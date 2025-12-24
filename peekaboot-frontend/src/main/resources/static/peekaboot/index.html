@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>peekaboot</title>
+    <link rel="stylesheet" href="/webjars/bulma/css/bulma.min.css">
+    <link rel="stylesheet" href="peekaboot.css">
+</head>
+<body>
+    <section class="hero is-primary is-small">
+        <div class="hero-body py-4">
+            <div class="container">
+                <div class="level is-mobile">
+                    <div class="level-left">
+                        <div class="level-item">
+                            <h1 class="title is-4 mb-0">peekaboot</h1>
+                        </div>
+                    </div>
+                    <div class="level-right">
+                        <div class="level-item">
+                            <span class="is-size-7 has-text-primary-light" id="last-updated"></span>
+                        </div>
+                        <div class="level-item">
+                            <div class="buttons are-small">
+                                <button class="button is-light is-outlined" id="refresh-btn" title="Refresh now">
+                                    <span class="icon"><span id="refresh-icon">&#8635;</span></span>
+                                </button>
+                                <button class="button is-light is-outlined" id="pause-btn" title="Pause auto-refresh">
+                                    <span class="icon"><span id="pause-icon">&#10074;&#10074;</span></span>
+                                </button>
+                                <button class="button is-light is-outlined" id="theme-toggle" title="Toggle theme">
+                                    <span class="icon"><span id="theme-icon"></span></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container mt-4 px-4">
+        <div class="tabs is-boxed mb-4" id="main-tabs">
+            <ul>
+                <li class="is-active" data-tab="dashboard">
+                    <a><span>Dashboard</span></a>
+                </li>
+                <li data-tab="environment">
+                    <a><span>Environment</span></a>
+                </li>
+            </ul>
+        </div>
+
+        <div class="content-area">
+            <div class="has-text-centered py-6" id="loading">
+                <button class="button is-loading is-large is-ghost"></button>
+                <p class="mt-4 has-text-grey">Loading data...</p>
+            </div>
+
+            <div class="notification is-danger" id="error" style="display: none;">
+                <button class="delete" id="error-close"></button>
+                <p class="error-message"></p>
+            </div>
+
+            <div class="tab-content is-active" id="dashboard-tab">
+                <div class="columns is-multiline">
+                    <div class="column is-half">
+                        <div class="box" id="build-card">
+                            <h2 class="title is-6 mb-3 card-title">Build</h2>
+                            <div class="card-content" id="build-info"></div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="box" id="git-card">
+                            <h2 class="title is-6 mb-3 card-title">Git</h2>
+                            <div class="card-content" id="git-info"></div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="box" id="java-card">
+                            <h2 class="title is-6 mb-3 card-title">Java</h2>
+                            <div class="card-content" id="java-info"></div>
+                        </div>
+                    </div>
+                    <div class="column is-half">
+                        <div class="box" id="os-card">
+                            <h2 class="title is-6 mb-3 card-title">System</h2>
+                            <div class="card-content" id="os-info"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="box health-banner mb-4" id="health-banner">
+                    <div class="level is-mobile">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <span class="health-indicator" id="health-indicator"></span>
+                                <span class="title is-5 mb-0 ml-3">Health: <span id="health-status-text"></span></span>
+                            </div>
+                        </div>
+                        <div class="level-right">
+                            <div class="level-item">
+                                <span class="has-text-grey" id="health-summary"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="box mb-4" id="memory-card">
+                    <div class="level is-mobile mb-3">
+                        <div class="level-left">
+                            <h2 class="title is-6 mb-0 card-title">Memory</h2>
+                        </div>
+                        <div class="level-right">
+                            <span class="is-size-7 has-text-grey" id="process-info"></span>
+                        </div>
+                    </div>
+                    <div id="memory-info"></div>
+                </div>
+
+                <div class="mb-4" id="health-components">
+                    <h2 class="title is-6 mb-3">Health Components</h2>
+                    <div class="columns is-multiline" id="components-grid"></div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="environment-tab">
+                <div class="field mb-4">
+                    <div class="control has-icons-left">
+                        <input class="input" type="text" id="env-filter" placeholder="Filter properties...">
+                        <span class="icon is-left">
+                            <span>&#128269;</span>
+                        </span>
+                    </div>
+                </div>
+                <div id="property-sources"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer py-4 mt-6">
+        <div class="content has-text-centered">
+            <p class="is-size-7 has-text-grey">peekaboot - Application Monitoring Dashboard</p>
+        </div>
+    </footer>
+
+    <script src="peekaboot.js"></script>
+</body>
+</html>

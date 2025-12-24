@@ -1,0 +1,2 @@
+net.osslabz.peekaboot.autoconfigure.PeekabootAutoConfiguration
+net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration
