@@ -49,6 +49,9 @@
                 <li data-tab="environment">
                     <a><span>Environment</span></a>
                 </li>
+                <li data-tab="traces" style="display: none;">
+                    <a><span>Traces</span></a>
+                </li>
             </ul>
         </div>
 
@@ -122,6 +125,17 @@
                 <div class="mb-4" id="health-components">
                     <h2 class="title is-6 mb-3">Health Components</h2>
                     <div class="columns is-multiline" id="components-grid"></div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="traces-tab">
+                <div id="traces-loading" class="has-text-centered py-6" style="display: none;">
+                    <button class="button is-loading is-large is-ghost"></button>
+                    <p class="mt-4 has-text-grey">Loading traces...</p>
+                </div>
+                <div id="traces-list"></div>
+                <div id="no-traces" class="has-text-centered py-6 has-text-grey" style="display: none;">
+                    <p>No error traces recorded</p>
                 </div>
             </div>
 
