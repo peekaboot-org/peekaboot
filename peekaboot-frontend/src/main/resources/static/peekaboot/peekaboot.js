@@ -8,6 +8,8 @@
     let refreshTimer = null;
     let isPaused = false;
     let features = { tracing: false };
+    let tracesData = null;
+    let tracesLoaded = false;
 
     async function init() {
         initTheme();
@@ -31,6 +33,177 @@
         } catch (error) {
             console.warn('Could not fetch features:', error);
         }
+    }
+
+    async function fetchTraces() {
+        const loadingEl = document.getElementById('traces-loading');
+        const listEl = document.getElementById('traces-list');
+        const noTracesEl = document.getElementById('no-traces');
+
+        loadingEl.style.display = 'block';
+        listEl.innerHTML = '';
+        noTracesEl.style.display = 'none';
+
+        try {
+            const response = await fetch('/peekaboot/api/traces?limit=50');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            tracesData = await response.json();
+            tracesLoaded = true;
+            renderTracesTab();
+        } catch (error) {
+            console.error('Error fetching traces:', error);
+            listEl.innerHTML = `<div class="notification is-danger">Failed to load traces: ${error.message}</div>`;
+        } finally {
+            loadingEl.style.display = 'none';
+        }
+    }
+
+    function renderTracesTab() {
+        const listEl = document.getElementById('traces-list');
+        const noTracesEl = document.getElementById('no-traces');
+        listEl.innerHTML = '';
+
+        if (!tracesData || tracesData.length === 0) {
+            noTracesEl.style.display = 'block';
+            return;
+        }
+
+        noTracesEl.style.display = 'none';
+
+        tracesData.forEach(trace => {
+            listEl.appendChild(renderTraceItem(trace));
+        });
+    }
+
+    function renderTraceItem(trace) {
+        const item = document.createElement('div');
+        item.className = 'trace-item box mb-4';
+
+        const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
+        const startTime = trace.startTime ? formatDate(trace.startTime) : '-';
+        const duration = trace.duration ? formatDuration(trace.duration) : '-';
+        const spanCount = trace.spanCount || 0;
+
+        item.innerHTML = `
+            <div class="trace-header">
+                <div class="trace-summary">
+                    <span class="trace-expand-icon">&#9654;</span>
+                    <code class="trace-id">${escapeHtml(traceIdShort)}</code>
+                    <span class="trace-time">${startTime}</span>
+                    <span class="trace-duration tag is-light">${duration}</span>
+                    <span class="trace-span-count tag is-light">${spanCount} spans</span>
+                </div>
+            </div>
+            <div class="trace-details" style="display: none;">
+                <div class="span-tree">
+                    ${renderSpanTree(trace.spans)}
+                </div>
+            </div>
+        `;
+
+        const header = item.querySelector('.trace-header');
+        const details = item.querySelector('.trace-details');
+        const icon = item.querySelector('.trace-expand-icon');
+
+        header.addEventListener('click', () => {
+            const isExpanded = details.style.display !== 'none';
+            details.style.display = isExpanded ? 'none' : 'block';
+            icon.innerHTML = isExpanded ? '&#9654;' : '&#9660;';
+            item.classList.toggle('is-expanded', !isExpanded);
+        });
+
+        return item;
+    }
+
+    function renderSpanTree(spans) {
+        if (!spans || spans.length === 0) {
+            return '<p class="no-data">No spans</p>';
+        }
+
+        const spanMap = new Map();
+        const rootSpans = [];
+
+        spans.forEach(span => {
+            spanMap.set(span.spanId, span);
+        });
+
+        spans.forEach(span => {
+            if (!span.parentId || !spanMap.has(span.parentId)) {
+                rootSpans.push(span);
+            }
+        });
+
+        if (rootSpans.length === 0) {
+            rootSpans.push(...spans);
+        }
+
+        function renderSpanWithChildren(span, depth) {
+            const children = spans.filter(s => s.parentId === span.spanId);
+            let html = renderSpanItem(span, depth);
+            children.forEach(child => {
+                html += renderSpanWithChildren(child, depth + 1);
+            });
+            return html;
+        }
+
+        return rootSpans.map(span => renderSpanWithChildren(span, 0)).join('');
+    }
+
+    function renderSpanItem(span, depth) {
+        const indent = depth * 24;
+        const hasError = span.errorMessage || span.errorClass;
+        const errorClass = hasError ? 'span-error' : '';
+
+        const duration = formatDuration(span.duration);
+        const kind = span.kind || 'INTERNAL';
+        const name = span.name || 'unknown';
+
+        let detailsHtml = '';
+
+        if (span.tags && Object.keys(span.tags).length > 0) {
+            const tagsHtml = Object.entries(span.tags)
+                .map(([k, v]) => `<span class="span-tag"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</span>`)
+                .join('');
+            detailsHtml += `<div class="span-tags">${tagsHtml}</div>`;
+        }
+
+        if (span.events && span.events.length > 0) {
+            const eventsHtml = span.events
+                .map(e => `<span class="span-event">${escapeHtml(e.name)} @ ${formatDate(e.timestamp)}</span>`)
+                .join('');
+            detailsHtml += `<div class="span-events">${eventsHtml}</div>`;
+        }
+
+        if (hasError) {
+            detailsHtml += `<div class="span-error-info">`;
+            if (span.errorClass) {
+                detailsHtml += `<div class="error-class">${escapeHtml(span.errorClass)}</div>`;
+            }
+            if (span.errorMessage) {
+                detailsHtml += `<div class="error-message">${escapeHtml(span.errorMessage)}</div>`;
+            }
+            detailsHtml += `</div>`;
+        }
+
+        if (span.remoteServiceName || span.remoteIp) {
+            const remote = [span.remoteServiceName, span.remoteIp, span.remotePort].filter(Boolean).join(':');
+            detailsHtml += `<div class="span-remote">Remote: ${escapeHtml(remote)}</div>`;
+        }
+
+        return `
+            <div class="span-item ${errorClass}" style="margin-left: ${indent}px;">
+                <div class="span-header">
+                    <span class="span-connector">${depth > 0 ? '└─' : ''}</span>
+                    <span class="span-name">${escapeHtml(name)}</span>
+                    <span class="span-kind tag is-small is-light">${kind}</span>
+                    <span class="span-duration">${duration}</span>
+                    ${hasError ? '<span class="span-error-badge">ERROR</span>' : ''}
+                </div>
+                ${detailsHtml ? `<div class="span-details">${detailsHtml}</div>` : ''}
+            </div>
+        `;
     }
 
     function initTheme() {
@@ -65,6 +238,10 @@
 
                 item.classList.add('is-active');
                 document.getElementById(`${tabName}-tab`).classList.add('is-active');
+
+                if (tabName === 'traces' && !tracesLoaded) {
+                    fetchTraces();
+                }
             });
         });
     }
@@ -521,6 +698,34 @@
         } catch {
             return dateStr;
         }
+    }
+
+    function formatDuration(duration) {
+        if (!duration) return '-';
+
+        let ms;
+        if (typeof duration === 'string') {
+            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
+            if (match) {
+                const hours = parseFloat(match[1] || 0);
+                const minutes = parseFloat(match[2] || 0);
+                const seconds = parseFloat(match[3] || 0);
+                ms = (hours * 3600 + minutes * 60 + seconds) * 1000;
+            } else {
+                ms = parseFloat(duration);
+            }
+        } else if (typeof duration === 'object' && duration.seconds !== undefined) {
+            ms = duration.seconds * 1000 + (duration.nano || 0) / 1000000;
+        } else {
+            ms = duration;
+        }
+
+        if (isNaN(ms)) return '-';
+
+        if (ms < 1) return '<1ms';
+        if (ms < 1000) return Math.round(ms) + 'ms';
+        if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
+        return (ms / 60000).toFixed(2) + 'm';
     }
 
     if (document.readyState === 'loading') {
