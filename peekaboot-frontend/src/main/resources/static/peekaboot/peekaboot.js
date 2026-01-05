@@ -7,14 +7,30 @@
     let peekabootData = null;
     let refreshTimer = null;
     let isPaused = false;
+    let features = { tracing: false };
 
-    function init() {
+    async function init() {
         initTheme();
         initTabs();
         initRefreshControls();
         initEnvironmentFilter();
         initErrorClose();
+        await fetchFeatures();
         fetchData();
+    }
+
+    async function fetchFeatures() {
+        try {
+            const response = await fetch('/peekaboot/api/features');
+            if (response.ok) {
+                features = await response.json();
+                if (features.tracing) {
+                    document.querySelector('[data-tab="traces"]').style.display = '';
+                }
+            }
+        } catch (error) {
+            console.warn('Could not fetch features:', error);
+        }
     }
 
     function initTheme() {
