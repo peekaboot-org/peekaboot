@@ -42,11 +42,11 @@ public class PeekabootLifecycleAutoConfiguration {
     public ApplicationReadyListener applicationReadyListener(
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
-            ObjectProvider<List<DatabaseMetadata>> databaseMetadataListProvider,
+            ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
             ObjectProvider<Map<String, DataSource>> dataSourcesProvider) {
-        List<DatabaseMetadata> databaseMetadataList = databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
+        List<DataSourceMetadata> dataSourceMetadataList = databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
-        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, databaseMetadataList, dataSources);
+        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, dataSourceMetadataList, dataSources);
     }
 
 
@@ -56,10 +56,10 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean(name = "databaseMetadataList")
-        public List<DatabaseMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
-            List<DatabaseMetadata> metadataList = new ArrayList<>();
+        public List<DataSourceMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
+            List<DataSourceMetadata> metadataList = new ArrayList<>();
             dataSources.forEach((name, dataSource) -> {
-                DatabaseMetadata metadata = DatabaseMetadata.fromDataSource(name, dataSource);
+                DataSourceMetadata metadata = DataSourceMetadata.fromDataSource(name, dataSource);
                 metadataList.add(metadata);
             });
             return metadataList;

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>net.osslabz</groupId>
@@ -16,6 +17,7 @@
         <module>peekaboot-spring-boot-autoconfigure</module>
         <module>peekaboot-spring-boot-starter</module>
         <module>peekaboot-example-app</module>
+        <module>peekaboot-tracing</module>
     </modules>
 
     <url>https://github.com/osslabz/peekaboot</url>
@@ -31,7 +33,7 @@
 
         <maven.compiler.release>${osslabz.java.version}</maven.compiler.release>
 
-        <spring-boot.version>3.5.7</spring-boot.version>
+        <spring-boot.version>4.0.1</spring-boot.version>
     </properties>
 
     <licenses>
@@ -54,7 +56,7 @@
         <connection>scm:git:https://github.com/osslabz/peekaboot.git</connection>
         <developerConnection>scm:git:https://github.com/osslabz/peekaboot.git</developerConnection>
         <url>https://github.com/osslabz/peekaboot</url>
-        <tag>main</tag>
+        <tag>dev</tag>
     </scm>
 
     <dependencyManagement>

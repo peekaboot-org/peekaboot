@@ -1,0 +1,4 @@
+net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration
+net.osslabz.peekaboot.tracing.autoconfigure.StandaloneTracingAutoConfiguration
+net.osslabz.peekaboot.tracing.autoconfigure.BraveTracingAutoConfiguration
+net.osslabz.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration

@@ -20,13 +20,13 @@ import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpointDisco
 import org.springframework.context.ApplicationContext;
 
 
-public class UnfilteredEndpoint {
+public class PeekabookActuatorService {
 
 
     private final WebEndpointDiscoverer discoverer;
 
 
-    public UnfilteredEndpoint(
+    public PeekabookActuatorService(
         ApplicationContext context,
         ParameterValueMapper parameterMapper,
         EndpointMediaTypes mediaTypes,

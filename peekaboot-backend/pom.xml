@@ -28,6 +28,12 @@
             <artifactId>HikariCP</artifactId>
             <optional>true</optional>
         </dependency>
+        <dependency>
+            <groupId>net.osslabz</groupId>
+            <artifactId>peekaboot-tracing</artifactId>
+            <version>${project.version}</version>
+            <optional>true</optional>
+        </dependency>
 
         <dependency>
             <groupId>net.osslabz</groupId>
