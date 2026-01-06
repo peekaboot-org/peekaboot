@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.config.PeekabootWebConfig;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import org.springframework.beans.factory.ObjectProvider;

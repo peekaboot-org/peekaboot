@@ -18,8 +18,6 @@ public class PeekabootTracingProperties {
 
     private TraceCaptureMode captureMode;
 
-    private boolean debugToolbar = false;
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -52,18 +50,10 @@ public class PeekabootTracingProperties {
         this.captureMode = captureMode;
     }
 
-    public boolean isDebugToolbar() {
-        return debugToolbar;
-    }
-
-    public void setDebugToolbar(boolean debugToolbar) {
-        this.debugToolbar = debugToolbar;
-    }
-
-    public TraceCaptureMode getEffectiveCaptureMode() {
+    public TraceCaptureMode getEffectiveCaptureMode(boolean devToolbar) {
         if (captureMode != null) {
             return captureMode;
         }
-        return debugToolbar ? TraceCaptureMode.ALL : TraceCaptureMode.ERRORS_ONLY;
+        return devToolbar ? TraceCaptureMode.ALL : TraceCaptureMode.ERRORS_ONLY;
     }
 }

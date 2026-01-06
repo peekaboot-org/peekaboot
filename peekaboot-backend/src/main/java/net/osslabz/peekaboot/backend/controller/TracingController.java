@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.controller;
 
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
@@ -21,9 +22,12 @@ public class TracingController {
     private final TraceQueryService traceQueryService;
     private final TraceCaptureMode captureMode;
 
-    public TracingController(TraceQueryService traceQueryService, PeekabootTracingProperties properties) {
+    public TracingController(
+            TraceQueryService traceQueryService,
+            PeekabootTracingProperties tracingProperties,
+            PeekabootProperties properties) {
         this.traceQueryService = traceQueryService;
-        this.captureMode = properties.getEffectiveCaptureMode();
+        this.captureMode = tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar());
     }
 
     @GetMapping(value = "/api/traces", produces = MediaType.APPLICATION_JSON_VALUE)

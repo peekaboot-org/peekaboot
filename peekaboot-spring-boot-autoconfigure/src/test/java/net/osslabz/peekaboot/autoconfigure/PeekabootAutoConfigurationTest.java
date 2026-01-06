@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,6 +12,7 @@ class PeekabootAutoConfigurationTest {
         PeekabootProperties properties = new PeekabootProperties();
         assertThat(properties.isEnabled()).isTrue();
         assertThat(properties.getBasePath()).isEqualTo("/peekaboot");
+        assertThat(properties.isDevToolbar()).isFalse();
     }
 
     @Test

@@ -1,4 +1,4 @@
-package net.osslabz.peekaboot.autoconfigure;
+package net.osslabz.peekaboot.backend.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -8,6 +8,8 @@ public class PeekabootProperties {
     private boolean enabled = true;
 
     private String basePath = "/peekaboot";
+
+    private boolean devToolbar = false;
 
     public boolean isEnabled() {
         return enabled;
@@ -23,5 +25,13 @@ public class PeekabootProperties {
 
     public void setBasePath(String basePath) {
         this.basePath = basePath;
+    }
+
+    public boolean isDevToolbar() {
+        return devToolbar;
+    }
+
+    public void setDevToolbar(boolean devToolbar) {
+        this.devToolbar = devToolbar;
     }
 }

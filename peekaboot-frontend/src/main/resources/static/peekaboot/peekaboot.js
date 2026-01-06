@@ -7,7 +7,7 @@
     let peekabootData = null;
     let refreshTimer = null;
     let isPaused = false;
-    let features = { tracing: false, traceCaptureMode: 'ERRORS_ONLY', debugToolbar: false };
+    let features = { tracing: false, traceCaptureMode: 'ERRORS_ONLY', devToolbar: false };
     let tracesData = null;
     let tracesLoaded = false;
 

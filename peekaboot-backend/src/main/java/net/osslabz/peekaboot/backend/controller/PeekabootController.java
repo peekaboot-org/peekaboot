@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.controller;
 
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,14 +19,17 @@ import java.util.Map;
 public class PeekabootController {
 
     private final PeekabookActuatorService peekabookActuatorService;
+    private final PeekabootProperties properties;
     private final boolean tracingEnabled;
     private final PeekabootTracingProperties tracingProperties;
 
     public PeekabootController(
             PeekabookActuatorService peekabootService,
+            PeekabootProperties properties,
             ApplicationContext applicationContext,
             @Autowired(required = false) PeekabootTracingProperties tracingProperties) {
         this.peekabookActuatorService = peekabootService;
+        this.properties = properties;
         this.tracingEnabled = applicationContext.containsBean("tracingController");
         this.tracingProperties = tracingProperties;
     }
@@ -44,9 +48,9 @@ public class PeekabootController {
     public Map<String, Object> getFeatures() {
         Map<String, Object> features = new HashMap<>();
         features.put("tracing", tracingEnabled);
+        features.put("devToolbar", properties.isDevToolbar());
         if (tracingProperties != null) {
-            features.put("traceCaptureMode", tracingProperties.getEffectiveCaptureMode().name());
-            features.put("debugToolbar", tracingProperties.isDebugToolbar());
+            features.put("traceCaptureMode", tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar()).name());
         }
         return features;
     }

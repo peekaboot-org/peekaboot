@@ -1,0 +1,77 @@
+package net.osslabz.peekaboot.autoconfigure;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import jakarta.annotation.PostConstruct;
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
+import net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender;
+import net.osslabz.peekaboot.backend.log.TraceLogStore;
+import net.osslabz.peekaboot.tracing.query.TraceQueryService;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
+
+@AutoConfiguration(after = PeekabootAutoConfiguration.class)
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
+@ConditionalOnClass(TraceQueryService.class)
+public class DevToolbarAutoConfiguration {
+
+    @Bean
+    public TraceLogStore traceLogStore() {
+        return new TraceLogStore();
+    }
+
+    @Bean
+    public ToolbarDataProvider toolbarDataProvider(
+            TraceQueryService traceQueryService,
+            PeekabootProperties properties) {
+        return new ToolbarDataProvider(traceQueryService, properties.getBasePath());
+    }
+
+    @Bean
+    public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
+            ToolbarDataProvider toolbarDataProvider,
+            PeekabootProperties properties) {
+        FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, properties.getBasePath()));
+        registration.addUrlPatterns("/*");
+        registration.setOrder(Ordered.LOWEST_PRECEDENCE);
+        registration.setName("devToolbarFilter");
+        return registration;
+    }
+
+    @Bean
+    public LogbackAppenderRegistrar logbackAppenderRegistrar(TraceLogStore traceLogStore) {
+        return new LogbackAppenderRegistrar(traceLogStore);
+    }
+
+    public static class LogbackAppenderRegistrar {
+        private final TraceLogStore traceLogStore;
+
+        public LogbackAppenderRegistrar(TraceLogStore traceLogStore) {
+            this.traceLogStore = traceLogStore;
+        }
+
+        @PostConstruct
+        public void registerAppender() {
+            if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
+                return;
+            }
+
+            PeekabootLogbackAppender appender = new PeekabootLogbackAppender(traceLogStore);
+            appender.setContext(loggerContext);
+            appender.start();
+
+            Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
+            rootLogger.addAppender(appender);
+        }
+    }
+}

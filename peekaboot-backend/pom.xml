@@ -29,12 +29,15 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+        <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>peekaboot-tracing</artifactId>
             <version>${project.version}</version>
             <optional>true</optional>
         </dependency>
-
         <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>jdbc-url-parser</artifactId>
