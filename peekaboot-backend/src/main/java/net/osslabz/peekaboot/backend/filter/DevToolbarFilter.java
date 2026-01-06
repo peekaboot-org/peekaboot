@@ -157,7 +157,16 @@ public class DevToolbarFilter implements Filter {
                     .peekaboot-metric .val{color:#c9d1d9}
                     .peekaboot-metric.warn .val{color:#d29922}
                     .peekaboot-metric.error .val{color:#f85149}
+                    .peekaboot-metric.ok .val{color:#3fb950}
                     .peekaboot-trace{font-family:monospace;font-size:11px;color:#8b949e}
+                    .peekaboot-health{display:flex;align-items:center;gap:4px;font-size:11px}
+                    .peekaboot-health .dot{width:8px;height:8px;border-radius:50%}
+                    .peekaboot-health .dot.up{background:#3fb950}
+                    .peekaboot-health .dot.down{background:#f85149}
+                    .peekaboot-health .dot.unknown{background:#8b949e}
+                    .peekaboot-memory{font-size:11px;color:#8b949e}
+                    .peekaboot-memory.warn{color:#d29922}
+                    .peekaboot-memory.error{color:#f85149}
                     .peekaboot-expand{background:#30363d;border:1px solid #484f58;color:#c9d1d9;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:11px}
                     .peekaboot-expand:hover{background:#484f58}
                 `;
@@ -169,17 +178,21 @@ public class DevToolbarFilter implements Filter {
                 var statusClass = 's' + Math.floor(data.status / 100) + 'xx';
                 var durationClass = data.duration > 500 ? 'error' : (data.duration > 100 ? 'warn' : '');
                 var queryClass = data.queryCount > 10 ? 'error' : (data.queryCount > 5 ? 'warn' : '');
+                var healthClass = data.health === 'UP' ? 'up' : (data.health === 'DOWN' ? 'down' : 'unknown');
+                var memoryClass = data.memoryPercent > 90 ? 'error' : (data.memoryPercent > 70 ? 'warn' : '');
 
                 bar.innerHTML = `
                     <div class="peekaboot-left">
                         <span class="peekaboot-status ${statusClass}">${data.status}</span>
                         <span class="peekaboot-method">${data.method}</span>
                         <span class="peekaboot-path" title="${data.path}">${data.path}</span>
-                        <span class="peekaboot-metric ${durationClass}"><span class="val">${data.duration}ms</span></span>
+                        <span class="peekaboot-metric ${durationClass}">\\u23F1<span class="val">${data.duration}ms</span></span>
                         ${data.queryCount >= 0 ? '<span class="peekaboot-metric ' + queryClass + '">\\u{1F5C4}<span class="val">' + data.queryCount + '</span></span>' : ''}
                         ${data.errorCount > 0 ? '<span class="peekaboot-metric error">\\u26A0<span class="val">' + data.errorCount + '</span></span>' : ''}
                     </div>
                     <div class="peekaboot-right">
+                        <span class="peekaboot-health" title="Health: ${data.health}"><span class="dot ${healthClass}"></span>${data.health}</span>
+                        ${data.memoryPercent >= 0 ? '<span class="peekaboot-memory ' + memoryClass + '" title="Heap memory">\\u{1F4BE}' + data.memoryPercent + '%</span>' : ''}
                         <span class="peekaboot-trace">${data.traceId ? data.traceId.substring(0, 16) + '...' : '-'}</span>
                         <a href="${data.dashboardUrl}" target="_blank" title="Open Dashboard">\\u{1F4CA}</a>
                         <button class="peekaboot-expand" title="Expand toolbar">\\u25B2</button>

@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.devtoolbar;
 
+import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.tracing.store.SpanData;
 import net.osslabz.peekaboot.tracing.store.TraceData;
@@ -12,10 +13,14 @@ import java.util.Optional;
 public class ToolbarDataProvider {
 
     private final TraceQueryService traceQueryService;
+    private final PeekabookActuatorService actuatorService;
     private final String basePath;
 
-    public ToolbarDataProvider(TraceQueryService traceQueryService, String basePath) {
+    public ToolbarDataProvider(TraceQueryService traceQueryService,
+                               PeekabookActuatorService actuatorService,
+                               String basePath) {
         this.traceQueryService = traceQueryService;
+        this.actuatorService = actuatorService;
         this.basePath = basePath;
     }
 
@@ -41,8 +46,22 @@ public class ToolbarDataProvider {
             }
         }
 
+        // Get health and memory from actuator
+        String healthStatus = "UNKNOWN";
+        int memoryPercent = -1;
+
+        if (actuatorService != null) {
+            try {
+                Map<String, Object> data = actuatorService.getData();
+                healthStatus = extractHealthStatus(data);
+                memoryPercent = extractMemoryPercent(data);
+            } catch (Exception e) {
+                // Ignore - use defaults
+            }
+        }
+
         return String.format(
-                "{\"method\":\"%s\",\"path\":\"%s\",\"status\":%d,\"traceId\":%s,\"dashboardUrl\":\"%s\",\"duration\":%d,\"queryCount\":%d,\"errorCount\":%d}",
+                "{\"method\":\"%s\",\"path\":\"%s\",\"status\":%d,\"traceId\":%s,\"dashboardUrl\":\"%s\",\"duration\":%d,\"queryCount\":%d,\"errorCount\":%d,\"health\":\"%s\",\"memoryPercent\":%d}",
                 escapeJson(method),
                 escapeJson(path),
                 status,
@@ -50,8 +69,52 @@ public class ToolbarDataProvider {
                 basePath + "/",
                 duration,
                 queryCount,
-                errorCount
+                errorCount,
+                escapeJson(healthStatus),
+                memoryPercent
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private String extractHealthStatus(Map<String, Object> data) {
+        try {
+            Map<String, Object> health = (Map<String, Object>) data.get("health");
+            if (health != null) {
+                Object status = health.get("status");
+                if (status != null) {
+                    return status.toString();
+                }
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return "UNKNOWN";
+    }
+
+    @SuppressWarnings("unchecked")
+    private int extractMemoryPercent(Map<String, Object> data) {
+        try {
+            Map<String, Object> info = (Map<String, Object>) data.get("info");
+            if (info != null) {
+                Map<String, Object> process = (Map<String, Object>) info.get("process");
+                if (process != null) {
+                    Map<String, Object> memory = (Map<String, Object>) process.get("memory");
+                    if (memory != null) {
+                        Map<String, Object> heap = (Map<String, Object>) memory.get("heap");
+                        if (heap != null) {
+                            Number used = (Number) heap.get("used");
+                            Number max = (Number) heap.get("max");
+                            if (used != null && max != null && max.longValue() > 0) {
+                                return (int) ((used.longValue() * 100) / max.longValue());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return -1;
     }
 
     private String escapeJson(String value) {
