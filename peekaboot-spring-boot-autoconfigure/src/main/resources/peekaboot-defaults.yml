@@ -1,0 +1,86 @@
+# peekaboot-defaults.yml
+# These defaults enable full observability for peekaboot.
+# Apps can override any of these in their own application.yml
+
+spring:
+  jpa:
+    properties:
+      # Hibernate statistics for query performance insights
+      # Spring default: false | We enable to expose query counts, cache stats, slow queries
+      "[hibernate.generate_statistics]": true
+
+management:
+  endpoint:
+    health:
+      # Controls visibility of health check details (db, disk, etc.)
+      # Spring default: never | We show always to expose component health in dashboard
+      show-details: always
+
+  info:
+    env:
+      # Exposes environment variables in /actuator/info
+      # Spring default: false | We enable for environment visibility in dashboard
+      enabled: true
+    java:
+      # Exposes JVM vendor, version, runtime info
+      # Spring default: false | We enable for Java runtime details in dashboard
+      enabled: true
+    os:
+      # Exposes OS name, version, architecture
+      # Spring default: false | We enable for system info in dashboard
+      enabled: true
+    process:
+      # Exposes PID, uptime, CPU count, memory usage
+      # Spring default: false | We enable for process metrics in dashboard
+      enabled: true
+    git:
+      # Exposes git commit, branch info from git.properties
+      # Spring default: true | We keep enabled for build traceability
+      enabled: true
+
+  tracing:
+    sampling:
+      # Percentage of requests to trace (0.0 to 1.0)
+      # Spring default: 0.1 (10%) | We sample all requests for complete trace visibility
+      probability: 1.0
+
+  observations:
+    annotations:
+      # Enables @Observed, @Timed, @Counted annotations
+      # Spring default: false | We enable for declarative observability
+      enabled: true
+
+  otlp:
+    metrics:
+      export:
+        # Auto-export metrics to OTLP collector
+        # Spring default: true | We disable to avoid errors when no collector configured
+        enabled: false
+
+# Third-party library defaults (only apply if dependency present)
+
+decorator:
+  datasource:
+    datasource-proxy:
+      # Pretty-print SQL for readability in logs
+      # Library default: false | We enable for debugging SQL queries
+      format-sql: true
+      query:
+        # Log level for SQL query logging
+        # Library default: DEBUG | We use TRACE for detailed query capture
+        log-level: TRACE
+
+logbook:
+  predicate:
+    include:
+      # Paths to log HTTP requests/responses for
+      # Library default: all paths | We limit to /api/** to reduce noise
+      - path: /api/**
+  format:
+    # Output format for logged requests
+    # Library default: json | We use http for human-readable format
+    style: http
+  # When to log response bodies
+  # Library default: without-body | We log body only on errors for debugging
+  strategy: body-only-if-status-at-least
+  minimum-status: 400
