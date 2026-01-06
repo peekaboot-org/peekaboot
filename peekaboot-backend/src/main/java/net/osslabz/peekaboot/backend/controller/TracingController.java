@@ -1,5 +1,7 @@
 package net.osslabz.peekaboot.backend.controller;
 
+import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
+import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.tracing.store.TraceData;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -17,13 +19,15 @@ import java.util.List;
 public class TracingController {
 
     private final TraceQueryService traceQueryService;
+    private final TraceCaptureMode captureMode;
 
-    public TracingController(TraceQueryService traceQueryService) {
+    public TracingController(TraceQueryService traceQueryService, PeekabootTracingProperties properties) {
         this.traceQueryService = traceQueryService;
+        this.captureMode = properties.getEffectiveCaptureMode();
     }
 
     @GetMapping(value = "/api/traces", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<TraceData> getErrorTraces(@RequestParam(defaultValue = "50") int limit) {
-        return traceQueryService.getErrorTraces(limit);
+    public List<TraceData> getTraces(@RequestParam(defaultValue = "50") int limit) {
+        return traceQueryService.getTraces(limit, captureMode);
     }
 }

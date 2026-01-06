@@ -1,11 +1,13 @@
 package net.osslabz.peekaboot.tracing.query;
 
+import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.tracing.store.InMemorySpanStore;
 import net.osslabz.peekaboot.tracing.store.SpanData;
 import net.osslabz.peekaboot.tracing.store.TraceData;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 public class TraceQueryService {
 
@@ -36,6 +38,14 @@ public class TraceQueryService {
                 .filter(TraceData::hasErrors)
                 .limit(limit)
                 .toList();
+    }
+
+    public List<TraceData> getTraces(int limit, TraceCaptureMode mode) {
+        Stream<TraceData> stream = store.getAllTraces().stream();
+        if (mode == TraceCaptureMode.ERRORS_ONLY) {
+            stream = stream.filter(TraceData::hasErrors);
+        }
+        return stream.limit(limit).toList();
     }
 
     public int getTraceCount() {

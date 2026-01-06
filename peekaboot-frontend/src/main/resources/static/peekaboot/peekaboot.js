@@ -7,7 +7,7 @@
     let peekabootData = null;
     let refreshTimer = null;
     let isPaused = false;
-    let features = { tracing: false };
+    let features = { tracing: false, traceCaptureMode: 'ERRORS_ONLY', debugToolbar: false };
     let tracesData = null;
     let tracesLoaded = false;
 
@@ -27,7 +27,10 @@
             if (response.ok) {
                 features = await response.json();
                 if (features.tracing) {
-                    document.querySelector('[data-tab="traces"]').style.display = '';
+                    const tracesTab = document.querySelector('[data-tab="traces"]');
+                    tracesTab.style.display = '';
+                    const tabLabel = features.traceCaptureMode === 'ALL' ? 'Traces' : 'Error Traces';
+                    tracesTab.querySelector('a').textContent = tabLabel;
                 }
             }
         } catch (error) {
@@ -66,6 +69,10 @@
         listEl.innerHTML = '';
 
         if (!tracesData || tracesData.length === 0) {
+            const noTracesMsg = features.traceCaptureMode === 'ALL'
+                ? 'No traces recorded'
+                : 'No error traces recorded';
+            noTracesEl.querySelector('p').textContent = noTracesMsg;
             noTracesEl.style.display = 'block';
             return;
         }
