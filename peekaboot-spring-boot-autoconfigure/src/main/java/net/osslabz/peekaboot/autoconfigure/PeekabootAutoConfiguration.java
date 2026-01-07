@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.config.PeekabootWebConfig;
+import net.osslabz.peekaboot.backend.controller.PeekabootController;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.endpoint.invoke.OperationInvokerAdvisor;
@@ -21,11 +22,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 
-@AutoConfiguration
+@AutoConfiguration(afterName = "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration")
 @ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(PeekabootProperties.class)
-@Import(PeekabootWebConfig.class)
+@Import({PeekabootWebConfig.class, PeekabootController.class})
 public class PeekabootAutoConfiguration {
 
 

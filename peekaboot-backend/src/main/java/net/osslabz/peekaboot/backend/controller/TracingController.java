@@ -45,19 +45,19 @@ public class TracingController {
     }
 
     @GetMapping(value = "/api/traces", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<TraceData> getTraces(@RequestParam(defaultValue = "50") int limit) {
+    public List<TraceData> getTraces(@RequestParam(name = "limit", defaultValue = "50") int limit) {
         return traceQueryService.getTraces(limit, captureMode);
     }
 
     @GetMapping(value = "/api/traces/{traceId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<TraceData> getTrace(@PathVariable String traceId) {
+    public ResponseEntity<TraceData> getTrace(@PathVariable(name = "traceId") String traceId) {
         Optional<TraceData> trace = traceQueryService.getTrace(traceId);
         return trace.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping(value = "/api/traces/{traceId}/details", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Map<String, Object>> getTraceDetails(@PathVariable String traceId) {
+    public ResponseEntity<Map<String, Object>> getTraceDetails(@PathVariable(name = "traceId") String traceId) {
         Optional<TraceData> traceOpt = traceQueryService.getTrace(traceId);
         if (traceOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
