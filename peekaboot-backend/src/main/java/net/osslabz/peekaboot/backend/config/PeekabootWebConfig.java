@@ -10,14 +10,14 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/peekaboot/**")
-                .addResourceLocations("classpath:/static/peekaboot/")
+        registry.addResourceHandler("/peekaboot/ui/**")
+                .addResourceLocations("classpath:/static/peekaboot/ui/")
                 .setCachePeriod(0);
     }
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addRedirectViewController("/peekaboot", "/peekaboot/index.html");
-        registry.addRedirectViewController("/peekaboot/", "/peekaboot/index.html");
+        registry.addRedirectViewController("/peekaboot", "/peekaboot/ui/dashboard/index.html");
+        registry.addRedirectViewController("/peekaboot/", "/peekaboot/ui/dashboard/index.html");
     }
 }

@@ -1,0 +1,110 @@
+package net.osslabz.peekaboot.autoconfigure;
+
+import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import net.osslabz.peekaboot.backend.log.TraceLogStore;
+import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
+import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration;
+import net.osslabz.peekaboot.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.tracing.store.InMemorySpanStore;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+class DevToolbarAutoConfigurationTest {
+
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    DevToolbarAutoConfiguration.class,
+                    PeekabootAutoConfiguration.class
+            ))
+            .withUserConfiguration(MockActuatorConfig.class);
+
+    @Test
+    void shouldCreateBeansWhenDevToolbarEnabled() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(TraceLogStore.class);
+                    assertThat(context).hasSingleBean(ToolbarDataProvider.class);
+                    assertThat(context).hasBean("devToolbarFilter");
+                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenDevToolbarDisabled() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=false")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
+                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenDevToolbarPropertyMissing() {
+        contextRunner
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
+                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenTracingNotOnClasspath() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withClassLoader(new FilteredClassLoader(TraceQueryService.class))
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
+                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                });
+    }
+
+    @Test
+    void shouldCreateLogbackAppenderRegistrar() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).hasSingleBean(TraceLogStore.class);
+                });
+    }
+
+    @Test
+    void propertiesDefaultDevToolbarToFalse() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(PeekabootProperties.class);
+            PeekabootProperties props = context.getBean(PeekabootProperties.class);
+            assertThat(props.isDevToolbar()).isFalse();
+        });
+    }
+
+    @Configuration
+    static class MockActuatorConfig {
+        @Bean
+        PeekabookActuatorService peekabookActuatorService() {
+            return mock(PeekabookActuatorService.class);
+        }
+    }
+
+    @Configuration
+    static class MockTracingConfig {
+        @Bean
+        TraceQueryService traceQueryService() {
+            return new TraceQueryService(new InMemorySpanStore(100, 50));
+        }
+    }
+}

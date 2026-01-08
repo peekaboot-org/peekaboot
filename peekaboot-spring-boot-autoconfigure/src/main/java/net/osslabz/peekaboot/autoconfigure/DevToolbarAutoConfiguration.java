@@ -25,8 +25,11 @@ import org.springframework.core.Ordered;
 @ConditionalOnClass(TraceQueryService.class)
 public class DevToolbarAutoConfiguration {
 
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
+
     @Bean
     public TraceLogStore traceLogStore() {
+        log.trace("Creating TraceLogStore bean");
         return new TraceLogStore();
     }
 
@@ -35,6 +38,7 @@ public class DevToolbarAutoConfiguration {
             TraceQueryService traceQueryService,
             PeekabookActuatorService actuatorService,
             PeekabootProperties properties) {
+        log.trace("Creating ToolbarDataProvider bean with basePath: {}", properties.getBasePath());
         return new ToolbarDataProvider(traceQueryService, actuatorService, properties.getBasePath());
     }
 
@@ -42,11 +46,13 @@ public class DevToolbarAutoConfiguration {
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
             PeekabootProperties properties) {
+        log.trace("Creating DevToolbarFilter bean with basePath: {}", properties.getBasePath());
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new DevToolbarFilter(toolbarDataProvider, properties.getBasePath()));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
+        log.info("DevToolbarFilter registered for all URLs");
         return registration;
     }
 

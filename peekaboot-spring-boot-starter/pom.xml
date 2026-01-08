@@ -5,7 +5,7 @@
     <parent>
         <groupId>net.osslabz</groupId>
         <artifactId>peekaboot-parent</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.0.2-SNAPSHOT</version>
     </parent>
 
     <artifactId>peekaboot-spring-boot-starter</artifactId>
@@ -17,6 +17,11 @@
         <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>peekaboot-spring-boot-autoconfigure</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.osslabz</groupId>
+            <artifactId>peekaboot-tracing</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

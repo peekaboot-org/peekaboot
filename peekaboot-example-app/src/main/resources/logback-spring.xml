@@ -5,6 +5,7 @@
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <logger name="net.osslabz" level="INFO"/>
+    <logger name="net.osslabz.peekaboot" level="TRACE"/>
 
     <springProfile name="default">
 

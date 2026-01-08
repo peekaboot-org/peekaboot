@@ -133,12 +133,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         }
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            report.append(String.format(" DB Connection [%s]: %s on %s:%d (user: %s)\n",
+            report.append(String.format(" DB Connection [%s]: %s on %s (user: %s)%n%n",
                 metadata.getDataSourceName(),
                 metadata.getDatabaseName(),
                 metadata.getHosts(),
                 metadata.getUsername()));
-            report.append(LINE).append("\n");
 
             if (!metadata.getConnectionParams().isEmpty()) {
                 String params = metadata.getConnectionParams().entrySet().stream()
@@ -149,7 +148,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                 report.append(LINE).append("\n");
             }
 
-            report.append(String.format(" DB Version: %s %s\n",
+            report.append(String.format(" DB Version: %s %s%n",
                 metadata.getDatabaseProductName(),
                 metadata.getDatabaseProductVersion()));
             report.append(LINE).append("\n");
@@ -168,14 +167,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         DataSource dataSource = dataSources.get(dataSourceName);
         if (dataSource instanceof HikariDataSource hikariDataSource) {
             HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
-            report.append(String.format(" DB Pool: minimumIdle=%d, maximumPoolSize=%d\n",
+            report.append(String.format(" DB Pool: minimumIdle=%d, maximumPoolSize=%d%n%n",
                 config.getMinimumIdle(),
-                config.getMaximumPoolSize()));
-            report.append(LINE).append("\n");
+                config.getMaximumPoolSize()));;
 
             try {
-                String isolationLevel = hikariDataSource.getHikariConfigMXBean().getConnectionTimeout() > 0
-                    ? "configured" : "default";
                 report.append(" Connection Timeout: ").append(config.getConnectionTimeout()).append(" ms\n");
                 report.append(LINE).append("\n");
             } catch (Exception e) {

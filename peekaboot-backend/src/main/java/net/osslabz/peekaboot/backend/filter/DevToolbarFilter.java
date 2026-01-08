@@ -8,6 +8,8 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
 import java.io.IOException;
@@ -15,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 public class DevToolbarFilter implements Filter {
+
+    private static final Logger log = LoggerFactory.getLogger(DevToolbarFilter.class);
 
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
@@ -43,21 +47,31 @@ public class DevToolbarFilter implements Filter {
 
         if (!(request instanceof HttpServletRequest httpRequest) ||
             !(response instanceof HttpServletResponse httpResponse)) {
+            log.trace("Skipping non-HTTP request");
             chain.doFilter(request, response);
             return;
         }
+
+        String uri = httpRequest.getRequestURI();
+        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), uri);
 
         if (shouldSkip(httpRequest)) {
             chain.doFilter(request, response);
             return;
         }
 
+        log.trace("Wrapping response for: {}", uri);
         ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
 
         try {
             chain.doFilter(request, wrappedResponse);
         } finally {
-            processResponse(httpRequest, wrappedResponse, httpResponse);
+            try {
+                processResponse(httpRequest, wrappedResponse, httpResponse);
+            } catch (Exception e) {
+                log.warn("Failed to inject dev toolbar, returning original response: {}", e.getMessage());
+                wrappedResponse.copyBodyToResponse();
+            }
         }
     }
 
@@ -67,6 +81,7 @@ public class DevToolbarFilter implements Filter {
         // Skip excluded prefixes
         for (String prefix : EXCLUDED_PREFIXES) {
             if (path.startsWith(prefix)) {
+                log.trace("Skipping {} - excluded prefix: {}", path, prefix);
                 return true;
             }
         }
@@ -75,6 +90,7 @@ public class DevToolbarFilter implements Filter {
         String lowerPath = path.toLowerCase();
         for (String ext : EXCLUDED_EXTENSIONS) {
             if (lowerPath.endsWith(ext)) {
+                log.trace("Skipping {} - static extension: {}", path, ext);
                 return true;
             }
         }
@@ -82,6 +98,7 @@ public class DevToolbarFilter implements Filter {
         // Skip AJAX requests
         String xRequestedWith = request.getHeader("X-Requested-With");
         if ("XMLHttpRequest".equalsIgnoreCase(xRequestedWith)) {
+            log.trace("Skipping {} - AJAX request", path);
             return true;
         }
 
@@ -94,21 +111,36 @@ public class DevToolbarFilter implements Filter {
         wrappedResponse.flushBuffer();
 
         String contentType = wrappedResponse.getContentType();
+        log.trace("Response content-type: {} for {}", contentType, request.getRequestURI());
+
         if (contentType == null || !contentType.contains(CONTENT_TYPE_HTML)) {
+            log.trace("Skipping toolbar injection - not HTML: {}", contentType);
             wrappedResponse.copyBodyToResponse();
             return;
         }
 
         String content = wrappedResponse.getContentAsString();
+        log.trace("Response content length: {} chars", content.length());
+
         int bodyEndIndex = content.toLowerCase().lastIndexOf(BODY_END_TAG);
 
         if (bodyEndIndex == -1) {
+            log.trace("Skipping toolbar injection - no </body> tag found");
             wrappedResponse.copyBodyToResponse();
             return;
         }
 
         String traceId = MDC.get("traceId");
-        String toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+        log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, traceId);
+
+        String toolbarHtml;
+        try {
+            toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+        } catch (Exception e) {
+            log.warn("Failed to generate toolbar HTML: {}", e.getMessage());
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
 
         String modifiedContent = content.substring(0, bodyEndIndex)
                 + toolbarHtml
@@ -117,6 +149,8 @@ public class DevToolbarFilter implements Filter {
         byte[] modifiedBytes = modifiedContent.getBytes(StandardCharsets.UTF_8);
         originalResponse.setContentType(contentType);
         wrappedResponse.copyBodyToResponse(modifiedBytes);
+
+        log.trace("Toolbar injected successfully for {}", request.getRequestURI());
     }
 
     private String generateToolbarHtml(HttpServletRequest request, ContentBufferingResponseWrapper response,
@@ -128,9 +162,9 @@ public class DevToolbarFilter implements Filter {
                 traceId
         );
 
-        return String.format("""
+        String template = """
             <!-- Peekaboot Dev Toolbar -->
-            <script id="peekaboot-toolbar-data" type="application/json">%s</script>
+            <script id="peekaboot-toolbar-data" type="application/json">{{SUMMARY_JSON}}</script>
             <script>
             (function() {
                 var data = JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent);
@@ -203,11 +237,15 @@ public class DevToolbarFilter implements Filter {
                 // Expand button - lazy load full toolbar
                 bar.querySelector('.peekaboot-expand').addEventListener('click', function() {
                     var script = document.createElement('script');
-                    script.src = '${basePath}/toolbar/toolbar.js';
+                    script.src = '{{BASE_PATH}}/ui/toolbar/toolbar.js';
                     document.head.appendChild(script);
                 });
             })();
             </script>
-            """, summaryJson, basePath);
+            """;
+
+        return template
+                .replace("{{SUMMARY_JSON}}", summaryJson)
+                .replace("{{BASE_PATH}}", basePath);
     }
 }

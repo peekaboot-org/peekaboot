@@ -1,7 +1,7 @@
-package net.osslabz.sandbox;
+package net.osslabz.peekaboot.autoconfigure;
 
 import io.micrometer.observation.ObservationRegistry;
-import jakarta.activation.DataSource;
+import javax.sql.DataSource;
 import net.ttddyy.observation.boot.autoconfigure.DataSourceNameResolver;
 import net.ttddyy.observation.boot.autoconfigure.DataSourceObservationAutoConfiguration;
 import net.ttddyy.observation.boot.autoconfigure.DefaultDataSourceNameResolver;
@@ -12,8 +12,8 @@ import org.springframework.context.annotation.Bean;
 
 
 @AutoConfiguration(before = DataSourceObservationAutoConfiguration.class)
-@ConditionalOnClass({DataSource.class, ObservationRegistry.class})
-public class ProjectDataSourceObservationAutoConfiguration {
+@ConditionalOnClass({DataSource.class, DataSourceObservationAutoConfiguration.class, ObservationRegistry.class})
+public class DataSourceProxyObservationAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
