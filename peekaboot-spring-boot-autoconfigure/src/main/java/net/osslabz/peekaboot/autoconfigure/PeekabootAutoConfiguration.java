@@ -4,6 +4,7 @@ import java.util.List;
 
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.config.PeekabootWebConfig;
+import net.osslabz.peekaboot.backend.config.UiTracingProperties;
 import net.osslabz.peekaboot.backend.controller.PeekabootController;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
@@ -28,7 +29,7 @@ import org.springframework.context.annotation.Import;
 @AutoConfiguration(afterName = "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration")
 @ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties(PeekabootProperties.class)
+@EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
 @Import({PeekabootWebConfig.class, PeekabootController.class})
 public class PeekabootAutoConfiguration {
 
