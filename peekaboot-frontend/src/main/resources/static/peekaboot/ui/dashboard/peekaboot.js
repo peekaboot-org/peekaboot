@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    const API_ENDPOINT = '/peekaboot/api/v1';
+    const API_ENDPOINT = '/peekaboot/api/actuator/all/insights';
     const REFRESH_INTERVAL = 30000;
 
     let peekabootData = null;
@@ -50,7 +50,7 @@
         noTracesEl.classList.add('hidden');
 
         try {
-            const response = await fetch('/peekaboot/api/traces?limit=50');
+            const response = await fetch('/peekaboot/api/traces/insights?limit=50');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -70,7 +70,8 @@
         const noTracesEl = document.getElementById('no-traces');
         listEl.innerHTML = '';
 
-        if (!tracesData || tracesData.length === 0) {
+        const traces = tracesData?.traces;
+        if (!traces || traces.length === 0) {
             const noTracesMsg = features.traceCaptureMode === 'ALL'
                 ? 'No traces recorded'
                 : 'No error traces recorded';
@@ -81,7 +82,7 @@
 
         noTracesEl.classList.add('hidden');
 
-        tracesData.forEach(trace => {
+        traces.forEach(trace => {
             listEl.appendChild(renderTraceItem(trace));
         });
     }
@@ -91,9 +92,18 @@
         item.className = 'trace-item';
 
         const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
-        const startTime = trace.startTime ? formatDate(trace.startTime) : '-';
-        const duration = trace.duration ? formatDuration(trace.duration) : '-';
-        const spanCount = trace.spanCount || 0;
+        const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
+        const duration = formatDurationMs(trace.durationMs);
+        const spanCount = trace.metrics?.totalSpans || 0;
+        const hasErrors = trace.status === 'HAS_ERRORS';
+        const hasSlow = trace.status === 'HAS_SLOW_SPANS';
+
+        let statusBadge = '';
+        if (hasErrors) {
+            statusBadge = '<span class="trace-badge error">ERROR</span>';
+        } else if (hasSlow) {
+            statusBadge = '<span class="trace-badge warning">SLOW</span>';
+        }
 
         item.innerHTML = `
             <div class="trace-header">
@@ -102,10 +112,11 @@
                 <span class="trace-time">${startTime}</span>
                 <span class="trace-duration">${duration}</span>
                 <span class="trace-badge">${spanCount} spans</span>
+                ${statusBadge}
             </div>
             <div class="trace-details">
                 <div class="span-tree">
-                    ${renderSpanTree(trace.spans)}
+                    ${renderSpanNode(trace.rootSpan, 0)}
                 </div>
             </div>
         `;
@@ -124,68 +135,61 @@
         return item;
     }
 
-    function renderSpanTree(spans) {
-        if (!spans || spans.length === 0) {
+    function renderSpanNode(span, depth) {
+        if (!span) {
             return '<p class="no-data">No spans</p>';
         }
 
-        const spanMap = new Map();
-        const rootSpans = [];
+        let html = renderSpanItem(span, depth);
 
-        spans.forEach(span => {
-            spanMap.set(span.spanId, span);
-        });
-
-        spans.forEach(span => {
-            if (!span.parentId || !spanMap.has(span.parentId)) {
-                rootSpans.push(span);
-            }
-        });
-
-        if (rootSpans.length === 0) {
-            rootSpans.push(...spans);
-        }
-
-        function renderSpanWithChildren(span, depth) {
-            const children = spans.filter(s => s.parentId === span.spanId);
-            let html = renderSpanItem(span, depth);
-            children.forEach(child => {
-                html += renderSpanWithChildren(child, depth + 1);
+        if (span.children && span.children.length > 0) {
+            span.children.forEach(child => {
+                html += renderSpanNode(child, depth + 1);
             });
-            return html;
         }
 
-        return rootSpans.map(span => renderSpanWithChildren(span, 0)).join('');
+        return html;
     }
 
     function renderSpanItem(span, depth) {
         const indent = depth * 24;
-        const hasError = span.errorMessage || span.errorClass;
+        const hasError = span.status === 'ERROR' || (span.issues && span.issues.some(i => i.type === 'ERROR'));
         const errorClass = hasError ? 'error' : '';
 
-        const duration = formatDuration(span.duration);
-        const durationClass = getDurationClass(span.duration);
+        const duration = formatDurationMs(span.durationMs);
+        const durationClass = getDurationClassMs(span.durationMs);
         const kind = span.kind || 'INTERNAL';
         const name = span.name || 'unknown';
 
         let detailsHtml = '';
 
-        if (span.tags && Object.keys(span.tags).length > 0) {
-            const tagsHtml = Object.entries(span.tags)
+        if (span.attributes && Object.keys(span.attributes).length > 0) {
+            const tagsHtml = Object.entries(span.attributes)
                 .map(([k, v]) => `<span class="span-tag"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</span>`)
                 .join('');
             detailsHtml += `<div class="span-tags">${tagsHtml}</div>`;
         }
 
-        if (hasError) {
-            detailsHtml += `<div style="color: var(--pk-danger); margin-top: 8px;">`;
-            if (span.errorClass) {
-                detailsHtml += `<strong>${escapeHtml(span.errorClass)}</strong><br>`;
-            }
-            if (span.errorMessage) {
-                detailsHtml += `${escapeHtml(span.errorMessage)}`;
-            }
-            detailsHtml += `</div>`;
+        if (span.issues && span.issues.length > 0) {
+            const issuesHtml = span.issues.map(issue => {
+                const issueClass = issue.severity === 'error' ? 'error' : (issue.severity === 'warning' ? 'warning' : '');
+                return `<span class="span-issue ${issueClass}">${escapeHtml(issue.type)}: ${escapeHtml(issue.message)}</span>`;
+            }).join('');
+            detailsHtml += `<div class="span-issues" style="margin-top: 8px;">${issuesHtml}</div>`;
+        }
+
+        let issueBadges = '';
+        if (span.issues && span.issues.length > 0) {
+            issueBadges = span.issues.map(issue => {
+                if (issue.type === 'ERROR') {
+                    return '<span class="trace-badge error">ERROR</span>';
+                } else if (issue.type === 'SLOW' || issue.type === 'VERY_SLOW') {
+                    return '<span class="trace-badge warning">SLOW</span>';
+                } else if (issue.type === 'SLOW_QUERY') {
+                    return '<span class="trace-badge warning">SLOW QUERY</span>';
+                }
+                return '';
+            }).join('');
         }
 
         return `
@@ -194,36 +198,26 @@
                     <span class="span-name">${escapeHtml(name)}</span>
                     <span class="span-badge">${kind}</span>
                     <span class="span-duration ${durationClass}">${duration}</span>
-                    ${hasError ? '<span class="trace-badge error">ERROR</span>' : ''}
+                    ${issueBadges}
                 </div>
                 ${detailsHtml ? `<div class="span-tags">${detailsHtml}</div>` : ''}
             </div>
         `;
     }
 
-    function getDurationClass(duration) {
-        const ms = parseDurationMs(duration);
+    function getDurationClassMs(ms) {
+        if (!ms) return '';
         if (ms > 500) return 'very-slow';
         if (ms > 100) return 'slow';
         return '';
     }
 
-    function parseDurationMs(duration) {
-        if (!duration) return 0;
-        if (typeof duration === 'object' && duration.seconds !== undefined) {
-            return duration.seconds * 1000 + (duration.nano || 0) / 1000000;
-        }
-        if (typeof duration === 'string') {
-            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
-            if (match) {
-                const h = parseFloat(match[1] || 0);
-                const m = parseFloat(match[2] || 0);
-                const s = parseFloat(match[3] || 0);
-                return (h * 3600 + m * 60 + s) * 1000;
-            }
-            return parseFloat(duration) || 0;
-        }
-        return duration || 0;
+    function formatDurationMs(ms) {
+        if (ms === null || ms === undefined) return '-';
+        if (ms < 1) return '<1ms';
+        if (ms < 1000) return Math.round(ms) + 'ms';
+        if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
+        return (ms / 60000).toFixed(2) + 'm';
     }
 
     function initTheme() {
@@ -390,19 +384,17 @@
     }
 
     function renderDashboardTab() {
-        const { info, health, spring, dataSources } = peekabootData;
-        const healthBody = health?.body || health;
-        const healthComponents = healthBody?.components || {};
+        const { application, runtime, dataSources, health } = peekabootData;
 
-        renderBuildInfo(info?.build);
-        renderGitInfo(info?.git);
-        renderSpringInfo(spring);
-        renderJavaInfo(info?.java);
-        renderOsInfo(info?.os, info?.process);
-        renderDataSourcesInfo(dataSources, healthComponents.db);
-        renderMemoryInfo(info?.process, healthComponents.diskSpace);
-        renderHealthBanner(healthBody);
-        renderHealthComponents(healthComponents);
+        renderBuildInfo(application?.build);
+        renderGitInfo(application?.git);
+        renderSpringInfo(application);
+        renderJavaInfo(application);
+        renderOsInfo(runtime?.os);
+        renderDataSourcesInfo(dataSources);
+        renderMemoryInfo(runtime);
+        renderHealthBanner(health);
+        renderHealthComponents(health?.components);
     }
 
     function renderBuildInfo(build) {
@@ -439,21 +431,21 @@
         if (git.dirty !== undefined) container.appendChild(createInfoRow('Dirty', git.dirty ? 'Yes' : 'No'));
     }
 
-    function renderSpringInfo(spring) {
+    function renderSpringInfo(application) {
         const container = document.getElementById('spring-info');
         if (!container) return;
         container.innerHTML = '';
 
-        if (!spring) {
+        if (!application) {
             container.innerHTML = '<p class="no-data">No Spring info available</p>';
             return;
         }
 
-        if (spring.bootVersion) container.appendChild(createInfoRow('Boot', spring.bootVersion));
-        if (spring.frameworkVersion) container.appendChild(createInfoRow('Framework', spring.frameworkVersion));
+        if (application.springBootVersion) container.appendChild(createInfoRow('Boot', application.springBootVersion));
+        if (application.springFrameworkVersion) container.appendChild(createInfoRow('Framework', application.springFrameworkVersion));
     }
 
-    function renderDataSourcesInfo(dataSources, dbHealth) {
+    function renderDataSourcesInfo(dataSources) {
         const container = document.getElementById('datasources-container');
         if (!container) return;
         container.innerHTML = '';
@@ -465,31 +457,23 @@
 
         container.classList.remove('hidden');
 
-        // Extract DB health status
-        let dbStatus = 'UNKNOWN';
-        let dbDetails = null;
-        if (dbHealth) {
-            dbStatus = dbHealth.status;
-            if (typeof dbStatus === 'object') {
-                dbStatus = dbStatus.code || dbStatus.name || 'UNKNOWN';
-            }
-            dbDetails = dbHealth.details;
-        }
-        const isDbUp = String(dbStatus).toUpperCase() === 'UP';
-
         dataSources.forEach((ds, index) => {
             const card = document.createElement('div');
             card.className = 'card datasource-card';
             card.dataset.dsIndex = index;
 
             const hostsStr = ds.hosts && ds.hosts.length > 0
-                ? ds.hosts.join(', ')
+                ? ds.hosts.map(h => h.host + (h.port ? ':' + h.port : '')).join(', ')
                 : 'unknown';
 
-            // Build health badge HTML
-            const healthBadge = dbHealth
-                ? `<span class="ds-health-badge ${isDbUp ? 'is-up' : 'is-down'}">${escapeHtml(String(dbStatus))}</span>`
+            const isUp = ds.health === 'UP';
+            const healthBadge = ds.health
+                ? `<span class="ds-health-badge ${isUp ? 'is-up' : 'is-down'}">${escapeHtml(ds.health)}</span>`
                 : '';
+
+            const dbProduct = ds.databaseProduct
+                ? (ds.databaseProduct.displayName || ds.databaseProduct)
+                : '-';
 
             card.innerHTML = `
                 <div class="card-header">
@@ -501,12 +485,11 @@
                     <div class="info-row"><span class="info-label">Database</span><span class="info-value">${escapeHtml(ds.databaseName || '-')}</span></div>
                     <div class="info-row"><span class="info-label">Host</span><span class="info-value mono">${escapeHtml(hostsStr)}</span></div>
                     <div class="info-row"><span class="info-label">User</span><span class="info-value">${escapeHtml(ds.username || '-')}</span></div>
-                    <div class="info-row"><span class="info-label">Product</span><span class="info-value">${escapeHtml(ds.productName || '-')}</span></div>
-                    <div class="info-row"><span class="info-label">Version</span><span class="info-value mono">${escapeHtml(ds.productVersion || '-')}</span></div>
-                    <div class="info-row"><span class="info-label">Driver</span><span class="info-value">${escapeHtml(ds.driverName || '-')} ${escapeHtml(ds.driverVersion || '')}</span></div>
-                    ${Object.keys(ds.connectionParams || {}).length > 0 ? '<div class="ds-params-toggle"><button class="btn btn-small">Show Connection Params</button></div>' : ''}
+                    <div class="info-row"><span class="info-label">Product</span><span class="info-value">${escapeHtml(String(dbProduct))}</span></div>
+                    <div class="info-row"><span class="info-label">Driver</span><span class="info-value">${escapeHtml(ds.driver || '-')}</span></div>
+                    ${Object.keys(ds.properties || {}).length > 0 ? '<div class="ds-params-toggle"><button class="btn btn-small">Show Connection Params</button></div>' : ''}
                 </div>
-                ${renderConnectionParams(ds.connectionParams)}
+                ${renderConnectionParams(ds.properties)}
             `;
 
             const toggleBtn = card.querySelector('.ds-params-toggle button');
@@ -530,51 +513,35 @@
     function renderConnectionParams(params) {
         if (!params || Object.keys(params).length === 0) return '';
 
-        // Group params by source
-        const bySource = {};
-        Object.entries(params).forEach(([key, param]) => {
-            const source = param.source || 'URL';
-            if (!bySource[source]) bySource[source] = [];
-            bySource[source].push({ key, value: param.value });
+        let html = '<div class="ds-params hidden"><div class="ds-params-list">';
+
+        Object.entries(params).forEach(([key, value]) => {
+            const isSensitive = /password|secret|key|token|credential/i.test(key);
+            const displayValue = isSensitive ? '********' : value;
+            html += `<div class="ds-param-item">
+                <span class="ds-param-key">${escapeHtml(key)}</span>
+                <span class="ds-param-value ${isSensitive ? 'sensitive' : ''}">${escapeHtml(displayValue || '-')}</span>
+            </div>`;
         });
 
-        let html = '<div class="ds-params hidden">';
-
-        Object.entries(bySource).forEach(([source, items]) => {
-            html += `<div class="ds-params-group">
-                <div class="ds-params-source">${escapeHtml(source)}</div>
-                <div class="ds-params-list">`;
-            items.forEach(({ key, value }) => {
-                const isSensitive = /password|secret|key|token|credential/i.test(key);
-                const displayValue = isSensitive ? '********' : value;
-                html += `<div class="ds-param-item">
-                    <span class="ds-param-key">${escapeHtml(key)}</span>
-                    <span class="ds-param-value ${isSensitive ? 'sensitive' : ''}">${escapeHtml(displayValue || '-')}</span>
-                </div>`;
-            });
-            html += '</div></div>';
-        });
-
-        html += '</div>';
+        html += '</div></div>';
         return html;
     }
 
-    function renderJavaInfo(java) {
+    function renderJavaInfo(application) {
         const container = document.getElementById('java-info');
         container.innerHTML = '';
 
-        if (!java) {
+        if (!application) {
             container.innerHTML = '<p class="no-data">No Java info available</p>';
             return;
         }
 
-        if (java.version) container.appendChild(createInfoRow('Version', java.version));
-        if (java.vendor?.name) container.appendChild(createInfoRow('Vendor', java.vendor.name));
-        if (java.runtime?.name) container.appendChild(createInfoRow('Runtime', java.runtime.name));
-        if (java.jvm?.name) container.appendChild(createInfoRow('JVM', java.jvm.name));
+        if (application.javaVersion) container.appendChild(createInfoRow('Version', application.javaVersion));
+        if (application.javaVendor) container.appendChild(createInfoRow('Vendor', application.javaVendor));
     }
 
-    function renderOsInfo(os, process) {
+    function renderOsInfo(os) {
         const container = document.getElementById('os-info');
         container.innerHTML = '';
 
@@ -585,8 +552,6 @@
 
         if (os.name) container.appendChild(createInfoRow('OS', `${os.name} ${os.version || ''}`));
         if (os.arch) container.appendChild(createInfoRow('Architecture', os.arch));
-        if (process?.cpus) container.appendChild(createInfoRow('CPUs', process.cpus));
-        if (process?.owner) container.appendChild(createInfoRow('User', process.owner));
     }
 
     function renderHealthBanner(health) {
@@ -605,113 +570,84 @@
             return;
         }
 
-        let status = health.status;
-        if (typeof status === 'object' && status !== null) {
-            status = status.code || status.name || 'UNKNOWN';
-        }
-        status = String(status || 'UNKNOWN');
+        const status = health.status || 'UNKNOWN';
         statusText.textContent = status;
 
-        const isUp = status.toUpperCase() === 'UP';
-        const isDown = status.toUpperCase() === 'DOWN';
+        const isUp = status === 'UP';
+        const isDown = status === 'DOWN';
 
         dot.className = 'health-dot' + (isDown ? ' is-down' : (!isUp ? ' is-unknown' : ''));
         banner.className = 'health-banner clickable' + (isDown ? ' is-down' : (!isUp ? ' is-unknown' : ''));
 
-        if (health.components) {
-            const total = Object.keys(health.components).length;
-            const healthy = Object.values(health.components).filter(c => {
-                const compStatus = typeof c.status === 'object' ? (c.status?.code || c.status?.name) : c.status;
-                return String(compStatus).toUpperCase() === 'UP';
-            }).length;
+        if (health.components && health.components.length > 0) {
+            const total = health.components.length;
+            const healthy = health.components.filter(c => c.status === 'UP').length;
             summary.textContent = `${healthy}/${total} healthy`;
         } else {
             summary.textContent = '';
         }
 
-        // Click handler to toggle health components
         banner.onclick = () => {
             const isExpanded = !healthComponents.classList.contains('hidden');
             healthComponents.classList.toggle('hidden');
             if (expandIcon) {
-                expandIcon.textContent = isExpanded ? '▶' : '▼';
+                expandIcon.textContent = isExpanded ? '\u25B6' : '\u25BC';
             }
         };
     }
 
-    function renderMemoryInfo(process, diskHealth) {
+    function renderMemoryInfo(runtime) {
         const container = document.getElementById('memory-info');
         const processInfo = document.getElementById('process-info');
         container.innerHTML = '';
 
-        if (!process?.memory && !diskHealth) {
+        const memory = runtime?.memory;
+        const storage = runtime?.storage;
+
+        if (!memory && (!storage || storage.length === 0)) {
             container.innerHTML = '<p class="no-data">No memory info available</p>';
             processInfo.textContent = '';
             return;
         }
 
-        if (process?.pid) {
-            processInfo.textContent = `PID: ${process.pid}`;
-        }
+        processInfo.textContent = '';
 
-        const { heap, nonHeap, garbageCollectors } = process?.memory || {};
+        if (memory) {
+            container.appendChild(createMemoryRowSimple('Heap', memory.heapUsed, memory.heapMax, memory.heapUsedPercent));
 
-        if (heap) {
-            container.appendChild(createMemoryRow('Heap', heap.used, heap.max, heap.committed));
-        }
-
-        if (nonHeap) {
-            container.appendChild(createMemoryRow('Non-Heap', nonHeap.used, nonHeap.max, nonHeap.committed));
-        }
-
-        if (garbageCollectors && garbageCollectors.length > 0) {
-            const gcInfo = document.createElement('div');
-            gcInfo.className = 'gc-info';
-            const gcText = garbageCollectors
-                .filter(gc => gc.collectionCount > 0)
-                .map(gc => `${gc.name}: ${gc.collectionCount}`)
-                .join(' | ');
-            if (gcText) {
-                gcInfo.innerHTML = `<span class="gc-label">GC:</span> <span class="gc-value">${escapeHtml(gcText)}</span>`;
-                container.appendChild(gcInfo);
+            if (memory.nonHeapUsed) {
+                const nonHeapRow = document.createElement('div');
+                nonHeapRow.className = 'memory-section';
+                nonHeapRow.innerHTML = `
+                    <div class="memory-header">
+                        <span class="memory-label">Non-Heap</span>
+                        <span class="memory-value">${formatBytes(memory.nonHeapUsed)}</span>
+                    </div>
+                `;
+                container.appendChild(nonHeapRow);
             }
         }
 
-        // Render disk health section
-        if (diskHealth?.details) {
-            const diskSection = document.createElement('div');
-            diskSection.className = 'disk-section';
-
-            const details = diskHealth.details;
-            const total = details.total || 0;
-            const free = details.free || 0;
-            const used = total - free;
-            const threshold = details.threshold || 0;
-
-            let diskStatus = diskHealth.status;
-            if (typeof diskStatus === 'object') {
-                diskStatus = diskStatus.code || diskStatus.name || 'UNKNOWN';
-            }
-            const isUp = String(diskStatus).toUpperCase() === 'UP';
-
-            diskSection.appendChild(createStorageRow('Disk', used, total, free, threshold, isUp));
-            container.appendChild(diskSection);
+        if (storage && storage.length > 0) {
+            storage.forEach(s => {
+                const used = s.total - s.free;
+                container.appendChild(createStorageRowSimple(s.path || 'Disk', used, s.total, s.free, s.usedPercent));
+            });
         }
     }
 
-    function createStorageRow(name, used, total, free, threshold, isUp) {
+    function createMemoryRowSimple(name, used, max, percent) {
         const row = document.createElement('div');
-        row.className = 'memory-section storage-section';
+        row.className = 'memory-section';
 
-        const hasTotal = total && total > 0;
-        const percentage = hasTotal ? (used / total) * 100 : 0;
-        const fillClass = !isUp ? 'danger' : (percentage >= 90 ? 'warning' : '');
-        const statusDot = `<span class="storage-status-dot ${isUp ? '' : 'is-down'}"></span>`;
+        const hasMax = max && max > 0;
+        const percentage = percent || (hasMax ? (used / max) * 100 : 0);
+        const fillClass = percentage >= 90 ? 'danger' : (percentage >= 70 ? 'warning' : '');
 
         row.innerHTML = `
             <div class="memory-header">
-                <span class="memory-label">${statusDot} ${name}</span>
-                <span class="memory-value">${formatBytes(used)} used / ${formatBytes(total)} total (${formatBytes(free)} free)</span>
+                <span class="memory-label">${name}</span>
+                <span class="memory-value">${formatBytes(used)} / ${formatBytes(max)} (${percentage.toFixed(1)}%)</span>
             </div>
             <div class="memory-bar">
                 <div class="memory-fill ${fillClass}" style="width: ${Math.min(percentage, 100)}%"></div>
@@ -721,19 +657,17 @@
         return row;
     }
 
-    function createMemoryRow(name, used, max, committed) {
+    function createStorageRowSimple(name, used, total, free, percent) {
         const row = document.createElement('div');
-        row.className = 'memory-section';
+        row.className = 'memory-section storage-section';
 
-        const hasMax = max && max > 0;
-        const percentage = hasMax ? (used / max) * 100 : (committed > 0 ? (used / committed) * 100 : 0);
-        const displayMax = hasMax ? formatBytes(max) : (committed > 0 ? formatBytes(committed) : '-');
-        const fillClass = percentage >= 90 ? 'danger' : (percentage >= 70 ? 'warning' : '');
+        const percentage = percent || (total > 0 ? (used / total) * 100 : 0);
+        const fillClass = percentage >= 90 ? 'warning' : '';
 
         row.innerHTML = `
             <div class="memory-header">
-                <span class="memory-label">${name}</span>
-                <span class="memory-value">${formatBytes(used)} / ${displayMax}${hasMax ? ` (${percentage.toFixed(1)}%)` : ''}</span>
+                <span class="memory-label">${escapeHtml(name)}</span>
+                <span class="memory-value">${formatBytes(used)} used / ${formatBytes(total)} total (${formatBytes(free)} free)</span>
             </div>
             <div class="memory-bar">
                 <div class="memory-fill ${fillClass}" style="width: ${Math.min(percentage, 100)}%"></div>
@@ -747,23 +681,18 @@
         const container = document.getElementById('components-grid');
         container.innerHTML = '';
 
-        if (!components || Object.keys(components).length === 0) {
+        if (!components || components.length === 0) {
             container.innerHTML = '<p class="no-data">No health components available</p>';
             return;
         }
 
-        Object.entries(components).forEach(([name, component]) => {
+        components.forEach(component => {
             const card = document.createElement('div');
             card.className = 'component-card';
 
-            let status = component.status;
-            if (typeof status === 'object' && status !== null) {
-                status = status.code || status.name || 'UNKNOWN';
-            }
-            status = String(status || 'UNKNOWN');
-
-            const isUp = status.toUpperCase() === 'UP';
-            const isDown = status.toUpperCase() === 'DOWN';
+            const status = component.status || 'UNKNOWN';
+            const isUp = status === 'UP';
+            const isDown = status === 'DOWN';
             const statusClass = isDown ? 'is-down' : (!isUp ? 'is-unknown' : '');
 
             let detailsHtml = '';
@@ -784,7 +713,7 @@
 
             card.innerHTML = `
                 <div class="component-header">
-                    <span class="component-name">${escapeHtml(name)}</span>
+                    <span class="component-name">${escapeHtml(component.name)}</span>
                     <span class="component-dot ${statusClass}"></span>
                 </div>
                 ${detailsHtml}
@@ -803,7 +732,7 @@
 
     // Environment Tab
     function renderEnvironmentTab(filterQuery = '') {
-        const env = peekabootData?.env;
+        const env = peekabootData?.environment;
         const container = document.getElementById('property-sources');
         container.innerHTML = '';
 
@@ -824,18 +753,17 @@
 
         env.propertySources.forEach(source => {
             const sourceName = source.name || 'Unknown Source';
-            const properties = source.properties || {};
+            const properties = source.properties || [];
 
-            if (Object.keys(properties).length === 0) return;
+            if (properties.length === 0) return;
 
-            const filteredEntries = Object.entries(properties).filter(([key, valueObj]) => {
-                const value = valueObj?.value !== undefined ? valueObj.value : valueObj;
-                return matchesFilter(key, value, filterQuery);
+            const filteredProperties = properties.filter(prop => {
+                return matchesFilter(prop.key, prop.value, filterQuery);
             });
 
-            if (filteredEntries.length === 0) return;
+            if (filteredProperties.length === 0) return;
 
-            totalMatches += filteredEntries.length;
+            totalMatches += filteredProperties.length;
 
             const sourceEl = document.createElement('div');
             sourceEl.className = 'property-source';
@@ -844,19 +772,18 @@
             headerEl.className = 'property-header';
             headerEl.innerHTML = `
                 <span class="property-name">${highlightText(sourceName, filterQuery)}</span>
-                <span class="property-count">${filteredEntries.length} properties</span>
+                <span class="property-count">${filteredProperties.length} properties</span>
             `;
 
             const listEl = document.createElement('div');
             listEl.className = 'property-list collapsed';
 
-            filteredEntries.forEach(([key, valueObj]) => {
-                const value = valueObj?.value !== undefined ? valueObj.value : valueObj;
+            filteredProperties.forEach(prop => {
                 const item = document.createElement('div');
                 item.className = 'property-item';
                 item.innerHTML = `
-                    <span class="property-key">${highlightText(key, filterQuery)}</span>
-                    <span class="property-value">${highlightText(formatValue(value), filterQuery)}</span>
+                    <span class="property-key">${highlightText(prop.key, filterQuery)}</span>
+                    <span class="property-value">${highlightText(formatValue(prop.value), filterQuery)}</span>
                 `;
                 listEl.appendChild(item);
             });
@@ -887,8 +814,8 @@
         if (!container) return;
         container.innerHTML = '';
 
-        const contexts = flyway?.contexts;
-        if (!contexts) {
+        const migrations = flyway?.migrations;
+        if (!migrations || migrations.length === 0) {
             if (noFlywayEl) noFlywayEl.classList.remove('hidden');
             return;
         }
@@ -896,69 +823,44 @@
         if (noFlywayEl) noFlywayEl.classList.add('hidden');
         if (flywayTab) flywayTab.classList.remove('hidden');
 
-        let hasMigrations = false;
+        migrations.forEach(migration => {
+            const card = document.createElement('div');
+            card.className = 'flyway-card';
 
-        Object.entries(contexts).forEach(([contextName, contextData]) => {
-            const flywayBeans = contextData?.flywayBeans;
-            if (!flywayBeans) return;
+            const isSuccess = migration.state === 'SUCCESS';
+            const isFailed = migration.state === 'FAILED';
+            const statusClass = isFailed ? 'error' : (isSuccess ? 'success' : '');
+            const isSlow = migration.executionTime > 100;
 
-            Object.entries(flywayBeans).forEach(([beanName, beanData]) => {
-                const migrations = beanData?.migrations;
-                if (!migrations || migrations.length === 0) return;
+            card.innerHTML = `
+                <div class="flyway-header">
+                    <span class="flyway-version">V${escapeHtml(migration.version)}</span>
+                    <span class="flyway-description">${escapeHtml(migration.description)}</span>
+                    <span class="flyway-status ${statusClass}">${escapeHtml(migration.state)}</span>
+                </div>
+                <div class="flyway-details">
+                    <span class="flyway-time ${isSlow ? 'slow' : ''}">&#9201; ${migration.executionTime}ms</span>
+                    <span class="flyway-date">${formatDate(migration.installedOn)}</span>
+                    <span class="flyway-type">${escapeHtml(migration.type)}</span>
+                </div>
+                <div class="flyway-script">${escapeHtml(migration.script)}</div>
+            `;
 
-                hasMigrations = true;
-
-                // Sort by version descending (newest first)
-                const sortedMigrations = [...migrations].sort((a, b) => {
-                    const vA = parseFloat(a.version) || 0;
-                    const vB = parseFloat(b.version) || 0;
-                    return vB - vA;
-                });
-
-                sortedMigrations.forEach(migration => {
-                    const card = document.createElement('div');
-                    card.className = 'flyway-card';
-
-                    const isSuccess = migration.state === 'SUCCESS';
-                    const isFailed = migration.state === 'FAILED';
-                    const statusClass = isFailed ? 'error' : (isSuccess ? 'success' : '');
-                    const isSlow = migration.executionTime > 100;
-
-                    card.innerHTML = `
-                        <div class="flyway-header">
-                            <span class="flyway-version">V${escapeHtml(migration.version)}</span>
-                            <span class="flyway-description">${escapeHtml(migration.description)}</span>
-                            <span class="flyway-status ${statusClass}">${escapeHtml(migration.state)}</span>
-                        </div>
-                        <div class="flyway-details">
-                            <span class="flyway-time ${isSlow ? 'slow' : ''}">&#9201; ${migration.executionTime}ms</span>
-                            <span class="flyway-date">${formatDate(migration.installedOn)}</span>
-                            <span class="flyway-type">${escapeHtml(migration.type)}</span>
-                        </div>
-                        <div class="flyway-script">${escapeHtml(migration.script)}</div>
-                    `;
-
-                    container.appendChild(card);
-                });
-            });
+            container.appendChild(card);
         });
-
-        if (!hasMigrations) {
-            if (noFlywayEl) noFlywayEl.classList.remove('hidden');
-        }
     }
 
     // Loggers Tab
     function renderLoggersTab(filterQuery = '') {
-        const loggers = peekabootData?.loggers;
+        const loggersInfo = peekabootData?.loggers;
         const container = document.getElementById('loggers-list');
         const loggersTab = document.querySelector('[data-tab="loggers"]');
 
         if (!container) return;
         container.innerHTML = '';
 
-        const loggersMap = loggers?.loggers;
-        if (!loggersMap || Object.keys(loggersMap).length === 0) {
+        const packages = loggersInfo?.packages;
+        if (!packages || packages.length === 0) {
             container.innerHTML = '<p class="no-data">No loggers available</p>';
             return;
         }
@@ -967,55 +869,38 @@
 
         const configuredOnly = document.getElementById('loggers-configured-only')?.checked || false;
 
-        // Group loggers by top-level package
-        const groups = new Map();
-
-        Object.entries(loggersMap).forEach(([name, config]) => {
-            if (configuredOnly && !config.configuredLevel) return;
-            if (filterQuery && !name.toLowerCase().includes(filterQuery.toLowerCase())) return;
-
-            const parts = name.split('.');
-            const groupKey = parts.length > 1 ? parts[0] : 'ROOT';
-
-            if (!groups.has(groupKey)) {
-                groups.set(groupKey, []);
-            }
-            groups.get(groupKey).push({ name, ...config });
-        });
-
-        if (groups.size === 0) {
-            container.innerHTML = `<p class="no-data">No loggers matching criteria</p>`;
-            return;
-        }
-
-        // Show level summary
-        const levels = loggers.levels || ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'];
+        // Show summary
         const summaryEl = document.createElement('div');
         summaryEl.className = 'loggers-summary';
-        summaryEl.innerHTML = levels.map(level => {
-            const count = Object.values(loggersMap).filter(l => l.effectiveLevel === level).length;
-            return count > 0 ? `<span class="level-badge level-${level.toLowerCase()}">${level}: ${count}</span>` : '';
-        }).join('');
+        summaryEl.innerHTML = `<span class="level-badge">Total: ${loggersInfo.totalCount}</span> <span class="level-badge">Configured: ${loggersInfo.configuredCount}</span>`;
         container.appendChild(summaryEl);
 
-        // Render groups
-        const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        let hasMatches = false;
 
-        sortedGroups.forEach(([groupName, groupLoggers]) => {
+        packages.forEach(group => {
+            const filteredLoggers = group.loggers.filter(logger => {
+                if (configuredOnly && !logger.configuredLevel) return false;
+                if (filterQuery && !logger.name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
+                return true;
+            });
+
+            if (filteredLoggers.length === 0) return;
+            hasMatches = true;
+
             const groupEl = document.createElement('div');
             groupEl.className = 'logger-group';
 
             const headerEl = document.createElement('div');
             headerEl.className = 'logger-group-header collapsed';
             headerEl.innerHTML = `
-                <span class="logger-group-name">${highlightText(groupName, filterQuery)}</span>
-                <span class="logger-group-count">${groupLoggers.length} loggers</span>
+                <span class="logger-group-name">${highlightText(group.packageName, filterQuery)}</span>
+                <span class="logger-group-count">${filteredLoggers.length} loggers</span>
             `;
 
             const listEl = document.createElement('div');
             listEl.className = 'logger-group-list collapsed';
 
-            groupLoggers.sort((a, b) => a.name.localeCompare(b.name)).forEach(logger => {
+            filteredLoggers.forEach(logger => {
                 const item = document.createElement('div');
                 item.className = 'logger-item';
 
@@ -1039,19 +924,23 @@
             groupEl.appendChild(listEl);
             container.appendChild(groupEl);
         });
+
+        if (!hasMatches && filterQuery) {
+            container.innerHTML = `<p class="no-data">No loggers matching criteria</p>`;
+        }
     }
 
     // Config Tab
     function renderConfigTab(filterQuery = '') {
-        const configprops = peekabootData?.configprops;
+        const configInfo = peekabootData?.config;
         const container = document.getElementById('config-groups');
         const configTab = document.querySelector('[data-tab="config"]');
 
         if (!container) return;
         container.innerHTML = '';
 
-        const contexts = configprops?.contexts;
-        if (!contexts) {
+        const groups = configInfo?.groups;
+        if (!groups || groups.length === 0) {
             container.innerHTML = '<p class="no-data">No configuration properties available</p>';
             return;
         }
@@ -1060,83 +949,52 @@
 
         let hasProps = false;
 
-        Object.entries(contexts).forEach(([contextName, contextData]) => {
-            const beans = contextData?.beans;
-            if (!beans || Object.keys(beans).length === 0) return;
-
-            // Group by prefix
-            const groups = new Map();
-
-            Object.entries(beans).forEach(([beanName, beanData]) => {
-                const prefix = beanData?.prefix || 'other';
-                const properties = beanData?.properties || {};
-
-                if (Object.keys(properties).length === 0) return;
-
-                // Apply filter
-                if (filterQuery) {
-                    const matchesPrefix = prefix.toLowerCase().includes(filterQuery.toLowerCase());
-                    const matchesProps = Object.entries(properties).some(([k, v]) =>
-                        k.toLowerCase().includes(filterQuery.toLowerCase()) ||
-                        String(v).toLowerCase().includes(filterQuery.toLowerCase())
-                    );
-                    if (!matchesPrefix && !matchesProps) return;
-                }
-
-                if (!groups.has(prefix)) {
-                    groups.set(prefix, []);
-                }
-                groups.get(prefix).push({ beanName, properties });
+        groups.forEach(group => {
+            const filteredProps = group.properties.filter(prop => {
+                if (!filterQuery) return true;
+                const matchesKey = prop.key.toLowerCase().includes(filterQuery.toLowerCase());
+                const matchesValue = prop.value && prop.value.toLowerCase().includes(filterQuery.toLowerCase());
+                return matchesKey || matchesValue;
             });
 
-            if (groups.size === 0) return;
+            if (filteredProps.length === 0) return;
             hasProps = true;
 
-            const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+            const groupEl = document.createElement('div');
+            groupEl.className = 'config-group';
 
-            sortedGroups.forEach(([prefix, beans]) => {
-                const groupEl = document.createElement('div');
-                groupEl.className = 'config-group';
+            const headerEl = document.createElement('div');
+            headerEl.className = 'config-header collapsed';
+            headerEl.innerHTML = `
+                <span class="config-prefix">${highlightText(group.prefix, filterQuery)}</span>
+                <span class="config-count">${filteredProps.length} properties</span>
+            `;
 
-                const propCount = beans.reduce((sum, b) => sum + Object.keys(b.properties).length, 0);
+            const listEl = document.createElement('div');
+            listEl.className = 'config-list collapsed';
 
-                const headerEl = document.createElement('div');
-                headerEl.className = 'config-header collapsed';
-                headerEl.innerHTML = `
-                    <span class="config-prefix">${highlightText(prefix, filterQuery)}</span>
-                    <span class="config-count">${propCount} properties</span>
+            filteredProps.forEach(prop => {
+                const item = document.createElement('div');
+                item.className = 'config-item';
+
+                const isSensitive = /password|secret|key|token|credential/i.test(prop.key);
+
+                item.innerHTML = `
+                    <span class="config-key">${highlightText(prop.key, filterQuery)}</span>
+                    <span class="config-value ${isSensitive ? 'sensitive' : ''}">${highlightText(prop.value || '-', filterQuery)}</span>
                 `;
 
-                const listEl = document.createElement('div');
-                listEl.className = 'config-list collapsed';
-
-                beans.forEach(({ properties }) => {
-                    Object.entries(properties).forEach(([key, value]) => {
-                        const item = document.createElement('div');
-                        item.className = 'config-item';
-
-                        // Mask sensitive values
-                        const isSensitive = /password|secret|key|token|credential/i.test(key);
-                        const displayValue = isSensitive ? '********' : formatValue(value);
-
-                        item.innerHTML = `
-                            <span class="config-key">${highlightText(key, filterQuery)}</span>
-                            <span class="config-value ${isSensitive ? 'sensitive' : ''}">${highlightText(displayValue, filterQuery)}</span>
-                        `;
-
-                        listEl.appendChild(item);
-                    });
-                });
-
-                headerEl.addEventListener('click', () => {
-                    listEl.classList.toggle('collapsed');
-                    headerEl.classList.toggle('collapsed');
-                });
-
-                groupEl.appendChild(headerEl);
-                groupEl.appendChild(listEl);
-                container.appendChild(groupEl);
+                listEl.appendChild(item);
             });
+
+            headerEl.addEventListener('click', () => {
+                listEl.classList.toggle('collapsed');
+                headerEl.classList.toggle('collapsed');
+            });
+
+            groupEl.appendChild(headerEl);
+            groupEl.appendChild(listEl);
+            container.appendChild(groupEl);
         });
 
         if (!hasProps) {
@@ -1224,34 +1082,6 @@
         } catch {
             return dateStr;
         }
-    }
-
-    function formatDuration(duration) {
-        if (!duration) return '-';
-
-        let ms;
-        if (typeof duration === 'string') {
-            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
-            if (match) {
-                const hours = parseFloat(match[1] || 0);
-                const minutes = parseFloat(match[2] || 0);
-                const seconds = parseFloat(match[3] || 0);
-                ms = (hours * 3600 + minutes * 60 + seconds) * 1000;
-            } else {
-                ms = parseFloat(duration);
-            }
-        } else if (typeof duration === 'object' && duration.seconds !== undefined) {
-            ms = duration.seconds * 1000 + (duration.nano || 0) / 1000000;
-        } else {
-            ms = duration;
-        }
-
-        if (isNaN(ms)) return '-';
-
-        if (ms < 1) return '<1ms';
-        if (ms < 1000) return Math.round(ms) + 'ms';
-        if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
-        return (ms / 60000).toFixed(2) + 'm';
     }
 
     if (document.readyState === 'loading') {
