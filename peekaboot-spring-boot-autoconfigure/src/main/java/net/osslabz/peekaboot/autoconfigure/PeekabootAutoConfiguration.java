@@ -1,8 +1,11 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import java.util.List;
+
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.config.PeekabootWebConfig;
 import net.osslabz.peekaboot.backend.controller.PeekabootController;
+import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.actuate.endpoint.invoke.OperationInvokerAdvisor;
@@ -37,8 +40,10 @@ public class PeekabootAutoConfiguration {
         EndpointMediaTypes mediaTypes,
         ObjectProvider<PathMapper> pathMappers,
         ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
-        ObjectProvider<OperationInvokerAdvisor> advisors) {
+        ObjectProvider<OperationInvokerAdvisor> advisors,
+        ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
 
-        return new PeekabookActuatorService(context, parameterMapper, mediaTypes, pathMappers, additionalPathsMappers, advisors);
+        return new PeekabookActuatorService(context, parameterMapper, mediaTypes, pathMappers, additionalPathsMappers,
+            advisors, dataSourceMetadataListProvider);
     }
 }

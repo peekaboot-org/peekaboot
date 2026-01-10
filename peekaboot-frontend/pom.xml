@@ -13,18 +13,6 @@
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Peekaboot Frontend - Embedded web UI resources</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>webjars-locator-core</artifactId>
-            <version>0.59</version>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars.npm</groupId>
-            <artifactId>bulma</artifactId>
-            <version>1.0.2</version>
-        </dependency>
-    </dependencies>
 
     <build>
         <resources>

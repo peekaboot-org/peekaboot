@@ -176,23 +176,23 @@ public class DevToolbarFilter implements Filter {
 
                 var style = document.createElement('style');
                 style.textContent = `
-                    .peekaboot-bar{display:flex;align-items:center;justify-content:space-between;background:#1a1a2e;color:#eee;font:12px/1.4 system-ui,sans-serif;padding:6px 12px;gap:16px}
+                    .peekaboot-bar{display:flex;align-items:center;justify-content:space-between;background:#0d1117;color:#c9d1d9;font:12px/1.4 system-ui,-apple-system,sans-serif;padding:6px 12px;gap:16px;border-top:1px solid #30363d}
                     .peekaboot-bar a{color:#58a6ff;text-decoration:none}
                     .peekaboot-bar a:hover{text-decoration:underline}
                     .peekaboot-left{display:flex;align-items:center;gap:12px}
                     .peekaboot-right{display:flex;align-items:center;gap:12px}
-                    .peekaboot-status{font-weight:600;padding:2px 6px;border-radius:3px}
-                    .peekaboot-status.s2xx{background:#238636;color:#fff}
-                    .peekaboot-status.s3xx{background:#9e6a03;color:#fff}
-                    .peekaboot-status.s4xx,.peekaboot-status.s5xx{background:#da3633;color:#fff}
+                    .peekaboot-status{font-weight:600;padding:2px 6px;border-radius:6px}
+                    .peekaboot-status.s2xx{background:#3fb950;color:#0d1117}
+                    .peekaboot-status.s3xx{background:#d29922;color:#0d1117}
+                    .peekaboot-status.s4xx,.peekaboot-status.s5xx{background:#f85149;color:#0d1117}
                     .peekaboot-method{color:#8b949e}
-                    .peekaboot-path{color:#c9d1d9;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+                    .peekaboot-path{color:#f0f6fc;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
                     .peekaboot-metric{display:flex;align-items:center;gap:4px;color:#8b949e}
                     .peekaboot-metric .val{color:#c9d1d9}
                     .peekaboot-metric.warn .val{color:#d29922}
                     .peekaboot-metric.error .val{color:#f85149}
                     .peekaboot-metric.ok .val{color:#3fb950}
-                    .peekaboot-trace{font-family:monospace;font-size:11px;color:#8b949e}
+                    .peekaboot-trace{font-family:ui-monospace,monospace;font-size:11px;color:#8b949e}
                     .peekaboot-health{display:flex;align-items:center;gap:4px;font-size:11px}
                     .peekaboot-health .dot{width:8px;height:8px;border-radius:50%}
                     .peekaboot-health .dot.up{background:#3fb950}
@@ -201,8 +201,8 @@ public class DevToolbarFilter implements Filter {
                     .peekaboot-memory{font-size:11px;color:#8b949e}
                     .peekaboot-memory.warn{color:#d29922}
                     .peekaboot-memory.error{color:#f85149}
-                    .peekaboot-expand{background:#30363d;border:1px solid #484f58;color:#c9d1d9;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:11px}
-                    .peekaboot-expand:hover{background:#484f58}
+                    .peekaboot-expand{background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px}
+                    .peekaboot-expand:hover{background:#21262d}
                 `;
                 shadow.appendChild(style);
 

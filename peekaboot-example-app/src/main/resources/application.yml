@@ -18,3 +18,51 @@ logging:
     net.osslabz.peekaboot: TRACE
 
 debug: true
+
+management:
+  endpoint:
+    health:
+      # Controls visibility of health check details (db, disk, etc.)
+      # Spring default: never | We show always to expose component health in dashboard
+      show-details: always
+
+  info:
+    env:
+      # Exposes environment variables in /actuator/info
+      # Spring default: false | We enable for environment visibility in dashboard
+      enabled: true
+    java:
+      # Exposes JVM vendor, version, runtime info
+      # Spring default: false | We enable for Java runtime details in dashboard
+      enabled: true
+    os:
+      # Exposes OS name, version, architecture
+      # Spring default: false | We enable for system info in dashboard
+      enabled: true
+    process:
+      # Exposes PID, uptime, CPU count, memory usage
+      # Spring default: false | We enable for process metrics in dashboard
+      enabled: true
+    git:
+      # Exposes git commit, branch info from git.properties
+      # Spring default: true | We keep enabled for build traceability
+      enabled: true
+
+  tracing:
+    sampling:
+      # Percentage of requests to trace (0.0 to 1.0)
+      # Spring default: 0.1 (10%) | We sample all requests for complete trace visibility
+      probability: 1.0
+
+  observations:
+    annotations:
+      # Enables @Observed, @Timed, @Counted annotations
+      # Spring default: false | We enable for declarative observability
+      enabled: true
+
+  otlp:
+    metrics:
+      export:
+        # Auto-export metrics to OTLP collector
+        # Spring default: true | We disable to avoid errors when no collector configured
+        enabled: false

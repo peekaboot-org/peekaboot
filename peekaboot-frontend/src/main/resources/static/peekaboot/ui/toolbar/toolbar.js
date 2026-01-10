@@ -9,9 +9,26 @@
     var traceData = null;
     var activeTab = 'timeline';
 
-    // Add expanded view styles
+    // Design tokens matching peekaboot.css (dark theme for toolbar)
     var expandedStyles = document.createElement('style');
     expandedStyles.textContent = `
+        :host {
+            --pk-bg: #0d1117;
+            --pk-bg-alt: #161b22;
+            --pk-bg-hover: #21262d;
+            --pk-border: #30363d;
+            --pk-text: #c9d1d9;
+            --pk-text-muted: #8b949e;
+            --pk-text-strong: #f0f6fc;
+            --pk-primary: #58a6ff;
+            --pk-success: #3fb950;
+            --pk-warning: #d29922;
+            --pk-danger: #f85149;
+            --pk-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --pk-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+            --pk-radius: 6px;
+        }
+
         .peekaboot-expanded {
             position: fixed;
             bottom: 0;
@@ -20,137 +37,163 @@
             height: 50vh;
             min-height: 300px;
             max-height: 70vh;
-            background: #1a1a2e;
-            color: #c9d1d9;
-            font: 13px/1.5 system-ui, -apple-system, sans-serif;
+            background: var(--pk-bg);
+            color: var(--pk-text);
+            font: 13px/1.5 var(--pk-font);
             display: flex;
             flex-direction: column;
-            border-top: 2px solid #30363d;
+            border-top: 2px solid var(--pk-border);
             z-index: 2147483647;
         }
+
         .peekaboot-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 8px 16px;
-            background: #161b22;
-            border-bottom: 1px solid #30363d;
+            background: var(--pk-bg-alt);
+            border-bottom: 1px solid var(--pk-border);
         }
+
         .peekaboot-tabs {
             display: flex;
             gap: 4px;
         }
+
         .peekaboot-tab {
             padding: 6px 12px;
             background: transparent;
             border: none;
-            color: #8b949e;
+            color: var(--pk-text-muted);
             cursor: pointer;
-            border-radius: 4px 4px 0 0;
+            border-radius: var(--pk-radius) var(--pk-radius) 0 0;
             font-size: 13px;
+            font-family: var(--pk-font);
         }
+
         .peekaboot-tab:hover {
-            color: #c9d1d9;
-            background: #21262d;
+            color: var(--pk-text);
+            background: var(--pk-bg-hover);
         }
+
         .peekaboot-tab.active {
-            color: #c9d1d9;
-            background: #30363d;
+            color: var(--pk-text);
+            background: var(--pk-border);
         }
+
         .peekaboot-tab .count {
             margin-left: 4px;
             padding: 1px 6px;
-            background: #30363d;
+            background: var(--pk-border);
             border-radius: 10px;
             font-size: 11px;
         }
+
         .peekaboot-tab.active .count {
-            background: #484f58;
+            background: var(--pk-bg-hover);
         }
+
         .peekaboot-close {
             background: transparent;
             border: none;
-            color: #8b949e;
+            color: var(--pk-text-muted);
             cursor: pointer;
             padding: 4px 8px;
             font-size: 18px;
         }
+
         .peekaboot-close:hover {
-            color: #f85149;
+            color: var(--pk-danger);
         }
+
         .peekaboot-content {
             flex: 1;
             overflow: auto;
             padding: 16px;
         }
+
         .peekaboot-loading {
             text-align: center;
             padding: 40px;
-            color: #8b949e;
+            color: var(--pk-text-muted);
         }
 
         /* Timeline styles */
         .span-item {
             margin: 4px 0;
             padding: 8px 12px;
-            background: #21262d;
-            border-radius: 4px;
-            border-left: 3px solid #30363d;
+            background: var(--pk-bg-alt);
+            border-radius: var(--pk-radius);
+            border-left: 3px solid var(--pk-border);
         }
+
         .span-item.has-error {
-            border-left-color: #f85149;
+            border-left-color: var(--pk-danger);
         }
+
         .span-item.is-db {
             border-left-color: #a371f7;
         }
+
         .span-header {
             display: flex;
             align-items: center;
             gap: 8px;
             cursor: pointer;
         }
+
         .span-icon {
             font-size: 14px;
         }
+
         .span-name {
             flex: 1;
             font-weight: 500;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            color: var(--pk-text-strong);
         }
+
         .span-duration {
-            color: #8b949e;
+            color: var(--pk-text-muted);
             font-size: 12px;
+            font-family: var(--pk-font-mono);
         }
+
         .span-duration.slow {
-            color: #d29922;
+            color: var(--pk-warning);
         }
+
         .span-duration.very-slow {
-            color: #f85149;
+            color: var(--pk-danger);
         }
+
         .span-details {
             margin-top: 8px;
             padding-top: 8px;
-            border-top: 1px solid #30363d;
+            border-top: 1px solid var(--pk-border);
             font-size: 12px;
         }
+
         .span-tags {
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
             margin-bottom: 8px;
         }
+
         .span-tag {
             padding: 2px 6px;
-            background: #30363d;
+            background: var(--pk-border);
             border-radius: 3px;
-            font-family: monospace;
+            font-family: var(--pk-font-mono);
             font-size: 11px;
         }
+
         .span-children {
             margin-left: 20px;
-            border-left: 1px dashed #30363d;
+            border-left: 1px dashed var(--pk-border);
             padding-left: 12px;
         }
 
@@ -159,31 +202,37 @@
             display: flex;
             gap: 12px;
             padding: 6px 12px;
-            border-bottom: 1px solid #21262d;
-            font-family: monospace;
+            border-bottom: 1px solid var(--pk-bg-alt);
+            font-family: var(--pk-font-mono);
             font-size: 12px;
         }
+
         .log-item:hover {
-            background: #21262d;
+            background: var(--pk-bg-alt);
         }
+
         .log-time {
-            color: #8b949e;
+            color: var(--pk-text-muted);
             white-space: nowrap;
         }
+
         .log-level {
             width: 50px;
             font-weight: 600;
         }
-        .log-level.DEBUG { color: #8b949e; }
-        .log-level.INFO { color: #58a6ff; }
-        .log-level.WARN { color: #d29922; }
-        .log-level.ERROR { color: #f85149; }
+
+        .log-level.DEBUG { color: var(--pk-text-muted); }
+        .log-level.INFO { color: var(--pk-primary); }
+        .log-level.WARN { color: var(--pk-warning); }
+        .log-level.ERROR { color: var(--pk-danger); }
+
         .log-logger {
             color: #a371f7;
             width: 150px;
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
         .log-message {
             flex: 1;
             word-break: break-word;
@@ -193,60 +242,71 @@
         .query-item {
             margin: 8px 0;
             padding: 12px;
-            background: #21262d;
-            border-radius: 4px;
+            background: var(--pk-bg-alt);
+            border-radius: var(--pk-radius);
             border-left: 3px solid #a371f7;
         }
+
         .query-header {
             display: flex;
             justify-content: space-between;
             margin-bottom: 8px;
         }
+
         .query-duration {
             font-weight: 600;
+            font-family: var(--pk-font-mono);
         }
-        .query-duration.slow { color: #d29922; }
-        .query-duration.very-slow { color: #f85149; }
+
+        .query-duration.slow { color: var(--pk-warning); }
+        .query-duration.very-slow { color: var(--pk-danger); }
+
         .query-sql {
-            font-family: monospace;
+            font-family: var(--pk-font-mono);
             font-size: 12px;
-            background: #161b22;
+            background: var(--pk-bg);
             padding: 8px;
-            border-radius: 4px;
+            border-radius: var(--pk-radius);
             overflow-x: auto;
             white-space: pre-wrap;
             word-break: break-all;
         }
+
         .query-params {
             margin-top: 8px;
             font-size: 11px;
-            color: #8b949e;
+            color: var(--pk-text-muted);
         }
 
         /* Request styles */
         .request-section {
             margin-bottom: 16px;
         }
+
         .request-section h3 {
             font-size: 14px;
             margin: 0 0 8px 0;
-            color: #8b949e;
+            color: var(--pk-text-muted);
         }
+
         .request-table {
             width: 100%;
             border-collapse: collapse;
             font-size: 12px;
         }
+
         .request-table td {
             padding: 4px 8px;
-            border-bottom: 1px solid #21262d;
+            border-bottom: 1px solid var(--pk-bg-alt);
         }
+
         .request-table td:first-child {
-            color: #8b949e;
+            color: var(--pk-text-muted);
             width: 200px;
         }
+
         .request-table td:last-child {
-            font-family: monospace;
+            font-family: var(--pk-font-mono);
             word-break: break-all;
         }
 
@@ -254,7 +314,7 @@
         .no-data {
             text-align: center;
             padding: 40px;
-            color: #8b949e;
+            color: var(--pk-text-muted);
         }
 
         /* Filter */
@@ -264,27 +324,32 @@
             margin-bottom: 12px;
             align-items: center;
         }
+
         .filter-input {
             flex: 1;
             max-width: 300px;
             padding: 6px 10px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #c9d1d9;
+            background: var(--pk-bg-alt);
+            border: 1px solid var(--pk-border);
+            border-radius: var(--pk-radius);
+            color: var(--pk-text);
             font-size: 13px;
+            font-family: var(--pk-font);
         }
+
         .filter-input:focus {
             outline: none;
-            border-color: #58a6ff;
+            border-color: var(--pk-primary);
         }
+
         .filter-select {
             padding: 6px 10px;
-            background: #21262d;
-            border: 1px solid #30363d;
-            border-radius: 4px;
-            color: #c9d1d9;
+            background: var(--pk-bg-alt);
+            border: 1px solid var(--pk-border);
+            border-radius: var(--pk-radius);
+            color: var(--pk-text);
             font-size: 13px;
+            font-family: var(--pk-font);
         }
     `;
     shadow.appendChild(expandedStyles);
@@ -303,7 +368,7 @@
                 <button class="peekaboot-tab" data-tab="logs">Logs <span class="count">-</span></button>
                 <button class="peekaboot-tab" data-tab="request">Request</button>
             </div>
-            <button class="peekaboot-close" title="Close">×</button>
+            <button class="peekaboot-close" title="Close">&times;</button>
         </div>
         <div class="peekaboot-content">
             <div class="peekaboot-loading">Loading trace data...</div>
@@ -440,7 +505,7 @@
         var duration = formatDuration(span.duration);
         var durationClass = getDurationClass(span.duration);
 
-        var icon = isDb ? '🗄' : (hasError ? '⚠' : '▸');
+        var icon = isDb ? '&#128451;' : (hasError ? '&#9888;' : '&#9654;');
         var classes = ['span-item'];
         if (hasError) classes.push('has-error');
         if (isDb) classes.push('is-db');
@@ -462,7 +527,7 @@
             html += '</div>';
         }
         if (hasError) {
-            html += '<div style="color:#f85149;">';
+            html += '<div style="color:var(--pk-danger);">';
             if (span.errorClass) html += '<strong>' + escapeHtml(span.errorClass) + '</strong><br>';
             if (span.errorMessage) html += escapeHtml(span.errorMessage);
             html += '</div>';
@@ -589,7 +654,7 @@
         html += '<tr><td>Path</td><td>' + escapeHtml(data.path) + '</td></tr>';
         html += '<tr><td>Status</td><td>' + data.status + '</td></tr>';
         html += '<tr><td>Duration</td><td>' + data.duration + 'ms</td></tr>';
-        html += '<tr><td>Trace ID</td><td style="font-family:monospace;">' + escapeHtml(data.traceId || '-') + '</td></tr>';
+        html += '<tr><td>Trace ID</td><td style="font-family:var(--pk-font-mono);">' + escapeHtml(data.traceId || '-') + '</td></tr>';
         html += '</table>';
         html += '</div>';
 

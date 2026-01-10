@@ -1,9 +1,13 @@
 package net.osslabz.peekaboot.backend.service;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.actuate.endpoint.ApiVersion;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
 import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
@@ -18,12 +22,15 @@ import org.springframework.boot.actuate.endpoint.web.PathMapper;
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpointDiscoverer;
 import org.springframework.context.ApplicationContext;
+import org.springframework.core.SpringVersion;
 
 
 public class PeekabookActuatorService {
 
 
     private final WebEndpointDiscoverer discoverer;
+
+    private final List<DataSourceMetadata> dataSourceMetadataList;
 
 
     public PeekabookActuatorService(
@@ -32,7 +39,8 @@ public class PeekabookActuatorService {
         EndpointMediaTypes mediaTypes,
         ObjectProvider<PathMapper> pathMappers,
         ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
-        ObjectProvider<OperationInvokerAdvisor> advisors) {
+        ObjectProvider<OperationInvokerAdvisor> advisors,
+        ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
 
         this.discoverer = new WebEndpointDiscoverer(
             context,
@@ -44,12 +52,19 @@ public class PeekabookActuatorService {
             List.of(),  // Empty endpoint filters = no exposure filtering
             List.of()   // Empty operation filters
         );
+        this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
 
     public Map<String, Object> getData() {
 
         Map<String, Object> results = new LinkedHashMap<>();
+
+        // Add Spring version info
+        results.put("spring", buildSpringInfo());
+
+        // Add DataSource metadata
+        results.put("dataSources", buildDataSourcesInfo());
 
         OperationArgumentResolver namespaceResolver = OperationArgumentResolver.of(
             WebServerNamespace.class,
@@ -77,5 +92,60 @@ public class PeekabookActuatorService {
         }
 
         return results;
+    }
+
+
+    private Map<String, String> buildSpringInfo() {
+
+        Map<String, String> springInfo = new LinkedHashMap<>();
+        springInfo.put("bootVersion", SpringBootVersion.getVersion());
+        springInfo.put("frameworkVersion", SpringVersion.getVersion());
+        return springInfo;
+    }
+
+
+    private List<Map<String, Object>> buildDataSourcesInfo() {
+
+        List<Map<String, Object>> dataSources = new ArrayList<>();
+
+        for (DataSourceMetadata metadata : dataSourceMetadataList) {
+            if (metadata == null) continue;
+
+            Map<String, Object> ds = new LinkedHashMap<>();
+            ds.put("name", metadata.getDataSourceName());
+            ds.put("databaseName", metadata.getDatabaseName());
+            ds.put("username", metadata.getUsername());
+
+            // Format hosts
+            List<String> hosts = new ArrayList<>();
+            if (metadata.getHosts() != null) {
+                metadata.getHosts().forEach(host -> hosts.add(host.toString()));
+            }
+            ds.put("hosts", hosts);
+
+            // Database product info
+            ds.put("productName", metadata.getDatabaseProductName());
+            ds.put("productVersion", metadata.getDatabaseProductVersion());
+
+            // Driver info
+            ds.put("driverName", metadata.getDriverName());
+            ds.put("driverVersion", metadata.getDriverVersion());
+
+            // Connection params
+            Map<String, Object> params = new LinkedHashMap<>();
+            if (metadata.getConnectionParams() != null) {
+                metadata.getConnectionParams().forEach((key, prop) -> {
+                    Map<String, Object> paramInfo = new LinkedHashMap<>();
+                    paramInfo.put("value", prop.value());
+                    paramInfo.put("source", prop.source() != null ? prop.source().name() : null);
+                    params.put(key, paramInfo);
+                });
+            }
+            ds.put("connectionParams", params);
+
+            dataSources.add(ds);
+        }
+
+        return dataSources;
     }
 }
