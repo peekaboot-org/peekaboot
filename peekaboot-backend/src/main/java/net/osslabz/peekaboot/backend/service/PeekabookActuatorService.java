@@ -23,8 +23,10 @@ import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpointDiscoverer;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.SpringVersion;
+import org.springframework.stereotype.Service;
 
 
+@Service
 public class PeekabookActuatorService {
 
 
