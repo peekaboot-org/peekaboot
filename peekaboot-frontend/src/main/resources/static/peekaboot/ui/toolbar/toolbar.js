@@ -630,7 +630,7 @@
 
         var html = '';
         filtered.forEach(function(log) {
-            var time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '-';
+            var time = formatTime(log.timestamp);
             var logger = log.loggerName ? log.loggerName.split('.').pop() : '-';
             html += '<div class="log-item">';
             html += '<span class="log-time">' + time + '</span>';
@@ -667,7 +667,7 @@
             html += '<tr><td>DB Queries</td><td>' + countQueries(traceData.spans || []) + '</td></tr>';
             html += '<tr><td>Logs</td><td>' + (traceData.logs || []).length + '</td></tr>';
             if (traceData.startTime) {
-                html += '<tr><td>Start Time</td><td>' + new Date(traceData.startTime).toLocaleString() + '</td></tr>';
+                html += '<tr><td>Start Time</td><td>' + formatDateTime(traceData.startTime) + '</td></tr>';
             }
             html += '</table>';
             html += '</div>';
@@ -723,6 +723,36 @@
             return parseFloat(duration) || 0;
         }
         return duration || 0;
+    }
+
+    function getDateFormatOptions(includeDate) {
+        var locale = localStorage.getItem('peekaboot-locale') || navigator.language || 'en-US';
+
+        var options = {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        };
+
+        if (includeDate) {
+            options.year = 'numeric';
+            options.month = 'short';
+            options.day = 'numeric';
+        }
+
+        return { options: options, locale: locale };
+    }
+
+    function formatTime(timestamp) {
+        if (!timestamp) return '-';
+        var fmt = getDateFormatOptions(false);
+        return new Date(timestamp).toLocaleTimeString(fmt.locale, fmt.options);
+    }
+
+    function formatDateTime(timestamp) {
+        if (!timestamp) return '-';
+        var fmt = getDateFormatOptions(true);
+        return new Date(timestamp).toLocaleString(fmt.locale, fmt.options);
     }
 
     function escapeHtml(text) {
