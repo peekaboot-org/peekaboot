@@ -1140,67 +1140,6 @@
         return `Every ${ms / 86400000}d`;
     }
 
-    function interpretCronExpression(cron) {
-        if (!cron) return '-';
-        const parts = cron.trim().split(/\s+/);
-        if (parts.length < 6) return cron;
-
-        const [sec, min, hour, dayOfMonth, month, dayOfWeek] = parts;
-
-        // Common patterns
-        if (sec === '0' && min === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return 'Every day at midnight';
-        }
-        if (sec === '0' && min === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return 'Every hour';
-        }
-        if (sec === '0' && min === '*' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return 'Every minute';
-        }
-        if (sec === '*' && min === '*' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return 'Every second';
-        }
-
-        // Every N seconds/minutes/hours
-        if (sec.startsWith('*/') && min === '*' && hour === '*') {
-            return `Every ${sec.slice(2)} seconds`;
-        }
-        if (sec === '0' && min.startsWith('*/') && hour === '*') {
-            return `Every ${min.slice(2)} minutes`;
-        }
-        if (sec === '0' && min === '0' && hour.startsWith('*/')) {
-            return `Every ${hour.slice(2)} hours`;
-        }
-
-        // At specific minute each hour
-        if (sec === '0' && /^\d+$/.test(min) && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return `Every hour at :${min.padStart(2, '0')}`;
-        }
-
-        // At specific time daily
-        if (sec === '0' && /^\d+$/.test(min) && /^\d+$/.test(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
-            return `Daily at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-        }
-
-        // Weekday patterns
-        if (dayOfWeek !== '*' && dayOfWeek !== '?') {
-            const days = { '0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed', '4': 'Thu', '5': 'Fri', '6': 'Sat', '7': 'Sun' };
-            const dayNames = dayOfWeek.split(',').map(d => days[d] || d).join(', ');
-            if (/^\d+$/.test(min) && /^\d+$/.test(hour)) {
-                return `${dayNames} at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-            }
-        }
-
-        // Day of month patterns
-        if (/^\d+$/.test(dayOfMonth) && dayOfMonth !== '*') {
-            if (/^\d+$/.test(min) && /^\d+$/.test(hour)) {
-                return `Day ${dayOfMonth} at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-            }
-        }
-
-        return cron;
-    }
-
     function matchesFilter(key, value, filter) {
         if (!filter) return true;
         const filterLower = filter.toLowerCase();
