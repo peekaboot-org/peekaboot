@@ -46,9 +46,21 @@ public class RuntimeMapper {
         Object memoryObj = process.get("memory");
         if (!(memoryObj instanceof Map<?, ?> memory)) return null;
 
-        long heapUsed = getLongValue(memory, "heap");
-        long heapMax = getLongValue(memory, "heapMax");
-        long nonHeapUsed = getLongValue(memory, "nonHeap");
+        // heap and nonHeap are nested objects with used/max/etc.
+        long heapUsed = 0;
+        long heapMax = 0;
+        long nonHeapUsed = 0;
+
+        Object heapObj = memory.get("heap");
+        if (heapObj instanceof Map<?, ?> heap) {
+            heapUsed = getLongValue(heap, "used");
+            heapMax = getLongValue(heap, "max");
+        }
+
+        Object nonHeapObj = memory.get("nonHeap");
+        if (nonHeapObj instanceof Map<?, ?> nonHeap) {
+            nonHeapUsed = getLongValue(nonHeap, "used");
+        }
 
         if (heapUsed == 0 && heapMax == 0) return null;
         return MemoryInfo.of(heapUsed, heapMax, nonHeapUsed);

@@ -42,7 +42,10 @@ class RuntimeMapperTest {
     void map_shouldExtractMemoryInfo() {
         Map<String, Object> info = Map.of(
             "process", Map.of(
-                "memory", Map.of("heap", 100_000_000L, "heapMax", 500_000_000L, "nonHeap", 50_000_000L)
+                "memory", Map.of(
+                    "heap", Map.of("used", 100_000_000L, "max", 500_000_000L),
+                    "nonHeap", Map.of("used", 50_000_000L)
+                )
             )
         );
         RuntimeInfo result = mapper.map(info, null);
