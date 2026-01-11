@@ -11,9 +11,14 @@ public record ServerInfo(
     String timezoneDisplay
 ) {
     public static ServerInfo current() {
+        return current(Locale.ENGLISH);
+    }
+
+    public static ServerInfo current(Locale locale) {
         ZoneId zone = ZoneId.systemDefault();
         String offset = zone.getRules().getOffset(Instant.now()).toString();
-        String display = zone.getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+        Locale effectiveLocale = locale != null ? locale : Locale.ENGLISH;
+        String display = zone.getDisplayName(TextStyle.FULL, effectiveLocale);
         return new ServerInfo(zone.getId(), offset, display);
     }
 }
