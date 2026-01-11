@@ -2,17 +2,25 @@ package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
 import net.osslabz.peekaboot.backend.domain.scheduledtasks.*;
+import net.osslabz.peekaboot.backend.service.CronDescriptionService;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 @Component
 public class ScheduledTasksMapper {
 
-    public ScheduledTasksInfo map(ScheduledTasksResponse response) {
+    private final CronDescriptionService cronDescriptionService;
+
+    public ScheduledTasksMapper(CronDescriptionService cronDescriptionService) {
+        this.cronDescriptionService = cronDescriptionService;
+    }
+
+    public ScheduledTasksInfo map(ScheduledTasksResponse response, Locale locale) {
         if (response == null) {
             return new ScheduledTasksInfo(List.of(), 0, 0, 0);
         }
@@ -21,7 +29,7 @@ public class ScheduledTasksMapper {
 
         if (response.cron() != null) {
             for (var cron : response.cron()) {
-                tasks.add(mapCronTask(cron));
+                tasks.add(mapCronTask(cron, locale));
             }
         }
 
@@ -48,11 +56,12 @@ public class ScheduledTasksMapper {
         return new ScheduledTasksInfo(tasks, cronCount, fixedDelayCount, fixedRateCount);
     }
 
-    private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron) {
+    private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
         return new ScheduledTaskInfo(
             extractTarget(cron.runnable()),
             TaskType.CRON,
             cron.expression(),
+            cronDescriptionService.describe(cron.expression(), locale),
             null,
             parseTime(cron.lastExecution()),
             parseStatus(cron.lastExecution()),
@@ -66,6 +75,7 @@ public class ScheduledTasksMapper {
             extractTarget(fixed.runnable()),
             type,
             formatInterval(fixed.interval()),
+            null,
             fixed.interval(),
             parseTime(fixed.lastExecution()),
             parseStatus(fixed.lastExecution()),

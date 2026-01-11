@@ -2,15 +2,17 @@ package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
 import net.osslabz.peekaboot.backend.domain.scheduledtasks.*;
+import net.osslabz.peekaboot.backend.service.CronDescriptionService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class ScheduledTasksMapperTest {
 
-    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper();
+    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper(new CronDescriptionService());
 
     @Test
     void map_shouldExtractCronTasks() {
@@ -26,7 +28,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.cronCount()).isEqualTo(1);
@@ -50,7 +52,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.fixedDelayCount()).isEqualTo(1);
@@ -75,7 +77,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.fixedRateCount()).isEqualTo(1);
@@ -85,7 +87,7 @@ class ScheduledTasksMapperTest {
 
     @Test
     void map_shouldHandleNullInput() {
-        ScheduledTasksInfo result = mapper.map(null);
+        ScheduledTasksInfo result = mapper.map(null, Locale.ENGLISH);
         assertThat(result.tasks()).isEmpty();
         assertThat(result.cronCount()).isZero();
     }
@@ -105,7 +107,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.FAILED);
         assertThat(result.tasks().get(0).lastException()).isEqualTo("NullPointerException");
@@ -123,7 +125,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).hasSize(3);
         assertThat(result.tasks().get(0).target()).isEqualTo("a.Scheduler.cronA");
@@ -144,7 +146,7 @@ class ScheduledTasksMapperTest {
             List.of()
         );
 
-        ScheduledTasksInfo result = mapper.map(response);
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks().get(0).schedule()).isEqualTo("500ms");
         assertThat(result.tasks().get(1).schedule()).isEqualTo("30s");

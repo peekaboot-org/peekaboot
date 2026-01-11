@@ -9,6 +9,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -54,7 +55,7 @@ public class ActuatorInsightsService {
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
-    public ActuatorInsightsResponse getInsights() {
+    public ActuatorInsightsResponse getInsights(Locale locale) {
         Map<String, Object> rawData = rawService.getData();
         ActuatorRawResponse typed = rawMapper.map(rawData);
 
@@ -67,7 +68,7 @@ public class ActuatorInsightsService {
             loggersMapper.map(typed.loggers()),
             flywayMapper.map(typed.flyway()),
             configMapper.map(typed.configprops()),
-            scheduledTasksMapper.map(typed.scheduledtasks())
+            scheduledTasksMapper.map(typed.scheduledtasks(), locale)
         );
     }
 }

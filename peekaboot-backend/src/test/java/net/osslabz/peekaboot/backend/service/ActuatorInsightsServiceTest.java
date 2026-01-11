@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +39,7 @@ class ActuatorInsightsServiceTest {
             new LoggersMapper(),
             new FlywayMapper(),
             new ConfigMapper(),
-            new ScheduledTasksMapper(),
+            new ScheduledTasksMapper(new CronDescriptionService()),
             dataSourceProvider
         );
     }
@@ -55,7 +56,7 @@ class ActuatorInsightsServiceTest {
             "configprops", Map.of("contexts", Map.of())
         ));
 
-        ActuatorInsightsResponse response = insightsService.getInsights();
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
 
         assertThat(response.health().status()).isEqualTo(HealthStatus.UP);
         assertThat(response.application().springBootVersion()).isEqualTo("4.0.1");
@@ -66,7 +67,7 @@ class ActuatorInsightsServiceTest {
     void getInsights_shouldHandleMissingData() {
         when(rawService.getData()).thenReturn(Map.of());
 
-        ActuatorInsightsResponse response = insightsService.getInsights();
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
 
         assertThat(response.health().status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(response.dataSources()).isEmpty();

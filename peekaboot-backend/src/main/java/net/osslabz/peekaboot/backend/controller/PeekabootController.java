@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 
@@ -59,8 +60,8 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ActuatorInsightsResponse getInsights() {
-        return actuatorInsightsService.getInsights();
+    public ActuatorInsightsResponse getInsights(Locale locale) {
+        return actuatorInsightsService.getInsights(locale);
     }
 
     @GetMapping(value = "/api/features", produces = MediaType.APPLICATION_JSON_VALUE)
