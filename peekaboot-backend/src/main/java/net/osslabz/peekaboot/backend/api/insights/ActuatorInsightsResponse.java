@@ -9,6 +9,7 @@ import net.osslabz.peekaboot.backend.domain.health.HealthInfo;
 import net.osslabz.peekaboot.backend.domain.loggers.LoggersInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.RuntimeInfo;
 import net.osslabz.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
+import net.osslabz.peekaboot.backend.domain.server.ServerInfo;
 
 import java.util.List;
 
@@ -21,5 +22,6 @@ public record ActuatorInsightsResponse(
     LoggersInfo loggers,
     FlywayInfo flyway,
     ConfigInfo config,
-    ScheduledTasksInfo scheduledTasks
+    ScheduledTasksInfo scheduledTasks,
+    ServerInfo server
 ) {}

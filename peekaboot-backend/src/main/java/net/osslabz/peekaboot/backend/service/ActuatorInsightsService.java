@@ -4,6 +4,7 @@ import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawMapper;
 import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
+import net.osslabz.peekaboot.backend.domain.server.ServerInfo;
 import net.osslabz.peekaboot.backend.mapper.actuator.*;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
@@ -68,7 +69,8 @@ public class ActuatorInsightsService {
             loggersMapper.map(typed.loggers()),
             flywayMapper.map(typed.flyway()),
             configMapper.map(typed.configprops()),
-            scheduledTasksMapper.map(typed.scheduledtasks(), locale)
+            scheduledTasksMapper.map(typed.scheduledtasks(), locale),
+            ServerInfo.current(locale)
         );
     }
 }
