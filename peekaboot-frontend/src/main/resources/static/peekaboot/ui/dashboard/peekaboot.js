@@ -1086,7 +1086,7 @@
 
                 const typeLabel = type === 'CRON' ? 'Cron' : (type === 'FIXED_DELAY' ? 'Fixed Delay' : 'Fixed Rate');
                 const scheduleDisplay = type === 'CRON'
-                    ? interpretCronExpression(task.schedule)
+                    ? (task.scheduleDescription || task.schedule)
                     : formatFixedInterval(task.intervalMs);
 
                 item.innerHTML = `

@@ -13,6 +13,19 @@
                 <h1>peekaboot</h1>
                 <div class="header-actions">
                     <span class="header-time" id="last-updated"></span>
+                    <!-- Timezone Toggle -->
+                    <button class="btn btn-tz" id="timezone-toggle" title="Toggle timezone">
+                        <span id="timezone-icon">&#127760;</span>
+                        <span id="timezone-label">Browser</span>
+                    </button>
+                    <span class="header-tz-info" id="tz-info"></span>
+                    <!-- Locale Selector -->
+                    <select class="btn btn-select" id="locale-select" title="Language">
+                        <option value="en-US">EN</option>
+                        <option value="de-DE">DE</option>
+                        <option value="fr-FR">FR</option>
+                        <option value="es-ES">ES</option>
+                    </select>
                     <button class="btn btn-icon" id="refresh-btn" title="Refresh now">
                         <span id="refresh-icon">&#8635;</span>
                     </button>

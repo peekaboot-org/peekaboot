@@ -1481,3 +1481,44 @@ mark {
         justify-content: flex-start;
     }
 }
+
+/* Timezone and Locale Controls */
+.btn-tz {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-space-xs);
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    font-size: var(--pk-text-xs);
+}
+
+.btn-select {
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    font-size: var(--pk-text-xs);
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: var(--pk-radius);
+    color: inherit;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.btn-select option {
+    background: var(--pk-bg);
+    color: var(--pk-text);
+}
+
+.header-tz-info {
+    font-size: var(--pk-text-xs);
+    opacity: 0.85;
+    margin-right: var(--pk-space-sm);
+}
+
+@media (max-width: 767px) {
+    .header-tz-info {
+        display: none;
+    }
+    .btn-tz span:last-child {
+        display: none;
+    }
+}
