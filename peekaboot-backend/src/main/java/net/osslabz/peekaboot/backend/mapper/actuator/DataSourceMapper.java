@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
+import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
 import net.osslabz.peekaboot.backend.domain.datasource.DataSourceInfo;
 import net.osslabz.peekaboot.backend.domain.health.HealthStatus;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -19,12 +20,12 @@ public class DataSourceMapper {
         "password|secret|key|token|credential", Pattern.CASE_INSENSITIVE
     );
 
-    public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, Map<String, Object> healthComponents) {
+    public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
         if (metadataList == null || metadataList.isEmpty()) {
             return List.of();
         }
 
-        HealthStatus dbHealth = extractDbHealth(healthComponents);
+        HealthStatus dbHealth = extractDbHealth(health);
 
         return metadataList.stream()
             .filter(m -> m != null)
@@ -85,24 +86,14 @@ public class DataSourceMapper {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    private HealthStatus extractDbHealth(Map<String, Object> healthComponents) {
-        if (healthComponents == null) return HealthStatus.UNKNOWN;
-
-        Object dbObj = healthComponents.get("db");
-        if (!(dbObj instanceof Map<?, ?> db)) return HealthStatus.UNKNOWN;
-
-        Object statusObj = db.get("status");
-        if (statusObj == null) return HealthStatus.UNKNOWN;
-
-        String statusStr;
-        if (statusObj instanceof Map<?, ?> m) {
-            Object code = m.get("code");
-            statusStr = code != null ? code.toString() : String.valueOf(m.get("name"));
-        } else {
-            statusStr = statusObj.toString();
+    private HealthStatus extractDbHealth(HealthResponse health) {
+        if (health == null || health.body() == null || health.body().components() == null) {
+            return HealthStatus.UNKNOWN;
         }
 
-        return HealthStatus.fromString(statusStr);
+        HealthResponse.HealthComponent db = health.body().components().get("db");
+        if (db == null) return HealthStatus.UNKNOWN;
+
+        return HealthStatus.fromString(db.status());
     }
 }

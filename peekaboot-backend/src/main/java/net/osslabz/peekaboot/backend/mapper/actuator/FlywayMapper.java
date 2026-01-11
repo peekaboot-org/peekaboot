@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
@@ -9,40 +10,25 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class FlywayMapper {
 
-    @SuppressWarnings("unchecked")
-    public FlywayInfo map(Map<String, Object> flywayData) {
-        if (flywayData == null) {
+    public FlywayInfo map(FlywayResponse flywayData) {
+        if (flywayData == null || flywayData.contexts() == null) {
             return new FlywayInfo(List.of());
         }
 
         List<MigrationInfo> migrations = new ArrayList<>();
 
-        Object contextsObj = flywayData.get("contexts");
-        if (!(contextsObj instanceof Map<?, ?> contexts)) {
-            return new FlywayInfo(List.of());
-        }
+        for (FlywayResponse.FlywayContext context : flywayData.contexts().values()) {
+            if (context.flywayBeans() == null) continue;
 
-        for (Object contextValue : contexts.values()) {
-            if (!(contextValue instanceof Map<?, ?> context)) continue;
+            for (FlywayResponse.FlywayBean bean : context.flywayBeans().values()) {
+                if (bean.migrations() == null) continue;
 
-            Object beansObj = context.get("flywayBeans");
-            if (!(beansObj instanceof Map<?, ?> beans)) continue;
-
-            for (Object beanValue : beans.values()) {
-                if (!(beanValue instanceof Map<?, ?> bean)) continue;
-
-                Object migrationsObj = bean.get("migrations");
-                if (!(migrationsObj instanceof List<?> migrationsList)) continue;
-
-                for (Object migrationObj : migrationsList) {
-                    if (migrationObj instanceof Map<?, ?> migration) {
-                        migrations.add(mapMigration((Map<String, Object>) migration));
-                    }
+                for (FlywayResponse.Migration migration : bean.migrations()) {
+                    migrations.add(mapMigration(migration));
                 }
             }
         }
@@ -51,29 +37,26 @@ public class FlywayMapper {
         return new FlywayInfo(migrations);
     }
 
-    private MigrationInfo mapMigration(Map<String, Object> migration) {
-        String version = getStringValue(migration, "version");
-        String description = getStringValue(migration, "description");
-        String type = getStringValue(migration, "type");
-        MigrationState state = MigrationState.fromString(getStringValue(migration, "state"));
-        String script = getStringValue(migration, "script");
+    private MigrationInfo mapMigration(FlywayResponse.Migration migration) {
+        MigrationState state = MigrationState.fromString(migration.state());
 
         Instant installedOn = null;
-        Object installedOnObj = migration.get("installedOn");
-        if (installedOnObj != null) {
+        if (migration.installedOn() != null) {
             try {
-                installedOn = Instant.parse(installedOnObj.toString());
+                installedOn = Instant.parse(migration.installedOn());
             } catch (Exception ignored) {
             }
         }
 
-        Integer executionTime = null;
-        Object execTimeObj = migration.get("executionTime");
-        if (execTimeObj instanceof Number n) {
-            executionTime = n.intValue();
-        }
-
-        return new MigrationInfo(version, description, type, state, installedOn, executionTime, script);
+        return new MigrationInfo(
+            migration.version(),
+            migration.description(),
+            migration.type(),
+            state,
+            installedOn,
+            migration.executionTime(),
+            migration.script()
+        );
     }
 
     private int compareVersions(String v1, String v2) {
@@ -99,10 +82,5 @@ public class FlywayMapper {
         } catch (NumberFormatException e) {
             return 0;
         }
-    }
-
-    private String getStringValue(Map<?, ?> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
     }
 }

@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawMapper;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.health.HealthStatus;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -28,6 +29,7 @@ class ActuatorInsightsServiceTest {
 
         insightsService = new ActuatorInsightsService(
             rawService,
+            new ActuatorRawMapper(),
             new HealthMapper(),
             new RuntimeMapper(),
             new DataSourceMapper(),
@@ -43,7 +45,7 @@ class ActuatorInsightsServiceTest {
     @Test
     void getInsights_shouldMapAllSections() {
         when(rawService.getData()).thenReturn(Map.of(
-            "health", Map.of("status", "UP", "components", Map.of()),
+            "health", Map.of("body", Map.of("status", "UP", "components", Map.of()), "status", 200),
             "info", Map.of("build", Map.of("name", "test")),
             "spring", Map.of("bootVersion", "4.0.1"),
             "env", Map.of("activeProfiles", List.of("dev")),

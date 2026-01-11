@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
 import org.junit.jupiter.api.Test;
@@ -15,19 +16,14 @@ class FlywayMapperTest {
 
     @Test
     void map_shouldExtractMigrations() {
-        Map<String, Object> flywayData = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "flywayBeans", Map.of(
-                        "flyway", Map.of(
-                            "migrations", List.of(
-                                Map.of("version", "1", "description", "Initial schema", "type", "SQL", "state", "SUCCESS", "script", "V1__Initial_schema.sql"),
-                                Map.of("version", "2", "description", "Add users", "type", "SQL", "state", "SUCCESS", "script", "V2__Add_users.sql")
-                            )
-                        )
-                    )
-                )
-            )
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(12345L, "Initial schema", 100, "admin", "2024-01-01T10:00:00Z", 1, "V1__Initial_schema.sql", "SUCCESS", "SQL", "1"),
+                    new FlywayResponse.Migration(12346L, "Add users", 50, "admin", "2024-01-02T10:00:00Z", 2, "V2__Add_users.sql", "SUCCESS", "SQL", "2")
+                ))),
+                null
+            ))
         );
 
         FlywayInfo result = mapper.map(flywayData);
@@ -40,20 +36,15 @@ class FlywayMapperTest {
 
     @Test
     void map_shouldSortMigrationsByVersion() {
-        Map<String, Object> flywayData = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "flywayBeans", Map.of(
-                        "flyway", Map.of(
-                            "migrations", List.of(
-                                Map.of("version", "2.0", "description", "Second", "state", "SUCCESS"),
-                                Map.of("version", "1.0", "description", "First", "state", "SUCCESS"),
-                                Map.of("version", "10.0", "description", "Tenth", "state", "SUCCESS")
-                            )
-                        )
-                    )
-                )
-            )
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, "Second", null, null, null, null, null, "SUCCESS", null, "2.0"),
+                    new FlywayResponse.Migration(null, "First", null, null, null, null, null, "SUCCESS", null, "1.0"),
+                    new FlywayResponse.Migration(null, "Tenth", null, null, null, null, null, "SUCCESS", null, "10.0")
+                ))),
+                null
+            ))
         );
 
         FlywayInfo result = mapper.map(flywayData);
@@ -70,25 +61,21 @@ class FlywayMapperTest {
     }
 
     @Test
-    void map_shouldHandleMissingContexts() {
-        FlywayInfo result = mapper.map(Map.of());
+    void map_shouldHandleNullContexts() {
+        FlywayResponse flywayData = new FlywayResponse(null);
+        FlywayInfo result = mapper.map(flywayData);
         assertThat(result.migrations()).isEmpty();
     }
 
     @Test
     void map_shouldHandlePendingState() {
-        Map<String, Object> flywayData = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "flywayBeans", Map.of(
-                        "flyway", Map.of(
-                            "migrations", List.of(
-                                Map.of("version", "1", "state", "PENDING")
-                            )
-                        )
-                    )
-                )
-            )
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "PENDING", null, "1")
+                ))),
+                null
+            ))
         );
 
         FlywayInfo result = mapper.map(flywayData);
@@ -97,18 +84,13 @@ class FlywayMapperTest {
 
     @Test
     void map_shouldParseExecutionTime() {
-        Map<String, Object> flywayData = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "flywayBeans", Map.of(
-                        "flyway", Map.of(
-                            "migrations", List.of(
-                                Map.of("version", "1", "state", "SUCCESS", "executionTime", 250)
-                            )
-                        )
-                    )
-                )
-            )
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, null, 250, null, null, null, null, "SUCCESS", null, "1")
+                ))),
+                null
+            ))
         );
 
         FlywayInfo result = mapper.map(flywayData);

@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.LoggersResponse;
 import net.osslabz.peekaboot.backend.domain.loggers.LoggerGroup;
 import net.osslabz.peekaboot.backend.domain.loggers.LoggerInfo;
 import net.osslabz.peekaboot.backend.domain.loggers.LoggersInfo;
@@ -13,13 +14,8 @@ import java.util.Map;
 @Component
 public class LoggersMapper {
 
-    public LoggersInfo map(Map<String, Object> loggersData) {
-        if (loggersData == null) {
-            return new LoggersInfo(List.of(), 0, 0);
-        }
-
-        Object loggersObj = loggersData.get("loggers");
-        if (!(loggersObj instanceof Map<?, ?> loggers)) {
+    public LoggersInfo map(LoggersResponse loggersData) {
+        if (loggersData == null || loggersData.loggers() == null) {
             return new LoggersInfo(List.of(), 0, 0);
         }
 
@@ -27,14 +23,15 @@ public class LoggersMapper {
         int totalCount = 0;
         int configuredCount = 0;
 
-        for (Map.Entry<?, ?> entry : loggers.entrySet()) {
-            String name = entry.getKey().toString();
-            if (!(entry.getValue() instanceof Map<?, ?> loggerData)) continue;
+        for (Map.Entry<String, LoggersResponse.LoggerInfo> entry : loggersData.loggers().entrySet()) {
+            String name = entry.getKey();
+            LoggersResponse.LoggerInfo loggerData = entry.getValue();
 
-            String configuredLevel = getStringValue(loggerData, "configuredLevel");
-            String effectiveLevel = getStringValue(loggerData, "effectiveLevel");
-
-            LoggerInfo loggerInfo = new LoggerInfo(name, configuredLevel, effectiveLevel);
+            LoggerInfo loggerInfo = new LoggerInfo(
+                name,
+                loggerData.configuredLevel(),
+                loggerData.effectiveLevel()
+            );
             String packageName = extractPackageName(name);
             byPackage.computeIfAbsent(packageName, k -> new ArrayList<>()).add(loggerInfo);
 
@@ -57,10 +54,5 @@ public class LoggersMapper {
             return parts[0] + "." + parts[1];
         }
         return parts[0];
-    }
-
-    private String getStringValue(Map<?, ?> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
     }
 }

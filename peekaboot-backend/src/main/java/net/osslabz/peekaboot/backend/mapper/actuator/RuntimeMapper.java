@@ -1,5 +1,7 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
+import net.osslabz.peekaboot.backend.actuator.raw.InfoResponse;
 import net.osslabz.peekaboot.backend.domain.runtime.MemoryInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.OsInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.RuntimeInfo;
@@ -13,85 +15,65 @@ import java.util.Map;
 @Component
 public class RuntimeMapper {
 
-    @SuppressWarnings("unchecked")
-    public RuntimeInfo map(Map<String, Object> info, Map<String, Object> healthComponents) {
+    public RuntimeInfo map(InfoResponse info, HealthResponse health) {
         OsInfo osInfo = extractOsInfo(info);
         MemoryInfo memoryInfo = extractMemoryInfo(info);
-        List<StorageInfo> storageInfo = extractStorageInfo(healthComponents);
+        List<StorageInfo> storageInfo = extractStorageInfo(health);
 
         return new RuntimeInfo(osInfo, memoryInfo, storageInfo);
     }
 
-    @SuppressWarnings("unchecked")
-    private OsInfo extractOsInfo(Map<String, Object> info) {
-        if (info == null) return null;
-        Object osObj = info.get("os");
-        if (!(osObj instanceof Map<?, ?> os)) return null;
+    private OsInfo extractOsInfo(InfoResponse info) {
+        if (info == null || info.os() == null) return null;
 
-        String name = getStringValue(os, "name");
-        String version = getStringValue(os, "version");
-        String arch = getStringValue(os, "arch");
-
-        if (name == null && version == null && arch == null) return null;
-        return new OsInfo(name, version, arch);
+        InfoResponse.OsInfo os = info.os();
+        if (os.name() == null && os.version() == null && os.arch() == null) return null;
+        return new OsInfo(os.name(), os.version(), os.arch());
     }
 
-    @SuppressWarnings("unchecked")
-    private MemoryInfo extractMemoryInfo(Map<String, Object> info) {
-        if (info == null) return null;
+    private MemoryInfo extractMemoryInfo(InfoResponse info) {
+        if (info == null || info.process() == null || info.process().memory() == null) return null;
 
-        Object processObj = info.get("process");
-        if (!(processObj instanceof Map<?, ?> process)) return null;
+        InfoResponse.ProcessInfo.MemoryInfo memory = info.process().memory();
 
-        Object memoryObj = process.get("memory");
-        if (!(memoryObj instanceof Map<?, ?> memory)) return null;
-
-        // heap and nonHeap are nested objects with used/max/etc.
         long heapUsed = 0;
         long heapMax = 0;
         long nonHeapUsed = 0;
 
-        Object heapObj = memory.get("heap");
-        if (heapObj instanceof Map<?, ?> heap) {
-            heapUsed = getLongValue(heap, "used");
-            heapMax = getLongValue(heap, "max");
+        if (memory.heap() != null) {
+            heapUsed = memory.heap().used() != null ? memory.heap().used() : 0;
+            heapMax = memory.heap().max() != null ? memory.heap().max() : 0;
         }
 
-        Object nonHeapObj = memory.get("nonHeap");
-        if (nonHeapObj instanceof Map<?, ?> nonHeap) {
-            nonHeapUsed = getLongValue(nonHeap, "used");
+        if (memory.nonHeap() != null) {
+            nonHeapUsed = memory.nonHeap().used() != null ? memory.nonHeap().used() : 0;
         }
 
         if (heapUsed == 0 && heapMax == 0) return null;
         return MemoryInfo.of(heapUsed, heapMax, nonHeapUsed);
     }
 
-    @SuppressWarnings("unchecked")
-    private List<StorageInfo> extractStorageInfo(Map<String, Object> healthComponents) {
-        if (healthComponents == null) return List.of();
+    private List<StorageInfo> extractStorageInfo(HealthResponse health) {
+        if (health == null || health.body() == null || health.body().components() == null) {
+            return List.of();
+        }
 
         List<StorageInfo> result = new ArrayList<>();
-        Object diskObj = healthComponents.get("diskSpace");
-        if (diskObj instanceof Map<?, ?> disk) {
-            Object detailsObj = disk.get("details");
-            if (detailsObj instanceof Map<?, ?> details) {
-                String path = getStringValue(details, "path");
-                long total = getLongValue(details, "total");
-                long free = getLongValue(details, "free");
-                if (total > 0) {
-                    result.add(StorageInfo.of(path != null ? path : "/", total, free));
-                }
+        HealthResponse.HealthComponent diskSpace = health.body().components().get("diskSpace");
+
+        if (diskSpace != null && diskSpace.details() != null) {
+            Map<String, Object> details = diskSpace.details();
+            String path = details.get("path") != null ? details.get("path").toString() : "/";
+            long total = getLongValue(details, "total");
+            long free = getLongValue(details, "free");
+            if (total > 0) {
+                result.add(StorageInfo.of(path, total, free));
             }
         }
         return result;
     }
 
-    private String getStringValue(Map<?, ?> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
-    }
-
-    private long getLongValue(Map<?, ?> map, String key) {
+    private long getLongValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (value instanceof Number n) return n.longValue();
         return 0;

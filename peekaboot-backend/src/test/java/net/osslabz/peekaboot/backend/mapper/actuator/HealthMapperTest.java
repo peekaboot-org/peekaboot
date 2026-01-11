@@ -1,10 +1,11 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
 import net.osslabz.peekaboot.backend.domain.health.HealthInfo;
 import net.osslabz.peekaboot.backend.domain.health.HealthStatus;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,17 +16,16 @@ class HealthMapperTest {
 
     @Test
     void map_shouldExtractStatusAndComponents() {
-        Map<String, Object> actuatorHealth = new LinkedHashMap<>();
-        actuatorHealth.put("status", "UP");
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"))),
+                List.of()
+            ),
+            200
+        );
 
-        Map<String, Object> components = new LinkedHashMap<>();
-        Map<String, Object> dbComponent = new LinkedHashMap<>();
-        dbComponent.put("status", "UP");
-        dbComponent.put("details", Map.of("database", "PostgreSQL"));
-        components.put("db", dbComponent);
-        actuatorHealth.put("components", components);
-
-        HealthInfo result = mapper.map(actuatorHealth);
+        HealthInfo result = mapper.map(health);
 
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components()).hasSize(1);
@@ -40,35 +40,42 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldHandleBodyWrapper() {
-        Map<String, Object> wrapped = Map.of("body", Map.of("status", "DOWN", "components", Map.of()));
-        HealthInfo result = mapper.map(wrapped);
+    void map_shouldHandleNullBody() {
+        HealthResponse health = new HealthResponse(null, 200);
+        HealthInfo result = mapper.map(health);
+        assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
+        assertThat(result.components()).isEmpty();
+    }
+
+    @Test
+    void map_shouldHandleDownStatus() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody("DOWN", Map.of(), List.of()),
+            503
+        );
+        HealthInfo result = mapper.map(health);
         assertThat(result.status()).isEqualTo(HealthStatus.DOWN);
     }
 
     @Test
-    void map_shouldHandleStatusAsMap() {
-        Map<String, Object> health = Map.of("status", Map.of("code", "UP"));
-        HealthInfo result = mapper.map(health);
-        assertThat(result.status()).isEqualTo(HealthStatus.UP);
-    }
-
-    @Test
     void map_shouldHandleOutOfServiceStatus() {
-        Map<String, Object> health = Map.of("status", "OUT_OF_SERVICE");
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody("OUT_OF_SERVICE", Map.of(), List.of()),
+            503
+        );
         HealthInfo result = mapper.map(health);
         assertThat(result.status()).isEqualTo(HealthStatus.OUT_OF_SERVICE);
     }
 
     @Test
     void map_shouldExtractComponentDetails() {
-        Map<String, Object> dbComponent = new LinkedHashMap<>();
-        dbComponent.put("status", "UP");
-        dbComponent.put("details", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"));
-
-        Map<String, Object> health = Map.of(
-            "status", "UP",
-            "components", Map.of("db", dbComponent)
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"))),
+                List.of()
+            ),
+            200
         );
 
         HealthInfo result = mapper.map(health);

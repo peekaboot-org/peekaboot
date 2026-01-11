@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
+import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
 import net.osslabz.peekaboot.backend.domain.datasource.DataSourceInfo;
 import net.osslabz.peekaboot.backend.domain.health.HealthStatus;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -40,9 +41,16 @@ class DataSourceMapperTest {
         when(metadata.getDataSourceName()).thenReturn("primaryDS");
         when(metadata.getHosts()).thenReturn(List.of());
 
-        Map<String, Object> healthComponents = Map.of("db", Map.of("status", "UP"));
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())),
+                List.of()
+            ),
+            200
+        );
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), healthComponents);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 

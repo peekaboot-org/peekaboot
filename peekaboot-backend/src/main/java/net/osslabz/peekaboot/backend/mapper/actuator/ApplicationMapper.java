@@ -1,45 +1,53 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.InfoResponse;
+import net.osslabz.peekaboot.backend.actuator.raw.SpringInfo;
 import net.osslabz.peekaboot.backend.domain.application.ApplicationInfo;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 @Component
 public class ApplicationMapper {
 
-    @SuppressWarnings("unchecked")
-    public ApplicationInfo map(Map<String, Object> info, Map<String, Object> spring) {
+    public ApplicationInfo map(InfoResponse info, SpringInfo spring) {
         Map<String, Object> build = Collections.emptyMap();
         Map<String, Object> git = Collections.emptyMap();
         String javaVersion = null;
         String javaVendor = null;
 
         if (info != null) {
-            if (info.get("build") instanceof Map<?, ?> b) {
-                build = (Map<String, Object>) b;
+            if (info.build() != null) {
+                build = info.build();
             }
-            if (info.get("git") instanceof Map<?, ?> g) {
-                git = (Map<String, Object>) g;
+            if (info.git() != null) {
+                git = mapGitInfo(info.git());
             }
-            if (info.get("java") instanceof Map<?, ?> java) {
-                javaVersion = getStringValue(java, "version");
-                Object vendor = java.get("vendor");
-                if (vendor instanceof Map<?, ?> v) {
-                    javaVendor = getStringValue(v, "name");
+            if (info.java() != null) {
+                javaVersion = info.java().version();
+                if (info.java().vendor() != null) {
+                    javaVendor = info.java().vendor().name();
                 }
             }
         }
 
-        String bootVersion = spring != null ? getStringValue(spring, "bootVersion") : null;
-        String frameworkVersion = spring != null ? getStringValue(spring, "frameworkVersion") : null;
+        String bootVersion = spring != null ? spring.bootVersion() : null;
+        String frameworkVersion = spring != null ? spring.frameworkVersion() : null;
 
         return new ApplicationInfo(build, git, bootVersion, frameworkVersion, javaVersion, javaVendor);
     }
 
-    private String getStringValue(Map<?, ?> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
+    private Map<String, Object> mapGitInfo(InfoResponse.GitInfo gitInfo) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("branch", gitInfo.branch());
+        if (gitInfo.commit() != null) {
+            Map<String, Object> commit = new HashMap<>();
+            commit.put("id", gitInfo.commit().id());
+            commit.put("time", gitInfo.commit().time());
+            result.put("commit", commit);
+        }
+        return result;
     }
 }

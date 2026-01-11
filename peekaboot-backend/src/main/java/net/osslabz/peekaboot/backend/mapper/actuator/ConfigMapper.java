@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ConfigPropsResponse;
 import net.osslabz.peekaboot.backend.domain.config.ConfigGroup;
 import net.osslabz.peekaboot.backend.domain.config.ConfigInfo;
 import net.osslabz.peekaboot.backend.domain.config.ConfigProperty;
@@ -18,36 +19,24 @@ public class ConfigMapper {
         "password|secret|key|token|credential|credentials", Pattern.CASE_INSENSITIVE
     );
 
-    @SuppressWarnings("unchecked")
-    public ConfigInfo map(Map<String, Object> configprops) {
-        if (configprops == null) {
+    public ConfigInfo map(ConfigPropsResponse configprops) {
+        if (configprops == null || configprops.contexts() == null) {
             return new ConfigInfo(List.of());
         }
 
         Map<String, List<ConfigProperty>> byPrefix = new LinkedHashMap<>();
 
-        Object contextsObj = configprops.get("contexts");
-        if (!(contextsObj instanceof Map<?, ?> contexts)) {
-            return new ConfigInfo(List.of());
-        }
+        for (ConfigPropsResponse.ConfigContext context : configprops.contexts().values()) {
+            if (context.beans() == null) continue;
 
-        for (Object contextValue : contexts.values()) {
-            if (!(contextValue instanceof Map<?, ?> context)) continue;
+            for (ConfigPropsResponse.ConfigBean bean : context.beans().values()) {
+                String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
 
-            Object beansObj = context.get("beans");
-            if (!(beansObj instanceof Map<?, ?> beans)) continue;
-
-            for (Object beanValue : beans.values()) {
-                if (!(beanValue instanceof Map<?, ?> bean)) continue;
-
-                String prefix = bean.get("prefix") != null ? bean.get("prefix").toString() : "unknown";
-                Object propsObj = bean.get("properties");
-
-                if (propsObj instanceof Map<?, ?> props) {
+                if (bean.properties() != null) {
                     List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
 
-                    for (Map.Entry<?, ?> entry : props.entrySet()) {
-                        String key = entry.getKey().toString();
+                    for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
+                        String key = entry.getKey();
                         String value = entry.getValue() != null ? entry.getValue().toString() : null;
 
                         if (SENSITIVE_PATTERN.matcher(key).find()) {

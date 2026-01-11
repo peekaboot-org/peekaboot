@@ -1,5 +1,7 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.InfoResponse;
+import net.osslabz.peekaboot.backend.actuator.raw.SpringInfo;
 import net.osslabz.peekaboot.backend.domain.application.ApplicationInfo;
 import org.junit.jupiter.api.Test;
 
@@ -13,26 +15,41 @@ class ApplicationMapperTest {
 
     @Test
     void map_shouldExtractBuildInfo() {
-        Map<String, Object> info = Map.of("build", Map.of("version", "1.0.0", "artifact", "my-app"));
+        InfoResponse info = new InfoResponse(
+            null,
+            Map.of("artifact", "my-app", "version", "1.0.0"),
+            null, null, null
+        );
         ApplicationInfo result = mapper.map(info, null);
-        assertThat(result.build()).containsEntry("version", "1.0.0");
         assertThat(result.build()).containsEntry("artifact", "my-app");
+        assertThat(result.build()).containsEntry("version", "1.0.0");
     }
 
     @Test
     void map_shouldExtractGitInfo() {
-        Map<String, Object> info = Map.of("git", Map.of("branch", "main", "commit", Map.of("id", "abc123")));
+        InfoResponse info = new InfoResponse(
+            new InfoResponse.GitInfo(
+                "main",
+                new InfoResponse.GitInfo.CommitInfo("abc123", "2024-01-01T10:00:00Z")
+            ),
+            null, null, null, null
+        );
         ApplicationInfo result = mapper.map(info, null);
         assertThat(result.git()).containsEntry("branch", "main");
+        assertThat(result.git()).containsKey("commit");
     }
 
     @Test
     void map_shouldExtractJavaInfo() {
-        Map<String, Object> info = Map.of(
-            "java", Map.of(
-                "version", "21.0.1",
-                "vendor", Map.of("name", "Eclipse Adoptium")
-            )
+        InfoResponse info = new InfoResponse(
+            null, null,
+            new InfoResponse.JavaInfo(
+                new InfoResponse.JavaInfo.JvmInfo("OpenJDK 64-Bit Server VM", "Eclipse Adoptium", "21.0.1"),
+                new InfoResponse.JavaInfo.RuntimeInfo("OpenJDK Runtime Environment", "21.0.1"),
+                new InfoResponse.JavaInfo.VendorInfo("Eclipse Adoptium", "21.0.1"),
+                "21.0.1"
+            ),
+            null, null
         );
         ApplicationInfo result = mapper.map(info, null);
         assertThat(result.javaVersion()).isEqualTo("21.0.1");
@@ -41,7 +58,7 @@ class ApplicationMapperTest {
 
     @Test
     void map_shouldExtractSpringVersions() {
-        Map<String, Object> spring = Map.of("bootVersion", "3.2.0", "frameworkVersion", "6.1.2");
+        SpringInfo spring = new SpringInfo("3.2.0", "6.1.2");
         ApplicationInfo result = mapper.map(null, spring);
         assertThat(result.springBootVersion()).isEqualTo("3.2.0");
         assertThat(result.springFrameworkVersion()).isEqualTo("6.1.2");

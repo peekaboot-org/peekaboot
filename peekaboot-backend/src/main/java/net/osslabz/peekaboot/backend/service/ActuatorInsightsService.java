@@ -1,5 +1,7 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawMapper;
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import net.osslabz.peekaboot.backend.mapper.actuator.*;
@@ -13,6 +15,7 @@ import java.util.Map;
 public class ActuatorInsightsService {
 
     private final PeekabookActuatorService rawService;
+    private final ActuatorRawMapper rawMapper;
     private final HealthMapper healthMapper;
     private final RuntimeMapper runtimeMapper;
     private final DataSourceMapper dataSourceMapper;
@@ -25,6 +28,7 @@ public class ActuatorInsightsService {
 
     public ActuatorInsightsService(
             PeekabookActuatorService rawService,
+            ActuatorRawMapper rawMapper,
             HealthMapper healthMapper,
             RuntimeMapper runtimeMapper,
             DataSourceMapper dataSourceMapper,
@@ -35,6 +39,7 @@ public class ActuatorInsightsService {
             ConfigMapper configMapper,
             ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
         this.rawService = rawService;
+        this.rawMapper = rawMapper;
         this.healthMapper = healthMapper;
         this.runtimeMapper = runtimeMapper;
         this.dataSourceMapper = dataSourceMapper;
@@ -46,47 +51,19 @@ public class ActuatorInsightsService {
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
-    @SuppressWarnings("unchecked")
     public ActuatorInsightsResponse getInsights() {
         Map<String, Object> rawData = rawService.getData();
-
-        // Extract health components for cross-referencing
-        Map<String, Object> healthComponents = extractHealthComponents(rawData);
+        ActuatorRawResponse typed = rawMapper.map(rawData);
 
         return new ActuatorInsightsResponse(
-            applicationMapper.map(asMap(rawData.get("info")), asMap(rawData.get("spring"))),
-            runtimeMapper.map(asMap(rawData.get("info")), healthComponents),
-            dataSourceMapper.map(dataSourceMetadataList, healthComponents),
-            healthMapper.map(asMap(rawData.get("health"))),
-            environmentMapper.map(asMap(rawData.get("env"))),
-            loggersMapper.map(asMap(rawData.get("loggers"))),
-            flywayMapper.map(asMap(rawData.get("flyway"))),
-            configMapper.map(asMap(rawData.get("configprops")))
+            applicationMapper.map(typed.info(), typed.spring()),
+            runtimeMapper.map(typed.info(), typed.health()),
+            dataSourceMapper.map(dataSourceMetadataList, typed.health()),
+            healthMapper.map(typed.health()),
+            environmentMapper.map(typed.env()),
+            loggersMapper.map(typed.loggers()),
+            flywayMapper.map(typed.flyway()),
+            configMapper.map(typed.configprops())
         );
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> extractHealthComponents(Map<String, Object> rawData) {
-        Object healthObj = rawData.get("health");
-        if (!(healthObj instanceof Map<?, ?> health)) return Map.of();
-
-        // Handle body wrapper
-        if (health.containsKey("body")) {
-            health = (Map<?, ?>) health.get("body");
-        }
-
-        Object components = health.get("components");
-        if (components instanceof Map<?, ?> m) {
-            return (Map<String, Object>) m;
-        }
-        return Map.of();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> asMap(Object obj) {
-        if (obj instanceof Map<?, ?> m) {
-            return (Map<String, Object>) m;
-        }
-        return null;
     }
 }

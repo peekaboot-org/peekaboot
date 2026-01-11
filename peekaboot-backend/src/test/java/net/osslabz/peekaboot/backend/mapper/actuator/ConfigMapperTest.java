@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ConfigPropsResponse;
 import net.osslabz.peekaboot.backend.domain.config.ConfigInfo;
 import org.junit.jupiter.api.Test;
 
@@ -13,21 +14,22 @@ class ConfigMapperTest {
 
     @Test
     void map_shouldGroupByPrefix() {
-        Map<String, Object> configprops = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "beans", Map.of(
-                        "spring.datasource-org.springframework.boot.autoconfigure.jdbc.DataSourceProperties", Map.of(
-                            "prefix", "spring.datasource",
-                            "properties", Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver")
-                        ),
-                        "server-org.springframework.boot.autoconfigure.web.ServerProperties", Map.of(
-                            "prefix", "server",
-                            "properties", Map.of("port", "8080")
-                        )
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of(
+                    "spring.datasource-DataSourceProperties", new ConfigPropsResponse.ConfigBean(
+                        "spring.datasource",
+                        Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver"),
+                        Map.of()
+                    ),
+                    "server-ServerProperties", new ConfigPropsResponse.ConfigBean(
+                        "server",
+                        Map.of("port", "8080"),
+                        Map.of()
                     )
-                )
-            )
+                ),
+                null
+            ))
         );
 
         ConfigInfo result = mapper.map(configprops);
@@ -37,17 +39,15 @@ class ConfigMapperTest {
 
     @Test
     void map_shouldMaskSensitiveProperties() {
-        Map<String, Object> configprops = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "beans", Map.of(
-                        "datasource", Map.of(
-                            "prefix", "spring.datasource",
-                            "properties", Map.of("password", "secret123", "username", "admin")
-                        )
-                    )
-                )
-            )
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("datasource", new ConfigPropsResponse.ConfigBean(
+                    "spring.datasource",
+                    Map.of("password", "secret123", "username", "admin"),
+                    Map.of()
+                )),
+                null
+            ))
         );
 
         ConfigInfo result = mapper.map(configprops);
@@ -63,24 +63,23 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldHandleMissingContexts() {
-        ConfigInfo result = mapper.map(Map.of());
+    void map_shouldHandleNullContexts() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(null);
+        ConfigInfo result = mapper.map(configprops);
         assertThat(result.groups()).isEmpty();
     }
 
     @Test
     void map_shouldMaskCredentialsKey() {
-        Map<String, Object> configprops = Map.of(
-            "contexts", Map.of(
-                "application", Map.of(
-                    "beans", Map.of(
-                        "aws", Map.of(
-                            "prefix", "aws",
-                            "properties", Map.of("credentials", "AKIA...")
-                        )
-                    )
-                )
-            )
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("aws", new ConfigPropsResponse.ConfigBean(
+                    "aws",
+                    Map.of("credentials", "AKIA..."),
+                    Map.of()
+                )),
+                null
+            ))
         );
 
         ConfigInfo result = mapper.map(configprops);
