@@ -72,4 +72,36 @@ class ActuatorInsightsServiceTest {
         assertThat(response.health().status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(response.dataSources()).isEmpty();
     }
+
+    @Test
+    void getInsights_shouldIncludeServerInfo() {
+        when(rawService.getData()).thenReturn(Map.of());
+
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+
+        assertThat(response.server()).isNotNull();
+        assertThat(response.server().timezone()).isNotNull();
+        assertThat(response.server().timezoneOffset()).isNotNull();
+        assertThat(response.server().timezoneDisplay()).isNotNull();
+    }
+
+    @Test
+    void getInsights_shouldPassLocaleToScheduledTasksMapper() {
+        when(rawService.getData()).thenReturn(Map.of(
+            "scheduledtasks", Map.of(
+                "cron", List.of(Map.of(
+                    "expression", "0 0 * * * *",
+                    "runnable", Map.of("target", "com.example.Task.run")
+                )),
+                "fixedDelay", List.of(),
+                "fixedRate", List.of()
+            )
+        ));
+
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+
+        assertThat(response.scheduledTasks()).isNotNull();
+        assertThat(response.scheduledTasks().tasks()).hasSize(1);
+        assertThat(response.scheduledTasks().tasks().get(0).scheduleDescription()).isNotNull();
+    }
 }

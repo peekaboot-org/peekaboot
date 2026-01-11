@@ -153,6 +153,58 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(2).schedule()).isEqualTo("2m");
     }
 
+    @Test
+    void map_cronTask_shouldPopulateScheduleDescription() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+            List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks()).hasSize(1);
+        assertThat(result.tasks().get(0).scheduleDescription()).isNotNull();
+        assertThat(result.tasks().get(0).scheduleDescription().toLowerCase()).contains("hour");
+    }
+
+    @Test
+    void map_fixedDelayTask_shouldHaveNullScheduleDescription() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+            List.of(),
+            List.of(createFixedTask(5000L, "com.example.Scheduler.fixedDelayTask")),
+            List.of(),
+            List.of()
+        );
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks()).hasSize(1);
+        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
+    }
+
+    @Test
+    void map_fixedRateTask_shouldHaveNullScheduleDescription() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+            List.of(),
+            List.of(),
+            List.of(new ScheduledTasksResponse.FixedTask(
+                0L,
+                10000L,
+                null,
+                null,
+                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRateTask")
+            )),
+            List.of()
+        );
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks()).hasSize(1);
+        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
+    }
+
     private ScheduledTasksResponse.CronTask createCronTask(String expr, String target) {
         return new ScheduledTasksResponse.CronTask(expr, null, null,
             new ScheduledTasksResponse.RunnableTarget(target));
