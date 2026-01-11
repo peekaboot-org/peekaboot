@@ -24,6 +24,7 @@ public class ActuatorInsightsService {
     private final LoggersMapper loggersMapper;
     private final FlywayMapper flywayMapper;
     private final ConfigMapper configMapper;
+    private final ScheduledTasksMapper scheduledTasksMapper;
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
     public ActuatorInsightsService(
@@ -37,6 +38,7 @@ public class ActuatorInsightsService {
             LoggersMapper loggersMapper,
             FlywayMapper flywayMapper,
             ConfigMapper configMapper,
+            ScheduledTasksMapper scheduledTasksMapper,
             ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
         this.rawService = rawService;
         this.rawMapper = rawMapper;
@@ -48,6 +50,7 @@ public class ActuatorInsightsService {
         this.loggersMapper = loggersMapper;
         this.flywayMapper = flywayMapper;
         this.configMapper = configMapper;
+        this.scheduledTasksMapper = scheduledTasksMapper;
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
@@ -63,7 +66,8 @@ public class ActuatorInsightsService {
             environmentMapper.map(typed.env()),
             loggersMapper.map(typed.loggers()),
             flywayMapper.map(typed.flyway()),
-            configMapper.map(typed.configprops())
+            configMapper.map(typed.configprops()),
+            scheduledTasksMapper.map(typed.scheduledtasks())
         );
     }
 }

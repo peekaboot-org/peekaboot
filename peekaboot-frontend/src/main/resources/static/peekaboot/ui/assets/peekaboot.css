@@ -1344,3 +1344,103 @@ mark {
 .hidden {
     display: none !important;
 }
+
+/* Scheduled Tasks Tab */
+.scheduled-task-item {
+    padding: var(--pk-space-md);
+    border-bottom: 1px solid var(--pk-border);
+}
+
+.scheduled-task-item:last-child {
+    border-bottom: none;
+}
+
+.task-main {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-md);
+    flex-wrap: wrap;
+    margin-bottom: var(--pk-space-sm);
+}
+
+.task-target {
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    color: var(--pk-text-strong);
+    flex: 1;
+    min-width: 200px;
+}
+
+.task-schedule {
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    padding: 2px 8px;
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--pk-primary);
+    border-radius: var(--pk-radius);
+}
+
+.task-status {
+    padding: 2px 8px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    background: var(--pk-bg-alt);
+    color: var(--pk-text-muted);
+}
+
+.task-status.status-success {
+    background: rgba(22, 163, 74, 0.15);
+    color: var(--pk-success);
+}
+
+.task-status.status-error {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--pk-danger);
+}
+
+.task-status.status-pending {
+    background: var(--pk-bg-alt);
+    color: var(--pk-text-muted);
+}
+
+.task-timing {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    flex-wrap: wrap;
+}
+
+.task-timing-label {
+    font-weight: 500;
+}
+
+.task-timing-value {
+    font-family: var(--pk-font-mono);
+    margin-right: var(--pk-space-md);
+}
+
+.task-exception {
+    margin-top: var(--pk-space-sm);
+    padding: var(--pk-space-sm);
+    background: rgba(220, 38, 38, 0.1);
+    border-radius: var(--pk-radius);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-danger);
+    word-break: break-word;
+}
+
+@media (max-width: 767px) {
+    .task-main {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .task-target {
+        min-width: 100%;
+    }
+}

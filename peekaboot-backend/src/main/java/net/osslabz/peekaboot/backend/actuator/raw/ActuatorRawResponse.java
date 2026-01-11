@@ -13,6 +13,7 @@ public record ActuatorRawResponse(
     EnvResponse env,
     LoggersResponse loggers,
     FlywayResponse flyway,
-    ConfigPropsResponse configprops
+    ConfigPropsResponse configprops,
+    ScheduledTasksResponse scheduledtasks
 ) {
 }

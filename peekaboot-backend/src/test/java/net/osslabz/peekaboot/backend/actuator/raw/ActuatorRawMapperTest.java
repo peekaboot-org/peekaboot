@@ -146,6 +146,27 @@ class ActuatorRawMapperTest {
     }
 
     @Test
+    void mapsScheduledTasksResponse() {
+        ScheduledTasksResponse scheduledTasks = mapper.mapScheduledTasks(rawData);
+
+        assertThat(scheduledTasks).isNotNull();
+        assertThat(scheduledTasks.cron()).isNotNull();
+        assertThat(scheduledTasks.cron()).hasSize(3);
+        assertThat(scheduledTasks.fixedDelay()).hasSize(1);
+        assertThat(scheduledTasks.fixedRate()).hasSize(1);
+
+        // Verify cron task structure
+        var cronTask = scheduledTasks.cron().get(0);
+        assertThat(cronTask.expression()).isEqualTo("0 0 * * * *");
+        assertThat(cronTask.runnable().target()).isEqualTo("net.osslabz.example.Scheduler.cron1");
+
+        // Verify fixed delay task with execution status
+        var fixedDelayTask = scheduledTasks.fixedDelay().get(0);
+        assertThat(fixedDelayTask.interval()).isEqualTo(5000L);
+        assertThat(fixedDelayTask.lastExecution().status()).isEqualTo("SUCCESS");
+    }
+
+    @Test
     void mapsFullResponse() {
         ActuatorRawResponse response = mapper.map(rawData);
 
@@ -157,6 +178,7 @@ class ActuatorRawMapperTest {
         assertThat(response.loggers()).isNotNull();
         assertThat(response.flyway()).isNotNull();
         assertThat(response.configprops()).isNotNull();
+        assertThat(response.scheduledtasks()).isNotNull();
     }
 
     @Test
@@ -167,5 +189,6 @@ class ActuatorRawMapperTest {
         assertThat(response.spring()).isNull();
         assertThat(response.health()).isNull();
         assertThat(response.info()).isNull();
+        assertThat(response.scheduledtasks()).isNull();
     }
 }

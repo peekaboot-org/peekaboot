@@ -381,6 +381,7 @@
         renderFlywayTab();
         renderLoggersTab();
         renderConfigTab();
+        renderScheduledTasksTab();
     }
 
     function renderDashboardTab() {
@@ -1001,6 +1002,112 @@
             container.innerHTML = filterQuery
                 ? `<p class="no-data">No properties matching "${escapeHtml(filterQuery)}"</p>`
                 : '<p class="no-data">No configuration properties available</p>';
+        }
+    }
+
+    // Scheduled Tasks Tab
+    function renderScheduledTasksTab() {
+        const scheduledTasks = peekabootData?.scheduledTasks;
+        const summaryEl = document.getElementById('scheduled-tasks-summary');
+        const groupsEl = document.getElementById('scheduled-tasks-groups');
+        const noTasksEl = document.getElementById('no-scheduled-tasks');
+        const tabBtn = document.querySelector('[data-tab="scheduled-tasks"]');
+
+        if (!summaryEl || !groupsEl) return;
+        summaryEl.innerHTML = '';
+        groupsEl.innerHTML = '';
+
+        const tasks = scheduledTasks?.tasks;
+        if (!tasks || tasks.length === 0) {
+            if (noTasksEl) noTasksEl.classList.remove('hidden');
+            return;
+        }
+
+        if (noTasksEl) noTasksEl.classList.add('hidden');
+        if (tabBtn) tabBtn.classList.remove('hidden');
+
+        // Summary badges
+        summaryEl.innerHTML = `
+            <span class="level-badge">Total: ${tasks.length}</span>
+            <span class="level-badge">Cron: ${scheduledTasks.cronCount}</span>
+            <span class="level-badge">Fixed Delay: ${scheduledTasks.fixedDelayCount}</span>
+            <span class="level-badge">Fixed Rate: ${scheduledTasks.fixedRateCount}</span>
+        `;
+
+        // Group by type
+        const tasksByType = {
+            'CRON': tasks.filter(t => t.type === 'CRON'),
+            'FIXED_DELAY': tasks.filter(t => t.type === 'FIXED_DELAY'),
+            'FIXED_RATE': tasks.filter(t => t.type === 'FIXED_RATE')
+        };
+
+        const typeLabels = {
+            'CRON': 'Cron Tasks',
+            'FIXED_DELAY': 'Fixed Delay Tasks',
+            'FIXED_RATE': 'Fixed Rate Tasks'
+        };
+
+        Object.entries(tasksByType).forEach(([type, typeTasks]) => {
+            if (typeTasks.length === 0) return;
+
+            const groupEl = document.createElement('div');
+            groupEl.className = 'logger-group';
+
+            const headerEl = document.createElement('div');
+            headerEl.className = 'logger-group-header collapsed';
+            headerEl.innerHTML = `
+                <span class="logger-group-name">${typeLabels[type]}</span>
+                <span class="logger-group-count">${typeTasks.length} tasks</span>
+            `;
+
+            const listEl = document.createElement('div');
+            listEl.className = 'logger-group-list collapsed';
+
+            typeTasks.forEach(task => {
+                const item = document.createElement('div');
+                item.className = 'scheduled-task-item';
+
+                const statusClass = getTaskStatusClass(task.lastStatus);
+                const targetShort = task.target.includes('.')
+                    ? task.target.split('.').slice(-2).join('.')
+                    : task.target;
+
+                item.innerHTML = `
+                    <div class="task-main">
+                        <span class="task-target" title="${escapeHtml(task.target)}">${escapeHtml(targetShort)}</span>
+                        <span class="task-schedule">${escapeHtml(task.schedule)}</span>
+                        <span class="task-status ${statusClass}">${escapeHtml(task.lastStatus || 'PENDING')}</span>
+                    </div>
+                    <div class="task-timing">
+                        <span class="task-timing-label">Last:</span>
+                        <span class="task-timing-value">${task.lastExecution ? formatDate(task.lastExecution) : 'Never'}</span>
+                        <span class="task-timing-label">Next:</span>
+                        <span class="task-timing-value">${task.nextExecution ? formatDate(task.nextExecution) : '-'}</span>
+                    </div>
+                    ${task.lastException ? `<div class="task-exception">${escapeHtml(task.lastException)}</div>` : ''}
+                `;
+
+                listEl.appendChild(item);
+            });
+
+            headerEl.addEventListener('click', () => {
+                listEl.classList.toggle('collapsed');
+                headerEl.classList.toggle('collapsed');
+            });
+
+            groupEl.appendChild(headerEl);
+            groupEl.appendChild(listEl);
+            groupsEl.appendChild(groupEl);
+        });
+    }
+
+    function getTaskStatusClass(status) {
+        if (!status) return '';
+        switch (status.toUpperCase()) {
+            case 'SUCCESS': return 'status-success';
+            case 'FAILED': case 'ERROR': return 'status-error';
+            case 'PENDING': return 'status-pending';
+            default: return '';
         }
     }
 

@@ -38,6 +38,7 @@ class ActuatorInsightsServiceTest {
             new LoggersMapper(),
             new FlywayMapper(),
             new ConfigMapper(),
+            new ScheduledTasksMapper(),
             dataSourceProvider
         );
     }

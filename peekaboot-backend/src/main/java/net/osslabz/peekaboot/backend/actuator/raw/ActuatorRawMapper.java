@@ -23,7 +23,7 @@ public class ActuatorRawMapper {
 
     public ActuatorRawResponse map(Map<String, Object> rawData) {
         if (rawData == null) {
-            return new ActuatorRawResponse(null, null, null, null, null, null, null);
+            return new ActuatorRawResponse(null, null, null, null, null, null, null, null);
         }
         return objectMapper.convertValue(rawData, ActuatorRawResponse.class);
     }
@@ -61,5 +61,10 @@ public class ActuatorRawMapper {
     public ConfigPropsResponse mapConfigProps(Map<String, Object> rawData) {
         Object configprops = rawData != null ? rawData.get("configprops") : null;
         return configprops != null ? objectMapper.convertValue(configprops, ConfigPropsResponse.class) : null;
+    }
+
+    public ScheduledTasksResponse mapScheduledTasks(Map<String, Object> rawData) {
+        Object scheduledtasks = rawData != null ? rawData.get("scheduledtasks") : null;
+        return scheduledtasks != null ? objectMapper.convertValue(scheduledtasks, ScheduledTasksResponse.class) : null;
     }
 }

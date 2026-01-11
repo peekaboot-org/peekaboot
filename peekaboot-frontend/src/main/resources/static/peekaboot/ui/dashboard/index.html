@@ -34,6 +34,7 @@
             <button class="tab hidden" data-tab="flyway">Flyway</button>
             <button class="tab hidden" data-tab="loggers">Loggers</button>
             <button class="tab hidden" data-tab="config">Config</button>
+            <button class="tab hidden" data-tab="scheduled-tasks">Scheduled Tasks</button>
             <button class="tab hidden" data-tab="traces">Traces</button>
         </nav>
 
@@ -173,6 +174,15 @@
                 <input class="filter-input" type="text" id="config-filter" placeholder="Filter config properties...">
             </div>
             <div id="config-groups"></div>
+        </section>
+
+        <!-- Scheduled Tasks Tab -->
+        <section class="tab-content" id="scheduled-tasks-tab">
+            <div id="scheduled-tasks-summary" class="loggers-summary"></div>
+            <div id="scheduled-tasks-groups"></div>
+            <div id="no-scheduled-tasks" class="no-data hidden">
+                <p>No scheduled tasks configured</p>
+            </div>
         </section>
     </main>
 
