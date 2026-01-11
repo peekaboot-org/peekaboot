@@ -30,7 +30,7 @@ public class CronDescriptionService {
         try {
             Cron cron = parser.parse(cronExpression);
             return CronDescriptor.instance(effectiveLocale).describe(cron);
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
             logger.warn("Failed to parse cron expression: {}", cronExpression, e);
             return null;
         }
