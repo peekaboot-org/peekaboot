@@ -1072,17 +1072,25 @@
                     ? task.target.split('.').slice(-2).join('.')
                     : task.target;
 
+                const typeLabel = type === 'CRON' ? 'Cron' : (type === 'FIXED_DELAY' ? 'Fixed Delay' : 'Fixed Rate');
+                const scheduleDisplay = type === 'CRON'
+                    ? interpretCronExpression(task.schedule)
+                    : formatFixedInterval(task.intervalMs);
+
                 item.innerHTML = `
-                    <div class="task-main">
-                        <span class="task-target" title="${escapeHtml(task.target)}">${escapeHtml(targetShort)}</span>
-                        <span class="task-schedule">${escapeHtml(task.schedule)}</span>
-                        <span class="task-status ${statusClass}">${escapeHtml(task.lastStatus || 'PENDING')}</span>
+                    <div class="task-row">
+                        <div class="task-left">
+                            <span class="task-type-badge ${type.toLowerCase()}">${typeLabel}</span>
+                            <span class="task-schedule-value" title="${escapeHtml(task.schedule)}">${escapeHtml(scheduleDisplay)}</span>
+                        </div>
+                        <div class="task-right">
+                            <span class="task-timing-item"><span class="task-timing-label">Last:</span> ${task.lastExecution ? formatDate(task.lastExecution) : 'Never'}</span>
+                            <span class="task-timing-item"><span class="task-timing-label">Next:</span> ${task.nextExecution ? formatDate(task.nextExecution) : '-'}</span>
+                            <span class="task-status ${statusClass}">${escapeHtml(task.lastStatus || 'PENDING')}</span>
+                        </div>
                     </div>
-                    <div class="task-timing">
-                        <span class="task-timing-label">Last:</span>
-                        <span class="task-timing-value">${task.lastExecution ? formatDate(task.lastExecution) : 'Never'}</span>
-                        <span class="task-timing-label">Next:</span>
-                        <span class="task-timing-value">${task.nextExecution ? formatDate(task.nextExecution) : '-'}</span>
+                    <div class="task-target-row">
+                        <span class="task-target" title="${escapeHtml(task.target)}">${escapeHtml(targetShort)}</span>
                     </div>
                     ${task.lastException ? `<div class="task-exception">${escapeHtml(task.lastException)}</div>` : ''}
                 `;
@@ -1109,6 +1117,76 @@
             case 'PENDING': return 'status-pending';
             default: return '';
         }
+    }
+
+    function formatFixedInterval(ms) {
+        if (!ms) return '-';
+        if (ms < 1000) return `Every ${ms}ms`;
+        if (ms < 60000) return `Every ${ms / 1000}s`;
+        if (ms < 3600000) return `Every ${ms / 60000}m`;
+        if (ms < 86400000) return `Every ${ms / 3600000}h`;
+        return `Every ${ms / 86400000}d`;
+    }
+
+    function interpretCronExpression(cron) {
+        if (!cron) return '-';
+        const parts = cron.trim().split(/\s+/);
+        if (parts.length < 6) return cron;
+
+        const [sec, min, hour, dayOfMonth, month, dayOfWeek] = parts;
+
+        // Common patterns
+        if (sec === '0' && min === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return 'Every day at midnight';
+        }
+        if (sec === '0' && min === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return 'Every hour';
+        }
+        if (sec === '0' && min === '*' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return 'Every minute';
+        }
+        if (sec === '*' && min === '*' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return 'Every second';
+        }
+
+        // Every N seconds/minutes/hours
+        if (sec.startsWith('*/') && min === '*' && hour === '*') {
+            return `Every ${sec.slice(2)} seconds`;
+        }
+        if (sec === '0' && min.startsWith('*/') && hour === '*') {
+            return `Every ${min.slice(2)} minutes`;
+        }
+        if (sec === '0' && min === '0' && hour.startsWith('*/')) {
+            return `Every ${hour.slice(2)} hours`;
+        }
+
+        // At specific minute each hour
+        if (sec === '0' && /^\d+$/.test(min) && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return `Every hour at :${min.padStart(2, '0')}`;
+        }
+
+        // At specific time daily
+        if (sec === '0' && /^\d+$/.test(min) && /^\d+$/.test(hour) && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+            return `Daily at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
+        }
+
+        // Weekday patterns
+        if (dayOfWeek !== '*' && dayOfWeek !== '?') {
+            const days = { '0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed', '4': 'Thu', '5': 'Fri', '6': 'Sat', '7': 'Sun' };
+            const dayNames = dayOfWeek.split(',').map(d => days[d] || d).join(', ');
+            if (/^\d+$/.test(min) && /^\d+$/.test(hour)) {
+                return `${dayNames} at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
+            }
+        }
+
+        // Day of month patterns
+        if (/^\d+$/.test(dayOfMonth) && dayOfMonth !== '*') {
+            if (/^\d+$/.test(min) && /^\d+$/.test(hour)) {
+                return `Day ${dayOfMonth} at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
+            }
+        }
+
+        return cron;
     }
 
     function matchesFilter(key, value, filter) {

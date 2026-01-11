@@ -1355,30 +1355,82 @@ mark {
     border-bottom: none;
 }
 
-.task-main {
+.task-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-space-md);
+    flex-wrap: wrap;
+}
+
+.task-left {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    flex-shrink: 0;
+}
+
+.task-right {
     display: flex;
     align-items: center;
     gap: var(--pk-space-md);
     flex-wrap: wrap;
-    margin-bottom: var(--pk-space-sm);
 }
 
-.task-target {
+.task-type-badge {
+    padding: 2px 8px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.task-type-badge.cron {
+    background: rgba(147, 51, 234, 0.15);
+    color: #9333ea;
+}
+
+[data-theme="dark"] .task-type-badge.cron {
+    background: rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+}
+
+.task-type-badge.fixed_delay {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--pk-primary);
+}
+
+.task-type-badge.fixed_rate {
+    background: rgba(22, 163, 74, 0.15);
+    color: var(--pk-success);
+}
+
+.task-schedule-value {
     font-family: var(--pk-font-mono);
     font-size: var(--pk-text-sm);
     font-weight: 600;
     color: var(--pk-text-strong);
-    flex: 1;
-    min-width: 200px;
 }
 
-.task-schedule {
+.task-timing-item {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    white-space: nowrap;
+}
+
+.task-timing-label {
+    font-weight: 500;
+}
+
+.task-target-row {
+    margin-top: var(--pk-space-sm);
+}
+
+.task-target {
     font-family: var(--pk-font-mono);
     font-size: var(--pk-text-xs);
-    padding: 2px 8px;
-    background: rgba(37, 99, 235, 0.15);
-    color: var(--pk-primary);
-    border-radius: var(--pk-radius);
+    color: var(--pk-text-muted);
 }
 
 .task-status {
@@ -1389,6 +1441,7 @@ mark {
     text-transform: uppercase;
     background: var(--pk-bg-alt);
     color: var(--pk-text-muted);
+    white-space: nowrap;
 }
 
 .task-status.status-success {
@@ -1406,24 +1459,6 @@ mark {
     color: var(--pk-text-muted);
 }
 
-.task-timing {
-    display: flex;
-    align-items: center;
-    gap: var(--pk-space-sm);
-    font-size: var(--pk-text-xs);
-    color: var(--pk-text-muted);
-    flex-wrap: wrap;
-}
-
-.task-timing-label {
-    font-weight: 500;
-}
-
-.task-timing-value {
-    font-family: var(--pk-font-mono);
-    margin-right: var(--pk-space-md);
-}
-
 .task-exception {
     margin-top: var(--pk-space-sm);
     padding: var(--pk-space-sm);
@@ -1436,11 +1471,13 @@ mark {
 }
 
 @media (max-width: 767px) {
-    .task-main {
+    .task-row {
         flex-direction: column;
         align-items: flex-start;
+        gap: var(--pk-space-sm);
     }
-    .task-target {
-        min-width: 100%;
+    .task-right {
+        width: 100%;
+        justify-content: flex-start;
     }
 }
