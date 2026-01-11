@@ -11,10 +11,16 @@
     let tracesData = null;
     let tracesLoaded = false;
 
+    let currentLocale = navigator.language || 'en-US';
+    let useServerTimezone = false;  // Default: browser timezone
+    let serverTimezone = null;      // Will be populated from API response
+
     async function init() {
         initTheme();
         initTabs();
         initRefreshControls();
+        initTimezoneControls();
+        initLocaleSelector();
         initEnvironmentFilter();
         initLoggersFilter();
         initConfigFilter();
@@ -346,13 +352,19 @@
             }
             errorEl.classList.add('hidden');
 
-            const response = await fetch(API_ENDPOINT);
+            const url = new URL(API_ENDPOINT, window.location.origin);
+            url.searchParams.set('locale', currentLocale);
+            const response = await fetch(url);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             peekabootData = await response.json();
+            if (peekabootData.server) {
+                serverTimezone = peekabootData.server;
+            }
+            updateTimezoneDisplay();
             renderData();
             updateLastUpdated();
 
@@ -1253,17 +1265,75 @@
         return value.toFixed(value >= 100 ? 0 : (value >= 10 ? 1 : 2)) + ' ' + size;
     }
 
+    function initTimezoneControls() {
+        const saved = localStorage.getItem('peekaboot-use-server-tz');
+        useServerTimezone = saved === 'true';
+
+        const toggle = document.getElementById('timezone-toggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => {
+                useServerTimezone = !useServerTimezone;
+                localStorage.setItem('peekaboot-use-server-tz', String(useServerTimezone));
+                updateTimezoneDisplay();
+                renderData();
+            });
+        }
+        updateTimezoneDisplay();
+    }
+
+    function initLocaleSelector() {
+        const saved = localStorage.getItem('peekaboot-locale');
+        if (saved) {
+            currentLocale = saved;
+        }
+
+        const select = document.getElementById('locale-select');
+        if (select) {
+            const option = select.querySelector(`option[value="${currentLocale}"]`);
+            if (option) {
+                select.value = currentLocale;
+            }
+
+            select.addEventListener('change', () => {
+                currentLocale = select.value;
+                localStorage.setItem('peekaboot-locale', currentLocale);
+                fetchData();
+            });
+        }
+    }
+
+    function updateTimezoneDisplay() {
+        const label = document.getElementById('timezone-label');
+        const info = document.getElementById('tz-info');
+
+        if (label) {
+            label.textContent = useServerTimezone ? 'Server' : 'Browser';
+        }
+
+        if (info) {
+            const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const serverTz = serverTimezone ? serverTimezone.timezone : 'Unknown';
+            info.textContent = useServerTimezone ? serverTz : browserTz;
+        }
+    }
+
     function formatDate(dateStr) {
         if (!dateStr) return '-';
         try {
             const date = new Date(dateStr);
-            return date.toLocaleDateString(undefined, {
+            const options = {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
-            });
+            };
+
+            if (useServerTimezone && serverTimezone) {
+                options.timeZone = serverTimezone.timezone;
+            }
+
+            return date.toLocaleDateString(currentLocale, options);
         } catch {
             return dateStr;
         }
