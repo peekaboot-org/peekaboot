@@ -60,7 +60,7 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ActuatorInsightsResponse getInsights(@RequestParam(required = false) String locale) {
+    public ActuatorInsightsResponse getInsights(@RequestParam(name = "locale", required = false) String locale) {
         Locale parsedLocale = (locale != null && !locale.isBlank())
             ? Locale.forLanguageTag(locale.replace('_', '-'))
             : Locale.ENGLISH;
