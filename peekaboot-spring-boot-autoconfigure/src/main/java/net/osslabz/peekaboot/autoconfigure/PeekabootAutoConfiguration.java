@@ -22,7 +22,8 @@ import org.springframework.context.annotation.Import;
     "net.osslabz.peekaboot.backend.controller",
     "net.osslabz.peekaboot.backend.service",
     "net.osslabz.peekaboot.backend.mapper",
-    "net.osslabz.peekaboot.backend.config"
+    "net.osslabz.peekaboot.backend.config",
+    "net.osslabz.peekaboot.backend.actuator"
 })
 public class PeekabootAutoConfiguration {
 }
