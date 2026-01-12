@@ -208,8 +208,17 @@
                 ${statusBadge}
             </div>
             <div class="trace-details">
-                <div class="span-tree">
-                    ${renderSpanNode(trace.rootSpan, 0)}
+                <div class="trace-view-toggle">
+                    <button class="trace-view-btn active" data-view="tree">Tree</button>
+                    <button class="trace-view-btn" data-view="timeline">Timeline</button>
+                </div>
+                <div class="trace-view tree-view">
+                    <div class="span-tree">
+                        ${renderSpanNode(trace.rootSpan, 0)}
+                    </div>
+                </div>
+                <div class="trace-view timeline-view" style="display: none;">
+                    ${renderTimelineView(trace)}
                 </div>
             </div>
         `;
@@ -230,6 +239,29 @@
             } else {
                 setHash('traces');  // Collapsing - just the tab
             }
+        });
+
+        // View toggle handlers
+        const toggleButtons = item.querySelectorAll('.trace-view-btn');
+        const treeView = item.querySelector('.tree-view');
+        const timelineView = item.querySelector('.timeline-view');
+
+        toggleButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const view = btn.dataset.view;
+
+                toggleButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                if (view === 'tree') {
+                    treeView.style.display = '';
+                    timelineView.style.display = 'none';
+                } else {
+                    treeView.style.display = 'none';
+                    timelineView.style.display = '';
+                }
+            });
         });
 
         return item;
