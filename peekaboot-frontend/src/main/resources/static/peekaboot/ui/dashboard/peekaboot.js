@@ -15,6 +15,27 @@
     let useServerTimezone = false;  // Default: browser timezone
     let serverTimezone = null;      // Will be populated from API response
 
+    // Root action type display mappings
+    const ROOT_ACTION_ICONS = {
+        HTTP_REQUEST: '&#127760;',     // Globe
+        SCHEDULED_JOB: '&#128337;',    // Clock
+        MESSAGE_CONSUMER: '&#128233;', // Envelope
+        RPC_CALL: '&#128279;',         // Link
+        DATABASE: '&#128450;',         // Filing cabinet
+        INTERNAL: '&#9881;',           // Gear
+        UNKNOWN: '&#10067;'            // Question mark
+    };
+
+    const ROOT_ACTION_LABELS = {
+        HTTP_REQUEST: 'HTTP Request',
+        SCHEDULED_JOB: 'Scheduled Job',
+        MESSAGE_CONSUMER: 'Message Consumer',
+        RPC_CALL: 'RPC Call',
+        DATABASE: 'Database',
+        INTERNAL: 'Internal',
+        UNKNOWN: 'Unknown'
+    };
+
     // Deep-linking support
     function parseHash() {
         const hash = window.location.hash.slice(1); // remove #
