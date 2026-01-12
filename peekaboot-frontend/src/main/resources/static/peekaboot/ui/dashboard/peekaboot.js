@@ -186,6 +186,10 @@
         const hasErrors = trace.status === 'HAS_ERRORS';
         const hasSlow = trace.status === 'HAS_SLOW_SPANS';
 
+        const actionType = trace.rootActionType || 'UNKNOWN';
+        const actionIcon = ROOT_ACTION_ICONS[actionType] || ROOT_ACTION_ICONS.UNKNOWN;
+        const actionLabel = ROOT_ACTION_LABELS[actionType] || ROOT_ACTION_LABELS.UNKNOWN;
+
         let statusBadge = '';
         if (hasErrors) {
             statusBadge = '<span class="trace-badge error">ERROR</span>';
@@ -196,6 +200,7 @@
         item.innerHTML = `
             <div class="trace-header">
                 <span class="trace-expand">&#9654;</span>
+                <span class="trace-action-type" title="${escapeHtml(actionLabel)}">${actionIcon}</span>
                 <code class="trace-id">${escapeHtml(traceIdShort)}</code>
                 <span class="trace-time">${startTime}</span>
                 <span class="trace-duration">${duration}</span>
