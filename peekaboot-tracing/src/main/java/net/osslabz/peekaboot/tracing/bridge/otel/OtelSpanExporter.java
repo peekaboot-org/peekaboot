@@ -8,6 +8,8 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
+import net.osslabz.peekaboot.tracing.event.SpanCompletedEvent;
+import net.osslabz.peekaboot.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.tracing.store.InMemorySpanStore;
 
 import java.time.Duration;
@@ -22,9 +24,15 @@ public class OtelSpanExporter implements SpanExporter {
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
     private final InMemorySpanStore store;
+    private final TraceEventBus eventBus;
 
     public OtelSpanExporter(InMemorySpanStore store) {
+        this(store, null);
+    }
+
+    public OtelSpanExporter(InMemorySpanStore store, TraceEventBus eventBus) {
         this.store = store;
+        this.eventBus = eventBus;
     }
 
     @Override
@@ -32,8 +40,27 @@ public class OtelSpanExporter implements SpanExporter {
         for (SpanData otelSpan : spans) {
             net.osslabz.peekaboot.tracing.store.SpanData spanData = convertToSpanData(otelSpan);
             store.report(spanData);
+            publishSpanEvent(spanData);
         }
         return CompletableResultCode.ofSuccess();
+    }
+
+    private void publishSpanEvent(net.osslabz.peekaboot.tracing.store.SpanData spanData) {
+        if (eventBus == null) {
+            return;
+        }
+        eventBus.publish(new SpanCompletedEvent(
+                spanData.traceId(),
+                spanData.spanId(),
+                spanData.parentId(),
+                spanData.name(),
+                spanData.kind(),
+                spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0,
+                spanData.duration() != null ? spanData.duration().toMillis() : 0,
+                spanData.tags(),
+                spanData.errorMessage(),
+                spanData.errorClass()
+        ));
     }
 
     @Override

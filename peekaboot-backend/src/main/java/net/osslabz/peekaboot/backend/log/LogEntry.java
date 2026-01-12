@@ -5,6 +5,7 @@ import java.util.Map;
 
 public record LogEntry(
         String traceId,
+        String spanId,
         Instant timestamp,
         String level,
         String loggerName,
