@@ -79,7 +79,7 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<TraceData> getTracesRaw(@RequestParam(defaultValue = "100") int limit) {
+    public List<TraceData> getTracesRaw(@RequestParam(name = "limit", defaultValue = "100") int limit) {
         TraceQueryService traceQueryService = traceQueryServiceProvider.getIfAvailable();
         if (traceQueryService == null) {
             return List.of();
@@ -88,12 +88,12 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public TraceInsightsResponse getTracesInsights(@RequestParam(defaultValue = "100") int limit) {
+    public TraceInsightsResponse getTracesInsights(@RequestParam(name = "limit", defaultValue = "100") int limit) {
         return traceInsightsService.getInsights(limit, getEffectiveCaptureMode());
     }
 
     @GetMapping(value = "/api/traces/{traceId}/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<TraceData> getTraceRaw(@PathVariable String traceId) {
+    public ResponseEntity<TraceData> getTraceRaw(@PathVariable (name = "traceId") String traceId) {
         TraceQueryService traceQueryService = traceQueryServiceProvider.getIfAvailable();
         if (traceQueryService == null) {
             return ResponseEntity.notFound().build();
@@ -104,7 +104,7 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/{traceId}/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<TraceTree> getTraceInsights(@PathVariable String traceId) {
+    public ResponseEntity<TraceTree> getTraceInsights(@PathVariable(name = "traceId") String traceId) {
         return traceInsightsService.getTraceInsights(traceId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
