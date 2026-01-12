@@ -7,6 +7,7 @@ public record TraceTree(
     long startTimeMs,
     long durationMs,
     TraceStatus status,
+    RootActionType rootActionType,
     String rootOperation,
     SpanNode rootSpan,
     TraceMetrics metrics,
