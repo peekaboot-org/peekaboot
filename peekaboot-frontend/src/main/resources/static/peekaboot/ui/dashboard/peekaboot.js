@@ -42,8 +42,18 @@
     }
 
     function expandTraceById(traceId) {
-        // Wait a bit for traces to load if needed
-        setTimeout(() => {
+        // Validate traceId to prevent selector injection
+        if (!traceId || !/^[a-zA-Z0-9_-]+$/.test(traceId)) {
+            console.warn('Invalid trace ID:', traceId);
+            return;
+        }
+
+        // Retry pattern for reliability
+        const maxRetries = 10;
+        const retryInterval = 100;
+        let attempts = 0;
+
+        function tryExpand() {
             const traceItem = document.querySelector(`[data-trace-id="${traceId}"]`);
             if (traceItem) {
                 const details = traceItem.querySelector('.trace-details');
@@ -56,8 +66,11 @@
                     }
                 }
                 traceItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (++attempts < maxRetries) {
+                setTimeout(tryExpand, retryInterval);
             }
-        }, 100);
+        }
+        tryExpand();
     }
 
     async function init() {
