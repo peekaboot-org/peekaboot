@@ -176,7 +176,8 @@ public class DevToolbarFilter implements Filter {
 
                 var style = document.createElement('style');
                 style.textContent = `
-                    .peekaboot-bar{display:flex;align-items:center;justify-content:space-between;background:#0d1117;color:#c9d1d9;font:12px/1.4 system-ui,-apple-system,sans-serif;padding:6px 12px;gap:16px;border-top:1px solid #30363d}
+                    .peekaboot-bar{display:flex;align-items:center;justify-content:space-between;background:#0d1117;color:#c9d1d9;font:12px/1.4 system-ui,-apple-system,sans-serif;padding:6px 12px;gap:16px;border-top:1px solid #30363d;cursor:pointer}
+                    .peekaboot-bar:hover{background:#161b22}
                     .peekaboot-bar a{color:#58a6ff;text-decoration:none}
                     .peekaboot-bar a:hover{text-decoration:underline}
                     .peekaboot-left{display:flex;align-items:center;gap:12px}
@@ -201,8 +202,6 @@ public class DevToolbarFilter implements Filter {
                     .peekaboot-memory{font-size:11px;color:#8b949e}
                     .peekaboot-memory.warn{color:#d29922}
                     .peekaboot-memory.error{color:#f85149}
-                    .peekaboot-expand{background:#161b22;border:1px solid #30363d;color:#c9d1d9;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:11px}
-                    .peekaboot-expand:hover{background:#21262d}
                 `;
                 shadow.appendChild(style);
 
@@ -228,24 +227,23 @@ public class DevToolbarFilter implements Filter {
                         <span class="peekaboot-health" title="Health: ${data.health}"><span class="dot ${healthClass}"></span>${data.health}</span>
                         ${data.memoryPercent >= 0 ? '<span class="peekaboot-memory ' + memoryClass + '" title="Heap memory">\\u{1F4BE}' + data.memoryPercent + '%</span>' : ''}
                         <span class="peekaboot-trace">${data.traceId ? data.traceId.substring(0, 16) + '...' : '-'}</span>
-                        <a href="${data.dashboardUrl}" target="_blank" title="Open Dashboard">\\u{1F4CA}</a>
-                        <button class="peekaboot-expand" title="Expand toolbar">\\u25B2</button>
+                        <a href="${data.dashboardUrl}" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\\u{1F4CA}</a>
                     </div>
                 `;
                 shadow.appendChild(bar);
 
-                // Expand button - open trace detail overlay
-                bar.querySelector('.peekaboot-expand').addEventListener('click', function() {
+                // Click anywhere on bar to open trace detail overlay
+                bar.addEventListener('click', function(e) {
+                    if (e.target.tagName === 'A') return;
+                    if (!data.traceId) return;
                     if (!window.PeekabootTraceDetail) {
                         var script = document.createElement('script');
                         script.src = '{{BASE_PATH}}/ui/trace-detail/trace-detail.js';
                         script.onload = function() {
-                            if (data.traceId) {
-                                window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
-                            }
+                            window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
                         };
                         document.head.appendChild(script);
-                    } else if (data.traceId) {
+                    } else {
                         window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
                     }
                 });

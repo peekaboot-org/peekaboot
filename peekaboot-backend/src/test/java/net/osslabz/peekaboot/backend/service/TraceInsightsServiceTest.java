@@ -41,7 +41,7 @@ class TraceInsightsServiceTest {
         traceQueryService = mock(TraceQueryService.class);
         traceTreeMapper = new TraceTreeMapper();
         issueDetector = new IssueDetector(new UiTracingProperties());
-        service = new TraceInsightsService(traceQueryService, traceTreeMapper, issueDetector);
+        service = new TraceInsightsService(traceQueryService, null, traceTreeMapper, issueDetector);
     }
 
     @Test
@@ -96,7 +96,7 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldHandleNullTraceQueryService() {
         // Given: TraceQueryService is null (tracing not enabled)
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, traceTreeMapper, issueDetector);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector);
 
         // When
         TraceInsightsResponse response = serviceWithNullQuery.getInsights(10, TraceCaptureMode.ALL);
@@ -153,7 +153,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldHandleNullTraceQueryService() {
         // Given
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, traceTreeMapper, issueDetector);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector);
 
         // When
         Optional<TraceTree> result = serviceWithNullQuery.getTraceInsights("trace1");
