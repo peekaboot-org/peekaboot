@@ -305,6 +305,85 @@
         `;
     }
 
+    function flattenSpanTree(span, depth) {
+        if (!span) {
+            return [];
+        }
+
+        const result = [{ span, depth }];
+
+        if (span.children && span.children.length > 0) {
+            span.children.forEach(child => {
+                result.push(...flattenSpanTree(child, depth + 1));
+            });
+        }
+
+        return result;
+    }
+
+    function renderTimelineView(trace) {
+        if (!trace || !trace.rootSpan) {
+            return '<p class="no-data">No spans to display</p>';
+        }
+
+        const traceStart = trace.startTimeMs || 0;
+        const traceDuration = trace.durationMs || 1;
+        const flatSpans = flattenSpanTree(trace.rootSpan, 0);
+
+        if (flatSpans.length === 0) {
+            return '<p class="no-data">No spans to display</p>';
+        }
+
+        let html = '<div class="trace-timeline-container">';
+
+        // Time header with markers
+        html += '<div class="timeline-header">';
+        const markerCount = 5;
+        for (let i = 0; i < markerCount; i++) {
+            const percent = (i / (markerCount - 1)) * 100;
+            const timeMs = (traceDuration * i) / (markerCount - 1);
+            html += `<span class="timeline-marker" style="left: ${percent}%">${formatDurationMs(timeMs)}</span>`;
+        }
+        html += '</div>';
+
+        // Span rows
+        flatSpans.forEach(({ span, depth }) => {
+            const spanStart = span.startTimeMs || 0;
+            const spanDuration = span.durationMs || 0;
+
+            const leftPercent = traceDuration > 0
+                ? ((spanStart - traceStart) / traceDuration) * 100
+                : 0;
+            const widthPercent = traceDuration > 0
+                ? Math.max((spanDuration / traceDuration) * 100, 0.5)
+                : 0.5;
+
+            const depthClass = `depth-${Math.min(depth, 5)}`;
+            const kind = (span.kind || 'internal').toLowerCase();
+            const kindClass = `kind-${kind}`;
+
+            const hasError = span.status === 'ERROR' ||
+                (span.issues && span.issues.some(issue => issue.type === 'ERROR'));
+            const errorClass = hasError ? 'has-error' : '';
+
+            const spanName = span.name || 'unknown';
+            const truncatedName = spanName.length > 40 ? spanName.substring(0, 37) + '...' : spanName;
+
+            html += `<div class="timeline-row ${depthClass}">`;
+            html += `<div class="timeline-label" title="${escapeHtml(spanName)}">${escapeHtml(truncatedName)}</div>`;
+            html += `<div class="timeline-track">`;
+            html += `<div class="timeline-bar ${kindClass} ${errorClass}" style="left: ${leftPercent}%; width: ${widthPercent}%">`;
+            html += `<span class="timeline-bar-tooltip">${escapeHtml(spanName)}: ${formatDurationMs(spanDuration)}</span>`;
+            html += `</div>`;
+            html += `</div>`;
+            html += `</div>`;
+        });
+
+        html += '</div>';
+
+        return html;
+    }
+
     function getDurationClassMs(ms) {
         if (!ms) return '';
         if (ms > 500) return 'very-slow';
