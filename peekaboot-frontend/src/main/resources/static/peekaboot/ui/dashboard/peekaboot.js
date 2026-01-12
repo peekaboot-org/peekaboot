@@ -404,6 +404,7 @@
         renderSpringInfo(application);
         renderJavaInfo(application);
         renderOsInfo(runtime?.os);
+        renderJvmDefaults(peekabootData.server);
         renderDataSourcesInfo(dataSources);
         renderMemoryInfo(runtime);
         renderHealthBanner(health);
@@ -565,6 +566,31 @@
 
         if (os.name) container.appendChild(createInfoRow('OS', `${os.name} ${os.version || ''}`));
         if (os.arch) container.appendChild(createInfoRow('Architecture', os.arch));
+    }
+
+    function renderJvmDefaults(server) {
+        const container = document.getElementById('jvm-defaults-info');
+        container.innerHTML = '';
+
+        if (!server) {
+            container.innerHTML = '<p class="no-data">No JVM defaults available</p>';
+            return;
+        }
+
+        if (server.locale) {
+            const localeDisplay = server.localeDisplay ? ` (${server.localeDisplay})` : '';
+            container.appendChild(createInfoRow('Locale', `${server.locale}${localeDisplay}`));
+        }
+        if (server.timezone) {
+            const tzDisplay = server.timezoneOffset ? ` (UTC${server.timezoneOffset})` : '';
+            container.appendChild(createInfoRow('Timezone', `${server.timezone}${tzDisplay}`));
+        }
+        if (server.currentTime) {
+            const serverTime = new Date(server.currentTime);
+            container.appendChild(createInfoRow('Server Time', formatDate(serverTime, { dateStyle: 'medium', timeStyle: 'medium' })));
+        }
+        if (server.fileEncoding) container.appendChild(createInfoRow('File Encoding', server.fileEncoding));
+        if (server.availableProcessors) container.appendChild(createInfoRow('CPU Cores', server.availableProcessors));
     }
 
     function renderHealthBanner(health) {
