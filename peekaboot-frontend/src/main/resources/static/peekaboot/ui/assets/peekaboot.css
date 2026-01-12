@@ -1527,3 +1527,132 @@ mark {
         display: none;
     }
 }
+
+/* Gantt Timeline View */
+.trace-timeline-container {
+    margin-top: var(--pk-space-md);
+    padding: var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border-radius: var(--pk-radius);
+}
+
+.trace-timeline-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--pk-space-sm);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+}
+
+.timeline-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--pk-space-xs);
+    min-height: 24px;
+}
+
+.timeline-label {
+    width: 180px;
+    flex-shrink: 0;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: var(--pk-space-sm);
+}
+
+/* Depth-based indentation for nested spans */
+.timeline-label.depth-1 { padding-left: 16px; }
+.timeline-label.depth-2 { padding-left: 32px; }
+.timeline-label.depth-3 { padding-left: 48px; }
+.timeline-label.depth-4 { padding-left: 64px; }
+.timeline-label.depth-5 { padding-left: 80px; }
+
+.timeline-track {
+    flex: 1;
+    position: relative;
+    height: 20px;
+    background: var(--pk-border);
+    border-radius: 2px;
+}
+
+.timeline-bar {
+    position: absolute;
+    height: 16px;
+    top: 2px;
+    border-radius: 2px;
+    min-width: 2px;
+    cursor: pointer;
+    transition: opacity var(--pk-transition);
+}
+
+.timeline-bar:hover {
+    opacity: 0.8;
+}
+
+/* Color by span kind */
+.timeline-bar.kind-server { background: var(--pk-primary); }
+.timeline-bar.kind-client { background: #10b981; }
+.timeline-bar.kind-producer { background: #8b5cf6; }
+.timeline-bar.kind-consumer { background: #f59e0b; }
+.timeline-bar.kind-internal { background: var(--pk-text-muted); }
+
+.timeline-bar.has-error { background: var(--pk-danger); }
+
+.timeline-bar-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    background: var(--pk-text-strong);
+    color: var(--pk-bg);
+    font-size: var(--pk-text-xs);
+    border-radius: var(--pk-radius);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity var(--pk-transition);
+    z-index: 10;
+    margin-bottom: 4px;
+}
+
+.timeline-bar:hover .timeline-bar-tooltip {
+    opacity: 1;
+}
+
+/* View toggle buttons */
+.trace-view-toggle {
+    display: inline-flex;
+    margin-bottom: var(--pk-space-md);
+}
+
+.trace-view-btn {
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    border: 1px solid var(--pk-border);
+    background: var(--pk-bg);
+    color: var(--pk-text-muted);
+    font-size: var(--pk-text-xs);
+    cursor: pointer;
+    transition: all var(--pk-transition);
+}
+
+.trace-view-btn:first-child {
+    border-radius: var(--pk-radius) 0 0 var(--pk-radius);
+}
+
+.trace-view-btn:last-child {
+    border-radius: 0 var(--pk-radius) var(--pk-radius) 0;
+    margin-left: -1px;
+}
+
+.trace-view-btn.active {
+    background: var(--pk-primary);
+    border-color: var(--pk-primary);
+    color: white;
+}
+
+.trace-view-btn:hover:not(.active) {
+    background: var(--pk-bg-alt);
+}
