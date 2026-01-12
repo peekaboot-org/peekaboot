@@ -234,7 +234,7 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).contains("/peekaboot/ui/toolbar/toolbar.js");
+        assertThat(result).contains("/peekaboot/ui/trace-detail/trace-detail.js");
     }
 
     private static class TestServletOutputStream extends ServletOutputStream {

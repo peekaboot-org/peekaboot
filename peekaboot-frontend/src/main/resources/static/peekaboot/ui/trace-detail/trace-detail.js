@@ -1,0 +1,611 @@
+(function(global) {
+    'use strict';
+
+    const STYLES = `
+        :host {
+            --pk-bg: #0d1117;
+            --pk-bg-alt: #161b22;
+            --pk-bg-hover: #21262d;
+            --pk-border: #30363d;
+            --pk-text: #c9d1d9;
+            --pk-text-muted: #8b949e;
+            --pk-text-strong: #f0f6fc;
+            --pk-primary: #58a6ff;
+            --pk-success: #3fb950;
+            --pk-warning: #d29922;
+            --pk-danger: #f85149;
+            --pk-purple: #a371f7;
+            --pk-font: system-ui, -apple-system, sans-serif;
+            --pk-font-mono: ui-monospace, SFMono-Regular, monospace;
+            --pk-radius: 6px;
+        }
+
+        .pk-trace-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pk-trace-container {
+            width: 95vw;
+            height: 95vh;
+            max-width: 1600px;
+            background: var(--pk-bg);
+            border-radius: var(--pk-radius);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: var(--pk-text);
+            font: 13px/1.5 var(--pk-font);
+            position: relative;
+        }
+
+        .pk-trace-header {
+            padding: 16px 20px;
+            background: var(--pk-bg-alt);
+            border-bottom: 1px solid var(--pk-border);
+        }
+
+        .pk-trace-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .pk-trace-title-icon { font-size: 24px; }
+        .pk-trace-title-method { font-weight: 600; color: var(--pk-text-strong); font-size: 16px; }
+        .pk-trace-title-path { font-family: var(--pk-font-mono); color: var(--pk-text); font-size: 14px; max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .pk-trace-meta {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 12px;
+        }
+
+        .pk-trace-duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: 16px; }
+        .pk-trace-duration.warn { color: var(--pk-warning); }
+        .pk-trace-duration.error { color: var(--pk-danger); }
+
+        .pk-trace-status { padding: 3px 10px; border-radius: 4px; font-weight: 600; font-size: 13px; }
+        .pk-trace-status.s2xx { background: var(--pk-success); color: #000; }
+        .pk-trace-status.s3xx { background: var(--pk-warning); color: #000; }
+        .pk-trace-status.s4xx, .pk-trace-status.s5xx { background: var(--pk-danger); color: #fff; }
+
+        .pk-trace-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: transparent;
+            border: none;
+            color: var(--pk-text-muted);
+            font-size: 28px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+        }
+        .pk-trace-close:hover { color: var(--pk-danger); }
+
+        .pk-trace-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 0 20px;
+            background: var(--pk-bg-alt);
+            border-bottom: 1px solid var(--pk-border);
+        }
+
+        .pk-trace-tab {
+            padding: 10px 16px;
+            background: transparent;
+            border: none;
+            color: var(--pk-text-muted);
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+        .pk-trace-tab:hover { color: var(--pk-text); }
+        .pk-trace-tab.active { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary); }
+        .pk-trace-tab .count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); border-radius: 10px; font-size: 11px; }
+
+        .pk-trace-content { flex: 1; overflow: auto; padding: 16px 20px; }
+
+        .pk-trace-loading, .pk-trace-error { padding: 40px; text-align: center; color: var(--pk-text-muted); }
+        .pk-trace-error { color: var(--pk-danger); }
+
+        /* Gantt view styles */
+        .pk-gantt { display: flex; flex-direction: column; gap: 2px; }
+        .pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: 8px; margin-bottom: 8px; }
+        .pk-gantt-header-name { width: 350px; color: var(--pk-text-muted); font-size: 11px; text-transform: uppercase; }
+        .pk-gantt-header-timeline { flex: 1; display: flex; justify-content: space-between; font-size: 11px; color: var(--pk-text-muted); font-family: var(--pk-font-mono); }
+
+        .pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
+        .pk-gantt-row:hover { background: var(--pk-bg-alt); }
+
+        .pk-gantt-name { width: 350px; display: flex; align-items: center; gap: 4px; font-size: 12px; overflow: hidden; }
+        .pk-gantt-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-gantt-kind { font-size: 10px; padding: 1px 4px; border-radius: 3px; text-transform: uppercase; }
+        .pk-gantt-kind.server { background: var(--pk-primary); color: #000; }
+        .pk-gantt-kind.client { background: var(--pk-purple); color: #fff; }
+        .pk-gantt-kind.internal { background: var(--pk-border); color: var(--pk-text); }
+
+        .pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 8px; }
+        .pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; }
+        .pk-gantt-bar.kind-server { background: var(--pk-primary); }
+        .pk-gantt-bar.kind-client { background: var(--pk-purple); }
+        .pk-gantt-bar.kind-internal, .pk-gantt-bar.kind-unknown { background: var(--pk-text-muted); }
+        .pk-gantt-bar.has-error { background: var(--pk-danger); }
+
+        .pk-gantt-duration { width: 60px; font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
+
+        /* Request tab styles */
+        .pk-request-section { margin-bottom: 24px; }
+        .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .pk-request-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .pk-request-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
+        .pk-request-table td:first-child { width: 200px; color: var(--pk-text-muted); }
+        .pk-request-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
+        .pk-request-masked { color: var(--pk-text-muted); font-style: italic; }
+        .pk-controller-info { font-family: var(--pk-font-mono); font-size: 13px; color: var(--pk-text); padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
+
+        /* Queries tab styles */
+        .pk-query-item { margin-bottom: 16px; padding: 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); border-left: 3px solid var(--pk-purple); }
+        .pk-query-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+        .pk-query-system { color: var(--pk-text-muted); }
+        .pk-query-duration { font-family: var(--pk-font-mono); font-weight: 600; }
+        .pk-query-duration.slow { color: var(--pk-warning); }
+        .pk-query-duration.very-slow { color: var(--pk-danger); }
+        .pk-query-sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
+        .pk-query-params { margin-top: 8px; font-size: 11px; color: var(--pk-text-muted); }
+
+        /* Logs tab styles */
+        .pk-logs-filter { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .pk-logs-filter input, .pk-logs-filter select { padding: 6px 10px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text); font-size: 12px; }
+        .pk-logs-filter input { flex: 1; max-width: 300px; }
+        .pk-logs-filter input::placeholder { color: var(--pk-text-muted); }
+
+        .pk-log-group { margin-bottom: 8px; }
+        .pk-log-group-header { padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); cursor: pointer; display: flex; justify-content: space-between; font-size: 12px; font-weight: 500; }
+        .pk-log-group-header:hover { background: var(--pk-bg-hover); }
+        .pk-log-group-header .arrow { transition: transform 0.2s; }
+        .pk-log-group-header.collapsed .arrow { transform: rotate(-90deg); }
+
+        .pk-log-group-list { padding-left: 0; }
+        .pk-log-group-list.collapsed { display: none; }
+
+        .pk-log-item { display: flex; gap: 12px; padding: 6px 12px; font-family: var(--pk-font-mono); font-size: 11px; border-bottom: 1px solid var(--pk-bg-alt); }
+        .pk-log-item:hover { background: var(--pk-bg-alt); }
+        .pk-log-time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
+        .pk-log-level { width: 50px; font-weight: 600; }
+        .pk-log-level.DEBUG { color: var(--pk-text-muted); }
+        .pk-log-level.INFO { color: var(--pk-primary); }
+        .pk-log-level.WARN { color: var(--pk-warning); }
+        .pk-log-level.ERROR { color: var(--pk-danger); }
+        .pk-log-message { flex: 1; word-break: break-word; }
+
+        .pk-no-data { padding: 40px; text-align: center; color: var(--pk-text-muted); }
+    `;
+
+    const ROOT_ACTION_ICONS = {
+        HTTP_REQUEST: '&#127760;',
+        SCHEDULED_JOB: '&#128337;',
+        MESSAGE_CONSUMER: '&#128233;',
+        RPC_CALL: '&#128279;',
+        DATABASE: '&#128450;',
+        INTERNAL: '&#9881;',
+        UNKNOWN: '&#10067;'
+    };
+
+    function openTraceDetail(traceId, options = {}) {
+        closeTraceDetail();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'peekaboot-trace-overlay';
+        document.body.appendChild(overlay);
+
+        const shadow = overlay.attachShadow({ mode: 'open' });
+
+        const style = document.createElement('style');
+        style.textContent = STYLES;
+        shadow.appendChild(style);
+
+        const loading = document.createElement('div');
+        loading.className = 'pk-trace-overlay';
+        loading.innerHTML = '<div class="pk-trace-loading">Loading trace data...</div>';
+        shadow.appendChild(loading);
+
+        fetchAndRender(shadow, traceId, options);
+    }
+
+    function closeTraceDetail() {
+        const existing = document.getElementById('peekaboot-trace-overlay');
+        if (existing) {
+            existing.remove();
+        }
+    }
+
+    async function fetchAndRender(shadow, traceId, options) {
+        try {
+            const basePath = options.basePath || '/peekaboot';
+            const response = await fetch(`${basePath}/api/traces/${traceId}/insights`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const trace = await response.json();
+            render(shadow, trace, options);
+        } catch (error) {
+            shadow.innerHTML = '';
+            const style = document.createElement('style');
+            style.textContent = STYLES;
+            shadow.appendChild(style);
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'pk-trace-overlay';
+            errorDiv.innerHTML = `<div class="pk-trace-error">Failed to load trace: ${escapeHtml(error.message)}<br><br><button onclick="this.closest('#peekaboot-trace-overlay').remove()" style="padding:8px 16px;cursor:pointer">Close</button></div>`;
+            shadow.appendChild(errorDiv);
+        }
+    }
+
+    function render(shadow, trace, options) {
+        const rootSpan = trace.rootSpan || {};
+        const attrs = rootSpan.attributes || {};
+        const method = attrs['http.method'] || attrs['http.request.method'] || 'UNKNOWN';
+        const path = attrs['http.target'] || attrs['url.path'] || rootSpan.name || '-';
+        const status = attrs['http.status_code'] || attrs['http.response.status_code'] || '-';
+        const statusClass = 's' + Math.floor(parseInt(status) / 100) + 'xx';
+        const icon = ROOT_ACTION_ICONS[trace.rootActionType] || ROOT_ACTION_ICONS.UNKNOWN;
+        const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 200 ? 'warn' : '');
+
+        const queryCount = countQueries(trace.rootSpan);
+        const logCount = (trace.logs || []).length;
+        const spanCount = trace.metrics?.totalSpans || countSpans(trace.rootSpan);
+
+        shadow.innerHTML = '';
+        const style = document.createElement('style');
+        style.textContent = STYLES;
+        shadow.appendChild(style);
+
+        const container = document.createElement('div');
+        container.className = 'pk-trace-overlay';
+        container.innerHTML = `
+            <div class="pk-trace-container">
+                <div class="pk-trace-header">
+                    <div class="pk-trace-title">
+                        <span class="pk-trace-title-icon">${icon}</span>
+                        <span class="pk-trace-title-method">${escapeHtml(method)}</span>
+                        <span class="pk-trace-title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+                    </div>
+                    <div class="pk-trace-meta">
+                        <span class="pk-trace-duration ${durationClass}">${trace.durationMs}ms</span>
+                        <span class="pk-trace-status ${statusClass}">${status}</span>
+                        <span>${spanCount} spans</span>
+                        <span>${queryCount} queries</span>
+                        <span>${logCount} logs</span>
+                    </div>
+                    <button class="pk-trace-close" title="Close">&times;</button>
+                </div>
+                <div class="pk-trace-tabs">
+                    <button class="pk-trace-tab active" data-tab="overview">Overview</button>
+                    <button class="pk-trace-tab" data-tab="request">Request</button>
+                    <button class="pk-trace-tab" data-tab="queries">Queries <span class="count">${queryCount}</span></button>
+                    <button class="pk-trace-tab" data-tab="logs">Logs <span class="count">${logCount}</span></button>
+                </div>
+                <div class="pk-trace-content" id="pk-tab-content"></div>
+            </div>
+        `;
+        shadow.appendChild(container);
+
+        container.querySelector('.pk-trace-close').addEventListener('click', closeTraceDetail);
+        container.addEventListener('click', (e) => {
+            if (e.target === container) closeTraceDetail();
+        });
+
+        let activeTab = 'overview';
+        const tabs = container.querySelectorAll('.pk-trace-tab');
+        const content = container.querySelector('#pk-tab-content');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                activeTab = tab.dataset.tab;
+                renderTabContent(content, activeTab, trace);
+            });
+        });
+
+        renderTabContent(content, activeTab, trace);
+
+        // ESC key to close
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeTraceDetail();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+    function renderTabContent(container, tab, trace) {
+        switch (tab) {
+            case 'overview': renderOverview(container, trace); break;
+            case 'request': renderRequest(container, trace); break;
+            case 'queries': renderQueries(container, trace); break;
+            case 'logs': renderLogs(container, trace); break;
+        }
+    }
+
+    function renderOverview(container, trace) {
+        const spans = flattenSpanTree(trace.rootSpan, 0);
+        const totalDuration = trace.durationMs || 1;
+        const traceStart = trace.startTimeMs || 0;
+
+        const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
+
+        let html = '<div class="pk-gantt">';
+        html += '<div class="pk-gantt-header">';
+        html += '<div class="pk-gantt-header-name">Span</div>';
+        html += '<div class="pk-gantt-header-timeline">' + markers.map(m => `<span>${m}</span>`).join('') + '</div>';
+        html += '<div style="width:60px"></div>';
+        html += '</div>';
+
+        spans.forEach(({ span, depth }) => {
+            const indent = depth * 20;
+            const spanStart = span.startTimeMs || traceStart;
+            const spanDuration = span.durationMs || 0;
+            const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
+            const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
+            const kindRaw = span.kind || 'internal';
+            const kind = kindRaw.toLowerCase();
+            const hasError = span.status === 'ERROR' || span.errorMessage;
+
+            html += `<div class="pk-gantt-row">`;
+            html += `<div class="pk-gantt-name" style="padding-left: ${indent}px">`;
+            if (kind !== 'internal' && kind !== 'unknown') {
+                html += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
+            }
+            html += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
+            html += `</div>`;
+            html += `<div class="pk-gantt-track">`;
+            html += `<div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div>`;
+            html += `</div>`;
+            html += `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
+            html += `</div>`;
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function renderRequest(container, trace) {
+        const req = trace.request;
+        const rootSpan = trace.rootSpan || {};
+        const attrs = rootSpan.attributes || {};
+
+        let html = '';
+
+        if (req?.controllerClass || req?.controllerMethod) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Controller</h3>';
+            html += `<div class="pk-controller-info">${escapeHtml(req.controllerClass || 'Unknown')}.${escapeHtml(req.controllerMethod || 'unknown')}()</div>`;
+            html += '</div>';
+        }
+
+        html += '<div class="pk-request-section">';
+        html += '<h3>Request Headers</h3>';
+        html += '<table class="pk-request-table">';
+        const reqHeaders = req?.requestHeaders || {};
+        if (Object.keys(reqHeaders).length > 0) {
+            Object.entries(reqHeaders).sort().forEach(([k, v]) => {
+                const isMasked = v === '********';
+                html += `<tr><td>${escapeHtml(k)}</td><td class="${isMasked ? 'pk-request-masked' : ''}">${escapeHtml(v)}</td></tr>`;
+            });
+        } else {
+            html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
+        }
+        html += '</table></div>';
+
+        const queryParams = req?.queryParams || {};
+        if (Object.keys(queryParams).length > 0) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Query Parameters</h3>';
+            html += '<table class="pk-request-table">';
+            Object.entries(queryParams).sort().forEach(([k, v]) => {
+                html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+            });
+            html += '</table></div>';
+        }
+
+        html += '<div class="pk-request-section">';
+        html += '<h3>Response Headers</h3>';
+        html += '<table class="pk-request-table">';
+        const resHeaders = req?.responseHeaders || {};
+        if (Object.keys(resHeaders).length > 0) {
+            Object.entries(resHeaders).sort().forEach(([k, v]) => {
+                html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+            });
+        } else {
+            html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
+        }
+        html += '</table></div>';
+
+        container.innerHTML = html || '<div class="pk-no-data">No request details available</div>';
+    }
+
+    function renderQueries(container, trace) {
+        const queries = collectDbSpans(trace.rootSpan);
+
+        if (queries.length === 0) {
+            container.innerHTML = '<div class="pk-no-data">No database queries recorded</div>';
+            return;
+        }
+
+        let html = '';
+        queries.forEach((span, idx) => {
+            const attrs = span.attributes || {};
+            const sql = attrs['db.statement'] || span.name || 'Unknown query';
+            const duration = span.durationMs || 0;
+            const durationClass = duration > 500 ? 'very-slow' : (duration > 100 ? 'slow' : '');
+            const system = attrs['db.system'] || 'SQL';
+            const params = attrs['db.parameters'];
+            const rowCount = attrs['db.row_count'];
+
+            html += '<div class="pk-query-item">';
+            html += '<div class="pk-query-header">';
+            html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
+            html += `<span class="pk-query-duration ${durationClass}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
+            html += '</div>';
+            html += `<div class="pk-query-sql">${escapeHtml(sql)}</div>`;
+            if (params) {
+                html += `<div class="pk-query-params">Parameters: ${escapeHtml(params)}</div>`;
+            }
+            if (rowCount !== undefined) {
+                html += `<div class="pk-query-params">Rows returned: ${rowCount}</div>`;
+            }
+            html += '</div>';
+        });
+
+        container.innerHTML = html;
+    }
+
+    function renderLogs(container, trace) {
+        const logs = trace.logs || [];
+
+        if (logs.length === 0) {
+            container.innerHTML = '<div class="pk-no-data">No logs recorded for this trace</div>';
+            return;
+        }
+
+        const bySpan = new Map();
+        const spanNames = new Map();
+
+        function mapSpanNames(span) {
+            if (!span) return;
+            spanNames.set(span.spanId, span.name);
+            (span.children || []).forEach(mapSpanNames);
+        }
+        mapSpanNames(trace.rootSpan);
+
+        logs.forEach(log => {
+            const spanId = log.spanId || 'unknown';
+            if (!bySpan.has(spanId)) bySpan.set(spanId, []);
+            bySpan.get(spanId).push(log);
+        });
+
+        let html = '<div class="pk-logs-filter">';
+        html += '<input type="text" placeholder="Filter logs..." id="pk-log-filter">';
+        html += '<select id="pk-log-level"><option value="">All Levels</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option></select>';
+        html += '</div>';
+        html += '<div id="pk-logs-list">';
+
+        bySpan.forEach((spanLogs, spanId) => {
+            const spanName = spanNames.get(spanId) || spanId;
+            html += `<div class="pk-log-group" data-span="${escapeHtml(spanId)}">`;
+            html += `<div class="pk-log-group-header"><span>${escapeHtml(spanName)} (${spanLogs.length} logs)</span><span class="arrow">&#9660;</span></div>`;
+            html += '<div class="pk-log-group-list">';
+            spanLogs.forEach(log => {
+                const time = formatTime(log.timestamp);
+                html += `<div class="pk-log-item" data-level="${log.level}">`;
+                html += `<span class="pk-log-time">${time}</span>`;
+                html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
+                html += `<span class="pk-log-message">${escapeHtml(log.message)}</span>`;
+                html += '</div>';
+            });
+            html += '</div></div>';
+        });
+
+        html += '</div>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.pk-log-group-header').forEach(header => {
+            header.addEventListener('click', () => {
+                header.classList.toggle('collapsed');
+                header.nextElementSibling.classList.toggle('collapsed');
+            });
+        });
+
+        const filterInput = container.querySelector('#pk-log-filter');
+        const levelSelect = container.querySelector('#pk-log-level');
+        const logsList = container.querySelector('#pk-logs-list');
+
+        function filterLogs() {
+            const text = filterInput.value.toLowerCase();
+            const level = levelSelect.value;
+            logsList.querySelectorAll('.pk-log-item').forEach(item => {
+                const message = item.querySelector('.pk-log-message').textContent.toLowerCase();
+                const itemLevel = item.dataset.level;
+                const matchText = !text || message.includes(text);
+                const matchLevel = !level || itemLevel === level;
+                item.style.display = matchText && matchLevel ? '' : 'none';
+            });
+        }
+
+        filterInput.addEventListener('input', filterLogs);
+        levelSelect.addEventListener('change', filterLogs);
+    }
+
+    function flattenSpanTree(span, depth) {
+        if (!span) return [];
+        const result = [{ span, depth }];
+        (span.children || []).forEach(child => {
+            result.push(...flattenSpanTree(child, depth + 1));
+        });
+        return result;
+    }
+
+    function countQueries(span) {
+        if (!span) return 0;
+        let count = isDbSpan(span) ? 1 : 0;
+        (span.children || []).forEach(child => {
+            count += countQueries(child);
+        });
+        return count;
+    }
+
+    function countSpans(span) {
+        if (!span) return 0;
+        let count = 1;
+        (span.children || []).forEach(child => {
+            count += countSpans(child);
+        });
+        return count;
+    }
+
+    function collectDbSpans(span) {
+        if (!span) return [];
+        const result = isDbSpan(span) ? [span] : [];
+        (span.children || []).forEach(child => {
+            result.push(...collectDbSpans(child));
+        });
+        return result;
+    }
+
+    function isDbSpan(span) {
+        const attrs = span.attributes || {};
+        return attrs['db.system'] || attrs['db.statement'];
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = String(text);
+        return div.innerHTML;
+    }
+
+    function formatTime(timestamp) {
+        if (!timestamp) return '-';
+        try {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+        } catch (e) {
+            return String(timestamp).substring(11, 23);
+        }
+    }
+
+    global.PeekabootTraceDetail = {
+        open: openTraceDetail,
+        close: closeTraceDetail
+    };
+
+})(window);

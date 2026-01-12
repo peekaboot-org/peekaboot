@@ -234,11 +234,20 @@ public class DevToolbarFilter implements Filter {
                 `;
                 shadow.appendChild(bar);
 
-                // Expand button - lazy load full toolbar
+                // Expand button - open trace detail overlay
                 bar.querySelector('.peekaboot-expand').addEventListener('click', function() {
-                    var script = document.createElement('script');
-                    script.src = '{{BASE_PATH}}/ui/toolbar/toolbar.js';
-                    document.head.appendChild(script);
+                    if (!window.PeekabootTraceDetail) {
+                        var script = document.createElement('script');
+                        script.src = '{{BASE_PATH}}/ui/trace-detail/trace-detail.js';
+                        script.onload = function() {
+                            if (data.traceId) {
+                                window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
+                            }
+                        };
+                        document.head.appendChild(script);
+                    } else if (data.traceId) {
+                        window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
+                    }
                 });
             })();
             </script>
