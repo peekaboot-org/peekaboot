@@ -199,7 +199,7 @@
             icon.innerHTML = isOpen ? '&#9654;' : '&#9660;';
 
             // Update URL hash for deep-linking
-            if (!isOpen) {
+            if (!isOpen && trace.traceId) {
                 setHash('traces', trace.traceId);  // Expanding - include trace ID
             } else {
                 setHash('traces');  // Collapsing - just the tab
