@@ -1,6 +1,7 @@
 package net.osslabz.peekaboot.backend.mapper.trace;
 
 import io.micrometer.tracing.Span;
+import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanIssue;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
@@ -28,6 +29,7 @@ public class TraceTreeMapper {
                     traceData != null ? traceData.traceId() : null,
                     0L, 0L,
                     TraceStatus.OK,
+                    RootActionType.UNKNOWN,
                     null, null,
                     new TraceMetrics(0, 0, 0L, 0, 0),
                     Map.of()
@@ -64,12 +66,14 @@ public class TraceTreeMapper {
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
         String rootOperation = rootSpanData != null ? rootSpanData.name() : null;
+        RootActionType rootActionType = detectRootActionType(rootSpanData);
 
         return new TraceTree(
                 traceData.traceId(),
                 startTimeMs,
                 durationMs,
                 status,
+                rootActionType,
                 rootOperation,
                 rootSpan,
                 metrics,
@@ -86,6 +90,53 @@ public class TraceTreeMapper {
         }
         // Fallback: return first span
         return spans.isEmpty() ? null : spans.get(0);
+    }
+
+    private RootActionType detectRootActionType(SpanData rootSpan) {
+        if (rootSpan == null) {
+            return RootActionType.UNKNOWN;
+        }
+
+        Span.Kind kind = rootSpan.kind();
+        Map<String, String> tags = rootSpan.tags() != null ? rootSpan.tags() : Map.of();
+        String name = rootSpan.name() != null ? rootSpan.name().toLowerCase() : "";
+
+        boolean hasHttpTags = tags.keySet().stream().anyMatch(k -> k.startsWith("http."));
+        boolean hasDbTags = tags.keySet().stream().anyMatch(k -> k.startsWith("db."));
+        boolean hasMessagingTags = tags.keySet().stream().anyMatch(k -> k.startsWith("messaging."));
+        boolean hasRpcTags = tags.keySet().stream().anyMatch(k -> k.startsWith("rpc."));
+
+        // 1. CONSUMER kind OR messaging.* tags -> MESSAGE_CONSUMER
+        if (kind == Span.Kind.CONSUMER || hasMessagingTags) {
+            return RootActionType.MESSAGE_CONSUMER;
+        }
+        // 2. SERVER kind + http.* tags -> HTTP_REQUEST
+        if (kind == Span.Kind.SERVER && hasHttpTags) {
+            return RootActionType.HTTP_REQUEST;
+        }
+        // 3. SERVER kind + rpc.* tags -> RPC_CALL
+        if (kind == Span.Kind.SERVER && hasRpcTags) {
+            return RootActionType.RPC_CALL;
+        }
+        // 4. Name contains "schedule"/"cron"/"timer"/"job" -> SCHEDULED_JOB
+        if (name.contains("schedule") || name.contains("cron") ||
+                name.contains("timer") || name.contains("job")) {
+            return RootActionType.SCHEDULED_JOB;
+        }
+        // 5. CLIENT kind + db.* tags as root -> DATABASE
+        if (kind == Span.Kind.CLIENT && hasDbTags) {
+            return RootActionType.DATABASE;
+        }
+        // 6. SERVER kind (default) -> HTTP_REQUEST
+        if (kind == Span.Kind.SERVER) {
+            return RootActionType.HTTP_REQUEST;
+        }
+        // 7. null/INTERNAL kind -> INTERNAL
+        if (kind == null) {
+            return RootActionType.INTERNAL;
+        }
+        // 8. Fallback
+        return RootActionType.UNKNOWN;
     }
 
     private MutableSpanNode buildMutableTree(SpanData spanData, Map<String, List<SpanData>> childrenByParentId) {

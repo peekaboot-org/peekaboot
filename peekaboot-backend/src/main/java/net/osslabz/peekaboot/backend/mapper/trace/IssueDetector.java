@@ -32,6 +32,7 @@ public class IssueDetector {
                 trace.startTimeMs(),
                 trace.durationMs(),
                 trace.status(),
+                trace.rootActionType(),
                 trace.rootOperation(),
                 processedRoot,
                 trace.metrics(),

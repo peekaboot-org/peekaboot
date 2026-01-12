@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static net.osslabz.peekaboot.backend.domain.trace.RootActionType.HTTP_REQUEST;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class TraceDomainTest {
@@ -61,6 +62,7 @@ class TraceDomainTest {
             1000L,
             200L,
             TraceStatus.OK,
+            HTTP_REQUEST,
             "GET /api/users",
             rootSpan,
             metrics,
@@ -115,7 +117,7 @@ class TraceDomainTest {
         );
         TraceMetrics metrics = new TraceMetrics(1, 0, 0L, 0, 0);
         TraceTree tree = new TraceTree(
-            "trace-1", 0L, 100L, TraceStatus.OK, "op",
+            "trace-1", 0L, 100L, TraceStatus.OK, HTTP_REQUEST, "op",
             rootSpan, metrics, Map.of()
         );
 

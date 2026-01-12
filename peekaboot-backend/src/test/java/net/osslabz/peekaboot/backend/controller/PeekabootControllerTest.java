@@ -3,6 +3,7 @@ package net.osslabz.peekaboot.backend.controller;
 import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
@@ -297,6 +298,7 @@ class PeekabootControllerTest {
                 0L,
                 100L,
                 TraceStatus.OK,
+                RootActionType.HTTP_REQUEST,
                 "test-operation",
                 rootSpan,
                 new TraceMetrics(1, 0, 0L, 0, 0),

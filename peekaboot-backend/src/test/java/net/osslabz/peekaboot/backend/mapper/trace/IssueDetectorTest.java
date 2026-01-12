@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.backend.mapper.trace;
 
 import net.osslabz.peekaboot.backend.config.UiTracingProperties;
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
+import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanIssue;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
@@ -270,7 +271,7 @@ class IssueDetectorTest {
     void detectIssues_shouldHandleNullRootSpan() {
         // Given: A trace with no root span
         TraceTree trace = new TraceTree(
-                "trace1", 0, 0, TraceStatus.OK, null, null,
+                "trace1", 0, 0, TraceStatus.OK, RootActionType.UNKNOWN, null, null,
                 new TraceMetrics(0, 0, 0, 0, 0), Map.of()
         );
 
@@ -289,7 +290,7 @@ class IssueDetectorTest {
     private TraceTree createTrace(SpanNode rootSpan, TraceMetrics metrics) {
         return new TraceTree(
                 "trace-1", 0, rootSpan != null ? rootSpan.durationMs() : 0,
-                TraceStatus.OK, rootSpan != null ? rootSpan.name() : null,
+                TraceStatus.OK, RootActionType.UNKNOWN, rootSpan != null ? rootSpan.name() : null,
                 rootSpan, metrics, Map.of()
         );
     }
