@@ -15,6 +15,51 @@
     let useServerTimezone = false;  // Default: browser timezone
     let serverTimezone = null;      // Will be populated from API response
 
+    // Deep-linking support
+    function parseHash() {
+        const hash = window.location.hash.slice(1); // remove #
+        if (!hash) return { tab: 'dashboard', detail: null };
+        const parts = hash.split('/');
+        return {
+            tab: parts[0] || 'dashboard',
+            detail: parts[1] || null
+        };
+    }
+
+    function setHash(tab, detail = null) {
+        const hash = detail ? `#${tab}/${detail}` : `#${tab}`;
+        if (window.location.hash !== hash) {
+            history.pushState(null, '', hash);
+        }
+    }
+
+    function handleHashChange() {
+        const { tab, detail } = parseHash();
+        activateTab(tab);
+        if (tab === 'traces' && detail) {
+            expandTraceById(detail);
+        }
+    }
+
+    function expandTraceById(traceId) {
+        // Wait a bit for traces to load if needed
+        setTimeout(() => {
+            const traceItem = document.querySelector(`[data-trace-id="${traceId}"]`);
+            if (traceItem) {
+                const details = traceItem.querySelector('.trace-details');
+                const icon = traceItem.querySelector('.trace-expand');
+                if (details && !details.classList.contains('open')) {
+                    details.classList.add('open');
+                    if (icon) {
+                        icon.classList.add('open');
+                        icon.innerHTML = '&#9660;';
+                    }
+                }
+                traceItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 100);
+    }
+
     async function init() {
         initTheme();
         initTabs();
