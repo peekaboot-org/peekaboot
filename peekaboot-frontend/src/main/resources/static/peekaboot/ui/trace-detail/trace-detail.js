@@ -126,6 +126,10 @@
 
         .pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
         .pk-gantt-row:hover { background: var(--pk-bg-alt); }
+        .pk-gantt-row.collapsed + .pk-gantt-row.child { display: none; }
+
+        .pk-gantt-toggle { width: 16px; cursor: pointer; user-select: none; color: var(--pk-text-muted); }
+        .pk-gantt-toggle:hover { color: var(--pk-text); }
 
         .pk-gantt-name { width: 350px; display: flex; align-items: center; gap: 4px; font-size: 12px; overflow: hidden; }
         .pk-gantt-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -337,10 +341,8 @@
     }
 
     function renderOverview(container, trace) {
-        const spans = flattenSpanTree(trace.rootSpan, 0);
         const totalDuration = trace.durationMs || 1;
         const traceStart = trace.startTimeMs || 0;
-
         const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
 
         let html = '<div class="pk-gantt">';
@@ -349,33 +351,89 @@
         html += '<div class="pk-gantt-header-timeline">' + markers.map(m => `<span>${m}</span>`).join('') + '</div>';
         html += '<div style="width:60px"></div>';
         html += '</div>';
-
-        spans.forEach(({ span, depth }) => {
-            const indent = depth * 20;
-            const spanStart = span.startTimeMs || traceStart;
-            const spanDuration = span.durationMs || 0;
-            const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
-            const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
-            const kindRaw = span.kind || 'internal';
-            const kind = kindRaw.toLowerCase();
-            const hasError = span.status === 'ERROR' || span.errorMessage;
-
-            html += `<div class="pk-gantt-row">`;
-            html += `<div class="pk-gantt-name" style="padding-left: ${indent}px">`;
-            if (kind !== 'internal' && kind !== 'unknown') {
-                html += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
-            }
-            html += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
-            html += `</div>`;
-            html += `<div class="pk-gantt-track">`;
-            html += `<div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div>`;
-            html += `</div>`;
-            html += `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
-            html += `</div>`;
-        });
-
+        html += '<div id="pk-gantt-rows"></div>';
         html += '</div>';
         container.innerHTML = html;
+
+        const rowsContainer = container.querySelector('#pk-gantt-rows');
+        renderSpanRows(rowsContainer, trace.rootSpan, 0, traceStart, totalDuration, null);
+
+        // Add click handlers for expand/collapse
+        rowsContainer.addEventListener('click', (e) => {
+            const toggle = e.target.closest('.pk-gantt-toggle');
+            if (!toggle) return;
+            const row = toggle.closest('.pk-gantt-row');
+            const spanId = row.dataset.spanId;
+            const isCollapsed = toggle.textContent === '+';
+
+            toggle.textContent = isCollapsed ? '-' : '+';
+
+            // Show/hide descendant rows
+            let sibling = row.nextElementSibling;
+            const rowDepth = parseInt(row.dataset.depth);
+            while (sibling && parseInt(sibling.dataset.depth) > rowDepth) {
+                if (isCollapsed) {
+                    sibling.style.display = '';
+                    // If this row has a collapsed toggle, skip its children
+                    const sibToggle = sibling.querySelector('.pk-gantt-toggle');
+                    if (sibToggle && sibToggle.textContent === '+') {
+                        const sibDepth = parseInt(sibling.dataset.depth);
+                        sibling = sibling.nextElementSibling;
+                        while (sibling && parseInt(sibling.dataset.depth) > sibDepth) {
+                            sibling = sibling.nextElementSibling;
+                        }
+                        continue;
+                    }
+                } else {
+                    sibling.style.display = 'none';
+                }
+                sibling = sibling.nextElementSibling;
+            }
+        });
+    }
+
+    function renderSpanRows(container, span, depth, traceStart, totalDuration, parentId) {
+        if (!span) return;
+
+        const indent = depth * 20;
+        const spanStart = span.startTimeMs || traceStart;
+        const spanDuration = span.durationMs || 0;
+        const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
+        const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
+        const kindRaw = span.kind || 'internal';
+        const kind = kindRaw.toLowerCase();
+        const hasError = span.status === 'ERROR' || span.errorMessage;
+        const hasChildren = span.children && span.children.length > 0;
+
+        const row = document.createElement('div');
+        row.className = 'pk-gantt-row';
+        row.dataset.spanId = span.spanId;
+        row.dataset.depth = depth;
+        if (parentId) row.dataset.parentId = parentId;
+
+        let nameHtml = `<div class="pk-gantt-name" style="padding-left: ${indent}px">`;
+        if (hasChildren) {
+            nameHtml += `<span class="pk-gantt-toggle">-</span>`;
+        } else {
+            nameHtml += `<span style="width:16px"></span>`;
+        }
+        if (kind !== 'internal' && kind !== 'unknown' && kind !== 'null') {
+            nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
+        }
+        nameHtml += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
+        nameHtml += `</div>`;
+
+        row.innerHTML = nameHtml +
+            `<div class="pk-gantt-track"><div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div></div>` +
+            `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
+
+        container.appendChild(row);
+
+        if (hasChildren) {
+            span.children.forEach(child => {
+                renderSpanRows(container, child, depth + 1, traceStart, totalDuration, span.spanId);
+            });
+        }
     }
 
     function renderRequest(container, trace) {
@@ -583,7 +641,21 @@
 
     function isDbSpan(span) {
         const attrs = span.attributes || {};
-        return attrs['db.system'] || attrs['db.statement'];
+        // Check for db.* attributes
+        if (attrs['db.system'] || attrs['db.statement']) return true;
+        // Check for any attribute key starting with db.
+        for (const key of Object.keys(attrs)) {
+            if (key.startsWith('db.')) return true;
+        }
+        // Check for CLIENT span with SQL-like name
+        const name = (span.name || '').toUpperCase();
+        if ((span.kind === 'CLIENT' || !span.kind) &&
+            (name.startsWith('SELECT ') || name.startsWith('INSERT ') ||
+             name.startsWith('UPDATE ') || name.startsWith('DELETE ') ||
+             name.includes(' FROM ') || name.includes('HIBERNATE'))) {
+            return true;
+        }
+        return false;
     }
 
     function escapeHtml(text) {
