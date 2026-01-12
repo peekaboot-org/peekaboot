@@ -154,6 +154,9 @@
     function renderTraceItem(trace) {
         const item = document.createElement('div');
         item.className = 'trace-item';
+        if (trace.traceId) {
+            item.dataset.traceId = trace.traceId;
+        }
 
         const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
         const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
@@ -302,26 +305,52 @@
         document.getElementById('theme-icon').textContent = theme === 'light' ? '\u263E' : '\u2600';
     }
 
-    function initTabs() {
+    function activateTab(tabName) {
         const tabButtons = document.querySelectorAll('#main-tabs .tab');
         const tabContents = document.querySelectorAll('.tab-content');
+
+        // Validate tab exists
+        const button = document.querySelector(`[data-tab="${tabName}"]`);
+        if (!button) {
+            tabName = 'dashboard'; // Fallback to dashboard
+        }
+
+        tabButtons.forEach(tab => tab.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+
+        const targetButton = document.querySelector(`[data-tab="${tabName}"]`);
+        if (targetButton) targetButton.classList.add('active');
+
+        const content = document.getElementById(`${tabName}-tab`);
+        if (content) content.classList.add('active');
+
+        // Load traces on demand
+        if (tabName === 'traces' && !tracesLoaded) {
+            fetchTraces();
+        }
+    }
+
+    function initTabs() {
+        const tabButtons = document.querySelectorAll('#main-tabs .tab');
 
         tabButtons.forEach(button => {
             button.addEventListener('click', (e) => {
                 e.preventDefault();
                 const tabName = button.dataset.tab;
-
-                tabButtons.forEach(tab => tab.classList.remove('active'));
-                tabContents.forEach(content => content.classList.remove('active'));
-
-                button.classList.add('active');
-                document.getElementById(`${tabName}-tab`).classList.add('active');
-
-                if (tabName === 'traces' && !tracesLoaded) {
-                    fetchTraces();
-                }
+                activateTab(tabName);
+                setHash(tabName); // Update URL
             });
         });
+
+        // Listen for browser back/forward
+        window.addEventListener('hashchange', handleHashChange);
+
+        // Handle initial hash on page load
+        const { tab } = parseHash();
+        if (tab !== 'dashboard') {
+            // Defer to allow DOM to initialize
+            setTimeout(() => handleHashChange(), 0);
+        }
     }
 
     function initRefreshControls() {
