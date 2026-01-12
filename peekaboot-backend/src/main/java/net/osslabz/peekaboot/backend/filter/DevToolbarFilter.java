@@ -172,7 +172,7 @@ public class DevToolbarFilter implements Filter {
                 host.id = 'peekaboot-toolbar-host';
                 host.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;';
                 document.body.appendChild(host);
-                var shadow = host.attachShadow({mode:'closed'});
+                var shadow = host.attachShadow({mode:'open'});
 
                 var style = document.createElement('style');
                 style.textContent = `
