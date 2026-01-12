@@ -131,7 +131,8 @@ public class TraceTreeMapper {
         if (kind == Span.Kind.SERVER) {
             return RootActionType.HTTP_REQUEST;
         }
-        // 7. null/INTERNAL kind -> INTERNAL
+        // 7. null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
+        //    internal spans are represented by null kind)
         if (kind == null) {
             return RootActionType.INTERNAL;
         }
