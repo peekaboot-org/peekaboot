@@ -1,6 +1,7 @@
 package net.osslabz.peekaboot.backend.mapper.trace;
 
 import io.micrometer.tracing.Span;
+import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
@@ -264,6 +265,152 @@ class TraceTreeMapperTest {
         // Then
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("orphan");
+    }
+
+    // --- Root Action Type Detection Tests ---
+
+    @Test
+    void map_shouldDetectHttpRequestRootActionType() {
+        var rootSpan = createSpan("trace1", "root", null, "GET /api/users",
+                Span.Kind.SERVER, 0, 100, Map.of("http.method", "GET", "http.url", "/api/users"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
+    }
+
+    @Test
+    void map_shouldDetectMessageConsumerRootActionTypeFromConsumerKind() {
+        var rootSpan = createSpan("trace1", "root", null, "receive message",
+                Span.Kind.CONSUMER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.MESSAGE_CONSUMER);
+    }
+
+    @Test
+    void map_shouldDetectMessageConsumerRootActionTypeFromMessagingTags() {
+        var rootSpan = createSpan("trace1", "root", null, "process message",
+                Span.Kind.SERVER, 0, 100, Map.of("messaging.system", "kafka", "messaging.destination", "orders"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.MESSAGE_CONSUMER);
+    }
+
+    @Test
+    void map_shouldDetectRpcCallRootActionType() {
+        var rootSpan = createSpan("trace1", "root", null, "grpc.UserService/GetUser",
+                Span.Kind.SERVER, 0, 100, Map.of("rpc.system", "grpc", "rpc.service", "UserService"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.RPC_CALL);
+    }
+
+    @Test
+    void map_shouldDetectScheduledJobRootActionTypeFromSchedule() {
+        var rootSpan = createSpan("trace1", "root", null, "scheduled-task",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
+    }
+
+    @Test
+    void map_shouldDetectScheduledJobRootActionTypeFromCron() {
+        var rootSpan = createSpan("trace1", "root", null, "cron-cleanup",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
+    }
+
+    @Test
+    void map_shouldDetectScheduledJobRootActionTypeFromTimer() {
+        var rootSpan = createSpan("trace1", "root", null, "timer-heartbeat",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
+    }
+
+    @Test
+    void map_shouldDetectScheduledJobRootActionTypeFromJob() {
+        var rootSpan = createSpan("trace1", "root", null, "batch-job-processor",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
+    }
+
+    @Test
+    void map_shouldDetectDatabaseRootActionType() {
+        var rootSpan = createSpan("trace1", "root", null, "SELECT * FROM users",
+                Span.Kind.CLIENT, 0, 100, Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+    }
+
+    @Test
+    void map_shouldDetectInternalRootActionType() {
+        var rootSpan = createSpan("trace1", "root", null, "internal-processing",
+                null, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
+    }
+
+    @Test
+    void map_shouldDetectUnknownRootActionTypeAsFallback() {
+        var rootSpan = createSpan("trace1", "root", null, "produce-event",
+                Span.Kind.PRODUCER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
+    }
+
+    @Test
+    void map_shouldDetectHttpRequestForServerKindWithoutSpecificTags() {
+        var rootSpan = createSpan("trace1", "root", null, "handle-request",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
 
     // Helper methods to create test data
