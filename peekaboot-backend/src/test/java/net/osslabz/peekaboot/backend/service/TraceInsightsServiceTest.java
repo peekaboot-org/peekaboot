@@ -12,9 +12,11 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.tracing.store.SpanData;
 import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -206,6 +208,57 @@ class TraceInsightsServiceTest {
 
         // Then: slowTrace has VERY_SLOW issue, so slowCount should be 1
         assertThat(response.summary().slowCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getTraceInsights_shouldEnrichWithLogs() {
+        // Given: TraceDataStorage with logs for the trace
+        TraceDataStorage dataStorage = new TraceDataStorage();
+        LogCapturedEvent logEvent = new LogCapturedEvent(
+                "trace1",
+                "span-trace1",
+                Instant.now(),
+                "INFO",
+                "TestLogger",
+                "Test log message from trace",
+                "main"
+        );
+        dataStorage.accept(logEvent);
+
+        TraceInsightsService serviceWithLogs = new TraceInsightsService(
+                traceQueryService, dataStorage, traceTreeMapper, issueDetector);
+
+        TraceData traceData = createTraceData("trace1", 100, false);
+        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+
+        // When
+        Optional<TraceTree> result = serviceWithLogs.getTraceInsights("trace1");
+
+        // Then
+        assertThat(result).isPresent();
+        assertThat(result.get().logs()).isNotNull();
+        assertThat(result.get().logs()).hasSize(1);
+        assertThat(result.get().logs().get(0).message()).isEqualTo("Test log message from trace");
+        assertThat(result.get().logs().get(0).level()).isEqualTo("INFO");
+        assertThat(result.get().logs().get(0).loggerName()).isEqualTo("TestLogger");
+    }
+
+    @Test
+    void getTraceInsights_shouldReturnEmptyLogsWhenNoLogsStored() {
+        // Given: TraceDataStorage with no logs for this trace
+        TraceDataStorage dataStorage = new TraceDataStorage();
+        TraceInsightsService serviceWithStorage = new TraceInsightsService(
+                traceQueryService, dataStorage, traceTreeMapper, issueDetector);
+
+        TraceData traceData = createTraceData("trace1", 100, false);
+        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+
+        // When
+        Optional<TraceTree> result = serviceWithStorage.getTraceInsights("trace1");
+
+        // Then
+        assertThat(result).isPresent();
+        assertThat(result.get().logs()).isNullOrEmpty();
     }
 
     // Helper method to create test TraceData
