@@ -14,7 +14,8 @@ public record TraceTree(
     TraceMetrics metrics,
     Map<String, Object> inheritedAttributes,
     RequestDetails request,
-    List<TraceLog> logs
+    List<TraceLog> logs,
+    List<QueryInfo> queries
 ) {
     public TraceTree(
             String traceId,
@@ -28,6 +29,6 @@ public record TraceTree(
             Map<String, Object> inheritedAttributes
     ) {
         this(traceId, startTimeMs, durationMs, status, rootActionType, rootOperation,
-                rootSpan, metrics, inheritedAttributes, null, null);
+                rootSpan, metrics, inheritedAttributes, null, null, null);
     }
 }

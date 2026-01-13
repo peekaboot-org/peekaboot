@@ -1,6 +1,7 @@
 package net.osslabz.peekaboot.backend.service;
 
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
+import net.osslabz.peekaboot.backend.domain.trace.QueryInfo;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
@@ -8,6 +9,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
+import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
@@ -34,16 +36,19 @@ public class TraceInsightsService {
     private final TraceDataStorage traceDataStorage;
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
+    private final QueryExtractor queryExtractor;
 
     public TraceInsightsService(
             @Nullable TraceQueryService traceQueryService,
             @Nullable TraceDataStorage traceDataStorage,
             TraceTreeMapper traceTreeMapper,
-            IssueDetector issueDetector) {
+            IssueDetector issueDetector,
+            QueryExtractor queryExtractor) {
         this.traceQueryService = traceQueryService;
         this.traceDataStorage = traceDataStorage;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
+        this.queryExtractor = queryExtractor;
     }
 
     public TraceInsightsResponse getInsights(int limit, TraceCaptureMode mode) {
@@ -66,31 +71,33 @@ public class TraceInsightsService {
         }
 
         return traceQueryService.getTrace(traceId)
-                .map(traceTreeMapper::map)
-                .map(issueDetector::detectIssues)
-                .map(tree -> enrichWithLogs(tree, traceId));
+                .map(traceData -> {
+                    List<QueryInfo> queries = queryExtractor.extract(traceData);
+                    TraceTree tree = traceTreeMapper.map(traceData);
+                    tree = issueDetector.detectIssues(tree);
+                    return enrichWithDetails(tree, traceId, queries);
+                });
     }
 
-    private TraceTree enrichWithLogs(TraceTree tree, String traceId) {
-        if (traceDataStorage == null) {
-            return tree;
+    private TraceTree enrichWithDetails(TraceTree tree, String traceId, List<QueryInfo> queries) {
+        List<TraceLog> logs = List.of();
+        if (traceDataStorage != null) {
+            logs = traceDataStorage.getTrace(traceId)
+                    .map(TraceDataBundle::logs)
+                    .orElse(List.of())
+                    .stream()
+                    .map(e -> new TraceLog(
+                            e.spanId(),
+                            e.timestamp(),
+                            e.level(),
+                            e.loggerName(),
+                            e.message(),
+                            e.threadName()
+                    ))
+                    .toList();
         }
 
-        List<TraceLog> logs = traceDataStorage.getTrace(traceId)
-                .map(TraceDataBundle::logs)
-                .orElse(List.of())
-                .stream()
-                .map(e -> new TraceLog(
-                        e.spanId(),
-                        e.timestamp(),
-                        e.level(),
-                        e.loggerName(),
-                        e.message(),
-                        e.threadName()
-                ))
-                .toList();
-
-        if (logs.isEmpty()) {
+        if (logs.isEmpty() && queries.isEmpty()) {
             return tree;
         }
 
@@ -105,7 +112,8 @@ public class TraceInsightsService {
                 tree.metrics(),
                 tree.inheritedAttributes(),
                 tree.request(),
-                logs
+                logs.isEmpty() ? null : logs,
+                queries.isEmpty() ? null : queries
         );
     }
 

@@ -10,6 +10,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
+import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
@@ -36,6 +37,7 @@ class TraceInsightsServiceTest {
     private TraceQueryService traceQueryService;
     private TraceTreeMapper traceTreeMapper;
     private IssueDetector issueDetector;
+    private QueryExtractor queryExtractor;
     private TraceInsightsService service;
 
     @BeforeEach
@@ -43,7 +45,8 @@ class TraceInsightsServiceTest {
         traceQueryService = mock(TraceQueryService.class);
         traceTreeMapper = new TraceTreeMapper();
         issueDetector = new IssueDetector(new UiTracingProperties());
-        service = new TraceInsightsService(traceQueryService, null, traceTreeMapper, issueDetector);
+        queryExtractor = new QueryExtractor();
+        service = new TraceInsightsService(traceQueryService, null, traceTreeMapper, issueDetector, queryExtractor);
     }
 
     @Test
@@ -98,7 +101,7 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldHandleNullTraceQueryService() {
         // Given: TraceQueryService is null (tracing not enabled)
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector, queryExtractor);
 
         // When
         TraceInsightsResponse response = serviceWithNullQuery.getInsights(10, TraceCaptureMode.ALL);
@@ -155,7 +158,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldHandleNullTraceQueryService() {
         // Given
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector, queryExtractor);
 
         // When
         Optional<TraceTree> result = serviceWithNullQuery.getTraceInsights("trace1");
@@ -226,7 +229,7 @@ class TraceInsightsServiceTest {
         dataStorage.accept(logEvent);
 
         TraceInsightsService serviceWithLogs = new TraceInsightsService(
-                traceQueryService, dataStorage, traceTreeMapper, issueDetector);
+                traceQueryService, dataStorage, traceTreeMapper, issueDetector, queryExtractor);
 
         TraceData traceData = createTraceData("trace1", 100, false);
         when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
@@ -248,7 +251,7 @@ class TraceInsightsServiceTest {
         // Given: TraceDataStorage with no logs for this trace
         TraceDataStorage dataStorage = new TraceDataStorage();
         TraceInsightsService serviceWithStorage = new TraceInsightsService(
-                traceQueryService, dataStorage, traceTreeMapper, issueDetector);
+                traceQueryService, dataStorage, traceTreeMapper, issueDetector, queryExtractor);
 
         TraceData traceData = createTraceData("trace1", 100, false);
         when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
@@ -259,6 +262,38 @@ class TraceInsightsServiceTest {
         // Then
         assertThat(result).isPresent();
         assertThat(result.get().logs()).isNullOrEmpty();
+    }
+
+    @Test
+    void getTraceInsights_shouldExtractQueries() {
+        // Given: A trace with a DB span
+        TraceData traceData = createTraceDataWithDbSpan("trace1", 100);
+        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+
+        // When
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
+
+        // Then
+        assertThat(result).isPresent();
+        assertThat(result.get().queries()).isNotNull();
+        assertThat(result.get().queries()).hasSize(1);
+        assertThat(result.get().queries().get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ?");
+        assertThat(result.get().queries().get(0).dbSystem()).isEqualTo("postgresql");
+        assertThat(result.get().queries().get(0).durationMs()).isEqualTo(50L);
+    }
+
+    @Test
+    void getTraceInsights_shouldReturnEmptyQueriesWhenNoDbSpans() {
+        // Given: A trace without DB spans
+        TraceData traceData = createTraceData("trace1", 100, false);
+        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+
+        // When
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
+
+        // Then
+        assertThat(result).isPresent();
+        assertThat(result.get().queries()).isNullOrEmpty();
     }
 
     // Helper method to create test TraceData
@@ -287,5 +322,54 @@ class TraceInsightsServiceTest {
         );
 
         return TraceData.fromSpans(traceId, List.of(span));
+    }
+
+    private TraceData createTraceDataWithDbSpan(String traceId, long totalDurationMs) {
+        Instant start = Instant.EPOCH;
+        Instant dbSpanStart = start.plusMillis(10);
+
+        // Root HTTP span
+        SpanData rootSpan = new SpanData(
+                traceId,
+                "span-root-" + traceId,
+                null,
+                "GET /users/{id}",
+                Span.Kind.SERVER,
+                start,
+                start.plusMillis(totalDurationMs),
+                Duration.ofMillis(totalDurationMs),
+                Map.of("http.method", "GET", "http.url", "/users/123"),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                0
+        );
+
+        // DB query span
+        SpanData dbSpan = new SpanData(
+                traceId,
+                "span-db-" + traceId,
+                "span-root-" + traceId,
+                "SELECT users",
+                Span.Kind.CLIENT,
+                dbSpanStart,
+                dbSpanStart.plusMillis(50),
+                Duration.ofMillis(50),
+                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                0
+        );
+
+        return TraceData.fromSpans(traceId, List.of(rootSpan, dbSpan));
     }
 }

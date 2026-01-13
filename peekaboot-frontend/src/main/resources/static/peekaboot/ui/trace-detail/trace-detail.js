@@ -262,7 +262,7 @@
         const icon = ROOT_ACTION_ICONS[trace.rootActionType] || ROOT_ACTION_ICONS.UNKNOWN;
         const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 200 ? 'warn' : '');
 
-        const queryCount = countQueries(trace.rootSpan);
+        const queryCount = (trace.queries || []).length;
         const logCount = (trace.logs || []).length;
         const spanCount = trace.metrics?.totalSpans || countSpans(trace.rootSpan);
 
@@ -492,7 +492,7 @@
     }
 
     function renderQueries(container, trace) {
-        const queries = collectDbSpans(trace.rootSpan);
+        const queries = trace.queries || [];
 
         if (queries.length === 0) {
             container.innerHTML = '<div class="pk-no-data">No database queries recorded</div>';
@@ -500,14 +500,11 @@
         }
 
         let html = '';
-        queries.forEach((span, idx) => {
-            const attrs = span.attributes || {};
-            const sql = attrs['db.statement'] || span.name || 'Unknown query';
-            const duration = span.durationMs || 0;
+        queries.forEach((query, idx) => {
+            const sql = query.sql || 'Unknown query';
+            const duration = query.durationMs || 0;
             const durationClass = duration > 500 ? 'very-slow' : (duration > 100 ? 'slow' : '');
-            const system = attrs['db.system'] || 'SQL';
-            const params = attrs['db.parameters'];
-            const rowCount = attrs['db.row_count'];
+            const system = query.dbSystem || 'SQL';
 
             html += '<div class="pk-query-item">';
             html += '<div class="pk-query-header">';
@@ -515,12 +512,6 @@
             html += `<span class="pk-query-duration ${durationClass}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
             html += '</div>';
             html += `<div class="pk-query-sql">${escapeHtml(sql)}</div>`;
-            if (params) {
-                html += `<div class="pk-query-params">Parameters: ${escapeHtml(params)}</div>`;
-            }
-            if (rowCount !== undefined) {
-                html += `<div class="pk-query-params">Rows returned: ${rowCount}</div>`;
-            }
             html += '</div>';
         });
 
@@ -603,24 +594,6 @@
         levelSelect.addEventListener('change', filterLogs);
     }
 
-    function flattenSpanTree(span, depth) {
-        if (!span) return [];
-        const result = [{ span, depth }];
-        (span.children || []).forEach(child => {
-            result.push(...flattenSpanTree(child, depth + 1));
-        });
-        return result;
-    }
-
-    function countQueries(span) {
-        if (!span) return 0;
-        let count = isDbSpan(span) ? 1 : 0;
-        (span.children || []).forEach(child => {
-            count += countQueries(child);
-        });
-        return count;
-    }
-
     function countSpans(span) {
         if (!span) return 0;
         let count = 1;
@@ -628,39 +601,6 @@
             count += countSpans(child);
         });
         return count;
-    }
-
-    function collectDbSpans(span) {
-        if (!span) return [];
-        const result = isDbSpan(span) ? [span] : [];
-        (span.children || []).forEach(child => {
-            result.push(...collectDbSpans(child));
-        });
-        return result;
-    }
-
-    function isDbSpan(span) {
-        const attrs = span.attributes || {};
-        // Check for db.* attributes
-        if (attrs['db.system'] || attrs['db.statement']) return true;
-        // Check for any attribute key starting with db.
-        for (const key of Object.keys(attrs)) {
-            if (key.startsWith('db.')) return true;
-        }
-        // Check for CLIENT span with SQL-like name
-        const name = (span.name || '').toUpperCase();
-        if ((span.kind === 'CLIENT' || !span.kind) &&
-            (name.startsWith('SELECT ') || name.startsWith('INSERT ') ||
-             name.startsWith('UPDATE ') || name.startsWith('DELETE ') ||
-             name.includes(' FROM ') || name.includes('HIBERNATE'))) {
-            return true;
-        }
-        // Check for connection pool and JDBC patterns by name
-        if (name.includes('HIKARI') || name.includes('JDBC') ||
-            name.includes('CONNECTION') || name.includes('DATASOURCE')) {
-            return true;
-        }
-        return false;
     }
 
     function escapeHtml(text) {
