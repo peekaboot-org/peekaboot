@@ -1,7 +1,7 @@
 package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.controller.TracingController;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;

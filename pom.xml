@@ -17,14 +17,13 @@
         <module>peekaboot-spring-boot-autoconfigure</module>
         <module>peekaboot-spring-boot-starter</module>
         <module>peekaboot-example-app</module>
-        <module>peekaboot-tracing</module>
     </modules>
 
     <url>https://github.com/osslabz/peekaboot</url>
 
     <properties>
         <osslabz.encoding>UTF-8</osslabz.encoding>
-        <osslabz.java.version>17</osslabz.java.version>
+        <osslabz.java.version>21</osslabz.java.version>
 
         <project.build.sourceEncoding>${osslabz.encoding}</project.build.sourceEncoding>
         <project.reporting.outputEncoding>${osslabz.encoding}</project.reporting.outputEncoding>

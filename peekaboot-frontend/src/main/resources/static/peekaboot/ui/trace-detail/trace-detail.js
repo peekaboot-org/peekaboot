@@ -147,6 +147,12 @@
 
         .pk-gantt-duration { width: 60px; font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
 
+        .pk-gantt-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; padding-left: 20px; }
+        .pk-event-badge { font-size: 9px; padding: 1px 5px; background: var(--pk-success); color: #000; border-radius: 3px; font-weight: 500; }
+        .pk-tag-badge { font-size: 9px; padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-tag-badge .key { color: var(--pk-primary); }
+        .pk-tag-badge .value { color: var(--pk-text); }
+
         /* Request tab styles */
         .pk-request-section { margin-bottom: 24px; }
         .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -161,9 +167,11 @@
         .pk-query-item { margin-bottom: 16px; padding: 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); border-left: 3px solid var(--pk-purple); }
         .pk-query-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
         .pk-query-system { color: var(--pk-text-muted); }
+        .pk-query-meta { display: flex; gap: 12px; align-items: center; }
         .pk-query-duration { font-family: var(--pk-font-mono); font-weight: 600; }
         .pk-query-duration.slow { color: var(--pk-warning); }
         .pk-query-duration.very-slow { color: var(--pk-danger); }
+        .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success); font-size: 11px; }
         .pk-query-sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
         .pk-query-params { margin-top: 8px; font-size: 11px; color: var(--pk-text-muted); }
 
@@ -254,10 +262,10 @@
 
     function render(shadow, trace, options) {
         const rootSpan = trace.rootSpan || {};
-        const attrs = rootSpan.attributes || {};
-        const method = attrs['http.method'] || attrs['http.request.method'] || 'UNKNOWN';
-        const path = attrs['http.target'] || attrs['url.path'] || rootSpan.name || '-';
-        const status = attrs['http.status_code'] || attrs['http.response.status_code'] || '-';
+        const tags = rootSpan.tags || {};
+        const method = tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
+        const path = tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
+        const status = tags['http.status_code'] || tags['http.response.status_code'] || '-';
         const statusClass = 's' + Math.floor(parseInt(status) / 100) + 'xx';
         const icon = ROOT_ACTION_ICONS[trace.rootActionType] || ROOT_ACTION_ICONS.UNKNOWN;
         const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 200 ? 'warn' : '');
@@ -404,6 +412,8 @@
         const kind = kindRaw.toLowerCase();
         const hasError = span.status === 'ERROR' || span.errorMessage;
         const hasChildren = span.children && span.children.length > 0;
+        const events = span.events || [];
+        const tags = span.tags || {};
 
         const row = document.createElement('div');
         row.className = 'pk-gantt-row';
@@ -429,6 +439,38 @@
 
         container.appendChild(row);
 
+        // Add events and tags row if present
+        const hasEvents = events.length > 0;
+        const tagEntries = Object.entries(tags).filter(([k]) => !k.startsWith('jdbc.query'));
+        const hasTags = tagEntries.length > 0;
+
+        if (hasEvents || hasTags) {
+            const badgesRow = document.createElement('div');
+            badgesRow.className = 'pk-gantt-badges';
+            badgesRow.style.paddingLeft = (indent + 20) + 'px';
+            badgesRow.dataset.depth = depth;
+            if (parentId) badgesRow.dataset.parentId = parentId;
+
+            let badgesHtml = '';
+            // Render events
+            events.forEach(event => {
+                badgesHtml += `<span class="pk-event-badge" title="${escapeHtml(event.timestamp || '')}">${escapeHtml(event.name)}</span>`;
+            });
+            // Render selected tags (limit to avoid clutter)
+            const maxTags = 5;
+            tagEntries.slice(0, maxTags).forEach(([key, value]) => {
+                const shortKey = key.split('.').pop();
+                const shortVal = String(value).length > 30 ? String(value).substring(0, 30) + '...' : String(value);
+                badgesHtml += `<span class="pk-tag-badge" title="${escapeHtml(key)}: ${escapeHtml(value)}"><span class="key">${escapeHtml(shortKey)}</span>=<span class="value">${escapeHtml(shortVal)}</span></span>`;
+            });
+            if (tagEntries.length > maxTags) {
+                badgesHtml += `<span class="pk-tag-badge">+${tagEntries.length - maxTags} more</span>`;
+            }
+
+            badgesRow.innerHTML = badgesHtml;
+            container.appendChild(badgesRow);
+        }
+
         if (hasChildren) {
             span.children.forEach(child => {
                 renderSpanRows(container, child, depth + 1, traceStart, totalDuration, span.spanId);
@@ -439,7 +481,7 @@
     function renderRequest(container, trace) {
         const req = trace.request;
         const rootSpan = trace.rootSpan || {};
-        const attrs = rootSpan.attributes || {};
+        const tags = rootSpan.tags || {};
 
         let html = '';
 
@@ -505,11 +547,17 @@
             const duration = query.durationMs || 0;
             const durationClass = duration > 500 ? 'very-slow' : (duration > 100 ? 'slow' : '');
             const system = query.dbSystem || 'SQL';
+            const rowCount = query.rowCount;
 
             html += '<div class="pk-query-item">';
             html += '<div class="pk-query-header">';
             html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
+            html += '<span class="pk-query-meta">';
             html += `<span class="pk-query-duration ${durationClass}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
+            if (rowCount !== null && rowCount !== undefined) {
+                html += `<span class="pk-query-rows">${rowCount} rows</span>`;
+            }
+            html += '</span>';
             html += '</div>';
             html += `<div class="pk-query-sql">${escapeHtml(sql)}</div>`;
             html += '</div>';

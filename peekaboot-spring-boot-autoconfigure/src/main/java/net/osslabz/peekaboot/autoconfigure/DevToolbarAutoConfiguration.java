@@ -6,10 +6,11 @@ import jakarta.annotation.PostConstruct;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
+import net.osslabz.peekaboot.backend.filter.RequestCaptureFilter;
 import net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender;
-import net.osslabz.peekaboot.tracing.event.TraceEventBus;
+import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -47,6 +48,19 @@ public class DevToolbarAutoConfiguration {
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
         log.info("DevToolbarFilter registered for all URLs");
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(TraceEventBus eventBus) {
+        log.trace("Creating RequestCaptureFilter bean");
+        FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new RequestCaptureFilter(eventBus));
+        registration.addUrlPatterns("/*");
+        // Run early to capture before other filters modify request/response
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
+        registration.setName("requestCaptureFilter");
+        log.info("RequestCaptureFilter registered for all URLs");
         return registration;
     }
 

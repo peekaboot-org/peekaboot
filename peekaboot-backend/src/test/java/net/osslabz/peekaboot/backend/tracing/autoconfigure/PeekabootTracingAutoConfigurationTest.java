@@ -1,0 +1,64 @@
+package net.osslabz.peekaboot.backend.tracing.autoconfigure;
+
+import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class PeekabootTracingAutoConfigurationTest {
+
+    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    PeekabootTracingAutoConfiguration.class,
+                    OtelTracingAutoConfiguration.class
+            ));
+
+    @Test
+    void shouldCreateCoreBeans() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(InMemorySpanStore.class);
+            assertThat(context).hasSingleBean(TraceQueryService.class);
+            assertThat(context).hasSingleBean(TraceEventBus.class);
+            assertThat(context).hasSingleBean(TraceDataStorage.class);
+        });
+    }
+
+    @Test
+    void shouldCreateOtelSpanExporterWhenOtelOnClasspath() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(OtelSpanExporter.class);
+        });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenDisabled() {
+        contextRunner
+                .withPropertyValues("peekaboot.tracing.enabled=false")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(InMemorySpanStore.class);
+                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+                    assertThat(context).doesNotHaveBean(TraceQueryService.class);
+                });
+    }
+
+    @Test
+    void shouldApplyCustomProperties() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.tracing.max-traces=500",
+                        "peekaboot.tracing.max-spans-per-trace=25"
+                )
+                .run(context -> {
+                    assertThat(context).hasSingleBean(PeekabootTracingProperties.class);
+                    PeekabootTracingProperties properties = context.getBean(PeekabootTracingProperties.class);
+                    assertThat(properties.getMaxTraces()).isEqualTo(500);
+                    assertThat(properties.getMaxSpansPerTrace()).isEqualTo(25);
+                });
+    }
+}

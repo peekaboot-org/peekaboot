@@ -1,10 +1,10 @@
 package net.osslabz.peekaboot.backend.controller;
 
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;

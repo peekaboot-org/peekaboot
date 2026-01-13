@@ -249,6 +249,7 @@ class IssueDetectorTest {
                 "OK",
                 List.of(),
                 Map.of("custom.attr", "value"),
+                List.of(),
                 List.of()
         );
         TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
@@ -264,7 +265,7 @@ class IssueDetectorTest {
         assertThat(resultSpan.startTimeMs()).isEqualTo(1000L);
         assertThat(resultSpan.durationMs()).isEqualTo(150L);
         assertThat(resultSpan.status()).isEqualTo("OK");
-        assertThat(resultSpan.attributes()).containsEntry("custom.attr", "value");
+        assertThat(resultSpan.tags()).containsEntry("custom.attr", "value");
     }
 
     @Test
@@ -283,8 +284,8 @@ class IssueDetectorTest {
     }
 
     private SpanNode createSpan(String spanId, long durationMs, String status,
-                                 Map<String, Object> attributes, List<SpanNode> children) {
-        return new SpanNode(spanId, "test-op", "SERVER", 0, durationMs, status, children, attributes, List.of());
+                                 Map<String, Object> tags, List<SpanNode> children) {
+        return new SpanNode(spanId, "test-op", "SERVER", 0, durationMs, status, children, tags, List.of(), List.of());
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceMetrics metrics) {

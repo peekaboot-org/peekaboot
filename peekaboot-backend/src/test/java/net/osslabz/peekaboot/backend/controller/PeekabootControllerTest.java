@@ -13,11 +13,11 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.SpanData;
-import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -290,6 +290,7 @@ class PeekabootControllerTest {
                 "OK",
                 List.of(),
                 Map.of(),
+                List.of(),
                 List.of()
         );
 

@@ -12,12 +12,12 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.SpanData;
-import net.osslabz.peekaboot.tracing.store.TraceData;
-import net.osslabz.peekaboot.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

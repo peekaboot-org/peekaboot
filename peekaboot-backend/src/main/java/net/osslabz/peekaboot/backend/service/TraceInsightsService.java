@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.backend.service;
 
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.QueryInfo;
+import net.osslabz.peekaboot.backend.domain.trace.RequestDetails;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
@@ -11,15 +12,16 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.TraceDataBundle;
-import net.osslabz.peekaboot.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataBundle;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -81,23 +83,44 @@ public class TraceInsightsService {
 
     private TraceTree enrichWithDetails(TraceTree tree, String traceId, List<QueryInfo> queries) {
         List<TraceLog> logs = List.of();
+        RequestDetails requestDetails = null;
+
         if (traceDataStorage != null) {
-            logs = traceDataStorage.getTrace(traceId)
-                    .map(TraceDataBundle::logs)
-                    .orElse(List.of())
-                    .stream()
-                    .map(e -> new TraceLog(
-                            e.spanId(),
-                            e.timestamp(),
-                            e.level(),
-                            e.loggerName(),
-                            e.message(),
-                            e.threadName()
-                    ))
-                    .toList();
+            Optional<TraceDataBundle> bundleOpt = traceDataStorage.getTrace(traceId);
+
+            if (bundleOpt.isPresent()) {
+                TraceDataBundle bundle = bundleOpt.get();
+
+                // Extract logs
+                logs = bundle.logs().stream()
+                        .map(e -> new TraceLog(
+                                e.spanId(),
+                                e.timestamp(),
+                                e.level(),
+                                e.loggerName(),
+                                e.message(),
+                                e.threadName()
+                        ))
+                        .toList();
+
+                // Extract request details
+                RequestCompletedEvent reqEvent = bundle.request();
+                if (reqEvent != null) {
+                    requestDetails = new RequestDetails(
+                            reqEvent.controllerClass(),
+                            reqEvent.controllerMethod(),
+                            reqEvent.requestHeaders() != null ? reqEvent.requestHeaders() : Map.of(),
+                            reqEvent.responseHeaders() != null ? reqEvent.responseHeaders() : Map.of(),
+                            reqEvent.queryParams() != null ? reqEvent.queryParams() : Map.of(),
+                            Map.of(),  // formParams not captured yet
+                            reqEvent.requestBody(),
+                            reqEvent.requestBodyTruncated()
+                    );
+                }
+            }
         }
 
-        if (logs.isEmpty() && queries.isEmpty()) {
+        if (logs.isEmpty() && queries.isEmpty() && requestDetails == null) {
             return tree;
         }
 
@@ -111,7 +134,7 @@ public class TraceInsightsService {
                 tree.rootSpan(),
                 tree.metrics(),
                 tree.inheritedAttributes(),
-                tree.request(),
+                requestDetails,
                 logs.isEmpty() ? null : logs,
                 queries.isEmpty() ? null : queries
         );

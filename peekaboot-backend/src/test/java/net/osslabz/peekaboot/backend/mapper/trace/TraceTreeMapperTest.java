@@ -5,8 +5,8 @@ import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
-import net.osslabz.peekaboot.tracing.store.SpanData;
-import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -71,8 +71,8 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldHoistCommonAttributesToParent() {
-        // Given: Parent span with two children, all having the same db.system value
+    void map_shouldKeepTagsOnEachSpan() {
+        // Given: Parent span with two children, each with their own tags
         var parent = createSpan("trace1", "parent", null, "parent-op",
                 Span.Kind.SERVER, 0, 100, Map.of("service.name", "api"));
         var child1 = createSpan("trace1", "child1", "parent", "child1-op",
@@ -85,20 +85,20 @@ class TraceTreeMapperTest {
         // When
         TraceTree result = mapper.map(traceData);
 
-        // Then: Common attributes should be hoisted to the parent level
+        // Then: All spans keep their own tags (no hoisting)
         SpanNode parentNode = result.rootSpan();
-        assertThat(parentNode.attributes()).containsEntry("db.system", "postgresql");
-        assertThat(parentNode.attributes()).containsEntry("db.name", "mydb");
+        assertThat(parentNode.tags()).containsEntry("service.name", "api");
+        assertThat(parentNode.tags()).doesNotContainKey("db.system");
 
-        // Children should not have the hoisted attributes
+        // Children keep their tags
         for (SpanNode child : parentNode.children()) {
-            assertThat(child.attributes()).doesNotContainKey("db.system");
-            assertThat(child.attributes()).doesNotContainKey("db.name");
+            assertThat(child.tags()).containsEntry("db.system", "postgresql");
+            assertThat(child.tags()).containsEntry("db.name", "mydb");
         }
     }
 
     @Test
-    void map_shouldNotHoistDifferingAttributes() {
+    void map_shouldPreserveDifferentTagsOnChildren() {
         // Given: Children with different values for db.name
         var parent = createSpan("trace1", "parent", null, "parent-op",
                 Span.Kind.SERVER, 0, 100, Map.of());
@@ -112,18 +112,19 @@ class TraceTreeMapperTest {
         // When
         TraceTree result = mapper.map(traceData);
 
-        // Then: db.system is common and should be hoisted, but db.name differs so stays on children
+        // Then: Each span keeps its own tags
         SpanNode parentNode = result.rootSpan();
-        assertThat(parentNode.attributes()).containsEntry("db.system", "postgresql");
-        assertThat(parentNode.attributes()).doesNotContainKey("db.name");
+        assertThat(parentNode.tags()).isEmpty();
 
-        // Children keep the differing attribute
-        assertThat(parentNode.children().get(0).attributes()).containsEntry("db.name", "db1");
-        assertThat(parentNode.children().get(1).attributes()).containsEntry("db.name", "db2");
+        // Children keep their individual tags
+        assertThat(parentNode.children().get(0).tags()).containsEntry("db.system", "postgresql");
+        assertThat(parentNode.children().get(0).tags()).containsEntry("db.name", "db1");
+        assertThat(parentNode.children().get(1).tags()).containsEntry("db.system", "postgresql");
+        assertThat(parentNode.children().get(1).tags()).containsEntry("db.name", "db2");
     }
 
     @Test
-    void map_shouldStoreTraceWideCommonAttributesInInheritedAttributes() {
+    void map_shouldNotHoistToInheritedAttributes() {
         // Given: All spans have the same service.name
         var root = createSpan("trace1", "root", null, "root-op",
                 Span.Kind.SERVER, 0, 100, Map.of("service.name", "api-service"));
@@ -135,8 +136,10 @@ class TraceTreeMapperTest {
         // When
         TraceTree result = mapper.map(traceData);
 
-        // Then: Trace-level common attributes stored in inheritedAttributes
-        assertThat(result.inheritedAttributes()).containsEntry("service.name", "api-service");
+        // Then: No hoisting - inheritedAttributes is empty, tags stay on spans
+        assertThat(result.inheritedAttributes()).isEmpty();
+        assertThat(result.rootSpan().tags()).containsEntry("service.name", "api-service");
+        assertThat(result.rootSpan().children().get(0).tags()).containsEntry("service.name", "api-service");
     }
 
     @Test

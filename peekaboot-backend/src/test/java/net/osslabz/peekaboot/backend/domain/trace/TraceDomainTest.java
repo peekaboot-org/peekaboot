@@ -21,6 +21,7 @@ class TraceDomainTest {
             "ok",
             List.of(),
             Map.of("db.statement", "SELECT * FROM users"),
+            List.of(),
             List.of()
         );
 
@@ -33,6 +34,7 @@ class TraceDomainTest {
             "ok",
             List.of(child),
             Map.of(),
+            List.of(),
             List.of()
         );
 
@@ -52,6 +54,7 @@ class TraceDomainTest {
             "ok",
             List.of(),
             Map.of("http.method", "GET"),
+            List.of(),
             List.of()
         );
 
@@ -113,7 +116,7 @@ class TraceDomainTest {
     void traceInsightsResponse_shouldCombineTracesAndSummary() {
         SpanNode rootSpan = new SpanNode(
             "span-1", "op", "SERVER", 0L, 100L, "ok",
-            List.of(), Map.of(), List.of()
+            List.of(), Map.of(), List.of(), List.of()
         );
         TraceMetrics metrics = new TraceMetrics(1, 0, 0L, 0, 0);
         TraceTree tree = new TraceTree(

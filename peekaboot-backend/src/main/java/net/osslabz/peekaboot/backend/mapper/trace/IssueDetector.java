@@ -104,22 +104,27 @@ public class IssueDetector {
                 span.durationMs(),
                 span.status(),
                 processedChildren,
-                span.attributes(),
-                issues
+                span.tags(),
+                span.events(),
+                issues,
+                span.creationOrder(),
+                span.errorMessage(),
+                span.errorClass(),
+                span.remoteServiceName()
         );
     }
 
     private boolean isDbSpan(SpanNode span) {
-        if (span.attributes() == null) {
+        if (span.tags() == null) {
             return false;
         }
-        return span.attributes().keySet().stream()
-                .anyMatch(key -> key.startsWith("db."));
+        return span.tags().keySet().stream()
+                .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc."));
     }
 
     private String getErrorMessage(SpanNode span) {
-        if (span.attributes() != null) {
-            Object errorMessage = span.attributes().get("error.message");
+        if (span.tags() != null) {
+            Object errorMessage = span.tags().get("error.message");
             if (errorMessage != null) {
                 return errorMessage.toString();
             }

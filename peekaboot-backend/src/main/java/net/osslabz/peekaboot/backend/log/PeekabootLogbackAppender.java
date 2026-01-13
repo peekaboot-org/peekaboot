@@ -3,8 +3,8 @@ package net.osslabz.peekaboot.backend.log;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
-import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
-import net.osslabz.peekaboot.tracing.event.TraceEventBus;
+import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
+import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 
 import java.time.Instant;
 import java.util.Map;

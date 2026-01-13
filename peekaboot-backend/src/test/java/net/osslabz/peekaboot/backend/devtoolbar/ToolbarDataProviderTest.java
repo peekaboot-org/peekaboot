@@ -2,9 +2,9 @@ package net.osslabz.peekaboot.backend.devtoolbar;
 
 import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.SpanData;
-import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

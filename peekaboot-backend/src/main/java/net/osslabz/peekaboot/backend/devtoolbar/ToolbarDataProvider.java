@@ -1,9 +1,9 @@
 package net.osslabz.peekaboot.backend.devtoolbar;
 
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
-import net.osslabz.peekaboot.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.tracing.store.SpanData;
-import net.osslabz.peekaboot.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 
 import java.time.Duration;
 import java.util.List;
