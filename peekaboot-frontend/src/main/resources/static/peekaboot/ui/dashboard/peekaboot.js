@@ -69,29 +69,10 @@
             return;
         }
 
-        // Retry pattern for reliability
-        const maxRetries = 10;
-        const retryInterval = 100;
-        let attempts = 0;
-
-        function tryExpand() {
-            const traceItem = document.querySelector(`[data-trace-id="${traceId}"]`);
-            if (traceItem) {
-                const details = traceItem.querySelector('.trace-details');
-                const icon = traceItem.querySelector('.trace-expand');
-                if (details && !details.classList.contains('open')) {
-                    details.classList.add('open');
-                    if (icon) {
-                        icon.classList.add('open');
-                        icon.innerHTML = '&#9660;';
-                    }
-                }
-                traceItem.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } else if (++attempts < maxRetries) {
-                setTimeout(tryExpand, retryInterval);
-            }
+        // Open the trace detail overlay
+        if (window.PeekabootTraceDetail) {
+            PeekabootTraceDetail.open(traceId);
         }
-        tryExpand();
     }
 
     async function init() {
@@ -199,7 +180,6 @@
 
         item.innerHTML = `
             <div class="trace-header">
-                <span class="trace-expand">&#9654;</span>
                 <span class="trace-action-type" title="${escapeHtml(actionLabel)}">${actionIcon}</span>
                 <code class="trace-id">${escapeHtml(traceIdShort)}</code>
                 <span class="trace-time">${startTime}</span>
@@ -207,220 +187,17 @@
                 <span class="trace-badge">${spanCount} spans</span>
                 ${statusBadge}
             </div>
-            <div class="trace-details">
-                <div class="trace-view-toggle">
-                    <button class="trace-view-btn active" data-view="tree">Tree</button>
-                    <button class="trace-view-btn" data-view="timeline">Timeline</button>
-                </div>
-                <div class="trace-view tree-view">
-                    <div class="span-tree">
-                        ${renderSpanNode(trace.rootSpan, 0)}
-                    </div>
-                </div>
-                <div class="trace-view timeline-view" style="display: none;">
-                    ${renderTimelineView(trace)}
-                </div>
-            </div>
         `;
 
         const header = item.querySelector('.trace-header');
-        const details = item.querySelector('.trace-details');
-        const icon = item.querySelector('.trace-expand');
-
         header.addEventListener('click', () => {
-            const isOpen = details.classList.contains('open');
-            details.classList.toggle('open', !isOpen);
-            icon.classList.toggle('open', !isOpen);
-            icon.innerHTML = isOpen ? '&#9654;' : '&#9660;';
-
-            // Update URL hash for deep-linking
-            if (!isOpen && trace.traceId) {
-                setHash('traces', trace.traceId);  // Expanding - include trace ID
-            } else {
-                setHash('traces');  // Collapsing - just the tab
+            if (trace.traceId) {
+                PeekabootTraceDetail.open(trace.traceId);
+                setHash('traces', trace.traceId);
             }
         });
 
-        // View toggle handlers
-        const toggleButtons = item.querySelectorAll('.trace-view-btn');
-        const treeView = item.querySelector('.tree-view');
-        const timelineView = item.querySelector('.timeline-view');
-
-        toggleButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const view = btn.dataset.view;
-
-                toggleButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-
-                if (view === 'tree') {
-                    treeView.style.display = '';
-                    timelineView.style.display = 'none';
-                } else {
-                    treeView.style.display = 'none';
-                    timelineView.style.display = '';
-                }
-            });
-        });
-
         return item;
-    }
-
-    function renderSpanNode(span, depth) {
-        if (!span) {
-            return '<p class="no-data">No spans</p>';
-        }
-
-        let html = renderSpanItem(span, depth);
-
-        if (span.children && span.children.length > 0) {
-            span.children.forEach(child => {
-                html += renderSpanNode(child, depth + 1);
-            });
-        }
-
-        return html;
-    }
-
-    function renderSpanItem(span, depth) {
-        const indent = depth * 24;
-        const hasError = span.status === 'ERROR' || (span.issues && span.issues.some(i => i.type === 'ERROR'));
-        const errorClass = hasError ? 'error' : '';
-
-        const duration = formatDurationMs(span.durationMs);
-        const durationClass = getDurationClassMs(span.durationMs);
-        const kind = span.kind || 'INTERNAL';
-        const name = span.name || 'unknown';
-
-        let detailsHtml = '';
-
-        if (span.attributes && Object.keys(span.attributes).length > 0) {
-            const tagsHtml = Object.entries(span.attributes)
-                .map(([k, v]) => `<span class="span-tag"><strong>${escapeHtml(k)}:</strong> ${escapeHtml(String(v))}</span>`)
-                .join('');
-            detailsHtml += `<div class="span-tags">${tagsHtml}</div>`;
-        }
-
-        if (span.issues && span.issues.length > 0) {
-            const issuesHtml = span.issues.map(issue => {
-                const issueClass = issue.severity === 'error' ? 'error' : (issue.severity === 'warning' ? 'warning' : '');
-                return `<span class="span-issue ${issueClass}">${escapeHtml(issue.type)}: ${escapeHtml(issue.message)}</span>`;
-            }).join('');
-            detailsHtml += `<div class="span-issues" style="margin-top: 8px;">${issuesHtml}</div>`;
-        }
-
-        let issueBadges = '';
-        if (span.issues && span.issues.length > 0) {
-            issueBadges = span.issues.map(issue => {
-                if (issue.type === 'ERROR') {
-                    return '<span class="trace-badge error">ERROR</span>';
-                } else if (issue.type === 'SLOW' || issue.type === 'VERY_SLOW') {
-                    return '<span class="trace-badge warning">SLOW</span>';
-                } else if (issue.type === 'SLOW_QUERY') {
-                    return '<span class="trace-badge warning">SLOW QUERY</span>';
-                }
-                return '';
-            }).join('');
-        }
-
-        return `
-            <div class="span-item ${errorClass}" style="margin-left: ${indent}px;">
-                <div class="span-header">
-                    <span class="span-name">${escapeHtml(name)}</span>
-                    <span class="span-badge">${kind}</span>
-                    <span class="span-duration ${durationClass}">${duration}</span>
-                    ${issueBadges}
-                </div>
-                ${detailsHtml ? `<div class="span-tags">${detailsHtml}</div>` : ''}
-            </div>
-        `;
-    }
-
-    function flattenSpanTree(span, depth) {
-        if (!span) {
-            return [];
-        }
-
-        const result = [{ span, depth }];
-
-        if (span.children && span.children.length > 0) {
-            span.children.forEach(child => {
-                result.push(...flattenSpanTree(child, depth + 1));
-            });
-        }
-
-        return result;
-    }
-
-    function renderTimelineView(trace) {
-        if (!trace || !trace.rootSpan) {
-            return '<p class="no-data">No spans to display</p>';
-        }
-
-        const traceStart = trace.startTimeMs || 0;
-        const traceDuration = trace.durationMs || 1;
-        const flatSpans = flattenSpanTree(trace.rootSpan, 0);
-
-        if (flatSpans.length === 0) {
-            return '<p class="no-data">No spans to display</p>';
-        }
-
-        let html = '<div class="trace-timeline-container">';
-
-        // Time header with markers
-        html += '<div class="timeline-header">';
-        const markerCount = 5;
-        for (let i = 0; i < markerCount; i++) {
-            const percent = (i / (markerCount - 1)) * 100;
-            const timeMs = (traceDuration * i) / (markerCount - 1);
-            html += `<span class="timeline-marker" style="left: ${percent}%">${formatDurationMs(timeMs)}</span>`;
-        }
-        html += '</div>';
-
-        // Span rows
-        flatSpans.forEach(({ span, depth }) => {
-            const spanStart = span.startTimeMs || 0;
-            const spanDuration = span.durationMs || 0;
-
-            const leftPercent = traceDuration > 0
-                ? ((spanStart - traceStart) / traceDuration) * 100
-                : 0;
-            const widthPercent = traceDuration > 0
-                ? Math.max((spanDuration / traceDuration) * 100, 0.5)
-                : 0.5;
-
-            const depthClass = `depth-${Math.min(depth, 5)}`;
-            const kind = (span.kind || 'internal').toLowerCase();
-            const kindClass = `kind-${kind}`;
-
-            const hasError = span.status === 'ERROR' ||
-                (span.issues && span.issues.some(issue => issue.type === 'ERROR'));
-            const errorClass = hasError ? 'has-error' : '';
-
-            const spanName = span.name || 'unknown';
-            const truncatedName = spanName.length > 40 ? spanName.substring(0, 37) + '...' : spanName;
-
-            html += `<div class="timeline-row ${depthClass}">`;
-            html += `<div class="timeline-label" title="${escapeHtml(spanName)}">${escapeHtml(truncatedName)}</div>`;
-            html += `<div class="timeline-track">`;
-            html += `<div class="timeline-bar ${kindClass} ${errorClass}" style="left: ${leftPercent}%; width: ${widthPercent}%">`;
-            html += `<span class="timeline-bar-tooltip">${escapeHtml(spanName)}: ${formatDurationMs(spanDuration)}</span>`;
-            html += `</div>`;
-            html += `</div>`;
-            html += `</div>`;
-        });
-
-        html += '</div>';
-
-        return html;
-    }
-
-    function getDurationClassMs(ms) {
-        if (!ms) return '';
-        if (ms > 500) return 'very-slow';
-        if (ms > 100) return 'slow';
-        return '';
     }
 
     function formatDurationMs(ms) {
