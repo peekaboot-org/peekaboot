@@ -7,7 +7,6 @@ import net.osslabz.peekaboot.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.tracing.event.TraceEventBus;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.Map;
 
 public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
@@ -15,12 +14,10 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
     private static final String TRACE_ID_KEY = "traceId";
     private static final String SPAN_ID_KEY = "spanId";
 
-    private final TraceLogStore logStore;
     private Level minLevel = Level.DEBUG;
     private TraceEventBus eventBus;
 
-    public PeekabootLogbackAppender(TraceLogStore logStore) {
-        this.logStore = logStore;
+    public PeekabootLogbackAppender() {
         setName("peekaboot");
     }
 
@@ -49,29 +46,14 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
             return;
         }
 
-        String spanId = mdc != null ? mdc.get(SPAN_ID_KEY) : null;
-        Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
-        String level = event.getLevel().toString();
-        String loggerName = event.getLoggerName();
-        String message = event.getFormattedMessage();
-        String threadName = event.getThreadName();
-
-        LogEntry entry = new LogEntry(
-                traceId,
-                spanId,
-                timestamp,
-                level,
-                loggerName,
-                message,
-                threadName,
-                mdc != null ? new HashMap<>(mdc) : Map.of()
-        );
-
-        if (logStore != null) {
-            logStore.addLog(entry);
-        }
-
         if (eventBus != null) {
+            String spanId = mdc != null ? mdc.get(SPAN_ID_KEY) : null;
+            Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
+            String level = event.getLevel().toString();
+            String loggerName = event.getLoggerName();
+            String message = event.getFormattedMessage();
+            String threadName = event.getThreadName();
+
             eventBus.publish(new LogCapturedEvent(
                     traceId,
                     spanId,

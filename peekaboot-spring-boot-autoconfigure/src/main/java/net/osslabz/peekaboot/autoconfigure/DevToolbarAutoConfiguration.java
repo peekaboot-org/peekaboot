@@ -68,7 +68,7 @@ public class DevToolbarAutoConfiguration {
                 return;
             }
 
-            PeekabootLogbackAppender appender = new PeekabootLogbackAppender(null);
+            PeekabootLogbackAppender appender = new PeekabootLogbackAppender();
             appender.setEventBus(eventBus);
             appender.setContext(loggerContext);
             appender.start();
