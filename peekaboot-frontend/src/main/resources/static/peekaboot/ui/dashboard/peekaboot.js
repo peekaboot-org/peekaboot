@@ -191,7 +191,7 @@
 
         const header = item.querySelector('.trace-header');
         header.addEventListener('click', () => {
-            if (trace.traceId) {
+            if (trace.traceId && window.PeekabootTraceDetail) {
                 PeekabootTraceDetail.open(trace.traceId);
                 setHash('traces', trace.traceId);
             }
