@@ -10,6 +10,8 @@
     let features = { tracing: false, traceCaptureMode: 'ERRORS_ONLY', devToolbar: false };
     let tracesData = null;
     let tracesLoaded = false;
+    let selectedRootActionTypes = new Set(['HTTP_REQUEST', 'SCHEDULED_JOB',
+        'MESSAGE_CONSUMER', 'DATABASE', 'INTERNAL', 'RPC_CALL', 'UNKNOWN']);
 
     let currentLocale = navigator.language || 'en-US';
     let useServerTimezone = false;  // Default: browser timezone
@@ -84,6 +86,7 @@
         initEnvironmentFilter();
         initLoggersFilter();
         initConfigFilter();
+        initTracesFilter();
         initErrorClose();
         await fetchFeatures();
         fetchData();
@@ -146,9 +149,18 @@
             return;
         }
 
+        const filteredTraces = traces.filter(t =>
+            selectedRootActionTypes.has(t.rootActionType || 'UNKNOWN'));
+
+        if (filteredTraces.length === 0) {
+            noTracesEl.querySelector('p').textContent = 'No traces match the selected filters';
+            noTracesEl.classList.remove('hidden');
+            return;
+        }
+
         noTracesEl.classList.add('hidden');
 
-        traces.forEach(trace => {
+        filteredTraces.forEach(trace => {
             listEl.appendChild(renderTraceItem(trace));
         });
     }
@@ -339,6 +351,19 @@
                 renderConfigTab(e.target.value.trim());
             });
         }
+    }
+
+    function initTracesFilter() {
+        document.querySelectorAll('#traces-filter input').forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) {
+                    selectedRootActionTypes.add(cb.value);
+                } else {
+                    selectedRootActionTypes.delete(cb.value);
+                }
+                renderTracesTab();
+            });
+        });
     }
 
     function initErrorClose() {
