@@ -3,7 +3,6 @@ package net.osslabz.peekaboot.autoconfigure;
 import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.controller.TracingController;
-import net.osslabz.peekaboot.backend.log.TraceLogStore;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.tracing.store.InMemorySpanStore;
@@ -32,7 +31,7 @@ class TracingControllerTest {
         traceQueryService = new TraceQueryService(spanStore);
         PeekabootTracingProperties tracingProps = new PeekabootTracingProperties();
         PeekabootProperties props = new PeekabootProperties();
-        controller = new TracingController(traceQueryService, tracingProps, props, null);
+        controller = new TracingController(traceQueryService, tracingProps, props);
     }
 
     @Test
@@ -60,19 +59,6 @@ class TracingControllerTest {
     }
 
     @Test
-    void shouldReturnTraceDetailsWithSpans() {
-        addTestTrace("test-trace-details");
-
-        ResponseEntity<Map<String, Object>> response = controller.getTraceDetails("test-trace-details");
-
-        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("traceId")).isEqualTo("test-trace-details");
-        assertThat(response.getBody().get("spans")).isNotNull();
-        assertThat(response.getBody().get("logs")).isNotNull();
-    }
-
-    @Test
     void shouldReturnTracesWithLimit() {
         addTestTrace("trace-1");
         addTestTrace("trace-2");
@@ -81,23 +67,6 @@ class TracingControllerTest {
         List<TraceData> traces = controller.getTraces(2);
 
         assertThat(traces.size()).isLessThanOrEqualTo(2);
-    }
-
-    @Test
-    void shouldReturnLogsInDetails() {
-        addTestTrace("trace-with-logs");
-        TraceLogStore logStore = new TraceLogStore();
-        TracingController controllerWithLogs = new TracingController(
-                traceQueryService,
-                new PeekabootTracingProperties(),
-                new PeekabootProperties(),
-                logStore
-        );
-
-        ResponseEntity<Map<String, Object>> response = controllerWithLogs.getTraceDetails("trace-with-logs");
-
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("logs")).isInstanceOf(List.class);
     }
 
     private void addTestTrace(String traceId) {

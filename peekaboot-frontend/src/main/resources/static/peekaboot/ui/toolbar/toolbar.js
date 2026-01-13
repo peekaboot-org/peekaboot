@@ -392,15 +392,16 @@
         if (bar) bar.style.display = 'flex';
     });
 
-    // Fetch trace data
+    // Fetch trace data from insights endpoint (includes logs from TraceDataStorage)
     if (data.traceId) {
-        fetch(data.dashboardUrl + 'api/traces/' + data.traceId + '/details')
-            .then(function(r) { return r.json(); })
-            .catch(function() {
-                return fetch(data.dashboardUrl + 'api/traces/' + data.traceId).then(function(r) { return r.json(); });
+        fetch(data.dashboardUrl + 'api/traces/' + data.traceId + '/insights')
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
             })
             .then(function(trace) {
-                traceData = trace;
+                // Convert TraceTree format to expected format for rendering
+                traceData = convertTraceTree(trace);
                 updateCounts();
                 renderContent();
             })
@@ -760,5 +761,42 @@
         var div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // Convert TraceTree format (from /insights endpoint) to flat spans array format
+    function convertTraceTree(tree) {
+        var spans = [];
+        if (tree.rootSpan) {
+            flattenSpanNode(tree.rootSpan, null, spans);
+        }
+        return {
+            traceId: tree.traceId,
+            startTime: tree.startTimeMs ? new Date(tree.startTimeMs).toISOString() : null,
+            duration: tree.durationMs,
+            spanCount: spans.length,
+            spans: spans,
+            logs: tree.logs || []
+        };
+    }
+
+    function flattenSpanNode(node, parentId, spans) {
+        var span = {
+            spanId: node.spanId,
+            parentId: parentId,
+            name: node.name,
+            kind: node.kind,
+            startTime: node.startTimeMs ? new Date(node.startTimeMs).toISOString() : null,
+            duration: node.durationMs,
+            tags: node.attributes || {},
+            errorMessage: node.status === 'ERROR' ? (node.attributes && node.attributes['error.message']) : null,
+            errorClass: node.status === 'ERROR' ? (node.attributes && node.attributes['error.type']) : null
+        };
+        spans.push(span);
+
+        if (node.children && node.children.length > 0) {
+            node.children.forEach(function(child) {
+                flattenSpanNode(child, node.spanId, spans);
+            });
+        }
     }
 })();
