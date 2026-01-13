@@ -526,6 +526,25 @@ body {
     pointer-events: none;
 }
 
+.filter-section {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border-radius: var(--pk-radius);
+    margin-bottom: var(--pk-space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-md);
+    flex-wrap: wrap;
+}
+
+.filter-section label {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-xs);
+    font-size: var(--pk-text-sm);
+    cursor: pointer;
+}
+
 .property-source {
     margin-bottom: var(--pk-space-lg);
 }
