@@ -7,7 +7,7 @@ import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender;
-import net.osslabz.peekaboot.backend.log.TraceLogStore;
+import net.osslabz.peekaboot.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import org.slf4j.LoggerFactory;
@@ -26,12 +26,6 @@ import org.springframework.core.Ordered;
 public class DevToolbarAutoConfiguration {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
-
-    @Bean
-    public TraceLogStore traceLogStore() {
-        log.trace("Creating TraceLogStore bean");
-        return new TraceLogStore();
-    }
 
     @Bean
     public ToolbarDataProvider toolbarDataProvider(
@@ -57,15 +51,15 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
-    public LogbackAppenderRegistrar logbackAppenderRegistrar(TraceLogStore traceLogStore) {
-        return new LogbackAppenderRegistrar(traceLogStore);
+    public LogbackAppenderRegistrar logbackAppenderRegistrar(TraceEventBus eventBus) {
+        return new LogbackAppenderRegistrar(eventBus);
     }
 
     public static class LogbackAppenderRegistrar {
-        private final TraceLogStore traceLogStore;
+        private final TraceEventBus eventBus;
 
-        public LogbackAppenderRegistrar(TraceLogStore traceLogStore) {
-            this.traceLogStore = traceLogStore;
+        public LogbackAppenderRegistrar(TraceEventBus eventBus) {
+            this.eventBus = eventBus;
         }
 
         @PostConstruct
@@ -74,7 +68,8 @@ public class DevToolbarAutoConfiguration {
                 return;
             }
 
-            PeekabootLogbackAppender appender = new PeekabootLogbackAppender(traceLogStore);
+            PeekabootLogbackAppender appender = new PeekabootLogbackAppender(null);
+            appender.setEventBus(eventBus);
             appender.setContext(loggerContext);
             appender.start();
 

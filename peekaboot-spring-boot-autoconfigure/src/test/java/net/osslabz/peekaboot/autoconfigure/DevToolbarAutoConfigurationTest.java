@@ -2,10 +2,10 @@ package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import net.osslabz.peekaboot.backend.log.TraceLogStore;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
-import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration;
 import net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties;
+import net.osslabz.peekaboot.tracing.event.InMemoryTraceEventBus;
+import net.osslabz.peekaboot.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.tracing.store.InMemorySpanStore;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,6 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
-                    assertThat(context).hasSingleBean(TraceLogStore.class);
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).hasBean("devToolbarFilter");
                     assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
@@ -46,7 +45,6 @@ class DevToolbarAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=false")
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
                 });
@@ -56,7 +54,6 @@ class DevToolbarAutoConfigurationTest {
     void shouldNotCreateBeansWhenDevToolbarPropertyMissing() {
         contextRunner
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
                 });
@@ -72,20 +69,19 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withClassLoader(new FilteredClassLoader(TraceQueryService.class))
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(TraceLogStore.class);
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
                 });
     }
 
     @Test
-    void shouldCreateLogbackAppenderRegistrar() {
+    void shouldCreateLogbackAppenderRegistrarWithEventBus() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
-                    assertThat(context).hasSingleBean(TraceLogStore.class);
+                    assertThat(context).hasSingleBean(TraceEventBus.class);
                 });
     }
 
@@ -112,6 +108,11 @@ class DevToolbarAutoConfigurationTest {
         @Bean
         TraceQueryService traceQueryService() {
             return new TraceQueryService(new InMemorySpanStore(100, 50));
+        }
+
+        @Bean
+        TraceEventBus traceEventBus() {
+            return new InMemoryTraceEventBus();
         }
     }
 
