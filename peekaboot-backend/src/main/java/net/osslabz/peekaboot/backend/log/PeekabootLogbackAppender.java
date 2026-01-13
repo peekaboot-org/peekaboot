@@ -67,7 +67,9 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
                 mdc != null ? new HashMap<>(mdc) : Map.of()
         );
 
-        logStore.addLog(entry);
+        if (logStore != null) {
+            logStore.addLog(entry);
+        }
 
         if (eventBus != null) {
             eventBus.publish(new LogCapturedEvent(
