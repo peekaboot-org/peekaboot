@@ -655,6 +655,12 @@
              name.includes(' FROM ') || name.includes('HIBERNATE'))) {
             return true;
         }
+        // Check for connection pool and JDBC patterns by name
+        const nameLower = (span.name || '').toLowerCase();
+        if (nameLower.includes('hikari') || nameLower.includes('jdbc') ||
+            nameLower.includes('connection') || nameLower.includes('datasource')) {
+            return true;
+        }
         return false;
     }
 
