@@ -3,3 +3,4 @@ net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration
+net.osslabz.peekaboot.autoconfigure.TracingInterceptorAutoConfiguration

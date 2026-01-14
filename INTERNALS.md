@@ -1,4 +1,4 @@
-# Peekaboot Internals
+/# Peekaboot Internals
 
 Technical documentation for contributors and maintainers.
 
