@@ -13,6 +13,7 @@ import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -65,6 +66,7 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(TraceEventBus.class)
     public LogbackAppenderRegistrar logbackAppenderRegistrar(TraceEventBus eventBus) {
         return new LogbackAppenderRegistrar(eventBus);
     }
