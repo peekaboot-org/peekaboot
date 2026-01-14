@@ -4,6 +4,8 @@ import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -13,6 +15,8 @@ import java.util.List;
 
 @Component
 public class FlywayMapper {
+
+    private static final Logger log = LoggerFactory.getLogger(FlywayMapper.class);
 
     public FlywayInfo map(FlywayResponse flywayData) {
         if (flywayData == null || flywayData.contexts() == null) {
@@ -44,7 +48,8 @@ public class FlywayMapper {
         if (migration.installedOn() != null) {
             try {
                 installedOn = Instant.parse(migration.installedOn());
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.debug("Failed to parse installedOn date: {}", migration.installedOn(), e);
             }
         }
 
