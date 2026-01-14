@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.filter;
 
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
@@ -11,22 +12,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +31,9 @@ class DevToolbarFilterTest {
 
     @Mock
     ToolbarDataProvider toolbarDataProvider;
+
+    @Mock
+    Tracer tracer;
 
     @Mock
     HttpServletRequest request;
@@ -49,7 +48,7 @@ class DevToolbarFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new DevToolbarFilter(toolbarDataProvider, "/peekaboot");
+        filter = new DevToolbarFilter(toolbarDataProvider, tracer, "/peekaboot");
     }
 
     @ParameterizedTest

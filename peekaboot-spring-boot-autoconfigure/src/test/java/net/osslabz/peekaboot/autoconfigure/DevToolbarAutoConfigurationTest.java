@@ -1,13 +1,12 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import io.micrometer.tracing.Tracer;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.backend.tracing.event.InMemoryTraceEventBus;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -15,6 +14,8 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -35,7 +36,6 @@ class DevToolbarAutoConfigurationTest {
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
-                    assertThat(context).hasBean("devToolbarFilter");
                     assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
                 });
     }
@@ -61,8 +61,6 @@ class DevToolbarAutoConfigurationTest {
 
     @Test
     void shouldNotCreateBeansWhenTracingNotOnClasspath() {
-        // Use a separate context runner without PeekabootAutoConfiguration
-        // because its ComponentScan fails when TraceQueryService is filtered out
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class)
@@ -75,13 +73,12 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldCreateLogbackAppenderRegistrarWithEventBus() {
+    void shouldCreateLogbackAppenderRegistrar() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
-                    assertThat(context).hasSingleBean(TraceEventBus.class);
                 });
     }
 
@@ -106,13 +103,18 @@ class DevToolbarAutoConfigurationTest {
     @EnableConfigurationProperties(PeekabootTracingProperties.class)
     static class MockTracingConfig {
         @Bean
-        TraceQueryService traceQueryService() {
-            return new TraceQueryService(new InMemorySpanStore(100, 50));
+        TraceDataStorage traceDataStorage() {
+            return new TraceDataStorage(100, 50, Duration.ofMinutes(5));
         }
 
         @Bean
-        TraceEventBus traceEventBus() {
-            return new InMemoryTraceEventBus();
+        TraceQueryService traceQueryService(TraceDataStorage storage) {
+            return new TraceQueryService(storage);
+        }
+
+        @Bean
+        Tracer tracer() {
+            return mock(Tracer.class);
         }
     }
 

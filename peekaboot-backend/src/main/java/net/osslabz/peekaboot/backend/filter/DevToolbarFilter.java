@@ -1,5 +1,7 @@
 package net.osslabz.peekaboot.backend.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,7 +12,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -27,10 +28,12 @@ public class DevToolbarFilter implements Filter {
     );
 
     private final ToolbarDataProvider toolbarDataProvider;
+    private final Tracer tracer;
     private final String basePath;
 
-    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, String basePath) {
+    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String basePath) {
         this.toolbarDataProvider = toolbarDataProvider;
+        this.tracer = tracer;
         this.basePath = basePath;
     }
 
@@ -121,7 +124,11 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
-        String traceId = MDC.get("traceId");
+        String traceId = null;
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan != null) {
+            traceId = currentSpan.context().traceId();
+        }
         log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, traceId);
 
         String toolbarHtml;

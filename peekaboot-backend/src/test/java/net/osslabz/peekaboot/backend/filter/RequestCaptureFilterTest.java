@@ -1,11 +1,12 @@
 package net.osslabz.peekaboot.backend.filter;
 
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
+import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,7 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.slf4j.MDC;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
 
@@ -37,7 +38,10 @@ import static org.mockito.Mockito.when;
 class RequestCaptureFilterTest {
 
     @Mock
-    TraceEventBus eventBus;
+    Tracer tracer;
+
+    @Mock
+    ApplicationEventPublisher eventPublisher;
 
     @Mock
     HttpServletRequest request;
@@ -52,12 +56,15 @@ class RequestCaptureFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RequestCaptureFilter(eventBus);
+        filter = new RequestCaptureFilter(tracer, eventPublisher);
     }
 
-    @AfterEach
-    void tearDown() {
-        MDC.clear();
+    private void setupTraceContext(String traceId) {
+        Span span = mock(Span.class);
+        TraceContext context = mock(TraceContext.class);
+        when(context.traceId()).thenReturn(traceId);
+        when(span.context()).thenReturn(context);
+        when(tracer.currentSpan()).thenReturn(span);
     }
 
     @ParameterizedTest
@@ -74,29 +81,30 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        verify(eventBus, never()).publish(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
     void shouldNotPublishEventWithoutTraceId() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/users");
+        when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        verify(eventBus, never()).publish(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
     void shouldPublishEventWithTraceId() throws Exception {
-        MDC.put("traceId", "abc123");
+        setupTraceContext("abc123");
         setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.traceId()).isEqualTo("abc123");
@@ -107,7 +115,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldCaptureRequestHeaders() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("POST");
         when(response.getStatus()).thenReturn(201);
@@ -123,7 +131,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.requestHeaders()).containsEntry("content-type", "application/json");
@@ -132,7 +140,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldMaskSensitiveHeaders() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
@@ -152,7 +160,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.requestHeaders()).containsEntry("authorization", "********");
@@ -163,7 +171,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldCaptureQueryParameters() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
@@ -178,7 +186,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.queryParams()).containsEntry("page", "1");
@@ -187,10 +195,9 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldCaptureControllerInfo() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         setupBasicRequestResponse();
 
-        // Mock HandlerMethod
         HandlerMethod handlerMethod = mock(HandlerMethod.class);
         when(handlerMethod.getBeanType()).thenReturn((Class) TestController.class);
         when(handlerMethod.getMethod()).thenReturn(TestController.class.getMethod("getUsers"));
@@ -199,7 +206,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.controllerClass()).isEqualTo("TestController");
@@ -208,7 +215,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldCaptureResponseHeaders() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
@@ -222,7 +229,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.responseHeaders()).containsEntry("content-type", "application/json");
@@ -231,7 +238,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldMaskSensitiveResponseHeaders() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
@@ -245,7 +252,7 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.responseHeaders()).containsEntry("set-cookie", "********");
@@ -255,25 +262,23 @@ class RequestCaptureFilterTest {
     @Test
     void shouldStillExecuteFilterChainEvenWhenNoTraceId() throws Exception {
         when(request.getRequestURI()).thenReturn("/api/users");
-        // No traceId in MDC
+        when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
-        // Chain should still be called
         verify(chain).doFilter(request, response);
-        // But no event published
-        verify(eventBus, never()).publish(any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
     void shouldCalculateDuration() throws Exception {
-        MDC.put("traceId", "trace1");
+        setupTraceContext("trace1");
         setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventBus).publish(captor.capture());
+        verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.durationMs()).isGreaterThanOrEqualTo(0);
@@ -288,7 +293,6 @@ class RequestCaptureFilterTest {
         when(request.getParameterMap()).thenReturn(Map.of());
     }
 
-    // Test helper class
     public static class TestController {
         public void getUsers() {
         }

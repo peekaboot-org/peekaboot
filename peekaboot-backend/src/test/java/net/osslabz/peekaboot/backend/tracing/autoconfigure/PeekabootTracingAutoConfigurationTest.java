@@ -1,9 +1,7 @@
 package net.osslabz.peekaboot.backend.tracing.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -22,10 +20,8 @@ class PeekabootTracingAutoConfigurationTest {
     @Test
     void shouldCreateCoreBeans() {
         contextRunner.run(context -> {
-            assertThat(context).hasSingleBean(InMemorySpanStore.class);
-            assertThat(context).hasSingleBean(TraceQueryService.class);
-            assertThat(context).hasSingleBean(TraceEventBus.class);
             assertThat(context).hasSingleBean(TraceDataStorage.class);
+            assertThat(context).hasSingleBean(TraceQueryService.class);
         });
     }
 
@@ -41,7 +37,7 @@ class PeekabootTracingAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.tracing.enabled=false")
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(InMemorySpanStore.class);
+                    assertThat(context).doesNotHaveBean(TraceDataStorage.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
                     assertThat(context).doesNotHaveBean(TraceQueryService.class);
                 });

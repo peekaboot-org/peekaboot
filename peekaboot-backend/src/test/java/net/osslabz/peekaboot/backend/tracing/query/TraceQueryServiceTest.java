@@ -1,9 +1,10 @@
 package net.osslabz.peekaboot.backend.tracing.query;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
+import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -16,34 +17,36 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TraceQueryServiceTest {
 
-    private InMemorySpanStore store;
+    private TraceDataStorage storage;
     private TraceQueryService queryService;
 
     @BeforeEach
     void setUp() {
-        store = new InMemorySpanStore(100, 50);
-        queryService = new TraceQueryService(store);
+        storage = new TraceDataStorage(100, 50, Duration.ofMinutes(5));
+        queryService = new TraceQueryService(storage);
+    }
+
+    private void addSpan(SpanData span) {
+        storage.onSpanData(new SpanDataEvent(span));
     }
 
     @Test
     void getErrorTraces_returnsOnlyTracesWithErrors() {
-        // Create a normal span (no error)
         SpanData normalSpan = new SpanData(
                 "trace-1", "span-1", null, "normal-op", null,
                 Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                 Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
+                storage.nextCreationOrder()
         );
-        store.report(normalSpan);
+        addSpan(normalSpan);
 
-        // Create an error span
         SpanData errorSpan = new SpanData(
                 "trace-2", "span-2", null, "error-op", null,
                 Instant.now(), Instant.now().plusMillis(200), Duration.ofMillis(200),
                 Map.of(), List.of(), "Connection failed", "java.io.IOException",
-                null, null, null, List.of(), store.nextCreationOrder()
+                null, null, null, List.of(), storage.nextCreationOrder()
         );
-        store.report(errorSpan);
+        addSpan(errorSpan);
 
         List<TraceData> errorTraces = queryService.getErrorTraces(10);
 
@@ -54,15 +57,14 @@ class TraceQueryServiceTest {
 
     @Test
     void getErrorTraces_respectsLimit() {
-        // Create 5 error traces
         for (int i = 0; i < 5; i++) {
             SpanData errorSpan = new SpanData(
                     "trace-" + i, "span-" + i, null, "error-op-" + i, null,
                     Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                     Map.of(), List.of(), "Error " + i, null,
-                    null, null, null, List.of(), store.nextCreationOrder()
+                    null, null, null, List.of(), storage.nextCreationOrder()
             );
-            store.report(errorSpan);
+            addSpan(errorSpan);
         }
 
         List<TraceData> errorTraces = queryService.getErrorTraces(3);
@@ -76,9 +78,9 @@ class TraceQueryServiceTest {
                 "trace-1", "span-1", null, "normal-op", null,
                 Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                 Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
+                storage.nextCreationOrder()
         );
-        store.report(normalSpan);
+        addSpan(normalSpan);
 
         List<TraceData> errorTraces = queryService.getErrorTraces(10);
 
@@ -87,23 +89,21 @@ class TraceQueryServiceTest {
 
     @Test
     void getTraces_withErrorsOnlyMode_returnsOnlyErrorTraces() {
-        // Create a normal span
         SpanData normalSpan = new SpanData(
                 "trace-1", "span-1", null, "normal-op", null,
                 Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                 Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
+                storage.nextCreationOrder()
         );
-        store.report(normalSpan);
+        addSpan(normalSpan);
 
-        // Create an error span
         SpanData errorSpan = new SpanData(
                 "trace-2", "span-2", null, "error-op", null,
                 Instant.now(), Instant.now().plusMillis(200), Duration.ofMillis(200),
                 Map.of(), List.of(), "Error occurred", null,
-                null, null, null, List.of(), store.nextCreationOrder()
+                null, null, null, List.of(), storage.nextCreationOrder()
         );
-        store.report(errorSpan);
+        addSpan(errorSpan);
 
         List<TraceData> traces = queryService.getTraces(10, TraceCaptureMode.ERRORS_ONLY);
 
@@ -113,23 +113,21 @@ class TraceQueryServiceTest {
 
     @Test
     void getTraces_withAllMode_returnsAllTraces() {
-        // Create a normal span
         SpanData normalSpan = new SpanData(
                 "trace-1", "span-1", null, "normal-op", null,
                 Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                 Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
+                storage.nextCreationOrder()
         );
-        store.report(normalSpan);
+        addSpan(normalSpan);
 
-        // Create an error span
         SpanData errorSpan = new SpanData(
                 "trace-2", "span-2", null, "error-op", null,
                 Instant.now(), Instant.now().plusMillis(200), Duration.ofMillis(200),
                 Map.of(), List.of(), "Error occurred", null,
-                null, null, null, List.of(), store.nextCreationOrder()
+                null, null, null, List.of(), storage.nextCreationOrder()
         );
-        store.report(errorSpan);
+        addSpan(errorSpan);
 
         List<TraceData> traces = queryService.getTraces(10, TraceCaptureMode.ALL);
 
@@ -138,15 +136,14 @@ class TraceQueryServiceTest {
 
     @Test
     void getTraces_withAllMode_respectsLimit() {
-        // Create 5 traces
         for (int i = 0; i < 5; i++) {
             SpanData span = new SpanData(
                     "trace-" + i, "span-" + i, null, "op-" + i, null,
                     Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
                     Map.of(), List.of(), null, null, null, null, null, List.of(),
-                    store.nextCreationOrder()
+                    storage.nextCreationOrder()
             );
-            store.report(span);
+            addSpan(span);
         }
 
         List<TraceData> traces = queryService.getTraces(3, TraceCaptureMode.ALL);

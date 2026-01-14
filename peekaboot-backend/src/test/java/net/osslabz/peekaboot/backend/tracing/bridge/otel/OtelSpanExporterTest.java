@@ -13,10 +13,14 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
+import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,17 +29,25 @@ class OtelSpanExporterTest {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
-    private InMemorySpanStore store;
+    private TraceDataStorage storage;
+    private List<SpanDataEvent> publishedEvents;
     private OtelSpanExporter exporter;
 
     @BeforeEach
     void setUp() {
-        store = new InMemorySpanStore(100, 50);
-        exporter = new OtelSpanExporter(store);
+        storage = new TraceDataStorage(100, 50, Duration.ofMinutes(5));
+        publishedEvents = new ArrayList<>();
+        ApplicationEventPublisher eventPublisher = event -> {
+            if (event instanceof SpanDataEvent spanDataEvent) {
+                publishedEvents.add(spanDataEvent);
+                storage.onSpanData(spanDataEvent);
+            }
+        };
+        exporter = new OtelSpanExporter(storage, eventPublisher);
     }
 
     @Test
-    void shouldConvertAndStoreOtelSpan() {
+    void shouldConvertAndPublishOtelSpan() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String spanId = "0123456789abcdef";
         SpanData otelSpan = createTestSpan(traceId, spanId, "test-operation", SpanKind.SERVER);
@@ -43,8 +55,9 @@ class OtelSpanExporterTest {
         CompletableResultCode result = exporter.export(List.of(otelSpan));
 
         assertThat(result.isSuccess()).isTrue();
+        assertThat(publishedEvents).hasSize(1);
 
-        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = store.getSpansForTrace(traceId);
+        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = storage.getSpansForTrace(traceId);
         assertThat(spans).hasSize(1);
 
         net.osslabz.peekaboot.backend.tracing.store.SpanData stored = spans.getFirst();
@@ -65,8 +78,9 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span1, span2, span3));
 
-        assertThat(store.getSpansForTrace(traceId1)).hasSize(2);
-        assertThat(store.getSpansForTrace(traceId2)).hasSize(1);
+        assertThat(publishedEvents).hasSize(3);
+        assertThat(storage.getSpansForTrace(traceId1)).hasSize(2);
+        assertThat(storage.getSpansForTrace(traceId2)).hasSize(1);
     }
 
     @Test
@@ -89,7 +103,7 @@ class OtelSpanExporterTest {
             SpanData span = createTestSpan(traceId, "0000000000000001", "op", kind);
             exporter.export(List.of(span));
 
-            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = store.getSpansForTrace(traceId);
+            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = storage.getSpansForTrace(traceId);
             assertThat(stored).hasSize(1);
 
             if (kind == SpanKind.INTERNAL) {

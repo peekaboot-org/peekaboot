@@ -1,47 +1,50 @@
 package net.osslabz.peekaboot.backend.tracing.query;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * Service for querying trace data from storage.
+ */
 public class TraceQueryService {
 
-    private final InMemorySpanStore store;
+    private final TraceDataStorage storage;
 
-    public TraceQueryService(InMemorySpanStore store) {
-        this.store = store;
+    public TraceQueryService(TraceDataStorage storage) {
+        this.storage = storage;
     }
 
     public Optional<TraceData> getTrace(String traceId) {
-        return store.getTrace(traceId);
+        return storage.getTraceData(traceId);
     }
 
     public List<SpanData> getSpans(String traceId) {
-        return store.getSpansForTrace(traceId);
+        return storage.getSpansForTrace(traceId);
     }
 
     public List<TraceData> getRecentTraces(int limit) {
-        return store.getRecentTraces(limit);
+        return storage.getRecentTraceData(limit);
     }
 
     public List<TraceData> getAllTraces() {
-        return store.getAllTraces();
+        return storage.getAllTraces();
     }
 
     public List<TraceData> getErrorTraces(int limit) {
-        return store.getAllTraces().stream()
+        return storage.getAllTraces().stream()
                 .filter(TraceData::hasErrors)
                 .limit(limit)
                 .toList();
     }
 
     public List<TraceData> getTraces(int limit, TraceCaptureMode mode) {
-        Stream<TraceData> stream = store.getAllTraces().stream();
+        Stream<TraceData> stream = storage.getAllTraces().stream();
         if (mode == TraceCaptureMode.ERRORS_ONLY) {
             stream = stream.filter(TraceData::hasErrors);
         }
@@ -49,6 +52,6 @@ public class TraceQueryService {
     }
 
     public int getTraceCount() {
-        return store.getTraceCount();
+        return storage.getTraceCount();
     }
 }

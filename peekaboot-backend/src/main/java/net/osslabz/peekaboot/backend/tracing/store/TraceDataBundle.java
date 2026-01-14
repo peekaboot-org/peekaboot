@@ -2,16 +2,19 @@ package net.osslabz.peekaboot.backend.tracing.store;
 
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.SpanCompletedEvent;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Bundle of all data collected for a single trace: spans, logs, and request info.
+ */
 public class TraceDataBundle {
 
     private final String traceId;
-    private final List<SpanCompletedEvent> spans = Collections.synchronizedList(new ArrayList<>());
+    private final List<SpanData> spans = Collections.synchronizedList(new ArrayList<>());
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
     private final long createdAt;
@@ -29,8 +32,15 @@ public class TraceDataBundle {
         return createdAt;
     }
 
-    public void addSpan(SpanCompletedEvent span) {
+    public void addSpan(SpanData span, int maxSpans) {
         spans.add(span);
+        if (spans.size() > maxSpans) {
+            synchronized (spans) {
+                if (spans.size() > maxSpans) {
+                    spans.subList(0, spans.size() - maxSpans).clear();
+                }
+            }
+        }
     }
 
     public void addLog(LogCapturedEvent log) {
@@ -41,8 +51,10 @@ public class TraceDataBundle {
         this.request = request;
     }
 
-    public List<SpanCompletedEvent> spans() {
-        return new ArrayList<>(spans);
+    public List<SpanData> spans() {
+        return spans.stream()
+                .sorted(Comparator.comparingLong(SpanData::creationOrder))
+                .toList();
     }
 
     public List<LogCapturedEvent> logs() {

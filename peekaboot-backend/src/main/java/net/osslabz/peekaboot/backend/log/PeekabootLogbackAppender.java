@@ -4,18 +4,22 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Logback appender that captures log events and publishes them via Spring events.
+ * Uses MDC for traceId/spanId correlation since logback events contain frozen MDC state.
+ */
 public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
 
     private static final String TRACE_ID_KEY = "traceId";
     private static final String SPAN_ID_KEY = "spanId";
 
     private Level minLevel = Level.DEBUG;
-    private TraceEventBus eventBus;
+    private ApplicationEventPublisher eventPublisher;
 
     public PeekabootLogbackAppender() {
         setName("peekaboot");
@@ -25,8 +29,8 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
         this.minLevel = minLevel;
     }
 
-    public void setEventBus(TraceEventBus eventBus) {
-        this.eventBus = eventBus;
+    public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -46,15 +50,15 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
             return;
         }
 
-        if (eventBus != null) {
-            String spanId = mdc != null ? mdc.get(SPAN_ID_KEY) : null;
+        if (eventPublisher != null) {
+            String spanId = mdc.get(SPAN_ID_KEY);
             Instant timestamp = Instant.ofEpochMilli(event.getTimeStamp());
             String level = event.getLevel().toString();
             String loggerName = event.getLoggerName();
             String message = event.getFormattedMessage();
             String threadName = event.getThreadName();
 
-            eventBus.publish(new LogCapturedEvent(
+            eventPublisher.publishEvent(new LogCapturedEvent(
                     traceId,
                     spanId,
                     timestamp,

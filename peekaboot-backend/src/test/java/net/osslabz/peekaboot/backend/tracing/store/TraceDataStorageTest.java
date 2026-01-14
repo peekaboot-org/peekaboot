@@ -2,12 +2,13 @@ package net.osslabz.peekaboot.backend.tracing.store;
 
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.SpanCompletedEvent;
+import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,14 +19,15 @@ class TraceDataStorageTest {
 
     @BeforeEach
     void setUp() {
-        storage = new TraceDataStorage(100, Duration.ofMinutes(5));
+        storage = new TraceDataStorage(100, 50, Duration.ofMinutes(5));
     }
 
     @Test
-    void accept_storesSpanEvent() {
-        var event = new SpanCompletedEvent("trace1", "span1", null, "test", null, 0, 100, Map.of(), null, null);
+    void onSpanData_storesSpan() {
+        var spanData = createSpanData("trace1", "span1", null, "test");
+        var event = new SpanDataEvent(spanData);
 
-        storage.accept(event);
+        storage.onSpanData(event);
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -34,10 +36,10 @@ class TraceDataStorageTest {
     }
 
     @Test
-    void accept_storesLogEvent() {
+    void onLogCaptured_storesLog() {
         var event = new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", "test message", "main");
 
-        storage.accept(event);
+        storage.onLogCaptured(event);
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -46,10 +48,10 @@ class TraceDataStorageTest {
     }
 
     @Test
-    void accept_storesRequestEvent() {
+    void onRequestCompleted_storesRequest() {
         var event = new RequestCompletedEvent("trace1", "GET", "/api/test", 200, 50, Map.of(), Map.of(), Map.of(), "TestController", "test", null, false);
 
-        storage.accept(event);
+        storage.onRequestCompleted(event);
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -58,11 +60,11 @@ class TraceDataStorageTest {
     }
 
     @Test
-    void accept_aggregatesMultipleEventsForSameTrace() {
-        storage.accept(new SpanCompletedEvent("trace1", "span1", null, "root", null, 0, 100, Map.of(), null, null));
-        storage.accept(new SpanCompletedEvent("trace1", "span2", "span1", "child", null, 10, 50, Map.of(), null, null));
-        storage.accept(new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "Test", "log1", "main"));
-        storage.accept(new RequestCompletedEvent("trace1", "GET", "/test", 200, 100, Map.of(), Map.of(), Map.of(), null, null, null, false));
+    void aggregatesMultipleEventsForSameTrace() {
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span1", null, "root")));
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span2", "span1", "child")));
+        storage.onLogCaptured(new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "Test", "log1", "main"));
+        storage.onRequestCompleted(new RequestCompletedEvent("trace1", "GET", "/test", 200, 100, Map.of(), Map.of(), Map.of(), null, null, null, false));
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -73,9 +75,9 @@ class TraceDataStorageTest {
 
     @Test
     void getRecentTraces_returnsOrderedByCreation() throws InterruptedException {
-        storage.accept(new SpanCompletedEvent("trace1", "span1", null, "first", null, 0, 100, Map.of(), null, null));
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span1", null, "first")));
         Thread.sleep(10);
-        storage.accept(new SpanCompletedEvent("trace2", "span2", null, "second", null, 0, 100, Map.of(), null, null));
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace2", "span2", null, "second")));
 
         var recent = storage.getRecentTraces(10);
 
@@ -85,8 +87,8 @@ class TraceDataStorageTest {
     }
 
     @Test
-    void accept_ignoresNullEvent() {
-        storage.accept(null);
+    void onSpanData_ignoresNullEvent() {
+        storage.onSpanData(null);
 
         assertThat(storage.getTraceCount()).isZero();
     }
@@ -100,11 +102,33 @@ class TraceDataStorageTest {
 
     @Test
     void clear_removesAllTraces() {
-        storage.accept(new SpanCompletedEvent("trace1", "span1", null, "test", null, 0, 100, Map.of(), null, null));
-        storage.accept(new SpanCompletedEvent("trace2", "span2", null, "test", null, 0, 100, Map.of(), null, null));
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span1", null, "test")));
+        storage.onSpanData(new SpanDataEvent(createSpanData("trace2", "span2", null, "test")));
 
         storage.clear();
 
         assertThat(storage.getTraceCount()).isZero();
+    }
+
+    private SpanData createSpanData(String traceId, String spanId, String parentId, String name) {
+        return new SpanData(
+                traceId,
+                spanId,
+                parentId,
+                name,
+                null,
+                Instant.now(),
+                Instant.now().plusMillis(100),
+                Duration.ofMillis(100),
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                storage.nextCreationOrder()
+        );
     }
 }

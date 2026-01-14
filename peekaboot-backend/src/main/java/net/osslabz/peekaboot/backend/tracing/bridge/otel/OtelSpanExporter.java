@@ -8,11 +8,11 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import net.osslabz.peekaboot.backend.tracing.event.SpanCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
-import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
+import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
+import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 
 import net.osslabz.peekaboot.backend.filter.FilterPathMatcher;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * OpenTelemetry SpanExporter that captures spans and publishes them via Spring events.
+ */
 public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
@@ -28,16 +31,12 @@ public class OtelSpanExporter implements SpanExporter {
     private static final AttributeKey<String> HTTP_TARGET_KEY = AttributeKey.stringKey("http.target");
     private static final AttributeKey<String> URL_PATH_KEY = AttributeKey.stringKey("url.path");
 
-    private final InMemorySpanStore store;
-    private final TraceEventBus eventBus;
+    private final TraceDataStorage storage;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public OtelSpanExporter(InMemorySpanStore store) {
-        this(store, null);
-    }
-
-    public OtelSpanExporter(InMemorySpanStore store, TraceEventBus eventBus) {
-        this.store = store;
-        this.eventBus = eventBus;
+    public OtelSpanExporter(TraceDataStorage storage, ApplicationEventPublisher eventPublisher) {
+        this.storage = storage;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -47,19 +46,16 @@ public class OtelSpanExporter implements SpanExporter {
                 continue;
             }
             net.osslabz.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan);
-            store.report(spanData);
-            publishSpanEvent(spanData);
+            eventPublisher.publishEvent(new SpanDataEvent(spanData));
         }
         return CompletableResultCode.ofSuccess();
     }
 
     private boolean shouldSkipSpan(SpanData span) {
-        // Check various attributes that might contain the URL path
         String path = extractPath(span);
         if (path != null && FilterPathMatcher.shouldSkip(path)) {
             return true;
         }
-        // Also check span name for HTTP spans (e.g., "GET /peekaboot/api/...")
         String name = span.getName();
         if (name != null && name.contains("/peekaboot/")) {
             return true;
@@ -68,17 +64,14 @@ public class OtelSpanExporter implements SpanExporter {
     }
 
     private String extractPath(SpanData span) {
-        // Try url.path first (OpenTelemetry semantic conventions)
         String urlPath = span.getAttributes().get(URL_PATH_KEY);
         if (urlPath != null) {
             return urlPath;
         }
-        // Try http.target (older convention)
         String httpTarget = span.getAttributes().get(HTTP_TARGET_KEY);
         if (httpTarget != null) {
             return httpTarget;
         }
-        // Try http.url and extract path
         String httpUrl = span.getAttributes().get(HTTP_URL_KEY);
         if (httpUrl != null) {
             int pathStart = httpUrl.indexOf('/', httpUrl.indexOf("://") + 3);
@@ -88,24 +81,6 @@ public class OtelSpanExporter implements SpanExporter {
             }
         }
         return null;
-    }
-
-    private void publishSpanEvent(net.osslabz.peekaboot.backend.tracing.store.SpanData spanData) {
-        if (eventBus == null) {
-            return;
-        }
-        eventBus.publish(new SpanCompletedEvent(
-                spanData.traceId(),
-                spanData.spanId(),
-                spanData.parentId(),
-                spanData.name(),
-                spanData.kind(),
-                spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0,
-                spanData.duration() != null ? spanData.duration().toMillis() : 0,
-                spanData.tags(),
-                spanData.errorMessage(),
-                spanData.errorClass()
-        ));
     }
 
     @Override
@@ -156,7 +131,7 @@ public class OtelSpanExporter implements SpanExporter {
                 null,
                 null,
                 List.of(),
-                store.nextCreationOrder()
+                storage.nextCreationOrder()
         );
     }
 

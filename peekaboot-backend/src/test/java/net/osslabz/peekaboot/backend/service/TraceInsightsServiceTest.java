@@ -226,7 +226,7 @@ class TraceInsightsServiceTest {
                 "Test log message from trace",
                 "main"
         );
-        dataStorage.accept(logEvent);
+        dataStorage.onLogCaptured(logEvent);
 
         TraceInsightsService serviceWithLogs = new TraceInsightsService(
                 traceQueryService, dataStorage, traceTreeMapper, issueDetector, queryExtractor);

@@ -2,13 +2,13 @@ package net.osslabz.peekaboot.autoconfigure;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
+import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.filter.RequestCaptureFilter;
 import net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender;
-import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import org.slf4j.LoggerFactory;
@@ -18,9 +18,14 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
 
+/**
+ * Auto-configuration for the development toolbar.
+ * Configures filters for toolbar injection and request/log capture.
+ */
 @AutoConfiguration(after = PeekabootAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
@@ -39,12 +44,14 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
+            Tracer tracer,
             PeekabootProperties properties) {
         log.trace("Creating DevToolbarFilter bean with basePath: {}", properties.getBasePath());
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, properties.getBasePath()));
+        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer, properties.getBasePath()));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
@@ -53,12 +60,14 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
-    public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(TraceEventBus eventBus) {
+    @ConditionalOnBean(Tracer.class)
+    public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
+            Tracer tracer,
+            ApplicationEventPublisher eventPublisher) {
         log.trace("Creating RequestCaptureFilter bean");
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RequestCaptureFilter(eventBus));
+        registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher));
         registration.addUrlPatterns("/*");
-        // Run early to capture before other filters modify request/response
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");
         log.info("RequestCaptureFilter registered for all URLs");
@@ -66,16 +75,15 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnBean(TraceEventBus.class)
-    public LogbackAppenderRegistrar logbackAppenderRegistrar(TraceEventBus eventBus) {
-        return new LogbackAppenderRegistrar(eventBus);
+    public LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
+        return new LogbackAppenderRegistrar(eventPublisher);
     }
 
     public static class LogbackAppenderRegistrar {
-        private final TraceEventBus eventBus;
+        private final ApplicationEventPublisher eventPublisher;
 
-        public LogbackAppenderRegistrar(TraceEventBus eventBus) {
-            this.eventBus = eventBus;
+        public LogbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
+            this.eventPublisher = eventPublisher;
         }
 
         @PostConstruct
@@ -85,7 +93,7 @@ public class DevToolbarAutoConfiguration {
             }
 
             PeekabootLogbackAppender appender = new PeekabootLogbackAppender();
-            appender.setEventBus(eventBus);
+            appender.setEventPublisher(eventPublisher);
             appender.setContext(loggerContext);
             appender.start();
 
