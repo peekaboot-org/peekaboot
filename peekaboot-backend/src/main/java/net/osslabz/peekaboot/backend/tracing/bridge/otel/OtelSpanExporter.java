@@ -12,6 +12,8 @@ import net.osslabz.peekaboot.backend.tracing.event.SpanCompletedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.TraceEventBus;
 import net.osslabz.peekaboot.backend.tracing.store.InMemorySpanStore;
 
+import net.osslabz.peekaboot.backend.filter.FilterPathMatcher;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -22,6 +24,9 @@ import java.util.Map;
 public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
+    private static final AttributeKey<String> HTTP_URL_KEY = AttributeKey.stringKey("http.url");
+    private static final AttributeKey<String> HTTP_TARGET_KEY = AttributeKey.stringKey("http.target");
+    private static final AttributeKey<String> URL_PATH_KEY = AttributeKey.stringKey("url.path");
 
     private final InMemorySpanStore store;
     private final TraceEventBus eventBus;
@@ -38,11 +43,51 @@ public class OtelSpanExporter implements SpanExporter {
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
         for (SpanData otelSpan : spans) {
+            if (shouldSkipSpan(otelSpan)) {
+                continue;
+            }
             net.osslabz.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan);
             store.report(spanData);
             publishSpanEvent(spanData);
         }
         return CompletableResultCode.ofSuccess();
+    }
+
+    private boolean shouldSkipSpan(SpanData span) {
+        // Check various attributes that might contain the URL path
+        String path = extractPath(span);
+        if (path != null && FilterPathMatcher.shouldSkip(path)) {
+            return true;
+        }
+        // Also check span name for HTTP spans (e.g., "GET /peekaboot/api/...")
+        String name = span.getName();
+        if (name != null && name.contains("/peekaboot/")) {
+            return true;
+        }
+        return false;
+    }
+
+    private String extractPath(SpanData span) {
+        // Try url.path first (OpenTelemetry semantic conventions)
+        String urlPath = span.getAttributes().get(URL_PATH_KEY);
+        if (urlPath != null) {
+            return urlPath;
+        }
+        // Try http.target (older convention)
+        String httpTarget = span.getAttributes().get(HTTP_TARGET_KEY);
+        if (httpTarget != null) {
+            return httpTarget;
+        }
+        // Try http.url and extract path
+        String httpUrl = span.getAttributes().get(HTTP_URL_KEY);
+        if (httpUrl != null) {
+            int pathStart = httpUrl.indexOf('/', httpUrl.indexOf("://") + 3);
+            if (pathStart > 0) {
+                int queryStart = httpUrl.indexOf('?', pathStart);
+                return queryStart > 0 ? httpUrl.substring(pathStart, queryStart) : httpUrl.substring(pathStart);
+            }
+        }
+        return null;
     }
 
     private void publishSpanEvent(net.osslabz.peekaboot.backend.tracing.store.SpanData spanData) {
