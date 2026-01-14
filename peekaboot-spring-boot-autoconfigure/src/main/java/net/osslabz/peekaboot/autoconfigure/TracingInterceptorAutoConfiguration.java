@@ -4,6 +4,7 @@ import io.micrometer.observation.ObservationRegistry;
 import net.osslabz.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -16,7 +17,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 /**
  * Auto-configuration for tracing interceptor that captures controller and view rendering spans.
  */
-@AutoConfiguration
+@AutoConfiguration(after = ObservationAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
