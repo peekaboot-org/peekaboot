@@ -99,4 +99,13 @@ public class InMemorySpanStore {
         traceCache.invalidateAll();
         traceCreationTimes.invalidateAll();
     }
+
+    /**
+     * Forces any pending eviction operations to complete synchronously.
+     * Useful for testing to ensure deterministic behavior.
+     */
+    public void cleanUp() {
+        traceCache.cleanUp();
+        traceCreationTimes.cleanUp();
+    }
 }

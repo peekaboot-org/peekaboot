@@ -42,17 +42,22 @@ class InMemorySpanStoreTest {
     }
 
     @Test
-    void shouldEvictOldestTracesWhenCapacityExceeded() throws InterruptedException {
+    void shouldEvictOldestTracesWhenCapacityExceeded() {
+        // Store is configured with maxTraces=10 in setUp()
         for (int i = 0; i < 15; i++) {
             store.report(createSpanData("trace-" + i, "span-1", "span"));
         }
 
-        // Caffeine eviction is async, give it time and trigger cleanup
-        Thread.sleep(100);
+        // Force synchronous eviction cleanup
+        store.cleanUp();
 
-        // After eviction settles, should be at or below max capacity
-        // Note: Caffeine may temporarily exceed capacity before async eviction runs
-        assertThat(store.getTraceCount()).isGreaterThan(0);
+        // Should be at or below max capacity (10)
+        assertThat(store.getTraceCount()).isLessThanOrEqualTo(10);
+
+        // Oldest traces should be evicted, newest should remain
+        // Traces 0-4 should be evicted, traces 10-14 should exist
+        assertThat(store.getSpansForTrace("trace-0")).isEmpty();
+        assertThat(store.getSpansForTrace("trace-14")).isNotEmpty();
     }
 
     @Test
