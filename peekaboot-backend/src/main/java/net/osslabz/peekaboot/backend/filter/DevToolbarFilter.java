@@ -22,13 +22,6 @@ public class DevToolbarFilter implements Filter {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
-    private static final Set<String> EXCLUDED_PREFIXES = Set.of(
-            "/static/",
-            "/webjars/",
-            "/actuator/",
-            "/peekaboot/",
-            "/error"
-    );
     private static final Set<String> EXCLUDED_EXTENSIONS = Set.of(
             ".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
     );
@@ -79,11 +72,9 @@ public class DevToolbarFilter implements Filter {
         String path = request.getRequestURI();
 
         // Skip excluded prefixes
-        for (String prefix : EXCLUDED_PREFIXES) {
-            if (path.startsWith(prefix)) {
-                log.trace("Skipping {} - excluded prefix: {}", path, prefix);
-                return true;
-            }
+        if (FilterPathMatcher.shouldSkip(path)) {
+            log.trace("Skipping {} - excluded prefix", path);
+            return true;
         }
 
         // Skip static file extensions

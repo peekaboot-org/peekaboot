@@ -29,14 +29,6 @@ public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
-    private static final Set<String> EXCLUDED_PREFIXES = Set.of(
-            "/static/",
-            "/webjars/",
-            "/actuator/",
-            "/peekaboot/",
-            "/error"
-    );
-
     private static final Set<String> SENSITIVE_HEADERS = Set.of(
             "authorization",
             "cookie",
@@ -82,12 +74,7 @@ public class RequestCaptureFilter implements Filter {
     }
 
     private boolean shouldSkip(String path) {
-        for (String prefix : EXCLUDED_PREFIXES) {
-            if (path.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
+        return FilterPathMatcher.shouldSkip(path);
     }
 
     private void captureRequest(HttpServletRequest request, HttpServletResponse response, long startTime) {
