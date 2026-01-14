@@ -813,59 +813,41 @@
             container.appendChild(profilesEl);
         }
 
-        let totalMatches = 0;
+        // Pre-filter sources and their properties
+        const filteredSources = env.propertySources
+            .map(source => ({
+                name: source.name || 'Unknown Source',
+                properties: (source.properties || []).filter(prop =>
+                    matchesFilter(prop.key, prop.value, filterQuery)
+                )
+            }))
+            .filter(source => source.properties.length > 0);
 
-        env.propertySources.forEach(source => {
-            const sourceName = source.name || 'Unknown Source';
-            const properties = source.properties || [];
-
-            if (properties.length === 0) return;
-
-            const filteredProperties = properties.filter(prop => {
-                return matchesFilter(prop.key, prop.value, filterQuery);
-            });
-
-            if (filteredProperties.length === 0) return;
-
-            totalMatches += filteredProperties.length;
-
-            const sourceEl = document.createElement('div');
-            sourceEl.className = 'property-source';
-
-            const headerEl = document.createElement('div');
-            headerEl.className = 'property-header';
-            headerEl.innerHTML = `
-                <span class="property-name">${highlightText(sourceName, filterQuery)}</span>
-                <span class="property-count">${filteredProperties.length} properties</span>
-            `;
-
-            const listEl = document.createElement('div');
-            listEl.className = 'property-list collapsed';
-
-            filteredProperties.forEach(prop => {
-                const item = document.createElement('div');
-                item.className = 'property-item';
-                item.innerHTML = `
-                    <span class="property-key">${highlightText(prop.key, filterQuery)}</span>
-                    <span class="property-value">${highlightText(formatValue(prop.value), filterQuery)}</span>
-                `;
-                listEl.appendChild(item);
-            });
-
-            headerEl.classList.add('collapsed');
-            headerEl.addEventListener('click', () => {
-                listEl.classList.toggle('collapsed');
-                headerEl.classList.toggle('collapsed');
-            });
-
-            sourceEl.appendChild(headerEl);
-            sourceEl.appendChild(listEl);
-            container.appendChild(sourceEl);
-        });
-
-        if (totalMatches === 0 && filterQuery) {
+        if (filteredSources.length === 0 && filterQuery) {
             container.innerHTML = `<p class="no-data">No properties matching "${PeekabootUtils.escapeHtml(filterQuery)}"</p>`;
+            return;
         }
+
+        renderCollapsibleGroups(container, filteredSources, {
+            groupClass: 'property-source',
+            headerClass: 'property-header',
+            listClass: 'property-list',
+            renderHeader: (source) => `
+                <span class="property-name">${highlightText(source.name, filterQuery)}</span>
+                <span class="property-count">${source.properties.length} properties</span>
+            `,
+            renderItems: (source, listEl) => {
+                source.properties.forEach(prop => {
+                    const item = document.createElement('div');
+                    item.className = 'property-item';
+                    item.innerHTML = `
+                        <span class="property-key">${highlightText(prop.key, filterQuery)}</span>
+                        <span class="property-value">${highlightText(formatValue(prop.value), filterQuery)}</span>
+                    `;
+                    listEl.appendChild(item);
+                });
+            }
+        });
     }
 
     // Flyway Tab
@@ -939,59 +921,48 @@
         summaryEl.innerHTML = `<span class="level-badge">Total: ${loggersInfo.totalCount}</span> <span class="level-badge">Configured: ${loggersInfo.configuredCount}</span>`;
         container.appendChild(summaryEl);
 
-        let hasMatches = false;
+        // Pre-filter packages and their loggers
+        const filteredPackages = packages
+            .map(group => ({
+                packageName: group.packageName,
+                loggers: group.loggers.filter(logger => {
+                    if (configuredOnly && !logger.configuredLevel) return false;
+                    if (filterQuery && !logger.name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
+                    return true;
+                })
+            }))
+            .filter(group => group.loggers.length > 0);
 
-        packages.forEach(group => {
-            const filteredLoggers = group.loggers.filter(logger => {
-                if (configuredOnly && !logger.configuredLevel) return false;
-                if (filterQuery && !logger.name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
-                return true;
-            });
-
-            if (filteredLoggers.length === 0) return;
-            hasMatches = true;
-
-            const groupEl = document.createElement('div');
-            groupEl.className = 'logger-group';
-
-            const headerEl = document.createElement('div');
-            headerEl.className = 'logger-group-header collapsed';
-            headerEl.innerHTML = `
-                <span class="logger-group-name">${highlightText(group.packageName, filterQuery)}</span>
-                <span class="logger-group-count">${filteredLoggers.length} loggers</span>
-            `;
-
-            const listEl = document.createElement('div');
-            listEl.className = 'logger-group-list collapsed';
-
-            filteredLoggers.forEach(logger => {
-                const item = document.createElement('div');
-                item.className = 'logger-item';
-
-                const levelClass = `level-${(logger.effectiveLevel || 'info').toLowerCase()}`;
-                const isConfigured = logger.configuredLevel !== null;
-
-                item.innerHTML = `
-                    <span class="logger-name ${isConfigured ? 'configured' : ''}">${highlightText(logger.name, filterQuery)}</span>
-                    <span class="logger-level ${levelClass}">${logger.effectiveLevel || '-'}</span>
-                `;
-
-                listEl.appendChild(item);
-            });
-
-            headerEl.addEventListener('click', () => {
-                listEl.classList.toggle('collapsed');
-                headerEl.classList.toggle('collapsed');
-            });
-
-            groupEl.appendChild(headerEl);
-            groupEl.appendChild(listEl);
-            container.appendChild(groupEl);
-        });
-
-        if (!hasMatches && filterQuery) {
+        if (filteredPackages.length === 0 && filterQuery) {
             container.innerHTML = `<p class="no-data">No loggers matching criteria</p>`;
+            return;
         }
+
+        renderCollapsibleGroups(container, filteredPackages, {
+            groupClass: 'logger-group',
+            headerClass: 'logger-group-header',
+            listClass: 'logger-group-list',
+            renderHeader: (group) => `
+                <span class="logger-group-name">${highlightText(group.packageName, filterQuery)}</span>
+                <span class="logger-group-count">${group.loggers.length} loggers</span>
+            `,
+            renderItems: (group, listEl) => {
+                group.loggers.forEach(logger => {
+                    const item = document.createElement('div');
+                    item.className = 'logger-item';
+
+                    const levelClass = `level-${(logger.effectiveLevel || 'info').toLowerCase()}`;
+                    const isConfigured = logger.configuredLevel !== null;
+
+                    item.innerHTML = `
+                        <span class="logger-name ${isConfigured ? 'configured' : ''}">${highlightText(logger.name, filterQuery)}</span>
+                        <span class="logger-level ${levelClass}">${logger.effectiveLevel || '-'}</span>
+                    `;
+
+                    listEl.appendChild(item);
+                });
+            }
+        });
     }
 
     // Config Tab
@@ -1011,61 +982,50 @@
 
         if (configTab) configTab.classList.remove('hidden');
 
-        let hasProps = false;
+        // Pre-filter groups and their properties
+        const filteredGroups = groups
+            .map(group => ({
+                prefix: group.prefix,
+                properties: group.properties.filter(prop => {
+                    if (!filterQuery) return true;
+                    const matchesKey = prop.key.toLowerCase().includes(filterQuery.toLowerCase());
+                    const matchesValue = prop.value && prop.value.toLowerCase().includes(filterQuery.toLowerCase());
+                    return matchesKey || matchesValue;
+                })
+            }))
+            .filter(group => group.properties.length > 0);
 
-        groups.forEach(group => {
-            const filteredProps = group.properties.filter(prop => {
-                if (!filterQuery) return true;
-                const matchesKey = prop.key.toLowerCase().includes(filterQuery.toLowerCase());
-                const matchesValue = prop.value && prop.value.toLowerCase().includes(filterQuery.toLowerCase());
-                return matchesKey || matchesValue;
-            });
-
-            if (filteredProps.length === 0) return;
-            hasProps = true;
-
-            const groupEl = document.createElement('div');
-            groupEl.className = 'config-group';
-
-            const headerEl = document.createElement('div');
-            headerEl.className = 'config-header collapsed';
-            headerEl.innerHTML = `
-                <span class="config-prefix">${highlightText(group.prefix, filterQuery)}</span>
-                <span class="config-count">${filteredProps.length} properties</span>
-            `;
-
-            const listEl = document.createElement('div');
-            listEl.className = 'config-list collapsed';
-
-            filteredProps.forEach(prop => {
-                const item = document.createElement('div');
-                item.className = 'config-item';
-
-                const isSensitive = /password|secret|key|token|credential/i.test(prop.key);
-
-                item.innerHTML = `
-                    <span class="config-key">${highlightText(prop.key, filterQuery)}</span>
-                    <span class="config-value ${isSensitive ? 'sensitive' : ''}">${highlightText(prop.value || '-', filterQuery)}</span>
-                `;
-
-                listEl.appendChild(item);
-            });
-
-            headerEl.addEventListener('click', () => {
-                listEl.classList.toggle('collapsed');
-                headerEl.classList.toggle('collapsed');
-            });
-
-            groupEl.appendChild(headerEl);
-            groupEl.appendChild(listEl);
-            container.appendChild(groupEl);
-        });
-
-        if (!hasProps) {
+        if (filteredGroups.length === 0) {
             container.innerHTML = filterQuery
                 ? `<p class="no-data">No properties matching "${PeekabootUtils.escapeHtml(filterQuery)}"</p>`
                 : '<p class="no-data">No configuration properties available</p>';
+            return;
         }
+
+        renderCollapsibleGroups(container, filteredGroups, {
+            groupClass: 'config-group',
+            headerClass: 'config-header',
+            listClass: 'config-list',
+            renderHeader: (group) => `
+                <span class="config-prefix">${highlightText(group.prefix, filterQuery)}</span>
+                <span class="config-count">${group.properties.length} properties</span>
+            `,
+            renderItems: (group, listEl) => {
+                group.properties.forEach(prop => {
+                    const item = document.createElement('div');
+                    item.className = 'config-item';
+
+                    const isSensitive = /password|secret|key|token|credential/i.test(prop.key);
+
+                    item.innerHTML = `
+                        <span class="config-key">${highlightText(prop.key, filterQuery)}</span>
+                        <span class="config-value ${isSensitive ? 'sensitive' : ''}">${highlightText(prop.value || '-', filterQuery)}</span>
+                    `;
+
+                    listEl.appendChild(item);
+                });
+            }
+        });
     }
 
     // Scheduled Tasks Tab
@@ -1228,6 +1188,49 @@
             <span class="info-value${isMonospace ? ' mono' : ''}">${PeekabootUtils.escapeHtml(String(value))}</span>
         `;
         return row;
+    }
+
+    /**
+     * Renders collapsible groups with consistent expand/collapse behavior.
+     * @param {HTMLElement} container - The container to append groups to
+     * @param {Array} groups - Array of group data objects
+     * @param {Object} options - Configuration options
+     * @param {string} options.groupClass - CSS class for the group wrapper
+     * @param {string} options.headerClass - CSS class for the header element
+     * @param {string} options.listClass - CSS class for the list element
+     * @param {Function} options.renderHeader - Function(group) returning header innerHTML
+     * @param {Function} options.renderItems - Function(group, listEl) that populates list element
+     */
+    function renderCollapsibleGroups(container, groups, options) {
+        const {
+            groupClass,
+            headerClass,
+            listClass,
+            renderHeader,
+            renderItems
+        } = options;
+
+        groups.forEach(group => {
+            const groupEl = document.createElement('div');
+            groupEl.className = groupClass;
+
+            const headerEl = document.createElement('div');
+            headerEl.className = `${headerClass} collapsed`;
+            headerEl.innerHTML = renderHeader(group);
+
+            const listEl = document.createElement('div');
+            listEl.className = `${listClass} collapsed`;
+            renderItems(group, listEl);
+
+            headerEl.addEventListener('click', () => {
+                listEl.classList.toggle('collapsed');
+                headerEl.classList.toggle('collapsed');
+            });
+
+            groupEl.appendChild(headerEl);
+            groupEl.appendChild(listEl);
+            container.appendChild(groupEl);
+        });
     }
 
     function formatValue(value) {
