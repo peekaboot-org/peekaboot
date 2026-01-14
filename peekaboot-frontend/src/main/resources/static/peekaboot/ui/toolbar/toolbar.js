@@ -1,16 +1,16 @@
 (function() {
     'use strict';
 
-    var host = document.getElementById('peekaboot-toolbar-host');
+    const host = document.getElementById('peekaboot-toolbar-host');
     if (!host || !host.shadowRoot) return;
 
-    var shadow = host.shadowRoot;
-    var data = JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent);
-    var traceData = null;
-    var activeTab = 'timeline';
+    const shadow = host.shadowRoot;
+    const data = JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent);
+    let traceData = null;
+    let activeTab = 'timeline';
 
     // Design tokens matching peekaboot.css (dark theme for toolbar)
-    var expandedStyles = document.createElement('style');
+    const expandedStyles = document.createElement('style');
     expandedStyles.textContent = `
         :host {
             --pk-bg: #0d1117;
@@ -355,10 +355,10 @@
     shadow.appendChild(expandedStyles);
 
     // Hide collapsed bar and show expanded
-    var bar = shadow.querySelector('.peekaboot-bar');
+    const bar = shadow.querySelector('.peekaboot-bar');
     if (bar) bar.style.display = 'none';
 
-    var expanded = document.createElement('div');
+    const expanded = document.createElement('div');
     expanded.className = 'peekaboot-expanded';
     expanded.innerHTML = `
         <div class="peekaboot-header">
@@ -416,14 +416,14 @@
 
     function updateCounts() {
         if (!traceData) return;
-        var queries = countQueries(traceData.spans || []);
-        var logs = (traceData.logs || []).length;
+        const queries = countQueries(traceData.spans || []);
+        const logs = (traceData.logs || []).length;
         expanded.querySelector('[data-tab="queries"] .count').textContent = queries;
         expanded.querySelector('[data-tab="logs"] .count').textContent = logs;
     }
 
     function countQueries(spans) {
-        var count = 0;
+        let count = 0;
         spans.forEach(function(span) {
             if (isDbSpan(span)) count++;
         });
@@ -431,8 +431,8 @@
     }
 
     function isDbSpan(span) {
-        var name = (span.name || '').toLowerCase();
-        var tags = span.tags || {};
+        const name = (span.name || '').toLowerCase();
+        const tags = span.tags || {};
         return tags['db.system'] ||
                name.indexOf('query') === 0 ||
                name.indexOf('select') === 0 ||
@@ -444,7 +444,7 @@
     }
 
     function renderContent() {
-        var content = expanded.querySelector('.peekaboot-content');
+        const content = expanded.querySelector('.peekaboot-content');
         if (!traceData) {
             content.innerHTML = '<div class="peekaboot-loading">Loading...</div>';
             return;
@@ -459,15 +459,15 @@
     }
 
     function renderTimeline(container) {
-        var spans = traceData.spans || [];
+        const spans = traceData.spans || [];
         if (spans.length === 0) {
             container.innerHTML = '<div class="no-data">No spans recorded</div>';
             return;
         }
 
-        var html = '<div class="timeline">';
-        var spanMap = {};
-        var rootSpans = [];
+        let html = '<div class="timeline">';
+        const spanMap = {};
+        let rootSpans = [];
 
         spans.forEach(function(span) {
             spanMap[span.spanId] = span;
@@ -491,7 +491,7 @@
         // Add click handlers for expand/collapse
         container.querySelectorAll('.span-header').forEach(function(header) {
             header.addEventListener('click', function() {
-                var details = header.nextElementSibling;
+                const details = header.nextElementSibling;
                 if (details && details.classList.contains('span-details')) {
                     details.style.display = details.style.display === 'none' ? 'block' : 'none';
                 }
@@ -500,18 +500,18 @@
     }
 
     function renderSpanTree(span, allSpans, depth) {
-        var children = allSpans.filter(function(s) { return s.parentId === span.spanId; });
-        var hasError = span.errorMessage || span.errorClass || (span.tags && span.tags.error === 'true');
-        var isDb = isDbSpan(span);
-        var duration = formatDuration(span.duration);
-        var durationClass = getDurationClass(span.duration);
+        const children = allSpans.filter(function(s) { return s.parentId === span.spanId; });
+        const hasError = span.errorMessage || span.errorClass || (span.tags && span.tags.error === 'true');
+        const isDb = isDbSpan(span);
+        const duration = formatDuration(span.duration);
+        const durationClass = getDurationClass(span.duration);
 
-        var icon = isDb ? '&#128451;' : (hasError ? '&#9888;' : '&#9654;');
-        var classes = ['span-item'];
+        const icon = isDb ? '&#128451;' : (hasError ? '&#9888;' : '&#9654;');
+        const classes = ['span-item'];
         if (hasError) classes.push('has-error');
         if (isDb) classes.push('is-db');
 
-        var html = '<div class="' + classes.join(' ') + '">';
+        let html = '<div class="' + classes.join(' ') + '">';
         html += '<div class="span-header">';
         html += '<span class="span-icon">' + icon + '</span>';
         html += '<span class="span-name">' + escapeHtml(span.name || 'unknown') + '</span>';
@@ -548,20 +548,20 @@
     }
 
     function renderQueries(container) {
-        var spans = traceData.spans || [];
-        var queries = spans.filter(isDbSpan);
+        const spans = traceData.spans || [];
+        const queries = spans.filter(isDbSpan);
 
         if (queries.length === 0) {
             container.innerHTML = '<div class="no-data">No database queries recorded</div>';
             return;
         }
 
-        var html = '';
+        let html = '';
         queries.forEach(function(span) {
-            var tags = span.tags || {};
-            var sql = tags['db.statement'] || tags['db.query'] || span.name || 'Unknown query';
-            var duration = formatDuration(span.duration);
-            var durationClass = getDurationClass(span.duration);
+            const tags = span.tags || {};
+            const sql = tags['db.statement'] || tags['db.query'] || span.name || 'Unknown query';
+            const duration = formatDuration(span.duration);
+            const durationClass = getDurationClass(span.duration);
 
             html += '<div class="query-item">';
             html += '<div class="query-header">';
@@ -579,14 +579,14 @@
     }
 
     function renderLogs(container) {
-        var logs = traceData.logs || [];
+        const logs = traceData.logs || [];
 
         if (logs.length === 0) {
             container.innerHTML = '<div class="no-data">No logs recorded for this trace</div>';
             return;
         }
 
-        var html = '<div class="filter-bar">';
+        let html = '<div class="filter-bar">';
         html += '<select class="filter-select" id="log-level-filter">';
         html += '<option value="">All Levels</option>';
         html += '<option value="ERROR">ERROR</option>';
@@ -602,22 +602,22 @@
         renderLogList(logs, '', '');
 
         container.querySelector('#log-level-filter').addEventListener('change', function() {
-            var filter = container.querySelector('#log-filter').value;
+            const filter = container.querySelector('#log-filter').value;
             renderLogList(logs, this.value, filter);
         });
 
         container.querySelector('#log-filter').addEventListener('input', function() {
-            var level = container.querySelector('#log-level-filter').value;
+            const level = container.querySelector('#log-level-filter').value;
             renderLogList(logs, level, this.value);
         });
     }
 
     function renderLogList(logs, levelFilter, textFilter) {
-        var list = shadow.querySelector('#log-list');
-        var filtered = logs.filter(function(log) {
+        const list = shadow.querySelector('#log-list');
+        const filtered = logs.filter(function(log) {
             if (levelFilter && log.level !== levelFilter) return false;
             if (textFilter) {
-                var search = textFilter.toLowerCase();
+                const search = textFilter.toLowerCase();
                 return (log.message || '').toLowerCase().indexOf(search) >= 0 ||
                        (log.loggerName || '').toLowerCase().indexOf(search) >= 0;
             }
@@ -629,10 +629,10 @@
             return;
         }
 
-        var html = '';
+        let html = '';
         filtered.forEach(function(log) {
-            var time = formatTime(log.timestamp);
-            var logger = log.loggerName ? log.loggerName.split('.').pop() : '-';
+            const time = formatTime(log.timestamp);
+            const logger = log.loggerName ? log.loggerName.split('.').pop() : '-';
             html += '<div class="log-item">';
             html += '<span class="log-time">' + time + '</span>';
             html += '<span class="log-level ' + (log.level || '') + '">' + (log.level || '-') + '</span>';
@@ -645,7 +645,7 @@
     }
 
     function renderRequest(container) {
-        var html = '';
+        let html = '';
 
         // Request info
         html += '<div class="request-section">';
@@ -679,15 +679,15 @@
 
     function formatDuration(duration) {
         if (!duration) return '-';
-        var ms;
+        let ms;
         if (typeof duration === 'object' && duration.seconds !== undefined) {
             ms = duration.seconds * 1000 + (duration.nano || 0) / 1000000;
         } else if (typeof duration === 'string') {
-            var match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
+            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
             if (match) {
-                var h = parseFloat(match[1] || 0);
-                var m = parseFloat(match[2] || 0);
-                var s = parseFloat(match[3] || 0);
+                const h = parseFloat(match[1] || 0);
+                const m = parseFloat(match[2] || 0);
+                const s = parseFloat(match[3] || 0);
                 ms = (h * 3600 + m * 60 + s) * 1000;
             } else {
                 ms = parseFloat(duration);
@@ -702,7 +702,7 @@
     }
 
     function getDurationClass(duration) {
-        var ms = parseDurationMs(duration);
+        const ms = parseDurationMs(duration);
         if (ms > 500) return 'very-slow';
         if (ms > 100) return 'slow';
         return '';
@@ -714,11 +714,11 @@
             return duration.seconds * 1000 + (duration.nano || 0) / 1000000;
         }
         if (typeof duration === 'string') {
-            var match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
+            const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?/);
             if (match) {
-                var h = parseFloat(match[1] || 0);
-                var m = parseFloat(match[2] || 0);
-                var s = parseFloat(match[3] || 0);
+                const h = parseFloat(match[1] || 0);
+                const m = parseFloat(match[2] || 0);
+                const s = parseFloat(match[3] || 0);
                 return (h * 3600 + m * 60 + s) * 1000;
             }
             return parseFloat(duration) || 0;
@@ -727,9 +727,9 @@
     }
 
     function getDateFormatOptions(includeDate) {
-        var locale = localStorage.getItem('peekaboot-locale') || navigator.language || 'en-US';
+        const locale = localStorage.getItem('peekaboot-locale') || navigator.language || 'en-US';
 
-        var options = {
+        const options = {
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit'
@@ -746,26 +746,26 @@
 
     function formatTime(timestamp) {
         if (!timestamp) return '-';
-        var fmt = getDateFormatOptions(false);
+        const fmt = getDateFormatOptions(false);
         return new Date(timestamp).toLocaleTimeString(fmt.locale, fmt.options);
     }
 
     function formatDateTime(timestamp) {
         if (!timestamp) return '-';
-        var fmt = getDateFormatOptions(true);
+        const fmt = getDateFormatOptions(true);
         return new Date(timestamp).toLocaleString(fmt.locale, fmt.options);
     }
 
     function escapeHtml(text) {
         if (!text) return '';
-        var div = document.createElement('div');
+        const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
     // Convert TraceTree format (from /insights endpoint) to flat spans array format
     function convertTraceTree(tree) {
-        var spans = [];
+        const spans = [];
         if (tree.rootSpan) {
             flattenSpanNode(tree.rootSpan, null, spans);
         }
@@ -780,7 +780,7 @@
     }
 
     function flattenSpanNode(node, parentId, spans) {
-        var span = {
+        const span = {
             spanId: node.spanId,
             parentId: parentId,
             name: node.name,

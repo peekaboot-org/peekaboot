@@ -255,7 +255,7 @@
             shadow.appendChild(style);
             const errorDiv = document.createElement('div');
             errorDiv.className = 'pk-trace-overlay';
-            errorDiv.innerHTML = `<div class="pk-trace-error">Failed to load trace: ${escapeHtml(error.message)}<br><br><button onclick="this.closest('#peekaboot-trace-overlay').remove()" style="padding:8px 16px;cursor:pointer">Close</button></div>`;
+            errorDiv.innerHTML = `<div class="pk-trace-error">Failed to load trace: ${PeekabootUtils.escapeHtml(error.message)}<br><br><button onclick="this.closest('#peekaboot-trace-overlay').remove()" style="padding:8px 16px;cursor:pointer">Close</button></div>`;
             shadow.appendChild(errorDiv);
         }
     }
@@ -286,8 +286,8 @@
                 <div class="pk-trace-header">
                     <div class="pk-trace-title">
                         <span class="pk-trace-title-icon">${icon}</span>
-                        <span class="pk-trace-title-method">${escapeHtml(method)}</span>
-                        <span class="pk-trace-title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+                        <span class="pk-trace-title-method">${PeekabootUtils.escapeHtml(method)}</span>
+                        <span class="pk-trace-title-path" title="${PeekabootUtils.escapeHtml(path)}">${PeekabootUtils.escapeHtml(path)}</span>
                     </div>
                     <div class="pk-trace-meta">
                         <span class="pk-trace-duration ${durationClass}">${trace.durationMs}ms</span>
@@ -430,7 +430,7 @@
         if (kind !== 'internal' && kind !== 'unknown' && kind !== 'null') {
             nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
         }
-        nameHtml += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
+        nameHtml += `<span class="pk-gantt-name-text" title="${PeekabootUtils.escapeHtml(span.name || 'unknown')}">${PeekabootUtils.escapeHtml(span.name || 'unknown')}</span>`;
         nameHtml += `</div>`;
 
         row.innerHTML = nameHtml +
@@ -454,14 +454,14 @@
             let badgesHtml = '';
             // Render events
             events.forEach(event => {
-                badgesHtml += `<span class="pk-event-badge" title="${escapeHtml(event.timestamp || '')}">${escapeHtml(event.name)}</span>`;
+                badgesHtml += `<span class="pk-event-badge" title="${PeekabootUtils.escapeHtml(event.timestamp || '')}">${PeekabootUtils.escapeHtml(event.name)}</span>`;
             });
             // Render selected tags (limit to avoid clutter)
             const maxTags = 5;
             tagEntries.slice(0, maxTags).forEach(([key, value]) => {
                 const shortKey = key.split('.').pop();
                 const shortVal = String(value).length > 30 ? String(value).substring(0, 30) + '...' : String(value);
-                badgesHtml += `<span class="pk-tag-badge" title="${escapeHtml(key)}: ${escapeHtml(value)}"><span class="key">${escapeHtml(shortKey)}</span>=<span class="value">${escapeHtml(shortVal)}</span></span>`;
+                badgesHtml += `<span class="pk-tag-badge" title="${PeekabootUtils.escapeHtml(key)}: ${PeekabootUtils.escapeHtml(value)}"><span class="key">${PeekabootUtils.escapeHtml(shortKey)}</span>=<span class="value">${PeekabootUtils.escapeHtml(shortVal)}</span></span>`;
             });
             if (tagEntries.length > maxTags) {
                 badgesHtml += `<span class="pk-tag-badge">+${tagEntries.length - maxTags} more</span>`;
@@ -488,7 +488,7 @@
         if (req?.controllerClass || req?.controllerMethod) {
             html += '<div class="pk-request-section">';
             html += '<h3>Controller</h3>';
-            html += `<div class="pk-controller-info">${escapeHtml(req.controllerClass || 'Unknown')}.${escapeHtml(req.controllerMethod || 'unknown')}()</div>`;
+            html += `<div class="pk-controller-info">${PeekabootUtils.escapeHtml(req.controllerClass || 'Unknown')}.${PeekabootUtils.escapeHtml(req.controllerMethod || 'unknown')}()</div>`;
             html += '</div>';
         }
 
@@ -499,7 +499,7 @@
         if (Object.keys(reqHeaders).length > 0) {
             Object.entries(reqHeaders).sort().forEach(([k, v]) => {
                 const isMasked = v === '********';
-                html += `<tr><td>${escapeHtml(k)}</td><td class="${isMasked ? 'pk-request-masked' : ''}">${escapeHtml(v)}</td></tr>`;
+                html += `<tr><td>${PeekabootUtils.escapeHtml(k)}</td><td class="${isMasked ? 'pk-request-masked' : ''}">${PeekabootUtils.escapeHtml(v)}</td></tr>`;
             });
         } else {
             html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
@@ -512,7 +512,7 @@
             html += '<h3>Query Parameters</h3>';
             html += '<table class="pk-request-table">';
             Object.entries(queryParams).sort().forEach(([k, v]) => {
-                html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+                html += `<tr><td>${PeekabootUtils.escapeHtml(k)}</td><td>${PeekabootUtils.escapeHtml(v)}</td></tr>`;
             });
             html += '</table></div>';
         }
@@ -523,7 +523,7 @@
         const resHeaders = req?.responseHeaders || {};
         if (Object.keys(resHeaders).length > 0) {
             Object.entries(resHeaders).sort().forEach(([k, v]) => {
-                html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
+                html += `<tr><td>${PeekabootUtils.escapeHtml(k)}</td><td>${PeekabootUtils.escapeHtml(v)}</td></tr>`;
             });
         } else {
             html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
@@ -545,13 +545,13 @@
         queries.forEach((query, idx) => {
             const sql = query.sql || 'Unknown query';
             const duration = query.durationMs || 0;
-            const durationClass = duration > 500 ? 'very-slow' : (duration > 100 ? 'slow' : '');
+            const durationClass = PeekabootUtils.getDurationClass(duration);
             const system = query.dbSystem || 'SQL';
             const rowCount = query.rowCount;
 
             html += '<div class="pk-query-item">';
             html += '<div class="pk-query-header">';
-            html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
+            html += `<span class="pk-query-system">${idx + 1}. ${PeekabootUtils.escapeHtml(system.toUpperCase())}</span>`;
             html += '<span class="pk-query-meta">';
             html += `<span class="pk-query-duration ${durationClass}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
             if (rowCount !== null && rowCount !== undefined) {
@@ -559,7 +559,7 @@
             }
             html += '</span>';
             html += '</div>';
-            html += `<div class="pk-query-sql">${escapeHtml(sql)}</div>`;
+            html += `<div class="pk-query-sql">${PeekabootUtils.escapeHtml(sql)}</div>`;
             html += '</div>';
         });
 
@@ -598,15 +598,15 @@
 
         bySpan.forEach((spanLogs, spanId) => {
             const spanName = spanNames.get(spanId) || spanId;
-            html += `<div class="pk-log-group" data-span="${escapeHtml(spanId)}">`;
-            html += `<div class="pk-log-group-header"><span>${escapeHtml(spanName)} (${spanLogs.length} logs)</span><span class="arrow">&#9660;</span></div>`;
+            html += `<div class="pk-log-group" data-span="${PeekabootUtils.escapeHtml(spanId)}">`;
+            html += `<div class="pk-log-group-header"><span>${PeekabootUtils.escapeHtml(spanName)} (${spanLogs.length} logs)</span><span class="arrow">&#9660;</span></div>`;
             html += '<div class="pk-log-group-list">';
             spanLogs.forEach(log => {
                 const time = formatTime(log.timestamp);
                 html += `<div class="pk-log-item" data-level="${log.level}">`;
                 html += `<span class="pk-log-time">${time}</span>`;
                 html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
-                html += `<span class="pk-log-message">${escapeHtml(log.message)}</span>`;
+                html += `<span class="pk-log-message">${PeekabootUtils.escapeHtml(log.message)}</span>`;
                 html += '</div>';
             });
             html += '</div></div>';
@@ -649,13 +649,6 @@
             count += countSpans(child);
         });
         return count;
-    }
-
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = String(text);
-        return div.innerHTML;
     }
 
     function formatTime(timestamp) {

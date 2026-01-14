@@ -174,7 +174,7 @@
 
         const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
         const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
-        const duration = formatDurationMs(trace.durationMs);
+        const duration = PeekabootUtils.formatDurationMs(trace.durationMs);
         const spanCount = trace.metrics?.totalSpans || 0;
         const hasErrors = trace.status === 'HAS_ERRORS';
         const hasSlow = trace.status === 'HAS_SLOW_SPANS';
@@ -192,8 +192,8 @@
 
         item.innerHTML = `
             <div class="trace-header">
-                <span class="trace-action-type" title="${escapeHtml(actionLabel)}">${actionIcon}</span>
-                <code class="trace-id">${escapeHtml(traceIdShort)}</code>
+                <span class="trace-action-type" title="${PeekabootUtils.escapeHtml(actionLabel)}">${actionIcon}</span>
+                <code class="trace-id">${PeekabootUtils.escapeHtml(traceIdShort)}</code>
                 <span class="trace-time">${startTime}</span>
                 <span class="trace-duration">${duration}</span>
                 <span class="trace-badge">${spanCount} spans</span>
@@ -210,14 +210,6 @@
         });
 
         return item;
-    }
-
-    function formatDurationMs(ms) {
-        if (ms === null || ms === undefined) return '-';
-        if (ms < 1) return '<1ms';
-        if (ms < 1000) return Math.round(ms) + 'ms';
-        if (ms < 60000) return (ms / 1000).toFixed(2) + 's';
-        return (ms / 60000).toFixed(2) + 'm';
     }
 
     function initTheme() {
@@ -515,7 +507,7 @@
 
             const isUp = ds.health === 'UP';
             const healthBadge = ds.health
-                ? `<span class="ds-health-badge ${isUp ? 'is-up' : 'is-down'}">${escapeHtml(ds.health)}</span>`
+                ? `<span class="ds-health-badge ${isUp ? 'is-up' : 'is-down'}">${PeekabootUtils.escapeHtml(ds.health)}</span>`
                 : '';
 
             const dbProduct = ds.databaseProduct
@@ -525,15 +517,15 @@
             card.innerHTML = `
                 <div class="card-header">
                     <span class="icon">&#128450;</span>
-                    <span>${escapeHtml(ds.name || 'DataSource')}</span>
+                    <span>${PeekabootUtils.escapeHtml(ds.name || 'DataSource')}</span>
                     ${healthBadge}
                 </div>
                 <div class="card-body">
-                    <div class="info-row"><span class="info-label">Database</span><span class="info-value">${escapeHtml(ds.databaseName || '-')}</span></div>
-                    <div class="info-row"><span class="info-label">Host</span><span class="info-value mono">${escapeHtml(hostsStr)}</span></div>
-                    <div class="info-row"><span class="info-label">User</span><span class="info-value">${escapeHtml(ds.username || '-')}</span></div>
-                    <div class="info-row"><span class="info-label">Product</span><span class="info-value">${escapeHtml(String(dbProduct))}</span></div>
-                    <div class="info-row"><span class="info-label">Driver</span><span class="info-value">${escapeHtml(ds.driver || '-')}</span></div>
+                    <div class="info-row"><span class="info-label">Database</span><span class="info-value">${PeekabootUtils.escapeHtml(ds.databaseName || '-')}</span></div>
+                    <div class="info-row"><span class="info-label">Host</span><span class="info-value mono">${PeekabootUtils.escapeHtml(hostsStr)}</span></div>
+                    <div class="info-row"><span class="info-label">User</span><span class="info-value">${PeekabootUtils.escapeHtml(ds.username || '-')}</span></div>
+                    <div class="info-row"><span class="info-label">Product</span><span class="info-value">${PeekabootUtils.escapeHtml(String(dbProduct))}</span></div>
+                    <div class="info-row"><span class="info-label">Driver</span><span class="info-value">${PeekabootUtils.escapeHtml(ds.driver || '-')}</span></div>
                     ${Object.keys(ds.properties || {}).length > 0 ? '<div class="ds-params-toggle"><button class="btn btn-small">Show Connection Params</button></div>' : ''}
                 </div>
                 ${renderConnectionParams(ds.properties)}
@@ -566,8 +558,8 @@
             const isSensitive = /password|secret|key|token|credential/i.test(key);
             const displayValue = isSensitive ? '********' : value;
             html += `<div class="ds-param-item">
-                <span class="ds-param-key">${escapeHtml(key)}</span>
-                <span class="ds-param-value ${isSensitive ? 'sensitive' : ''}">${escapeHtml(displayValue || '-')}</span>
+                <span class="ds-param-key">${PeekabootUtils.escapeHtml(key)}</span>
+                <span class="ds-param-value ${isSensitive ? 'sensitive' : ''}">${PeekabootUtils.escapeHtml(displayValue || '-')}</span>
             </div>`;
         });
 
@@ -738,7 +730,7 @@
 
         row.innerHTML = `
             <div class="memory-header">
-                <span class="memory-label">${escapeHtml(name)}</span>
+                <span class="memory-label">${PeekabootUtils.escapeHtml(name)}</span>
                 <span class="memory-value">${formatBytes(used)} used / ${formatBytes(total)} total (${formatBytes(free)} free)</span>
             </div>
             <div class="memory-bar">
@@ -779,13 +771,13 @@
                     })
                     .join('\n');
                 if (detailsText) {
-                    detailsHtml = `<div class="component-details">${escapeHtml(detailsText)}</div>`;
+                    detailsHtml = `<div class="component-details">${PeekabootUtils.escapeHtml(detailsText)}</div>`;
                 }
             }
 
             card.innerHTML = `
                 <div class="component-header">
-                    <span class="component-name">${escapeHtml(component.name)}</span>
+                    <span class="component-name">${PeekabootUtils.escapeHtml(component.name)}</span>
                     <span class="component-dot ${statusClass}"></span>
                 </div>
                 ${detailsHtml}
@@ -817,7 +809,7 @@
         if (env.activeProfiles && env.activeProfiles.length > 0) {
             const profilesEl = document.createElement('div');
             profilesEl.className = 'active-profiles';
-            profilesEl.innerHTML = `<strong>Active Profiles:</strong> ${env.activeProfiles.map(p => `<span class="profile-badge">${escapeHtml(p)}</span>`).join(' ')}`;
+            profilesEl.innerHTML = `<strong>Active Profiles:</strong> ${env.activeProfiles.map(p => `<span class="profile-badge">${PeekabootUtils.escapeHtml(p)}</span>`).join(' ')}`;
             container.appendChild(profilesEl);
         }
 
@@ -872,7 +864,7 @@
         });
 
         if (totalMatches === 0 && filterQuery) {
-            container.innerHTML = `<p class="no-data">No properties matching "${escapeHtml(filterQuery)}"</p>`;
+            container.innerHTML = `<p class="no-data">No properties matching "${PeekabootUtils.escapeHtml(filterQuery)}"</p>`;
         }
     }
 
@@ -906,16 +898,16 @@
 
             card.innerHTML = `
                 <div class="flyway-header">
-                    <span class="flyway-version">V${escapeHtml(migration.version)}</span>
-                    <span class="flyway-description">${escapeHtml(migration.description)}</span>
-                    <span class="flyway-status ${statusClass}">${escapeHtml(migration.state)}</span>
+                    <span class="flyway-version">V${PeekabootUtils.escapeHtml(migration.version)}</span>
+                    <span class="flyway-description">${PeekabootUtils.escapeHtml(migration.description)}</span>
+                    <span class="flyway-status ${statusClass}">${PeekabootUtils.escapeHtml(migration.state)}</span>
                 </div>
                 <div class="flyway-details">
                     <span class="flyway-time ${isSlow ? 'slow' : ''}">&#9201; ${migration.executionTime}ms</span>
                     <span class="flyway-date">${formatDate(migration.installedOn)}</span>
-                    <span class="flyway-type">${escapeHtml(migration.type)}</span>
+                    <span class="flyway-type">${PeekabootUtils.escapeHtml(migration.type)}</span>
                 </div>
-                <div class="flyway-script">${escapeHtml(migration.script)}</div>
+                <div class="flyway-script">${PeekabootUtils.escapeHtml(migration.script)}</div>
             `;
 
             container.appendChild(card);
@@ -1071,7 +1063,7 @@
 
         if (!hasProps) {
             container.innerHTML = filterQuery
-                ? `<p class="no-data">No properties matching "${escapeHtml(filterQuery)}"</p>`
+                ? `<p class="no-data">No properties matching "${PeekabootUtils.escapeHtml(filterQuery)}"</p>`
                 : '<p class="no-data">No configuration properties available</p>';
         }
     }
@@ -1152,18 +1144,18 @@
                     <div class="task-row">
                         <div class="task-left">
                             <span class="task-type-badge ${type.toLowerCase()}">${typeLabel}</span>
-                            <span class="task-schedule-value" title="${escapeHtml(task.schedule)}">${escapeHtml(scheduleDisplay)}</span>
+                            <span class="task-schedule-value" title="${PeekabootUtils.escapeHtml(task.schedule)}">${PeekabootUtils.escapeHtml(scheduleDisplay)}</span>
                         </div>
                         <div class="task-right">
                             <span class="task-timing-item"><span class="task-timing-label">Last:</span> ${task.lastExecution ? formatDate(task.lastExecution) : 'Never'}</span>
                             <span class="task-timing-item"><span class="task-timing-label">Next:</span> ${task.nextExecution ? formatDate(task.nextExecution) : '-'}</span>
-                            <span class="task-status ${statusClass}">${escapeHtml(task.lastStatus || 'PENDING')}</span>
+                            <span class="task-status ${statusClass}">${PeekabootUtils.escapeHtml(task.lastStatus || 'PENDING')}</span>
                         </div>
                     </div>
                     <div class="task-target-row">
-                        <span class="task-target" title="${escapeHtml(task.target)}">${escapeHtml(targetShort)}</span>
+                        <span class="task-target" title="${PeekabootUtils.escapeHtml(task.target)}">${PeekabootUtils.escapeHtml(targetShort)}</span>
                     </div>
-                    ${task.lastException ? `<div class="task-exception">${escapeHtml(task.lastException)}</div>` : ''}
+                    ${task.lastException ? `<div class="task-exception">${PeekabootUtils.escapeHtml(task.lastException)}</div>` : ''}
                 `;
 
                 listEl.appendChild(item);
@@ -1207,7 +1199,7 @@
     }
 
     function highlightText(text, query) {
-        if (!query) return escapeHtml(text);
+        if (!query) return PeekabootUtils.escapeHtml(text);
 
         const textStr = String(text);
         const lowerText = textStr.toLowerCase();
@@ -1218,28 +1210,22 @@
         let index = lowerText.indexOf(lowerQuery);
 
         while (index !== -1) {
-            result += escapeHtml(textStr.substring(lastIndex, index));
-            result += `<mark>${escapeHtml(textStr.substring(index, index + query.length))}</mark>`;
+            result += PeekabootUtils.escapeHtml(textStr.substring(lastIndex, index));
+            result += `<mark>${PeekabootUtils.escapeHtml(textStr.substring(index, index + query.length))}</mark>`;
             lastIndex = index + query.length;
             index = lowerText.indexOf(lowerQuery, lastIndex);
         }
 
-        result += escapeHtml(textStr.substring(lastIndex));
+        result += PeekabootUtils.escapeHtml(textStr.substring(lastIndex));
         return result;
-    }
-
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
     }
 
     function createInfoRow(label, value, isMonospace = false) {
         const row = document.createElement('div');
         row.className = 'info-row';
         row.innerHTML = `
-            <span class="info-label">${escapeHtml(label)}</span>
-            <span class="info-value${isMonospace ? ' mono' : ''}">${escapeHtml(String(value))}</span>
+            <span class="info-label">${PeekabootUtils.escapeHtml(label)}</span>
+            <span class="info-value${isMonospace ? ' mono' : ''}">${PeekabootUtils.escapeHtml(String(value))}</span>
         `;
         return row;
     }
