@@ -212,23 +212,33 @@ public class DevToolbarFilter implements Filter {
 
     private String generateToolbarScript() {
         return """
+            function escapeHtml(s) {
+                if (!s) return '';
+                return String(s).replace(/[&<>"']/g, function(c) {
+                    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+                });
+            }
+
             var bar = document.createElement('div');
             bar.className = 'peekaboot-bar';
 
             var statusClass = 's' + Math.floor(data.status / 100) + 'xx';
+            var safePath = escapeHtml(data.path);
+            var safeMethod = escapeHtml(data.method);
+            var safeTraceId = escapeHtml(data.traceId);
 
             bar.innerHTML = `
                 <div class="peekaboot-left">
                     <span class="peekaboot-status ${statusClass}">${data.status}</span>
-                    <span class="peekaboot-method">${data.method}</span>
-                    <span class="peekaboot-path" title="${data.path}">${data.path}</span>
+                    <span class="peekaboot-method">${safeMethod}</span>
+                    <span class="peekaboot-path" title="${safePath}">${safePath}</span>
                     <span class="peekaboot-controller" id="pb-controller"></span>
                     <span class="peekaboot-metrics" id="pb-metrics">
                         <span class="peekaboot-loading">loading</span>
                     </span>
                 </div>
                 <div class="peekaboot-right">
-                    <span class="peekaboot-trace">${data.traceId ? data.traceId.substring(0, 16) + '...' : '-'}</span>
+                    <span class="peekaboot-trace">${safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-'}</span>
                     <a href="${data.basePath}/" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\\u{1F4CA}</a>
                 </div>
             `;
