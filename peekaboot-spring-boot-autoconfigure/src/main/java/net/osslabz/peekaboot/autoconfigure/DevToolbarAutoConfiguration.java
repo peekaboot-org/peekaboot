@@ -50,7 +50,7 @@ public class DevToolbarAutoConfiguration {
             PeekabootProperties properties) {
         log.trace("Creating DevToolbarFilter bean with basePath: {}", properties.getBasePath());
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer, properties.getBasePath()));
+        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");

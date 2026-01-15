@@ -6,7 +6,6 @@ import io.micrometer.tracing.Tracer;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
-import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -39,11 +38,8 @@ public class SharedToolbarTestConfig {
     }
 
     @Bean
-    ToolbarDataProvider toolbarDataProvider(
-            TraceQueryService traceQueryService,
-            PeekabookActuatorService actuatorService,
-            PeekabootProperties properties) {
-        return new ToolbarDataProvider(traceQueryService, actuatorService, properties.getBasePath());
+    ToolbarDataProvider toolbarDataProvider(PeekabootProperties properties) {
+        return new ToolbarDataProvider(properties.getBasePath());
     }
 
     @Bean
@@ -68,7 +64,7 @@ public class SharedToolbarTestConfig {
             Tracer tracer,
             PeekabootProperties properties) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer, properties.getBasePath()));
+        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");

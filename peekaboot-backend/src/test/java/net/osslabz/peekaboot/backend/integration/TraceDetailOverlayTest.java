@@ -72,8 +72,8 @@ class TraceDetailOverlayTest {
 
     @Test
     void clickingToolbarShouldLoadTraceDetailScript() throws Exception {
-        // The script path for trace-detail.js should be present in the toolbar click handler
-        assertThat(getPersonsPageContent()).contains("/peekaboot/ui/trace-detail/trace-detail.js");
+        // The script dynamically builds the path using data.basePath
+        assertThat(getPersonsPageContent()).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
     }
 
     @Test
@@ -98,16 +98,16 @@ class TraceDetailOverlayTest {
     }
 
     @Test
-    void toolbarShouldShowDurationGreaterOrEqualToZero() throws Exception {
+    void toolbarShouldShowBasePath() throws Exception {
         String pageContent = getPersonsPageContent();
 
-        // Extract duration from toolbar JSON
-        Pattern durationPattern = Pattern.compile("\"duration\":(\\d+)");
-        Matcher matcher = durationPattern.matcher(pageContent);
+        // Extract basePath from toolbar JSON
+        Pattern basePathPattern = Pattern.compile("\"basePath\":\"([^\"]+)\"");
+        Matcher matcher = basePathPattern.matcher(pageContent);
 
-        assertThat(matcher.find()).as("Should find duration in toolbar data").isTrue();
+        assertThat(matcher.find()).as("Should find basePath in toolbar data").isTrue();
 
-        int duration = Integer.parseInt(matcher.group(1));
-        assertThat(duration).as("Duration should be >= 0").isGreaterThanOrEqualTo(0);
+        String basePath = matcher.group(1);
+        assertThat(basePath).as("BasePath should be /peekaboot").isEqualTo("/peekaboot");
     }
 }

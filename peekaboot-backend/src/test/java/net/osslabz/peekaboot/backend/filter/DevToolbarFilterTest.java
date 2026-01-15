@@ -48,7 +48,7 @@ class DevToolbarFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new DevToolbarFilter(toolbarDataProvider, tracer, "/peekaboot");
+        filter = new DevToolbarFilter(toolbarDataProvider, tracer);
     }
 
     @ParameterizedTest
@@ -209,7 +209,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldIncludeToolbarJsPath() throws Exception {
+    void shouldIncludeToolbarJsPathFromBasePath() throws Exception {
         when(request.getRequestURI()).thenReturn("/page");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
@@ -219,7 +219,7 @@ class DevToolbarFilterTest {
         TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
         when(response.getOutputStream()).thenReturn(servletOutputStream);
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{}");
+                .thenReturn("{\"method\":\"GET\",\"path\":\"/page\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}");
 
         doAnswer(invocation -> {
             ContentBufferingResponseWrapper wrapper =
@@ -233,7 +233,8 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).contains("/peekaboot/ui/trace-detail/trace-detail.js");
+        // The script now uses data.basePath dynamically, so check for the pattern
+        assertThat(result).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
     }
 
     private static class TestServletOutputStream extends ServletOutputStream {

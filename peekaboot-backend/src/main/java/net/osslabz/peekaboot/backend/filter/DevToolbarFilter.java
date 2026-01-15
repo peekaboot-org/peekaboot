@@ -29,12 +29,10 @@ public class DevToolbarFilter implements Filter {
 
     private final ToolbarDataProvider toolbarDataProvider;
     private final Tracer tracer;
-    private final String basePath;
 
-    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String basePath) {
+    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
         this.toolbarDataProvider = toolbarDataProvider;
         this.tracer = tracer;
-        this.basePath = basePath;
     }
 
     @Override
@@ -181,9 +179,7 @@ public class DevToolbarFilter implements Filter {
             </script>
             """.formatted(generateToolbarCss(), generateToolbarScript());
 
-        return template
-                .replace("{{SUMMARY_JSON}}", summaryJson)
-                .replace("{{BASE_PATH}}", basePath);
+        return template.replace("{{SUMMARY_JSON}}", summaryJson);
     }
 
     private String generateToolbarCss() {
@@ -200,20 +196,17 @@ public class DevToolbarFilter implements Filter {
             .peekaboot-status.s4xx,.peekaboot-status.s5xx{background:#f85149;color:#0d1117}
             .peekaboot-method{color:#8b949e}
             .peekaboot-path{color:#f0f6fc;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .peekaboot-controller{color:#58a6ff;font-size:11px}
+            .peekaboot-metrics{display:flex;align-items:center;gap:12px}
             .peekaboot-metric{display:flex;align-items:center;gap:4px;color:#8b949e}
             .peekaboot-metric .val{color:#c9d1d9}
             .peekaboot-metric.warn .val{color:#d29922}
             .peekaboot-metric.error .val{color:#f85149}
-            .peekaboot-metric.ok .val{color:#3fb950}
             .peekaboot-trace{font-family:ui-monospace,monospace;font-size:11px;color:#8b949e}
-            .peekaboot-health{display:flex;align-items:center;gap:4px;font-size:11px}
-            .peekaboot-health .dot{width:8px;height:8px;border-radius:50%}
-            .peekaboot-health .dot.up{background:#3fb950}
-            .peekaboot-health .dot.down{background:#f85149}
-            .peekaboot-health .dot.unknown{background:#8b949e}
-            .peekaboot-memory{font-size:11px;color:#8b949e}
-            .peekaboot-memory.warn{color:#d29922}
-            .peekaboot-memory.error{color:#f85149}
+            .peekaboot-loading{color:#8b949e;font-size:11px}
+            .peekaboot-loading::after{content:'';animation:dots 1.5s infinite}
+            @keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%,100%{content:'...'}}
+            .peekaboot-pending{color:#8b949e}
             """;
     }
 
@@ -223,41 +216,98 @@ public class DevToolbarFilter implements Filter {
             bar.className = 'peekaboot-bar';
 
             var statusClass = 's' + Math.floor(data.status / 100) + 'xx';
-            var durationClass = data.duration > 500 ? 'error' : (data.duration > 100 ? 'warn' : '');
-            var queryClass = data.queryCount > 10 ? 'error' : (data.queryCount > 5 ? 'warn' : '');
-            var healthClass = data.health === 'UP' ? 'up' : (data.health === 'DOWN' ? 'down' : 'unknown');
-            var memoryClass = data.memoryPercent > 90 ? 'error' : (data.memoryPercent > 70 ? 'warn' : '');
 
             bar.innerHTML = `
                 <div class="peekaboot-left">
                     <span class="peekaboot-status ${statusClass}">${data.status}</span>
                     <span class="peekaboot-method">${data.method}</span>
                     <span class="peekaboot-path" title="${data.path}">${data.path}</span>
-                    <span class="peekaboot-metric ${durationClass}">\\u23F1<span class="val">${data.duration}ms</span></span>
-                    ${data.queryCount >= 0 ? '<span class="peekaboot-metric ' + queryClass + '">\\u{1F5C4}<span class="val">' + data.queryCount + '</span></span>' : ''}
-                    ${data.errorCount > 0 ? '<span class="peekaboot-metric error">\\u26A0<span class="val">' + data.errorCount + '</span></span>' : ''}
+                    <span class="peekaboot-controller" id="pb-controller"></span>
+                    <span class="peekaboot-metrics" id="pb-metrics">
+                        <span class="peekaboot-loading">loading</span>
+                    </span>
                 </div>
                 <div class="peekaboot-right">
-                    <span class="peekaboot-health" title="Health: ${data.health}"><span class="dot ${healthClass}"></span>${data.health}</span>
-                    ${data.memoryPercent >= 0 ? '<span class="peekaboot-memory ' + memoryClass + '" title="Heap memory">\\u{1F4BE}' + data.memoryPercent + '%</span>' : ''}
                     <span class="peekaboot-trace">${data.traceId ? data.traceId.substring(0, 16) + '...' : '-'}</span>
-                    <a href="${data.dashboardUrl}" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\\u{1F4CA}</a>
+                    <a href="${data.basePath}/" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\\u{1F4CA}</a>
                 </div>
             `;
             shadow.appendChild(bar);
+
+            if (data.traceId) {
+                var delays = [100, 200, 500];
+                var attempt = 0;
+
+                function fetchTrace() {
+                    fetch(data.basePath + '/api/traces/' + data.traceId + '/insights')
+                        .then(function(resp) {
+                            if (resp.ok) return resp.json();
+                            if (resp.status === 404 && attempt < delays.length) {
+                                setTimeout(fetchTrace, delays[attempt++]);
+                                return null;
+                            }
+                            throw new Error('Not found');
+                        })
+                        .then(function(trace) {
+                            if (!trace) return;
+                            updateToolbar(trace);
+                        })
+                        .catch(function() {
+                            showPending();
+                        });
+                }
+
+                function updateToolbar(trace) {
+                    var metrics = trace.metrics || {};
+                    var req = trace.request || {};
+                    var metricsEl = shadow.getElementById('pb-metrics');
+                    var controllerEl = shadow.getElementById('pb-controller');
+
+                    if (req.controllerClass && req.controllerMethod) {
+                        var className = req.controllerClass.split('.').pop();
+                        controllerEl.textContent = '\\u2192 ' + className + '.' + req.controllerMethod;
+                    }
+
+                    var html = '';
+                    var durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 100 ? 'warn' : '');
+                    html += '<span class="peekaboot-metric ' + durationClass + '">\\u23F1<span class="val">' + trace.durationMs + 'ms</span></span>';
+
+                    if (metrics.dbQueryCount > 0) {
+                        var qClass = metrics.dbQueryCount > 10 ? 'error' : (metrics.dbQueryCount > 5 ? 'warn' : '');
+                        html += '<span class="peekaboot-metric ' + qClass + '">\\u{1F5C4}<span class="val">' + metrics.dbQueryCount + '\\u00B7' + metrics.dbTotalDurationMs + 'ms</span></span>';
+                    }
+
+                    if (metrics.httpCallCount > 0) {
+                        html += '<span class="peekaboot-metric">\\u{1F310}<span class="val">' + metrics.httpCallCount + '\\u00B7' + metrics.httpTotalDurationMs + 'ms</span></span>';
+                    }
+
+                    if (metrics.errorCount > 0) {
+                        html += '<span class="peekaboot-metric error">\\u26A0<span class="val">' + metrics.errorCount + '</span></span>';
+                    }
+
+                    metricsEl.innerHTML = html;
+                }
+
+                function showPending() {
+                    var metricsEl = shadow.getElementById('pb-metrics');
+                    metricsEl.innerHTML = '<span class="peekaboot-pending">[\\u23F1 ?] [\\u{1F5C4} ?] [\\u{1F310} ?]</span>';
+                }
+
+                setTimeout(fetchTrace, 50);
+            }
 
             bar.addEventListener('click', function(e) {
                 if (e.target.tagName === 'A') return;
                 if (!data.traceId) return;
                 if (!window.PeekabootTraceDetail) {
                     var script = document.createElement('script');
-                    script.src = '{{BASE_PATH}}/ui/trace-detail/trace-detail.js';
+                    script.src = data.basePath + '/ui/trace-detail/trace-detail.js';
                     script.onload = function() {
-                        window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
+                        window.PeekabootTraceDetail.open(data.traceId, { basePath: data.basePath });
                     };
                     document.head.appendChild(script);
                 } else {
-                    window.PeekabootTraceDetail.open(data.traceId, { basePath: '{{BASE_PATH}}' });
+                    window.PeekabootTraceDetail.open(data.traceId, { basePath: data.basePath });
                 }
             });
             """;

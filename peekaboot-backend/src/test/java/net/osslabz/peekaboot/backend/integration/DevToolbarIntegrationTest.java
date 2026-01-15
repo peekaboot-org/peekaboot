@@ -86,23 +86,8 @@ class DevToolbarIntegrationTest {
     }
 
     @Test
-    void toolbarShouldContainQueryCount() {
-        assertThat(getPersonsHtml()).matches("(?s).*\"queryCount\":-?\\d+.*");
-    }
-
-    @Test
-    void toolbarShouldContainDuration() {
-        assertThat(getPersonsHtml()).matches("(?s).*\"duration\":\\d+.*");
-    }
-
-    @Test
-    void toolbarShouldContainHealthStatus() {
-        assertThat(getPersonsHtml()).matches("(?s).*\"health\":\"(UP|DOWN|UNKNOWN)\".*");
-    }
-
-    @Test
-    void toolbarShouldContainDashboardUrl() {
-        assertThat(getPersonsHtml()).contains("\"/peekaboot/\"");
+    void toolbarShouldContainBasePath() {
+        assertThat(getPersonsHtml()).contains("\"basePath\":\"/peekaboot\"");
     }
 
     @Test
