@@ -58,7 +58,7 @@ class TraceDomainTest {
             List.of()
         );
 
-        TraceMetrics metrics = new TraceMetrics(5, 2, 100L, 1, 0);
+        TraceMetrics metrics = new TraceMetrics(5, 2, 100L, 1, 0L, 0);
 
         TraceTree tree = new TraceTree(
             "trace-abc123",
@@ -118,7 +118,7 @@ class TraceDomainTest {
             "span-1", "op", "SERVER", 0L, 100L, "ok",
             List.of(), Map.of(), List.of(), List.of()
         );
-        TraceMetrics metrics = new TraceMetrics(1, 0, 0L, 0, 0);
+        TraceMetrics metrics = new TraceMetrics(1, 0, 0L, 0, 0L, 0);
         TraceTree tree = new TraceTree(
             "trace-1", 0L, 100L, TraceStatus.OK, HTTP_REQUEST, "op",
             rootSpan, metrics, Map.of()

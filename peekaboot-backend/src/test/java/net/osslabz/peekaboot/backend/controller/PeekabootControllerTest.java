@@ -302,7 +302,7 @@ class PeekabootControllerTest {
                 RootActionType.HTTP_REQUEST,
                 "test-operation",
                 rootSpan,
-                new TraceMetrics(1, 0, 0L, 0, 0),
+                new TraceMetrics(1, 0, 0L, 0, 0L, 0),
                 Map.of()
         );
     }

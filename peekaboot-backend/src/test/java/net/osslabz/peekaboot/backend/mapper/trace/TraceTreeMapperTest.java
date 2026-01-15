@@ -164,6 +164,7 @@ class TraceTreeMapperTest {
         assertThat(result.metrics().dbQueryCount()).isEqualTo(2);
         assertThat(result.metrics().dbTotalDurationMs()).isEqualTo(80L); // 50 + 30
         assertThat(result.metrics().httpCallCount()).isEqualTo(1);
+        assertThat(result.metrics().httpTotalDurationMs()).isEqualTo(60L); // HTTP call duration
         assertThat(result.metrics().errorCount()).isEqualTo(0);
     }
 

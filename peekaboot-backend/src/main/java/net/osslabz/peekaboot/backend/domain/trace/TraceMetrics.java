@@ -5,5 +5,6 @@ public record TraceMetrics(
     int dbQueryCount,
     long dbTotalDurationMs,
     int httpCallCount,
+    long httpTotalDurationMs,
     int errorCount
 ) {}

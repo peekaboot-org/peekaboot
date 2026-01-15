@@ -29,7 +29,7 @@ public class TraceTreeMapper {
                     TraceStatus.OK,
                     RootActionType.UNKNOWN,
                     null, null,
-                    new TraceMetrics(0, 0, 0L, 0, 0),
+                    new TraceMetrics(0, 0, 0L, 0, 0L, 0),
                     Map.of()
             );
         }
@@ -185,6 +185,7 @@ public class TraceTreeMapper {
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
         int httpCallCount = 0;
+        long httpTotalDurationMs = 0L;
         int errorCount = 0;
 
         for (SpanData span : spans) {
@@ -208,11 +209,14 @@ public class TraceTreeMapper {
 
                 if (isClient && hasHttpTag) {
                     httpCallCount++;
+                    if (span.duration() != null) {
+                        httpTotalDurationMs += span.duration().toMillis();
+                    }
                 }
             }
         }
 
-        return new TraceMetrics(totalSpans, dbQueryCount, dbTotalDurationMs, httpCallCount, errorCount);
+        return new TraceMetrics(totalSpans, dbQueryCount, dbTotalDurationMs, httpCallCount, httpTotalDurationMs, errorCount);
     }
 
     private TraceStatus determineStatus(List<SpanData> spans) {

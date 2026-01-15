@@ -31,7 +31,7 @@ class IssueDetectorTest {
     void detectIssues_shouldDetectSlowSpan() {
         // Given: A span with duration 150ms (between 100-499ms threshold)
         SpanNode span = createSpan("span1", 150, "OK", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -48,7 +48,7 @@ class IssueDetectorTest {
     void detectIssues_shouldDetectVerySlowSpan() {
         // Given: A span with duration 600ms (>= 500ms threshold)
         SpanNode span = createSpan("span1", 600, "OK", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -65,7 +65,7 @@ class IssueDetectorTest {
     void detectIssues_shouldNotAddBothSlowAndVerySlowForSameSpan() {
         // Given: A very slow span (600ms) should NOT also be marked as SLOW
         SpanNode span = createSpan("span1", 600, "OK", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -79,7 +79,7 @@ class IssueDetectorTest {
     void detectIssues_shouldDetectErrorSpan() {
         // Given: A span with ERROR status
         SpanNode span = createSpan("span1", 50, "ERROR", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -97,7 +97,7 @@ class IssueDetectorTest {
         // Given: A span with ERROR status and an error message in attributes
         SpanNode span = createSpan("span1", 50, "ERROR",
                 Map.of("error.message", "Connection refused"), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -113,7 +113,7 @@ class IssueDetectorTest {
         // Given: A DB span with duration 80ms (>= 50ms threshold)
         SpanNode span = createSpan("span1", 80, "OK",
                 Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 1, 80, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 1, 80L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -131,7 +131,7 @@ class IssueDetectorTest {
         // Given: A non-DB span with duration 80ms (would be slow if it were a DB span)
         SpanNode span = createSpan("span1", 80, "OK",
                 Map.of("http.method", "GET"), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 1, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 1, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -145,7 +145,7 @@ class IssueDetectorTest {
         // Given: A trace with 25 DB queries (> 20 threshold)
         SpanNode child = createSpan("child1", 30, "OK", Map.of("db.system", "mysql"), List.of());
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
-        TraceTree trace = createTrace(root, new TraceMetrics(2, 25, 500, 0, 0));
+        TraceTree trace = createTrace(root, new TraceMetrics(2, 25, 500L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -163,7 +163,7 @@ class IssueDetectorTest {
         // Given: A trace with high query count but child span should not have the issue
         SpanNode child = createSpan("child1", 30, "OK", Map.of("db.system", "mysql"), List.of());
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
-        TraceTree trace = createTrace(root, new TraceMetrics(2, 25, 500, 0, 0));
+        TraceTree trace = createTrace(root, new TraceMetrics(2, 25, 500L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -179,7 +179,7 @@ class IssueDetectorTest {
         properties.setVerySlowSpanThresholdMs(1000);
 
         SpanNode span = createSpan("span1", 150, "OK", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -192,7 +192,7 @@ class IssueDetectorTest {
     void detectIssues_shouldReturnNoIssuesWhenUnderAllThresholds() {
         // Given: A fast span with no errors
         SpanNode span = createSpan("span1", 50, "OK", Map.of(), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -207,7 +207,7 @@ class IssueDetectorTest {
         SpanNode grandchild = createSpan("gc", 200, "OK", Map.of(), List.of());
         SpanNode child = createSpan("child", 300, "OK", Map.of(), List.of(grandchild));
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
-        TraceTree trace = createTrace(root, new TraceMetrics(3, 0, 0, 0, 0));
+        TraceTree trace = createTrace(root, new TraceMetrics(3, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -225,7 +225,7 @@ class IssueDetectorTest {
         // Given: A slow DB span with an error (multiple issues)
         SpanNode span = createSpan("span1", 200, "ERROR",
                 Map.of("db.system", "postgresql"), List.of());
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 1, 200, 0, 1));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 1, 200L, 0, 0L, 1));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -252,7 +252,7 @@ class IssueDetectorTest {
                 List.of(),
                 List.of()
         );
-        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0, 0, 0));
+        TraceTree trace = createTrace(span, new TraceMetrics(1, 0, 0L, 0, 0L, 0));
 
         // When
         TraceTree result = detector.detectIssues(trace);
@@ -273,7 +273,7 @@ class IssueDetectorTest {
         // Given: A trace with no root span
         TraceTree trace = new TraceTree(
                 "trace1", 0, 0, TraceStatus.OK, RootActionType.UNKNOWN, null, null,
-                new TraceMetrics(0, 0, 0, 0, 0), Map.of()
+                new TraceMetrics(0, 0, 0L, 0, 0L, 0), Map.of()
         );
 
         // When
