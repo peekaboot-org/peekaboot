@@ -14,6 +14,14 @@ import org.springframework.web.client.RestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Integration test for dev toolbar filter behavior.
+ * Uses SharedToolbarTestConfig with mocked tracing to test toolbar functionality.
+ *
+ * NOTE: This tests the filter behavior with manually wired beans.
+ * For auto-configuration ordering tests, see DevToolbarAutoConfigurationIntegrationTest
+ * in the peekaboot-spring-boot-autoconfigure module.
+ */
 @SpringBootTest(
     classes = {TestFixtureApplication.class, SharedToolbarTestConfig.class},
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
