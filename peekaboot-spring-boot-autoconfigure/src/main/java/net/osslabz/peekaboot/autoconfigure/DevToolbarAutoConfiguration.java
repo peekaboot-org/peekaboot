@@ -26,7 +26,10 @@ import org.springframework.core.Ordered;
  * Auto-configuration for the development toolbar.
  * Configures filters for toolbar injection and request/log capture.
  */
-@AutoConfiguration(after = PeekabootAutoConfiguration.class)
+@AutoConfiguration(
+        after = PeekabootAutoConfiguration.class,
+        afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
+)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
 @ConditionalOnClass(TraceQueryService.class)
