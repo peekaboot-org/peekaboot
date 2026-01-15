@@ -9,7 +9,6 @@ import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.filter.RequestCaptureFilter;
 import net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender;
-import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -38,12 +37,9 @@ public class DevToolbarAutoConfiguration {
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
 
     @Bean
-    public ToolbarDataProvider toolbarDataProvider(
-            TraceQueryService traceQueryService,
-            PeekabookActuatorService actuatorService,
-            PeekabootProperties properties) {
+    public ToolbarDataProvider toolbarDataProvider(PeekabootProperties properties) {
         log.trace("Creating ToolbarDataProvider bean with basePath: {}", properties.getBasePath());
-        return new ToolbarDataProvider(traceQueryService, actuatorService, properties.getBasePath());
+        return new ToolbarDataProvider(properties.getBasePath());
     }
 
     @Bean
