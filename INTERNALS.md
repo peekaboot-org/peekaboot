@@ -21,25 +21,30 @@ peekaboot/
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
 │   ┌──────────────────┐    ┌──────────────────┐                      │
-│   │   DevToolbarFilter│    │ RequestCaptureFilter│                  │
-│   │   (HTML injection)│    │   (trace context)   │                  │
+│   │  DevToolbarFilter │    │RequestCaptureFilter│                   │
+│   │  (HTML injection) │    │  (request metadata)│                   │
 │   └────────┬─────────┘    └────────┬───────────┘                    │
 │            │                       │                                 │
-│            └───────────┬───────────┘                                │
+│            │    ┌──────────────────┴───────────┐                    │
+│            │    │     Micrometer Tracer        │                    │
+│            │    │  (tracer.currentSpan())      │                    │
+│            │    └──────────────────────────────┘                    │
+│            │                                                        │
+│            └───────────┬───────────────────────────────────────────│
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
-│   │              TraceEventBus               │                      │
-│   │  (publish/subscribe for trace events)    │                      │
+│   │      ApplicationEventPublisher           │                      │
+│   │    (Spring's standard event system)      │                      │
 │   └────────────────────┬─────────────────────┘                      │
 │                        │                                            │
 │    ┌───────────────────┼───────────────────┐                       │
 │    ▼                   ▼                   ▼                       │
-│ SpanCompleted    LogCaptured     RequestCompleted                  │
+│ SpanCapturedEvent LogCapturedEvent RequestCompletedEvent           │
 │                        │                                            │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
-│   │          InMemorySpanStore               │ ◄── Caffeine Cache  │
-│   │   (traces, spans, logs, request data)    │                      │
+│   │           TraceDataStorage               │ ◄── Caffeine Cache  │
+│   │   (traces, spans, logs, request data)    │     @EventListener   │
 │   └────────────────────┬─────────────────────┘                      │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
@@ -78,20 +83,22 @@ net.osslabz.peekaboot.backend/
 ├── service/                # Business services
 ├── tracing/                # In-memory tracing
 │   ├── autoconfigure/      # Tracing auto-configuration
-│   ├── bridge/otel/        # OpenTelemetry integration
-│   ├── event/              # Event bus
+│   ├── bridge/otel/        # OpenTelemetry span exporter
+│   ├── event/              # Spring application events
+│   ├── interceptor/        # Tracing handler interceptor
 │   ├── query/              # Query API
-│   └── store/              # Caffeine-backed storage
+│   └── store/              # Caffeine-backed storage (TraceDataStorage)
 └── util/                   # Utilities (masking, etc.)
 ```
 
 ### Tracing Flow
 
 1. **Span Capture**: `OtelSpanExporter` receives spans from OpenTelemetry SDK
-2. **Storage**: Spans stored in `InMemorySpanStore` (Caffeine cache with LRU eviction)
-3. **Event Publishing**: `TraceEventBus` notifies listeners of new spans
-4. **Log Correlation**: `PeekabootLogbackAppender` captures logs with MDC traceId/spanId
-5. **Query**: `TraceQueryService` provides access to stored data
+2. **Event Publishing**: Publishes `SpanCapturedEvent` via Spring's `ApplicationEventPublisher`
+3. **Storage**: `TraceDataStorage` listens via `@EventListener` and stores in Caffeine cache
+4. **Log Correlation**: `PeekabootLogbackAppender` captures logs using Micrometer's `Tracer.currentSpan()` for trace ID
+5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
+6. **Query**: `TraceQueryService` provides access to stored data
 
 ### Servlet Filters
 
@@ -181,25 +188,40 @@ When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
 ```java
 @Bean
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter peekabootOtelExporter(InMemorySpanStore store, TraceEventBus bus) {
-    return new OtelSpanExporter(store, bus);
+public OtelSpanExporter otelSpanExporter(TraceDataStorage storage, ApplicationEventPublisher eventPublisher) {
+    return new OtelSpanExporter(storage, eventPublisher);
 }
 ```
 
 The exporter:
 - Receives finished spans from OTel SDK
 - Filters out peekaboot's own requests (`/peekaboot/**`, `/actuator/**`)
-- Converts to `SpanData` and stores in `InMemorySpanStore`
-- Publishes `SpanCompletedEvent` to `TraceEventBus`
+- Converts to `SpanData` and stores directly in `TraceDataStorage`
+- Publishes `SpanCapturedEvent` via Spring's `ApplicationEventPublisher`
+
+### Micrometer Tracer Integration
+
+Peekaboot uses Micrometer's `Tracer` API (not MDC) for trace correlation:
+
+```java
+// Get current trace context
+Span currentSpan = tracer.currentSpan();
+if (currentSpan != null) {
+    String traceId = currentSpan.context().traceId();
+    String spanId = currentSpan.context().spanId();
+}
+```
+
+This ensures compatibility with Spring Boot's tracing auto-configuration and works correctly regardless of whether MDC propagation is enabled.
 
 ### Log Capture
 
 `PeekabootLogbackAppender` captures log events with trace correlation:
 
-1. Registered via `logbackAppenderRegistrar` bean
-2. Reads `traceId` from MDC
-3. Publishes `LogCapturedEvent` with timestamp, level, message
-4. Stored in `TraceLogStore` (Caffeine cache, keyed by traceId)
+1. Registered via `LogbackAppenderRegistrar` bean in `DevToolbarAutoConfiguration`
+2. Publishes `LogCapturedEvent` via Spring's `ApplicationEventPublisher`
+3. `TraceDataStorage` receives events via `@EventListener` and stores by traceId
+4. Logs are associated with spans and included in trace detail views
 
 ## Data Models
 
@@ -247,13 +269,24 @@ ActuatorInsightsResponse
 
 ### Testing Auto-Configuration
 
-Use `ApplicationContextRunner` with `FilteredClassLoader`:
+Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests:
 
 ```java
 new ApplicationContextRunner()
     .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
     .withClassLoader(new FilteredClassLoader(TraceQueryService.class))
     .run(context -> assertThat(context).doesNotHaveBean("devToolbarFilter"));
+```
+
+For integration tests that verify auto-configuration ordering, use real OpenTelemetry:
+
+```java
+@SpringBootTest(classes = TestApplication.class, webEnvironment = RANDOM_PORT)
+@ActiveProfiles("integration")
+class DevToolbarAutoConfigurationIntegrationTest {
+    // Uses spring-boot-starter-opentelemetry for real Tracer bean
+    // Verifies auto-configuration creates beans in correct order
+}
 ```
 
 ## Build
@@ -272,8 +305,23 @@ cd peekaboot-example-app && mvn spring-boot:run
 ## Key Design Decisions
 
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
-2. **Actuator not exposed**: All data accessed through internal `WebEndpointDiscoverer`
-3. **Caffeine for storage**: Bounded memory with automatic eviction
-4. **Event-driven**: Loose coupling via `TraceEventBus`
-5. **Shadow DOM**: Toolbar cannot interfere with host application
-6. **Lowest-priority defaults**: Apps can always override peekaboot settings
+2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
+3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
+4. **Unified Storage**: Single `TraceDataStorage` class handles spans, logs, and request data
+5. **Actuator not exposed**: All data accessed through internal `WebEndpointDiscoverer`
+6. **Caffeine for storage**: Bounded memory with automatic eviction
+7. **Shadow DOM**: Toolbar cannot interfere with host application
+8. **Lowest-priority defaults**: Apps can always override peekaboot settings
+
+## Auto-Configuration Ordering
+
+`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists:
+
+```java
+@AutoConfiguration(
+    after = PeekabootAutoConfiguration.class,
+    afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
+)
+```
+
+The `afterName` attribute (string-based) is used instead of class reference to avoid compile-time dependency on the tracing autoconfigure module.

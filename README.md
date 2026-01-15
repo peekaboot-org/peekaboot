@@ -6,7 +6,7 @@ A Spring Boot starter that provides embedded application introspection through a
 
 - **App Insights Dashboard** - Standalone UI exposing actuator data: health, info, environment, loggers, flyway migrations, scheduled tasks
 - **Debug Toolbar** - Development-time toolbar injected into HTML responses showing request traces, queries, and logs
-- **In-Memory Tracing** - Distributed tracing with no external collector required. Works standalone or integrates with Brave/OpenTelemetry
+- **In-Memory Tracing** - Micrometer-based distributed tracing with no external collector required. Integrates with OpenTelemetry via Spring Boot's tracing support
 - **Zero Configuration** - Sensible defaults for full observability out of the box
 
 ## Quick Start
@@ -149,7 +149,8 @@ public class SecurityConfig {
 ## Requirements
 
 - Java 21+
-- Spring Boot 3.4+
+- Spring Boot 4.0+
+- OpenTelemetry tracing (via `spring-boot-starter-opentelemetry`)
 
 ## License
 
