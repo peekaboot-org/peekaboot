@@ -197,7 +197,11 @@ public class TraceTreeMapper {
             Map<String, String> tags = span.tags();
 
             if (tags != null) {
-                boolean hasDbTag = tags.keySet().stream().anyMatch(k -> k.startsWith("db."));
+                // Check for actual DB queries:
+                // - Standard OpenTelemetry: db.* tags
+                // - datasource-proxy/Micrometer: jdbc.query* tags (not just jdbc.* to avoid counting connection/result-set spans)
+                boolean hasDbTag = tags.keySet().stream().anyMatch(k ->
+                        k.startsWith("db.") || k.startsWith("jdbc.query"));
                 boolean hasHttpTag = tags.keySet().stream().anyMatch(k -> k.startsWith("http."));
 
                 if (isClient && hasDbTag) {

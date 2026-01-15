@@ -169,6 +169,28 @@ class TraceTreeMapperTest {
     }
 
     @Test
+    void map_shouldCalculateTraceMetrics_withJdbcQueryTags() {
+        // Given: A trace with datasource-proxy/Micrometer style jdbc.query tags
+        var root = createSpan("trace1", "root", null, "http get /",
+                Span.Kind.SERVER, 0, 100, Map.of("http.method", "GET"));
+        var connection = createSpan("trace1", "conn", "root", "connection",
+                Span.Kind.CLIENT, 10, 50, Map.of("jdbc.datasource.name", "mydb"));
+        var query = createSpan("trace1", "query", "root", "query",
+                Span.Kind.CLIENT, 20, 30, Map.of("jdbc.query[0]", "SELECT * FROM users"));
+        var resultSet = createSpan("trace1", "rs", "root", "result-set",
+                Span.Kind.CLIENT, 55, 5, Map.of("jdbc.row-count", "10"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root, connection, query, resultSet));
+
+        // When
+        TraceTree result = mapper.map(traceData);
+
+        // Then: Only the query span with jdbc.query* tag should be counted, not connection or result-set
+        assertThat(result.metrics().dbQueryCount()).isEqualTo(1);
+        assertThat(result.metrics().dbTotalDurationMs()).isEqualTo(30L);
+    }
+
+    @Test
     void map_shouldCountErrors() {
         var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
         var errorSpan = createSpanWithError("trace1", "error", "root", "error-op",
