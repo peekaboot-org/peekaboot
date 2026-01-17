@@ -13,12 +13,6 @@ spring:
 peekaboot:
   dev-toolbar: true
 
-logging:
-  level:
-    net.osslabz.peekaboot: TRACE
-
-debug: true
-
 management:
   endpoint:
     health:
