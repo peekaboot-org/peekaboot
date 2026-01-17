@@ -30,9 +30,15 @@ public record ScheduledTasksResponse(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TaskExecution(
-        String exception,
+        TaskException exception,
         String status,
         String time
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TaskException(
+        String message,
+        String type
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)

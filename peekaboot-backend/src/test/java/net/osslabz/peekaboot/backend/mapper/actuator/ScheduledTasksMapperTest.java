@@ -99,7 +99,11 @@ class ScheduledTasksMapperTest {
             List.of(new ScheduledTasksResponse.FixedTask(
                 0L,
                 1000L,
-                new ScheduledTasksResponse.TaskExecution("NullPointerException", "FAILED", "2026-01-11T06:49:20Z"),
+                new ScheduledTasksResponse.TaskExecution(
+                    new ScheduledTasksResponse.TaskException("Task failed", "java.lang.NullPointerException"),
+                    "FAILED",
+                    "2026-01-11T06:49:20Z"
+                ),
                 null,
                 new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask")
             )),
@@ -110,7 +114,7 @@ class ScheduledTasksMapperTest {
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.FAILED);
-        assertThat(result.tasks().get(0).lastException()).isEqualTo("NullPointerException");
+        assertThat(result.tasks().get(0).lastException()).isEqualTo("java.lang.NullPointerException: Task failed");
     }
 
     @Test

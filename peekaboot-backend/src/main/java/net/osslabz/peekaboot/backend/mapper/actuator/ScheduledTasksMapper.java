@@ -103,7 +103,14 @@ public class ScheduledTasksMapper {
     }
 
     private String parseException(ScheduledTasksResponse.TaskExecution execution) {
-        return execution != null ? execution.exception() : null;
+        if (execution == null || execution.exception() == null) {
+            return null;
+        }
+        var ex = execution.exception();
+        if (ex.type() != null && ex.message() != null) {
+            return ex.type() + ": " + ex.message();
+        }
+        return ex.message() != null ? ex.message() : ex.type();
     }
 
     private String formatInterval(Long intervalMs) {
