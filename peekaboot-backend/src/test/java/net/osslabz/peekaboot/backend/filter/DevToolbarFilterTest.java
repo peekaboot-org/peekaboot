@@ -64,7 +64,6 @@ class DevToolbarFilterTest {
     })
     void shouldSkipExcludedPaths(String path) throws Exception {
         when(request.getRequestURI()).thenReturn(path);
-        when(request.getMethod()).thenReturn("GET");
 
         filter.doFilter(request, response, chain);
 
@@ -75,7 +74,6 @@ class DevToolbarFilterTest {
     @ValueSource(strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"})
     void shouldSkipStaticFileExtensions(String extension) throws Exception {
         when(request.getRequestURI()).thenReturn("/app/file" + extension);
-        when(request.getMethod()).thenReturn("GET");
 
         filter.doFilter(request, response, chain);
 
@@ -85,7 +83,6 @@ class DevToolbarFilterTest {
     @Test
     void shouldSkipAjaxRequests() throws Exception {
         when(request.getRequestURI()).thenReturn("/users/123");
-        when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn("XMLHttpRequest");
 
         filter.doFilter(request, response, chain);

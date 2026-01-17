@@ -47,14 +47,13 @@ public class DevToolbarFilter implements Filter {
         }
 
         String uri = httpRequest.getRequestURI();
-        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), uri);
 
         if (shouldSkip(httpRequest)) {
             chain.doFilter(request, response);
             return;
         }
 
-        log.trace("Wrapping response for: {}", uri);
+        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), uri);
         ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
 
         try {
@@ -74,7 +73,6 @@ public class DevToolbarFilter implements Filter {
 
         // Skip excluded prefixes
         if (FilterPathMatcher.shouldSkip(path)) {
-            log.trace("Skipping {} - excluded prefix", path);
             return true;
         }
 
@@ -82,7 +80,6 @@ public class DevToolbarFilter implements Filter {
         String lowerPath = path.toLowerCase();
         for (String ext : EXCLUDED_EXTENSIONS) {
             if (lowerPath.endsWith(ext)) {
-                log.trace("Skipping {} - static extension: {}", path, ext);
                 return true;
             }
         }
@@ -90,7 +87,6 @@ public class DevToolbarFilter implements Filter {
         // Skip AJAX requests
         String xRequestedWith = request.getHeader("X-Requested-With");
         if ("XMLHttpRequest".equalsIgnoreCase(xRequestedWith)) {
-            log.trace("Skipping {} - AJAX request", path);
             return true;
         }
 
@@ -245,21 +241,34 @@ public class DevToolbarFilter implements Filter {
             shadow.appendChild(bar);
 
             if (data.traceId) {
-                var delays = [100, 200, 500];
-                var attempt = 0;
+                var retryDelay = 250;
+                var maxTotalDelay = 32000;
+                var totalDelay = 0;
+
+                function isTraceComplete(trace) {
+                    return trace && trace.rootSpan && trace.metrics && trace.metrics.totalSpans > 0;
+                }
 
                 function fetchTrace() {
                     fetch(data.basePath + '/api/traces/' + data.traceId + '/insights')
                         .then(function(resp) {
                             if (resp.ok) return resp.json();
-                            if (resp.status === 404 && attempt < delays.length) {
-                                setTimeout(fetchTrace, delays[attempt++]);
+                            if (resp.status === 404 && totalDelay < maxTotalDelay) {
+                                totalDelay += retryDelay;
+                                setTimeout(fetchTrace, retryDelay);
+                                retryDelay *= 2;
                                 return null;
                             }
                             throw new Error('Not found');
                         })
                         .then(function(trace) {
                             if (!trace) return;
+                            if (!isTraceComplete(trace) && totalDelay < maxTotalDelay) {
+                                totalDelay += retryDelay;
+                                setTimeout(fetchTrace, retryDelay);
+                                retryDelay *= 2;
+                                return;
+                            }
                             updateToolbar(trace);
                         })
                         .catch(function() {
@@ -268,6 +277,7 @@ public class DevToolbarFilter implements Filter {
                 }
 
                 function updateToolbar(trace) {
+                    console.log('Peekaboot trace data:', JSON.stringify(trace, null, 2));
                     var metrics = trace.metrics || {};
                     var req = trace.request || {};
                     var metricsEl = shadow.getElementById('pb-metrics');
@@ -279,20 +289,41 @@ public class DevToolbarFilter implements Filter {
                     }
 
                     var html = '';
-                    var durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 100 ? 'warn' : '');
-                    html += '<span class="peekaboot-metric ' + durationClass + '">\\u23F1<span class="val">' + trace.durationMs + 'ms</span></span>';
 
-                    if (metrics.dbQueryCount > 0) {
-                        var qClass = metrics.dbQueryCount > 10 ? 'error' : (metrics.dbQueryCount > 5 ? 'warn' : '');
-                        html += '<span class="peekaboot-metric ' + qClass + '">\\u{1F5C4}<span class="val">' + metrics.dbQueryCount + '\\u00B7' + metrics.dbTotalDurationMs + 'ms</span></span>';
+                    // Duration (always shown)
+                    var duration = trace.durationMs || 0;
+                    var durationClass = duration > 500 ? 'error' : (duration > 100 ? 'warn' : '');
+                    html += '<span class="peekaboot-metric ' + durationClass + '">\\u23F1<span class="val">' + duration + 'ms</span></span>';
+
+                    // Spans count
+                    var spanCount = metrics.totalSpans || 0;
+                    html += '<span class="peekaboot-metric">\\u{1F4C4}<span class="val">' + spanCount + '</span></span>';
+
+                    // Queries (use queries array length for accurate count)
+                    var queryCount = trace.queries ? trace.queries.length : 0;
+                    var queryDuration = metrics.dbTotalDurationMs || 0;
+                    if (queryCount > 0) {
+                        var qClass = queryCount > 10 ? 'error' : (queryCount > 5 ? 'warn' : '');
+                        html += '<span class="peekaboot-metric ' + qClass + '">\\u{1F5C4}<span class="val">' + queryCount + '\\u00B7' + queryDuration + 'ms</span></span>';
                     }
 
-                    if (metrics.httpCallCount > 0) {
-                        html += '<span class="peekaboot-metric">\\u{1F310}<span class="val">' + metrics.httpCallCount + '\\u00B7' + metrics.httpTotalDurationMs + 'ms</span></span>';
+                    // HTTP calls
+                    var httpCount = metrics.httpCallCount || 0;
+                    var httpDuration = metrics.httpTotalDurationMs || 0;
+                    if (httpCount > 0) {
+                        html += '<span class="peekaboot-metric">\\u{1F310}<span class="val">' + httpCount + '\\u00B7' + httpDuration + 'ms</span></span>';
                     }
 
-                    if (metrics.errorCount > 0) {
-                        html += '<span class="peekaboot-metric error">\\u26A0<span class="val">' + metrics.errorCount + '</span></span>';
+                    // Logs count
+                    var logCount = trace.logs ? trace.logs.length : 0;
+                    if (logCount > 0) {
+                        html += '<span class="peekaboot-metric">\\u{1F4DD}<span class="val">' + logCount + '</span></span>';
+                    }
+
+                    // Errors
+                    var errorCount = metrics.errorCount || 0;
+                    if (errorCount > 0) {
+                        html += '<span class="peekaboot-metric error">\\u26A0<span class="val">' + errorCount + '</span></span>';
                     }
 
                     metricsEl.innerHTML = html;
@@ -300,7 +331,7 @@ public class DevToolbarFilter implements Filter {
 
                 function showPending() {
                     var metricsEl = shadow.getElementById('pb-metrics');
-                    metricsEl.innerHTML = '<span class="peekaboot-pending">[\\u23F1 ?] [\\u{1F5C4} ?] [\\u{1F310} ?]</span>';
+                    metricsEl.innerHTML = '<span class="peekaboot-pending">[\\u23F1 ?] [\\u{1F4C4} ?] [\\u{1F5C4} ?] [\\u{1F4DD} ?]</span>';
                 }
 
                 setTimeout(fetchTrace, 50);
