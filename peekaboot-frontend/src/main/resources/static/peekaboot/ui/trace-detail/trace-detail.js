@@ -168,6 +168,28 @@
         .pk-tag-badge .key { color: var(--pk-primary); }
         .pk-tag-badge .value { color: var(--pk-text); }
 
+        .pk-span-row-count { font-size: 10px; padding: 1px 5px; background: var(--pk-success); color: #000; border-radius: 3px; margin-left: 4px; }
+
+        .pk-span-query-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-purple); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
+        .pk-span-query-toggle:hover { opacity: 0.8; }
+
+        .pk-span-query-detail { padding: 8px 12px; margin: 4px 0 4px 36px; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; display: none; }
+        .pk-span-query-detail.expanded { display: block; }
+        .pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
+        .pk-span-query-detail .pk-query-text { color: var(--pk-text-strong); }
+
+        .pk-span-logs-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-primary); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
+        .pk-span-logs-toggle:hover { opacity: 0.8; }
+
+        /* Logs popup */
+        .pk-logs-popup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 800px; max-height: 70vh; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 100; display: flex; flex-direction: column; }
+        .pk-logs-popup.hidden { display: none; }
+        .pk-logs-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--pk-border); }
+        .pk-logs-popup-title { font-weight: 600; color: var(--pk-text-strong); }
+        .pk-logs-popup-close { background: transparent; border: none; color: var(--pk-text-muted); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .pk-logs-popup-close:hover { color: var(--pk-danger); }
+        .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 0; }
+
         /* Request tab styles */
         .pk-request-section { margin-bottom: 24px; }
         .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -376,6 +398,8 @@
         html += '</div>';
         html += '<div id="pk-gantt-rows"></div>';
         html += '</div>';
+        // Hidden container for logs popup
+        html += '<div id="pk-logs-popup" class="pk-logs-popup hidden"></div>';
         container.innerHTML = html;
 
         const rowsContainer = container.querySelector('#pk-gantt-rows');
@@ -383,6 +407,29 @@
 
         // Add click handlers for expand/collapse
         rowsContainer.addEventListener('click', (e) => {
+            // Handle logs toggle clicks
+            const logsToggle = e.target.closest('.pk-span-logs-toggle');
+            if (logsToggle) {
+                const spanId = logsToggle.dataset.spanId;
+                const logsJson = logsToggle.dataset.logs;
+                const logs = logsJson ? JSON.parse(logsJson) : [];
+                showSpanLogsPopup(container, spanId, logs);
+                return;
+            }
+
+            // Handle SQL toggle clicks
+            const sqlToggle = e.target.closest('.pk-span-query-toggle');
+            if (sqlToggle) {
+                const spanId = sqlToggle.dataset.spanId;
+                const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${spanId}"]`);
+                if (queryDetail) {
+                    queryDetail.classList.toggle('expanded');
+                    sqlToggle.textContent = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'SQL';
+                }
+                return;
+            }
+
+            // Handle row expand/collapse
             const toggle = e.target.closest('.pk-gantt-toggle');
             if (!toggle) return;
             const row = toggle.closest('.pk-gantt-row');
@@ -415,6 +462,47 @@
         });
     }
 
+    function showSpanLogsPopup(container, spanId, logs) {
+        const popup = container.querySelector('#pk-logs-popup');
+        if (!popup) return;
+
+        if (logs.length === 0) {
+            popup.classList.add('hidden');
+            return;
+        }
+
+        let html = '<div class="pk-logs-popup-header">';
+        html += `<span class="pk-logs-popup-title">Logs for span</span>`;
+        html += '<button class="pk-logs-popup-close">&times;</button>';
+        html += '</div>';
+        html += '<div class="pk-logs-popup-content">';
+
+        logs.forEach(log => {
+            const time = formatTime(log.timestamp);
+            html += `<div class="pk-log-item">`;
+            html += `<span class="pk-log-time">${time}</span>`;
+            html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
+            html += `<span class="pk-log-message">${Utils.escapeHtml(log.message)}</span>`;
+            html += `</div>`;
+        });
+
+        html += '</div>';
+        popup.innerHTML = html;
+        popup.classList.remove('hidden');
+
+        // Close button handler
+        popup.querySelector('.pk-logs-popup-close').addEventListener('click', () => {
+            popup.classList.add('hidden');
+        });
+
+        // Click outside to close
+        popup.addEventListener('click', (e) => {
+            if (e.target === popup) {
+                popup.classList.add('hidden');
+            }
+        });
+    }
+
     function renderSpanRows(container, span, depth, traceStart, totalDuration, parentId) {
         if (!span) return;
 
@@ -429,6 +517,18 @@
         const hasChildren = span.children && span.children.length > 0;
         const events = span.events || [];
         const tags = span.tags || {};
+
+        // Check for query spans and result-set spans
+        const spanName = (span.name || '').toLowerCase();
+        const isQuerySpan = spanName === 'query' || spanName.includes('query');
+        const isResultSetSpan = spanName === 'result-set' || spanName.includes('result-set');
+        const queryTags = Object.entries(tags).filter(([k]) => k.startsWith('jdbc.query'));
+        const hasQuery = queryTags.length > 0;
+        const rowCount = tags['jdbc.row-count'];
+
+        // Check for logs (now attached to span by backend)
+        const spanLogs = span.logs || [];
+        const hasLogs = spanLogs.length > 0;
 
         const row = document.createElement('div');
         row.className = 'pk-gantt-row';
@@ -446,6 +546,24 @@
             nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
         }
         nameHtml += `<span class="pk-gantt-name-text" title="${Utils.escapeHtml(span.name || 'unknown')}">${Utils.escapeHtml(span.name || 'unknown')}</span>`;
+
+        // Add row count badge for result-set spans
+        if (isResultSetSpan && rowCount !== undefined) {
+            nameHtml += `<span class="pk-span-row-count">${rowCount} rows</span>`;
+        }
+
+        // Add query toggle for query spans with SQL
+        if (hasQuery) {
+            nameHtml += `<span class="pk-span-query-toggle" data-span-id="${span.spanId}">SQL</span>`;
+        }
+
+        // Add logs toggle for spans with logs
+        if (hasLogs) {
+            // Store logs as JSON data attribute for popup (backend provides logs per span)
+            const logsJson = Utils.escapeHtml(JSON.stringify(spanLogs));
+            nameHtml += `<span class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsJson}">${spanLogs.length} logs</span>`;
+        }
+
         nameHtml += `</div>`;
 
         row.innerHTML = nameHtml +
@@ -453,6 +571,24 @@
             `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
 
         container.appendChild(row);
+
+        // Add query detail row (hidden by default) for query spans
+        if (hasQuery) {
+            const queryDetail = document.createElement('div');
+            queryDetail.className = 'pk-span-query-detail';
+            queryDetail.dataset.spanId = span.spanId;
+            queryDetail.dataset.depth = depth;
+            queryDetail.style.marginLeft = (indent + 20) + 'px';
+
+            let queryHtml = '';
+            queryTags.forEach(([key, value]) => {
+                const label = key.replace('jdbc.query', 'Query').replace('[', ' ').replace(']', '');
+                queryHtml += `<div class="pk-query-label">${Utils.escapeHtml(label)}</div>`;
+                queryHtml += `<div class="pk-query-text">${Utils.escapeHtml(value)}</div>`;
+            });
+            queryDetail.innerHTML = queryHtml;
+            container.appendChild(queryDetail);
+        }
 
         // Add events and tags row if present
         const hasEvents = events.length > 0;

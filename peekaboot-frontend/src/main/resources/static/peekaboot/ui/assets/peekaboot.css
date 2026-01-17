@@ -703,6 +703,11 @@ mark {
     color: white;
 }
 
+.trace-badge.warning {
+    background: var(--pk-warning);
+    color: white;
+}
+
 /* Footer */
 .footer {
     text-align: center;
@@ -1467,4 +1472,54 @@ mark {
     .btn-tz span:last-child {
         display: none;
     }
+}
+
+/* Exception label */
+.task-exception-label {
+    font-weight: 600;
+    color: var(--pk-danger);
+}
+
+/* Trace action label */
+.trace-action-label {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    margin-left: var(--pk-space-xs);
+}
+
+/* Cross-linking between tabs */
+.task-traces-link,
+.trace-scheduler-link {
+    display: inline-block;
+    margin-left: var(--pk-space-sm);
+    padding: 2px 6px;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-primary);
+    text-decoration: none;
+    border-radius: var(--pk-radius);
+    transition: background-color var(--pk-transition);
+}
+
+.task-traces-link:hover,
+.trace-scheduler-link:hover {
+    background: var(--pk-bg-alt);
+    text-decoration: none;
+}
+
+/* Active filter banner */
+.active-filter-banner {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-primary-light);
+    border: 1px solid var(--pk-primary);
+    border-radius: var(--pk-radius);
+    margin-bottom: var(--pk-space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-md);
+}
+
+.active-filter-text {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-primary);
+    font-weight: 500;
 }

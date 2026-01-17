@@ -77,6 +77,36 @@
         }
     }
 
+    // Current filter for root operation (e.g., scheduler target)
+    let currentRootOperationFilter = null;
+
+    function navigateToTracesWithFilter(actionType, rootOperation) {
+        // Set filter to only show the specified action type
+        selectedRootActionTypes.clear();
+        selectedRootActionTypes.add(actionType);
+
+        // Set root operation filter (e.g., scheduler target)
+        currentRootOperationFilter = rootOperation || null;
+
+        // Update checkboxes to reflect new filter state
+        document.querySelectorAll('#traces-filter input').forEach(cb => {
+            cb.checked = cb.value === actionType;
+        });
+
+        // Navigate to traces tab
+        activateTab('traces');
+        setHash('traces');
+
+        // Refresh the traces view with new filters from backend
+        tracesLoaded = false;
+        fetchTraces();
+    }
+
+    function navigateToScheduledTasks() {
+        activateTab('scheduled-tasks');
+        setHash('scheduled-tasks');
+    }
+
     async function init() {
         initTheme();
         initTabs();
@@ -119,7 +149,20 @@
         noTracesEl.classList.add('hidden');
 
         try {
-            const response = await fetch('/peekaboot/api/traces/insights?limit=50');
+            // Build URL with filter parameters
+            const params = new URLSearchParams({ limit: '50' });
+
+            // Add rootActionType filter if only one type selected
+            if (selectedRootActionTypes.size === 1) {
+                params.append('rootActionType', Array.from(selectedRootActionTypes)[0]);
+            }
+
+            // Add rootOperation filter if set
+            if (currentRootOperationFilter) {
+                params.append('rootOperation', currentRootOperationFilter);
+            }
+
+            const response = await fetch(`/peekaboot/api/traces/insights?${params}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -134,10 +177,15 @@
         }
     }
 
+    const ALL_ROOT_ACTION_TYPES = ['HTTP_REQUEST', 'SCHEDULED_JOB', 'MESSAGE_CONSUMER', 'RPC_CALL', 'DATABASE', 'INTERNAL', 'UNKNOWN'];
+
     function renderTracesTab() {
         const listEl = document.getElementById('traces-list');
         const noTracesEl = document.getElementById('no-traces');
         listEl.innerHTML = '';
+
+        // Update filter indicator
+        updateFilterIndicator();
 
         const traces = tracesData?.traces;
         if (!traces || traces.length === 0) {
@@ -165,6 +213,54 @@
         });
     }
 
+    function updateFilterIndicator() {
+        const filterBanner = document.getElementById('traces-active-filter');
+        const filterText = filterBanner?.querySelector('.active-filter-text');
+        const clearBtn = document.getElementById('traces-filter-clear');
+
+        if (!filterBanner || !filterText) return;
+
+        const isTypeFiltered = selectedRootActionTypes.size < ALL_ROOT_ACTION_TYPES.length;
+        const isOperationFiltered = currentRootOperationFilter !== null;
+        const isFiltered = isTypeFiltered || isOperationFiltered;
+
+        if (isFiltered && selectedRootActionTypes.size > 0) {
+            let filterDescription = '';
+
+            // Show type filter
+            if (isTypeFiltered) {
+                const activeFilters = Array.from(selectedRootActionTypes)
+                    .map(type => ROOT_ACTION_LABELS[type] || type)
+                    .join(', ');
+                filterDescription = `Type: ${activeFilters}`;
+            }
+
+            // Show operation filter (e.g., scheduler target)
+            if (isOperationFiltered) {
+                const operationLabel = currentRootOperationFilter.split('.').pop();
+                filterDescription += filterDescription ? ` | Target: ${operationLabel}` : `Target: ${operationLabel}`;
+            }
+
+            filterText.textContent = `Filtering: ${filterDescription}`;
+            filterBanner.classList.remove('hidden');
+            if (clearBtn) clearBtn.classList.remove('hidden');
+        } else {
+            filterBanner.classList.add('hidden');
+            if (clearBtn) clearBtn.classList.add('hidden');
+        }
+    }
+
+    function resetTracesFilter() {
+        ALL_ROOT_ACTION_TYPES.forEach(type => selectedRootActionTypes.add(type));
+        currentRootOperationFilter = null;
+        document.querySelectorAll('#traces-filter input').forEach(cb => {
+            cb.checked = true;
+        });
+        // Refetch with cleared filters
+        tracesLoaded = false;
+        fetchTraces();
+    }
+
     function renderTraceItem(trace) {
         const item = document.createElement('div');
         item.className = 'trace-item';
@@ -190,24 +286,42 @@
             statusBadge = '<span class="trace-badge warning">SLOW</span>';
         }
 
+        // Link to scheduled tasks for SCHEDULED_JOB traces
+        const schedulerLink = actionType === 'SCHEDULED_JOB'
+            ? '<a href="#" class="trace-scheduler-link" title="View Scheduled Tasks">&#128337;</a>'
+            : '';
+
         item.innerHTML = `
             <div class="trace-header">
-                <span class="trace-action-type" title="${PeekabootUtils.escapeHtml(actionLabel)}">${actionIcon}</span>
+                <span class="trace-action-type" title="${PeekabootUtils.escapeHtml(actionLabel)}">${actionIcon} <span class="trace-action-label">${PeekabootUtils.escapeHtml(actionLabel)}</span></span>
                 <code class="trace-id">${PeekabootUtils.escapeHtml(traceIdShort)}</code>
                 <span class="trace-time">${startTime}</span>
                 <span class="trace-duration">${duration}</span>
                 <span class="trace-badge">${spanCount} spans</span>
                 ${statusBadge}
+                ${schedulerLink}
             </div>
         `;
 
         const header = item.querySelector('.trace-header');
-        header.addEventListener('click', () => {
+        header.addEventListener('click', (e) => {
+            // Don't open trace detail if clicking the scheduler link
+            if (e.target.closest('.trace-scheduler-link')) return;
             if (trace.traceId && window.PeekabootTraceDetail) {
                 PeekabootTraceDetail.open(trace.traceId);
                 setHash('traces', trace.traceId);
             }
         });
+
+        // Add click handler for scheduler link
+        const schedLink = item.querySelector('.trace-scheduler-link');
+        if (schedLink) {
+            schedLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigateToScheduledTasks();
+            });
+        }
 
         return item;
     }
@@ -356,6 +470,12 @@
                 renderTracesTab();
             });
         });
+
+        // Clear filter button
+        const clearBtn = document.getElementById('traces-filter-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', resetTracesFilter);
+        }
     }
 
     function initErrorClose() {
@@ -1100,6 +1220,10 @@
                     ? (task.scheduleDescription || task.schedule)
                     : formatFixedInterval(task.intervalMs);
 
+                const viewTracesLink = features.tracing
+                    ? `<a href="#" class="task-traces-link" data-target="${PeekabootUtils.escapeHtml(task.target)}" title="View traces for this scheduler">&#128269;</a>`
+                    : '';
+
                 item.innerHTML = `
                     <div class="task-row">
                         <div class="task-left">
@@ -1114,9 +1238,21 @@
                     </div>
                     <div class="task-target-row">
                         <span class="task-target" title="${PeekabootUtils.escapeHtml(task.target)}">${PeekabootUtils.escapeHtml(targetShort)}</span>
+                        ${viewTracesLink}
                     </div>
-                    ${task.lastException ? `<div class="task-exception">${PeekabootUtils.escapeHtml(task.lastException)}</div>` : ''}
+                    ${task.lastException ? `<div class="task-exception"><span class="task-exception-label">Error during last Execution:</span> ${PeekabootUtils.escapeHtml(task.lastException)}</div>` : ''}
                 `;
+
+                // Add click handler for view traces link
+                const tracesLink = item.querySelector('.task-traces-link');
+                if (tracesLink) {
+                    tracesLink.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const target = tracesLink.dataset.target;
+                        navigateToTracesWithFilter('SCHEDULED_JOB', target);
+                    });
+                }
 
                 listEl.appendChild(item);
             });
