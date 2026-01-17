@@ -88,8 +88,11 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public TraceInsightsResponse getTracesInsights(@RequestParam(name = "limit", defaultValue = "100") int limit) {
-        return traceInsightsService.getInsights(limit, getEffectiveCaptureMode());
+    public TraceInsightsResponse getTracesInsights(
+            @RequestParam(name = "limit", defaultValue = "100") int limit,
+            @RequestParam(name = "rootActionType", required = false) String rootActionType,
+            @RequestParam(name = "rootOperation", required = false) String rootOperation) {
+        return traceInsightsService.getInsights(limit, getEffectiveCaptureMode(), rootActionType, rootOperation);
     }
 
     @GetMapping(value = "/api/traces/{traceId}/raw", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -52,9 +52,10 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldTransformTracesAndCalculateSummary() {
         // Given: Two traces - one OK (100ms) and one with error (200ms)
+        // Note: Service fetches limit*10 traces to account for filtering
         TraceData trace1 = createTraceData("trace1", 100, false);
         TraceData trace2 = createTraceData("trace2", 200, true);
-        when(traceQueryService.getTraces(10, TraceCaptureMode.ALL)).thenReturn(List.of(trace1, trace2));
+        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL)).thenReturn(List.of(trace1, trace2));
 
         // When
         TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
@@ -69,10 +70,11 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldCountSlowTraces() {
         // Given: Three traces - one slow (150ms > 100ms threshold)
+        // Note: Service fetches limit*10 traces to account for filtering
         TraceData fastTrace = createTraceData("fast", 50, false);
         TraceData slowTrace = createTraceData("slow", 150, false);
         TraceData normalTrace = createTraceData("normal", 80, false);
-        when(traceQueryService.getTraces(10, TraceCaptureMode.ALL))
+        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
                 .thenReturn(List.of(fastTrace, slowTrace, normalTrace));
 
         // When
@@ -85,7 +87,8 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldHandleEmptyTracesList() {
         // Given
-        when(traceQueryService.getTraces(10, TraceCaptureMode.ALL)).thenReturn(List.of());
+        // Note: Service fetches limit*10 traces to account for filtering
+        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL)).thenReturn(List.of());
 
         // When
         TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
@@ -170,8 +173,9 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldUseCorrectCaptureMode() {
         // Given: Set up mocks for ERRORS_ONLY mode
+        // Note: Service fetches limit*10 traces to account for filtering
         TraceData errorTrace = createTraceData("error-trace", 100, true);
-        when(traceQueryService.getTraces(5, TraceCaptureMode.ERRORS_ONLY)).thenReturn(List.of(errorTrace));
+        when(traceQueryService.getTraces(50, TraceCaptureMode.ERRORS_ONLY)).thenReturn(List.of(errorTrace));
 
         // When
         TraceInsightsResponse response = service.getInsights(5, TraceCaptureMode.ERRORS_ONLY);
@@ -184,10 +188,11 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldCalculateAverageDurationCorrectly() {
         // Given: Three traces with durations 100, 200, 300 -> avg = 200
+        // Note: Service fetches limit*10 traces to account for filtering
         TraceData trace1 = createTraceData("trace1", 100, false);
         TraceData trace2 = createTraceData("trace2", 200, false);
         TraceData trace3 = createTraceData("trace3", 300, false);
-        when(traceQueryService.getTraces(10, TraceCaptureMode.ALL))
+        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
                 .thenReturn(List.of(trace1, trace2, trace3));
 
         // When
@@ -201,9 +206,10 @@ class TraceInsightsServiceTest {
     void getInsights_shouldCountTracesWithSlowOrVerySlowStatus() {
         // Given: Two traces - one with HAS_SLOW_SPANS status
         // Create a trace that will be mapped to HAS_SLOW_SPANS status - need an error span for HAS_ERRORS
+        // Note: Service fetches limit*10 traces to account for filtering
         TraceData slowTrace = createTraceData("slow", 500, false); // 500ms will trigger VERY_SLOW
         TraceData normalTrace = createTraceData("normal", 50, false);
-        when(traceQueryService.getTraces(10, TraceCaptureMode.ALL))
+        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
                 .thenReturn(List.of(slowTrace, normalTrace));
 
         // When

@@ -129,10 +129,10 @@ class PeekabootControllerTest {
                     List.of(),
                     new TraceSummary(0, 0, 0, 0.0)
             );
-            when(traceInsightsService.getInsights(anyInt(), any()))
+            when(traceInsightsService.getInsights(anyInt(), any(), any(), any()))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(100);
+            TraceInsightsResponse result = controller.getTracesInsights(100, null, null);
 
             assertThat(result).isEqualTo(expectedResponse);
         }
@@ -144,10 +144,24 @@ class PeekabootControllerTest {
                     List.of(),
                     new TraceSummary(0, 0, 0, 0.0)
             );
-            when(traceInsightsService.getInsights(25, TraceCaptureMode.ERRORS_ONLY))
+            when(traceInsightsService.getInsights(25, TraceCaptureMode.ERRORS_ONLY, null, null))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(25);
+            TraceInsightsResponse result = controller.getTracesInsights(25, null, null);
+
+            assertThat(result).isEqualTo(expectedResponse);
+        }
+
+        @Test
+        void shouldPassFiltersToService() {
+            TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
+                    List.of(),
+                    new TraceSummary(0, 0, 0, 0.0)
+            );
+            when(traceInsightsService.getInsights(100, TraceCaptureMode.ERRORS_ONLY, "SCHEDULED_JOB", "MyScheduler"))
+                    .thenReturn(expectedResponse);
+
+            TraceInsightsResponse result = controller.getTracesInsights(100, "SCHEDULED_JOB", "MyScheduler");
 
             assertThat(result).isEqualTo(expectedResponse);
         }

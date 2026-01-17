@@ -3,6 +3,7 @@ package net.osslabz.peekaboot.backend.service;
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.QueryInfo;
 import net.osslabz.peekaboot.backend.domain.trace.RequestDetails;
+import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
@@ -20,6 +21,8 @@ import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -54,17 +57,45 @@ public class TraceInsightsService {
     }
 
     public TraceInsightsResponse getInsights(int limit, TraceCaptureMode mode) {
+        return getInsights(limit, mode, null, null);
+    }
+
+    public TraceInsightsResponse getInsights(int limit, TraceCaptureMode mode, String rootActionType, String rootOperation) {
         if (traceQueryService == null) {
             return EMPTY_RESPONSE;
         }
 
-        List<TraceTree> traceTrees = traceQueryService.getTraces(limit, mode).stream()
+        // Parse rootActionType filter
+        RootActionType actionTypeFilter = null;
+        if (rootActionType != null && !rootActionType.isBlank()) {
+            try {
+                actionTypeFilter = RootActionType.valueOf(rootActionType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid values, don't filter
+            }
+        }
+
+        final RootActionType finalActionTypeFilter = actionTypeFilter;
+        final String finalRootOperation = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
+
+        List<TraceTree> traceTrees = traceQueryService.getTraces(limit * 10, mode).stream()  // Fetch more to account for filtering
                 .map(traceTreeMapper::map)
+                .filter(tree -> finalActionTypeFilter == null || tree.rootActionType() == finalActionTypeFilter)
+                .filter(tree -> finalRootOperation == null || matchesRootOperation(tree, finalRootOperation))
                 .map(issueDetector::detectIssues)
+                .limit(limit)
                 .toList();
 
         TraceSummary summary = calculateSummary(traceTrees);
         return new TraceInsightsResponse(traceTrees, summary);
+    }
+
+    private boolean matchesRootOperation(TraceTree tree, String rootOperation) {
+        if (tree.rootOperation() == null) {
+            return false;
+        }
+        // Support partial matching for flexibility
+        return tree.rootOperation().toLowerCase().contains(rootOperation.toLowerCase());
     }
 
     public Optional<TraceTree> getTraceInsights(String traceId) {
@@ -124,6 +155,13 @@ public class TraceInsightsService {
             return tree;
         }
 
+        // Attach logs to their respective spans
+        SpanNode enrichedRootSpan = tree.rootSpan();
+        if (!logs.isEmpty() && enrichedRootSpan != null) {
+            Map<String, List<TraceLog>> logsBySpan = groupLogsBySpan(logs);
+            enrichedRootSpan = attachLogsToSpan(enrichedRootSpan, logsBySpan);
+        }
+
         return new TraceTree(
                 tree.traceId(),
                 tree.startTimeMs(),
@@ -131,13 +169,53 @@ public class TraceInsightsService {
                 tree.status(),
                 tree.rootActionType(),
                 tree.rootOperation(),
-                tree.rootSpan(),
+                enrichedRootSpan,
                 tree.metrics(),
                 tree.inheritedAttributes(),
                 requestDetails,
                 logs.isEmpty() ? null : logs,
                 queries.isEmpty() ? null : queries
         );
+    }
+
+    private Map<String, List<TraceLog>> groupLogsBySpan(List<TraceLog> logs) {
+        Map<String, List<TraceLog>> logsBySpan = new HashMap<>();
+        for (TraceLog log : logs) {
+            String spanId = log.spanId() != null ? log.spanId() : "unknown";
+            logsBySpan.computeIfAbsent(spanId, k -> new ArrayList<>()).add(log);
+        }
+        return logsBySpan;
+    }
+
+    private SpanNode attachLogsToSpan(SpanNode span, Map<String, List<TraceLog>> logsBySpan) {
+        if (span == null) {
+            return null;
+        }
+
+        // Get logs for this span
+        List<TraceLog> spanLogs = logsBySpan.get(span.spanId());
+
+        // Recursively process children
+        List<SpanNode> enrichedChildren = null;
+        if (span.children() != null && !span.children().isEmpty()) {
+            enrichedChildren = span.children().stream()
+                    .map(child -> attachLogsToSpan(child, logsBySpan))
+                    .toList();
+        }
+
+        // Create new span with logs attached
+        if (spanLogs != null || enrichedChildren != null) {
+            SpanNode result = span;
+            if (spanLogs != null) {
+                result = result.withLogs(spanLogs);
+            }
+            if (enrichedChildren != null) {
+                result = result.withChildren(enrichedChildren);
+            }
+            return result;
+        }
+
+        return span;
     }
 
     private TraceSummary calculateSummary(List<TraceTree> traces) {
