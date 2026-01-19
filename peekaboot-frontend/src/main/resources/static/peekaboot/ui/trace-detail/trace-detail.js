@@ -191,6 +191,11 @@
         .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 20px; }
 
         /* Request tab styles */
+        .pk-request-subtabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--pk-border); }
+        .pk-request-subtab { padding: 8px 12px; background: transparent; border: none; color: var(--pk-text-muted); cursor: pointer; font-size: 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .pk-request-subtab:hover { color: var(--pk-text); }
+        .pk-request-subtab.active { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary); }
+
         .pk-request-section { margin-bottom: 24px; }
         .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
         .pk-request-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -636,18 +641,56 @@
         const req = httpExchange?.request;
         const res = httpExchange?.response;
 
+        // Build sub-tab navigation
+        let html = '<div class="pk-request-subtabs">';
+        html += '<button class="pk-request-subtab active" data-subtab="overview">Overview</button>';
+        html += '<button class="pk-request-subtab" data-subtab="request-headers">Request Headers</button>';
+        html += '<button class="pk-request-subtab" data-subtab="response-headers">Response Headers</button>';
+        html += '</div>';
+        html += '<div id="pk-request-subtab-content"></div>';
+
+        container.innerHTML = html;
+
+        // Add sub-tab click handlers
+        const subtabs = container.querySelectorAll('.pk-request-subtab');
+        const subtabContent = container.querySelector('#pk-request-subtab-content');
+
+        subtabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                subtabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                renderRequestSubtab(subtabContent, tab.dataset.subtab, req, res, trace);
+            });
+        });
+
+        // Render default sub-tab
+        renderRequestSubtab(subtabContent, 'overview', req, res, trace);
+    }
+
+    function renderRequestSubtab(container, subtab, req, res, trace) {
+        switch (subtab) {
+            case 'overview': renderRequestOverview(container, req, res, trace); break;
+            case 'request-headers': renderRequestHeaders(container, req); break;
+            case 'response-headers': renderResponseHeaders(container, res); break;
+        }
+    }
+
+    function renderRequestOverview(container, req, res, trace) {
         let html = '';
 
-        // Request Summary section
+        // Request info table
         html += '<div class="pk-request-section">';
         html += '<h3>Request</h3>';
         html += '<table class="pk-request-table">';
         html += `<tr><td>Method</td><td>${Utils.escapeHtml(req?.method || '-')}</td></tr>`;
         html += `<tr><td>Path</td><td>${Utils.escapeHtml(req?.path || '-')}</td></tr>`;
-        if (req?.queryString) {
-            html += `<tr><td>Query String</td><td>${Utils.escapeHtml(req.queryString)}</td></tr>`;
+        if (req?.query) {
+            html += `<tr><td>Query String</td><td>${Utils.escapeHtml(req.query)}</td></tr>`;
         }
-        html += `<tr><td>Status</td><td>${Utils.escapeHtml(String(res?.statusCode || '-'))}</td></tr>`;
+        html += `<tr><td>Status</td><td>${Utils.escapeHtml(String(res?.status || res?.statusCode || '-'))}</td></tr>`;
+        const contentType = req?.headers?.['content-type'] || req?.headers?.['Content-Type'] || '-';
+        html += `<tr><td>Content-Type</td><td>${Utils.escapeHtml(contentType)}</td></tr>`;
+        html += `<tr><td>Duration</td><td>${trace.durationMs || '-'}ms</td></tr>`;
         html += '</table></div>';
 
         // Controller info
@@ -655,29 +698,6 @@
             html += '<div class="pk-request-section">';
             html += '<h3>Controller</h3>';
             html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.className || 'Unknown')}.${Utils.escapeHtml(req.controller.methodName || 'unknown')}()</div>`;
-            html += '</div>';
-        }
-
-        // Request Headers
-        html += '<div class="pk-request-section">';
-        html += '<h3>Request Headers</h3>';
-        html += '<table class="pk-request-table">';
-        const reqHeaders = req?.headers || {};
-        if (Object.keys(reqHeaders).length > 0) {
-            Object.entries(reqHeaders).sort().forEach(([k, v]) => {
-                const isMasked = v === '********';
-                html += `<tr><td>${Utils.escapeHtml(k)}</td><td class="${isMasked ? 'pk-request-masked' : ''}">${Utils.escapeHtml(v)}</td></tr>`;
-            });
-        } else {
-            html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
-        }
-        html += '</table></div>';
-
-        // Request Body
-        if (req?.body?.content) {
-            html += '<div class="pk-request-section">';
-            html += '<h3>Request Body' + (req.body.truncated ? ' <span class="pk-request-masked">(truncated)</span>' : '') + '</h3>';
-            html += `<div class="pk-query-sql">${Utils.escapeHtml(req.body.content)}</div>`;
             html += '</div>';
         }
 
@@ -708,19 +728,48 @@
         }
 
         // Uploaded Files
-        const files = req?.params?.files || [];
+        const files = req?.params?.upload || req?.params?.files || [];
         if (files.length > 0) {
             html += '<div class="pk-request-section">';
             html += '<h3>Uploaded Files</h3>';
             html += '<table class="pk-request-table">';
             files.forEach(file => {
-                html += `<tr><td>${Utils.escapeHtml(file.name || 'unknown')}</td><td>${Utils.escapeHtml(file.contentType || '-')} (${Utils.escapeHtml(String(file.size || 0))} bytes)</td></tr>`;
+                const filename = file.originalFilename || file.name || 'unknown';
+                html += `<tr><td>${Utils.escapeHtml(filename)}</td><td>${Utils.escapeHtml(file.contentType || '-')} (${Utils.escapeHtml(String(file.size || 0))} bytes)</td></tr>`;
             });
             html += '</table></div>';
         }
 
-        // Response Headers
-        html += '<div class="pk-request-section">';
+        // Request Body
+        if (req?.body?.content) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Request Body' + (req.body.truncated ? ' <span class="pk-request-masked">(truncated)</span>' : '') + '</h3>';
+            html += `<div class="pk-query-sql">${Utils.escapeHtml(req.body.content)}</div>`;
+            html += '</div>';
+        }
+
+        container.innerHTML = html || '<div class="pk-no-data">No request details available</div>';
+    }
+
+    function renderRequestHeaders(container, req) {
+        let html = '<div class="pk-request-section">';
+        html += '<h3>Request Headers</h3>';
+        html += '<table class="pk-request-table">';
+        const reqHeaders = req?.headers || {};
+        if (Object.keys(reqHeaders).length > 0) {
+            Object.entries(reqHeaders).sort().forEach(([k, v]) => {
+                const isMasked = v === '********';
+                html += `<tr><td>${Utils.escapeHtml(k)}</td><td class="${isMasked ? 'pk-request-masked' : ''}">${Utils.escapeHtml(v)}</td></tr>`;
+            });
+        } else {
+            html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
+        }
+        html += '</table></div>';
+        container.innerHTML = html;
+    }
+
+    function renderResponseHeaders(container, res) {
+        let html = '<div class="pk-request-section">';
         html += '<h3>Response Headers</h3>';
         html += '<table class="pk-request-table">';
         const resHeaders = res?.headers || {};
@@ -732,8 +781,7 @@
             html += '<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>';
         }
         html += '</table></div>';
-
-        container.innerHTML = html || '<div class="pk-no-data">No request details available</div>';
+        container.innerHTML = html;
     }
 
     function renderQueries(container, trace) {

@@ -9,7 +9,7 @@
 
     <springProfile name="default">
 
-        <logger name="net.ttddyy" level="TRACE"/>
+        <logger name="net.ttddyy" level="INFO"/>
 
         <logger name="net.ttddyy.dsproxy.listener.logging.SLF4JQueryLoggingListener" level="TRACE"/>
         <logger name="org.zalando.logbook" level="TRACE"/>
