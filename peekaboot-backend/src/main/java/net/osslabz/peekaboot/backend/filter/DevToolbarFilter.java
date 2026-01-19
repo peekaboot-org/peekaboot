@@ -246,7 +246,7 @@ public class DevToolbarFilter implements Filter {
                 var totalDelay = 0;
 
                 function isTraceComplete(trace) {
-                    return trace && trace.rootSpan && trace.metrics && trace.metrics.totalSpans > 0;
+                    return trace && trace.rootSpan && trace.summary && trace.summary.spans && trace.summary.spans.count > 0;
                 }
 
                 function fetchTrace() {
@@ -278,14 +278,15 @@ public class DevToolbarFilter implements Filter {
 
                 function updateToolbar(trace) {
                     console.log('Peekaboot trace data:', JSON.stringify(trace, null, 2));
-                    var metrics = trace.metrics || {};
-                    var req = trace.request || {};
+                    var summary = trace.summary || {};
+                    var httpExchange = trace.httpExchange || {};
+                    var controller = httpExchange.request && httpExchange.request.controller || {};
                     var metricsEl = shadow.getElementById('pb-metrics');
                     var controllerEl = shadow.getElementById('pb-controller');
 
-                    if (req.controllerClass && req.controllerMethod) {
-                        var className = req.controllerClass.split('.').pop();
-                        controllerEl.textContent = '\\u2192 ' + className + '.' + req.controllerMethod;
+                    if (controller.class && controller.method) {
+                        var className = controller.class.split('.').pop();
+                        controllerEl.textContent = '\\u2192 ' + className + '.' + controller.method;
                     }
 
                     var html = '';
@@ -296,32 +297,25 @@ public class DevToolbarFilter implements Filter {
                     html += '<span class="peekaboot-metric ' + durationClass + '">\\u23F1<span class="val">' + duration + 'ms</span></span>';
 
                     // Spans count
-                    var spanCount = metrics.totalSpans || 0;
+                    var spanCount = summary.spans ? summary.spans.count : 0;
                     html += '<span class="peekaboot-metric">\\u{1F4C4}<span class="val">' + spanCount + '</span></span>';
 
-                    // Queries (use queries array length for accurate count)
-                    var queryCount = trace.queries ? trace.queries.length : 0;
-                    var queryDuration = metrics.dbTotalDurationMs || 0;
+                    // Queries (use queries array length for accurate count, or summary)
+                    var queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
+                    var queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
                     if (queryCount > 0) {
                         var qClass = queryCount > 10 ? 'error' : (queryCount > 5 ? 'warn' : '');
                         html += '<span class="peekaboot-metric ' + qClass + '">\\u{1F5C4}<span class="val">' + queryCount + '\\u00B7' + queryDuration + 'ms</span></span>';
                     }
 
-                    // HTTP calls
-                    var httpCount = metrics.httpCallCount || 0;
-                    var httpDuration = metrics.httpTotalDurationMs || 0;
-                    if (httpCount > 0) {
-                        html += '<span class="peekaboot-metric">\\u{1F310}<span class="val">' + httpCount + '\\u00B7' + httpDuration + 'ms</span></span>';
-                    }
-
                     // Logs count
-                    var logCount = trace.logs ? trace.logs.length : 0;
+                    var logCount = trace.logs ? trace.logs.length : (summary.logs ? summary.logs.count : 0);
                     if (logCount > 0) {
                         html += '<span class="peekaboot-metric">\\u{1F4DD}<span class="val">' + logCount + '</span></span>';
                     }
 
                     // Errors
-                    var errorCount = metrics.errorCount || 0;
+                    var errorCount = summary.spans ? summary.spans.errorCount : 0;
                     if (errorCount > 0) {
                         html += '<span class="peekaboot-metric error">\\u26A0<span class="val">' + errorCount + '</span></span>';
                     }

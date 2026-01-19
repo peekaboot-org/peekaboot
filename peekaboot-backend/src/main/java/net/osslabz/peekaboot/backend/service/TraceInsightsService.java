@@ -1,14 +1,17 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.peekaboot.backend.domain.trace.HttpExchange;
+import net.osslabz.peekaboot.backend.domain.trace.HttpRequest;
+import net.osslabz.peekaboot.backend.domain.trace.HttpResponse;
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.QueryInfo;
-import net.osslabz.peekaboot.backend.domain.trace.RequestDetails;
 import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
+import net.osslabz.peekaboot.backend.domain.trace.TraceListSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
-import net.osslabz.peekaboot.backend.domain.trace.TraceSummary;
+import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
@@ -32,7 +35,7 @@ public class TraceInsightsService {
 
     private static final TraceInsightsResponse EMPTY_RESPONSE = new TraceInsightsResponse(
             List.of(),
-            new TraceSummary(0, 0, 0, 0.0)
+            new TraceListSummary(0, 0, 0, 0.0)
     );
 
     @Nullable
@@ -86,7 +89,7 @@ public class TraceInsightsService {
                 .limit(limit)
                 .toList();
 
-        TraceSummary summary = calculateSummary(traceTrees);
+        TraceListSummary summary = calculateListSummary(traceTrees);
         return new TraceInsightsResponse(traceTrees, summary);
     }
 
@@ -114,7 +117,7 @@ public class TraceInsightsService {
 
     private TraceTree enrichWithDetails(TraceTree tree, String traceId, List<QueryInfo> queries) {
         List<TraceLog> logs = List.of();
-        RequestDetails requestDetails = null;
+        HttpExchange httpExchange = null;
 
         if (traceDataStorage != null) {
             Optional<TraceDataBundle> bundleOpt = traceDataStorage.getTrace(traceId);
@@ -134,24 +137,45 @@ public class TraceInsightsService {
                         ))
                         .toList();
 
-                // Extract request details
+                // Extract HTTP exchange details
                 RequestCompletedEvent reqEvent = bundle.request();
                 if (reqEvent != null) {
-                    requestDetails = new RequestDetails(
-                            reqEvent.controllerClass(),
-                            reqEvent.controllerMethod(),
-                            reqEvent.requestHeaders() != null ? reqEvent.requestHeaders() : Map.of(),
-                            reqEvent.responseHeaders() != null ? reqEvent.responseHeaders() : Map.of(),
-                            reqEvent.queryParams() != null ? reqEvent.queryParams() : Map.of(),
-                            Map.of(),  // formParams not captured yet
-                            reqEvent.requestBody(),
-                            reqEvent.requestBodyTruncated()
+                    HttpRequest.Body body = new HttpRequest.Body(
+                            reqEvent.requestBodyTruncated(),
+                            reqEvent.requestBody()
                     );
+                    HttpRequest.Controller controller = new HttpRequest.Controller(
+                            reqEvent.controllerClass(),
+                            reqEvent.controllerMethod()
+                    );
+                    HttpRequest.Params params = new HttpRequest.Params(
+                            reqEvent.queryParams() != null ? reqEvent.queryParams() : Map.of(),
+                            reqEvent.formParams() != null ? reqEvent.formParams() : Map.of(),
+                            reqEvent.uploadedFiles() != null
+                                    ? reqEvent.uploadedFiles().stream()
+                                        .map(f -> new HttpRequest.UploadedFile(f.fieldName(), f.originalFilename(), f.contentType(), f.size()))
+                                        .toList()
+                                    : List.of()
+                    );
+                    HttpRequest request = new HttpRequest(
+                            reqEvent.method(),
+                            reqEvent.path(),
+                            reqEvent.queryString(),
+                            reqEvent.requestHeaders() != null ? reqEvent.requestHeaders() : Map.of(),
+                            body,
+                            controller,
+                            params
+                    );
+                    HttpResponse response = new HttpResponse(
+                            reqEvent.status(),
+                            reqEvent.responseHeaders() != null ? reqEvent.responseHeaders() : Map.of()
+                    );
+                    httpExchange = new HttpExchange(request, response);
                 }
             }
         }
 
-        if (logs.isEmpty() && queries.isEmpty() && requestDetails == null) {
+        if (logs.isEmpty() && queries.isEmpty() && httpExchange == null) {
             return tree;
         }
 
@@ -162,6 +186,19 @@ public class TraceInsightsService {
             enrichedRootSpan = attachLogsToSpan(enrichedRootSpan, logsBySpan);
         }
 
+        // Update logs summary
+        TraceTabSummary updatedSummary = tree.summary();
+        if (!logs.isEmpty()) {
+            int errorLogCount = (int) logs.stream().filter(l -> "ERROR".equalsIgnoreCase(l.level())).count();
+            int warnLogCount = (int) logs.stream().filter(l -> "WARN".equalsIgnoreCase(l.level())).count();
+            updatedSummary = new TraceTabSummary(
+                    tree.summary().request(),
+                    tree.summary().spans(),
+                    tree.summary().queries(),
+                    new TraceTabSummary.LogsSummary(logs.size(), errorLogCount, warnLogCount)
+            );
+        }
+
         return new TraceTree(
                 tree.traceId(),
                 tree.startTimeMs(),
@@ -170,9 +207,9 @@ public class TraceInsightsService {
                 tree.rootActionType(),
                 tree.rootOperation(),
                 enrichedRootSpan,
-                tree.metrics(),
+                updatedSummary,
                 tree.inheritedAttributes(),
-                requestDetails,
+                httpExchange,
                 logs.isEmpty() ? null : logs,
                 queries.isEmpty() ? null : queries
         );
@@ -218,9 +255,9 @@ public class TraceInsightsService {
         return span;
     }
 
-    private TraceSummary calculateSummary(List<TraceTree> traces) {
+    private TraceListSummary calculateListSummary(List<TraceTree> traces) {
         if (traces.isEmpty()) {
-            return new TraceSummary(0, 0, 0, 0.0);
+            return new TraceListSummary(0, 0, 0, 0.0);
         }
 
         int totalTraces = traces.size();
@@ -241,7 +278,7 @@ public class TraceInsightsService {
         }
 
         double avgDurationMs = (double) totalDurationMs / totalTraces;
-        return new TraceSummary(totalTraces, errorCount, slowCount, avgDurationMs);
+        return new TraceListSummary(totalTraces, errorCount, slowCount, avgDurationMs);
     }
 
     private boolean hasSlowIssues(SpanNode span) {

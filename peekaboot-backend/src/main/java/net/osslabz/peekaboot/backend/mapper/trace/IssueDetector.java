@@ -24,7 +24,8 @@ public class IssueDetector {
             return trace;
         }
 
-        int traceDbQueryCount = trace.metrics().dbQueryCount();
+        int traceDbQueryCount = trace.summary() != null && trace.summary().queries() != null
+                ? trace.summary().queries().count() : 0;
         SpanNode processedRoot = processSpan(trace.rootSpan(), true, traceDbQueryCount);
 
         return new TraceTree(
@@ -35,7 +36,7 @@ public class IssueDetector {
                 trace.rootActionType(),
                 trace.rootOperation(),
                 processedRoot,
-                trace.metrics(),
+                trace.summary(),
                 trace.inheritedAttributes()
         );
     }

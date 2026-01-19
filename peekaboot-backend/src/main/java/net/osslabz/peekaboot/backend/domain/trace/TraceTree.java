@@ -11,9 +11,9 @@ public record TraceTree(
     RootActionType rootActionType,
     String rootOperation,
     SpanNode rootSpan,
-    TraceMetrics metrics,
+    TraceTabSummary summary,
     Map<String, Object> inheritedAttributes,
-    RequestDetails request,
+    HttpExchange httpExchange,
     List<TraceLog> logs,
     List<QueryInfo> queries
 ) {
@@ -25,10 +25,10 @@ public record TraceTree(
             RootActionType rootActionType,
             String rootOperation,
             SpanNode rootSpan,
-            TraceMetrics metrics,
+            TraceTabSummary summary,
             Map<String, Object> inheritedAttributes
     ) {
         this(traceId, startTimeMs, durationMs, status, rootActionType, rootOperation,
-                rootSpan, metrics, inheritedAttributes, null, null, null);
+                rootSpan, summary, inheritedAttributes, null, null, null);
     }
 }

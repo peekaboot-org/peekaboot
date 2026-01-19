@@ -17,8 +17,11 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -107,34 +110,49 @@ public class RequestCaptureFilter implements Filter {
             responseHeaders.put(name, value);
         });
 
-        Map<String, String> queryParams = new HashMap<>();
+        // Parse query params as List<String> per key
+        Map<String, List<String>> queryParams = new HashMap<>();
         request.getParameterMap().forEach((key, values) -> {
             if (values != null && values.length > 0) {
-                queryParams.put(key, values[0]);
+                queryParams.put(key, Arrays.asList(values));
             }
         });
+
+        // Form params are captured separately for POST requests with form content type
+        Map<String, List<String>> formParams = Map.of();
+        String contentType = request.getContentType();
+        if (contentType != null && contentType.contains("application/x-www-form-urlencoded")
+                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()))) {
+            formParams = new HashMap<>(queryParams);  // In form-urlencoded, params are in body
+        }
 
         String controllerClass = null;
         String controllerMethod = null;
         Object handler = request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
         if (handler instanceof HandlerMethod handlerMethod) {
-            controllerClass = handlerMethod.getBeanType().getSimpleName();
+            controllerClass = handlerMethod.getBeanType().getName();
             controllerMethod = handlerMethod.getMethod().getName();
         }
 
         RequestCompletedEvent event = new RequestCompletedEvent(
                 traceId,
+                // Request
                 request.getMethod(),
                 request.getRequestURI(),
-                response.getStatus(),
-                durationMs,
+                request.getQueryString(),
                 requestHeaders,
-                responseHeaders,
-                queryParams,
+                null,  // requestBody - not captured yet
+                false, // requestBodyTruncated
                 controllerClass,
                 controllerMethod,
-                null,
-                false
+                queryParams,
+                formParams,
+                List.of(),  // uploadedFiles - not captured yet
+                // Response
+                response.getStatus(),
+                responseHeaders,
+                // Timing
+                durationMs
         );
 
         eventPublisher.publishEvent(event);

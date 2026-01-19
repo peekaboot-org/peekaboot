@@ -4,8 +4,8 @@ import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanEvent;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
-import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
+import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
@@ -29,7 +29,9 @@ public class TraceTreeMapper {
                     TraceStatus.OK,
                     RootActionType.UNKNOWN,
                     null, null,
-                    new TraceMetrics(0, 0, 0L, 0, 0L, 0),
+                    new TraceTabSummary(null, new TraceTabSummary.SpansSummary(0, 0L, 0),
+                            new TraceTabSummary.QueriesSummary(0, 0L),
+                            new TraceTabSummary.LogsSummary(0, 0, 0)),
                     Map.of()
             );
         }
@@ -46,8 +48,8 @@ public class TraceTreeMapper {
         // Find root span
         SpanData rootSpanData = findRootSpan(spans, spanById);
 
-        // Calculate metrics
-        TraceMetrics metrics = calculateMetrics(spans);
+        // Calculate summary
+        TraceTabSummary summary = calculateSummary(spans, rootSpanData);
 
         // Determine trace status
         TraceStatus status = determineStatus(spans);
@@ -68,7 +70,7 @@ public class TraceTreeMapper {
                 rootActionType,
                 rootOperation,
                 rootSpan,
-                metrics,
+                summary,
                 Map.of()  // No inherited attributes - all tags stay on spans
         );
     }
@@ -180,17 +182,19 @@ public class TraceTreeMapper {
         );
     }
 
-    private TraceMetrics calculateMetrics(List<SpanData> spans) {
+    private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
         int totalSpans = spans.size();
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
-        int httpCallCount = 0;
-        long httpTotalDurationMs = 0L;
         int errorCount = 0;
+        long totalDurationMs = 0L;
 
         for (SpanData span : spans) {
             if (span.hasError()) {
                 errorCount++;
+            }
+            if (span.duration() != null) {
+                totalDurationMs += span.duration().toMillis();
             }
 
             boolean isClient = span.kind() == Span.Kind.CLIENT;
@@ -202,7 +206,6 @@ public class TraceTreeMapper {
                 // - datasource-proxy/Micrometer: jdbc.query* tags (not just jdbc.* to avoid counting connection/result-set spans)
                 boolean hasDbTag = tags.keySet().stream().anyMatch(k ->
                         k.startsWith("db.") || k.startsWith("jdbc.query"));
-                boolean hasHttpTag = tags.keySet().stream().anyMatch(k -> k.startsWith("http."));
 
                 if (isClient && hasDbTag) {
                     dbQueryCount++;
@@ -210,17 +213,44 @@ public class TraceTreeMapper {
                         dbTotalDurationMs += span.duration().toMillis();
                     }
                 }
-
-                if (isClient && hasHttpTag) {
-                    httpCallCount++;
-                    if (span.duration() != null) {
-                        httpTotalDurationMs += span.duration().toMillis();
-                    }
-                }
             }
         }
 
-        return new TraceMetrics(totalSpans, dbQueryCount, dbTotalDurationMs, httpCallCount, httpTotalDurationMs, errorCount);
+        // Extract request summary from root span tags
+        TraceTabSummary.RequestSummary requestSummary = null;
+        if (rootSpanData != null && rootSpanData.tags() != null) {
+            Map<String, String> tags = rootSpanData.tags();
+            String method = tags.get("http.method");
+            if (method == null) {
+                method = tags.get("http.request.method");
+            }
+            String path = tags.get("http.target");
+            if (path == null) {
+                path = tags.get("url.path");
+            }
+            String statusStr = tags.get("http.status_code");
+            if (statusStr == null) {
+                statusStr = tags.get("http.response.status_code");
+            }
+            Integer statusCode = null;
+            if (statusStr != null) {
+                try {
+                    statusCode = Integer.parseInt(statusStr);
+                } catch (NumberFormatException e) {
+                    // ignore
+                }
+            }
+            if (method != null || path != null || statusCode != null) {
+                requestSummary = new TraceTabSummary.RequestSummary(method, path, statusCode);
+            }
+        }
+
+        return new TraceTabSummary(
+                requestSummary,
+                new TraceTabSummary.SpansSummary(totalSpans, totalDurationMs, errorCount),
+                new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
+                new TraceTabSummary.LogsSummary(0, 0, 0)  // Logs populated later by TraceInsightsService
+        );
     }
 
     private TraceStatus determineStatus(List<SpanData> spans) {
