@@ -181,14 +181,14 @@
         .pk-span-logs-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-primary); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
         .pk-span-logs-toggle:hover { opacity: 0.8; }
 
-        /* Logs popup */
-        .pk-logs-popup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 800px; max-height: 70vh; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 100; display: flex; flex-direction: column; }
+        /* Logs popup - full width, fixed position */
+        .pk-logs-popup { position: fixed; bottom: 0; left: 0; right: 0; height: 40vh; background: var(--pk-bg-alt); border-top: 2px solid var(--pk-primary); box-shadow: 0 -8px 32px rgba(0,0,0,0.5); z-index: 1000; display: flex; flex-direction: column; }
         .pk-logs-popup.hidden { display: none; }
-        .pk-logs-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--pk-border); }
+        .pk-logs-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--pk-border); background: var(--pk-bg); }
         .pk-logs-popup-title { font-weight: 600; color: var(--pk-text-strong); }
         .pk-logs-popup-close { background: transparent; border: none; color: var(--pk-text-muted); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1; }
         .pk-logs-popup-close:hover { color: var(--pk-danger); }
-        .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 0; }
+        .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 20px; }
 
         /* Request tab styles */
         .pk-request-section { margin-bottom: 24px; }
@@ -342,6 +342,7 @@
                     <button class="pk-trace-tab" data-tab="logs">Logs <span class="count">${logCount}</span></button>
                 </div>
                 <div class="pk-trace-content" id="pk-tab-content"></div>
+                <div id="pk-logs-popup" class="pk-logs-popup hidden"></div>
             </div>
         `;
         shadow.appendChild(container);
@@ -398,8 +399,6 @@
         html += '</div>';
         html += '<div id="pk-gantt-rows"></div>';
         html += '</div>';
-        // Hidden container for logs popup
-        html += '<div id="pk-logs-popup" class="pk-logs-popup hidden"></div>';
         container.innerHTML = html;
 
         const rowsContainer = container.querySelector('#pk-gantt-rows');
@@ -463,7 +462,9 @@
     }
 
     function showSpanLogsPopup(container, spanId, logs) {
-        const popup = container.querySelector('#pk-logs-popup');
+        // Find popup in the trace container (parent of tab content)
+        const traceContainer = container.closest('.pk-trace-container');
+        const popup = traceContainer ? traceContainer.querySelector('#pk-logs-popup') : null;
         if (!popup) return;
 
         if (logs.length === 0) {
@@ -633,18 +634,30 @@
         const httpExchange = trace.httpExchange;
         const req = httpExchange?.request;
         const res = httpExchange?.response;
-        const rootSpan = trace.rootSpan || {};
-        const tags = rootSpan.tags || {};
 
         let html = '';
 
-        if (req?.controller?.class || req?.controller?.method) {
+        // Request Summary section
+        html += '<div class="pk-request-section">';
+        html += '<h3>Request</h3>';
+        html += '<table class="pk-request-table">';
+        html += `<tr><td>Method</td><td>${Utils.escapeHtml(req?.method || '-')}</td></tr>`;
+        html += `<tr><td>Path</td><td>${Utils.escapeHtml(req?.path || '-')}</td></tr>`;
+        if (req?.queryString) {
+            html += `<tr><td>Query String</td><td>${Utils.escapeHtml(req.queryString)}</td></tr>`;
+        }
+        html += `<tr><td>Status</td><td>${Utils.escapeHtml(String(res?.statusCode || '-'))}</td></tr>`;
+        html += '</table></div>';
+
+        // Controller info
+        if (req?.controller?.className || req?.controller?.methodName) {
             html += '<div class="pk-request-section">';
             html += '<h3>Controller</h3>';
-            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.class || 'Unknown')}.${Utils.escapeHtml(req.controller.method || 'unknown')}()</div>`;
+            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.className || 'Unknown')}.${Utils.escapeHtml(req.controller.methodName || 'unknown')}()</div>`;
             html += '</div>';
         }
 
+        // Request Headers
         html += '<div class="pk-request-section">';
         html += '<h3>Request Headers</h3>';
         html += '<table class="pk-request-table">';
@@ -659,6 +672,15 @@
         }
         html += '</table></div>';
 
+        // Request Body
+        if (req?.body?.content) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Request Body' + (req.body.truncated ? ' <span class="pk-request-masked">(truncated)</span>' : '') + '</h3>';
+            html += `<div class="pk-query-sql">${Utils.escapeHtml(req.body.content)}</div>`;
+            html += '</div>';
+        }
+
+        // Query Parameters
         const queryParams = req?.params?.query || {};
         if (Object.keys(queryParams).length > 0) {
             html += '<div class="pk-request-section">';
@@ -671,6 +693,32 @@
             html += '</table></div>';
         }
 
+        // Form Parameters
+        const formParams = req?.params?.form || {};
+        if (Object.keys(formParams).length > 0) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Form Parameters</h3>';
+            html += '<table class="pk-request-table">';
+            Object.entries(formParams).sort().forEach(([k, v]) => {
+                const displayValue = Array.isArray(v) ? v.join(', ') : v;
+                html += `<tr><td>${Utils.escapeHtml(k)}</td><td>${Utils.escapeHtml(displayValue)}</td></tr>`;
+            });
+            html += '</table></div>';
+        }
+
+        // Uploaded Files
+        const files = req?.params?.files || [];
+        if (files.length > 0) {
+            html += '<div class="pk-request-section">';
+            html += '<h3>Uploaded Files</h3>';
+            html += '<table class="pk-request-table">';
+            files.forEach(file => {
+                html += `<tr><td>${Utils.escapeHtml(file.name || 'unknown')}</td><td>${Utils.escapeHtml(file.contentType || '-')} (${Utils.escapeHtml(String(file.size || 0))} bytes)</td></tr>`;
+            });
+            html += '</table></div>';
+        }
+
+        // Response Headers
         html += '<div class="pk-request-section">';
         html += '<h3>Response Headers</h3>';
         html += '<table class="pk-request-table">';
