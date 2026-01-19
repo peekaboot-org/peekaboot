@@ -410,8 +410,9 @@
             const logsToggle = e.target.closest('.pk-span-logs-toggle');
             if (logsToggle) {
                 const spanId = logsToggle.dataset.spanId;
-                const logsJson = logsToggle.dataset.logs;
-                const logs = logsJson ? JSON.parse(logsJson) : [];
+                const logsBase64 = logsToggle.dataset.logs;
+                // Decode base64 JSON (handles UTF-8 properly)
+                const logs = logsBase64 ? JSON.parse(decodeURIComponent(escape(atob(logsBase64)))) : [];
                 showSpanLogsPopup(container, spanId, logs);
                 return;
             }
@@ -560,9 +561,9 @@
 
         // Add logs toggle for spans with logs
         if (hasLogs) {
-            // Store logs as JSON data attribute for popup (backend provides logs per span)
-            const logsJson = Utils.escapeHtml(JSON.stringify(spanLogs));
-            nameHtml += `<span class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsJson}">${spanLogs.length} logs</span>`;
+            // Store logs as base64-encoded JSON to avoid HTML attribute escaping issues
+            const logsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(spanLogs))));
+            nameHtml += `<span class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsBase64}">${spanLogs.length} logs</span>`;
         }
 
         nameHtml += `</div>`;
