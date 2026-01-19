@@ -1,16 +1,18 @@
 package net.osslabz.peekaboot.backend.controller;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
+import net.osslabz.peekaboot.backend.domain.trace.TraceRawData;
+import net.osslabz.peekaboot.backend.domain.trace.TraceRawResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
+import net.osslabz.peekaboot.backend.service.TraceRawService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -35,27 +36,27 @@ public class PeekabootController {
     private final PeekabookActuatorService peekabookActuatorService;
     private final ActuatorInsightsService actuatorInsightsService;
     private final TraceInsightsService traceInsightsService;
+    private final TraceRawService traceRawService;
     private final PeekabootProperties properties;
-    private final ObjectProvider<TraceQueryService> traceQueryServiceProvider;
     private final PeekabootTracingProperties tracingProperties;
 
     public PeekabootController(
             PeekabookActuatorService peekabootService,
             ActuatorInsightsService actuatorInsightsService,
             TraceInsightsService traceInsightsService,
+            TraceRawService traceRawService,
             PeekabootProperties properties,
-            ObjectProvider<TraceQueryService> traceQueryServiceProvider,
             ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider) {
         this.peekabookActuatorService = peekabootService;
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
+        this.traceRawService = traceRawService;
         this.properties = properties;
-        this.traceQueryServiceProvider = traceQueryServiceProvider;
         this.tracingProperties = tracingPropertiesProvider.getIfAvailable();
     }
 
     @GetMapping(value = "/api/actuator/all/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, Object> getRaw() {
+    public ActuatorRawResponse getRaw() {
         return peekabookActuatorService.getData();
     }
 
@@ -70,7 +71,7 @@ public class PeekabootController {
     @GetMapping(value = "/api/features", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> getFeatures() {
         Map<String, Object> features = new HashMap<>();
-        features.put("tracing", traceQueryServiceProvider.getIfAvailable() != null);
+        features.put("tracing", traceRawService != null);
         features.put("devToolbar", properties.isDevToolbar());
         if (tracingProperties != null) {
             features.put("traceCaptureMode", tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar()).name());
@@ -79,12 +80,8 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public List<TraceData> getTracesRaw(@RequestParam(name = "limit", defaultValue = "100") int limit) {
-        TraceQueryService traceQueryService = traceQueryServiceProvider.getIfAvailable();
-        if (traceQueryService == null) {
-            return List.of();
-        }
-        return traceQueryService.getTraces(limit, getEffectiveCaptureMode());
+    public TraceRawResponse getTracesRaw(@RequestParam(name = "limit", defaultValue = "100") int limit) {
+        return traceRawService.getTraces(limit, getEffectiveCaptureMode());
     }
 
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -96,12 +93,8 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/{traceId}/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<TraceData> getTraceRaw(@PathVariable (name = "traceId") String traceId) {
-        TraceQueryService traceQueryService = traceQueryServiceProvider.getIfAvailable();
-        if (traceQueryService == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return traceQueryService.getTrace(traceId)
+    public ResponseEntity<TraceRawData> getTraceRaw(@PathVariable(name = "traceId") String traceId) {
+        return traceRawService.getTrace(traceId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -21,11 +21,11 @@ public class ActuatorRawMapper {
             .build();
     }
 
-    public ActuatorRawResponse map(Map<String, Object> rawData) {
+    public ActuatorParsedData map(Map<String, Object> rawData) {
         if (rawData == null) {
-            return new ActuatorRawResponse(null, null, null, null, null, null, null, null);
+            return new ActuatorParsedData(null, null, null, null, null, null, null, null);
         }
-        return objectMapper.convertValue(rawData, ActuatorRawResponse.class);
+        return objectMapper.convertValue(rawData, ActuatorParsedData.class);
     }
 
     public SpringInfo mapSpring(Map<String, Object> rawData) {

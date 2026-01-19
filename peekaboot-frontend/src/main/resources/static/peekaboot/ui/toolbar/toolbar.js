@@ -7,7 +7,7 @@
     const shadow = host.shadowRoot;
     const data = JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent);
     let traceData = null;
-    let activeTab = 'timeline';
+    let activeTab = 'spans';
 
     // Design tokens matching peekaboot.css (dark theme for toolbar)
     const expandedStyles = document.createElement('style');
@@ -363,10 +363,10 @@
     expanded.innerHTML = `
         <div class="peekaboot-header">
             <div class="peekaboot-tabs">
-                <button class="peekaboot-tab active" data-tab="timeline">Timeline</button>
+                <button class="peekaboot-tab" data-tab="request">Request</button>
+                <button class="peekaboot-tab active" data-tab="spans">Spans</button>
                 <button class="peekaboot-tab" data-tab="queries">Queries <span class="count">-</span></button>
                 <button class="peekaboot-tab" data-tab="logs">Logs <span class="count">-</span></button>
-                <button class="peekaboot-tab" data-tab="request">Request</button>
             </div>
             <button class="peekaboot-close" title="Close">&times;</button>
         </div>
@@ -451,21 +451,21 @@
         }
 
         switch (activeTab) {
-            case 'timeline': renderTimeline(content); break;
+            case 'request': renderRequest(content); break;
+            case 'spans': renderSpans(content); break;
             case 'queries': renderQueries(content); break;
             case 'logs': renderLogs(content); break;
-            case 'request': renderRequest(content); break;
         }
     }
 
-    function renderTimeline(container) {
+    function renderSpans(container) {
         const spans = traceData.spans || [];
         if (spans.length === 0) {
             container.innerHTML = '<div class="no-data">No spans recorded</div>';
             return;
         }
 
-        let html = '<div class="timeline">';
+        let html = '<div class="spans-list">';
         const spanMap = {};
         let rootSpans = [];
 
@@ -787,9 +787,9 @@
             kind: node.kind,
             startTime: node.startTimeMs ? new Date(node.startTimeMs).toISOString() : null,
             duration: node.durationMs,
-            tags: node.attributes || {},
-            errorMessage: node.status === 'ERROR' ? (node.attributes && node.attributes['error.message']) : null,
-            errorClass: node.status === 'ERROR' ? (node.attributes && node.attributes['error.type']) : null
+            tags: node.tags || {},
+            errorMessage: node.status === 'ERROR' ? (node.tags && node.tags['error.message']) : null,
+            errorClass: node.status === 'ERROR' ? (node.tags && node.tags['error.type']) : null
         };
         spans.push(span);
 

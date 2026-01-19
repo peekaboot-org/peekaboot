@@ -58,7 +58,12 @@ class TraceDomainTest {
             List.of()
         );
 
-        TraceMetrics metrics = new TraceMetrics(5, 2, 100L, 1, 0L, 0);
+        TraceTabSummary summary = new TraceTabSummary(
+            null,
+            new TraceTabSummary.SpansSummary(5, 200L, 0),
+            new TraceTabSummary.QueriesSummary(2, 100L),
+            new TraceTabSummary.LogsSummary(0, 0, 0)
+        );
 
         TraceTree tree = new TraceTree(
             "trace-abc123",
@@ -68,14 +73,14 @@ class TraceDomainTest {
             HTTP_REQUEST,
             "GET /api/users",
             rootSpan,
-            metrics,
+            summary,
             Map.of("service.name", "user-service")
         );
 
         assertThat(tree.traceId()).isEqualTo("trace-abc123");
         assertThat(tree.rootSpan()).isEqualTo(rootSpan);
         assertThat(tree.status()).isEqualTo(TraceStatus.OK);
-        assertThat(tree.metrics().totalSpans()).isEqualTo(5);
+        assertThat(tree.summary().spans().count()).isEqualTo(5);
         assertThat(tree.inheritedAttributes()).containsEntry("service.name", "user-service");
     }
 
@@ -118,18 +123,23 @@ class TraceDomainTest {
             "span-1", "op", "SERVER", 0L, 100L, "ok",
             List.of(), Map.of(), List.of(), List.of()
         );
-        TraceMetrics metrics = new TraceMetrics(1, 0, 0L, 0, 0L, 0);
+        TraceTabSummary tabSummary = new TraceTabSummary(
+            null,
+            new TraceTabSummary.SpansSummary(1, 100L, 0),
+            new TraceTabSummary.QueriesSummary(0, 0L),
+            new TraceTabSummary.LogsSummary(0, 0, 0)
+        );
         TraceTree tree = new TraceTree(
             "trace-1", 0L, 100L, TraceStatus.OK, HTTP_REQUEST, "op",
-            rootSpan, metrics, Map.of()
+            rootSpan, tabSummary, Map.of()
         );
 
-        TraceSummary summary = new TraceSummary(1, 0, 0, 100.0);
+        TraceListSummary summary = new TraceListSummary(1, 0, 0, 100.0);
 
         TraceInsightsResponse response = new TraceInsightsResponse(List.of(tree), summary);
 
         assertThat(response.traces()).hasSize(1);
-        assertThat(response.summary().totalTraces()).isEqualTo(1);
+        assertThat(response.summary().traceCount()).isEqualTo(1);
         assertThat(response.summary().avgDurationMs()).isEqualTo(100.0);
     }
 }

@@ -271,7 +271,7 @@
         const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
         const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
         const duration = PeekabootUtils.formatDurationMs(trace.durationMs);
-        const spanCount = trace.metrics?.totalSpans || 0;
+        const spanCount = trace.summary?.spans?.count || 0;
         const hasErrors = trace.status === 'HAS_ERRORS';
         const hasSlow = trace.status === 'HAS_SLOW_SPANS';
 

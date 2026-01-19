@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringBootVersion;
@@ -58,7 +59,7 @@ public class PeekabookActuatorService {
     }
 
 
-    public Map<String, Object> getData() {
+    public Map<String, Object> getRawData() {
 
         Map<String, Object> results = new LinkedHashMap<>();
 
@@ -94,6 +95,10 @@ public class PeekabookActuatorService {
         }
 
         return results;
+    }
+
+    public ActuatorRawResponse getData() {
+        return ActuatorRawResponse.wrap(getRawData());
     }
 
 

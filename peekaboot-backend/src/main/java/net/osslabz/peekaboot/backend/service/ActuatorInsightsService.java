@@ -1,7 +1,7 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorParsedData;
 import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawMapper;
-import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import net.osslabz.peekaboot.backend.domain.server.ServerInfo;
@@ -57,8 +57,8 @@ public class ActuatorInsightsService {
     }
 
     public ActuatorInsightsResponse getInsights(Locale locale) {
-        Map<String, Object> rawData = rawService.getData();
-        ActuatorRawResponse typed = rawMapper.map(rawData);
+        Map<String, Object> rawData = rawService.getRawData();
+        ActuatorParsedData typed = rawMapper.map(rawData);
 
         return new ActuatorInsightsResponse(
             applicationMapper.map(typed.info(), typed.spring()),

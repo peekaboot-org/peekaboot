@@ -143,7 +143,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldCalculateTraceMetrics() {
+    void map_shouldCalculateTraceSummary() {
         // Given: A trace with DB queries and HTTP calls
         var root = createSpan("trace1", "root", null, "GET /api/users",
                 Span.Kind.SERVER, 0, 200, Map.of("http.method", "GET"));
@@ -160,16 +160,14 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(traceData);
 
         // Then
-        assertThat(result.metrics().totalSpans()).isEqualTo(4);
-        assertThat(result.metrics().dbQueryCount()).isEqualTo(2);
-        assertThat(result.metrics().dbTotalDurationMs()).isEqualTo(80L); // 50 + 30
-        assertThat(result.metrics().httpCallCount()).isEqualTo(1);
-        assertThat(result.metrics().httpTotalDurationMs()).isEqualTo(60L); // HTTP call duration
-        assertThat(result.metrics().errorCount()).isEqualTo(0);
+        assertThat(result.summary().spans().count()).isEqualTo(4);
+        assertThat(result.summary().queries().count()).isEqualTo(2);
+        assertThat(result.summary().queries().totalDurationMs()).isEqualTo(80L); // 50 + 30
+        assertThat(result.summary().spans().errorCount()).isEqualTo(0);
     }
 
     @Test
-    void map_shouldCalculateTraceMetrics_withJdbcQueryTags() {
+    void map_shouldCalculateTraceSummary_withJdbcQueryTags() {
         // Given: A trace with datasource-proxy/Micrometer style jdbc.query tags
         var root = createSpan("trace1", "root", null, "http get /",
                 Span.Kind.SERVER, 0, 100, Map.of("http.method", "GET"));
@@ -186,8 +184,8 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(traceData);
 
         // Then: Only the query span with jdbc.query* tag should be counted, not connection or result-set
-        assertThat(result.metrics().dbQueryCount()).isEqualTo(1);
-        assertThat(result.metrics().dbTotalDurationMs()).isEqualTo(30L);
+        assertThat(result.summary().queries().count()).isEqualTo(1);
+        assertThat(result.summary().queries().totalDurationMs()).isEqualTo(30L);
     }
 
     @Test
@@ -200,7 +198,7 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.metrics().errorCount()).isEqualTo(1);
+        assertThat(result.summary().spans().errorCount()).isEqualTo(1);
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 
@@ -223,7 +221,7 @@ class TraceTreeMapperTest {
 
         assertThat(result.traceId()).isEqualTo("trace1");
         assertThat(result.rootSpan()).isNull();
-        assertThat(result.metrics().totalSpans()).isEqualTo(0);
+        assertThat(result.summary().spans().count()).isEqualTo(0);
         assertThat(result.status()).isEqualTo(TraceStatus.OK);
     }
 
@@ -239,7 +237,7 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("only-span");
         assertThat(result.rootSpan().children()).isEmpty();
-        assertThat(result.metrics().totalSpans()).isEqualTo(1);
+        assertThat(result.summary().spans().count()).isEqualTo(1);
         assertThat(result.rootOperation()).isEqualTo("single-op");
     }
 

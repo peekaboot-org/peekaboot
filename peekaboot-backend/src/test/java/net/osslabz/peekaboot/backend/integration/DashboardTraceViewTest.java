@@ -192,13 +192,14 @@ class DashboardTraceViewTest {
             .body(String.class);
 
         JsonNode trace = objectMapper.readTree(traceJson);
-        JsonNode metrics = trace.get("metrics");
+        JsonNode summary = trace.get("summary");
 
-        assertThat(metrics).isNotNull();
-        int queryCount = metrics.has("dbQueryCount") ? metrics.get("dbQueryCount").asInt(-1) : -1;
+        assertThat(summary).isNotNull();
+        JsonNode queries = summary.get("queries");
+        int queryCount = queries != null && queries.has("count") ? queries.get("count").asInt(-1) : -1;
 
         assertThat(queryCount)
-            .as("Metrics should contain dbQueryCount >= 0")
+            .as("Summary should contain queries.count >= 0")
             .isGreaterThanOrEqualTo(0);
     }
 

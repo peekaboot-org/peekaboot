@@ -6,7 +6,7 @@ import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanIssue;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import net.osslabz.peekaboot.backend.domain.trace.TraceMetrics;
+import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
@@ -62,7 +62,7 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(response.traces()).hasSize(2);
-        assertThat(response.summary().totalTraces()).isEqualTo(2);
+        assertThat(response.summary().traceCount()).isEqualTo(2);
         assertThat(response.summary().errorCount()).isEqualTo(1);
         assertThat(response.summary().avgDurationMs()).isEqualTo(150.0);
     }
@@ -95,7 +95,7 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(response.traces()).isEmpty();
-        assertThat(response.summary().totalTraces()).isEqualTo(0);
+        assertThat(response.summary().traceCount()).isEqualTo(0);
         assertThat(response.summary().errorCount()).isEqualTo(0);
         assertThat(response.summary().slowCount()).isEqualTo(0);
         assertThat(response.summary().avgDurationMs()).isEqualTo(0.0);
@@ -111,7 +111,7 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(response.traces()).isEmpty();
-        assertThat(response.summary().totalTraces()).isEqualTo(0);
+        assertThat(response.summary().traceCount()).isEqualTo(0);
     }
 
     @Test

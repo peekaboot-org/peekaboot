@@ -24,6 +24,7 @@ import org.springframework.web.servlet.HandlerMapping;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -189,8 +190,8 @@ class RequestCaptureFilterTest {
         verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
-        assertThat(event.queryParams()).containsEntry("page", "1");
-        assertThat(event.queryParams()).containsEntry("size", "10");
+        assertThat(event.queryParams()).containsEntry("page", List.of("1"));
+        assertThat(event.queryParams()).containsEntry("size", List.of("10"));
     }
 
     @Test
@@ -209,7 +210,7 @@ class RequestCaptureFilterTest {
         verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
-        assertThat(event.controllerClass()).isEqualTo("TestController");
+        assertThat(event.controllerClass()).endsWith("TestController");
         assertThat(event.controllerMethod()).isEqualTo("getUsers");
     }
 

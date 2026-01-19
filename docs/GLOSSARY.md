@@ -93,33 +93,36 @@ Category of detected issue.
 
 **Usage:** `IssueType` enum
 
-## Metrics
+## Summary
 
-### Trace Metrics
-Aggregated statistics for a trace.
-
-| Field | Description |
-|-------|-------------|
-| `totalSpans` | Number of spans in the trace |
-| `dbQueryCount` | Number of database queries |
-| `dbTotalDurationMs` | Total time spent in database |
-| `httpCallCount` | Number of HTTP client calls |
-| `httpTotalDurationMs` | Total time in HTTP calls |
-| `errorCount` | Number of errored spans |
-
-**Usage:** `TraceMetrics` record, `metrics` field
-
-### Trace Summary
-Aggregate statistics across multiple traces.
+### Trace Tab Summary
+Per-trace statistics organized by UI tab categories (request, spans, queries, logs). Contains all information needed to render the dev toolbar and trace list.
 
 | Field | Description |
 |-------|-------------|
-| `totalTraces` | Number of traces |
+| `request` | HTTP request summary (method, path, statusCode) |
+| `spans.count` | Number of spans in the trace |
+| `spans.totalDurationMs` | Total span duration |
+| `spans.errorCount` | Number of errored spans |
+| `queries.count` | Number of database queries |
+| `queries.totalDurationMs` | Total time spent in database |
+| `logs.count` | Number of log entries |
+| `logs.errorCount` | Error-level logs |
+| `logs.warnCount` | Warning-level logs |
+
+**Usage:** `TraceTabSummary` record, `summary` field on `TraceTree`
+
+### Trace List Summary
+Aggregate statistics across multiple traces in list responses.
+
+| Field | Description |
+|-------|-------------|
+| `traceCount` | Number of traces |
 | `errorCount` | Traces with errors |
 | `slowCount` | Traces with slow spans |
 | `avgDurationMs` | Average trace duration |
 
-**Usage:** `TraceSummary` record
+**Usage:** `TraceListSummary` record, `summary` field on `TraceInsightsResponse`
 
 ## Additional Data
 
@@ -133,20 +136,31 @@ Information about a database query executed within a trace.
 
 **Usage:** `QueryInfo` record, `queries` field
 
-### Request Details
-HTTP request/response metadata captured for web traces.
+### HTTP Exchange
+HTTP request/response metadata captured for web traces. Contains nested `HttpRequest` and `HttpResponse` structures.
 
+**HttpRequest fields:**
 | Field | Description |
 |-------|-------------|
-| `controllerClass` | Spring controller class |
-| `controllerMethod` | Handler method name |
-| `requestHeaders` | HTTP request headers |
-| `responseHeaders` | HTTP response headers |
-| `queryParams` | URL query parameters |
-| `requestBody` | Request body content |
-| `requestBodyTruncated` | Whether body was truncated |
+| `method` | HTTP method (GET, POST, etc.) |
+| `path` | Request path |
+| `queryString` | Raw query string |
+| `headers` | HTTP request headers |
+| `body.content` | Request body content |
+| `body.truncated` | Whether body was truncated |
+| `controller.className` | Spring controller class |
+| `controller.methodName` | Handler method name |
+| `params.query` | URL query parameters |
+| `params.form` | Form parameters |
+| `params.files` | Uploaded files |
 
-**Usage:** `RequestDetails` record, `request` field
+**HttpResponse fields:**
+| Field | Description |
+|-------|-------------|
+| `statusCode` | HTTP status code |
+| `headers` | HTTP response headers |
+
+**Usage:** `HttpExchange` record, `httpExchange` field on `TraceTree` and `TraceRawData`
 
 ## UI Components
 

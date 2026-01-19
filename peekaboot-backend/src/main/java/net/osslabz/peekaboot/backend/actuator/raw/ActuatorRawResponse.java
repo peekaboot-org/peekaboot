@@ -1,19 +1,16 @@
 package net.osslabz.peekaboot.backend.actuator.raw;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.util.Map;
 
 /**
- * Top-level container for the raw actuator response from PeekabookActuatorService.
+ * Top-level container for the raw actuator response with spring.actuator namespace.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public record ActuatorRawResponse(
-    SpringInfo spring,
-    HealthResponse health,
-    InfoResponse info,
-    EnvResponse env,
-    LoggersResponse loggers,
-    FlywayResponse flyway,
-    ConfigPropsResponse configprops,
-    ScheduledTasksResponse scheduledtasks
+    Spring spring
 ) {
+    public record Spring(Map<String, Object> actuator) {}
+
+    public static ActuatorRawResponse wrap(Map<String, Object> actuatorData) {
+        return new ActuatorRawResponse(new Spring(actuatorData));
+    }
 }

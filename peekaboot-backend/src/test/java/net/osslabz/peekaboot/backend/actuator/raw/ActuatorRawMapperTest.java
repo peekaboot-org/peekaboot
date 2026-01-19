@@ -168,7 +168,7 @@ class ActuatorRawMapperTest {
 
     @Test
     void mapsFullResponse() {
-        ActuatorRawResponse response = mapper.map(rawData);
+        ActuatorParsedData response = mapper.map(rawData);
 
         assertThat(response).isNotNull();
         assertThat(response.spring()).isNotNull();
@@ -183,7 +183,7 @@ class ActuatorRawMapperTest {
 
     @Test
     void handlesNullInput() {
-        ActuatorRawResponse response = mapper.map(null);
+        ActuatorParsedData response = mapper.map(null);
 
         assertThat(response).isNotNull();
         assertThat(response.spring()).isNull();

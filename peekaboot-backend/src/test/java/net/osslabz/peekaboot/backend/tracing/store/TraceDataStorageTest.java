@@ -49,7 +49,13 @@ class TraceDataStorageTest {
 
     @Test
     void onRequestCompleted_storesRequest() {
-        var event = new RequestCompletedEvent("trace1", "GET", "/api/test", 200, 50, Map.of(), Map.of(), Map.of(), "TestController", "test", null, false);
+        var event = new RequestCompletedEvent(
+                "trace1", "GET", "/api/test", null,
+                Map.of(), null, false,
+                "TestController", "test",
+                Map.of(), Map.of(), List.of(),
+                200, Map.of(), 50
+        );
 
         storage.onRequestCompleted(event);
 
@@ -64,7 +70,13 @@ class TraceDataStorageTest {
         storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span1", null, "root")));
         storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span2", "span1", "child")));
         storage.onLogCaptured(new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "Test", "log1", "main"));
-        storage.onRequestCompleted(new RequestCompletedEvent("trace1", "GET", "/test", 200, 100, Map.of(), Map.of(), Map.of(), null, null, null, false));
+        storage.onRequestCompleted(new RequestCompletedEvent(
+                "trace1", "GET", "/test", null,
+                Map.of(), null, false,
+                null, null,
+                Map.of(), Map.of(), List.of(),
+                200, Map.of(), 100
+        ));
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();

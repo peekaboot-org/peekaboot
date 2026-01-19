@@ -309,7 +309,7 @@
 
         const queryCount = (trace.queries || []).length;
         const logCount = (trace.logs || []).length;
-        const spanCount = trace.metrics?.totalSpans || countSpans(trace.rootSpan);
+        const spanCount = trace.summary?.spans?.count || countSpans(trace.rootSpan);
 
         shadow.innerHTML = '';
         const style = document.createElement('style');
@@ -336,8 +336,8 @@
                     <button class="pk-trace-close" title="Close">&times;</button>
                 </div>
                 <div class="pk-trace-tabs">
-                    <button class="pk-trace-tab active" data-tab="overview">Overview</button>
                     <button class="pk-trace-tab" data-tab="request">Request</button>
+                    <button class="pk-trace-tab active" data-tab="spans">Spans</button>
                     <button class="pk-trace-tab" data-tab="queries">Queries <span class="count">${queryCount}</span></button>
                     <button class="pk-trace-tab" data-tab="logs">Logs <span class="count">${logCount}</span></button>
                 </div>
@@ -351,7 +351,7 @@
             if (e.target === container) closeTraceDetail();
         });
 
-        let activeTab = 'overview';
+        let activeTab = 'spans';
         const tabs = container.querySelectorAll('.pk-trace-tab');
         const content = container.querySelector('#pk-tab-content');
 
@@ -378,14 +378,14 @@
 
     function renderTabContent(container, tab, trace) {
         switch (tab) {
-            case 'overview': renderOverview(container, trace); break;
             case 'request': renderRequest(container, trace); break;
+            case 'spans': renderSpans(container, trace); break;
             case 'queries': renderQueries(container, trace); break;
             case 'logs': renderLogs(container, trace); break;
         }
     }
 
-    function renderOverview(container, trace) {
+    function renderSpans(container, trace) {
         const totalDuration = trace.durationMs || 1;
         const traceStart = trace.startTimeMs || 0;
         const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
@@ -630,23 +630,25 @@
     }
 
     function renderRequest(container, trace) {
-        const req = trace.request;
+        const httpExchange = trace.httpExchange;
+        const req = httpExchange?.request;
+        const res = httpExchange?.response;
         const rootSpan = trace.rootSpan || {};
         const tags = rootSpan.tags || {};
 
         let html = '';
 
-        if (req?.controllerClass || req?.controllerMethod) {
+        if (req?.controller?.class || req?.controller?.method) {
             html += '<div class="pk-request-section">';
             html += '<h3>Controller</h3>';
-            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controllerClass || 'Unknown')}.${Utils.escapeHtml(req.controllerMethod || 'unknown')}()</div>`;
+            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.class || 'Unknown')}.${Utils.escapeHtml(req.controller.method || 'unknown')}()</div>`;
             html += '</div>';
         }
 
         html += '<div class="pk-request-section">';
         html += '<h3>Request Headers</h3>';
         html += '<table class="pk-request-table">';
-        const reqHeaders = req?.requestHeaders || {};
+        const reqHeaders = req?.headers || {};
         if (Object.keys(reqHeaders).length > 0) {
             Object.entries(reqHeaders).sort().forEach(([k, v]) => {
                 const isMasked = v === '********';
@@ -657,13 +659,14 @@
         }
         html += '</table></div>';
 
-        const queryParams = req?.queryParams || {};
+        const queryParams = req?.params?.query || {};
         if (Object.keys(queryParams).length > 0) {
             html += '<div class="pk-request-section">';
             html += '<h3>Query Parameters</h3>';
             html += '<table class="pk-request-table">';
             Object.entries(queryParams).sort().forEach(([k, v]) => {
-                html += `<tr><td>${Utils.escapeHtml(k)}</td><td>${Utils.escapeHtml(v)}</td></tr>`;
+                const displayValue = Array.isArray(v) ? v.join(', ') : v;
+                html += `<tr><td>${Utils.escapeHtml(k)}</td><td>${Utils.escapeHtml(displayValue)}</td></tr>`;
             });
             html += '</table></div>';
         }
@@ -671,7 +674,7 @@
         html += '<div class="pk-request-section">';
         html += '<h3>Response Headers</h3>';
         html += '<table class="pk-request-table">';
-        const resHeaders = req?.responseHeaders || {};
+        const resHeaders = res?.headers || {};
         if (Object.keys(resHeaders).length > 0) {
             Object.entries(resHeaders).sort().forEach(([k, v]) => {
                 html += `<tr><td>${Utils.escapeHtml(k)}</td><td>${Utils.escapeHtml(v)}</td></tr>`;
