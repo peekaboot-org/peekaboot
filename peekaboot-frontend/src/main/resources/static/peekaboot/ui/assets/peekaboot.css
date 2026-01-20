@@ -1599,6 +1599,24 @@ mark {
     padding: var(--pk-space-md);
 }
 
+/* Trace Main Line */
+.trace-main-line {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    width: 100%;
+}
+
+.trace-path {
+    flex: 1;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    color: var(--pk-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Trace Stats Line */
 .trace-stats {
     display: flex;

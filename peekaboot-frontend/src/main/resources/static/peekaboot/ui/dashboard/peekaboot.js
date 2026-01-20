@@ -271,13 +271,14 @@
         const traceIdShort = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
         const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
         const duration = PeekabootUtils.formatDurationMs(trace.durationMs);
-        const spanCount = trace.summary?.spans?.count || 0;
         const hasErrors = trace.status === 'HAS_ERRORS';
         const hasSlow = trace.status === 'HAS_SLOW_SPANS';
 
         const actionType = trace.rootActionType || 'UNKNOWN';
         const actionIcon = ROOT_ACTION_ICONS[actionType] || ROOT_ACTION_ICONS.UNKNOWN;
-        const actionLabel = ROOT_ACTION_LABELS[actionType] || ROOT_ACTION_LABELS.UNKNOWN;
+
+        // Root operation path/name
+        const rootOperation = trace.rootOperation || '';
 
         let statusBadge = '';
         if (hasErrors) {
@@ -291,15 +292,45 @@
             ? '<a href="#" class="trace-scheduler-link" title="View Scheduled Tasks">&#128337;</a>'
             : '';
 
+        // Build stats for second line (only non-zero values)
+        const statParts = [];
+
+        // Query stats
+        const queryCount = trace.summary?.queries?.count || 0;
+        const queryDuration = trace.summary?.queries?.totalDurationMs || 0;
+        if (queryCount > 0) {
+            const queryDurationStr = PeekabootUtils.formatDurationMs(queryDuration);
+            statParts.push(`<span class="stat-group"><span class="stat-count">${queryCount}</span> ${queryCount === 1 ? 'query' : 'queries'} <span class="stat-duration">${queryDurationStr}</span></span>`);
+        }
+
+        // Log counts (errors and warnings)
+        const errorCount = trace.summary?.logs?.errorCount || 0;
+        const warnCount = trace.summary?.logs?.warnCount || 0;
+        if (errorCount > 0) {
+            statParts.push(`<span class="log-count error">${errorCount} ${errorCount === 1 ? 'error' : 'errors'}</span>`);
+        }
+        if (warnCount > 0) {
+            statParts.push(`<span class="log-count warn">${warnCount} ${warnCount === 1 ? 'warning' : 'warnings'}</span>`);
+        }
+
+        const statsHtml = statParts.length > 0
+            ? statParts.join('<span class="stat-separator">|</span>')
+            : '';
+
         item.innerHTML = `
             <div class="trace-header">
-                <span class="trace-action-type" title="${PeekabootUtils.escapeHtml(actionLabel)}">${actionIcon} <span class="trace-action-label">${PeekabootUtils.escapeHtml(actionLabel)}</span></span>
-                <code class="trace-id">${PeekabootUtils.escapeHtml(traceIdShort)}</code>
-                <span class="trace-time">${startTime}</span>
-                <span class="trace-duration">${duration}</span>
-                <span class="trace-badge">${spanCount} spans</span>
-                ${statusBadge}
-                ${schedulerLink}
+                <div class="trace-main-line">
+                    <span class="trace-action-type">${actionIcon}</span>
+                    <span class="trace-path" title="${PeekabootUtils.escapeHtml(rootOperation)}">${PeekabootUtils.escapeHtml(rootOperation)}</span>
+                    <span class="trace-duration">${duration}</span>
+                    ${statusBadge}
+                    ${schedulerLink}
+                </div>
+                <div class="trace-stats">
+                    <code class="trace-id">${PeekabootUtils.escapeHtml(traceIdShort)}</code>
+                    <span class="trace-time">${startTime}</span>
+                    ${statsHtml}
+                </div>
             </div>
         `;
 
