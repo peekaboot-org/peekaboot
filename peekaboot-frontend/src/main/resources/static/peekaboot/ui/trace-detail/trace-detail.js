@@ -167,16 +167,16 @@
 
         .pk-span-row-count { font-size: 10px; padding: 1px 5px; background: var(--pk-success); color: #000; border-radius: 3px; margin-left: 4px; }
 
-        .pk-span-query-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-purple); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
-        .pk-span-query-toggle:hover { opacity: 0.8; }
+        .pk-span-query-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: 4px; color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
+        .pk-span-query-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 
         .pk-span-query-detail { padding: 8px 12px; margin: 4px 0 4px 36px; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; display: none; }
         .pk-span-query-detail.expanded { display: block; }
         .pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
         .pk-span-query-detail .pk-query-text { color: var(--pk-text-strong); }
 
-        .pk-span-logs-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-primary); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
-        .pk-span-logs-toggle:hover { opacity: 0.8; }
+        .pk-span-logs-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: 4px; color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
+        .pk-span-logs-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 
         /* Logs popup - fullscreen */
         .pk-logs-popup { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--pk-bg); border: none; box-shadow: none; z-index: 1001; display: flex; flex-direction: column; }
@@ -426,7 +426,7 @@
                 const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${spanId}"]`);
                 if (queryDetail) {
                     queryDetail.classList.toggle('expanded');
-                    sqlToggle.textContent = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'SQL';
+                    sqlToggle.title = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'Show SQL';
                 }
                 return;
             }
@@ -558,7 +558,7 @@
 
         // Add query toggle for query spans with SQL
         if (hasQuery) {
-            nameHtml += `<span class="pk-span-query-toggle" data-span-id="${span.spanId}">SQL</span>`;
+            nameHtml += `<span class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL">&#128196;</span>`;
         }
 
         // Add logs toggle for spans with logs
