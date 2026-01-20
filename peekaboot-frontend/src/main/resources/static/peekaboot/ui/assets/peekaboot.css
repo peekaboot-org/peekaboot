@@ -1523,3 +1523,101 @@ mark {
     color: var(--pk-primary);
     font-weight: 500;
 }
+
+/* Stat Groups - pipe-separated metrics display */
+.stat-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stat-count {
+    font-weight: 500;
+}
+
+.stat-separator {
+    color: var(--pk-text-muted);
+    opacity: 0.6;
+}
+
+.stat-duration {
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+}
+
+/* Icon Buttons - distinct from badges */
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    background: transparent;
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    color: var(--pk-text-muted);
+    font-size: var(--pk-text-xs);
+    cursor: pointer;
+    transition: all var(--pk-transition);
+}
+
+.icon-btn:hover {
+    background: var(--pk-bg-hover);
+    color: var(--pk-text);
+    border-color: var(--pk-text-muted);
+}
+
+.icon-btn:active {
+    background: var(--pk-bg-alt);
+}
+
+/* Fullscreen Overlays */
+.fullscreen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: column;
+}
+
+.overlay-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border-bottom: 1px solid var(--pk-border);
+    flex-shrink: 0;
+}
+
+.overlay-content {
+    flex: 1;
+    overflow: auto;
+    padding: var(--pk-space-md);
+}
+
+/* Trace Stats Line */
+.trace-stats {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-md);
+    margin-top: var(--pk-space-xs);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+}
+
+.log-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.log-count.error {
+    color: var(--pk-danger);
+}
+
+.log-count.warn {
+    color: var(--pk-warning);
+}
