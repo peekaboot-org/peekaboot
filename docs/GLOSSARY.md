@@ -1,4 +1,4 @@
-# Peekaboot Glossary
+ operation# Peekaboot Glossary
 
 This glossary defines terms used in the Peekaboot codebase and documentation.
 

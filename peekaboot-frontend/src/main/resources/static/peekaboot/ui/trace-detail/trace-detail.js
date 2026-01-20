@@ -304,9 +304,13 @@
     function render(shadow, trace, options) {
         const rootSpan = trace.rootSpan || {};
         const tags = rootSpan.tags || {};
-        const method = tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
-        const path = tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
-        const status = tags['http.status_code'] || tags['http.response.status_code'] || '-';
+        const httpExchange = trace.httpExchange || {};
+        const req = httpExchange.request || {};
+        const res = httpExchange.response || {};
+        // Prefer httpExchange data, fall back to span tags
+        const method = req.method || tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
+        const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
+        const status = res.status || res.statusCode || tags['http.status_code'] || tags['http.response.status_code'] || '-';
         const statusClass = 's' + Math.floor(parseInt(status) / 100) + 'xx';
         const icon = ROOT_ACTION_ICONS[trace.rootActionType] || ROOT_ACTION_ICONS.UNKNOWN;
         const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 200 ? 'warn' : '');
@@ -692,11 +696,11 @@
         html += `<tr><td>Duration</td><td>${trace.durationMs || '-'}ms</td></tr>`;
         html += '</table></div>';
 
-        // Controller info
-        if (req?.controller?.className || req?.controller?.methodName) {
+        // Controller info (API returns 'class' and 'method' fields)
+        if (req?.controller?.class || req?.controller?.method) {
             html += '<div class="pk-request-section">';
             html += '<h3>Controller</h3>';
-            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.className || 'Unknown')}.${Utils.escapeHtml(req.controller.methodName || 'unknown')}()</div>`;
+            html += `<div class="pk-controller-info">${Utils.escapeHtml(req.controller.class || 'Unknown')}.${Utils.escapeHtml(req.controller.method || 'unknown')}()</div>`;
             html += '</div>';
         }
 
