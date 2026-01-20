@@ -1545,6 +1545,10 @@ mark {
     font-size: var(--pk-text-xs);
 }
 
+.stat-group.warn .stat-duration {
+    color: var(--pk-warning);
+}
+
 /* Icon Buttons - distinct from badges */
 .icon-btn {
     display: inline-flex;

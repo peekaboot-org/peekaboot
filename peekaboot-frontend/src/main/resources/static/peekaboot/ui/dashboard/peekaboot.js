@@ -276,8 +276,9 @@
 
         const actionType = trace.rootActionType || 'UNKNOWN';
         const actionIcon = ROOT_ACTION_ICONS[actionType] || ROOT_ACTION_ICONS.UNKNOWN;
+        const actionLabel = ROOT_ACTION_LABELS[actionType] || ROOT_ACTION_LABELS.UNKNOWN;
 
-        // Root operation path/name
+        // Root operation path/name (fallback to action label if empty)
         const rootOperation = trace.rootOperation || '';
 
         let statusBadge = '';
@@ -295,12 +296,13 @@
         // Build stats for second line (only non-zero values)
         const statParts = [];
 
-        // Query stats
+        // Query stats (warn class for slow queries >100ms)
         const queryCount = trace.summary?.queries?.count || 0;
         const queryDuration = trace.summary?.queries?.totalDurationMs || 0;
         if (queryCount > 0) {
             const queryDurationStr = PeekabootUtils.formatDurationMs(queryDuration);
-            statParts.push(`<span class="stat-group"><span class="stat-count">${queryCount}</span> ${queryCount === 1 ? 'query' : 'queries'} <span class="stat-duration">${queryDurationStr}</span></span>`);
+            const qClass = queryDuration > 100 ? ' warn' : '';
+            statParts.push(`<span class="stat-group${qClass}"><span class="stat-count">${queryCount}</span> ${queryCount === 1 ? 'query' : 'queries'} <span class="stat-duration">${queryDurationStr}</span></span>`);
         }
 
         // Log counts (errors and warnings)
@@ -317,11 +319,16 @@
             ? statParts.join('<span class="stat-separator">|</span>')
             : '';
 
+        // Path display: use rootOperation or fallback to actionLabel
+        const pathDisplay = rootOperation
+            ? PeekabootUtils.escapeHtml(rootOperation)
+            : `<span class="trace-action-label">${PeekabootUtils.escapeHtml(actionLabel)}</span>`;
+
         item.innerHTML = `
             <div class="trace-header">
                 <div class="trace-main-line">
-                    <span class="trace-action-type">${actionIcon}</span>
-                    <span class="trace-path" title="${PeekabootUtils.escapeHtml(rootOperation)}">${PeekabootUtils.escapeHtml(rootOperation)}</span>
+                    <span class="trace-action-type" title="${PeekabootUtils.escapeHtml(actionLabel)}">${actionIcon}</span>
+                    <span class="trace-path" title="${PeekabootUtils.escapeHtml(rootOperation || actionLabel)}">${pathDisplay}</span>
                     <span class="trace-duration">${duration}</span>
                     ${statusBadge}
                     ${schedulerLink}
