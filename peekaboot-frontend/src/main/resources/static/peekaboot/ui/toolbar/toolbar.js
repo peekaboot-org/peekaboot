@@ -383,20 +383,24 @@
         });
     });
 
-    // Close button
-    expanded.querySelector('.peekaboot-close').addEventListener('click', function() {
+    // Close toolbar function (shared by button and ESC)
+    function closeToolbar() {
         expanded.remove();
         if (bar) bar.style.display = 'flex';
-    });
+        document.removeEventListener('keydown', escHandler);
+    }
+
+    function escHandler(e) {
+        if (e.key === 'Escape') {
+            closeToolbar();
+        }
+    }
+
+    // Close button
+    expanded.querySelector('.peekaboot-close').addEventListener('click', closeToolbar);
 
     // ESC key to close
-    document.addEventListener('keydown', function escHandler(e) {
-        if (e.key === 'Escape') {
-            expanded.remove();
-            if (bar) bar.style.display = 'flex';
-            document.removeEventListener('keydown', escHandler);
-        }
-    });
+    document.addEventListener('keydown', escHandler);
 
     // Fetch trace data from insights endpoint (includes logs from TraceDataStorage)
     if (data.traceId) {
