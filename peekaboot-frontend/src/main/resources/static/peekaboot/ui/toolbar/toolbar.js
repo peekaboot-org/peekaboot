@@ -31,18 +31,15 @@
 
         .peekaboot-expanded {
             position: fixed;
-            bottom: 0;
+            top: 0;
             left: 0;
-            right: 0;
-            height: 50vh;
-            min-height: 300px;
-            max-height: 70vh;
+            width: 100vw;
+            height: 100vh;
             background: var(--pk-bg);
             color: var(--pk-text);
             font: 13px/1.5 var(--pk-font);
             display: flex;
             flex-direction: column;
-            border-top: 2px solid var(--pk-border);
             z-index: 2147483647;
         }
 
@@ -390,6 +387,15 @@
     expanded.querySelector('.peekaboot-close').addEventListener('click', function() {
         expanded.remove();
         if (bar) bar.style.display = 'flex';
+    });
+
+    // ESC key to close
+    document.addEventListener('keydown', function escHandler(e) {
+        if (e.key === 'Escape') {
+            expanded.remove();
+            if (bar) bar.style.display = 'flex';
+            document.removeEventListener('keydown', escHandler);
+        }
     });
 
     // Fetch trace data from insights endpoint (includes logs from TraceDataStorage)
