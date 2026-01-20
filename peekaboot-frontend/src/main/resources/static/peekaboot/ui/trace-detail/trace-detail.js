@@ -38,19 +38,16 @@
         .pk-trace-overlay {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, 0.85);
+            background: var(--pk-bg);
             z-index: 2147483647;
             display: flex;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
         }
 
         .pk-trace-container {
-            width: 95vw;
-            height: 95vh;
-            max-width: 1600px;
+            width: 100vw;
+            height: 100vh;
             background: var(--pk-bg);
-            border-radius: var(--pk-radius);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -181,8 +178,8 @@
         .pk-span-logs-toggle { font-size: 10px; padding: 1px 6px; background: var(--pk-primary); color: #fff; border-radius: 3px; cursor: pointer; margin-left: 4px; user-select: none; }
         .pk-span-logs-toggle:hover { opacity: 0.8; }
 
-        /* Logs popup - full width, fixed position */
-        .pk-logs-popup { position: fixed; bottom: 0; left: 0; right: 0; height: 40vh; background: var(--pk-bg-alt); border-top: 2px solid var(--pk-primary); box-shadow: 0 -8px 32px rgba(0,0,0,0.5); z-index: 1000; display: flex; flex-direction: column; }
+        /* Logs popup - fullscreen */
+        .pk-logs-popup { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--pk-bg); border: none; box-shadow: none; z-index: 1001; display: flex; flex-direction: column; }
         .pk-logs-popup.hidden { display: none; }
         .pk-logs-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--pk-border); background: var(--pk-bg); }
         .pk-logs-popup-title { font-weight: 600; color: var(--pk-text-strong); }
