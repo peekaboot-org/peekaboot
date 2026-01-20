@@ -308,13 +308,8 @@ public class DevToolbarFilter implements Filter {
                         html += '<span class="peekaboot-stat ' + qClass + '">' + queryCount + ' queries<span class="sep"> | </span><span class="dur">' + queryDuration + 'ms</span></span>';
                     }
 
-                    // HTTP calls (client spans): "2 HTTP | 120ms" format
-                    var httpCount = summary.httpCalls ? summary.httpCalls.count : 0;
-                    var httpDuration = summary.httpCalls ? summary.httpCalls.totalDurationMs : 0;
-                    if (httpCount > 0) {
-                        var hClass = httpDuration > 200 ? 'warn' : '';
-                        html += '<span class="peekaboot-stat ' + hClass + '">' + httpCount + ' HTTP<span class="sep"> | </span><span class="dur">' + httpDuration + 'ms</span></span>';
-                    }
+                    // TODO: Add HTTP calls (client spans) when summary.httpCalls is available in the API
+                    // Format: "2 HTTP | 120ms"
 
                     // Log counts by level
                     var errorCount = summary.logs ? summary.logs.errorCount : 0;
@@ -322,10 +317,10 @@ public class DevToolbarFilter implements Filter {
                     if (errorCount > 0 || warnCount > 0) {
                         html += '<span class="peekaboot-log-counts">';
                         if (errorCount > 0) {
-                            html += '<span class="peekaboot-log-count error">\\u26A0' + errorCount + ' err</span>';
+                            html += '<span class="peekaboot-log-count error">\\u2757' + errorCount + ' err</span>';
                         }
                         if (warnCount > 0) {
-                            html += '<span class="peekaboot-log-count warn">\\u26A1' + warnCount + ' warn</span>';
+                            html += '<span class="peekaboot-log-count warn">\\u26A0' + warnCount + ' warn</span>';
                         }
                         html += '</span>';
                     }
