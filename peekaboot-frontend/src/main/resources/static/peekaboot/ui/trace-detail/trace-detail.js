@@ -159,8 +159,13 @@
 
         .pk-gantt-duration { width: 60px; font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
 
+        .pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; cursor: pointer; }
+        .pk-gantt-event-marker::after { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; background: var(--pk-success); border-radius: 50%; border: 1px solid var(--pk-bg); }
+        .pk-gantt-event-marker:hover::after { transform: scale(1.3); }
+        .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: 4px 8px; font-size: 10px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
+        .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
+
         .pk-gantt-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; padding-left: 20px; }
-        .pk-event-badge { font-size: 9px; padding: 1px 5px; background: var(--pk-success); color: #000; border-radius: 3px; font-weight: 500; }
         .pk-tag-badge { font-size: 9px; padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .pk-tag-badge .key { color: var(--pk-primary); }
         .pk-tag-badge .value { color: var(--pk-text); }
@@ -576,9 +581,22 @@
 
         nameHtml += `</div>`;
 
-        row.innerHTML = nameHtml +
-            `<div class="pk-gantt-track"><div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div></div>` +
-            `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
+        // Build track HTML with bar and event markers
+        let trackHtml = `<div class="pk-gantt-track">`;
+        trackHtml += `<div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div>`;
+
+        // Add event markers on the timeline
+        events.forEach(event => {
+            if (event.timestamp) {
+                const eventTimeMs = new Date(event.timestamp).getTime();
+                // Position relative to the entire trace timeline
+                const eventLeft = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
+                trackHtml += `<div class="pk-gantt-event-marker" style="left: ${eventLeft}%"><span class="pk-gantt-event-tooltip">${Utils.escapeHtml(event.name)}</span></div>`;
+            }
+        });
+        trackHtml += `</div>`;
+
+        row.innerHTML = nameHtml + trackHtml + `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
 
         container.appendChild(row);
 
@@ -600,12 +618,11 @@
             container.appendChild(queryDetail);
         }
 
-        // Add events and tags row if present
-        const hasEvents = events.length > 0;
+        // Add tags row if present (events are now shown as markers on the timeline)
         const tagEntries = Object.entries(tags).filter(([k]) => !k.startsWith('jdbc.query'));
         const hasTags = tagEntries.length > 0;
 
-        if (hasEvents || hasTags) {
+        if (hasTags) {
             const badgesRow = document.createElement('div');
             badgesRow.className = 'pk-gantt-badges';
             badgesRow.style.paddingLeft = (indent + 20) + 'px';
@@ -613,20 +630,12 @@
             if (parentId) badgesRow.dataset.parentId = parentId;
 
             let badgesHtml = '';
-            // Render events
-            events.forEach(event => {
-                badgesHtml += `<span class="pk-event-badge" title="${Utils.escapeHtml(event.timestamp || '')}">${Utils.escapeHtml(event.name)}</span>`;
-            });
-            // Render selected tags (limit to avoid clutter)
-            const maxTags = 5;
-            tagEntries.slice(0, maxTags).forEach(([key, value]) => {
+            // Render all tags
+            tagEntries.forEach(([key, value]) => {
                 const shortKey = key.split('.').pop();
-                const shortVal = String(value).length > 30 ? String(value).substring(0, 30) + '...' : String(value);
+                const shortVal = String(value).length > 50 ? String(value).substring(0, 50) + '...' : String(value);
                 badgesHtml += `<span class="pk-tag-badge" title="${Utils.escapeHtml(key)}: ${Utils.escapeHtml(value)}"><span class="key">${Utils.escapeHtml(shortKey)}</span>=<span class="value">${Utils.escapeHtml(shortVal)}</span></span>`;
             });
-            if (tagEntries.length > maxTags) {
-                badgesHtml += `<span class="pk-tag-badge">+${tagEntries.length - maxTags} more</span>`;
-            }
 
             badgesRow.innerHTML = badgesHtml;
             container.appendChild(badgesRow);
