@@ -62,16 +62,32 @@
             border-bottom: 1px solid var(--pk-border);
         }
 
+        .pk-trace-back {
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            background: transparent;
+            border: none;
+            color: var(--pk-text-muted);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+        }
+        .pk-trace-back:hover { color: var(--pk-primary); }
+
         .pk-trace-title {
             display: flex;
             align-items: center;
             gap: 12px;
             margin-bottom: 8px;
+            margin-left: 32px;
         }
 
         .pk-trace-title-icon { font-size: 24px; }
         .pk-trace-title-method { font-weight: 600; color: var(--pk-text-strong); font-size: 16px; }
         .pk-trace-title-path { font-family: var(--pk-font-mono); color: var(--pk-text); font-size: 14px; max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-trace-title-traceid { font-family: var(--pk-font-mono); color: var(--pk-text-muted); font-size: 11px; background: var(--pk-bg); padding: 2px 8px; border-radius: 3px; }
 
         .pk-trace-meta {
             display: flex;
@@ -229,10 +245,13 @@
         .pk-query-params { margin-top: 8px; font-size: 11px; color: var(--pk-text-muted); }
 
         /* Logs tab styles */
-        .pk-logs-filter { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .pk-logs-filter { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
         .pk-logs-filter input, .pk-logs-filter select { padding: 6px 10px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text); font-size: 12px; }
         .pk-logs-filter input { flex: 1; max-width: 300px; }
         .pk-logs-filter input::placeholder { color: var(--pk-text-muted); }
+        .pk-logs-filter-span { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--pk-primary); color: #000; border-radius: var(--pk-radius); font-size: 11px; }
+        .pk-logs-filter-span-clear { cursor: pointer; font-weight: bold; }
+        .pk-logs-filter-span-clear:hover { color: var(--pk-danger); }
 
         .pk-log-group { margin-bottom: 8px; }
         .pk-log-group-header { padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); cursor: pointer; display: flex; justify-content: space-between; font-size: 12px; font-weight: 500; }
@@ -245,7 +264,10 @@
 
         .pk-log-item { display: flex; gap: 12px; padding: 6px 12px; font-family: var(--pk-font-mono); font-size: 11px; border-bottom: 1px solid var(--pk-bg-alt); }
         .pk-log-item:hover { background: var(--pk-bg-alt); }
+        .pk-log-item.hidden { display: none; }
         .pk-log-time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
+        .pk-log-span-link { width: 100px; color: var(--pk-primary); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pk-log-span-link:hover { text-decoration: underline; }
         .pk-log-level { width: 50px; font-weight: 600; }
         .pk-log-level.DEBUG { color: var(--pk-text-muted); }
         .pk-log-level.INFO { color: var(--pk-primary); }
@@ -341,10 +363,12 @@
         container.innerHTML = `
             <div class="pk-trace-container">
                 <div class="pk-trace-header">
+                    <button class="pk-trace-back" title="Back">&#8592;</button>
                     <div class="pk-trace-title">
                         <span class="pk-trace-title-icon">${icon}</span>
                         <span class="pk-trace-title-method">${Utils.escapeHtml(method)}</span>
                         <span class="pk-trace-title-path" title="${Utils.escapeHtml(path)}">${Utils.escapeHtml(path)}</span>
+                        <span class="pk-trace-title-traceid" title="${Utils.escapeHtml(trace.traceId || '')}">${Utils.escapeHtml(trace.traceId || '-')}</span>
                     </div>
                     <div class="pk-trace-meta">
                         <span class="pk-trace-duration ${durationClass}">${trace.durationMs}ms</span>
@@ -367,6 +391,7 @@
         `;
         shadow.appendChild(container);
 
+        container.querySelector('.pk-trace-back').addEventListener('click', closeTraceDetail);
         container.querySelector('.pk-trace-close').addEventListener('click', closeTraceDetail);
         container.addEventListener('click', (e) => {
             if (e.target === container) closeTraceDetail();
@@ -934,9 +959,8 @@
             return;
         }
 
-        const bySpan = new Map();
+        // Build span name lookup
         const spanNames = new Map();
-
         function mapSpanNames(span) {
             if (!span) return;
             spanNames.set(span.spanId, span.name);
@@ -944,62 +968,81 @@
         }
         mapSpanNames(trace.rootSpan);
 
-        logs.forEach(log => {
-            const spanId = log.spanId || 'unknown';
-            if (!bySpan.has(spanId)) bySpan.set(spanId, []);
-            bySpan.get(spanId).push(log);
-        });
+        let currentSpanFilter = null;
 
-        let html = '<div class="pk-logs-filter">';
-        html += '<input type="text" placeholder="Filter logs..." id="pk-log-filter">';
-        html += '<select id="pk-log-level"><option value="">All Levels</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option></select>';
-        html += '</div>';
-        html += '<div id="pk-logs-list">';
+        function render() {
+            let html = '<div class="pk-logs-filter">';
+            html += '<input type="text" placeholder="Filter logs..." id="pk-log-filter">';
+            html += '<select id="pk-log-level"><option value="">All Levels</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option></select>';
+            if (currentSpanFilter) {
+                const spanName = spanNames.get(currentSpanFilter) || currentSpanFilter;
+                const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
+                html += `<span class="pk-logs-filter-span">Span: ${Utils.escapeHtml(shortName)} <span class="pk-logs-filter-span-clear" id="pk-clear-span-filter">&times;</span></span>`;
+            }
+            html += '</div>';
+            html += '<div id="pk-logs-list">';
 
-        bySpan.forEach((spanLogs, spanId) => {
-            const spanName = spanNames.get(spanId) || spanId;
-            html += `<div class="pk-log-group" data-span="${Utils.escapeHtml(spanId)}">`;
-            html += `<div class="pk-log-group-header"><span>${Utils.escapeHtml(spanName)} (${spanLogs.length} logs)</span><span class="arrow">&#9660;</span></div>`;
-            html += '<div class="pk-log-group-list">';
-            spanLogs.forEach(log => {
+            logs.forEach(log => {
+                const logSpanId = log.spanId || '';
+                const spanName = spanNames.get(logSpanId) || logSpanId;
+                const shortSpanName = spanName.length > 15 ? spanName.substring(0, 15) + '...' : spanName;
                 const time = formatTime(log.timestamp);
-                html += `<div class="pk-log-item" data-level="${log.level}">`;
+                const hiddenClass = currentSpanFilter && logSpanId !== currentSpanFilter ? ' hidden' : '';
+
+                html += `<div class="pk-log-item${hiddenClass}" data-level="${log.level}" data-span-id="${Utils.escapeHtml(logSpanId)}">`;
                 html += `<span class="pk-log-time">${time}</span>`;
+                html += `<span class="pk-log-span-link" data-span-id="${Utils.escapeHtml(logSpanId)}" title="${Utils.escapeHtml(spanName)}">${Utils.escapeHtml(shortSpanName)}</span>`;
                 html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
                 html += `<span class="pk-log-message">${Utils.escapeHtml(log.message)}</span>`;
                 html += '</div>';
             });
-            html += '</div></div>';
-        });
 
-        html += '</div>';
-        container.innerHTML = html;
+            html += '</div>';
+            container.innerHTML = html;
 
-        container.querySelectorAll('.pk-log-group-header').forEach(header => {
-            header.addEventListener('click', () => {
-                header.classList.toggle('collapsed');
-                header.nextElementSibling.classList.toggle('collapsed');
-            });
-        });
+            // Filter controls
+            const filterInput = container.querySelector('#pk-log-filter');
+            const levelSelect = container.querySelector('#pk-log-level');
+            const clearSpanFilter = container.querySelector('#pk-clear-span-filter');
 
-        const filterInput = container.querySelector('#pk-log-filter');
-        const levelSelect = container.querySelector('#pk-log-level');
-        const logsList = container.querySelector('#pk-logs-list');
+            function applyFilters() {
+                const text = filterInput.value.toLowerCase();
+                const level = levelSelect.value;
+                container.querySelectorAll('.pk-log-item').forEach(item => {
+                    const message = item.querySelector('.pk-log-message').textContent.toLowerCase();
+                    const itemLevel = item.dataset.level;
+                    const itemSpanId = item.dataset.spanId;
+                    const matchText = !text || message.includes(text);
+                    const matchLevel = !level || itemLevel === level;
+                    const matchSpan = !currentSpanFilter || itemSpanId === currentSpanFilter;
+                    item.classList.toggle('hidden', !(matchText && matchLevel && matchSpan));
+                });
+            }
 
-        function filterLogs() {
-            const text = filterInput.value.toLowerCase();
-            const level = levelSelect.value;
-            logsList.querySelectorAll('.pk-log-item').forEach(item => {
-                const message = item.querySelector('.pk-log-message').textContent.toLowerCase();
-                const itemLevel = item.dataset.level;
-                const matchText = !text || message.includes(text);
-                const matchLevel = !level || itemLevel === level;
-                item.style.display = matchText && matchLevel ? '' : 'none';
+            filterInput.addEventListener('input', applyFilters);
+            levelSelect.addEventListener('change', applyFilters);
+
+            // Clear span filter
+            if (clearSpanFilter) {
+                clearSpanFilter.addEventListener('click', () => {
+                    currentSpanFilter = null;
+                    render();
+                });
+            }
+
+            // Span click to filter
+            container.querySelectorAll('.pk-log-span-link').forEach(el => {
+                el.addEventListener('click', () => {
+                    const spanId = el.dataset.spanId;
+                    if (spanId) {
+                        currentSpanFilter = spanId;
+                        render();
+                    }
+                });
             });
         }
 
-        filterInput.addEventListener('input', filterLogs);
-        levelSelect.addEventListener('change', filterLogs);
+        render();
     }
 
     function countSpans(span) {
