@@ -52,6 +52,20 @@
             border-bottom: 1px solid var(--pk-border);
         }
 
+        .peekaboot-back {
+            background: transparent;
+            border: none;
+            color: var(--pk-text-muted);
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 18px;
+            margin-right: 8px;
+        }
+
+        .peekaboot-back:hover {
+            color: var(--pk-primary);
+        }
+
         .peekaboot-tabs {
             display: flex;
             gap: 4px;
@@ -367,6 +381,7 @@
     expanded.className = 'peekaboot-expanded';
     expanded.innerHTML = `
         <div class="peekaboot-header">
+            <button class="peekaboot-back" title="Back">&#8592;</button>
             <div class="peekaboot-tabs">
                 <button class="peekaboot-tab" data-tab="request">Request</button>
                 <button class="peekaboot-tab active" data-tab="spans">Spans</button>
@@ -404,7 +419,8 @@
         }
     }
 
-    // Close button
+    // Back and close buttons (both close the toolbar)
+    expanded.querySelector('.peekaboot-back').addEventListener('click', closeToolbar);
     expanded.querySelector('.peekaboot-close').addEventListener('click', closeToolbar);
 
     // ESC key to close

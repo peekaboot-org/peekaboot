@@ -191,10 +191,15 @@
         .pk-logs-popup-header { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--pk-border); background: var(--pk-bg); gap: 12px; }
         .pk-logs-popup-back { background: transparent; border: none; color: var(--pk-text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
         .pk-logs-popup-back:hover { color: var(--pk-primary); }
-        .pk-logs-popup-title { flex: 1; font-weight: 600; color: var(--pk-text-strong); font-family: var(--pk-font-mono); font-size: 13px; }
+        .pk-logs-popup-title { flex: 1; font-weight: 600; color: var(--pk-text-strong); font-size: 13px; }
+        .pk-logs-popup-title code { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg-alt); padding: 2px 6px; border-radius: 3px; }
+        .pk-logs-popup-link { color: var(--pk-primary); cursor: pointer; text-decoration: underline; }
+        .pk-logs-popup-link:hover { color: var(--pk-text-strong); }
         .pk-logs-popup-close { background: transparent; border: none; color: var(--pk-text-muted); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1; }
         .pk-logs-popup-close:hover { color: var(--pk-danger); }
         .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 20px; }
+        .pk-log-item .pk-log-span { width: 120px; color: var(--pk-primary); cursor: pointer; font-family: var(--pk-font-mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+        .pk-log-item .pk-log-span:hover { text-decoration: underline; }
 
         /* Request tab styles */
         .pk-request-subtabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--pk-border); }
@@ -405,6 +410,7 @@
         const totalDuration = trace.durationMs || 1;
         const traceStart = trace.startTimeMs || 0;
         const traceId = trace.traceId || '';
+        const allTraceLogs = trace.logs || [];
         const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
 
         let html = '<div class="pk-gantt">';
@@ -428,8 +434,8 @@
                 const spanId = logsToggle.dataset.spanId;
                 const logsBase64 = logsToggle.dataset.logs;
                 // Decode base64 JSON (handles UTF-8 properly)
-                const logs = logsBase64 ? JSON.parse(decodeURIComponent(escape(atob(logsBase64)))) : [];
-                showSpanLogsPopup(container, traceId, spanId, logs);
+                const spanLogs = logsBase64 ? JSON.parse(decodeURIComponent(escape(atob(logsBase64)))) : [];
+                showSpanLogsPopup(container, traceId, spanId, spanLogs, allTraceLogs);
                 return;
             }
 
@@ -478,51 +484,135 @@
         });
     }
 
-    function showSpanLogsPopup(container, traceId, spanId, logs) {
+    function showSpanLogsPopup(container, traceId, spanId, spanLogs, allTraceLogs) {
         // Find popup in the trace container (parent of tab content)
         const traceContainer = container.closest('.pk-trace-container');
         const popup = traceContainer ? traceContainer.querySelector('#pk-logs-popup') : null;
         if (!popup) return;
 
-        if (logs.length === 0) {
-            popup.classList.add('hidden');
-            return;
+        // Render function that can show either span logs or all trace logs
+        function renderLogs(showAllLogs, filterSpanId) {
+            const logs = showAllLogs ? allTraceLogs : spanLogs;
+
+            if (logs.length === 0) {
+                popup.classList.add('hidden');
+                return;
+            }
+
+            let html = '<div class="pk-logs-popup-header">';
+            html += '<button class="pk-logs-popup-back" title="Back">&#8592;</button>';
+
+            if (showAllLogs) {
+                // Showing all trace logs
+                html += `<span class="pk-logs-popup-title">Logs for Trace <code>${Utils.escapeHtml(traceId)}</code></span>`;
+            } else {
+                // Showing span-specific logs
+                html += `<span class="pk-logs-popup-title">Logs for Span <code>${Utils.escapeHtml(spanId)}</code> (Part of trace <code>${Utils.escapeHtml(traceId)}</code>). <span class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</span></span>`;
+            }
+
+            html += '<button class="pk-logs-popup-close" title="Close">&times;</button>';
+            html += '</div>';
+            html += '<div class="pk-logs-popup-content">';
+
+            logs.forEach(log => {
+                const time = formatTime(log.timestamp);
+                const logSpanId = log.spanId || '';
+                html += `<div class="pk-log-item">`;
+                html += `<span class="pk-log-time">${time}</span>`;
+                if (showAllLogs) {
+                    // Show spanId column when viewing all logs
+                    const shortSpanId = logSpanId.length > 12 ? logSpanId.substring(0, 12) + '...' : logSpanId;
+                    html += `<span class="pk-log-span" data-span-id="${Utils.escapeHtml(logSpanId)}" title="${Utils.escapeHtml(logSpanId)}">${Utils.escapeHtml(shortSpanId)}</span>`;
+                }
+                html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
+                html += `<span class="pk-log-message">${Utils.escapeHtml(log.message)}</span>`;
+                html += `</div>`;
+            });
+
+            html += '</div>';
+            popup.innerHTML = html;
+            popup.classList.remove('hidden');
+
+            // Close handlers (both back and close buttons)
+            const closePopup = () => popup.classList.add('hidden');
+            popup.querySelector('.pk-logs-popup-back').addEventListener('click', closePopup);
+            popup.querySelector('.pk-logs-popup-close').addEventListener('click', closePopup);
+
+            // "Show logs for all spans" link handler
+            const showAllLink = popup.querySelector('#pk-show-all-logs');
+            if (showAllLink) {
+                showAllLink.addEventListener('click', () => renderLogs(true, null));
+            }
+
+            // SpanId click handler to filter to that span's logs
+            if (showAllLogs) {
+                popup.querySelectorAll('.pk-log-span').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const clickedSpanId = el.dataset.spanId;
+                        if (clickedSpanId) {
+                            // Filter to show only logs for this span
+                            const filteredLogs = allTraceLogs.filter(l => l.spanId === clickedSpanId);
+                            showFilteredSpanLogs(clickedSpanId, filteredLogs);
+                        }
+                    });
+                });
+            }
+
+            // Click outside to close
+            popup.addEventListener('click', (e) => {
+                if (e.target === popup) {
+                    popup.classList.add('hidden');
+                }
+            });
         }
 
-        // Build title with traceId-spanId
-        const titleId = traceId && spanId ? `${traceId}-${spanId}` : (spanId || 'unknown');
-
-        let html = '<div class="pk-logs-popup-header">';
-        html += '<button class="pk-logs-popup-back" title="Back">&#8592;</button>';
-        html += `<span class="pk-logs-popup-title">Logs for ${Utils.escapeHtml(titleId)}</span>`;
-        html += '<button class="pk-logs-popup-close" title="Close">&times;</button>';
-        html += '</div>';
-        html += '<div class="pk-logs-popup-content">';
-
-        logs.forEach(log => {
-            const time = formatTime(log.timestamp);
-            html += `<div class="pk-log-item">`;
-            html += `<span class="pk-log-time">${time}</span>`;
-            html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
-            html += `<span class="pk-log-message">${Utils.escapeHtml(log.message)}</span>`;
-            html += `</div>`;
-        });
-
-        html += '</div>';
-        popup.innerHTML = html;
-        popup.classList.remove('hidden');
-
-        // Close handlers (both back and close buttons)
-        const closePopup = () => popup.classList.add('hidden');
-        popup.querySelector('.pk-logs-popup-back').addEventListener('click', closePopup);
-        popup.querySelector('.pk-logs-popup-close').addEventListener('click', closePopup);
-
-        // Click outside to close
-        popup.addEventListener('click', (e) => {
-            if (e.target === popup) {
+        // Show filtered span logs (when clicking on spanId in the all-logs view)
+        function showFilteredSpanLogs(filteredSpanId, filteredLogs) {
+            if (filteredLogs.length === 0) {
                 popup.classList.add('hidden');
+                return;
             }
-        });
+
+            let html = '<div class="pk-logs-popup-header">';
+            html += '<button class="pk-logs-popup-back" title="Back">&#8592;</button>';
+            html += `<span class="pk-logs-popup-title">Logs for Span <code>${Utils.escapeHtml(filteredSpanId)}</code> (Part of trace <code>${Utils.escapeHtml(traceId)}</code>). <span class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</span></span>`;
+            html += '<button class="pk-logs-popup-close" title="Close">&times;</button>';
+            html += '</div>';
+            html += '<div class="pk-logs-popup-content">';
+
+            filteredLogs.forEach(log => {
+                const time = formatTime(log.timestamp);
+                html += `<div class="pk-log-item">`;
+                html += `<span class="pk-log-time">${time}</span>`;
+                html += `<span class="pk-log-level ${log.level}">${log.level}</span>`;
+                html += `<span class="pk-log-message">${Utils.escapeHtml(log.message)}</span>`;
+                html += `</div>`;
+            });
+
+            html += '</div>';
+            popup.innerHTML = html;
+
+            // Close handlers
+            const closePopup = () => popup.classList.add('hidden');
+            popup.querySelector('.pk-logs-popup-back').addEventListener('click', closePopup);
+            popup.querySelector('.pk-logs-popup-close').addEventListener('click', closePopup);
+
+            // "Show logs for all spans" link handler
+            const showAllLink = popup.querySelector('#pk-show-all-logs');
+            if (showAllLink) {
+                showAllLink.addEventListener('click', () => renderLogs(true, null));
+            }
+
+            // Click outside to close
+            popup.addEventListener('click', (e) => {
+                if (e.target === popup) {
+                    popup.classList.add('hidden');
+                }
+            });
+        }
+
+        // Initial render showing span-specific logs
+        renderLogs(false, spanId);
     }
 
     function renderSpanRows(container, span, depth, traceStart, totalDuration, parentId) {
