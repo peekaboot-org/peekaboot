@@ -137,6 +137,14 @@
             align-items: center;
             gap: 8px;
             cursor: pointer;
+            padding: 4px;
+            margin: -4px;
+            border-radius: var(--pk-radius);
+            transition: background-color 0.15s ease;
+        }
+
+        .span-header:hover {
+            background: var(--pk-bg-hover);
         }
 
         .span-icon {

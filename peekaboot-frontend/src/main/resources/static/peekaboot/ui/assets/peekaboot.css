@@ -1644,3 +1644,14 @@ mark {
 .log-count.warn {
     color: var(--pk-warning);
 }
+
+/* Utility: Section margin for dashboard elements */
+.section-margin {
+    margin-top: var(--pk-space-md);
+}
+
+/* Process info in memory card header */
+.process-info {
+    margin-left: auto;
+    font-weight: normal;
+}
