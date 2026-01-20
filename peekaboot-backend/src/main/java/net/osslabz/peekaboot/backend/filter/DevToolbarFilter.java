@@ -193,11 +193,15 @@ public class DevToolbarFilter implements Filter {
             .peekaboot-method{color:#8b949e}
             .peekaboot-path{color:#f0f6fc;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
             .peekaboot-controller{color:#58a6ff;font-size:11px}
-            .peekaboot-metrics{display:flex;align-items:center;gap:12px}
-            .peekaboot-metric{display:flex;align-items:center;gap:4px;color:#8b949e}
-            .peekaboot-metric .val{color:#c9d1d9}
-            .peekaboot-metric.warn .val{color:#d29922}
-            .peekaboot-metric.error .val{color:#f85149}
+            .peekaboot-metrics{display:flex;align-items:center;gap:16px}
+            .peekaboot-stat{display:flex;align-items:center;gap:4px;color:#c9d1d9;font-size:11px}
+            .peekaboot-stat .sep{color:#8b949e;opacity:0.6}
+            .peekaboot-stat .dur{font-family:ui-monospace,monospace}
+            .peekaboot-stat.warn .dur{color:#d29922}
+            .peekaboot-stat.error .dur{color:#f85149}
+            .peekaboot-log-counts{display:flex;align-items:center;gap:8px;font-size:11px}
+            .peekaboot-log-count.error{color:#f85149}
+            .peekaboot-log-count.warn{color:#d29922}
             .peekaboot-trace{font-family:ui-monospace,monospace;font-size:11px;color:#8b949e}
             .peekaboot-loading{color:#8b949e;font-size:11px}
             .peekaboot-loading::after{content:'';animation:dots 1.5s infinite}
@@ -291,33 +295,39 @@ public class DevToolbarFilter implements Filter {
 
                     var html = '';
 
-                    // Duration (always shown)
+                    // Duration
                     var duration = trace.durationMs || 0;
                     var durationClass = duration > 500 ? 'error' : (duration > 100 ? 'warn' : '');
-                    html += '<span class="peekaboot-metric ' + durationClass + '">\\u23F1<span class="val">' + duration + 'ms</span></span>';
+                    html += '<span class="peekaboot-stat ' + durationClass + '">\\u23F1<span class="dur">' + duration + 'ms</span></span>';
 
-                    // Spans count
-                    var spanCount = summary.spans ? summary.spans.count : 0;
-                    html += '<span class="peekaboot-metric">\\u{1F4C4}<span class="val">' + spanCount + '</span></span>';
-
-                    // Queries (use queries array length for accurate count, or summary)
+                    // Queries: "3 queries | 45ms" format
                     var queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
                     var queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
                     if (queryCount > 0) {
-                        var qClass = queryCount > 10 ? 'error' : (queryCount > 5 ? 'warn' : '');
-                        html += '<span class="peekaboot-metric ' + qClass + '">\\u{1F5C4}<span class="val">' + queryCount + '\\u00B7' + queryDuration + 'ms</span></span>';
+                        var qClass = queryDuration > 100 ? 'warn' : '';
+                        html += '<span class="peekaboot-stat ' + qClass + '">' + queryCount + ' queries<span class="sep"> | </span><span class="dur">' + queryDuration + 'ms</span></span>';
                     }
 
-                    // Logs count
-                    var logCount = trace.logs ? trace.logs.length : (summary.logs ? summary.logs.count : 0);
-                    if (logCount > 0) {
-                        html += '<span class="peekaboot-metric">\\u{1F4DD}<span class="val">' + logCount + '</span></span>';
+                    // HTTP calls (client spans): "2 HTTP | 120ms" format
+                    var httpCount = summary.httpCalls ? summary.httpCalls.count : 0;
+                    var httpDuration = summary.httpCalls ? summary.httpCalls.totalDurationMs : 0;
+                    if (httpCount > 0) {
+                        var hClass = httpDuration > 200 ? 'warn' : '';
+                        html += '<span class="peekaboot-stat ' + hClass + '">' + httpCount + ' HTTP<span class="sep"> | </span><span class="dur">' + httpDuration + 'ms</span></span>';
                     }
 
-                    // Errors
-                    var errorCount = summary.spans ? summary.spans.errorCount : 0;
-                    if (errorCount > 0) {
-                        html += '<span class="peekaboot-metric error">\\u26A0<span class="val">' + errorCount + '</span></span>';
+                    // Log counts by level
+                    var errorCount = summary.logs ? summary.logs.errorCount : 0;
+                    var warnCount = summary.logs ? summary.logs.warnCount : 0;
+                    if (errorCount > 0 || warnCount > 0) {
+                        html += '<span class="peekaboot-log-counts">';
+                        if (errorCount > 0) {
+                            html += '<span class="peekaboot-log-count error">\\u26A0' + errorCount + ' err</span>';
+                        }
+                        if (warnCount > 0) {
+                            html += '<span class="peekaboot-log-count warn">\\u26A1' + warnCount + ' warn</span>';
+                        }
+                        html += '</span>';
                     }
 
                     metricsEl.innerHTML = html;
