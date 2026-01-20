@@ -1528,7 +1528,7 @@ mark {
 .stat-group {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: var(--pk-space-xs);
 }
 
 .stat-count {
@@ -1580,6 +1580,7 @@ mark {
     z-index: 2147483647;
     display: flex;
     flex-direction: column;
+    background: var(--pk-bg);
 }
 
 .overlay-header {
