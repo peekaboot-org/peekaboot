@@ -188,8 +188,10 @@
         /* Logs popup - fullscreen */
         .pk-logs-popup { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: var(--pk-bg); border: none; box-shadow: none; z-index: 1001; display: flex; flex-direction: column; }
         .pk-logs-popup.hidden { display: none; }
-        .pk-logs-popup-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--pk-border); background: var(--pk-bg); }
-        .pk-logs-popup-title { font-weight: 600; color: var(--pk-text-strong); }
+        .pk-logs-popup-header { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--pk-border); background: var(--pk-bg); gap: 12px; }
+        .pk-logs-popup-back { background: transparent; border: none; color: var(--pk-text-muted); font-size: 18px; cursor: pointer; padding: 4px 8px; line-height: 1; }
+        .pk-logs-popup-back:hover { color: var(--pk-primary); }
+        .pk-logs-popup-title { flex: 1; font-weight: 600; color: var(--pk-text-strong); font-family: var(--pk-font-mono); font-size: 13px; }
         .pk-logs-popup-close { background: transparent; border: none; color: var(--pk-text-muted); font-size: 24px; cursor: pointer; padding: 0 4px; line-height: 1; }
         .pk-logs-popup-close:hover { color: var(--pk-danger); }
         .pk-logs-popup-content { flex: 1; overflow-y: auto; padding: 8px 20px; }
@@ -402,6 +404,7 @@
     function renderSpans(container, trace) {
         const totalDuration = trace.durationMs || 1;
         const traceStart = trace.startTimeMs || 0;
+        const traceId = trace.traceId || '';
         const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
 
         let html = '<div class="pk-gantt">';
@@ -426,7 +429,7 @@
                 const logsBase64 = logsToggle.dataset.logs;
                 // Decode base64 JSON (handles UTF-8 properly)
                 const logs = logsBase64 ? JSON.parse(decodeURIComponent(escape(atob(logsBase64)))) : [];
-                showSpanLogsPopup(container, spanId, logs);
+                showSpanLogsPopup(container, traceId, spanId, logs);
                 return;
             }
 
@@ -475,7 +478,7 @@
         });
     }
 
-    function showSpanLogsPopup(container, spanId, logs) {
+    function showSpanLogsPopup(container, traceId, spanId, logs) {
         // Find popup in the trace container (parent of tab content)
         const traceContainer = container.closest('.pk-trace-container');
         const popup = traceContainer ? traceContainer.querySelector('#pk-logs-popup') : null;
@@ -486,9 +489,13 @@
             return;
         }
 
+        // Build title with traceId-spanId
+        const titleId = traceId && spanId ? `${traceId}-${spanId}` : (spanId || 'unknown');
+
         let html = '<div class="pk-logs-popup-header">';
-        html += `<span class="pk-logs-popup-title">Logs for span</span>`;
-        html += '<button class="pk-logs-popup-close">&times;</button>';
+        html += '<button class="pk-logs-popup-back" title="Back">&#8592;</button>';
+        html += `<span class="pk-logs-popup-title">Logs for ${Utils.escapeHtml(titleId)}</span>`;
+        html += '<button class="pk-logs-popup-close" title="Close">&times;</button>';
         html += '</div>';
         html += '<div class="pk-logs-popup-content">';
 
@@ -505,10 +512,10 @@
         popup.innerHTML = html;
         popup.classList.remove('hidden');
 
-        // Close button handler
-        popup.querySelector('.pk-logs-popup-close').addEventListener('click', () => {
-            popup.classList.add('hidden');
-        });
+        // Close handlers (both back and close buttons)
+        const closePopup = () => popup.classList.add('hidden');
+        popup.querySelector('.pk-logs-popup-back').addEventListener('click', closePopup);
+        popup.querySelector('.pk-logs-popup-close').addEventListener('click', closePopup);
 
         // Click outside to close
         popup.addEventListener('click', (e) => {
