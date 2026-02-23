@@ -19,6 +19,10 @@ public class ToolbarDataProvider {
         );
     }
 
+    public String getIdleModeJson() {
+        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(basePath));
+    }
+
     private String escapeJson(String value) {
         if (value == null) return "";
         return value.replace("\\", "\\\\")
