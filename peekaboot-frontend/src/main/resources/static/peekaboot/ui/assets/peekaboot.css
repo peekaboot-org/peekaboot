@@ -1655,3 +1655,183 @@ mark {
     margin-left: auto;
     font-weight: normal;
 }
+
+/* Metrics Tab */
+.metric-group {
+    margin-bottom: var(--pk-space-sm);
+}
+
+.metric-group-header {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    cursor: pointer;
+    transition: background-color var(--pk-transition);
+}
+
+.metric-group-header:hover {
+    background: var(--pk-bg-hover);
+}
+
+.metric-group-header::before {
+    content: '\25B6';
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    transition: transform var(--pk-transition);
+}
+
+.metric-group-header:not(.collapsed)::before {
+    transform: rotate(90deg);
+}
+
+.metric-name {
+    flex: 1;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    color: var(--pk-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.metric-type-badge {
+    padding: 2px 6px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    background: var(--pk-bg);
+    color: var(--pk-text-muted);
+}
+
+.metric-type-badge.type-gauge {
+    background: rgba(37, 99, 235, 0.15);
+    color: var(--pk-primary);
+}
+
+.metric-type-badge.type-counter {
+    background: rgba(22, 163, 74, 0.15);
+    color: var(--pk-success);
+}
+
+.metric-type-badge.type-timer {
+    background: rgba(202, 138, 4, 0.15);
+    color: var(--pk-warning);
+}
+
+.metric-type-badge.type-distribution {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+}
+
+.metric-type-badge.type-long-task {
+    background: rgba(220, 38, 38, 0.15);
+    color: var(--pk-danger);
+}
+
+.metric-unit {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+}
+
+.metric-measurement-count {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+}
+
+.metric-group-content {
+    border: 1px solid var(--pk-border);
+    border-top: none;
+    border-radius: 0 0 var(--pk-radius) var(--pk-radius);
+    overflow: hidden;
+}
+
+.metric-group-content.collapsed {
+    display: none;
+}
+
+.metric-description {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    font-style: italic;
+    border-bottom: 1px solid var(--pk-border);
+}
+
+.metric-measurements {
+    background: var(--pk-bg);
+}
+
+.metric-measurement {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--pk-space-md);
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    border-bottom: 1px solid var(--pk-border);
+}
+
+.metric-measurement:last-child {
+    border-bottom: none;
+}
+
+.metric-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-space-xs);
+    flex: 1;
+}
+
+.metric-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text);
+}
+
+.metric-no-tags {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    font-style: italic;
+}
+
+.metric-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-space-sm);
+    justify-content: flex-end;
+}
+
+.metric-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--pk-text-xs);
+}
+
+.metric-stat-name {
+    color: var(--pk-text-muted);
+    text-transform: uppercase;
+    font-size: 0.65rem;
+}
+
+.metric-stat-value {
+    font-family: var(--pk-font-mono);
+    font-weight: 600;
+    color: var(--pk-text-strong);
+}
+
+#metrics-count {
+    margin-left: auto;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+}

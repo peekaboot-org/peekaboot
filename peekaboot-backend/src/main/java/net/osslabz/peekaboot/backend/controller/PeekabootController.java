@@ -3,11 +3,13 @@ package net.osslabz.peekaboot.backend.controller;
 import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.domain.metrics.MetricsInfo;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceRawData;
 import net.osslabz.peekaboot.backend.domain.trace.TraceRawResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
+import net.osslabz.peekaboot.backend.service.MetricsService;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
@@ -37,6 +39,7 @@ public class PeekabootController {
     private final ActuatorInsightsService actuatorInsightsService;
     private final TraceInsightsService traceInsightsService;
     private final TraceRawService traceRawService;
+    private final MetricsService metricsService;
     private final PeekabootProperties properties;
     private final PeekabootTracingProperties tracingProperties;
 
@@ -45,12 +48,14 @@ public class PeekabootController {
             ActuatorInsightsService actuatorInsightsService,
             TraceInsightsService traceInsightsService,
             TraceRawService traceRawService,
+            MetricsService metricsService,
             PeekabootProperties properties,
             ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider) {
         this.peekabookActuatorService = peekabootService;
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.traceRawService = traceRawService;
+        this.metricsService = metricsService;
         this.properties = properties;
         this.tracingProperties = tracingPropertiesProvider.getIfAvailable();
     }
@@ -72,11 +77,17 @@ public class PeekabootController {
     public Map<String, Object> getFeatures() {
         Map<String, Object> features = new HashMap<>();
         features.put("tracing", traceRawService != null);
+        features.put("metrics", metricsService.isAvailable());
         features.put("devToolbar", properties.isDevToolbar());
         if (tracingProperties != null) {
             features.put("traceCaptureMode", tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar()).name());
         }
         return features;
+    }
+
+    @GetMapping(value = "/api/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
+    public MetricsInfo getMetrics() {
+        return metricsService.getMetrics();
     }
 
     @GetMapping(value = "/api/traces/raw", produces = MediaType.APPLICATION_JSON_VALUE)

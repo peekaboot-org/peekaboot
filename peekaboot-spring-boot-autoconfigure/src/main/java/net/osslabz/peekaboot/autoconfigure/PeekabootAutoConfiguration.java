@@ -13,7 +13,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
 
 
-@AutoConfiguration(afterName = "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration")
+@AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
 @ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})

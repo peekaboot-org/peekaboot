@@ -14,6 +14,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
+import net.osslabz.peekaboot.backend.service.MetricsService;
 import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
@@ -43,6 +44,7 @@ class PeekabootControllerTest {
     private ActuatorInsightsService actuatorInsightsService;
     private TraceInsightsService traceInsightsService;
     private TraceRawService traceRawService;
+    private MetricsService metricsService;
     private PeekabootProperties properties;
     private ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider;
     private PeekabootTracingProperties tracingProperties;
@@ -56,17 +58,20 @@ class PeekabootControllerTest {
         actuatorInsightsService = mock(ActuatorInsightsService.class);
         traceInsightsService = mock(TraceInsightsService.class);
         traceRawService = mock(TraceRawService.class);
+        metricsService = mock(MetricsService.class);
         properties = new PeekabootProperties();
         tracingPropertiesProvider = mock(ObjectProvider.class);
         tracingProperties = new PeekabootTracingProperties();
 
         when(tracingPropertiesProvider.getIfAvailable()).thenReturn(tracingProperties);
+        when(metricsService.isAvailable()).thenReturn(true);
 
         controller = new PeekabootController(
                 actuatorService,
                 actuatorInsightsService,
                 traceInsightsService,
                 traceRawService,
+                metricsService,
                 properties,
                 tracingPropertiesProvider
         );
@@ -208,6 +213,7 @@ class PeekabootControllerTest {
                     actuatorInsightsService,
                     traceInsightsService,
                     null,  // null TraceRawService
+                    metricsService,
                     properties,
                     tracingPropertiesProvider
             );
@@ -215,6 +221,24 @@ class PeekabootControllerTest {
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features.get("tracing")).isEqualTo(false);
+        }
+
+        @Test
+        void shouldIncludeMetricsFeature() {
+            when(metricsService.isAvailable()).thenReturn(true);
+
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("metrics")).isEqualTo(true);
+        }
+
+        @Test
+        void shouldIncludeMetricsFeatureAsFalseWhenUnavailable() {
+            when(metricsService.isAvailable()).thenReturn(false);
+
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("metrics")).isEqualTo(false);
         }
 
         @Test

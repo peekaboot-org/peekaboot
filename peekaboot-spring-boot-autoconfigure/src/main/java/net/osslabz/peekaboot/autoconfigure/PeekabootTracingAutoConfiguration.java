@@ -1,5 +1,6 @@
-package net.osslabz.peekaboot.backend.tracing.autoconfigure;
+package net.osslabz.peekaboot.autoconfigure;
 
+import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.springframework.boot.autoconfigure.AutoConfiguration;

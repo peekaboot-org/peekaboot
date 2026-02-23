@@ -7,9 +7,11 @@
     let peekabootData = null;
     let refreshTimer = null;
     let isPaused = false;
-    let features = { tracing: false, traceCaptureMode: 'ERRORS_ONLY', devToolbar: false };
+    let features = { tracing: false, metrics: false, traceCaptureMode: 'ERRORS_ONLY', devToolbar: false };
     let tracesData = null;
     let tracesLoaded = false;
+    let metricsData = null;
+    let metricsLoaded = false;
     let selectedRootActionTypes = new Set(['HTTP_REQUEST', 'SCHEDULED_JOB',
         'MESSAGE_CONSUMER', 'DATABASE', 'INTERNAL', 'RPC_CALL', 'UNKNOWN']);
 
@@ -117,6 +119,7 @@
         initLoggersFilter();
         initConfigFilter();
         initTracesFilter();
+        initMetricsFilter();
         initErrorClose();
         await fetchFeatures();
         fetchData();
@@ -132,6 +135,10 @@
                     tracesTab.classList.remove('hidden');
                     const tabLabel = features.traceCaptureMode === 'ALL' ? 'Traces' : 'Error Traces';
                     tracesTab.textContent = tabLabel;
+                }
+                if (features.metrics) {
+                    const metricsTab = document.querySelector('[data-tab="metrics"]');
+                    if (metricsTab) metricsTab.classList.remove('hidden');
                 }
             }
         } catch (error) {
@@ -405,6 +412,11 @@
         if (tabName === 'traces' && !tracesLoaded) {
             fetchTraces();
         }
+
+        // Load metrics on demand
+        if (tabName === 'metrics' && !metricsLoaded) {
+            fetchMetrics();
+        }
     }
 
     function initTabs() {
@@ -514,6 +526,198 @@
         if (clearBtn) {
             clearBtn.addEventListener('click', resetTracesFilter);
         }
+    }
+
+    function initMetricsFilter() {
+        const filterInput = document.getElementById('metrics-filter');
+        if (filterInput) {
+            filterInput.addEventListener('input', (e) => {
+                renderMetricsTab(e.target.value.trim());
+            });
+        }
+    }
+
+    async function fetchMetrics() {
+        const listEl = document.getElementById('metrics-list');
+        const noMetricsEl = document.getElementById('no-metrics');
+        const countEl = document.getElementById('metrics-count');
+
+        if (!listEl) return;
+
+        listEl.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading metrics...</p></div>';
+        if (noMetricsEl) noMetricsEl.classList.add('hidden');
+
+        try {
+            const response = await fetch('/peekaboot/api/metrics');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            metricsData = await response.json();
+            metricsLoaded = true;
+            renderMetricsTab();
+        } catch (error) {
+            console.error('Error fetching metrics:', error);
+            listEl.innerHTML = `<div class="error-banner"><span class="message">Failed to load metrics: ${error.message}</span></div>`;
+        }
+    }
+
+    function renderMetricsTab(filterQuery = '') {
+        const listEl = document.getElementById('metrics-list');
+        const noMetricsEl = document.getElementById('no-metrics');
+        const countEl = document.getElementById('metrics-count');
+
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        const metrics = metricsData?.metrics;
+        if (!metrics || metrics.length === 0) {
+            if (noMetricsEl) noMetricsEl.classList.remove('hidden');
+            if (countEl) countEl.textContent = '';
+            return;
+        }
+
+        if (noMetricsEl) noMetricsEl.classList.add('hidden');
+
+        // Filter metrics by name or tag
+        const filteredMetrics = filterQuery
+            ? metrics.filter(m => matchesMetricFilter(m, filterQuery))
+            : metrics;
+
+        // Update count
+        if (countEl) {
+            countEl.textContent = filterQuery
+                ? `${filteredMetrics.length} / ${metrics.length} metrics`
+                : `${metrics.length} metrics`;
+        }
+
+        if (filteredMetrics.length === 0) {
+            listEl.innerHTML = `<p class="no-data">No metrics matching "${PeekabootUtils.escapeHtml(filterQuery)}"</p>`;
+            return;
+        }
+
+        // Render metric groups
+        filteredMetrics.forEach(metric => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'metric-group';
+
+            const headerEl = document.createElement('div');
+            headerEl.className = 'metric-group-header collapsed';
+
+            const typeBadgeClass = getMetricTypeBadgeClass(metric.type);
+            const unitDisplay = metric.baseUnit ? `<span class="metric-unit">${PeekabootUtils.escapeHtml(metric.baseUnit)}</span>` : '';
+
+            headerEl.innerHTML = `
+                <span class="metric-name">${highlightText(metric.name, filterQuery)}</span>
+                <span class="metric-type-badge ${typeBadgeClass}">${PeekabootUtils.escapeHtml(metric.type)}</span>
+                ${unitDisplay}
+                <span class="metric-measurement-count">${metric.measurements.length} measurement${metric.measurements.length !== 1 ? 's' : ''}</span>
+            `;
+
+            const contentEl = document.createElement('div');
+            contentEl.className = 'metric-group-content collapsed';
+
+            // Description
+            if (metric.description) {
+                const descEl = document.createElement('div');
+                descEl.className = 'metric-description';
+                descEl.textContent = metric.description;
+                contentEl.appendChild(descEl);
+            }
+
+            // Measurements
+            const measurementsEl = document.createElement('div');
+            measurementsEl.className = 'metric-measurements';
+
+            metric.measurements.forEach(measurement => {
+                const measEl = document.createElement('div');
+                measEl.className = 'metric-measurement';
+
+                // Tags
+                const tagsHtml = Object.entries(measurement.tags || {})
+                    .map(([k, v]) => `<span class="metric-tag">${highlightText(k, filterQuery)}=${highlightText(v, filterQuery)}</span>`)
+                    .join('');
+
+                // Statistics
+                const statsHtml = (measurement.statistics || [])
+                    .map(stat => `<span class="metric-stat"><span class="metric-stat-name">${PeekabootUtils.escapeHtml(stat.name)}</span><span class="metric-stat-value">${formatMetricValue(stat.value, metric.baseUnit)}</span></span>`)
+                    .join('');
+
+                measEl.innerHTML = `
+                    <div class="metric-tags">${tagsHtml || '<span class="metric-no-tags">no tags</span>'}</div>
+                    <div class="metric-stats">${statsHtml}</div>
+                `;
+
+                measurementsEl.appendChild(measEl);
+            });
+
+            contentEl.appendChild(measurementsEl);
+
+            headerEl.addEventListener('click', () => {
+                contentEl.classList.toggle('collapsed');
+                headerEl.classList.toggle('collapsed');
+            });
+
+            groupEl.appendChild(headerEl);
+            groupEl.appendChild(contentEl);
+            listEl.appendChild(groupEl);
+        });
+    }
+
+    function matchesMetricFilter(metric, query) {
+        const lowerQuery = query.toLowerCase();
+
+        // Match metric name
+        if (metric.name.toLowerCase().includes(lowerQuery)) return true;
+
+        // Match tags
+        for (const measurement of metric.measurements) {
+            for (const [key, value] of Object.entries(measurement.tags || {})) {
+                if (key.toLowerCase().includes(lowerQuery) || value.toLowerCase().includes(lowerQuery)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    function getMetricTypeBadgeClass(type) {
+        switch (type?.toUpperCase()) {
+            case 'GAUGE': return 'type-gauge';
+            case 'COUNTER': return 'type-counter';
+            case 'TIMER': return 'type-timer';
+            case 'DISTRIBUTION_SUMMARY': return 'type-distribution';
+            case 'LONG_TASK_TIMER': return 'type-long-task';
+            default: return 'type-other';
+        }
+    }
+
+    function formatMetricValue(value, unit) {
+        if (value === null || value === undefined || isNaN(value)) return '-';
+
+        // Format bytes
+        if (unit === 'bytes') {
+            return formatBytes(value);
+        }
+
+        // Format seconds as duration
+        if (unit === 'seconds') {
+            if (value < 0.001) return `${(value * 1000000).toFixed(0)} \u00B5s`;
+            if (value < 1) return `${(value * 1000).toFixed(2)} ms`;
+            return `${value.toFixed(3)} s`;
+        }
+
+        // Format large numbers with grouping
+        if (Math.abs(value) >= 1000) {
+            return value.toLocaleString(currentLocale, { maximumFractionDigits: 2 });
+        }
+
+        // Format small decimals
+        if (value !== 0 && Math.abs(value) < 0.01) {
+            return value.toExponential(2);
+        }
+
+        return value.toLocaleString(currentLocale, { maximumFractionDigits: 4 });
     }
 
     function initErrorClose() {

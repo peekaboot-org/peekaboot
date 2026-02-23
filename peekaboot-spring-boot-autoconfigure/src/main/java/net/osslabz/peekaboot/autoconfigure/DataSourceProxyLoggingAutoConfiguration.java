@@ -19,7 +19,7 @@ public class DataSourceProxyLoggingAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnBean(DataSourceDecorator.class)
-    public com.github.gavlyukovskiy.boot.jdbc.decorator.DataSourceNameResolver dataSourceNameResolver(ApplicationContext applicationContext) {
+    public com.github.gavlyukovskiy.boot.jdbc.decorator.DataSourceNameResolver loggingDataSourceNameResolver(ApplicationContext applicationContext) {
 
         return new DataSourceNameResolver(applicationContext);
     }

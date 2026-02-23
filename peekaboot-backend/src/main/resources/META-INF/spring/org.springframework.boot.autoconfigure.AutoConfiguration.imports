@@ -1,2 +1,0 @@
-net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingAutoConfiguration
-net.osslabz.peekaboot.backend.tracing.autoconfigure.OtelTracingAutoConfiguration

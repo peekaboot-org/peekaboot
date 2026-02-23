@@ -1,4 +1,4 @@
-package net.osslabz.peekaboot.backend.tracing.autoconfigure;
+package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
