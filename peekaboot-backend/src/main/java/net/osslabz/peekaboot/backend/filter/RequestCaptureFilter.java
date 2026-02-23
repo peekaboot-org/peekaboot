@@ -1,6 +1,7 @@
 package net.osslabz.peekaboot.backend.filter;
 
 import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
@@ -72,6 +73,7 @@ public class RequestCaptureFilter implements Filter {
             chain.doFilter(request, response);
         } finally {
             try {
+                setServerTimingHeader(httpResponse);
                 captureRequest(httpRequest, httpResponse, startTime);
             } catch (Exception e) {
                 log.warn("Failed to capture request details: {}", e.getMessage());
@@ -81,6 +83,21 @@ public class RequestCaptureFilter implements Filter {
 
     private boolean shouldSkip(String path) {
         return FilterPathMatcher.shouldSkip(path);
+    }
+
+    private void setServerTimingHeader(HttpServletResponse response) {
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan == null) {
+            return;
+        }
+        TraceContext context = currentSpan.context();
+        String traceId = context.traceId();
+        String spanId = context.spanId();
+        if (traceId == null || spanId == null) {
+            return;
+        }
+        String traceFlags = Boolean.TRUE.equals(context.sampled()) ? "01" : "00";
+        response.setHeader("Server-Timing", "trace;desc=\"00-" + traceId + "-" + spanId + "-" + traceFlags + "\"");
     }
 
     private void captureRequest(HttpServletRequest request, HttpServletResponse response, long startTime) {

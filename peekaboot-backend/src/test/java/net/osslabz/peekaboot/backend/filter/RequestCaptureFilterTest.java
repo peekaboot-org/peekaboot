@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -283,6 +284,48 @@ class RequestCaptureFilterTest {
 
         RequestCompletedEvent event = captor.getValue();
         assertThat(event.durationMs()).isGreaterThanOrEqualTo(0);
+    }
+
+    @Test
+    void shouldSetServerTimingHeader() throws Exception {
+        Span span = mock(Span.class);
+        TraceContext context = mock(TraceContext.class);
+        when(context.traceId()).thenReturn("0af7651916cd43dd8448eb211c80319c");
+        when(context.spanId()).thenReturn("b7ad6b7169203331");
+        when(context.sampled()).thenReturn(true);
+        when(span.context()).thenReturn(context);
+        when(tracer.currentSpan()).thenReturn(span);
+        setupBasicRequestResponse();
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).setHeader("Server-Timing", "trace;desc=\"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01\"");
+    }
+
+    @Test
+    void shouldSetServerTimingHeaderWithUnsampledFlag() throws Exception {
+        Span span = mock(Span.class);
+        TraceContext context = mock(TraceContext.class);
+        when(context.traceId()).thenReturn("abc123");
+        when(context.spanId()).thenReturn("def456");
+        when(context.sampled()).thenReturn(false);
+        when(span.context()).thenReturn(context);
+        when(tracer.currentSpan()).thenReturn(span);
+        setupBasicRequestResponse();
+
+        filter.doFilter(request, response, chain);
+
+        verify(response).setHeader("Server-Timing", "trace;desc=\"00-abc123-def456-00\"");
+    }
+
+    @Test
+    void shouldNotSetServerTimingHeaderWhenNoSpan() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/users");
+        when(tracer.currentSpan()).thenReturn(null);
+
+        filter.doFilter(request, response, chain);
+
+        verify(response, never()).setHeader(eq("Server-Timing"), any());
     }
 
     private void setupBasicRequestResponse() {
