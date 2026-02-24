@@ -222,132 +222,154 @@ public class DevToolbarFilter implements Filter {
             var bar = document.createElement('div');
             bar.className = 'peekaboot-bar';
 
-            var statusClass = 's' + Math.floor(data.status / 100) + 'xx';
-            var safePath = escapeHtml(data.path);
-            var safeMethod = escapeHtml(data.method);
-            var safeTraceId = escapeHtml(data.traceId);
-
             bar.innerHTML = `
                 <div class="peekaboot-left">
-                    <span class="peekaboot-status ${statusClass}">${data.status}</span>
-                    <span class="peekaboot-method">${safeMethod}</span>
-                    <span class="peekaboot-path" title="${safePath}">${safePath}</span>
+                    <span class="peekaboot-status" id="pb-status"></span>
+                    <span class="peekaboot-method" id="pb-method"></span>
+                    <span class="peekaboot-path" id="pb-path"></span>
                     <span class="peekaboot-controller" id="pb-controller"></span>
                     <span class="peekaboot-metrics" id="pb-metrics">
-                        <span class="peekaboot-loading">loading</span>
+                        <span class="peekaboot-pending">Waiting for request\\u2026</span>
                     </span>
                 </div>
                 <div class="peekaboot-right">
-                    <span class="peekaboot-trace">${safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-'}</span>
+                    <span class="peekaboot-trace" id="pb-trace">-</span>
                     <a href="${data.basePath}/" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\\u{1F4CA}</a>
                 </div>
             `;
             shadow.appendChild(bar);
 
-            if (data.traceId) {
-                var retryDelay = 250;
-                var maxTotalDelay = 32000;
-                var totalDelay = 0;
+            var currentTraceId = null;
 
-                function isTraceComplete(trace) {
-                    return trace && trace.rootSpan && trace.summary && trace.summary.spans && trace.summary.spans.count > 0;
-                }
+            function loadTrace(traceId, method, path, status) {
+                currentTraceId = traceId;
+                var statusClass = 's' + Math.floor(status / 100) + 'xx';
+                var safePath = escapeHtml(path);
+                var safeMethod = escapeHtml(method);
+                var safeTraceId = escapeHtml(traceId);
 
-                function fetchTrace() {
-                    fetch(data.basePath + '/api/traces/' + data.traceId + '/insights')
-                        .then(function(resp) {
-                            if (resp.ok) return resp.json();
-                            if (resp.status === 404 && totalDelay < maxTotalDelay) {
-                                totalDelay += retryDelay;
-                                setTimeout(fetchTrace, retryDelay);
-                                retryDelay *= 2;
-                                return null;
-                            }
-                            throw new Error('Not found');
-                        })
-                        .then(function(trace) {
-                            if (!trace) return;
-                            if (!isTraceComplete(trace) && totalDelay < maxTotalDelay) {
-                                totalDelay += retryDelay;
-                                setTimeout(fetchTrace, retryDelay);
-                                retryDelay *= 2;
-                                return;
-                            }
-                            updateToolbar(trace);
-                        })
-                        .catch(function() {
-                            showPending();
-                        });
-                }
+                var statusEl = shadow.getElementById('pb-status');
+                statusEl.textContent = status;
+                statusEl.className = 'peekaboot-status ' + statusClass;
 
-                function updateToolbar(trace) {
-                    console.log('Peekaboot trace data:', JSON.stringify(trace, null, 2));
-                    var summary = trace.summary || {};
-                    var httpExchange = trace.httpExchange || {};
-                    var controller = httpExchange.request && httpExchange.request.controller || {};
-                    var metricsEl = shadow.getElementById('pb-metrics');
-                    var controllerEl = shadow.getElementById('pb-controller');
+                shadow.getElementById('pb-method').textContent = safeMethod;
+                var pathEl = shadow.getElementById('pb-path');
+                pathEl.textContent = safePath;
+                pathEl.title = safePath;
 
-                    if (controller.class && controller.method) {
-                        var className = controller.class.split('.').pop();
-                        controllerEl.textContent = '\\u2192 ' + className + '.' + controller.method;
+                shadow.getElementById('pb-controller').textContent = '';
+                shadow.getElementById('pb-trace').textContent = safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-';
+
+                var metricsEl = shadow.getElementById('pb-metrics');
+                metricsEl.innerHTML = '<span class="peekaboot-loading">loading</span>';
+
+                if (traceId) {
+                    var retryDelay = 250;
+                    var maxTotalDelay = 32000;
+                    var totalDelay = 0;
+
+                    function isTraceComplete(trace) {
+                        return trace && trace.rootSpan && trace.summary && trace.summary.spans && trace.summary.spans.count > 0;
                     }
 
-                    var html = '';
-
-                    // Duration
-                    var duration = trace.durationMs || 0;
-                    var durationClass = duration > 500 ? 'error' : (duration > 100 ? 'warn' : '');
-                    html += '<span class="peekaboot-stat ' + durationClass + '">\\u23F1<span class="dur">' + duration + 'ms</span></span>';
-
-                    // Queries: "3 queries | 45ms" format
-                    var queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
-                    var queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
-                    if (queryCount > 0) {
-                        var qClass = queryDuration > 100 ? 'warn' : '';
-                        html += '<span class="peekaboot-stat ' + qClass + '">' + queryCount + ' queries<span class="sep"> | </span><span class="dur">' + queryDuration + 'ms</span></span>';
+                    function fetchTrace() {
+                        if (currentTraceId !== traceId) return;
+                        fetch(data.basePath + '/api/traces/' + traceId + '/insights')
+                            .then(function(resp) {
+                                if (currentTraceId !== traceId) return null;
+                                if (resp.ok) return resp.json();
+                                if (resp.status === 404 && totalDelay < maxTotalDelay) {
+                                    totalDelay += retryDelay;
+                                    setTimeout(fetchTrace, retryDelay);
+                                    retryDelay *= 2;
+                                    return null;
+                                }
+                                throw new Error('Not found');
+                            })
+                            .then(function(trace) {
+                                if (!trace || currentTraceId !== traceId) return;
+                                if (!isTraceComplete(trace) && totalDelay < maxTotalDelay) {
+                                    totalDelay += retryDelay;
+                                    setTimeout(fetchTrace, retryDelay);
+                                    retryDelay *= 2;
+                                    return;
+                                }
+                                updateToolbar(trace);
+                            })
+                            .catch(function() {
+                                if (currentTraceId === traceId) showPending();
+                            });
                     }
 
-                    // TODO: Add HTTP calls (client spans) when summary.httpCalls is available in the API
-                    // Format: "2 HTTP | 120ms"
+                    function updateToolbar(trace) {
+                        if (currentTraceId !== traceId) return;
+                        var summary = trace.summary || {};
+                        var httpExchange = trace.httpExchange || {};
+                        var controller = httpExchange.request && httpExchange.request.controller || {};
+                        var metricsEl = shadow.getElementById('pb-metrics');
+                        var controllerEl = shadow.getElementById('pb-controller');
 
-                    // Log counts by level
-                    var errorCount = summary.logs ? summary.logs.errorCount : 0;
-                    var warnCount = summary.logs ? summary.logs.warnCount : 0;
-                    if (errorCount > 0 || warnCount > 0) {
-                        html += '<span class="peekaboot-log-counts">';
-                        if (errorCount > 0) {
-                            html += '<span class="peekaboot-log-count error">\\u2757' + errorCount + ' err</span>';
+                        if (controller.class && controller.method) {
+                            var className = controller.class.split('.').pop();
+                            controllerEl.textContent = '\\u2192 ' + className + '.' + controller.method;
                         }
-                        if (warnCount > 0) {
-                            html += '<span class="peekaboot-log-count warn">\\u26A0' + warnCount + ' warn</span>';
+
+                        var html = '';
+
+                        var duration = trace.durationMs || 0;
+                        var durationClass = duration > 500 ? 'error' : (duration > 100 ? 'warn' : '');
+                        html += '<span class="peekaboot-stat ' + durationClass + '">\\u23F1<span class="dur">' + duration + 'ms</span></span>';
+
+                        var queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
+                        var queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
+                        if (queryCount > 0) {
+                            var qClass = queryDuration > 100 ? 'warn' : '';
+                            html += '<span class="peekaboot-stat ' + qClass + '">' + queryCount + ' queries<span class="sep"> | </span><span class="dur">' + queryDuration + 'ms</span></span>';
                         }
-                        html += '</span>';
+
+                        var errorCount = summary.logs ? summary.logs.errorCount : 0;
+                        var warnCount = summary.logs ? summary.logs.warnCount : 0;
+                        if (errorCount > 0 || warnCount > 0) {
+                            html += '<span class="peekaboot-log-counts">';
+                            if (errorCount > 0) {
+                                html += '<span class="peekaboot-log-count error">\\u2757' + errorCount + ' err</span>';
+                            }
+                            if (warnCount > 0) {
+                                html += '<span class="peekaboot-log-count warn">\\u26A0' + warnCount + ' warn</span>';
+                            }
+                            html += '</span>';
+                        }
+
+                        metricsEl.innerHTML = html;
                     }
 
-                    metricsEl.innerHTML = html;
-                }
+                    function showPending() {
+                        var metricsEl = shadow.getElementById('pb-metrics');
+                        metricsEl.innerHTML = '<span class="peekaboot-pending">[\\u23F1 ?] [\\u{1F4C4} ?] [\\u{1F5C4} ?] [\\u{1F4DD} ?]</span>';
+                    }
 
-                function showPending() {
-                    var metricsEl = shadow.getElementById('pb-metrics');
-                    metricsEl.innerHTML = '<span class="peekaboot-pending">[\\u23F1 ?] [\\u{1F4C4} ?] [\\u{1F5C4} ?] [\\u{1F4DD} ?]</span>';
+                    setTimeout(fetchTrace, 50);
                 }
+            }
 
-                setTimeout(fetchTrace, 50);
+            window.__peekaboot = { loadTrace: loadTrace, basePath: data.basePath };
+
+            if (!data.idle && data.traceId) {
+                loadTrace(data.traceId, data.method, data.path, data.status);
             }
 
             bar.addEventListener('click', function(e) {
                 if (e.target.tagName === 'A') return;
-                if (!data.traceId) return;
+                if (!currentTraceId) return;
                 if (!window.PeekabootTraceDetail) {
                     var script = document.createElement('script');
                     script.src = data.basePath + '/ui/trace-detail/trace-detail.js';
                     script.onload = function() {
-                        window.PeekabootTraceDetail.open(data.traceId, { basePath: data.basePath });
+                        window.PeekabootTraceDetail.open(currentTraceId, { basePath: data.basePath });
                     };
                     document.head.appendChild(script);
                 } else {
-                    window.PeekabootTraceDetail.open(data.traceId, { basePath: data.basePath });
+                    window.PeekabootTraceDetail.open(currentTraceId, { basePath: data.basePath });
                 }
             });
             """;

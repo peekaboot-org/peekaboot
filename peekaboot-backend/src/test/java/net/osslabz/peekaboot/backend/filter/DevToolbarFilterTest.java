@@ -206,6 +206,35 @@ class DevToolbarFilterTest {
     }
 
     @Test
+    void shouldExposeLoadTraceGlobalFunction() throws Exception {
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write("<html><body></body></html>");
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("window.__peekaboot");
+        assertThat(result).contains("loadTrace");
+    }
+
+    @Test
     void shouldIncludeToolbarJsPathFromBasePath() throws Exception {
         when(request.getRequestURI()).thenReturn("/page");
         when(request.getMethod()).thenReturn("GET");
