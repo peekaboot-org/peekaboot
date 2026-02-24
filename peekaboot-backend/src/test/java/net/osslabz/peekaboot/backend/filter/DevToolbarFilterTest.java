@@ -263,6 +263,90 @@ class DevToolbarFilterTest {
         assertThat(result).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
     }
 
+    @Test
+    void shouldInjectIdleModeToolbarForSwaggerUi() throws Exception {
+        when(request.getRequestURI()).thenReturn("/swagger-ui/index.html");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(toolbarDataProvider.getIdleModeJson()).thenReturn("{\"idle\":true,\"basePath\":\"/peekaboot\"}");
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write("<html><body><div id=\"swagger-ui\"></div></body></html>");
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
+        assertThat(result).contains("\"idle\":true");
+        assertThat(result).contains("Waiting for request");
+    }
+
+    @Test
+    void shouldInjectFetchInterceptorForSwaggerUi() throws Exception {
+        when(request.getRequestURI()).thenReturn("/swagger-ui/index.html");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(toolbarDataProvider.getIdleModeJson()).thenReturn("{\"idle\":true,\"basePath\":\"/peekaboot\"}");
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write("<html><body><div id=\"swagger-ui\"></div></body></html>");
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("Server-Timing");
+        assertThat(result).contains("__peekaboot.loadTrace");
+        assertThat(result).contains("originalFetch");
+    }
+
+    @Test
+    void shouldNotInjectFetchInterceptorForRegularPages() throws Exception {
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write("<html><body></body></html>");
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).doesNotContain("originalFetch");
+    }
+
     private static class TestServletOutputStream extends ServletOutputStream {
         private final ByteArrayOutputStream output;
 

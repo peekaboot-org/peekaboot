@@ -23,6 +23,7 @@ public class DevToolbarFilter implements Filter {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
+    private static final String SWAGGER_UI_PREFIX = "/swagger-ui/";
     private static final Set<String> EXCLUDED_EXTENSIONS = Set.of(
             ".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
     );
@@ -127,7 +128,11 @@ public class DevToolbarFilter implements Filter {
 
         String toolbarHtml;
         try {
-            toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+            if (isSwaggerUi(request.getRequestURI())) {
+                toolbarHtml = generateSwaggerToolbarHtml();
+            } else {
+                toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+            }
         } catch (Exception e) {
             log.warn("Failed to generate toolbar HTML: {}", e.getMessage());
             wrappedResponse.copyBodyToResponse();
@@ -372,6 +377,78 @@ public class DevToolbarFilter implements Filter {
                     window.PeekabootTraceDetail.open(currentTraceId, { basePath: data.basePath });
                 }
             });
+            """;
+    }
+
+    private boolean isSwaggerUi(String path) {
+        return path.startsWith(SWAGGER_UI_PREFIX);
+    }
+
+    private String generateSwaggerToolbarHtml() {
+        String idleJson = toolbarDataProvider.getIdleModeJson();
+
+        String template = """
+            <!-- Peekaboot Dev Toolbar -->
+            <script id="peekaboot-toolbar-data" type="application/json">{{SUMMARY_JSON}}</script>
+            <script>
+            (function() {
+                var data = JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent);
+                var host = document.createElement('div');
+                host.id = 'peekaboot-toolbar-host';
+                host.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;';
+                document.body.appendChild(host);
+                var shadow = host.attachShadow({mode:'open'});
+
+                var style = document.createElement('style');
+                style.textContent = `%s`;
+                shadow.appendChild(style);
+
+                %s
+
+                %s
+            })();
+            </script>
+            """.formatted(generateToolbarCss(), generateToolbarScript(), generateFetchInterceptorScript());
+
+        return template.replace("{{SUMMARY_JSON}}", idleJson);
+    }
+
+    private String generateFetchInterceptorScript() {
+        return """
+            // Fetch interceptor for Swagger UI
+            (function() {
+                var skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/'];
+                var originalFetch = window.fetch;
+
+                window.fetch = function(input, init) {
+                    var url = (typeof input === 'string') ? input : (input instanceof Request ? input.url : String(input));
+                    var method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+
+                    var path;
+                    try {
+                        var parsed = new URL(url, window.location.origin);
+                        path = parsed.pathname;
+                    } catch(e) {
+                        path = url;
+                    }
+
+                    var skip = skipPrefixes.some(function(prefix) { return path.startsWith(prefix); });
+
+                    return originalFetch.apply(this, arguments).then(function(response) {
+                        if (skip) return response;
+
+                        var serverTiming = response.headers.get('Server-Timing');
+                        if (serverTiming && window.__peekaboot) {
+                            var match = serverTiming.match(/trace;desc="00-([a-f0-9]+)-([a-f0-9]+)-([a-f0-9]+)"/);
+                            if (match) {
+                                var traceId = match[1];
+                                window.__peekaboot.loadTrace(traceId, method, path, response.status);
+                            }
+                        }
+                        return response;
+                    });
+                };
+            })();
             """;
     }
 }
