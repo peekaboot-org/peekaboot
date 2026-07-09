@@ -726,7 +726,9 @@
             const queryDetail = document.createElement('div');
             queryDetail.className = 'pk-span-query-detail';
             queryDetail.dataset.spanId = span.spanId;
-            queryDetail.dataset.depth = depth;
+            // depth + 1: counts as collapsible content of this span's row, so the
+            // expand/collapse walker (which stops at depth <= row depth) passes it
+            queryDetail.dataset.depth = depth + 1;
             queryDetail.style.marginLeft = (indent + 20) + 'px';
 
             let queryHtml = '';
@@ -747,7 +749,7 @@
             const badgesRow = document.createElement('div');
             badgesRow.className = 'pk-gantt-badges';
             badgesRow.style.paddingLeft = (indent + 20) + 'px';
-            badgesRow.dataset.depth = depth;
+            badgesRow.dataset.depth = depth + 1;
             if (parentId) badgesRow.dataset.parentId = parentId;
 
             let badgesHtml = '';
