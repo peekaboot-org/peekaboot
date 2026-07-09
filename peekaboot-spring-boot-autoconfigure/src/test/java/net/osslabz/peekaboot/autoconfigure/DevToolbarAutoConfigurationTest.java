@@ -73,6 +73,21 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
+    void peekabootDisabledWinsOverDevToolbarFlag() {
+        // peekaboot.enabled=false skips PeekabootAutoConfiguration (and with it
+        // the PeekabootProperties bean); the toolbar must switch off cleanly
+        // instead of failing the context on the missing bean.
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=false", "peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                });
+    }
+
+    @Test
     void shouldCreateLogbackAppenderRegistrar() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
