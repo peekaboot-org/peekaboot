@@ -14,7 +14,7 @@
 
     <groupId>net.osslabz</groupId>
     <artifactId>peekaboot-example-app</artifactId>
-    <version>0.0.2-SNAPSHOT</version>
+    <version>0.0.4-SNAPSHOT</version>
 
     <properties>
         <java.version>25</java.version>
@@ -110,7 +110,7 @@
         <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>peekaboot-spring-boot-starter</artifactId>
-            <version>0.0.2-SNAPSHOT</version>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 
