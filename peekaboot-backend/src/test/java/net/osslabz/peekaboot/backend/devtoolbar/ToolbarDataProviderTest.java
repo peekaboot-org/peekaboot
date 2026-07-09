@@ -79,4 +79,27 @@ class ToolbarDataProviderTest {
 
         assertThat(json).contains("trace\\twith\\ttabs");
     }
+
+    @Test
+    void shouldEscapeAngleBracketsToPreventScriptTagBreakout() {
+        // The JSON is embedded verbatim inside a <script> tag; a literal
+        // </script> in the payload would terminate the tag and inject markup.
+        String json = provider.getToolbarSummaryJson("GET", "/foo</script><script>alert(1)</script>", 200, null);
+
+        assertThat(json).doesNotContainIgnoringCase("</script>");
+        assertThat(json).contains("\\u003c/script\\u003e");
+    }
+
+    @Test
+    void shouldEscapeControlCharactersAsUnicodeSequences() {
+        String nul = String.valueOf((char) 0x00);
+        String bel = String.valueOf((char) 0x07);
+
+        String json = provider.getToolbarSummaryJson("GET", "/p" + nul + "ath" + bel, 200, null);
+
+        assertThat(json).doesNotContain(nul);
+        assertThat(json).doesNotContain(bel);
+        assertThat(json).contains("\\u0000");
+        assertThat(json).contains("\\u0007");
+    }
 }
