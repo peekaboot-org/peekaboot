@@ -2,9 +2,9 @@ package net.osslabz.peekaboot.backend.lifecycle;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
@@ -64,16 +64,15 @@ public class DataSourceMetadata {
     }
 
 
-    public static DataSourceMetadata fromDataSource(String dataSourceName, DataSource dataSource) {
+    public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
 
         try (Connection connection = dataSource.getConnection()) {
             DatabaseMetaData metaData = connection.getMetaData();
-            String catalogName = connection.getCatalog();
             String url = metaData.getURL();
             String username = metaData.getUserName();
             JdbcUrl jdbcUrl = JdbcUrlParser.parse(url);
 
-            return new DataSourceMetadata(
+            return Optional.of(new DataSourceMetadata(
                 dataSourceName,
                 url,
                 username,
@@ -84,12 +83,12 @@ public class DataSourceMetadata {
                 metaData.getDatabaseProductVersion(),
                 metaData.getDriverName(),
                 metaData.getDriverVersion()
-            );
-        } catch (SQLException e) {
+            ));
+        } catch (Exception e) {
             logger.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
         }
 
-        return null;
+        return Optional.empty();
     }
 
 

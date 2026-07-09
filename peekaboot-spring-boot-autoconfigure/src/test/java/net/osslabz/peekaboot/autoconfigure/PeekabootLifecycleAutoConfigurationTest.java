@@ -6,8 +6,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import javax.sql.DataSource;
+import java.sql.SQLException;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Verifies that the lifecycle auto-configuration is ordered after the Boot
@@ -59,5 +67,27 @@ class PeekabootLifecycleAutoConfigurationTest {
         contextRunner
             .withPropertyValues("peekaboot.lifecycle.enabled=false")
             .run(context -> assertThat(context).doesNotHaveBean(ApplicationReadyListener.class));
+    }
+
+    @Test
+    void brokenDataSourceDoesNotFailStartup() {
+        contextRunner
+            .withUserConfiguration(BrokenDataSourceConfig.class)
+            .run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasBean("databaseMetadataList");
+                assertThat(context.getBean("databaseMetadataList", List.class)).isEmpty();
+            });
+    }
+
+    @Configuration
+    static class BrokenDataSourceConfig {
+
+        @Bean
+        DataSource brokenDataSource() throws SQLException {
+            DataSource dataSource = mock(DataSource.class);
+            when(dataSource.getConnection()).thenThrow(new SQLException("db down"));
+            return dataSource;
+        }
     }
 }

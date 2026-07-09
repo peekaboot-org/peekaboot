@@ -68,10 +68,8 @@ public class PeekabootLifecycleAutoConfiguration {
         @ConditionalOnMissingBean(name = "databaseMetadataList")
         public List<DataSourceMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
             List<DataSourceMetadata> metadataList = new ArrayList<>();
-            dataSources.forEach((name, dataSource) -> {
-                DataSourceMetadata metadata = DataSourceMetadata.fromDataSource(name, dataSource);
-                metadataList.add(metadata);
-            });
+            dataSources.forEach((name, dataSource) ->
+                DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
             return metadataList;
         }
     }
