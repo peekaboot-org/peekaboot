@@ -67,13 +67,14 @@ public class RequestCaptureFilter implements Filter {
             return;
         }
 
+        setServerTimingHeader(httpResponse);
+
         long startTime = System.currentTimeMillis();
 
         try {
             chain.doFilter(request, response);
         } finally {
             try {
-                setServerTimingHeader(httpResponse);
                 captureRequest(httpRequest, httpResponse, startTime);
             } catch (Exception e) {
                 log.warn("Failed to capture request details: {}", e.getMessage());
