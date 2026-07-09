@@ -39,14 +39,21 @@ public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
+    public ServerUrlResolver serverUrlResolver(Environment environment) {
+        return new ServerUrlResolver(environment);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ApplicationReadyListener applicationReadyListener(
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
+            ServerUrlResolver serverUrlResolver,
             ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
             ObjectProvider<Map<String, DataSource>> dataSourcesProvider) {
         List<DataSourceMetadata> dataSourceMetadataList = databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
-        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, dataSourceMetadataList, dataSources);
+        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
     }
 
 

@@ -790,7 +790,7 @@
         renderGitInfo(application?.git);
         renderSpringInfo(application);
         renderJavaInfo(application);
-        renderOsInfo(runtime?.os);
+        renderOsInfo(runtime);
         renderJvmDefaults(peekabootData.server);
         renderDataSourcesInfo(dataSources);
         renderMemoryInfo(runtime);
@@ -942,17 +942,39 @@
         if (application.javaVendor) container.appendChild(createInfoRow('Vendor', application.javaVendor));
     }
 
-    function renderOsInfo(os) {
+    function renderOsInfo(runtime) {
         const container = document.getElementById('os-info');
         container.innerHTML = '';
 
-        if (!os) {
+        const os = runtime?.os;
+        const process = runtime?.process;
+
+        if (!os && !process) {
             container.innerHTML = '<p class="no-data">No system info available</p>';
             return;
         }
 
-        if (os.name) container.appendChild(createInfoRow('OS', `${os.name} ${os.version || ''}`));
-        if (os.arch) container.appendChild(createInfoRow('Architecture', os.arch));
+        if (os) {
+            if (os.name) container.appendChild(createInfoRow('OS', `${os.name} ${os.version || ''}`));
+            if (os.arch) container.appendChild(createInfoRow('Architecture', os.arch));
+        }
+
+        if (process) {
+            let userDisplay = process.username || '';
+            if (process.uid != null) {
+                userDisplay += ` (uid=${process.uid}, gid=${process.gid})`;
+            }
+            container.appendChild(createInfoRow('User', userDisplay));
+            container.appendChild(createInfoRow('PID', process.pid, true));
+
+            if (process.parentProcesses && process.parentProcesses.length > 0) {
+                const tree = process.parentProcesses
+                    .map(p => p.command ? `${p.command}(${p.pid})` : String(p.pid))
+                    .reverse()
+                    .join(' \u2192 ');
+                container.appendChild(createInfoRow('Process Tree', tree, true));
+            }
+        }
     }
 
     function renderJvmDefaults(server) {

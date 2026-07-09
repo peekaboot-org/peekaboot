@@ -51,6 +51,8 @@ class RuntimeMapperTest {
         assertThat(result.os()).isNull();
         assertThat(result.memory()).isNull();
         assertThat(result.storage()).isEmpty();
+        assertThat(result.process()).isNotNull();
+        assertThat(result.process().username()).isEqualTo(System.getProperty("user.name"));
     }
 
     @Test
@@ -78,6 +80,13 @@ class RuntimeMapperTest {
         InfoResponse info = new InfoResponse(null, null, null, null, null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
+    }
+
+    @Test
+    void map_shouldAlwaysIncludeProcessInfo() {
+        RuntimeInfo result = mapper.map(null, null);
+        assertThat(result.process()).isNotNull();
+        assertThat(result.process().pid()).isEqualTo(ProcessHandle.current().pid());
     }
 
     @Test

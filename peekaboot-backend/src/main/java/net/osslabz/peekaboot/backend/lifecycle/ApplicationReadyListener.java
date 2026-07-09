@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import javax.sql.DataSource;
+import net.osslabz.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -30,6 +31,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final BuildInfoProvider buildInfoProvider;
 
+    private final ServerUrlResolver serverUrlResolver;
+
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
     private final Map<String, DataSource> dataSources;
@@ -37,11 +40,13 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     public ApplicationReadyListener(EnvironmentInfo environmentInfo,
         BuildInfoProvider buildInfoProvider,
+        ServerUrlResolver serverUrlResolver,
         List<DataSourceMetadata> dataSourceMetadataList,
         Map<String, DataSource> dataSources) {
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
+        this.serverUrlResolver = serverUrlResolver;
         this.dataSourceMetadataList = dataSourceMetadataList != null ? dataSourceMetadataList : List.of();
         this.dataSources = dataSources;
     }
@@ -56,6 +61,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         report.append(SEPARATOR).append("\n");
 
         appendApplicationInfo(report);
+        appendServiceUrl(report, event);
         appendBuildInfo(report);
         appendSystemInfo(report);
         appendMemoryInfo(report);
@@ -73,6 +79,22 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         String profiles = environmentInfo.getActiveProfilesAsString();
         report.append(String.format(" Application [%s] ready with active profiles [%s]\n", appName, profiles));
         report.append(LINE).append("\n");
+    }
+
+
+    private void appendServiceUrl(StringBuilder report, ApplicationReadyEvent event) {
+
+        serverUrlResolver.resolveServiceUrl(event)
+            .ifPresent(url -> {
+                report.append(" Service URL: ").append(url).append("\n");
+                report.append(LINE).append("\n");
+            });
+
+        serverUrlResolver.resolveSwaggerUiUrl(event)
+            .ifPresent(url -> {
+                report.append(" Swagger UI: ").append(url).append("\n");
+                report.append(LINE).append("\n");
+            });
     }
 
 
@@ -104,6 +126,18 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
         report.append(String.format(" Operating System: %s %s (%s)\n", osName, osVersion, osArch));
+        report.append(LINE).append("\n");
+
+        ProcessInfo processInfo = ProcessInfo.current();
+        report.append(String.format(" Process User: %s (uid=%s, gid=%s, pid=%d)\n",
+            processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid()));
+        if (!processInfo.parentProcesses().isEmpty()) {
+            String tree = processInfo.parentProcesses().stream()
+                .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
+                .reduce((a, b) -> a + " -> " + b)
+                .orElse("");
+            report.append(" Process Tree: ").append(tree).append("\n");
+        }
         report.append(LINE).append("\n");
     }
 

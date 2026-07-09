@@ -4,6 +4,7 @@ import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
 import net.osslabz.peekaboot.backend.actuator.raw.InfoResponse;
 import net.osslabz.peekaboot.backend.domain.runtime.MemoryInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.OsInfo;
+import net.osslabz.peekaboot.backend.domain.runtime.ProcessInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.RuntimeInfo;
 import net.osslabz.peekaboot.backend.domain.runtime.StorageInfo;
 import org.springframework.stereotype.Component;
@@ -19,8 +20,9 @@ public class RuntimeMapper {
         OsInfo osInfo = extractOsInfo(info);
         MemoryInfo memoryInfo = extractMemoryInfo(info);
         List<StorageInfo> storageInfo = extractStorageInfo(health);
+        ProcessInfo processInfo = extractProcessInfo(info);
 
-        return new RuntimeInfo(osInfo, memoryInfo, storageInfo);
+        return new RuntimeInfo(osInfo, memoryInfo, storageInfo, processInfo);
     }
 
     private OsInfo extractOsInfo(InfoResponse info) {
@@ -71,6 +73,10 @@ public class RuntimeMapper {
             }
         }
         return result;
+    }
+
+    private ProcessInfo extractProcessInfo(InfoResponse info) {
+        return ProcessInfo.current();
     }
 
     private long getLongValue(Map<String, Object> map, String key) {
