@@ -182,6 +182,44 @@ class ActuatorRawMapperTest {
     }
 
     @Test
+    void toleratesErrorPlaceholderForSingleEndpoint() {
+        // PeekabookActuatorService stores "Error: ..." strings for endpoints
+        // that failed to invoke; one broken endpoint must not break parsing
+        // of all the others.
+        Map<String, Object> data = new java.util.LinkedHashMap<>(rawData);
+        data.put("env", "Error: env endpoint failed");
+
+        ActuatorParsedData response = mapper.map(data);
+
+        assertThat(response.env()).isNull();
+        assertThat(response.health()).isNotNull();
+        assertThat(response.info()).isNotNull();
+        assertThat(response.loggers()).isNotNull();
+    }
+
+    @Test
+    void singleKeyMappersReturnNullForErrorPlaceholder() {
+        Map<String, Object> data = Map.of(
+                "health", "Error: boom",
+                "spring", "Error: boom",
+                "info", "Error: boom",
+                "env", "Error: boom",
+                "loggers", "Error: boom",
+                "flyway", "Error: boom",
+                "configprops", "Error: boom",
+                "scheduledtasks", "Error: boom");
+
+        assertThat(mapper.mapHealth(data)).isNull();
+        assertThat(mapper.mapSpring(data)).isNull();
+        assertThat(mapper.mapInfo(data)).isNull();
+        assertThat(mapper.mapEnv(data)).isNull();
+        assertThat(mapper.mapLoggers(data)).isNull();
+        assertThat(mapper.mapFlyway(data)).isNull();
+        assertThat(mapper.mapConfigProps(data)).isNull();
+        assertThat(mapper.mapScheduledTasks(data)).isNull();
+    }
+
+    @Test
     void handlesNullInput() {
         ActuatorParsedData response = mapper.map(null);
 

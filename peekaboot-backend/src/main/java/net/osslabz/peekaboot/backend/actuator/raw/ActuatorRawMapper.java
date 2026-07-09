@@ -5,10 +5,14 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
  * Maps the raw Map response from PeekabookActuatorService to typed actuator beans.
+ * Entries that are not JSON objects (e.g. the "Error: ..." placeholders stored
+ * for endpoints that failed to invoke) are treated as absent, so one broken
+ * endpoint never breaks parsing of the others.
  */
 @Component
 public class ActuatorRawMapper {
@@ -25,46 +29,49 @@ public class ActuatorRawMapper {
         if (rawData == null) {
             return new ActuatorParsedData(null, null, null, null, null, null, null, null);
         }
-        return objectMapper.convertValue(rawData, ActuatorParsedData.class);
+        Map<String, Object> sanitized = new LinkedHashMap<>();
+        rawData.forEach((key, value) -> {
+            if (value instanceof Map) {
+                sanitized.put(key, value);
+            }
+        });
+        return objectMapper.convertValue(sanitized, ActuatorParsedData.class);
     }
 
     public SpringInfo mapSpring(Map<String, Object> rawData) {
-        Object spring = rawData != null ? rawData.get("spring") : null;
-        return spring != null ? objectMapper.convertValue(spring, SpringInfo.class) : null;
+        return mapKey(rawData, "spring", SpringInfo.class);
     }
 
     public HealthResponse mapHealth(Map<String, Object> rawData) {
-        Object health = rawData != null ? rawData.get("health") : null;
-        return health != null ? objectMapper.convertValue(health, HealthResponse.class) : null;
+        return mapKey(rawData, "health", HealthResponse.class);
     }
 
     public InfoResponse mapInfo(Map<String, Object> rawData) {
-        Object info = rawData != null ? rawData.get("info") : null;
-        return info != null ? objectMapper.convertValue(info, InfoResponse.class) : null;
+        return mapKey(rawData, "info", InfoResponse.class);
     }
 
     public EnvResponse mapEnv(Map<String, Object> rawData) {
-        Object env = rawData != null ? rawData.get("env") : null;
-        return env != null ? objectMapper.convertValue(env, EnvResponse.class) : null;
+        return mapKey(rawData, "env", EnvResponse.class);
     }
 
     public LoggersResponse mapLoggers(Map<String, Object> rawData) {
-        Object loggers = rawData != null ? rawData.get("loggers") : null;
-        return loggers != null ? objectMapper.convertValue(loggers, LoggersResponse.class) : null;
+        return mapKey(rawData, "loggers", LoggersResponse.class);
     }
 
     public FlywayResponse mapFlyway(Map<String, Object> rawData) {
-        Object flyway = rawData != null ? rawData.get("flyway") : null;
-        return flyway != null ? objectMapper.convertValue(flyway, FlywayResponse.class) : null;
+        return mapKey(rawData, "flyway", FlywayResponse.class);
     }
 
     public ConfigPropsResponse mapConfigProps(Map<String, Object> rawData) {
-        Object configprops = rawData != null ? rawData.get("configprops") : null;
-        return configprops != null ? objectMapper.convertValue(configprops, ConfigPropsResponse.class) : null;
+        return mapKey(rawData, "configprops", ConfigPropsResponse.class);
     }
 
     public ScheduledTasksResponse mapScheduledTasks(Map<String, Object> rawData) {
-        Object scheduledtasks = rawData != null ? rawData.get("scheduledtasks") : null;
-        return scheduledtasks != null ? objectMapper.convertValue(scheduledtasks, ScheduledTasksResponse.class) : null;
+        return mapKey(rawData, "scheduledtasks", ScheduledTasksResponse.class);
+    }
+
+    private <T> T mapKey(Map<String, Object> rawData, String key, Class<T> type) {
+        Object value = rawData != null ? rawData.get(key) : null;
+        return value instanceof Map ? objectMapper.convertValue(value, type) : null;
     }
 }
