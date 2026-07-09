@@ -14,6 +14,11 @@ peekaboot:
   dev-toolbar: true
 
 management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
   endpoint:
     health:
       # Controls visibility of health check details (db, disk, etc.)
