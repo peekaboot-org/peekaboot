@@ -161,8 +161,6 @@ Auto-configuration classes that wire everything together.
 | `PeekabootAutoConfiguration` | Core beans, component scan |
 | `DevToolbarAutoConfiguration` | Toolbar filter registration |
 | `PeekabootLifecycleAutoConfiguration` | Startup listeners |
-| `DataSourceProxyLoggingAutoConfiguration` | SQL query capture |
-| `DataSourceProxyObservationAutoConfiguration` | Query tracing spans |
 | `PeekabootDefaultsEnvironmentPostProcessor` | Default property values |
 
 ### Conditional Loading

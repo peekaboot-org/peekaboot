@@ -18,13 +18,13 @@ A Spring Boot starter that provides embedded application introspection through a
 <dependency>
     <groupId>net.osslabz</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.4-SNAPSHOT</version>
 </dependency>
 ```
 
 **Gradle:**
 ```groovy
-implementation 'net.osslabz:peekaboot-spring-boot-starter:0.0.1-SNAPSHOT'
+implementation 'net.osslabz:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT'
 ```
 
 ### 2. Access the dashboard
