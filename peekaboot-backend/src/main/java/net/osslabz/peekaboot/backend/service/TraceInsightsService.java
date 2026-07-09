@@ -15,6 +15,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
+import net.osslabz.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -42,6 +43,7 @@ public class TraceInsightsService {
     private final TraceQueryService traceQueryService;
     @Nullable
     private final TraceDataStorage traceDataStorage;
+    private final SpanDeduplicator spanDeduplicator;
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
     private final QueryExtractor queryExtractor;
@@ -49,11 +51,13 @@ public class TraceInsightsService {
     public TraceInsightsService(
             @Nullable TraceQueryService traceQueryService,
             @Nullable TraceDataStorage traceDataStorage,
+            SpanDeduplicator spanDeduplicator,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor) {
         this.traceQueryService = traceQueryService;
         this.traceDataStorage = traceDataStorage;
+        this.spanDeduplicator = spanDeduplicator;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
         this.queryExtractor = queryExtractor;
@@ -82,6 +86,7 @@ public class TraceInsightsService {
         final String finalRootOperation = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
         List<TraceTree> traceTrees = traceQueryService.getTraces(limit * 10, mode).stream()  // Fetch more to account for filtering
+                .map(spanDeduplicator::deduplicate)
                 .map(traceTreeMapper::map)
                 .filter(tree -> finalActionTypeFilter == null || tree.rootActionType() == finalActionTypeFilter)
                 .filter(tree -> finalRootOperation == null || matchesRootOperation(tree, finalRootOperation))
@@ -107,6 +112,7 @@ public class TraceInsightsService {
         }
 
         return traceQueryService.getTrace(traceId)
+                .map(spanDeduplicator::deduplicate)
                 .map(traceData -> {
                     List<QueryInfo> queries = queryExtractor.extract(traceData);
                     TraceTree tree = traceTreeMapper.map(traceData);

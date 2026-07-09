@@ -11,6 +11,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
+import net.osslabz.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -46,7 +47,7 @@ class TraceInsightsServiceTest {
         traceTreeMapper = new TraceTreeMapper();
         issueDetector = new IssueDetector(new UiTracingProperties());
         queryExtractor = new QueryExtractor();
-        service = new TraceInsightsService(traceQueryService, null, traceTreeMapper, issueDetector, queryExtractor);
+        service = new TraceInsightsService(traceQueryService, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
     }
 
     @Test
@@ -104,7 +105,7 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldHandleNullTraceQueryService() {
         // Given: TraceQueryService is null (tracing not enabled)
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector, queryExtractor);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
 
         // When
         TraceInsightsResponse response = serviceWithNullQuery.getInsights(10, TraceCaptureMode.ALL);
@@ -161,7 +162,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldHandleNullTraceQueryService() {
         // Given
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, traceTreeMapper, issueDetector, queryExtractor);
+        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
 
         // When
         Optional<TraceTree> result = serviceWithNullQuery.getTraceInsights("trace1");
@@ -235,7 +236,7 @@ class TraceInsightsServiceTest {
         dataStorage.onLogCaptured(logEvent);
 
         TraceInsightsService serviceWithLogs = new TraceInsightsService(
-                traceQueryService, dataStorage, traceTreeMapper, issueDetector, queryExtractor);
+                traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
 
         TraceData traceData = createTraceData("trace1", 100, false);
         when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
@@ -257,7 +258,7 @@ class TraceInsightsServiceTest {
         // Given: TraceDataStorage with no logs for this trace
         TraceDataStorage dataStorage = new TraceDataStorage();
         TraceInsightsService serviceWithStorage = new TraceInsightsService(
-                traceQueryService, dataStorage, traceTreeMapper, issueDetector, queryExtractor);
+                traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
 
         TraceData traceData = createTraceData("trace1", 100, false);
         when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
