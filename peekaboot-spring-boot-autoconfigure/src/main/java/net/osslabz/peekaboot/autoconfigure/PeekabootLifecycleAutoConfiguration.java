@@ -14,7 +14,10 @@ import org.springframework.core.env.Environment;
 import javax.sql.DataSource;
 import java.util.*;
 
-@AutoConfiguration
+@AutoConfiguration(
+        after = org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
+        afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
+)
 @ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
 
