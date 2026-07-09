@@ -52,7 +52,9 @@ public class TraceDataBundle {
     }
 
     public List<SpanData> spans() {
-        return spans.stream()
+        // copy under the list's mutex (via toArray) before sorting; streaming
+        // the synchronizedList directly races with concurrent addSpan calls
+        return new ArrayList<>(spans).stream()
                 .sorted(Comparator.comparingLong(SpanData::creationOrder))
                 .toList();
     }
