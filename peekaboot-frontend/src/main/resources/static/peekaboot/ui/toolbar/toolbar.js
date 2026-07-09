@@ -791,10 +791,9 @@
     }
 
     function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        if (text == null) return '';
+        return String(text).replace(/[&<>"']/g, c =>
+            ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
     }
 
     // Convert TraceTree format (from /insights endpoint) to flat spans array format

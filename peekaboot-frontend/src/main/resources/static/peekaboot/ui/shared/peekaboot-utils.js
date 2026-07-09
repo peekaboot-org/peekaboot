@@ -4,11 +4,11 @@
 const PeekabootUtils = (function() {
     'use strict';
 
+    const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
+
     function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        if (text == null) return '';
+        return String(text).replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
     }
 
     function formatDurationMs(ms) {

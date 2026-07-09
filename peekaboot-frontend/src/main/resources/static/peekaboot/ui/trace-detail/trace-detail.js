@@ -4,10 +4,9 @@
     // Fallback utilities when PeekabootUtils is not loaded (e.g., toolbar context)
     const Utils = (typeof PeekabootUtils !== 'undefined') ? PeekabootUtils : {
         escapeHtml: function(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+            if (text == null) return '';
+            return String(text).replace(/[&<>"']/g, c =>
+                ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
         },
         getDurationClass: function(ms) {
             if (ms > 500) return 'very-slow';
