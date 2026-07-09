@@ -109,6 +109,19 @@ net.osslabz.peekaboot.backend/
 
 Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints.
 
+### Server-Timing Header
+
+`RequestCaptureFilter` sets a `Server-Timing` response header carrying the current
+trace context in W3C `traceparent` form, before invoking the filter chain:
+
+```
+Server-Timing: trace;desc="00-<traceId>-<spanId>-<traceFlags>"
+```
+
+Setting it before the chain runs ensures the header is present even when downstream
+handling commits the response early. Clients and tooling (e.g. the Swagger UI
+toolbar) read it to correlate a response with its captured trace.
+
 ### BFF Pattern
 
 The backend implements a Backend-for-Frontend pattern:
@@ -220,6 +233,16 @@ This ensures compatibility with Spring Boot's tracing auto-configuration and wor
 2. Publishes `LogCapturedEvent` via Spring's `ApplicationEventPublisher`
 3. `TraceDataStorage` receives events via `@EventListener` and stores by traceId
 4. Logs are associated with spans and included in trace detail views
+
+### Span Deduplication
+
+`SpanDeduplicator` runs in `TraceInsightsService` before spans are mapped to a
+`TraceTree`, for both the trace list and single-trace views. It removes child
+spans that duplicate their parent — same span name and identical tags, ignoring
+service-identifier keys (`peer.service`, `jdbc.datasource.name`) — which occur
+when a single operation is instrumented by more than one layer. Children of a
+removed span are re-parented to the nearest surviving ancestor so the tree stays
+connected.
 
 ## Data Models
 
