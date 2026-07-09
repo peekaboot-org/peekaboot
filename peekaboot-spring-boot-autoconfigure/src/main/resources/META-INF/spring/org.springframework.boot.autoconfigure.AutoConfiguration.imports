@@ -1,9 +1,6 @@
 net.osslabz.peekaboot.autoconfigure.PeekabootTracingAutoConfiguration
-net.osslabz.peekaboot.autoconfigure.OtelConventionsAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.OtelTracingAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.PeekabootAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration
-net.osslabz.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration
-net.osslabz.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration
 net.osslabz.peekaboot.autoconfigure.TracingInterceptorAutoConfiguration

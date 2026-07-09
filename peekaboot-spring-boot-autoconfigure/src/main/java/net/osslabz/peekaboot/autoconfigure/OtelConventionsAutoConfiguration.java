@@ -15,52 +15,49 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.server.observation.OpenTelemetryServerRequestObservationConvention;
 
 
-@Configuration(proxyBeanMethods = false)
+//@Configuration(proxyBeanMethods = false)
 public class OtelConventionsAutoConfiguration {
+/*
 
-    @Configuration(proxyBeanMethods = false)
-    public class OpenTelemetryConfiguration {
+    @Bean
+    OpenTelemetryServerRequestObservationConvention openTelemetryServerRequestObservationConvention() {
 
-        @Bean
-        OpenTelemetryServerRequestObservationConvention openTelemetryServerRequestObservationConvention() {
-
-            return new OpenTelemetryServerRequestObservationConvention();
-        }
-
-
-        @Bean
-        OpenTelemetryJvmCpuMeterConventions openTelemetryJvmCpuMeterConventions() {
-
-            return new OpenTelemetryJvmCpuMeterConventions(Tags.empty());
-        }
-
-
-        @Bean
-        ProcessorMetrics processorMetrics() {
-
-            return new ProcessorMetrics(List.of(), new OpenTelemetryJvmCpuMeterConventions(Tags.empty()));
-        }
-
-
-        @Bean
-        JvmMemoryMetrics jvmMemoryMetrics() {
-
-            return new JvmMemoryMetrics(List.of(), new OpenTelemetryJvmMemoryMeterConventions(Tags.empty()));
-        }
-
-
-        @Bean
-        JvmThreadMetrics jvmThreadMetrics() {
-
-            return new JvmThreadMetrics(List.of(), new OpenTelemetryJvmThreadMeterConventions(Tags.empty()));
-        }
-
-
-        @Bean
-        ClassLoaderMetrics classLoaderMetrics() {
-
-            return new ClassLoaderMetrics(new OpenTelemetryJvmClassLoadingMeterConventions());
-        }
-
+        return new OpenTelemetryServerRequestObservationConvention();
     }
+
+
+    @Bean
+    OpenTelemetryJvmCpuMeterConventions openTelemetryJvmCpuMeterConventions() {
+
+        return new OpenTelemetryJvmCpuMeterConventions(Tags.empty());
+    }
+
+
+    @Bean
+    ProcessorMetrics processorMetrics() {
+
+        return new ProcessorMetrics(List.of(), new OpenTelemetryJvmCpuMeterConventions(Tags.empty()));
+    }
+
+
+    @Bean
+    JvmMemoryMetrics jvmMemoryMetrics() {
+
+        return new JvmMemoryMetrics(List.of(), new OpenTelemetryJvmMemoryMeterConventions(Tags.empty()));
+    }
+
+
+    @Bean
+    JvmThreadMetrics jvmThreadMetrics() {
+
+        return new JvmThreadMetrics(List.of(), new OpenTelemetryJvmThreadMeterConventions(Tags.empty()));
+    }
+
+
+    @Bean
+    ClassLoaderMetrics classLoaderMetrics() {
+
+        return new ClassLoaderMetrics(new OpenTelemetryJvmClassLoadingMeterConventions());
+    }
+*/
 }
