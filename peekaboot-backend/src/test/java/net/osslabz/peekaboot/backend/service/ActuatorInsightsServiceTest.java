@@ -46,7 +46,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldMapAllSections() {
-        when(rawService.getRawData()).thenReturn(Map.of(
+        when(rawService.getInsightsData()).thenReturn(Map.of(
             "health", Map.of("body", Map.of("status", "UP", "components", Map.of()), "status", 200),
             "info", Map.of("build", Map.of("name", "test")),
             "spring", Map.of("bootVersion", "4.0.1"),
@@ -65,7 +65,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldHandleMissingData() {
-        when(rawService.getRawData()).thenReturn(Map.of());
+        when(rawService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
 
@@ -75,7 +75,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldIncludeServerInfo() {
-        when(rawService.getRawData()).thenReturn(Map.of());
+        when(rawService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
 
@@ -87,7 +87,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldPassLocaleToScheduledTasksMapper() {
-        when(rawService.getRawData()).thenReturn(Map.of(
+        when(rawService.getInsightsData()).thenReturn(Map.of(
             "scheduledtasks", Map.of(
                 "cron", List.of(Map.of(
                     "expression", "0 0 * * * *",

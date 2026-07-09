@@ -57,7 +57,7 @@ public class ActuatorInsightsService {
     }
 
     public ActuatorInsightsResponse getInsights(Locale locale) {
-        Map<String, Object> rawData = rawService.getRawData();
+        Map<String, Object> rawData = rawService.getInsightsData();
         ActuatorParsedData typed = rawMapper.map(rawData);
 
         return new ActuatorInsightsResponse(

@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Predicate;
 
 import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -30,6 +32,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class PeekabookActuatorService {
 
+    /**
+     * Endpoints whose READ operation is expensive or dangerous to invoke on
+     * every dashboard load (full JVM thread dump, heap dump file, log file).
+     */
+    private static final Set<String> EXPENSIVE_ENDPOINTS = Set.of("heapdump", "threaddump", "logfile");
+
+    /**
+     * The only actuator endpoints the insights mappers consume.
+     */
+    private static final Set<String> INSIGHTS_ENDPOINTS =
+        Set.of("health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
 
     private final WebEndpointDiscoverer discoverer;
 
@@ -60,6 +73,17 @@ public class PeekabookActuatorService {
 
 
     public Map<String, Object> getRawData() {
+        return collectData(key -> !EXPENSIVE_ENDPOINTS.contains(key));
+    }
+
+    /**
+     * Invokes only the actuator endpoints the insights mappers consume.
+     */
+    public Map<String, Object> getInsightsData() {
+        return collectData(INSIGHTS_ENDPOINTS::contains);
+    }
+
+    private Map<String, Object> collectData(Predicate<String> endpointKeyFilter) {
 
         Map<String, Object> results = new LinkedHashMap<>();
 
@@ -79,12 +103,15 @@ public class PeekabookActuatorService {
             () -> ApiVersion.LATEST
         );
         for (ExposableWebEndpoint endpoint : discoverer.getEndpoints()) {
+            String key = endpoint.getEndpointId().toLowerCaseString();
+            if (!endpointKeyFilter.test(key)) {
+                continue;
+            }
             endpoint.getOperations().stream()
                 .filter(op -> op.getType() == OperationType.READ)
                 .filter(op -> op.getRequestPredicate().getPath().equals(endpoint.getRootPath()))
                 .findFirst()
                 .ifPresent(op -> {
-                    String key = endpoint.getEndpointId().toLowerCaseString();
                     try {
                         Object result = op.invoke(new InvocationContext(SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver));
                         results.put(key, result);
