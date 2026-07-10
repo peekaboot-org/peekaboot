@@ -81,18 +81,35 @@ peekaboot:
 
 ## Auto-Configured Defaults
 
-Peekaboot sets sensible defaults for full observability (apps can override):
+Peekaboot sets defaults for full observability. Any application property
+overrides them, and setting `peekaboot.enabled=false` skips them entirely.
+Note that some are security- or performance-relevant (health details,
+environment info, 100% trace sampling, Hibernate statistics) - review them
+before shipping the starter in a production profile:
 
 ```yaml
 management:
   endpoint.health.show-details: always
+  info.env.enabled: true
   info.java.enabled: true
   info.os.enabled: true
   info.process.enabled: true
+  info.git.enabled: true
   tracing.sampling.probability: 1.0
   observations.annotations.enabled: true
+  otlp.metrics.export.enabled: false
 spring:
   jpa.properties.hibernate.generate_statistics: true
+
+# third-party integrations (only apply if the library is present)
+decorator.datasource.datasource-proxy:
+  format-sql: true
+  query.log-level: TRACE
+logbook:
+  predicate.include: [path: /api/**]
+  format.style: http
+  strategy: body-only-if-status-at-least
+  minimum-status: 400
 ```
 
 ## Dashboard Tabs

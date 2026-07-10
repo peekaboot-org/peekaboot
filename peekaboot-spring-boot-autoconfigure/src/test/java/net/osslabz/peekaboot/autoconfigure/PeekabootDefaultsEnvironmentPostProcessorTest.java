@@ -13,7 +13,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PeekabootDefaultsEnvironmentPostProcessorTest {
 
     private final PeekabootDefaultsEnvironmentPostProcessor postProcessor =
-            new PeekabootDefaultsEnvironmentPostProcessor();
+            new PeekabootDefaultsEnvironmentPostProcessor(java.util.function.Supplier::get);
+
+    @Test
+    void skipsDefaultsWhenPeekabootDisabled() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "false");
+
+        postProcessor.postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isFalse();
+        assertThat(environment.getProperty("management.endpoint.health.show-details")).isNull();
+    }
 
     @Test
     void loadsDefaultProperties() {
