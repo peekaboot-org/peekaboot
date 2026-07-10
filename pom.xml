@@ -169,6 +169,9 @@
                 <version>3.14.1</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
+                    <!-- JDK 23+ no longer runs classpath annotation processors by
+                         default; required for spring-boot-configuration-processor -->
+                    <proc>full</proc>
                 </configuration>
             </plugin>
             <plugin>
