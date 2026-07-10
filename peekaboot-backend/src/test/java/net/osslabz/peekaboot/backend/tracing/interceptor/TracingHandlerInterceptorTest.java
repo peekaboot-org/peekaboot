@@ -31,6 +31,16 @@ class TracingHandlerInterceptorTest {
         response = new MockHttpServletResponse();
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void closeLeakedScopes() {
+        // tests that call preHandle without a matching completion leave the
+        // thread-local scope open; drain it so tests stay isolated
+        Observation.Scope scope;
+        while ((scope = observationRegistry.getCurrentObservationScope()) != null) {
+            scope.close();
+        }
+    }
+
     @Test
     void preHandle_shouldStartHandlerObservation() {
         request.setRequestURI("/api/users");
@@ -139,6 +149,61 @@ class TracingHandlerInterceptorTest {
                 .hasObservationWithNameEqualTo("spring.handler")
                 .that()
                 .hasHighCardinalityKeyValue("handler.name", "TestController.getUsers");
+    }
+
+    @Test
+    void preHandle_shouldOpenScopeSoChildObservationsNestUnderHandler() {
+        request.setRequestURI("/api/users");
+        Object handler = new Object();
+
+        interceptor.preHandle(request, response, handler);
+
+        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
+                .as("handler observation should be current while the handler executes")
+                .isNotNull();
+        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation().getContext().getName())
+                .isEqualTo("spring.handler");
+
+        interceptor.postHandle(request, response, handler, null);
+
+        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
+                .as("scope should be closed after postHandle")
+                .isNull();
+    }
+
+    @Test
+    void afterConcurrentHandlingStarted_shouldStopHandlerObservation() {
+        request.setRequestURI("/api/async");
+        Object handler = new Object();
+
+        interceptor.preHandle(request, response, handler);
+        interceptor.afterConcurrentHandlingStarted(request, response, handler);
+
+        assertThat(observationRegistry)
+                .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .hasBeenStopped();
+        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation()).isNull();
+    }
+
+    @Test
+    void preHandle_onAsyncDispatch_shouldNotStartSecondObservation() {
+        request.setRequestURI("/api/async");
+        Object handler = new Object();
+
+        interceptor.preHandle(request, response, handler);
+        interceptor.afterConcurrentHandlingStarted(request, response, handler);
+
+        // the container re-invokes preHandle on the ASYNC dispatch
+        request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
+        interceptor.preHandle(request, response, handler);
+        interceptor.postHandle(request, response, handler, null);
+        interceptor.afterCompletion(request, response, handler, null);
+
+        assertThat(observationRegistry)
+                .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
     }
 
     // Test controller for handler method resolution
