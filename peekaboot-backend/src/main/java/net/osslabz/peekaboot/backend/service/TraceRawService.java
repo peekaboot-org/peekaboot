@@ -54,6 +54,14 @@ public class TraceRawService {
         }
     }
 
+    /**
+     * Tracing is wired only when peekaboot.tracing.enabled is true; without it
+     * the nullable collaborators stay absent and all trace endpoints are empty.
+     */
+    public boolean isTracingAvailable() {
+        return traceQueryService != null;
+    }
+
     public TraceRawResponse getTraces(int limit, TraceCaptureMode mode) {
         if (traceQueryService == null) {
             return TraceRawResponse.empty(collectionFramework);

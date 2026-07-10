@@ -200,23 +200,18 @@ class PeekabootControllerTest {
     class GetFeatures {
 
         @Test
-        void shouldIncludeTracingFeatureWhenServiceAvailable() {
+        void shouldIncludeTracingFeatureWhenTracingAvailable() {
+            when(traceRawService.isTracingAvailable()).thenReturn(true);
+
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features.get("tracing")).isEqualTo(true);
         }
 
         @Test
-        void shouldIncludeTracingFeatureAsFalseWhenServiceUnavailable() {
-            controller = new PeekabootController(
-                    actuatorService,
-                    actuatorInsightsService,
-                    traceInsightsService,
-                    null,  // null TraceRawService
-                    metricsService,
-                    properties,
-                    tracingPropertiesProvider
-            );
+        void shouldIncludeTracingFeatureAsFalseWhenTracingUnavailable() {
+            // tracing disabled: the service bean exists but has no TraceQueryService
+            when(traceRawService.isTracingAvailable()).thenReturn(false);
 
             Map<String, Object> features = controller.getFeatures();
 

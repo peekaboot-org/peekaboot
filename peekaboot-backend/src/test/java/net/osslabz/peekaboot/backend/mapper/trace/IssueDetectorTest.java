@@ -173,6 +173,41 @@ class IssueDetectorTest {
     }
 
     @Test
+    void detectIssues_shouldFlagSpanWithManyDirectQueryChildren() {
+        // Default highQueryCountThreshold is 5; six direct query children exceed it
+        List<SpanNode> queries = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            queries.add(createSpan("q" + i, 10, "OK", Map.of("jdbc.query[0]", "SELECT " + i), List.of()));
+        }
+        SpanNode service = createSpan("service", 80, "OK", Map.of(), List.copyOf(queries));
+        SpanNode root = createSpan("root", 90, "OK", Map.of(), List.of(service));
+        TraceTree trace = createTrace(root, createSummary(8, 6, 60L, 0));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        SpanNode serviceNode = result.rootSpan().children().get(0);
+        assertThat(serviceNode.issues())
+                .anyMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
+    }
+
+    @Test
+    void detectIssues_shouldNotFlagSpanWithQueryChildrenAtThreshold() {
+        List<SpanNode> queries = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            queries.add(createSpan("q" + i, 10, "OK", Map.of("jdbc.query[0]", "SELECT " + i), List.of()));
+        }
+        SpanNode service = createSpan("service", 80, "OK", Map.of(), List.copyOf(queries));
+        SpanNode root = createSpan("root", 90, "OK", Map.of(), List.of(service));
+        TraceTree trace = createTrace(root, createSummary(7, 5, 50L, 0));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        SpanNode serviceNode = result.rootSpan().children().get(0);
+        assertThat(serviceNode.issues())
+                .noneMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
+    }
+
+    @Test
     void detectIssues_shouldSupportCustomThresholds() {
         // Given: Custom thresholds - slow at 200ms instead of 100ms
         properties.setSlowSpanThresholdMs(200);

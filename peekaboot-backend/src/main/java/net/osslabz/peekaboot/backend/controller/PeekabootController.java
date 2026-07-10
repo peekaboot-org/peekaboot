@@ -76,7 +76,7 @@ public class PeekabootController {
     @GetMapping(value = "/api/features", produces = MediaType.APPLICATION_JSON_VALUE)
     public Map<String, Object> getFeatures() {
         Map<String, Object> features = new HashMap<>();
-        features.put("tracing", traceRawService != null);
+        features.put("tracing", traceRawService.isTracingAvailable());
         features.put("metrics", metricsService.isAvailable());
         features.put("devToolbar", properties.isDevToolbar());
         if (tracingProperties != null) {

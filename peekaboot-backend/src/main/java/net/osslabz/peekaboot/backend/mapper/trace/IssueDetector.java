@@ -82,12 +82,23 @@ public class IssueDetector {
             ));
         }
 
-        // Check for HIGH_QUERY_COUNT (only on root span)
+        // Check for HIGH_QUERY_COUNT on trace level (only on root span)
         if (isRoot && traceDbQueryCount > properties.getHighTraceQueryCountThreshold()) {
             issues.add(new SpanIssue(
                     IssueType.HIGH_QUERY_COUNT,
                     String.format("Trace has %d database queries (threshold: %d)",
                             traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
+                    "warning"
+            ));
+        }
+
+        // Check for HIGH_QUERY_COUNT per span (many direct query children)
+        long directQueryChildren = span.children().stream().filter(this::isDbQuerySpan).count();
+        if (directQueryChildren > properties.getHighQueryCountThreshold()) {
+            issues.add(new SpanIssue(
+                    IssueType.HIGH_QUERY_COUNT,
+                    String.format("Span has %d direct database queries (threshold: %d)",
+                            directQueryChildren, properties.getHighQueryCountThreshold()),
                     "warning"
             ));
         }
@@ -121,6 +132,18 @@ public class IssueDetector {
         }
         return span.tags().keySet().stream()
                 .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc."));
+    }
+
+    /**
+     * Actual query spans only - excludes datasource-proxy connection and
+     * result-set spans (same definition as TraceTreeMapper's query summary).
+     */
+    private boolean isDbQuerySpan(SpanNode span) {
+        if (span.tags() == null) {
+            return false;
+        }
+        return span.tags().keySet().stream()
+                .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     private String getErrorMessage(SpanNode span) {
