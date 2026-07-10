@@ -2,11 +2,10 @@ package net.osslabz.peekaboot.backend.devtoolbar;
 
 public class ToolbarDataProvider {
 
-    private final String basePath;
+    /** Peekaboot's UI/API prefix; also hardcoded in PeekabootController and FilterPathMatcher. */
+    private static final String BASE_PATH = "/peekaboot";
 
-    public ToolbarDataProvider(String basePath) {
-        this.basePath = basePath;
-    }
+    private final String basePath = BASE_PATH;
 
     public String getToolbarSummaryJson(String method, String path, int status, String traceId) {
         return String.format(

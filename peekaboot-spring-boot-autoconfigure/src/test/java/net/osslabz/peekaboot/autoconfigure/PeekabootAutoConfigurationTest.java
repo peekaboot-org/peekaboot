@@ -11,7 +11,6 @@ class PeekabootAutoConfigurationTest {
     void propertiesHaveCorrectDefaults() {
         PeekabootProperties properties = new PeekabootProperties();
         assertThat(properties.isEnabled()).isTrue();
-        assertThat(properties.getBasePath()).isEqualTo("/peekaboot");
         assertThat(properties.isDevToolbar()).isFalse();
     }
 
@@ -19,9 +18,9 @@ class PeekabootAutoConfigurationTest {
     void propertiesCanBeModified() {
         PeekabootProperties properties = new PeekabootProperties();
         properties.setEnabled(false);
-        properties.setBasePath("/custom");
+        properties.setDevToolbar(true);
 
         assertThat(properties.isEnabled()).isFalse();
-        assertThat(properties.getBasePath()).isEqualTo("/custom");
+        assertThat(properties.isDevToolbar()).isTrue();
     }
 }

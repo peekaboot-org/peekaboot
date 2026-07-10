@@ -13,7 +13,6 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
-  base-path: /peekaboot
 
 management:
   endpoint:

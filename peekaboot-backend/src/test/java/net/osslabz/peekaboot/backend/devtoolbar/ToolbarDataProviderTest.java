@@ -11,7 +11,7 @@ class ToolbarDataProviderTest {
 
     @BeforeEach
     void setUp() {
-        provider = new ToolbarDataProvider("/peekaboot");
+        provider = new ToolbarDataProvider();
     }
 
     @Test
@@ -48,15 +48,6 @@ class ToolbarDataProviderTest {
         String json = provider.getToolbarSummaryJson("GET", "/users", 200, null);
 
         assertThat(json).contains("\"traceId\":null");
-    }
-
-    @Test
-    void shouldUseCorrectBasePath() {
-        ToolbarDataProvider customProvider = new ToolbarDataProvider("/custom-path");
-
-        String json = customProvider.getToolbarSummaryJson("GET", "/page", 200, null);
-
-        assertThat(json).contains("\"basePath\":\"/custom-path\"");
     }
 
     @Test

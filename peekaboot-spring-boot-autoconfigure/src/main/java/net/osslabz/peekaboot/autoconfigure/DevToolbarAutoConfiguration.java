@@ -4,7 +4,6 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
-import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.filter.RequestCaptureFilter;
@@ -38,18 +37,15 @@ public class DevToolbarAutoConfiguration {
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
 
     @Bean
-    public ToolbarDataProvider toolbarDataProvider(PeekabootProperties properties) {
-        log.trace("Creating ToolbarDataProvider bean with basePath: {}", properties.getBasePath());
-        return new ToolbarDataProvider(properties.getBasePath());
+    public ToolbarDataProvider toolbarDataProvider() {
+        return new ToolbarDataProvider();
     }
 
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
-            Tracer tracer,
-            PeekabootProperties properties) {
-        log.trace("Creating DevToolbarFilter bean with basePath: {}", properties.getBasePath());
+            Tracer tracer) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");

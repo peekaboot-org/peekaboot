@@ -3,7 +3,6 @@ package net.osslabz.peekaboot.backend.integration;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
-import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
@@ -38,8 +37,8 @@ public class SharedToolbarTestConfig {
     }
 
     @Bean
-    ToolbarDataProvider toolbarDataProvider(PeekabootProperties properties) {
-        return new ToolbarDataProvider(properties.getBasePath());
+    ToolbarDataProvider toolbarDataProvider() {
+        return new ToolbarDataProvider();
     }
 
     @Bean
@@ -61,8 +60,7 @@ public class SharedToolbarTestConfig {
     @Bean
     FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
-            Tracer tracer,
-            PeekabootProperties properties) {
+            Tracer tracer) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");

@@ -43,8 +43,9 @@ All properties are optional. Peekaboot works out of the box with sensible defaul
 | Property | Default | Description |
 |----------|---------|-------------|
 | `peekaboot.enabled` | `true` | Enable/disable Peekaboot entirely |
-| `peekaboot.base-path` | `/peekaboot` | Base path for UI and API endpoints |
 | `peekaboot.dev-toolbar` | `false` | Enable debug toolbar injection into HTML responses |
+
+The UI and API are always served under the fixed `/peekaboot` prefix.
 
 ### Tracing Properties
 
