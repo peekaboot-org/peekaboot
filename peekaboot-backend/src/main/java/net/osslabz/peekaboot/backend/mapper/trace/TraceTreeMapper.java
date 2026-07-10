@@ -48,6 +48,10 @@ public class TraceTreeMapper {
         // Find root span
         SpanData rootSpanData = findRootSpan(spans, spanById);
 
+        // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
+        // exported) under the root so they don't silently vanish from the tree
+        attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
+
         // Calculate summary
         TraceTabSummary summary = calculateSummary(spans, rootSpanData);
 
@@ -73,6 +77,28 @@ public class TraceTreeMapper {
                 summary,
                 Map.of()  // No inherited attributes - all tags stay on spans
         );
+    }
+
+    private void attachOrphansToRoot(List<SpanData> spans, Map<String, SpanData> spanById,
+                                     Map<String, List<SpanData>> childrenByParentId, SpanData rootSpanData) {
+        if (rootSpanData == null) {
+            return;
+        }
+        List<SpanData> orphans = new ArrayList<>();
+        for (SpanData span : spans) {
+            if (span == rootSpanData) {
+                continue;
+            }
+            if (span.parentId() == null || !spanById.containsKey(span.parentId())) {
+                orphans.add(span);
+                if (span.parentId() != null) {
+                    childrenByParentId.get(span.parentId()).remove(span);
+                }
+            }
+        }
+        if (!orphans.isEmpty()) {
+            childrenByParentId.computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>()).addAll(orphans);
+        }
     }
 
     private SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {

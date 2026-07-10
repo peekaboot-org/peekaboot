@@ -84,6 +84,30 @@ class QueryExtractorTest {
     }
 
     @Test
+    void extract_shouldNotAttributeRowCountToEarlierQueryWithoutResultSet() {
+        // An UPDATE produces no result-set span; the following SELECT's
+        // result set must not be attributed to it.
+        var update = createSpan("q1", "query", 10,
+                Map.of("jdbc.query[0]", "UPDATE users SET active = true", "peer.service", "db"),
+                10);
+        var select = createSpan("q2", "query", 20,
+                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
+                20);
+        var rs = createSpan("rs1", "result-set", 5,
+                Map.of("jdbc.row-count", "42", "peer.service", "db"),
+                21);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(update, select, rs));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(2);
+        assertThat(queries.get(0).sql()).isEqualTo("UPDATE users SET active = true");
+        assertThat(queries.get(0).rowCount()).isNull();
+        assertThat(queries.get(1).rowCount()).isEqualTo(42L);
+    }
+
+    @Test
     void extract_shouldMatchMultipleResultSetsToQueries() {
         // First query + result set
         var query1 = createSpan("q1", "query", 50,

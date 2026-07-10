@@ -32,21 +32,27 @@ public class QueryExtractor {
                 .map(s -> new ResultSetInfo(s.creationOrder(), extractRowCount(s)))
                 .toList();
 
+        // Query spans in creation order, so each query's row-count search can
+        // be bounded by the next query
+        List<SpanData> querySpans = sortedSpans.stream()
+                .filter(s -> s.tags() != null && !s.tags().isEmpty() && findSql(s.tags(), s.name()) != null)
+                .toList();
+
         List<QueryInfo> queries = new ArrayList<>();
-        for (SpanData span : sortedSpans) {
-            QueryInfo query = extractQuery(span, resultSets);
+        for (int i = 0; i < querySpans.size(); i++) {
+            long nextQueryOrder = i + 1 < querySpans.size()
+                    ? querySpans.get(i + 1).creationOrder()
+                    : Long.MAX_VALUE;
+            QueryInfo query = extractQuery(querySpans.get(i), resultSets, nextQueryOrder);
             if (query != null) {
                 queries.add(query);
             }
         }
 
-        // Sort queries by creationOrder
-        return queries.stream()
-                .sorted(Comparator.comparingLong(QueryInfo::creationOrder))
-                .toList();
+        return queries;
     }
 
-    private QueryInfo extractQuery(SpanData span, List<ResultSetInfo> resultSets) {
+    private QueryInfo extractQuery(SpanData span, List<ResultSetInfo> resultSets, long nextQueryOrder) {
         Map<String, String> tags = span.tags();
         if (tags == null || tags.isEmpty()) {
             return null;
@@ -65,9 +71,9 @@ public class QueryExtractor {
         long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
         long creationOrder = span.creationOrder();
 
-        // Find matching result-set for row count
-        // Result-set span should come after the query span (creationOrder > query's creationOrder)
-        Long rowCount = findRowCount(creationOrder, resultSets);
+        // Find matching result-set for row count: it must come after this
+        // query but before the next one
+        Long rowCount = findRowCount(creationOrder, nextQueryOrder, resultSets);
 
         return new QueryInfo(
                 span.spanId(),
@@ -98,11 +104,10 @@ public class QueryExtractor {
         return null;
     }
 
-    private Long findRowCount(long queryCreationOrder, List<ResultSetInfo> resultSets) {
-        // Find the first result-set that comes after this query
-        // (result-set creationOrder > query creationOrder)
+    private Long findRowCount(long queryCreationOrder, long nextQueryOrder, List<ResultSetInfo> resultSets) {
+        // First result-set created between this query and the next one
         for (ResultSetInfo rs : resultSets) {
-            if (rs.creationOrder > queryCreationOrder) {
+            if (rs.creationOrder > queryCreationOrder && rs.creationOrder < nextQueryOrder) {
                 return rs.rowCount;
             }
         }

@@ -55,6 +55,33 @@ class TraceTreeMapperTest {
     }
 
     @Test
+    void map_shouldAttachOrphanSubtreesToRoot() {
+        // Spans can arrive before their parent is exported; a subtree whose
+        // parent is missing must not silently vanish from the tree.
+        var root = createSpan("trace1", "root", null, "root-op",
+                Span.Kind.SERVER, 0, 100, Map.of());
+        var orphan = createSpan("trace1", "orphan", "missing-parent", "orphan-op",
+                Span.Kind.CLIENT, 10, 20, Map.of());
+        var orphanChild = createSpan("trace1", "orphan-child", "orphan", "orphan-child-op",
+                Span.Kind.CLIENT, 12, 5, Map.of());
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root, orphan, orphanChild));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().spanId()).isEqualTo("root");
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId)
+                .contains("orphan");
+        SpanNode orphanNode = result.rootSpan().children().stream()
+                .filter(c -> c.spanId().equals("orphan"))
+                .findFirst().orElseThrow();
+        assertThat(orphanNode.children())
+                .extracting(SpanNode::spanId)
+                .containsExactly("orphan-child");
+    }
+
+    @Test
     void map_shouldIdentifyRootSpanWithNullParentId() {
         var rootSpan = createSpan("trace1", "root-id", null, "root-op",
                 Span.Kind.SERVER, 0, 100, Map.of());
