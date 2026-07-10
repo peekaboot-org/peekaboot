@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.filter.RequestCaptureFilter;
@@ -18,6 +19,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
 /**
@@ -70,13 +72,19 @@ public class DevToolbarAutoConfiguration {
         return registration;
     }
 
-    @Bean
-    public LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
-        return new LogbackAppenderRegistrar(eventPublisher);
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "ch.qos.logback.classic.LoggerContext")
+    static class LogbackCaptureConfiguration {
+
+        @Bean
+        LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
+            return new LogbackAppenderRegistrar(eventPublisher);
+        }
     }
 
     public static class LogbackAppenderRegistrar {
         private final ApplicationEventPublisher eventPublisher;
+        private PeekabootLogbackAppender appender;
 
         public LogbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
             this.eventPublisher = eventPublisher;
@@ -88,13 +96,27 @@ public class DevToolbarAutoConfiguration {
                 return;
             }
 
-            PeekabootLogbackAppender appender = new PeekabootLogbackAppender();
+            appender = new PeekabootLogbackAppender();
             appender.setEventPublisher(eventPublisher);
             appender.setContext(loggerContext);
             appender.start();
 
             Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
             rootLogger.addAppender(appender);
+        }
+
+        @PreDestroy
+        public void detachAppender() {
+            // the LoggerContext outlives the Spring context (devtools restarts);
+            // without detaching, appenders accumulate and pin the closed context
+            if (appender == null) {
+                return;
+            }
+            if (LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext) {
+                loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).detachAppender(appender);
+            }
+            appender.stop();
+            appender = null;
         }
     }
 }

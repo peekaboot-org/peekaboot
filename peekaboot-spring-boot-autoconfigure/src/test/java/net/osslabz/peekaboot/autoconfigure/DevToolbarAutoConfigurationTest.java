@@ -98,6 +98,54 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
+    void logbackAppenderIsDetachedWhenContextCloses() {
+        int before = peekabootAppenderCount();
+
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(peekabootAppenderCount())
+                            .as("appender attached while context runs")
+                            .isEqualTo(before + 1);
+                });
+
+        // run() closed the context; a devtools restart must not accumulate appenders
+        assertThat(peekabootAppenderCount())
+                .as("appender detached after context close")
+                .isEqualTo(before);
+    }
+
+    @Test
+    void shouldNotCreateLogbackRegistrarWhenLogbackMissing() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .withClassLoader(new FilteredClassLoader(ch.qos.logback.classic.LoggerContext.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                });
+    }
+
+    private int peekabootAppenderCount() {
+        ch.qos.logback.classic.LoggerContext loggerContext =
+                (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
+        ch.qos.logback.classic.Logger root =
+                loggerContext.getLogger(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME);
+        int count = 0;
+        java.util.Iterator<ch.qos.logback.core.Appender<ch.qos.logback.classic.spi.ILoggingEvent>> it =
+                root.iteratorForAppenders();
+        while (it.hasNext()) {
+            if (it.next() instanceof net.osslabz.peekaboot.backend.log.PeekabootLogbackAppender) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Test
     void propertiesDefaultDevToolbarToFalse() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(PeekabootProperties.class);
