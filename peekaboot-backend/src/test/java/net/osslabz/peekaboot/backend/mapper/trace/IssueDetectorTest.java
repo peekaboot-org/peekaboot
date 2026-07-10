@@ -109,6 +109,35 @@ class IssueDetectorTest {
     }
 
     @Test
+    void detectIssues_shouldPreferErrorMessageFieldOverTag() {
+        // The exporter stores the error in SpanNode.errorMessage; it never
+        // writes an error.message tag
+        SpanNode span = new SpanNode("span1", "test-op", "SERVER", 0, 50, "ERROR",
+                List.of(), Map.of(), List.of(), List.of(), 0,
+                "Connection refused: db:5432", "java.net.ConnectException", null);
+        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 1));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        SpanIssue issue = result.rootSpan().issues().get(0);
+        assertThat(issue.type()).isEqualTo(IssueType.ERROR);
+        assertThat(issue.message()).isEqualTo("Connection refused: db:5432");
+    }
+
+    @Test
+    void detectIssues_shouldNotFlagResultSetSpansAsSlowQuery() {
+        // datasource-proxy connection/result-set spans carry jdbc.* tags but
+        // are not queries (same distinction as the trace summary)
+        SpanNode span = createSpan("span1", 80, "OK", Map.of("jdbc.row-count", "10"), List.of());
+        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        assertThat(result.rootSpan().issues())
+                .noneMatch(issue -> issue.type() == IssueType.SLOW_QUERY);
+    }
+
+    @Test
     void detectIssues_shouldDetectSlowQuery() {
         // Given: A DB span with duration 80ms (>= 50ms threshold)
         SpanNode span = createSpan("span1", 80, "OK",

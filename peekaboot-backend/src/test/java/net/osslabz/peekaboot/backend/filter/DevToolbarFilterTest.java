@@ -148,6 +148,74 @@ class DevToolbarFilterTest {
     }
 
     @Test
+    void shouldInjectBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
+        // 'İ' (U+0130) lowercases to two characters; the </body> index must be
+        // computed on the original string, not a lowercased copy
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
+
+        String htmlContent = "<html><BODY>İİİ</BODY></html>";
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write(htmlContent);
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
+        assertThat(result.indexOf("<!-- Peekaboot Dev Toolbar -->"))
+                .isLessThan(result.toLowerCase(java.util.Locale.ROOT).indexOf("</body>"));
+        assertThat(result).endsWith("</BODY></html>");
+    }
+
+    @Test
+    void shouldPreserveResponseCharsetWhenInjecting() throws Exception {
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+        when(response.getCharacterEncoding()).thenReturn("ISO-8859-1");
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
+
+        String htmlContent = "<html><body>Käse</body></html>";
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html;charset=ISO-8859-1");
+            wrapper.getWriter().write(htmlContent);
+            when(response.getContentType()).thenReturn("text/html;charset=ISO-8859-1");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        // the declared charset stays ISO-8859-1, so the body must be encoded with it
+        String result = originalOutput.toString(java.nio.charset.Charset.forName("ISO-8859-1"));
+        assertThat(result).contains("Käse");
+        assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
+    }
+
+    @Test
     void shouldHandleResponseWithoutBodyTag() throws Exception {
         when(request.getRequestURI()).thenReturn("/fragment");
         when(request.getMethod()).thenReturn("GET");

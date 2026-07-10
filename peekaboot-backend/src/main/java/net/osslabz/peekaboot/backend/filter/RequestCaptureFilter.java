@@ -18,10 +18,12 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -128,21 +130,24 @@ public class RequestCaptureFilter implements Filter {
             responseHeaders.put(name, value);
         });
 
-        // Parse query params as List<String> per key
+        // getParameterMap() merges query-string and form-body parameters;
+        // split them using the actual query string
         Map<String, List<String>> queryParams = new HashMap<>();
+        Map<String, List<String>> formParams = new HashMap<>();
+        Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
+        String contentType = request.getContentType();
+        boolean formRequest = contentType != null && contentType.contains("application/x-www-form-urlencoded")
+                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
         request.getParameterMap().forEach((key, values) -> {
-            if (values != null && values.length > 0) {
+            if (values == null || values.length == 0) {
+                return;
+            }
+            if (queryStringKeys.contains(key) || !formRequest) {
                 queryParams.put(key, Arrays.asList(values));
+            } else {
+                formParams.put(key, Arrays.asList(values));
             }
         });
-
-        // Form params are captured separately for POST requests with form content type
-        Map<String, List<String>> formParams = Map.of();
-        String contentType = request.getContentType();
-        if (contentType != null && contentType.contains("application/x-www-form-urlencoded")
-                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()))) {
-            formParams = new HashMap<>(queryParams);  // In form-urlencoded, params are in body
-        }
 
         String controllerClass = null;
         String controllerMethod = null;
@@ -179,5 +184,20 @@ public class RequestCaptureFilter implements Filter {
 
     private boolean isSensitiveHeader(String headerName) {
         return SENSITIVE_HEADERS.contains(headerName.toLowerCase());
+    }
+
+    private Set<String> parseQueryStringKeys(String queryString) {
+        if (queryString == null || queryString.isBlank()) {
+            return Set.of();
+        }
+        Set<String> keys = new HashSet<>();
+        for (String pair : queryString.split("&")) {
+            int equalsIndex = pair.indexOf('=');
+            String key = equalsIndex >= 0 ? pair.substring(0, equalsIndex) : pair;
+            if (!key.isBlank()) {
+                keys.add(URLDecoder.decode(key, StandardCharsets.UTF_8));
+            }
+        }
+        return keys;
     }
 }

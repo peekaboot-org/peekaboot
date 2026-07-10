@@ -8,6 +8,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProcessInfoTest {
 
     @Test
+    void current_isComputedOnceAndCached() {
+        // process identity is static for the JVM's lifetime; current() is
+        // called on every insights request and must not fork subprocesses
+        // (id -u / id -g) or walk the parent chain each time
+        assertThat(ProcessInfo.current()).isSameAs(ProcessInfo.current());
+    }
+
+    @Test
     void current_shouldReturnUsername() {
         ProcessInfo info = ProcessInfo.current();
         assertThat(info.username()).isEqualTo(System.getProperty("user.name"));

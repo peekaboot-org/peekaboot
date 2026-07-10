@@ -27,6 +27,14 @@ class CronDescriptionServiceTest {
     }
 
     @Test
+    void describe_spring53LastDayOfMonth_isSupported() {
+        // 'L' (last day of month) is valid @Scheduled syntax since Spring 5.3
+        String result = service.describe("0 0 0 L * *", Locale.ENGLISH);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
     void describe_nullExpression_returnsNull() {
         String result = service.describe(null, Locale.ENGLISH);
 

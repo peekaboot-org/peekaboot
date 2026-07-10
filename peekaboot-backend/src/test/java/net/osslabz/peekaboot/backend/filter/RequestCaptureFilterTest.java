@@ -196,6 +196,36 @@ class RequestCaptureFilterTest {
     }
 
     @Test
+    void shouldSeparateQueryAndFormParameters() throws Exception {
+        // getParameterMap() merges query-string and form-body parameters;
+        // only actual query-string keys belong in queryParams and only
+        // body keys in formParams
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/api/users");
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
+        when(request.getQueryString()).thenReturn("page=1");
+        when(response.getStatus()).thenReturn(201);
+        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+
+        Map<String, String[]> params = new HashMap<>();
+        params.put("page", new String[]{"1"});
+        params.put("firstName", new String[]{"Bob"});
+        when(request.getParameterMap()).thenReturn(params);
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        RequestCompletedEvent event = captor.getValue();
+        assertThat(event.queryParams()).containsOnlyKeys("page");
+        assertThat(event.formParams()).containsOnlyKeys("firstName");
+        assertThat(event.formParams()).containsEntry("firstName", List.of("Bob"));
+    }
+
+    @Test
     void shouldCaptureControllerInfo() throws Exception {
         setupTraceContext("trace1");
         setupBasicRequestResponse();

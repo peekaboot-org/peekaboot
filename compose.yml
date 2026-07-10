@@ -3,7 +3,7 @@ services:
     image: 'postgres:latest'
     environment:
       - 'POSTGRES_DB=sample_app_db'
-      - 'POSTGRES_PASSWORD=sample_app_db_user'
-      - 'POSTGRES_USER=sample_app_db_pwd'
+      - 'POSTGRES_USER=sample_app_db_user'
+      - 'POSTGRES_PASSWORD=sample_app_db_pwd'
     ports:
       - '5432'

@@ -92,7 +92,7 @@ public class PeekabootController {
 
     @GetMapping(value = "/api/traces/raw", produces = MediaType.APPLICATION_JSON_VALUE)
     public TraceRawResponse getTracesRaw(@RequestParam(name = "limit", defaultValue = "100") int limit) {
-        return traceRawService.getTraces(limit, getEffectiveCaptureMode());
+        return traceRawService.getTraces(sanitizeLimit(limit), getEffectiveCaptureMode());
     }
 
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -100,7 +100,15 @@ public class PeekabootController {
             @RequestParam(name = "limit", defaultValue = "100") int limit,
             @RequestParam(name = "rootActionType", required = false) String rootActionType,
             @RequestParam(name = "rootOperation", required = false) String rootOperation) {
-        return traceInsightsService.getInsights(limit, getEffectiveCaptureMode(), rootActionType, rootOperation);
+        return traceInsightsService.getInsights(sanitizeLimit(limit), getEffectiveCaptureMode(), rootActionType, rootOperation);
+    }
+
+    /**
+     * Negative limits would throw from Stream.limit; excessive ones overflow
+     * downstream arithmetic.
+     */
+    private int sanitizeLimit(int limit) {
+        return Math.clamp(limit, 0, 10_000);
     }
 
     @GetMapping(value = "/api/traces/{traceId}/raw", produces = MediaType.APPLICATION_JSON_VALUE)

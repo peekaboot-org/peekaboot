@@ -72,8 +72,8 @@ public class IssueDetector {
             ));
         }
 
-        // Check for SLOW_QUERY (if DB span)
-        if (isDbSpan(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
+        // Check for SLOW_QUERY (if DB query span)
+        if (isDbQuerySpan(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.SLOW_QUERY,
                     String.format("Query took %dms (threshold: %dms)",
@@ -126,14 +126,6 @@ public class IssueDetector {
         );
     }
 
-    private boolean isDbSpan(SpanNode span) {
-        if (span.tags() == null) {
-            return false;
-        }
-        return span.tags().keySet().stream()
-                .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc."));
-    }
-
     /**
      * Actual query spans only - excludes datasource-proxy connection and
      * result-set spans (same definition as TraceTreeMapper's query summary).
@@ -147,6 +139,9 @@ public class IssueDetector {
     }
 
     private String getErrorMessage(SpanNode span) {
+        if (span.errorMessage() != null && !span.errorMessage().isBlank()) {
+            return span.errorMessage();
+        }
         if (span.tags() != null) {
             Object errorMessage = span.tags().get("error.message");
             if (errorMessage != null) {

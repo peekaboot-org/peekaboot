@@ -20,9 +20,8 @@ public class RuntimeMapper {
         OsInfo osInfo = extractOsInfo(info);
         MemoryInfo memoryInfo = extractMemoryInfo(info);
         List<StorageInfo> storageInfo = extractStorageInfo(health);
-        ProcessInfo processInfo = extractProcessInfo(info);
 
-        return new RuntimeInfo(osInfo, memoryInfo, storageInfo, processInfo);
+        return new RuntimeInfo(osInfo, memoryInfo, storageInfo, ProcessInfo.current());
     }
 
     private OsInfo extractOsInfo(InfoResponse info) {
@@ -73,10 +72,6 @@ public class RuntimeMapper {
             }
         }
         return result;
-    }
-
-    private ProcessInfo extractProcessInfo(InfoResponse info) {
-        return ProcessInfo.current();
     }
 
     private long getLongValue(Map<String, Object> map, String key) {

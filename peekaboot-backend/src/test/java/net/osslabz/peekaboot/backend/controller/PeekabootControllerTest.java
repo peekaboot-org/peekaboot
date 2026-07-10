@@ -94,6 +94,24 @@ class PeekabootControllerTest {
 
             assertThat(result.collectionFramework()).isEqualTo(CollectionFramework.BRAVE);
         }
+
+        @Test
+        void shouldClampNegativeLimit() {
+            // a negative limit would throw from Stream.limit and produce a 500
+            controller.getTracesRaw(-5);
+
+            org.mockito.Mockito.verify(traceRawService)
+                    .getTraces(org.mockito.ArgumentMatchers.eq(0), any());
+        }
+
+        @Test
+        void shouldClampExcessiveLimit() {
+            // huge limits would overflow downstream multiplications
+            controller.getTracesRaw(Integer.MAX_VALUE);
+
+            org.mockito.Mockito.verify(traceRawService)
+                    .getTraces(org.mockito.ArgumentMatchers.eq(10_000), any());
+        }
     }
 
     @Nested

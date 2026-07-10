@@ -45,13 +45,19 @@ class FilterPathMatcherTest {
     }
 
     @Test
+    void shouldSkip_pathsMerelyStartingWithError_returnsFalse() {
+        assertThat(FilterPathMatcher.shouldSkip("/errors")).isFalse();
+        assertThat(FilterPathMatcher.shouldSkip("/error-report")).isFalse();
+    }
+
+    @Test
     void excludedPrefixes_containsExpectedValues() {
         assertThat(FilterPathMatcher.EXCLUDED_PREFIXES).containsExactlyInAnyOrder(
                 "/static/",
                 "/webjars/",
                 "/actuator/",
                 "/peekaboot/",
-                "/error"
+                "/error/"
         );
     }
 }

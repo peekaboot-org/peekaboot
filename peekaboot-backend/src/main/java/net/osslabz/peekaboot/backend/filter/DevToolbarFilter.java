@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
@@ -117,7 +118,7 @@ public class DevToolbarFilter implements Filter {
         String content = wrappedResponse.getContentAsString();
         log.trace("Response content length: {} chars", content.length());
 
-        int bodyEndIndex = content.toLowerCase().lastIndexOf(BODY_END_TAG);
+        int bodyEndIndex = lastIndexOfIgnoreCase(content, BODY_END_TAG);
 
         if (bodyEndIndex == -1) {
             log.trace("Skipping toolbar injection - no </body> tag found");
@@ -149,11 +150,27 @@ public class DevToolbarFilter implements Filter {
                 + toolbarHtml
                 + content.substring(bodyEndIndex);
 
-        byte[] modifiedBytes = modifiedContent.getBytes(StandardCharsets.UTF_8);
+        // encode with the response's declared charset, not blindly UTF-8
+        String encoding = wrappedResponse.getCharacterEncoding();
+        Charset charset = encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
+        byte[] modifiedBytes = modifiedContent.getBytes(charset);
         originalResponse.setContentType(contentType);
         wrappedResponse.copyBodyToResponse(modifiedBytes);
 
         log.trace("Toolbar injected successfully for {}", request.getRequestURI());
+    }
+
+    /**
+     * Case-insensitive lastIndexOf on the original string; a lowercased copy
+     * is not length-preserving for all characters (e.g. U+0130).
+     */
+    private static int lastIndexOfIgnoreCase(String content, String search) {
+        for (int i = content.length() - search.length(); i >= 0; i--) {
+            if (content.regionMatches(true, i, search, 0, search.length())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private String generateToolbarHtml(HttpServletRequest request, ContentBufferingResponseWrapper response,

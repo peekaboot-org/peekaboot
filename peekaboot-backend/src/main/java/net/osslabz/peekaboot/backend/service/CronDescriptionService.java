@@ -19,7 +19,8 @@ public class CronDescriptionService {
     private final CronParser parser;
 
     public CronDescriptionService() {
-        this.parser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.SPRING));
+        // SPRING53 matches @Scheduled syntax since Spring 5.3 (L, W, # etc.)
+        this.parser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.SPRING53));
     }
 
     public String describe(String cronExpression, Locale locale) {
@@ -31,7 +32,8 @@ public class CronDescriptionService {
             Cron cron = parser.parse(cronExpression);
             return CronDescriptor.instance(effectiveLocale).describe(cron);
         } catch (IllegalArgumentException e) {
-            logger.warn("Failed to parse cron expression: {}", cronExpression, e);
+            // called on every insights refresh - keep the log noise low
+            logger.debug("Failed to parse cron expression '{}': {}", cronExpression, e.getMessage());
             return null;
         }
     }

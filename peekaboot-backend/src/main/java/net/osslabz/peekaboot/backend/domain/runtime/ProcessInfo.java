@@ -5,6 +5,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 public record ProcessInfo(
     String username,
@@ -16,7 +17,19 @@ public record ProcessInfo(
 
     public record ParentProcess(long pid, String command) {}
 
+    /**
+     * Lazily computed once: the values are static for the JVM's lifetime and
+     * computing them forks subprocesses and walks the parent process chain.
+     */
+    private static final class CurrentHolder {
+        private static final ProcessInfo CURRENT = compute();
+    }
+
     public static ProcessInfo current() {
+        return CurrentHolder.CURRENT;
+    }
+
+    private static ProcessInfo compute() {
         String username = System.getProperty("user.name");
         long pid = ProcessHandle.current().pid();
         String uid = execCommand("id", "-u");
@@ -52,17 +65,24 @@ public record ProcessInfo(
     }
 
     private static String execCommand(String... command) {
+        Process process = null;
         try {
-            Process process = new ProcessBuilder(command)
+            process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .start();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
                 String result = reader.readLine();
-                int exitCode = process.waitFor();
-                return exitCode == 0 && result != null ? result.trim() : null;
+                if (!process.waitFor(2, TimeUnit.SECONDS)) {
+                    return null;
+                }
+                return process.exitValue() == 0 && result != null ? result.trim() : null;
             }
         } catch (Exception e) {
             return null;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
         }
     }
 }

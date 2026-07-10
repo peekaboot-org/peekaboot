@@ -9,12 +9,16 @@ public final class FilterPathMatcher {
             "/webjars/",
             "/actuator/",
             "/peekaboot/",
-            "/error"
+            "/error/"
     );
 
     private FilterPathMatcher() {}
 
     public static boolean shouldSkip(String path) {
+        // exact match so /errors or /error-report are not excluded
+        if ("/error".equals(path)) {
+            return true;
+        }
         for (String prefix : EXCLUDED_PREFIXES) {
             if (path.startsWith(prefix)) {
                 return true;
