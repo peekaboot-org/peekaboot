@@ -69,6 +69,13 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- UI resources so integration tests can serve/execute the real toolbar scripts -->
+        <dependency>
+            <groupId>net.osslabz</groupId>
+            <artifactId>peekaboot-frontend</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-observation-test</artifactId>

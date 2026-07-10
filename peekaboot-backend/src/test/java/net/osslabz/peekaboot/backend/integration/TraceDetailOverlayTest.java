@@ -71,9 +71,16 @@ class TraceDetailOverlayTest {
     }
 
     @Test
-    void clickingToolbarShouldLoadTraceDetailScript() throws Exception {
-        // The script dynamically builds the path using data.basePath
-        assertThat(getPersonsPageContent()).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
+    void injectedPageShouldLoadExternalToolbarScript() throws Exception {
+        assertThat(getPersonsPageContent()).contains("/peekaboot/ui/toolbar/toolbar.js");
+    }
+
+    @Test
+    void toolbarScriptShouldLazyLoadTraceDetailScript() throws Exception {
+        // The toolbar script dynamically builds the path using data.basePath
+        String toolbarJs = webClient.getPage(baseUrl + "/peekaboot/ui/toolbar/toolbar.js")
+                .getWebResponse().getContentAsString();
+        assertThat(toolbarJs).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
     }
 
     @Test
