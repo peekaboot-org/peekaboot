@@ -517,7 +517,9 @@
                 } else {
                     selectedRootActionTypes.delete(cb.value);
                 }
-                renderTracesTab();
+                // refetch: tracesData may have been narrowed server-side by a
+                // previous single-type or rootOperation filter
+                fetchTraces();
             });
         });
 
@@ -776,11 +778,16 @@
         if (!peekabootData) return;
 
         renderDashboardTab();
-        renderEnvironmentTab();
+        // keep the user's typed filters across auto-refreshes
+        renderEnvironmentTab(currentFilterValue('env-filter'));
         renderFlywayTab();
-        renderLoggersTab();
-        renderConfigTab();
+        renderLoggersTab(currentFilterValue('loggers-filter'));
+        renderConfigTab(currentFilterValue('config-filter'));
         renderScheduledTasksTab();
+    }
+
+    function currentFilterValue(inputId) {
+        return document.getElementById(inputId)?.value.trim() || '';
     }
 
     function renderDashboardTab() {
@@ -1182,6 +1189,7 @@
     function renderEnvironmentTab(filterQuery = '') {
         const env = peekabootData?.environment;
         const container = document.getElementById('property-sources');
+        const expandedKeys = getExpandedGroupKeys(container, 'property-header');
         container.innerHTML = '';
 
         if (!env?.propertySources || env.propertySources.length === 0) {
@@ -1216,6 +1224,8 @@
             groupClass: 'property-source',
             headerClass: 'property-header',
             listClass: 'property-list',
+            groupKey: (source) => source.name,
+            expandedKeys,
             renderHeader: (source) => `
                 <span class="property-name">${highlightText(source.name, filterQuery)}</span>
                 <span class="property-count">${source.properties.length} properties</span>
@@ -1287,6 +1297,7 @@
         const loggersTab = document.querySelector('[data-tab="loggers"]');
 
         if (!container) return;
+        const expandedKeys = getExpandedGroupKeys(container, 'logger-group-header');
         container.innerHTML = '';
 
         const packages = loggersInfo?.packages;
@@ -1326,6 +1337,8 @@
             groupClass: 'logger-group',
             headerClass: 'logger-group-header',
             listClass: 'logger-group-list',
+            groupKey: (group) => group.packageName,
+            expandedKeys,
             renderHeader: (group) => `
                 <span class="logger-group-name">${highlightText(group.packageName, filterQuery)}</span>
                 <span class="logger-group-count">${group.loggers.length} loggers</span>
@@ -1356,6 +1369,7 @@
         const configTab = document.querySelector('[data-tab="config"]');
 
         if (!container) return;
+        const expandedKeys = getExpandedGroupKeys(container, 'config-group-header');
         container.innerHTML = '';
 
         const groups = configInfo?.groups;
@@ -1388,11 +1402,13 @@
 
         renderCollapsibleGroups(container, filteredGroups, {
             groupClass: 'config-group',
-            headerClass: 'config-header',
+            headerClass: 'config-group-header',
             listClass: 'config-list',
+            groupKey: (group) => group.prefix,
+            expandedKeys,
             renderHeader: (group) => `
-                <span class="config-prefix">${highlightText(group.prefix, filterQuery)}</span>
-                <span class="config-count">${group.properties.length} properties</span>
+                <span class="config-group-name">${highlightText(group.prefix, filterQuery)}</span>
+                <span class="config-group-count">${group.properties.length} properties</span>
             `,
             renderItems: (group, listEl) => {
                 group.properties.forEach(prop => {
@@ -1607,19 +1623,25 @@
             headerClass,
             listClass,
             renderHeader,
-            renderItems
+            renderItems,
+            groupKey,
+            expandedKeys
         } = options;
 
         groups.forEach(group => {
             const groupEl = document.createElement('div');
             groupEl.className = groupClass;
 
+            const key = groupKey ? groupKey(group) : '';
+            groupEl.dataset.groupKey = key;
+            const expanded = key && expandedKeys && expandedKeys.has(key);
+
             const headerEl = document.createElement('div');
-            headerEl.className = `${headerClass} collapsed`;
+            headerEl.className = expanded ? headerClass : `${headerClass} collapsed`;
             headerEl.innerHTML = renderHeader(group);
 
             const listEl = document.createElement('div');
-            listEl.className = `${listClass} collapsed`;
+            listEl.className = expanded ? listClass : `${listClass} collapsed`;
             renderItems(group, listEl);
 
             headerEl.addEventListener('click', () => {
@@ -1631,6 +1653,18 @@
             groupEl.appendChild(listEl);
             container.appendChild(groupEl);
         });
+    }
+
+    /**
+     * Captures which collapsible groups are currently expanded, so a
+     * re-render (e.g. the 30s auto-refresh) can restore their state.
+     * Must be called before the container is cleared.
+     */
+    function getExpandedGroupKeys(container, headerClass) {
+        if (!container) return new Set();
+        return new Set(Array.from(container.querySelectorAll(`.${headerClass}:not(.collapsed)`))
+                .map(header => header.parentElement?.dataset.groupKey)
+                .filter(Boolean));
     }
 
     function formatValue(value) {
