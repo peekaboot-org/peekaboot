@@ -5,15 +5,12 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -22,8 +19,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class TraceDataStorage {
 
-    private static final Logger log = LoggerFactory.getLogger(TraceDataStorage.class);
-
     private static final int DEFAULT_MAX_TRACES = 1000;
     private static final int DEFAULT_MAX_SPANS_PER_TRACE = 1000;
     private static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
@@ -31,9 +26,6 @@ public class TraceDataStorage {
     private final Cache<String, TraceDataBundle> cache;
     private final int maxSpansPerTrace;
     private final AtomicLong spanCounter = new AtomicLong(0);
-
-    // Track request completion times to measure span export delay
-    private final ConcurrentHashMap<String, Long> requestCompletionTimes = new ConcurrentHashMap<>();
 
     public TraceDataStorage() {
         this(DEFAULT_MAX_TRACES, DEFAULT_MAX_SPANS_PER_TRACE, DEFAULT_EXPIRE);
@@ -57,19 +49,7 @@ public class TraceDataStorage {
             return;
         }
         String traceId = event.spanData().traceId();
-        TraceDataBundle bundle = cache.get(traceId, TraceDataBundle::new);
-        if (bundle != null) {
-            bundle.addSpan(event.spanData(), maxSpansPerTrace);
-
-            // Log span export delay for root spans (SERVER kind with no parent)
-            Long requestTime = requestCompletionTimes.get(traceId);
-            if (requestTime != null && event.spanData().parentId() == null) {
-                long delayMs = System.currentTimeMillis() - requestTime;
-                log.debug("Span export delay for trace {}: {}ms (span: {}, kind: {})",
-                        traceId, delayMs, event.spanData().name(), event.spanData().kind());
-                requestCompletionTimes.remove(traceId);
-            }
-        }
+        cache.get(traceId, TraceDataBundle::new).addSpan(event.spanData(), maxSpansPerTrace);
     }
 
     @EventListener
@@ -77,10 +57,7 @@ public class TraceDataStorage {
         if (event == null) {
             return;
         }
-        TraceDataBundle bundle = cache.get(event.traceId(), TraceDataBundle::new);
-        if (bundle != null) {
-            bundle.addLog(event);
-        }
+        cache.get(event.traceId(), TraceDataBundle::new).addLog(event);
     }
 
     @EventListener
@@ -88,14 +65,7 @@ public class TraceDataStorage {
         if (event == null) {
             return;
         }
-        String traceId = event.traceId();
-        TraceDataBundle bundle = cache.get(traceId, TraceDataBundle::new);
-        if (bundle != null) {
-            bundle.setRequest(event);
-        }
-        // Record request completion time to measure span export delay
-        requestCompletionTimes.put(traceId, System.currentTimeMillis());
-        log.debug("Request completed for trace {}: {} {}", traceId, event.method(), event.path());
+        cache.get(event.traceId(), TraceDataBundle::new).setRequest(event);
     }
 
     public Optional<TraceDataBundle> getTrace(String traceId) {
