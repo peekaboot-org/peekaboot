@@ -132,6 +132,69 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.isCommitted()).isFalse();
     }
 
+    @Test
+    void nonHtmlContentTypeSwitchesToPassthrough() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
+
+        wrapper.setContentType("application/json");
+        wrapper.getOutputStream().write("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("{\"id\":1}");
+    }
+
+    @Test
+    void eventStreamContentTypeSwitchesToPassthrough() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
+
+        wrapper.setContentType("text/event-stream");
+        wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
+        wrapper.flushBuffer();
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+    }
+
+    @Test
+    void htmlContentTypeKeepsBuffering() throws IOException {
+        wrapper.setContentType("text/html;charset=UTF-8");
+        wrapper.getOutputStream().write("<html>".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isFalse();
+        assertThat(wrapper.getContentAsString()).isEqualTo("<html>");
+    }
+
+    @Test
+    void enablePassthroughFlushesBufferAndRoutesLaterWrites() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
+
+        wrapper.getOutputStream().write("early".getBytes(StandardCharsets.UTF_8));
+        wrapper.enablePassthrough();
+        wrapper.getOutputStream().write("-late".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+        // buffered content was handed off; nothing left to copy
+        wrapper.copyBodyToResponse();
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+    }
+
+    @Test
+    void passthroughRoutesWriterContent() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
+
+        PrintWriter writer = wrapper.getWriter();
+        writer.write("early");
+        wrapper.enablePassthrough();
+        writer.write("-late");
+        writer.flush();
+
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+    }
+
     private static class TestServletOutputStream extends ServletOutputStream {
         private final ByteArrayOutputStream output;
 

@@ -206,6 +206,56 @@ class DevToolbarFilterTest {
     }
 
     @Test
+    void shouldPassthroughAsyncResponsesWithoutInjection() throws Exception {
+        when(request.getRequestURI()).thenReturn("/sse/stream");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(request.isAsyncStarted()).thenReturn(true);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+
+        filter.doFilter(request, response, chain);
+
+        // The async handler keeps writing through the wrapper after doFilter
+        // returned; the bytes must reach the real response.
+        org.mockito.ArgumentCaptor<jakarta.servlet.ServletResponse> captor =
+                org.mockito.ArgumentCaptor.forClass(jakarta.servlet.ServletResponse.class);
+        verify(chain).doFilter(eq(request), captor.capture());
+        ContentBufferingResponseWrapper wrapper = (ContentBufferingResponseWrapper) captor.getValue();
+        wrapper.getOutputStream().write("async data".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("async data");
+    }
+
+    @Test
+    void shouldStreamNonHtmlResponsesDuringRequest() throws Exception {
+        when(request.getRequestURI()).thenReturn("/api/stream");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/event-stream");
+            wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
+            wrapper.flushBuffer();
+            // must be visible to the client while the handler is still running
+            assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+    }
+
+    @Test
     void shouldInjectExternalToolbarScriptLoader() throws Exception {
         when(request.getRequestURI()).thenReturn("/users/123");
         when(request.getMethod()).thenReturn("GET");

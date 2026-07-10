@@ -61,7 +61,13 @@ public class DevToolbarFilter implements Filter {
             chain.doFilter(request, wrappedResponse);
         } finally {
             try {
-                processResponse(httpRequest, wrappedResponse, httpResponse);
+                if (httpRequest.isAsyncStarted()) {
+                    // async handlers keep writing after this filter returns;
+                    // hand the response over and skip injection
+                    wrappedResponse.enablePassthrough();
+                } else if (!wrappedResponse.isPassthrough()) {
+                    processResponse(httpRequest, wrappedResponse, httpResponse);
+                }
             } catch (Exception e) {
                 log.warn("Failed to inject dev toolbar, returning original response: {}", e.getMessage());
                 wrappedResponse.copyBodyToResponse();
