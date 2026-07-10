@@ -21,10 +21,10 @@ import static org.assertj.core.api.Assertions.assertThat;
     }
 )
 @ActiveProfiles("test")
-class PeekabookActuatorServiceTest {
+class PeekabootActuatorServiceTest {
 
     @Autowired
-    private PeekabookActuatorService service;
+    private PeekabootActuatorService service;
 
     @Autowired
     private ApplicationContext context;

@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
 
 
 @Service
-public class PeekabookActuatorService {
+public class PeekabootActuatorService {
 
     /**
      * Endpoints whose READ operation is expensive or dangerous to invoke on
@@ -49,7 +49,7 @@ public class PeekabookActuatorService {
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
 
-    public PeekabookActuatorService(
+    public PeekabootActuatorService(
         ApplicationContext context,
         ParameterValueMapper parameterMapper,
         EndpointMediaTypes mediaTypes,

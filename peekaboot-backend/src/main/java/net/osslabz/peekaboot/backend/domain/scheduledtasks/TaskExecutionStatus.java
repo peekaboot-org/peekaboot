@@ -4,6 +4,7 @@ public enum TaskExecutionStatus {
     SUCCESS,
     FAILED,
     PENDING,
+    RUNNING,
     UNKNOWN;
 
     public static TaskExecutionStatus fromString(String status) {
@@ -12,6 +13,7 @@ public enum TaskExecutionStatus {
             case "SUCCESS" -> SUCCESS;
             case "FAILED", "ERROR" -> FAILED;
             case "PENDING" -> PENDING;
+            case "STARTED" -> RUNNING;
             default -> UNKNOWN;
         };
     }

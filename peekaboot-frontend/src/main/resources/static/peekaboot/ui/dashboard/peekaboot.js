@@ -1553,7 +1553,7 @@
         switch (status.toUpperCase()) {
             case 'SUCCESS': return 'status-success';
             case 'FAILED': case 'ERROR': return 'status-error';
-            case 'PENDING': return 'status-pending';
+            case 'PENDING': case 'RUNNING': return 'status-pending';
             default: return '';
         }
     }

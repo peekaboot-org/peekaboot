@@ -18,13 +18,13 @@ import static org.mockito.Mockito.*;
 
 class ActuatorInsightsServiceTest {
 
-    private PeekabookActuatorService rawService;
+    private PeekabootActuatorService rawService;
     private ActuatorInsightsService insightsService;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        rawService = mock(PeekabookActuatorService.class);
+        rawService = mock(PeekabootActuatorService.class);
         ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
         when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of());
 

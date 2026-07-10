@@ -15,7 +15,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
 import net.osslabz.peekaboot.backend.service.MetricsService;
-import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
+import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 
 class PeekabootControllerTest {
 
-    private PeekabookActuatorService actuatorService;
+    private PeekabootActuatorService actuatorService;
     private ActuatorInsightsService actuatorInsightsService;
     private TraceInsightsService traceInsightsService;
     private TraceRawService traceRawService;
@@ -54,7 +54,7 @@ class PeekabootControllerTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        actuatorService = mock(PeekabookActuatorService.class);
+        actuatorService = mock(PeekabootActuatorService.class);
         actuatorInsightsService = mock(ActuatorInsightsService.class);
         traceInsightsService = mock(TraceInsightsService.class);
         traceRawService = mock(TraceRawService.class);

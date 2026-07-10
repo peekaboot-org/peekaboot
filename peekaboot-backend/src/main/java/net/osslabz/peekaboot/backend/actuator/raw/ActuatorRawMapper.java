@@ -9,7 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Maps the raw Map response from PeekabookActuatorService to typed actuator beans.
+ * Maps the raw Map response from PeekabootActuatorService to typed actuator beans.
  * Entries that are not JSON objects (e.g. the "Error: ..." placeholders stored
  * for endpoints that failed to invoke) are treated as absent, so one broken
  * endpoint never breaks parsing of the others.

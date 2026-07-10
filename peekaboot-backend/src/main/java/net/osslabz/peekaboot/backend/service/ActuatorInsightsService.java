@@ -16,7 +16,7 @@ import java.util.Map;
 @Service
 public class ActuatorInsightsService {
 
-    private final PeekabookActuatorService rawService;
+    private final PeekabootActuatorService rawService;
     private final ActuatorRawMapper rawMapper;
     private final HealthMapper healthMapper;
     private final RuntimeMapper runtimeMapper;
@@ -30,7 +30,7 @@ public class ActuatorInsightsService {
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
     public ActuatorInsightsService(
-            PeekabookActuatorService rawService,
+            PeekabootActuatorService rawService,
             ActuatorRawMapper rawMapper,
             HealthMapper healthMapper,
             RuntimeMapper runtimeMapper,

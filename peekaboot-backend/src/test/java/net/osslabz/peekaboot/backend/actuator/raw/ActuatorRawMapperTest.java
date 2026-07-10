@@ -183,7 +183,7 @@ class ActuatorRawMapperTest {
 
     @Test
     void toleratesErrorPlaceholderForSingleEndpoint() {
-        // PeekabookActuatorService stores "Error: ..." strings for endpoints
+        // PeekabootActuatorService stores "Error: ..." strings for endpoints
         // that failed to invoke; one broken endpoint must not break parsing
         // of all the others.
         Map<String, Object> data = new java.util.LinkedHashMap<>(rawData);

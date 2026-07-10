@@ -3,7 +3,7 @@ package net.osslabz.peekaboot.autoconfigure;
 import io.micrometer.tracing.Tracer;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
+import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
@@ -157,8 +157,8 @@ class DevToolbarAutoConfigurationTest {
     @Configuration
     static class MockActuatorConfig {
         @Bean
-        PeekabookActuatorService peekabookActuatorService() {
-            return mock(PeekabookActuatorService.class);
+        PeekabootActuatorService peekabootActuatorService() {
+            return mock(PeekabootActuatorService.class);
         }
     }
 

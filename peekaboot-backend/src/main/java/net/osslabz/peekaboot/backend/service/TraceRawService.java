@@ -110,7 +110,7 @@ public class TraceRawService {
 
                 RequestCompletedEvent reqEvent = bundle.request();
                 if (reqEvent != null) {
-                    httpExchange = buildHttpExchange(reqEvent);
+                    httpExchange = HttpExchange.from(reqEvent);
                 }
             }
         }
@@ -143,40 +143,6 @@ public class TraceRawService {
                 queries,
                 httpExchange
         );
-    }
-
-    private HttpExchange buildHttpExchange(RequestCompletedEvent reqEvent) {
-        HttpRequest.Body body = new HttpRequest.Body(
-                reqEvent.requestBodyTruncated(),
-                reqEvent.requestBody()
-        );
-        HttpRequest.Controller controller = new HttpRequest.Controller(
-                reqEvent.controllerClass(),
-                reqEvent.controllerMethod()
-        );
-        HttpRequest.Params params = new HttpRequest.Params(
-                reqEvent.queryParams() != null ? reqEvent.queryParams() : Map.of(),
-                reqEvent.formParams() != null ? reqEvent.formParams() : Map.of(),
-                reqEvent.uploadedFiles() != null
-                        ? reqEvent.uploadedFiles().stream()
-                            .map(f -> new HttpRequest.UploadedFile(f.fieldName(), f.originalFilename(), f.contentType(), f.size()))
-                            .toList()
-                        : List.of()
-        );
-        HttpRequest request = new HttpRequest(
-                reqEvent.method(),
-                reqEvent.path(),
-                reqEvent.queryString(),
-                reqEvent.requestHeaders() != null ? reqEvent.requestHeaders() : Map.of(),
-                body,
-                controller,
-                params
-        );
-        HttpResponse response = new HttpResponse(
-                reqEvent.status(),
-                reqEvent.responseHeaders() != null ? reqEvent.responseHeaders() : Map.of()
-        );
-        return new HttpExchange(request, response);
     }
 
     private TraceRawSummary calculateSummary(List<TraceRawData> traces) {

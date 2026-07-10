@@ -10,7 +10,7 @@ import net.osslabz.peekaboot.backend.domain.trace.TraceRawResponse;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.service.ActuatorInsightsService;
 import net.osslabz.peekaboot.backend.service.MetricsService;
-import net.osslabz.peekaboot.backend.service.PeekabookActuatorService;
+import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
@@ -35,7 +35,7 @@ public class PeekabootController {
 
     private static final int DEFAULT_TRACE_LIMIT = 100;
 
-    private final PeekabookActuatorService peekabookActuatorService;
+    private final PeekabootActuatorService peekabootActuatorService;
     private final ActuatorInsightsService actuatorInsightsService;
     private final TraceInsightsService traceInsightsService;
     private final TraceRawService traceRawService;
@@ -44,14 +44,14 @@ public class PeekabootController {
     private final PeekabootTracingProperties tracingProperties;
 
     public PeekabootController(
-            PeekabookActuatorService peekabootService,
+            PeekabootActuatorService peekabootService,
             ActuatorInsightsService actuatorInsightsService,
             TraceInsightsService traceInsightsService,
             TraceRawService traceRawService,
             MetricsService metricsService,
             PeekabootProperties properties,
             ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider) {
-        this.peekabookActuatorService = peekabootService;
+        this.peekabootActuatorService = peekabootService;
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.traceRawService = traceRawService;
@@ -62,7 +62,7 @@ public class PeekabootController {
 
     @GetMapping(value = "/api/actuator/all/raw", produces = MediaType.APPLICATION_JSON_VALUE)
     public ActuatorRawResponse getRaw() {
-        return peekabookActuatorService.getData();
+        return peekabootActuatorService.getData();
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
