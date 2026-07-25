@@ -31,7 +31,7 @@ public class ActuatorRawMapper {
         }
         Map<String, Object> sanitized = new LinkedHashMap<>();
         rawData.forEach((key, value) -> {
-            if (value instanceof Map) {
+            if (isConvertible(value)) {
                 sanitized.put(key, value);
             }
         });
@@ -72,6 +72,15 @@ public class ActuatorRawMapper {
 
     private <T> T mapKey(Map<String, Object> rawData, String key, Class<T> type) {
         Object value = rawData != null ? rawData.get(key) : null;
-        return value instanceof Map ? objectMapper.convertValue(value, type) : null;
+        return isConvertible(value) ? objectMapper.convertValue(value, type) : null;
+    }
+
+    /**
+     * Endpoint results are Maps (from JSON) or POJOs (WebEndpointResponse,
+     * descriptor objects at runtime) - both convert; only the String error
+     * placeholders don't.
+     */
+    private static boolean isConvertible(Object value) {
+        return value != null && !(value instanceof String);
     }
 }

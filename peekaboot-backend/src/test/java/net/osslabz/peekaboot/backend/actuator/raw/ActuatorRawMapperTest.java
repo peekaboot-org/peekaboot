@@ -220,6 +220,24 @@ class ActuatorRawMapperTest {
     }
 
     @Test
+    void parsesPojoEndpointResults() {
+        // At runtime the invoked operations return POJOs (WebEndpointResponse,
+        // descriptor objects), not Maps - they must be converted, not dropped.
+        record HealthBody(String status, Map<String, Object> components) {}
+        record HealthPojo(int status, HealthBody body) {}
+        Map<String, Object> data = Map.of("health", new HealthPojo(200, new HealthBody("UP", Map.of())));
+
+        ActuatorParsedData response = mapper.map(data);
+
+        assertThat(response.health()).isNotNull();
+        assertThat(response.health().status()).isEqualTo(200);
+        assertThat(response.health().body().status()).isEqualTo("UP");
+
+        assertThat(mapper.mapHealth(data)).isNotNull();
+        assertThat(mapper.mapHealth(data).body().status()).isEqualTo("UP");
+    }
+
+    @Test
     void handlesNullInput() {
         ActuatorParsedData response = mapper.map(null);
 
