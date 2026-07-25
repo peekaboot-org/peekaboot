@@ -1,4 +1,4 @@
- operation# Peekaboot Glossary
+# Peekaboot Glossary
 
 This glossary defines terms used in the Peekaboot codebase and documentation.
 
@@ -89,7 +89,7 @@ Category of detected issue.
 | `VERY_SLOW` | Span exceeds very slow threshold | 500ms |
 | `ERROR` | Span has error status | - |
 | `SLOW_QUERY` | Database query too slow | 50ms |
-| `HIGH_QUERY_COUNT` | Too many queries in span | 5 queries |
+| `HIGH_QUERY_COUNT` | Too many queries in a span (5) or in the whole trace (20) | 5 / 20 queries |
 
 **Usage:** `IssueType` enum
 

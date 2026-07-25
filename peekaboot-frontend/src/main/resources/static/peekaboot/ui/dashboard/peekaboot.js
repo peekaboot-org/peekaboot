@@ -63,7 +63,24 @@
         activateTab(tab);
         if (tab === 'traces' && detail) {
             expandTraceById(detail);
+        } else if (window.PeekabootTraceDetail) {
+            // browser Back removed the detail segment - close the overlay
+            PeekabootTraceDetail.close();
         }
+    }
+
+    function openTraceOverlay(traceId) {
+        if (!window.PeekabootTraceDetail) return;
+        PeekabootTraceDetail.open(traceId, {
+            // closing the overlay (ESC, buttons) must also clean the hash,
+            // otherwise a reload would unexpectedly reopen the trace
+            onClose: () => {
+                const { tab, detail } = parseHash();
+                if (tab === 'traces' && detail === traceId) {
+                    setHash('traces');
+                }
+            }
+        });
     }
 
     function expandTraceById(traceId) {
@@ -73,10 +90,7 @@
             return;
         }
 
-        // Open the trace detail overlay
-        if (window.PeekabootTraceDetail) {
-            PeekabootTraceDetail.open(traceId);
-        }
+        openTraceOverlay(traceId);
     }
 
     // Current filter for root operation (e.g., scheduler target)
@@ -146,7 +160,10 @@
         }
     }
 
+    let fetchTracesVersion = 0;
+
     async function fetchTraces() {
+        const version = ++fetchTracesVersion;
         const loadingEl = document.getElementById('traces-loading');
         const listEl = document.getElementById('traces-list');
         const noTracesEl = document.getElementById('no-traces');
@@ -173,12 +190,16 @@
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
-            tracesData = await response.json();
+            const data = await response.json();
+            if (version !== fetchTracesVersion) {
+                return;
+            }
+            tracesData = data;
             tracesLoaded = true;
             renderTracesTab();
         } catch (error) {
             console.error('Error fetching traces:', error);
-            listEl.innerHTML = `<div class="error-banner"><span class="message">Failed to load traces: ${error.message}</span></div>`;
+            listEl.innerHTML = `<div class="error-banner"><span class="message">Failed to load traces: ${PeekabootUtils.escapeHtml(error.message)}</span></div>`;
         } finally {
             loadingEl.classList.add('hidden');
         }
@@ -359,8 +380,8 @@
             // Don't open trace detail if clicking the scheduler link
             if (e.target.closest('.trace-scheduler-link')) return;
             if (trace.traceId && window.PeekabootTraceDetail) {
-                PeekabootTraceDetail.open(trace.traceId);
                 setHash('traces', trace.traceId);
+                openTraceOverlay(trace.traceId);
             }
         });
 
@@ -565,7 +586,7 @@
             renderMetricsTab();
         } catch (error) {
             console.error('Error fetching metrics:', error);
-            listEl.innerHTML = `<div class="error-banner"><span class="message">Failed to load metrics: ${error.message}</span></div>`;
+            listEl.innerHTML = `<div class="error-banner"><span class="message">Failed to load metrics: ${PeekabootUtils.escapeHtml(error.message)}</span></div>`;
         }
     }
 
@@ -734,10 +755,16 @@
         });
     }
 
+    let fetchDataVersion = 0;
+
     async function fetchData() {
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
         const refreshIcon = document.getElementById('refresh-icon');
+
+        // guard against a slow older response overwriting a newer one
+        // (auto-refresh timer, manual refresh and locale changes overlap)
+        const version = ++fetchDataVersion;
 
         refreshIcon.classList.add('spinning');
 
@@ -755,7 +782,11 @@
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            peekabootData = await response.json();
+            const data = await response.json();
+            if (version !== fetchDataVersion) {
+                return;
+            }
+            peekabootData = data;
             if (peekabootData.server) {
                 serverTimezone = peekabootData.server;
             }
@@ -1275,8 +1306,13 @@
 
             const isSuccess = migration.state === 'SUCCESS';
             const isFailed = migration.state === 'FAILED';
+            if (isFailed) card.classList.add('failed');
+            if (migration.state === 'PENDING') card.classList.add('pending');
             const statusClass = isFailed ? 'error' : (isSuccess ? 'success' : '');
             const isSlow = migration.executionTime > 100;
+            const executionTime = migration.executionTime != null
+                ? `<span class="flyway-time ${isSlow ? 'slow' : ''}">&#9201; ${migration.executionTime}ms</span>`
+                : '';
 
             card.innerHTML = `
                 <div class="flyway-header">
@@ -1285,7 +1321,7 @@
                     <span class="flyway-status ${statusClass}">${PeekabootUtils.escapeHtml(migration.state)}</span>
                 </div>
                 <div class="flyway-details">
-                    <span class="flyway-time ${isSlow ? 'slow' : ''}">&#9201; ${migration.executionTime}ms</span>
+                    ${executionTime}
                     <span class="flyway-date">${formatDate(migration.installedOn)}</span>
                     <span class="flyway-type">${PeekabootUtils.escapeHtml(migration.type)}</span>
                 </div>
@@ -1744,11 +1780,11 @@
         }
     }
 
-    function formatDate(dateStr) {
+    function formatDate(dateStr, formatOptions) {
         if (!dateStr) return '-';
         try {
             const date = new Date(dateStr);
-            const options = {
+            const options = formatOptions ? { ...formatOptions } : {
                 year: 'numeric',
                 month: 'short',
                 day: 'numeric',

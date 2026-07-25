@@ -1,4 +1,4 @@
-/# Peekaboot Internals
+# Peekaboot Internals
 
 Technical documentation for contributors and maintainers.
 
@@ -39,7 +39,7 @@ peekaboot/
 │                        │                                            │
 │    ┌───────────────────┼───────────────────┐                       │
 │    ▼                   ▼                   ▼                       │
-│ SpanCapturedEvent LogCapturedEvent RequestCompletedEvent           │
+│ SpanDataEvent   LogCapturedEvent   RequestCompletedEvent           │
 │                        │                                            │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
@@ -94,7 +94,7 @@ net.osslabz.peekaboot.backend/
 ### Tracing Flow
 
 1. **Span Capture**: `OtelSpanExporter` receives spans from OpenTelemetry SDK
-2. **Event Publishing**: Publishes `SpanCapturedEvent` via Spring's `ApplicationEventPublisher`
+2. **Event Publishing**: Publishes `SpanDataEvent` via Spring's `ApplicationEventPublisher`
 3. **Storage**: `TraceDataStorage` listens via `@EventListener` and stores in Caffeine cache
 4. **Log Correlation**: `PeekabootLogbackAppender` captures logs using Micrometer's `Tracer.currentSpan()` for trace ID
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
@@ -152,7 +152,7 @@ static/peekaboot/ui/
 ├── shared/
 │   └── peekaboot-utils.js  # Shared utilities
 ├── toolbar/
-│   └── toolbar.js          # Debug toolbar (lazy-loaded)
+│   └── toolbar.js          # Collapsed toolbar bar (loaded via injected script tag)
 └── trace-detail/
     └── trace-detail.js     # Standalone trace viewer
 ```
@@ -162,7 +162,7 @@ static/peekaboot/ui/
 - **No build step**: Plain HTML/CSS/JS
 - **Shadow DOM**: Toolbar isolated from host app styles
 - **Mobile-first**: Responsive design
-- **Lazy loading**: Toolbar JS loaded only when expanded
+- **Lazy loading**: Trace-detail overlay JS loaded only on first use
 - **Theme support**: CSS variables for dark/light modes
 
 ## peekaboot-spring-boot-autoconfigure
@@ -181,9 +181,10 @@ Auto-configuration classes that wire everything together.
 Auto-configuration uses Spring Boot conditionals:
 
 ```java
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
-@ConditionalOnBean(TraceQueryService.class)
-@ConditionalOnClass(name = "io.opentelemetry.sdk.trace.SpanProcessor")
+@ConditionalOnClass(TraceQueryService.class)
 ```
 
 ### Default Properties
@@ -207,8 +208,9 @@ public OtelSpanExporter otelSpanExporter(TraceDataStorage storage, ApplicationEv
 The exporter:
 - Receives finished spans from OTel SDK
 - Filters out peekaboot's own requests (`/peekaboot/**`, `/actuator/**`)
-- Converts to `SpanData` and stores directly in `TraceDataStorage`
-- Publishes `SpanCapturedEvent` via Spring's `ApplicationEventPublisher`
+- Converts to `SpanData` and publishes `SpanDataEvent` via Spring's
+  `ApplicationEventPublisher`; `TraceDataStorage` stores it via an
+  `@EventListener`
 
 ### Micrometer Tracer Integration
 

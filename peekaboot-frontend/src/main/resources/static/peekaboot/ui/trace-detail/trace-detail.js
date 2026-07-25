@@ -153,7 +153,6 @@
 
         .pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
         .pk-gantt-row:hover { background: var(--pk-bg-alt); }
-        .pk-gantt-row.collapsed + .pk-gantt-row.child { display: none; }
 
         .pk-gantt-toggle { width: 16px; cursor: pointer; user-select: none; color: var(--pk-text-muted); }
         .pk-gantt-toggle:hover { color: var(--pk-text); }
@@ -187,7 +186,7 @@
 
         .pk-span-row-count { font-size: 10px; padding: 1px 5px; background: var(--pk-success); color: #000; border-radius: 3px; margin-left: 4px; }
 
-        .pk-span-query-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all var(--pk-transition); }
+        .pk-span-query-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
         .pk-span-query-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
         .pk-span-query-toggle:active { background: var(--pk-bg-alt); }
 
@@ -196,7 +195,7 @@
         .pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
         .pk-span-query-detail .pk-query-text { color: var(--pk-text-strong); }
 
-        .pk-span-logs-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all var(--pk-transition); }
+        .pk-span-logs-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
         .pk-span-logs-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
         .pk-span-logs-toggle:active { background: var(--pk-bg-alt); }
 
@@ -287,8 +286,12 @@
         UNKNOWN: '&#10067;'
     };
 
+    let escHandler = null;
+    let onCloseCallback = null;
+
     function openTraceDetail(traceId, options = {}) {
         closeTraceDetail();
+        onCloseCallback = options.onClose || null;
 
         const overlay = document.createElement('div');
         overlay.id = 'peekaboot-trace-overlay';
@@ -312,6 +315,15 @@
         const existing = document.getElementById('peekaboot-trace-overlay');
         if (existing) {
             existing.remove();
+        }
+        if (escHandler) {
+            document.removeEventListener('keydown', escHandler);
+            escHandler = null;
+        }
+        if (onCloseCallback) {
+            const callback = onCloseCallback;
+            onCloseCallback = null;
+            callback();
         }
     }
 
@@ -343,10 +355,11 @@
         // Prefer httpExchange data, fall back to span tags
         const method = req.method || tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
         const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
-        const status = res.status || res.statusCode || tags['http.status_code'] || tags['http.response.status_code'] || '-';
-        const statusClass = 's' + Math.floor(parseInt(status) / 100) + 'xx';
+        const status = res.status || tags['http.status_code'] || tags['http.response.status_code'] || '-';
+        const statusNum = parseInt(status);
+        const statusClass = Number.isFinite(statusNum) ? 's' + Math.floor(statusNum / 100) + 'xx' : '';
         const icon = ROOT_ACTION_ICONS[trace.rootActionType] || ROOT_ACTION_ICONS.UNKNOWN;
-        const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 200 ? 'warn' : '');
+        const durationClass = trace.durationMs > 500 ? 'error' : (trace.durationMs > 100 ? 'warn' : '');
 
         const queryCount = (trace.queries || []).length;
         const logCount = (trace.logs || []).length;
@@ -411,11 +424,14 @@
 
         renderTabContent(content, activeTab, trace);
 
-        // ESC key to close
-        const escHandler = (e) => {
+        // ESC key to close; closeTraceDetail removes the listener however
+        // the overlay is dismissed (buttons, overlay click, ESC)
+        if (escHandler) {
+            document.removeEventListener('keydown', escHandler);
+        }
+        escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeTraceDetail();
-                document.removeEventListener('keydown', escHandler);
             }
         };
         document.addEventListener('keydown', escHandler);
@@ -581,13 +597,6 @@
                     });
                 });
             }
-
-            // Click outside to close
-            popup.addEventListener('click', (e) => {
-                if (e.target === popup) {
-                    popup.classList.add('hidden');
-                }
-            });
         }
 
         // Show filtered span logs (when clicking on spanId in the all-logs view)
@@ -626,8 +635,12 @@
             if (showAllLink) {
                 showAllLink.addEventListener('click', () => renderLogs(true, null));
             }
+        }
 
-            // Click outside to close
+        // Click outside to close - bound once; the popup element persists
+        // across re-renders while its children are replaced
+        if (!popup.dataset.dismissBound) {
+            popup.dataset.dismissBound = 'true';
             popup.addEventListener('click', (e) => {
                 if (e.target === popup) {
                     popup.classList.add('hidden');
@@ -685,7 +698,7 @@
 
         // Add row count badge for result-set spans
         if (isResultSetSpan && rowCount !== undefined) {
-            nameHtml += `<span class="pk-span-row-count">${rowCount} rows</span>`;
+            nameHtml += `<span class="pk-span-row-count">${Utils.escapeHtml(String(rowCount))} rows</span>`;
         }
 
         // Add query toggle for query spans with SQL
@@ -822,7 +835,7 @@
         if (req?.query) {
             html += `<tr><td>Query String</td><td>${Utils.escapeHtml(req.query)}</td></tr>`;
         }
-        html += `<tr><td>Status</td><td>${Utils.escapeHtml(String(res?.status || res?.statusCode || '-'))}</td></tr>`;
+        html += `<tr><td>Status</td><td>${Utils.escapeHtml(String(res?.status || '-'))}</td></tr>`;
         const contentType = req?.headers?.['content-type'] || req?.headers?.['Content-Type'] || '-';
         html += `<tr><td>Content-Type</td><td>${Utils.escapeHtml(contentType)}</td></tr>`;
         html += `<tr><td>Duration</td><td>${trace.durationMs || '-'}ms</td></tr>`;
@@ -863,7 +876,7 @@
         }
 
         // Uploaded Files
-        const files = req?.params?.upload || req?.params?.files || [];
+        const files = req?.params?.upload || [];
         if (files.length > 0) {
             html += '<div class="pk-request-section">';
             html += '<h3>Uploaded Files</h3>';
@@ -941,7 +954,7 @@
             html += '<span class="pk-query-meta">';
             html += `<span class="pk-query-duration ${durationClass}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
             if (rowCount !== null && rowCount !== undefined) {
-                html += `<span class="pk-query-rows">${rowCount} rows</span>`;
+                html += `<span class="pk-query-rows">${Utils.escapeHtml(String(rowCount))} rows</span>`;
             }
             html += '</span>';
             html += '</div>';

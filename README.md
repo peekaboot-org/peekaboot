@@ -166,7 +166,7 @@ public class SecurityConfig {
 
 ## Requirements
 
-- Java 21+
+- Java 25+
 - Spring Boot 4.0+
 - OpenTelemetry tracing (via `spring-boot-starter-opentelemetry`)
 
