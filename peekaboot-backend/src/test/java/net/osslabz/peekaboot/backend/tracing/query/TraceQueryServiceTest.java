@@ -31,32 +31,7 @@ class TraceQueryServiceTest {
     }
 
     @Test
-    void getErrorTraces_returnsOnlyTracesWithErrors() {
-        SpanData normalSpan = new SpanData(
-                "trace-1", "span-1", null, "normal-op", null,
-                Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
-                Map.of(), List.of(), null, null, null, null, null, List.of(),
-                storage.nextCreationOrder()
-        );
-        addSpan(normalSpan);
-
-        SpanData errorSpan = new SpanData(
-                "trace-2", "span-2", null, "error-op", null,
-                Instant.now(), Instant.now().plusMillis(200), Duration.ofMillis(200),
-                Map.of(), List.of(), "Connection failed", "java.io.IOException",
-                null, null, null, List.of(), storage.nextCreationOrder()
-        );
-        addSpan(errorSpan);
-
-        List<TraceData> errorTraces = queryService.getErrorTraces(10);
-
-        assertEquals(1, errorTraces.size());
-        assertEquals("trace-2", errorTraces.get(0).traceId());
-        assertTrue(errorTraces.get(0).hasErrors());
-    }
-
-    @Test
-    void getErrorTraces_respectsLimit() {
+    void getTraces_withErrorsOnlyMode_respectsLimit() {
         for (int i = 0; i < 5; i++) {
             SpanData errorSpan = new SpanData(
                     "trace-" + i, "span-" + i, null, "error-op-" + i, null,
@@ -67,13 +42,13 @@ class TraceQueryServiceTest {
             addSpan(errorSpan);
         }
 
-        List<TraceData> errorTraces = queryService.getErrorTraces(3);
+        List<TraceData> errorTraces = queryService.getTraces(3, TraceCaptureMode.ERRORS_ONLY);
 
         assertEquals(3, errorTraces.size());
     }
 
     @Test
-    void getErrorTraces_returnsEmptyWhenNoErrors() {
+    void getTraces_withErrorsOnlyMode_returnsEmptyWhenNoErrors() {
         SpanData normalSpan = new SpanData(
                 "trace-1", "span-1", null, "normal-op", null,
                 Instant.now(), Instant.now().plusMillis(100), Duration.ofMillis(100),
@@ -82,7 +57,7 @@ class TraceQueryServiceTest {
         );
         addSpan(normalSpan);
 
-        List<TraceData> errorTraces = queryService.getErrorTraces(10);
+        List<TraceData> errorTraces = queryService.getTraces(10, TraceCaptureMode.ERRORS_ONLY);
 
         assertTrue(errorTraces.isEmpty());
     }

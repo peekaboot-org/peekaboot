@@ -88,8 +88,7 @@ class TraceDomainTest {
     void traceStatus_shouldHaveAllValues() {
         assertThat(TraceStatus.values()).containsExactly(
             TraceStatus.OK,
-            TraceStatus.HAS_ERRORS,
-            TraceStatus.HAS_SLOW_SPANS
+            TraceStatus.HAS_ERRORS
         );
     }
 

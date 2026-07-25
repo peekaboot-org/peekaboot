@@ -268,6 +268,12 @@
         fetchTraces();
     }
 
+    function hasSlowIssues(span) {
+        if (!span) return false;
+        if ((span.issues || []).some(issue => issue.type === 'SLOW' || issue.type === 'VERY_SLOW')) return true;
+        return (span.children || []).some(hasSlowIssues);
+    }
+
     function renderTraceItem(trace) {
         const item = document.createElement('div');
         item.className = 'trace-item';
@@ -279,7 +285,7 @@
         const startTime = trace.startTimeMs ? formatDate(new Date(trace.startTimeMs).toISOString()) : '-';
         const duration = PeekabootUtils.formatDurationMs(trace.durationMs);
         const hasErrors = trace.status === 'HAS_ERRORS';
-        const hasSlow = trace.status === 'HAS_SLOW_SPANS';
+        const hasSlow = hasSlowIssues(trace.rootSpan);
 
         const actionType = trace.rootActionType || 'UNKNOWN';
         const actionIcon = ROOT_ACTION_ICONS[actionType] || ROOT_ACTION_ICONS.UNKNOWN;

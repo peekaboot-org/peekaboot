@@ -28,19 +28,8 @@ public class TraceQueryService {
         return storage.getSpansForTrace(traceId);
     }
 
-    public List<TraceData> getRecentTraces(int limit) {
-        return storage.getRecentTraceData(limit);
-    }
-
     public List<TraceData> getAllTraces() {
         return storage.getAllTraces();
-    }
-
-    public List<TraceData> getErrorTraces(int limit) {
-        return storage.getAllTraces().stream()
-                .filter(TraceData::hasErrors)
-                .limit(limit)
-                .toList();
     }
 
     public List<TraceData> getTraces(int limit, TraceCaptureMode mode) {

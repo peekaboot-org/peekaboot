@@ -33,8 +33,6 @@ import java.util.Map;
 @RequestMapping("/peekaboot")
 public class PeekabootController {
 
-    private static final int DEFAULT_TRACE_LIMIT = 100;
-
     private final PeekabootActuatorService peekabootActuatorService;
     private final ActuatorInsightsService actuatorInsightsService;
     private final TraceInsightsService traceInsightsService;

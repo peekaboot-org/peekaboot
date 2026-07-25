@@ -248,7 +248,7 @@ public class TraceInsightsService {
                 errorCount++;
             }
 
-            if (trace.status() == TraceStatus.HAS_SLOW_SPANS || hasSlowIssues(trace.rootSpan())) {
+            if (hasSlowIssues(trace.rootSpan())) {
                 slowCount++;
             }
         }

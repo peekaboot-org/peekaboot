@@ -3,8 +3,6 @@ package net.osslabz.peekaboot.backend.domain.trace;
 /**
  * Per-trace summary organized by UI tab categories.
  * Contains all information needed to render the dev toolbar and trace list.
- *
- * Note: This will be renamed to TraceSummary once the old TraceSummary is removed.
  */
 public record TraceTabSummary(
     RequestSummary request,

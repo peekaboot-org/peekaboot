@@ -25,26 +25,10 @@ const PeekabootUtils = (function() {
         return '';
     }
 
-    function formatTime(timestamp) {
-        if (!timestamp) return '-';
-        try {
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                fractionalSecondDigits: 3
-            });
-        } catch (e) {
-            return '-';
-        }
-    }
-
     return {
         escapeHtml,
         formatDurationMs,
-        getDurationClass,
-        formatTime
+        getDurationClass
     };
 })();
 

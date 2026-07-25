@@ -1,10 +1,7 @@
 package net.osslabz.peekaboot.backend.service;
 
-import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.domain.trace.CollectionFramework;
 import net.osslabz.peekaboot.backend.domain.trace.HttpExchange;
-import net.osslabz.peekaboot.backend.domain.trace.HttpRequest;
-import net.osslabz.peekaboot.backend.domain.trace.HttpResponse;
 import net.osslabz.peekaboot.backend.domain.trace.QueryInfo;
 import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
 import net.osslabz.peekaboot.backend.domain.trace.TraceRawData;

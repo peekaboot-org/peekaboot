@@ -53,11 +53,6 @@ management:
       # Spring default: 0.1 (10%) | We sample all requests for complete trace visibility
       probability: 1.0
 
-  opentelemetry:
-    tracing:
-      export:
-        schedule-delay:
-
   observations:
     annotations:
       # Enables @Observed, @Timed, @Counted annotations

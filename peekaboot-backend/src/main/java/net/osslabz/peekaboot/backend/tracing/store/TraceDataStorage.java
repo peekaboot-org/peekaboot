@@ -20,7 +20,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TraceDataStorage {
 
     private static final int DEFAULT_MAX_TRACES = 1000;
-    private static final int DEFAULT_MAX_SPANS_PER_TRACE = 1000;
+    // keep in sync with PeekabootTracingProperties.maxSpansPerTrace
+    private static final int DEFAULT_MAX_SPANS_PER_TRACE = 100;
     private static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
 
     private final Cache<String, TraceDataBundle> cache;
@@ -80,13 +81,6 @@ public class TraceDataStorage {
         return getTrace(traceId)
                 .map(TraceDataBundle::spans)
                 .orElse(List.of());
-    }
-
-    public List<TraceDataBundle> getRecentTraces(int limit) {
-        return cache.asMap().values().stream()
-                .sorted(Comparator.comparingLong(TraceDataBundle::createdAt).reversed())
-                .limit(limit)
-                .toList();
     }
 
     public List<TraceData> getRecentTraceData(int limit) {

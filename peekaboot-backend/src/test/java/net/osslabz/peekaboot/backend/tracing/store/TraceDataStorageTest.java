@@ -86,12 +86,12 @@ class TraceDataStorageTest {
     }
 
     @Test
-    void getRecentTraces_returnsOrderedByCreation() throws InterruptedException {
+    void getRecentTraceData_returnsOrderedByCreation() throws InterruptedException {
         storage.onSpanData(new SpanDataEvent(createSpanData("trace1", "span1", null, "first")));
         Thread.sleep(10);
         storage.onSpanData(new SpanDataEvent(createSpanData("trace2", "span2", null, "second")));
 
-        var recent = storage.getRecentTraces(10);
+        var recent = storage.getRecentTraceData(10);
 
         assertThat(recent).hasSize(2);
         assertThat(recent.get(0).traceId()).isEqualTo("trace2");
