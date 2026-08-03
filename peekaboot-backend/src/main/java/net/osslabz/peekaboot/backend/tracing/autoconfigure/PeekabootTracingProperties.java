@@ -16,6 +16,12 @@ public class PeekabootTracingProperties {
 
     private int maxSpansPerTrace = 100;
 
+    private int maxErrorTraces = 100;
+
+    private int maxSlowTraces = 100;
+
+    private long slowTraceThresholdMs = 1000;
+
     private TraceCaptureMode captureMode;
 
     public boolean isEnabled() {
@@ -40,6 +46,30 @@ public class PeekabootTracingProperties {
 
     public void setMaxSpansPerTrace(int maxSpansPerTrace) {
         this.maxSpansPerTrace = maxSpansPerTrace;
+    }
+
+    public int getMaxErrorTraces() {
+        return maxErrorTraces;
+    }
+
+    public void setMaxErrorTraces(int maxErrorTraces) {
+        this.maxErrorTraces = maxErrorTraces;
+    }
+
+    public int getMaxSlowTraces() {
+        return maxSlowTraces;
+    }
+
+    public void setMaxSlowTraces(int maxSlowTraces) {
+        this.maxSlowTraces = maxSlowTraces;
+    }
+
+    public long getSlowTraceThresholdMs() {
+        return slowTraceThresholdMs;
+    }
+
+    public void setSlowTraceThresholdMs(long slowTraceThresholdMs) {
+        this.slowTraceThresholdMs = slowTraceThresholdMs;
     }
 
     public TraceCaptureMode getCaptureMode() {
