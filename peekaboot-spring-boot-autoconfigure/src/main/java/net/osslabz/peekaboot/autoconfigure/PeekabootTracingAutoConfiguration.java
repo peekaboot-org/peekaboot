@@ -2,7 +2,9 @@ package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -13,7 +15,7 @@ import java.time.Duration;
 
 /**
  * Auto-configuration for Peekaboot tracing components.
- * Configures TraceDataStorage as the central storage for all trace data
+ * Configures TraceStore as the central storage for all trace data
  * and TraceQueryService for querying traces.
  */
 @AutoConfiguration
@@ -23,8 +25,8 @@ public class PeekabootTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceDataStorage traceDataStorage(PeekabootTracingProperties properties) {
-        return new TraceDataStorage(
+    public TraceStore traceStore(PeekabootTracingProperties properties) {
+        return new InMemoryTraceStore(
                 properties.getMaxTraces(),
                 properties.getMaxSpansPerTrace(),
                 Duration.ofMinutes(30)
@@ -33,7 +35,13 @@ public class PeekabootTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public TraceQueryService traceQueryService(TraceDataStorage storage) {
-        return new TraceQueryService(storage);
+    public TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
+        return new TraceStoreEventListener(traceStore);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TraceQueryService traceQueryService(TraceStore store) {
+        return new TraceQueryService((InMemoryTraceStore) store);
     }
 }

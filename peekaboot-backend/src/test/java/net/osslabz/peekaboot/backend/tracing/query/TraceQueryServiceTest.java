@@ -1,10 +1,9 @@
 package net.osslabz.peekaboot.backend.tracing.query;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -17,17 +16,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TraceQueryServiceTest {
 
-    private TraceDataStorage storage;
+    private InMemoryTraceStore storage;
     private TraceQueryService queryService;
 
     @BeforeEach
     void setUp() {
-        storage = new TraceDataStorage(100, 50, Duration.ofMinutes(5));
+        storage = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
         queryService = new TraceQueryService(storage);
     }
 
     private void addSpan(SpanData span) {
-        storage.onSpanData(new SpanDataEvent(span));
+        storage.addSpan(span);
     }
 
     @Test

@@ -1,7 +1,7 @@
 package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -20,7 +20,7 @@ public class OtelTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public OtelSpanExporter otelSpanExporter(TraceDataStorage storage, ApplicationEventPublisher eventPublisher) {
+    public OtelSpanExporter otelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
         return new OtelSpanExporter(storage, eventPublisher);
     }
 }

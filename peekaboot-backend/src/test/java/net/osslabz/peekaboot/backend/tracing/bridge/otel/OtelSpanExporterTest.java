@@ -14,7 +14,7 @@ import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
 import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,18 +29,18 @@ class OtelSpanExporterTest {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
-    private TraceDataStorage storage;
+    private InMemoryTraceStore storage;
     private List<SpanDataEvent> publishedEvents;
     private OtelSpanExporter exporter;
 
     @BeforeEach
     void setUp() {
-        storage = new TraceDataStorage(100, 50, Duration.ofMinutes(5));
+        storage = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
         publishedEvents = new ArrayList<>();
         ApplicationEventPublisher eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
                 publishedEvents.add(spanDataEvent);
-                storage.onSpanData(spanDataEvent);
+                storage.addSpan(spanDataEvent.spanData());
             }
         };
         exporter = new OtelSpanExporter(storage, eventPublisher);

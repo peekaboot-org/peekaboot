@@ -9,7 +9,7 @@ import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 
 import net.osslabz.peekaboot.backend.filter.FilterPathMatcher;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,10 +31,10 @@ public class OtelSpanExporter implements SpanExporter {
     private static final AttributeKey<String> HTTP_TARGET_KEY = AttributeKey.stringKey("http.target");
     private static final AttributeKey<String> URL_PATH_KEY = AttributeKey.stringKey("url.path");
 
-    private final TraceDataStorage storage;
+    private final TraceStore storage;
     private final ApplicationEventPublisher eventPublisher;
 
-    public OtelSpanExporter(TraceDataStorage storage, ApplicationEventPublisher eventPublisher) {
+    public OtelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
         this.storage = storage;
         this.eventPublisher = eventPublisher;
     }

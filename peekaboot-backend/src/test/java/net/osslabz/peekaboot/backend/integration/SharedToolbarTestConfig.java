@@ -6,7 +6,9 @@ import io.micrometer.tracing.Tracer;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -27,13 +29,18 @@ import static org.mockito.Mockito.mock;
 public class SharedToolbarTestConfig {
 
     @Bean
-    TraceDataStorage traceDataStorage() {
-        return new TraceDataStorage(100, 50, Duration.ofMinutes(5));
+    TraceStore traceStore() {
+        return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
     }
 
     @Bean
-    TraceQueryService traceQueryService(TraceDataStorage storage) {
-        return new TraceQueryService(storage);
+    TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
+        return new TraceStoreEventListener(traceStore);
+    }
+
+    @Bean
+    TraceQueryService traceQueryService(TraceStore store) {
+        return new TraceQueryService((InMemoryTraceStore) store);
     }
 
     @Bean

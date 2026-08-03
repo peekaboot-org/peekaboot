@@ -4,8 +4,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
-import org.springframework.context.event.EventListener;
 
 import java.time.Duration;
 import java.util.Comparator;
@@ -13,11 +11,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Central storage for all trace data. Receives events via Spring's event mechanism
- * and stores raw span data, logs, and request info in trace bundles.
- */
-public class TraceDataStorage {
+/** In-memory {@link TraceStore} backed by a bounded Caffeine cache. */
+public class InMemoryTraceStore implements TraceStore {
 
     private static final int DEFAULT_MAX_TRACES = 1000;
     // keep in sync with PeekabootTracingProperties.maxSpansPerTrace
@@ -28,11 +23,11 @@ public class TraceDataStorage {
     private final int maxSpansPerTrace;
     private final AtomicLong spanCounter = new AtomicLong(0);
 
-    public TraceDataStorage() {
+    public InMemoryTraceStore() {
         this(DEFAULT_MAX_TRACES, DEFAULT_MAX_SPANS_PER_TRACE, DEFAULT_EXPIRE);
     }
 
-    public TraceDataStorage(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
+    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
         this.maxSpansPerTrace = maxSpansPerTrace;
         this.cache = Caffeine.newBuilder()
                 .maximumSize(maxTraces)
@@ -40,35 +35,27 @@ public class TraceDataStorage {
                 .build();
     }
 
+    @Override
     public long nextCreationOrder() {
         return spanCounter.incrementAndGet();
     }
 
-    @EventListener
-    public void onSpanData(SpanDataEvent event) {
-        if (event == null || event.spanData() == null) {
-            return;
-        }
-        String traceId = event.spanData().traceId();
-        cache.get(traceId, TraceDataBundle::new).addSpan(event.spanData(), maxSpansPerTrace);
+    @Override
+    public void addSpan(SpanData span) {
+        cache.get(span.traceId(), TraceDataBundle::new).addSpan(span, maxSpansPerTrace);
     }
 
-    @EventListener
-    public void onLogCaptured(LogCapturedEvent event) {
-        if (event == null) {
-            return;
-        }
-        cache.get(event.traceId(), TraceDataBundle::new).addLog(event);
+    @Override
+    public void addLog(LogCapturedEvent log) {
+        cache.get(log.traceId(), TraceDataBundle::new).addLog(log);
     }
 
-    @EventListener
-    public void onRequestCompleted(RequestCompletedEvent event) {
-        if (event == null) {
-            return;
-        }
-        cache.get(event.traceId(), TraceDataBundle::new).setRequest(event);
+    @Override
+    public void setRequest(RequestCompletedEvent request) {
+        cache.get(request.traceId(), TraceDataBundle::new).setRequest(request);
     }
 
+    @Override
     public Optional<TraceDataBundle> getTrace(String traceId) {
         return Optional.ofNullable(cache.getIfPresent(traceId));
     }
@@ -102,10 +89,12 @@ public class TraceDataStorage {
         return (int) cache.estimatedSize();
     }
 
+    @Override
     public void clear() {
         cache.invalidateAll();
     }
 
+    @Override
     public void cleanUp() {
         cache.cleanUp();
     }

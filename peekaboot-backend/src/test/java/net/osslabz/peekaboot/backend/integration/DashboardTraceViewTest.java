@@ -4,9 +4,8 @@ import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.fixture.TestFixtureApplication;
 import net.osslabz.peekaboot.backend.fixture.entity.Person;
 import net.osslabz.peekaboot.backend.fixture.repository.PersonRepository;
-import net.osslabz.peekaboot.backend.tracing.event.SpanDataEvent;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -46,7 +45,7 @@ class DashboardTraceViewTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private TraceDataStorage traceDataStorage;
+    private TraceStore traceStore;
 
     private RestClient restClient;
     private String baseUrl;
@@ -92,9 +91,9 @@ class DashboardTraceViewTest {
             null,
             null,
             List.of(),
-            traceDataStorage.nextCreationOrder()
+            traceStore.nextCreationOrder()
         );
-        traceDataStorage.onSpanData(new SpanDataEvent(rootSpan));
+        traceStore.addSpan(rootSpan);
 
         SpanData dbSpan = new SpanData(
             testTraceId,
@@ -113,9 +112,9 @@ class DashboardTraceViewTest {
             null,
             null,
             List.of(),
-            traceDataStorage.nextCreationOrder()
+            traceStore.nextCreationOrder()
         );
-        traceDataStorage.onSpanData(new SpanDataEvent(dbSpan));
+        traceStore.addSpan(dbSpan);
     }
 
     @Test

@@ -14,7 +14,7 @@ import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataBundle;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -28,16 +28,16 @@ public class TraceRawService {
     @Nullable
     private final TraceQueryService traceQueryService;
     @Nullable
-    private final TraceDataStorage traceDataStorage;
+    private final TraceStore traceStore;
     private final QueryExtractor queryExtractor;
     private final CollectionFramework collectionFramework;
 
     public TraceRawService(
             @Nullable TraceQueryService traceQueryService,
-            @Nullable TraceDataStorage traceDataStorage,
+            @Nullable TraceStore traceStore,
             QueryExtractor queryExtractor) {
         this.traceQueryService = traceQueryService;
-        this.traceDataStorage = traceDataStorage;
+        this.traceStore = traceStore;
         this.queryExtractor = queryExtractor;
         this.collectionFramework = detectCollectionFramework();
     }
@@ -88,8 +88,8 @@ public class TraceRawService {
         List<TraceLog> logs = List.of();
         HttpExchange httpExchange = null;
 
-        if (traceDataStorage != null) {
-            Optional<TraceDataBundle> bundleOpt = traceDataStorage.getTrace(traceData.traceId());
+        if (traceStore != null) {
+            Optional<TraceDataBundle> bundleOpt = traceStore.getTrace(traceData.traceId());
 
             if (bundleOpt.isPresent()) {
                 TraceDataBundle bundle = bundleOpt.get();

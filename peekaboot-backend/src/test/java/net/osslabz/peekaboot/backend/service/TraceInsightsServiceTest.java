@@ -16,9 +16,9 @@ import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -222,8 +222,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void getTraceInsights_shouldEnrichWithLogs() {
-        // Given: TraceDataStorage with logs for the trace
-        TraceDataStorage dataStorage = new TraceDataStorage();
+        // Given: InMemoryTraceStore with logs for the trace
+        InMemoryTraceStore dataStorage = new InMemoryTraceStore();
         LogCapturedEvent logEvent = new LogCapturedEvent(
                 "trace1",
                 "span-trace1",
@@ -233,7 +233,7 @@ class TraceInsightsServiceTest {
                 "Test log message from trace",
                 "main"
         );
-        dataStorage.onLogCaptured(logEvent);
+        dataStorage.addLog(logEvent);
 
         TraceInsightsService serviceWithLogs = new TraceInsightsService(
                 traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
@@ -255,8 +255,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void getTraceInsights_shouldReturnEmptyLogsWhenNoLogsStored() {
-        // Given: TraceDataStorage with no logs for this trace
-        TraceDataStorage dataStorage = new TraceDataStorage();
+        // Given: InMemoryTraceStore with no logs for this trace
+        InMemoryTraceStore dataStorage = new InMemoryTraceStore();
         TraceInsightsService serviceWithStorage = new TraceInsightsService(
                 traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
 

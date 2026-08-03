@@ -21,7 +21,7 @@ import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingPrope
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataBundle;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -42,7 +42,7 @@ public class TraceInsightsService {
     @Nullable
     private final TraceQueryService traceQueryService;
     @Nullable
-    private final TraceDataStorage traceDataStorage;
+    private final TraceStore traceStore;
     private final SpanDeduplicator spanDeduplicator;
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
@@ -50,13 +50,13 @@ public class TraceInsightsService {
 
     public TraceInsightsService(
             @Nullable TraceQueryService traceQueryService,
-            @Nullable TraceDataStorage traceDataStorage,
+            @Nullable TraceStore traceStore,
             SpanDeduplicator spanDeduplicator,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor) {
         this.traceQueryService = traceQueryService;
-        this.traceDataStorage = traceDataStorage;
+        this.traceStore = traceStore;
         this.spanDeduplicator = spanDeduplicator;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
@@ -125,8 +125,8 @@ public class TraceInsightsService {
         List<TraceLog> logs = List.of();
         HttpExchange httpExchange = null;
 
-        if (traceDataStorage != null) {
-            Optional<TraceDataBundle> bundleOpt = traceDataStorage.getTrace(traceId);
+        if (traceStore != null) {
+            Optional<TraceDataBundle> bundleOpt = traceStore.getTrace(traceId);
 
             if (bundleOpt.isPresent()) {
                 TraceDataBundle bundle = bundleOpt.get();

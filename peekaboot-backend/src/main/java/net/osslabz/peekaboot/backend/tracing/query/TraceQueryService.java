@@ -3,7 +3,7 @@ package net.osslabz.peekaboot.backend.tracing.query;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceData;
-import net.osslabz.peekaboot.backend.tracing.store.TraceDataStorage;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,9 +14,9 @@ import java.util.stream.Stream;
  */
 public class TraceQueryService {
 
-    private final TraceDataStorage storage;
+    private final InMemoryTraceStore storage;
 
-    public TraceQueryService(TraceDataStorage storage) {
+    public TraceQueryService(InMemoryTraceStore storage) {
         this.storage = storage;
     }
 
