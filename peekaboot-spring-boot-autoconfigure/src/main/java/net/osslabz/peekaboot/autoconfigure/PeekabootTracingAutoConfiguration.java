@@ -1,7 +1,6 @@
 package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -15,8 +14,7 @@ import java.time.Duration;
 
 /**
  * Auto-configuration for Peekaboot tracing components.
- * Configures TraceStore as the central storage for all trace data
- * and TraceQueryService for querying traces.
+ * Configures TraceStore as the central storage for all trace data.
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "peekaboot.tracing", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -40,11 +38,5 @@ public class PeekabootTracingAutoConfiguration {
     @ConditionalOnMissingBean
     public TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
         return new TraceStoreEventListener(traceStore);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public TraceQueryService traceQueryService(TraceStore store) {
-        return new TraceQueryService((InMemoryTraceStore) store);
     }
 }

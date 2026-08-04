@@ -84,19 +84,6 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void getRecentTraceData_returnsOrderedByCreation() throws InterruptedException {
-        storage.addSpan(createSpanData("trace1", "span1", null, "first"));
-        Thread.sleep(10);
-        storage.addSpan(createSpanData("trace2", "span2", null, "second"));
-
-        var recent = storage.getRecentTraceData(10);
-
-        assertThat(recent).hasSize(2);
-        assertThat(recent.get(0).traceId()).isEqualTo("trace2");
-        assertThat(recent.get(1).traceId()).isEqualTo("trace1");
-    }
-
-    @Test
     void getTrace_returnsEmptyForUnknownTraceId() {
         var bundle = storage.getTrace("unknown");
 
@@ -110,7 +97,7 @@ class InMemoryTraceStoreTest {
 
         storage.clear();
 
-        assertThat(storage.getTraceCount()).isZero();
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
     }
 
     private SpanData createSpanData(String traceId, String spanId, String parentId, String name) {
@@ -228,6 +215,24 @@ class InMemoryTraceStoreTest {
 
         List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
         assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
+    }
+
+    @Test
+    void getTracesAllBucketRespectsLimit() {
+        for (int i = 0; i < 5; i++) {
+            storage.addSpan(createSpanData("trace-" + i, "span-" + i, null, "op-" + i));
+        }
+
+        assertThat(storage.getTraces(TraceBucket.ALL, 3)).hasSize(3);
+    }
+
+    @Test
+    void getTracesErrorsBucketRespectsLimit() {
+        for (int i = 0; i < 5; i++) {
+            storage.addSpan(createSpanData("trace-" + i, "span-" + i, Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        }
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 3)).hasSize(3);
     }
 
     @Test

@@ -4,5 +4,6 @@ import java.util.List;
 
 public record TraceInsightsResponse(
     List<TraceTree> traces,
-    TraceListSummary summary
+    TraceListSummary summary,
+    BucketCounts bucketCounts
 ) {}

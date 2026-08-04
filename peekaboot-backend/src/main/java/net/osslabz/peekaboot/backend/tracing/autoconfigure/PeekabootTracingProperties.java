@@ -5,11 +5,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "peekaboot.tracing")
 public class PeekabootTracingProperties {
 
-    public enum TraceCaptureMode {
-        ERRORS_ONLY,
-        ALL
-    }
-
     private boolean enabled = true;
 
     private int maxTraces = 1000;
@@ -21,8 +16,6 @@ public class PeekabootTracingProperties {
     private int maxSlowTraces = 100;
 
     private long slowTraceThresholdMs = 1000;
-
-    private TraceCaptureMode captureMode;
 
     public boolean isEnabled() {
         return enabled;
@@ -70,20 +63,5 @@ public class PeekabootTracingProperties {
 
     public void setSlowTraceThresholdMs(long slowTraceThresholdMs) {
         this.slowTraceThresholdMs = slowTraceThresholdMs;
-    }
-
-    public TraceCaptureMode getCaptureMode() {
-        return captureMode;
-    }
-
-    public void setCaptureMode(TraceCaptureMode captureMode) {
-        this.captureMode = captureMode;
-    }
-
-    public TraceCaptureMode getEffectiveCaptureMode(boolean devToolbar) {
-        if (captureMode != null) {
-            return captureMode;
-        }
-        return devToolbar ? TraceCaptureMode.ALL : TraceCaptureMode.ERRORS_ONLY;
     }
 }

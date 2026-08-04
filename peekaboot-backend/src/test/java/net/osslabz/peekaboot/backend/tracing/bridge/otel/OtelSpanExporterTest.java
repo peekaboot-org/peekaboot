@@ -57,7 +57,7 @@ class OtelSpanExporterTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(publishedEvents).hasSize(1);
 
-        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = storage.getSpansForTrace(traceId);
+        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = storage.getTrace(traceId).orElseThrow().spans();
         assertThat(spans).hasSize(1);
 
         net.osslabz.peekaboot.backend.tracing.store.SpanData stored = spans.getFirst();
@@ -79,8 +79,8 @@ class OtelSpanExporterTest {
         exporter.export(List.of(span1, span2, span3));
 
         assertThat(publishedEvents).hasSize(3);
-        assertThat(storage.getSpansForTrace(traceId1)).hasSize(2);
-        assertThat(storage.getSpansForTrace(traceId2)).hasSize(1);
+        assertThat(storage.getTrace(traceId1).orElseThrow().spans()).hasSize(2);
+        assertThat(storage.getTrace(traceId2).orElseThrow().spans()).hasSize(1);
     }
 
     @Test
@@ -103,7 +103,7 @@ class OtelSpanExporterTest {
             SpanData span = createTestSpan(traceId, "0000000000000001", "op", kind);
             exporter.export(List.of(span));
 
-            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = storage.getSpansForTrace(traceId);
+            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = storage.getTrace(traceId).orElseThrow().spans();
             assertThat(stored).hasSize(1);
 
             if (kind == SpanKind.INTERNAL) {

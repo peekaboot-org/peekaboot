@@ -5,7 +5,6 @@ import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.filter.DevToolbarFilter;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -23,7 +22,7 @@ import static org.mockito.Mockito.mock;
 
 /**
  * Shared test configuration for dev toolbar integration tests.
- * Provides common bean definitions for trace storage, querying, and toolbar injection.
+ * Provides common bean definitions for trace storage and toolbar injection.
  */
 @TestConfiguration
 public class SharedToolbarTestConfig {
@@ -36,11 +35,6 @@ public class SharedToolbarTestConfig {
     @Bean
     TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
         return new TraceStoreEventListener(traceStore);
-    }
-
-    @Bean
-    TraceQueryService traceQueryService(TraceStore store) {
-        return new TraceQueryService((InMemoryTraceStore) store);
     }
 
     @Bean

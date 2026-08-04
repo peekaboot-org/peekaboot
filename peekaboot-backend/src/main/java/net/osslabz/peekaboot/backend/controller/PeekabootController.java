@@ -13,9 +13,7 @@ import net.osslabz.peekaboot.backend.service.MetricsService;
 import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
-import org.springframework.beans.factory.ObjectProvider;
+import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,7 +37,6 @@ public class PeekabootController {
     private final TraceRawService traceRawService;
     private final MetricsService metricsService;
     private final PeekabootProperties properties;
-    private final PeekabootTracingProperties tracingProperties;
 
     public PeekabootController(
             PeekabootActuatorService peekabootService,
@@ -47,15 +44,13 @@ public class PeekabootController {
             TraceInsightsService traceInsightsService,
             TraceRawService traceRawService,
             MetricsService metricsService,
-            PeekabootProperties properties,
-            ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider) {
+            PeekabootProperties properties) {
         this.peekabootActuatorService = peekabootService;
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.traceRawService = traceRawService;
         this.metricsService = metricsService;
         this.properties = properties;
-        this.tracingProperties = tracingPropertiesProvider.getIfAvailable();
     }
 
     @GetMapping(value = "/api/actuator/all/raw", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -77,9 +72,6 @@ public class PeekabootController {
         features.put("tracing", traceRawService.isTracingAvailable());
         features.put("metrics", metricsService.isAvailable());
         features.put("devToolbar", properties.isDevToolbar());
-        if (tracingProperties != null) {
-            features.put("traceCaptureMode", tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar()).name());
-        }
         return features;
     }
 
@@ -89,16 +81,19 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/traces/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public TraceRawResponse getTracesRaw(@RequestParam(name = "limit", defaultValue = "100") int limit) {
-        return traceRawService.getTraces(sanitizeLimit(limit), getEffectiveCaptureMode());
+    public TraceRawResponse getTracesRaw(
+            @RequestParam(name = "limit", defaultValue = "100") int limit,
+            @RequestParam(name = "bucket", required = false) String bucket) {
+        return traceRawService.getTraces(sanitizeLimit(limit), TraceBucket.fromParam(bucket));
     }
 
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
     public TraceInsightsResponse getTracesInsights(
             @RequestParam(name = "limit", defaultValue = "100") int limit,
+            @RequestParam(name = "bucket", required = false) String bucket,
             @RequestParam(name = "rootActionType", required = false) String rootActionType,
             @RequestParam(name = "rootOperation", required = false) String rootOperation) {
-        return traceInsightsService.getInsights(sanitizeLimit(limit), getEffectiveCaptureMode(), rootActionType, rootOperation);
+        return traceInsightsService.getInsights(sanitizeLimit(limit), TraceBucket.fromParam(bucket), rootActionType, rootOperation);
     }
 
     /**
@@ -121,12 +116,5 @@ public class PeekabootController {
         return traceInsightsService.getTraceInsights(traceId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
-    }
-
-    private TraceCaptureMode getEffectiveCaptureMode() {
-        if (tracingProperties == null) {
-            return TraceCaptureMode.ALL;
-        }
-        return tracingProperties.getEffectiveCaptureMode(properties.isDevToolbar());
     }
 }

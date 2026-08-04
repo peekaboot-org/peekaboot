@@ -177,35 +177,6 @@ public class InMemoryTraceStore implements TraceStore {
                 && traceData.duration().toMillis() >= slowTraceThresholdMs;
     }
 
-    public Optional<TraceData> getTraceData(String traceId) {
-        return getTrace(traceId).map(bundle -> TraceData.fromSpans(traceId, bundle.spans()));
-    }
-
-    public List<SpanData> getSpansForTrace(String traceId) {
-        return getTrace(traceId)
-                .map(TraceDataBundle::spans)
-                .orElse(List.of());
-    }
-
-    public List<TraceData> getRecentTraceData(int limit) {
-        return cache.asMap().entrySet().stream()
-                .sorted((a, b) -> Long.compare(b.getValue().createdAt(), a.getValue().createdAt()))
-                .limit(limit)
-                .map(entry -> TraceData.fromSpans(entry.getKey(), entry.getValue().spans()))
-                .toList();
-    }
-
-    public List<TraceData> getAllTraces() {
-        return cache.asMap().entrySet().stream()
-                .map(entry -> TraceData.fromSpans(entry.getKey(), entry.getValue().spans()))
-                .sorted(Comparator.comparing(TraceData::startTime, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-    }
-
-    public int getTraceCount() {
-        return (int) cache.estimatedSize();
-    }
-
     @Override
     public void clear() {
         cache.invalidateAll();

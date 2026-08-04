@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.peekaboot.backend.domain.trace.BucketCounts;
 import net.osslabz.peekaboot.backend.domain.trace.HttpExchange;
 import net.osslabz.peekaboot.backend.domain.trace.HttpRequest;
 import net.osslabz.peekaboot.backend.domain.trace.HttpResponse;
@@ -17,9 +18,9 @@ import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
+import net.osslabz.peekaboot.backend.tracing.store.TraceData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceDataBundle;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
@@ -36,11 +37,10 @@ public class TraceInsightsService {
 
     private static final TraceInsightsResponse EMPTY_RESPONSE = new TraceInsightsResponse(
             List.of(),
-            new TraceListSummary(0, 0, 0, 0.0)
+            new TraceListSummary(0, 0, 0, 0.0),
+            BucketCounts.empty()
     );
 
-    @Nullable
-    private final TraceQueryService traceQueryService;
     @Nullable
     private final TraceStore traceStore;
     private final SpanDeduplicator spanDeduplicator;
@@ -49,13 +49,11 @@ public class TraceInsightsService {
     private final QueryExtractor queryExtractor;
 
     public TraceInsightsService(
-            @Nullable TraceQueryService traceQueryService,
             @Nullable TraceStore traceStore,
             SpanDeduplicator spanDeduplicator,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor) {
-        this.traceQueryService = traceQueryService;
         this.traceStore = traceStore;
         this.spanDeduplicator = spanDeduplicator;
         this.traceTreeMapper = traceTreeMapper;
@@ -63,12 +61,8 @@ public class TraceInsightsService {
         this.queryExtractor = queryExtractor;
     }
 
-    public TraceInsightsResponse getInsights(int limit, TraceCaptureMode mode) {
-        return getInsights(limit, mode, null, null);
-    }
-
-    public TraceInsightsResponse getInsights(int limit, TraceCaptureMode mode, String rootActionType, String rootOperation) {
-        if (traceQueryService == null) {
+    public TraceInsightsResponse getInsights(int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
+        if (traceStore == null) {
             return EMPTY_RESPONSE;
         }
 
@@ -85,7 +79,8 @@ public class TraceInsightsService {
         final RootActionType finalActionTypeFilter = actionTypeFilter;
         final String finalRootOperation = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
-        List<TraceTree> traceTrees = traceQueryService.getTraces(limit * 10, mode).stream()  // Fetch more to account for filtering
+        List<TraceTree> traceTrees = traceStore.getTraces(bucket, limit * 10).stream()  // overfetch to survive filtering
+                .map(bundle -> TraceData.fromSpans(bundle.traceId(), bundle.spans()))
                 .map(spanDeduplicator::deduplicate)
                 .map(traceTreeMapper::map)
                 .filter(tree -> finalActionTypeFilter == null || tree.rootActionType() == finalActionTypeFilter)
@@ -94,8 +89,12 @@ public class TraceInsightsService {
                 .limit(limit)
                 .toList();
 
-        TraceListSummary summary = calculateListSummary(traceTrees);
-        return new TraceInsightsResponse(traceTrees, summary);
+        BucketCounts bucketCounts = new BucketCounts(
+                traceStore.getTraceCount(TraceBucket.ALL),
+                traceStore.getTraceCount(TraceBucket.ERRORS),
+                traceStore.getTraceCount(TraceBucket.SLOW));
+
+        return new TraceInsightsResponse(traceTrees, calculateListSummary(traceTrees), bucketCounts);
     }
 
     private boolean matchesRootOperation(TraceTree tree, String rootOperation) {
@@ -107,48 +106,36 @@ public class TraceInsightsService {
     }
 
     public Optional<TraceTree> getTraceInsights(String traceId) {
-        if (traceQueryService == null) {
+        if (traceStore == null) {
             return Optional.empty();
         }
 
-        return traceQueryService.getTrace(traceId)
-                .map(spanDeduplicator::deduplicate)
-                .map(traceData -> {
+        return traceStore.getTrace(traceId)
+                .map(bundle -> {
+                    TraceData traceData = spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
                     List<QueryInfo> queries = queryExtractor.extract(traceData);
                     TraceTree tree = traceTreeMapper.map(traceData);
                     tree = issueDetector.detectIssues(tree);
-                    return enrichWithDetails(tree, traceId, queries);
+                    return enrichWithDetails(tree, bundle, queries);
                 });
     }
 
-    private TraceTree enrichWithDetails(TraceTree tree, String traceId, List<QueryInfo> queries) {
-        List<TraceLog> logs = List.of();
+    private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
+        List<TraceLog> logs = bundle.logs().stream()
+                .map(e -> new TraceLog(
+                        e.spanId(),
+                        e.timestamp(),
+                        e.level(),
+                        e.loggerName(),
+                        e.message(),
+                        e.threadName()
+                ))
+                .toList();
+
         HttpExchange httpExchange = null;
-
-        if (traceStore != null) {
-            Optional<TraceDataBundle> bundleOpt = traceStore.getTrace(traceId);
-
-            if (bundleOpt.isPresent()) {
-                TraceDataBundle bundle = bundleOpt.get();
-
-                // Extract logs
-                logs = bundle.logs().stream()
-                        .map(e -> new TraceLog(
-                                e.spanId(),
-                                e.timestamp(),
-                                e.level(),
-                                e.loggerName(),
-                                e.message(),
-                                e.threadName()
-                        ))
-                        .toList();
-
-                // Extract HTTP exchange details
-                RequestCompletedEvent reqEvent = bundle.request();
-                if (reqEvent != null) {
-                    httpExchange = HttpExchange.from(reqEvent);
-                }
-            }
+        RequestCompletedEvent reqEvent = bundle.request();
+        if (reqEvent != null) {
+            httpExchange = HttpExchange.from(reqEvent);
         }
 
         if (logs.isEmpty() && queries.isEmpty() && httpExchange == null) {

@@ -2,6 +2,7 @@ package net.osslabz.peekaboot.backend.controller;
 
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.domain.trace.BucketCounts;
 import net.osslabz.peekaboot.backend.domain.trace.CollectionFramework;
 import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
@@ -18,12 +19,10 @@ import net.osslabz.peekaboot.backend.service.MetricsService;
 import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.service.TraceInsightsService;
 import net.osslabz.peekaboot.backend.service.TraceRawService;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
+import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -35,7 +34,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PeekabootControllerTest {
@@ -46,13 +47,10 @@ class PeekabootControllerTest {
     private TraceRawService traceRawService;
     private MetricsService metricsService;
     private PeekabootProperties properties;
-    private ObjectProvider<PeekabootTracingProperties> tracingPropertiesProvider;
-    private PeekabootTracingProperties tracingProperties;
 
     private PeekabootController controller;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     void setUp() {
         actuatorService = mock(PeekabootActuatorService.class);
         actuatorInsightsService = mock(ActuatorInsightsService.class);
@@ -60,10 +58,7 @@ class PeekabootControllerTest {
         traceRawService = mock(TraceRawService.class);
         metricsService = mock(MetricsService.class);
         properties = new PeekabootProperties();
-        tracingPropertiesProvider = mock(ObjectProvider.class);
-        tracingProperties = new PeekabootTracingProperties();
 
-        when(tracingPropertiesProvider.getIfAvailable()).thenReturn(tracingProperties);
         when(metricsService.isAvailable()).thenReturn(true);
 
         controller = new PeekabootController(
@@ -72,8 +67,7 @@ class PeekabootControllerTest {
                 traceInsightsService,
                 traceRawService,
                 metricsService,
-                properties,
-                tracingPropertiesProvider
+                properties
         );
     }
 
@@ -90,7 +84,7 @@ class PeekabootControllerTest {
             when(traceRawService.getTraces(anyInt(), any()))
                     .thenReturn(expectedResponse);
 
-            TraceRawResponse result = controller.getTracesRaw(50);
+            TraceRawResponse result = controller.getTracesRaw(50, null);
 
             assertThat(result.collectionFramework()).isEqualTo(CollectionFramework.BRAVE);
         }
@@ -98,19 +92,24 @@ class PeekabootControllerTest {
         @Test
         void shouldClampNegativeLimit() {
             // a negative limit would throw from Stream.limit and produce a 500
-            controller.getTracesRaw(-5);
+            controller.getTracesRaw(-5, null);
 
-            org.mockito.Mockito.verify(traceRawService)
-                    .getTraces(org.mockito.ArgumentMatchers.eq(0), any());
+            verify(traceRawService).getTraces(eq(0), any());
         }
 
         @Test
         void shouldClampExcessiveLimit() {
             // huge limits would overflow downstream multiplications
-            controller.getTracesRaw(Integer.MAX_VALUE);
+            controller.getTracesRaw(Integer.MAX_VALUE, null);
 
-            org.mockito.Mockito.verify(traceRawService)
-                    .getTraces(org.mockito.ArgumentMatchers.eq(10_000), any());
+            verify(traceRawService).getTraces(eq(10_000), any());
+        }
+
+        @Test
+        void shouldPassParsedBucketToService() {
+            controller.getTracesRaw(50, "errors");
+
+            verify(traceRawService).getTraces(50, TraceBucket.ERRORS);
         }
     }
 
@@ -121,12 +120,13 @@ class PeekabootControllerTest {
         void shouldReturnInsightsResponse() {
             TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
                     List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0)
+                    new TraceListSummary(0, 0, 0, 0.0),
+                    BucketCounts.empty()
             );
             when(traceInsightsService.getInsights(anyInt(), any(), any(), any()))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(100, null, null);
+            TraceInsightsResponse result = controller.getTracesInsights(100, null, null, null);
 
             assertThat(result).isEqualTo(expectedResponse);
         }
@@ -135,12 +135,13 @@ class PeekabootControllerTest {
         void shouldPassLimitToService() {
             TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
                     List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0)
+                    new TraceListSummary(0, 0, 0, 0.0),
+                    BucketCounts.empty()
             );
-            when(traceInsightsService.getInsights(25, TraceCaptureMode.ERRORS_ONLY, null, null))
+            when(traceInsightsService.getInsights(25, TraceBucket.ALL, null, null))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(25, null, null);
+            TraceInsightsResponse result = controller.getTracesInsights(25, null, null, null);
 
             assertThat(result).isEqualTo(expectedResponse);
         }
@@ -149,14 +150,29 @@ class PeekabootControllerTest {
         void shouldPassFiltersToService() {
             TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
                     List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0)
+                    new TraceListSummary(0, 0, 0, 0.0),
+                    BucketCounts.empty()
             );
-            when(traceInsightsService.getInsights(100, TraceCaptureMode.ERRORS_ONLY, "SCHEDULED_JOB", "MyScheduler"))
+            when(traceInsightsService.getInsights(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler"))
                     .thenReturn(expectedResponse);
 
-            TraceInsightsResponse result = controller.getTracesInsights(100, "SCHEDULED_JOB", "MyScheduler");
+            TraceInsightsResponse result = controller.getTracesInsights(100, null, "SCHEDULED_JOB", "MyScheduler");
 
             assertThat(result).isEqualTo(expectedResponse);
+        }
+
+        @Test
+        void shouldPassParsedBucketToService() {
+            controller.getTracesInsights(100, "errors", null, null);
+
+            verify(traceInsightsService).getInsights(100, TraceBucket.ERRORS, null, null);
+        }
+
+        @Test
+        void shouldFallBackToAllBucketForInvalidValue() {
+            controller.getTracesInsights(100, "not-a-bucket", null, null);
+
+            verify(traceInsightsService).getInsights(100, TraceBucket.ALL, null, null);
         }
     }
 
@@ -228,7 +244,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldIncludeTracingFeatureAsFalseWhenTracingUnavailable() {
-            // tracing disabled: the service bean exists but has no TraceQueryService
+            // tracing disabled: the service bean exists but has no TraceStore
             when(traceRawService.isTracingAvailable()).thenReturn(false);
 
             Map<String, Object> features = controller.getFeatures();
@@ -255,12 +271,10 @@ class PeekabootControllerTest {
         }
 
         @Test
-        void shouldIncludeTraceCaptureMode() {
-            tracingProperties.setCaptureMode(TraceCaptureMode.ERRORS_ONLY);
-
+        void shouldNotIncludeTraceCaptureMode() {
             Map<String, Object> features = controller.getFeatures();
 
-            assertThat(features.get("traceCaptureMode")).isEqualTo("ERRORS_ONLY");
+            assertThat(features).doesNotContainKey("traceCaptureMode");
         }
     }
 

@@ -135,7 +135,7 @@ class TraceDomainTest {
 
         TraceListSummary summary = new TraceListSummary(1, 0, 0, 100.0);
 
-        TraceInsightsResponse response = new TraceInsightsResponse(List.of(tree), summary);
+        TraceInsightsResponse response = new TraceInsightsResponse(List.of(tree), summary, BucketCounts.empty());
 
         assertThat(response.traces()).hasSize(1);
         assertThat(response.summary().traceCount()).isEqualTo(1);

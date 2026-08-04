@@ -2,23 +2,20 @@ package net.osslabz.peekaboot.backend.service;
 
 import io.micrometer.tracing.Span;
 import net.osslabz.peekaboot.backend.config.UiTracingProperties;
+import net.osslabz.peekaboot.backend.domain.trace.BucketCounts;
 import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanIssue;
-import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
 import net.osslabz.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
-import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import net.osslabz.peekaboot.backend.mapper.trace.IssueDetector;
 import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
-import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties.TraceCaptureMode;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
-import net.osslabz.peekaboot.backend.tracing.store.TraceData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
+import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -29,13 +26,10 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class TraceInsightsServiceTest {
 
-    private TraceQueryService traceQueryService;
+    private InMemoryTraceStore store;
     private TraceTreeMapper traceTreeMapper;
     private IssueDetector issueDetector;
     private QueryExtractor queryExtractor;
@@ -43,23 +37,21 @@ class TraceInsightsServiceTest {
 
     @BeforeEach
     void setUp() {
-        traceQueryService = mock(TraceQueryService.class);
+        store = new InMemoryTraceStore();
         traceTreeMapper = new TraceTreeMapper();
         issueDetector = new IssueDetector(new UiTracingProperties());
         queryExtractor = new QueryExtractor();
-        service = new TraceInsightsService(traceQueryService, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
+        service = newService(store);
     }
 
     @Test
     void getInsights_shouldTransformTracesAndCalculateSummary() {
         // Given: Two traces - one OK (100ms) and one with error (200ms)
-        // Note: Service fetches limit*10 traces to account for filtering
-        TraceData trace1 = createTraceData("trace1", 100, false);
-        TraceData trace2 = createTraceData("trace2", 200, true);
-        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL)).thenReturn(List.of(trace1, trace2));
+        addTrace("trace1", 100, false);
+        addTrace("trace2", 200, true);
 
         // When
-        TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then
         assertThat(response.traces()).hasSize(2);
@@ -71,15 +63,12 @@ class TraceInsightsServiceTest {
     @Test
     void getInsights_shouldCountSlowTraces() {
         // Given: Three traces - one slow (150ms > 100ms threshold)
-        // Note: Service fetches limit*10 traces to account for filtering
-        TraceData fastTrace = createTraceData("fast", 50, false);
-        TraceData slowTrace = createTraceData("slow", 150, false);
-        TraceData normalTrace = createTraceData("normal", 80, false);
-        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
-                .thenReturn(List.of(fastTrace, slowTrace, normalTrace));
+        addTrace("fast", 50, false);
+        addTrace("slow", 150, false);
+        addTrace("normal", 80, false);
 
         // When
-        TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then: slowTrace has a span with 150ms duration, which triggers SLOW issue
         assertThat(response.summary().slowCount()).isEqualTo(1);
@@ -87,12 +76,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsights_shouldHandleEmptyTracesList() {
-        // Given
-        // Note: Service fetches limit*10 traces to account for filtering
-        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL)).thenReturn(List.of());
-
         // When
-        TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then
         assertThat(response.traces()).isEmpty();
@@ -103,12 +88,12 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldHandleNullTraceQueryService() {
-        // Given: TraceQueryService is null (tracing not enabled)
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
+    void getInsights_shouldHandleNullTraceStore() {
+        // Given: TraceStore is null (tracing not enabled)
+        TraceInsightsService serviceWithNullStore = newService(null);
 
         // When
-        TraceInsightsResponse response = serviceWithNullQuery.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = serviceWithNullStore.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then
         assertThat(response.traces()).isEmpty();
@@ -116,10 +101,53 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void getInsightsQueriesRequestedBucket() {
+        InMemoryTraceStore bucketStore = new InMemoryTraceStore();
+        // error trace
+        Instant now = Instant.now();
+        bucketStore.addSpan(new SpanData("terr", "s1", null, "op", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), "boom", "java.lang.RuntimeException",
+                null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        // healthy trace
+        bucketStore.addSpan(new SpanData("tok", "s2", null, "op", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), null, null, null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        TraceInsightsService bucketService = newService(bucketStore);
+
+        TraceInsightsResponse errors = bucketService.getInsights(10, TraceBucket.ERRORS, null, null);
+        TraceInsightsResponse all = bucketService.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(errors.traces()).extracting(TraceTree::traceId).containsExactly("terr");
+        assertThat(all.traces()).hasSize(2);
+    }
+
+    @Test
+    void responseCarriesBucketCounts() {
+        InMemoryTraceStore bucketStore = new InMemoryTraceStore();
+        Instant now = Instant.now();
+        bucketStore.addSpan(new SpanData("terr", "s1", null, "op", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), "boom", "java.lang.RuntimeException",
+                null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        TraceInsightsService bucketService = newService(bucketStore);
+
+        TraceInsightsResponse response = bucketService.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 1, 0));
+    }
+
+    @Test
+    void nullStoreYieldsEmptyResponseWithZeroCounts() {
+        TraceInsightsService serviceWithNullStore = newService(null);
+
+        TraceInsightsResponse response = serviceWithNullStore.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces()).isEmpty();
+        assertThat(response.bucketCounts()).isEqualTo(BucketCounts.empty());
+    }
+
+    @Test
     void getTraceInsights_shouldReturnTransformedTrace() {
         // Given
-        TraceData traceData = createTraceData("trace1", 100, false);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        addTrace("trace1", 100, false);
 
         // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
@@ -133,8 +161,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldDetectIssues() {
         // Given: A trace with a slow span (200ms > 100ms threshold)
-        TraceData traceData = createTraceData("trace1", 200, false);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        addTrace("trace1", 200, false);
 
         // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
@@ -149,9 +176,6 @@ class TraceInsightsServiceTest {
 
     @Test
     void getTraceInsights_shouldReturnEmptyForUnknownTraceId() {
-        // Given
-        when(traceQueryService.getTrace("unknown")).thenReturn(Optional.empty());
-
         // When
         Optional<TraceTree> result = service.getTraceInsights("unknown");
 
@@ -160,44 +184,26 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldHandleNullTraceQueryService() {
+    void getTraceInsights_shouldHandleNullTraceStore() {
         // Given
-        TraceInsightsService serviceWithNullQuery = new TraceInsightsService(null, null, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
+        TraceInsightsService serviceWithNullStore = newService(null);
 
         // When
-        Optional<TraceTree> result = serviceWithNullQuery.getTraceInsights("trace1");
+        Optional<TraceTree> result = serviceWithNullStore.getTraceInsights("trace1");
 
         // Then
         assertThat(result).isEmpty();
     }
 
     @Test
-    void getInsights_shouldUseCorrectCaptureMode() {
-        // Given: Set up mocks for ERRORS_ONLY mode
-        // Note: Service fetches limit*10 traces to account for filtering
-        TraceData errorTrace = createTraceData("error-trace", 100, true);
-        when(traceQueryService.getTraces(50, TraceCaptureMode.ERRORS_ONLY)).thenReturn(List.of(errorTrace));
-
-        // When
-        TraceInsightsResponse response = service.getInsights(5, TraceCaptureMode.ERRORS_ONLY);
-
-        // Then: Should have called with the correct mode and returned the error trace
-        assertThat(response.traces()).hasSize(1);
-        assertThat(response.summary().errorCount()).isEqualTo(1);
-    }
-
-    @Test
     void getInsights_shouldCalculateAverageDurationCorrectly() {
         // Given: Three traces with durations 100, 200, 300 -> avg = 200
-        // Note: Service fetches limit*10 traces to account for filtering
-        TraceData trace1 = createTraceData("trace1", 100, false);
-        TraceData trace2 = createTraceData("trace2", 200, false);
-        TraceData trace3 = createTraceData("trace3", 300, false);
-        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
-                .thenReturn(List.of(trace1, trace2, trace3));
+        addTrace("trace1", 100, false);
+        addTrace("trace2", 200, false);
+        addTrace("trace3", 300, false);
 
         // When
-        TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then
         assertThat(response.summary().avgDurationMs()).isEqualTo(200.0);
@@ -205,16 +211,12 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsights_shouldCountTracesWithSlowOrVerySlowStatus() {
-        // Given: Two traces - one with HAS_SLOW_SPANS status
-        // Create a trace that will be mapped to HAS_SLOW_SPANS status - need an error span for HAS_ERRORS
-        // Note: Service fetches limit*10 traces to account for filtering
-        TraceData slowTrace = createTraceData("slow", 500, false); // 500ms will trigger VERY_SLOW
-        TraceData normalTrace = createTraceData("normal", 50, false);
-        when(traceQueryService.getTraces(100, TraceCaptureMode.ALL))
-                .thenReturn(List.of(slowTrace, normalTrace));
+        // Given: one trace with VERY_SLOW status (500ms), one normal
+        addTrace("slow", 500, false);
+        addTrace("normal", 50, false);
 
         // When
-        TraceInsightsResponse response = service.getInsights(10, TraceCaptureMode.ALL);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         // Then: slowTrace has VERY_SLOW issue, so slowCount should be 1
         assertThat(response.summary().slowCount()).isEqualTo(1);
@@ -222,9 +224,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void getTraceInsights_shouldEnrichWithLogs() {
-        // Given: InMemoryTraceStore with logs for the trace
-        InMemoryTraceStore dataStorage = new InMemoryTraceStore();
-        LogCapturedEvent logEvent = new LogCapturedEvent(
+        // Given: a trace with an attached log
+        addTrace("trace1", 100, false);
+        store.addLog(new LogCapturedEvent(
                 "trace1",
                 "span-trace1",
                 Instant.now(),
@@ -232,17 +234,10 @@ class TraceInsightsServiceTest {
                 "TestLogger",
                 "Test log message from trace",
                 "main"
-        );
-        dataStorage.addLog(logEvent);
-
-        TraceInsightsService serviceWithLogs = new TraceInsightsService(
-                traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
-
-        TraceData traceData = createTraceData("trace1", 100, false);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        ));
 
         // When
-        Optional<TraceTree> result = serviceWithLogs.getTraceInsights("trace1");
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
 
         // Then
         assertThat(result).isPresent();
@@ -255,16 +250,11 @@ class TraceInsightsServiceTest {
 
     @Test
     void getTraceInsights_shouldReturnEmptyLogsWhenNoLogsStored() {
-        // Given: InMemoryTraceStore with no logs for this trace
-        InMemoryTraceStore dataStorage = new InMemoryTraceStore();
-        TraceInsightsService serviceWithStorage = new TraceInsightsService(
-                traceQueryService, dataStorage, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
-
-        TraceData traceData = createTraceData("trace1", 100, false);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        // Given: no logs stored for this trace
+        addTrace("trace1", 100, false);
 
         // When
-        Optional<TraceTree> result = serviceWithStorage.getTraceInsights("trace1");
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
 
         // Then
         assertThat(result).isPresent();
@@ -274,8 +264,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldExtractQueries() {
         // Given: A trace with a DB span
-        TraceData traceData = createTraceDataWithDbSpan("trace1", 100);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        addTraceWithDbSpan("trace1", 100);
 
         // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
@@ -292,8 +281,7 @@ class TraceInsightsServiceTest {
     @Test
     void getTraceInsights_shouldReturnEmptyQueriesWhenNoDbSpans() {
         // Given: A trace without DB spans
-        TraceData traceData = createTraceData("trace1", 100, false);
-        when(traceQueryService.getTrace("trace1")).thenReturn(Optional.of(traceData));
+        addTrace("trace1", 100, false);
 
         // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
@@ -303,8 +291,11 @@ class TraceInsightsServiceTest {
         assertThat(result.get().queries()).isNullOrEmpty();
     }
 
-    // Helper method to create test TraceData
-    private TraceData createTraceData(String traceId, long durationMs, boolean hasError) {
+    private TraceInsightsService newService(TraceStore store) {
+        return new TraceInsightsService(store, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
+    }
+
+    private void addTrace(String traceId, long durationMs, boolean hasError) {
         Instant start = Instant.EPOCH;
         Instant end = start.plusMillis(durationMs);
 
@@ -325,13 +316,13 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                0
+                store.nextCreationOrder()
         );
 
-        return TraceData.fromSpans(traceId, List.of(span));
+        store.addSpan(span);
     }
 
-    private TraceData createTraceDataWithDbSpan(String traceId, long totalDurationMs) {
+    private void addTraceWithDbSpan(String traceId, long totalDurationMs) {
         Instant start = Instant.EPOCH;
         Instant dbSpanStart = start.plusMillis(10);
 
@@ -353,7 +344,7 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                0
+                store.nextCreationOrder()
         );
 
         // DB query span
@@ -374,9 +365,10 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                0
+                store.nextCreationOrder()
         );
 
-        return TraceData.fromSpans(traceId, List.of(rootSpan, dbSpan));
+        store.addSpan(rootSpan);
+        store.addSpan(dbSpan);
     }
 }

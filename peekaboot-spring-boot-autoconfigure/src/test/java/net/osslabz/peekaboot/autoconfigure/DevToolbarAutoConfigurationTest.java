@@ -5,7 +5,6 @@ import net.osslabz.peekaboot.backend.config.PeekabootProperties;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import net.osslabz.peekaboot.backend.service.PeekabootActuatorService;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
-import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
 import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -67,7 +66,7 @@ class DevToolbarAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class)
                 .withPropertyValues("peekaboot.dev-toolbar=true")
-                .withClassLoader(new FilteredClassLoader(TraceQueryService.class))
+                .withClassLoader(new FilteredClassLoader(TraceStore.class))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
@@ -175,11 +174,6 @@ class DevToolbarAutoConfigurationTest {
         @Bean
         TraceStoreEventListener traceStoreEventListener(TraceStore traceStore) {
             return new TraceStoreEventListener(traceStore);
-        }
-
-        @Bean
-        TraceQueryService traceQueryService(TraceStore store) {
-            return new TraceQueryService((InMemoryTraceStore) store);
         }
 
         @Bean
