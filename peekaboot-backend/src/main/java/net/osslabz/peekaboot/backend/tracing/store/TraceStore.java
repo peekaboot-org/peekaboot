@@ -3,6 +3,7 @@ package net.osslabz.peekaboot.backend.tracing.store;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -20,6 +21,10 @@ public interface TraceStore {
     void setRequest(RequestCompletedEvent request);
 
     Optional<TraceDataBundle> getTrace(String traceId);
+
+    List<TraceDataBundle> getTraces(TraceBucket bucket, int limit);
+
+    int getTraceCount(TraceBucket bucket);
 
     void clear();
 

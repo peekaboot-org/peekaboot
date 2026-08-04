@@ -134,4 +134,117 @@ class InMemoryTraceStoreTest {
                 storage.nextCreationOrder()
         );
     }
+
+    private SpanData createSpanData(String traceId, String spanId, Instant start, Instant end, String errorClass) {
+        return new SpanData(traceId, spanId, null, "op", null,
+                start, end,
+                (start != null && end != null) ? Duration.between(start, end) : null,
+                Map.of(), List.of(), null, errorClass,
+                null, null, null, List.of(), storage.nextCreationOrder());
+    }
+
+    @Test
+    void errorSpanClassifiesTraceIntoErrorBucket() {
+        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    @Test
+    void errorLogClassifiesTraceIntoErrorBucket() {
+        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "ERROR", "Logger", "boom", "main"));
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    @Test
+    void infoLogDoesNotClassifyTraceIntoErrorBucket() {
+        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "fine", "main"));
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
+    }
+
+    @Test
+    void slowTraceClassifiedWhenTotalDurationReachesThreshold() {
+        // threshold in setUp fixture: use a store with slowTraceThresholdMs = 100
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
+        Instant start = Instant.parse("2026-01-01T00:00:00Z");
+        store.addSpan(new SpanData("t1", "s1", null, "op", null,
+                start, start.plusMillis(150), Duration.ofMillis(150),
+                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    @Test
+    void fastTraceNotClassifiedAsSlow() {
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
+        Instant start = Instant.parse("2026-01-01T00:00:00Z");
+        store.addSpan(new SpanData("t1", "s1", null, "op", null,
+                start, start.plusMillis(50), Duration.ofMillis(50),
+                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
+    }
+
+    @Test
+    void slowDurationSpansMultipleSpans() {
+        // two 60ms spans 60ms apart: total window 120ms >= 100ms threshold
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
+        Instant start = Instant.parse("2026-01-01T00:00:00Z");
+        store.addSpan(new SpanData("t1", "s1", null, "op", null,
+                start, start.plusMillis(60), Duration.ofMillis(60),
+                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+        assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
+        store.addSpan(new SpanData("t1", "s2", "s1", "op2", null,
+                start.plusMillis(60), start.plusMillis(120), Duration.ofMillis(60),
+                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    @Test
+    void classificationIsIdempotent() {
+        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.addSpan(createSpanData("t1", "s2", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "ERROR", "Logger", "boom", "main"));
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
+    }
+
+    @Test
+    void getTracesAllReturnsNewestFirst() throws InterruptedException {
+        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), null));
+        Thread.sleep(5);  // createdAt has millisecond resolution; same pattern as getRecentTraceData_returnsOrderedByCreation
+        storage.addSpan(createSpanData("t2", "s2", Instant.now(), Instant.now(), null));
+
+        List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
+        assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
+    }
+
+    @Test
+    void getTraceCountPerBucket() {
+        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.addSpan(createSpanData("t2", "s2", Instant.now(), Instant.now(), null));
+
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(2);
+        assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isEqualTo(1);
+        assertThat(storage.getTraceCount(TraceBucket.SLOW)).isZero();
+    }
+
+    @Test
+    void bucketFromParamIsLenient() {
+        assertThat(TraceBucket.fromParam("errors")).isEqualTo(TraceBucket.ERRORS);
+        assertThat(TraceBucket.fromParam("SLOW")).isEqualTo(TraceBucket.SLOW);
+        assertThat(TraceBucket.fromParam(null)).isEqualTo(TraceBucket.ALL);
+        assertThat(TraceBucket.fromParam("bogus")).isEqualTo(TraceBucket.ALL);
+    }
 }
