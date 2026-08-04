@@ -71,28 +71,56 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void addSpan(SpanData span) {
-        TraceDataBundle bundle = cache.get(span.traceId(), TraceDataBundle::new);
+        TraceDataBundle bundle = resolveBundle(span.traceId());
         bundle.addSpan(span, maxSpansPerTrace);
         classify(bundle);
     }
 
     @Override
     public void addLog(LogCapturedEvent log) {
-        TraceDataBundle bundle = cache.get(log.traceId(), TraceDataBundle::new);
+        TraceDataBundle bundle = resolveBundle(log.traceId());
         bundle.addLog(log);
-        classify(bundle);
+        // logs never affect slow classification and can only ever add a trace to
+        // errorTraces, never remove it — so a full classify() pass is unnecessary here.
+        if (!errorTraces.containsKey(bundle.traceId()) && "ERROR".equalsIgnoreCase(log.level())) {
+            errorTraces.putIfAbsent(bundle.traceId(), bundle);
+        }
     }
 
     @Override
     public void setRequest(RequestCompletedEvent request) {
-        TraceDataBundle bundle = cache.get(request.traceId(), TraceDataBundle::new);
+        TraceDataBundle bundle = resolveBundle(request.traceId());
         bundle.setRequest(request);
-        classify(bundle);
+        // the request event affects neither error nor slow membership under the
+        // current classification rules (those depend only on spans + logs), so no
+        // classify() call is needed here.
+    }
+
+    /**
+     * Resolves the bundle for a trace id, reusing one retained by a bucket if the
+     * All cache has already evicted it — avoids creating a diverging copy for
+     * late-arriving events.
+     */
+    private TraceDataBundle resolveBundle(String traceId) {
+        return cache.get(traceId, id -> {
+            TraceDataBundle retained = errorTraces.get(id);
+            if (retained == null) {
+                retained = slowTraces.get(id);
+            }
+            return retained != null ? retained : new TraceDataBundle(id);
+        });
     }
 
     @Override
     public Optional<TraceDataBundle> getTrace(String traceId) {
-        return Optional.ofNullable(cache.getIfPresent(traceId));
+        TraceDataBundle bundle = cache.getIfPresent(traceId);
+        if (bundle == null) {
+            bundle = errorTraces.get(traceId);
+        }
+        if (bundle == null) {
+            bundle = slowTraces.get(traceId);
+        }
+        return Optional.ofNullable(bundle);
     }
 
     @Override
@@ -181,6 +209,8 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public void clear() {
         cache.invalidateAll();
+        errorTraces.clear();
+        slowTraces.clear();
     }
 
     @Override

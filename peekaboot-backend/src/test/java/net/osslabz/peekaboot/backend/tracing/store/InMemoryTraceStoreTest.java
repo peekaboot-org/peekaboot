@@ -247,4 +247,73 @@ class InMemoryTraceStoreTest {
         assertThat(TraceBucket.fromParam(null)).isEqualTo(TraceBucket.ALL);
         assertThat(TraceBucket.fromParam("bogus")).isEqualTo(TraceBucket.ALL);
     }
+
+    @Test
+    void lastNEvictionDropsOldestErrorTrace() {
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 2, 2, 1000);
+        store.addSpan(errorSpan(store, "t1"));
+        store.addSpan(errorSpan(store, "t2"));
+        store.addSpan(errorSpan(store, "t3"));
+
+        assertThat(store.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t3", "t2");
+    }
+
+    @Test
+    void errorTraceSurvivesAllCacheEviction() throws InterruptedException {
+        // TTL-based eviction is deterministic, size-based (W-TinyLFU) is not
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        store.addSpan(errorSpan(store, "t1"));
+        Thread.sleep(10);
+        store.cleanUp();
+
+        assertThat(store.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(store.getTrace("t1")).isPresent();
+        assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
+    }
+
+    @Test
+    void lateEventAfterCacheEvictionReusesBucketBundle() throws InterruptedException {
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        store.addSpan(errorSpan(store, "t1"));
+        Thread.sleep(10);
+        store.cleanUp();
+
+        store.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "late", "main"));
+
+        TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
+        assertThat(bundle.spans()).hasSize(1);   // original span still there — no fresh bundle
+        assertThat(bundle.logs()).hasSize(1);
+        assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
+    }
+
+    @Test
+    void clearEmptiesAllBuckets() {
+        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.clear();
+
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isZero();
+        assertThat(storage.getTraceCount(TraceBucket.SLOW)).isZero();
+        assertThat(storage.getTrace("t1")).isEmpty();
+    }
+
+    @Test
+    void lowercaseErrorLogAfterNonErrorLogClassifiesTraceIntoErrorBucket() {
+        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "fine", "main"));
+        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "error", "Logger", "boom", "main"));
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    private SpanData errorSpan(InMemoryTraceStore store, String traceId) {
+        Instant now = Instant.now();
+        return new SpanData(traceId, traceId + "-s", null, "op", null,
+                now, now, Duration.ZERO, Map.of(), List.of(),
+                "boom", "java.lang.RuntimeException",
+                null, null, null, List.of(), store.nextCreationOrder());
+    }
 }

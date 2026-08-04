@@ -29,7 +29,10 @@ public class PeekabootTracingAutoConfiguration {
         return new InMemoryTraceStore(
                 properties.getMaxTraces(),
                 properties.getMaxSpansPerTrace(),
-                Duration.ofMinutes(30)
+                Duration.ofMinutes(30),
+                properties.getMaxErrorTraces(),
+                properties.getMaxSlowTraces(),
+                properties.getSlowTraceThresholdMs()
         );
     }
 

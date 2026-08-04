@@ -3,11 +3,19 @@ package net.osslabz.peekaboot.autoconfigure;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import net.osslabz.peekaboot.backend.tracing.query.TraceQueryService;
+import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import net.osslabz.peekaboot.backend.tracing.store.SpanData;
+import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -58,6 +66,24 @@ class PeekabootTracingAutoConfigurationTest {
                     PeekabootTracingProperties properties = context.getBean(PeekabootTracingProperties.class);
                     assertThat(properties.getMaxTraces()).isEqualTo(500);
                     assertThat(properties.getMaxSpansPerTrace()).isEqualTo(25);
+                });
+    }
+
+    @Test
+    void bucketPropertiesReachTheStore() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.tracing.max-error-traces=1",
+                        "peekaboot.tracing.slow-trace-threshold-ms=1")
+                .run(context -> {
+                    InMemoryTraceStore store = (InMemoryTraceStore) context.getBean(TraceStore.class);
+                    // slow threshold 1ms: a 5ms span classifies as slow
+                    Instant start = Instant.parse("2026-01-01T00:00:00Z");
+                    store.addSpan(new SpanData("t1", "s1", null, "op", null,
+                            start, start.plusMillis(5), Duration.ofMillis(5),
+                            Map.of(), List.of(), null, null, null, null, null, List.of(),
+                            store.nextCreationOrder()));
+                    assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
     }
 }
