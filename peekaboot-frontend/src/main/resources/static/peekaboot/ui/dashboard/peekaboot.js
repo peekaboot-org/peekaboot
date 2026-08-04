@@ -96,6 +96,9 @@
     // Current filter for root operation (e.g., scheduler target)
     let currentRootOperationFilter = null;
 
+    // Current bucket selection for the traces tab (all/errors/slow)
+    let currentBucket = 'all';
+
     function navigateToTracesWithFilter(actionType, rootOperation) {
         // Set filter to only show the specified action type
         selectedRootActionTypes.clear();
@@ -132,6 +135,7 @@
         initEnvironmentFilter();
         initLoggersFilter();
         initConfigFilter();
+        initTracesBucket();
         initTracesFilter();
         initMetricsFilter();
         initErrorClose();
@@ -175,6 +179,11 @@
             // Build URL with filter parameters
             const params = new URLSearchParams({ limit: '50' });
 
+            // Add bucket filter unless showing all traces
+            if (currentBucket !== 'all') {
+                params.append('bucket', currentBucket);
+            }
+
             // Add rootActionType filter if only one type selected
             if (selectedRootActionTypes.size === 1) {
                 params.append('rootActionType', Array.from(selectedRootActionTypes)[0]);
@@ -195,6 +204,7 @@
             }
             tracesData = data;
             tracesLoaded = true;
+            updateBucketCounts(data.bucketCounts);
             renderTracesTab();
         } catch (error) {
             console.error('Error fetching traces:', error);
@@ -206,6 +216,22 @@
 
     const ALL_ROOT_ACTION_TYPES = ['HTTP_REQUEST', 'SCHEDULED_JOB', 'MESSAGE_CONSUMER', 'RPC_CALL', 'DATABASE', 'INTERNAL', 'UNKNOWN'];
 
+    const BUCKET_EMPTY_MESSAGES = {
+        all: 'No traces recorded',
+        errors: 'No error traces recorded',
+        slow: 'No slow traces recorded'
+    };
+
+    function updateBucketCounts(counts) {
+        if (!counts) return;
+        document.querySelectorAll('#traces-bucket .bucket-btn').forEach(btn => {
+            const bucket = btn.dataset.bucket;
+            const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+            const count = counts[bucket];
+            btn.textContent = count != null ? `${label} (${count})` : label;
+        });
+    }
+
     function renderTracesTab() {
         const listEl = document.getElementById('traces-list');
         const noTracesEl = document.getElementById('no-traces');
@@ -216,7 +242,7 @@
 
         const traces = tracesData?.traces;
         if (!traces || traces.length === 0) {
-            noTracesEl.querySelector('p').textContent = 'No traces recorded';
+            noTracesEl.querySelector('p').textContent = BUCKET_EMPTY_MESSAGES[currentBucket];
             noTracesEl.classList.remove('hidden');
             return;
         }
@@ -530,6 +556,18 @@
                 renderConfigTab(e.target.value.trim());
             });
         }
+    }
+
+    function initTracesBucket() {
+        document.querySelectorAll('#traces-bucket .bucket-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (btn.dataset.bucket === currentBucket) return;
+                currentBucket = btn.dataset.bucket;
+                document.querySelectorAll('#traces-bucket .bucket-btn').forEach(b =>
+                    b.classList.toggle('active', b === btn));
+                fetchTraces();
+            });
+        });
     }
 
     function initTracesFilter() {

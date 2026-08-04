@@ -802,6 +802,12 @@ mark {
     background: var(--pk-bg-hover);
 }
 
+.bucket-btn.active {
+    background: var(--pk-primary);
+    border-color: var(--pk-primary);
+    color: #fff;
+}
+
 .ds-params {
     margin-top: var(--pk-space-md);
     padding-top: var(--pk-space-md);

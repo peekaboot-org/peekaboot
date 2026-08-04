@@ -233,6 +233,57 @@ class DashboardTraceViewTest {
     }
 
     @Test
+    void insightsEndpointFiltersByBucketAndReportsCounts() {
+        // Isolate from other tests' setUp()-injected traces and from
+        // whatever earlier methods in this class have accumulated, since
+        // the store is shared for the lifetime of the class.
+        traceStore.clear();
+
+        Instant now = Instant.now();
+        traceStore.addSpan(new SpanData("berr", "s1", null, "op", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), "boom", "java.lang.RuntimeException",
+                null, null, null, List.of(), traceStore.nextCreationOrder()));
+        traceStore.addSpan(new SpanData("bok", "s2", null, "op", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), null, null, null, null, null, List.of(), traceStore.nextCreationOrder()));
+
+        JsonNode errors = getJson("/peekaboot/api/traces/insights?bucket=errors");
+        JsonNode all = getJson("/peekaboot/api/traces/insights?bucket=all");
+
+        assertThat(errors.get("traces")).hasSize(1);
+        assertThat(errors.get("traces").get(0).get("traceId").asString()).isEqualTo("berr");
+        assertThat(all.get("traces")).hasSize(2);
+        assertThat(all.get("bucketCounts").get("all").asInt()).isEqualTo(2);
+        assertThat(all.get("bucketCounts").get("errors").asInt()).isEqualTo(1);
+        assertThat(all.get("bucketCounts").get("slow").asInt()).isZero();
+    }
+
+    @Test
+    void dashboardHtmlContainsBucketControl() {
+        String html = getHtml("/peekaboot/ui/dashboard/index.html");
+
+        assertThat(html).contains("id=\"traces-bucket\"");
+        assertThat(html).contains("data-bucket=\"errors\"");
+        assertThat(html).contains("data-bucket=\"slow\"");
+    }
+
+    private JsonNode getJson(String path) {
+        String json = restClient.get()
+            .uri(path)
+            .accept(MediaType.APPLICATION_JSON)
+            .retrieve()
+            .body(String.class);
+        return objectMapper.readTree(json);
+    }
+
+    private String getHtml(String path) {
+        return restClient.get()
+            .uri(path)
+            .accept(MediaType.TEXT_HTML)
+            .retrieve()
+            .body(String.class);
+    }
+
+    @Test
     void featuresShouldIndicateTracingEnabled() throws Exception {
         String featuresJson = restClient.get()
             .uri("/peekaboot/api/features")
