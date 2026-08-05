@@ -43,13 +43,13 @@ peekaboot/
 │                        │                                            │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
-│   │           TraceDataStorage               │ ◄── Caffeine Cache  │
-│   │   (traces, spans, logs, request data)    │     @EventListener   │
+│   │        TraceStoreEventListener           │ ◄── @EventListener   │
+│   │      (forwards events to the store)      │                      │
 │   └────────────────────┬─────────────────────┘                      │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
-│   │          TraceQueryService               │                      │
-│   │   (query API for stored traces)          │                      │
+│   │    TraceStore (InMemoryTraceStore)       │ ◄── Caffeine Cache   │
+│   │   All / Errors / Slow buckets            │     + bounded maps   │
 │   └────────────────────┬─────────────────────┘                      │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
@@ -86,8 +86,7 @@ net.osslabz.peekaboot.backend/
 │   ├── bridge/otel/        # OpenTelemetry span exporter
 │   ├── event/              # Spring application events
 │   ├── interceptor/        # Tracing handler interceptor
-│   ├── query/              # Query API
-│   └── store/              # Caffeine-backed storage (TraceDataStorage)
+│   └── store/              # TraceStore, InMemoryTraceStore, TraceBucket, TraceStoreEventListener
 └── util/                   # Utilities (masking, etc.)
 ```
 
@@ -95,10 +94,10 @@ net.osslabz.peekaboot.backend/
 
 1. **Span Capture**: `OtelSpanExporter` receives spans from OpenTelemetry SDK
 2. **Event Publishing**: Publishes `SpanDataEvent` via Spring's `ApplicationEventPublisher`
-3. **Storage**: `TraceDataStorage` listens via `@EventListener` and stores in Caffeine cache
+3. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), which stores in a Caffeine cache (All bucket) plus bounded maps for the Errors and Slow buckets
 4. **Log Correlation**: `PeekabootLogbackAppender` captures logs using Micrometer's `Tracer.currentSpan()` for trace ID
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
-6. **Query**: `TraceQueryService` provides access to stored data
+6. **Query**: `TraceInsightsService` and `TraceRawService` query `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
 
 ### Servlet Filters
 
@@ -184,7 +183,7 @@ Auto-configuration uses Spring Boot conditionals:
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
-@ConditionalOnClass(TraceQueryService.class)
+@ConditionalOnClass(TraceStore.class)
 ```
 
 ### Default Properties
@@ -200,7 +199,7 @@ When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
 ```java
 @Bean
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter otelSpanExporter(TraceDataStorage storage, ApplicationEventPublisher eventPublisher) {
+public OtelSpanExporter otelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
     return new OtelSpanExporter(storage, eventPublisher);
 }
 ```
@@ -209,8 +208,8 @@ The exporter:
 - Receives finished spans from OTel SDK
 - Filters out peekaboot's own requests (`/peekaboot/**`, `/actuator/**`)
 - Converts to `SpanData` and publishes `SpanDataEvent` via Spring's
-  `ApplicationEventPublisher`; `TraceDataStorage` stores it via an
-  `@EventListener`
+  `ApplicationEventPublisher`; `TraceStoreEventListener` receives it via an
+  `@EventListener` and forwards it to `TraceStore`
 
 ### Micrometer Tracer Integration
 
@@ -233,7 +232,7 @@ This ensures compatibility with Spring Boot's tracing auto-configuration and wor
 
 1. Registered via `LogbackAppenderRegistrar` bean in `DevToolbarAutoConfiguration`
 2. Publishes `LogCapturedEvent` via Spring's `ApplicationEventPublisher`
-3. `TraceDataStorage` receives events via `@EventListener` and stores by traceId
+3. `TraceStoreEventListener` receives events via `@EventListener` and forwards them to `TraceStore`, which stores by traceId
 4. Logs are associated with spans and included in trace detail views
 
 ### Span Deduplication
@@ -297,7 +296,7 @@ Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests:
 ```java
 new ApplicationContextRunner()
     .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
-    .withClassLoader(new FilteredClassLoader(TraceQueryService.class))
+    .withClassLoader(new FilteredClassLoader(TraceStore.class))
     .run(context -> assertThat(context).doesNotHaveBean("devToolbarFilter"));
 ```
 
@@ -330,7 +329,7 @@ cd peekaboot-example-app && mvn spring-boot:run
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Unified Storage**: Single `TraceDataStorage` class handles spans, logs, and request data
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction)
 5. **Actuator not exposed**: All data accessed through internal `WebEndpointDiscoverer`
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application

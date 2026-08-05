@@ -52,9 +52,13 @@ The UI and API are always served under the fixed `/peekaboot` prefix.
 | Property | Default | Description |
 |----------|---------|-------------|
 | `peekaboot.tracing.enabled` | `true` | Enable/disable in-memory tracing |
-| `peekaboot.tracing.max-traces` | `1000` | Maximum traces to retain |
+| `peekaboot.tracing.max-traces` | `1000` | Maximum traces to retain in the All bucket |
 | `peekaboot.tracing.max-spans-per-trace` | `100` | Maximum spans per trace |
-| `peekaboot.tracing.capture-mode` | auto | `ALL` or `ERRORS_ONLY`. Defaults to `ALL` when dev-toolbar enabled |
+| `peekaboot.tracing.max-error-traces` | `100` | Maximum traces to retain in the Errors bucket |
+| `peekaboot.tracing.max-slow-traces` | `100` | Maximum traces to retain in the Slow bucket |
+| `peekaboot.tracing.slow-trace-threshold-ms` | `1000` | Trace duration (ms) at or above which a trace is classified as slow |
+
+Traces are organized into three buckets: **All** (every captured trace, size-capped with a 30-minute TTL), **Errors** (traces with at least one error span or ERROR-level log), and **Slow** (traces at or above the slow-trace threshold). Errors and Slow entries survive All-bucket eviction. The trace API and dashboard accept a `bucket=all|errors|slow` filter (default `all`).
 
 ### UI Thresholds
 
@@ -72,8 +76,8 @@ The UI and API are always served under the fixed `/peekaboot` prefix.
 peekaboot:
   dev-toolbar: true                    # Enable debug toolbar
   tracing:
-    capture-mode: ALL                  # Capture all traces, not just errors
     max-traces: 500                    # Reduce memory usage
+    slow-trace-threshold-ms: 2000      # Only flag traces slower than 2s
   ui:
     tracing:
       slow-span-threshold-ms: 200      # Adjust slow span threshold
@@ -122,7 +126,7 @@ logbook:
 | **Loggers** | Runtime log level configuration |
 | **Flyway** | Database migration history |
 | **Scheduled Tasks** | Cron jobs, fixed-rate, and fixed-delay tasks |
-| **Traces** | Recent request traces with spans, queries, logs |
+| **Traces** | Recent request traces with spans, queries, logs; filterable by All/Errors/Slow bucket with live counts |
 
 ## Debug Toolbar
 
