@@ -54,6 +54,7 @@ The UI and API are always served under the fixed `/peekaboot` prefix.
 | `peekaboot.tracing.enabled` | `true` | Enable/disable in-memory tracing |
 | `peekaboot.tracing.max-traces` | `1000` | Maximum traces to retain in the All bucket |
 | `peekaboot.tracing.max-spans-per-trace` | `100` | Maximum spans per trace |
+| `peekaboot.tracing.max-logs-per-trace` | `500` | Maximum logs per trace |
 | `peekaboot.tracing.max-error-traces` | `100` | Maximum traces to retain in the Errors bucket |
 | `peekaboot.tracing.max-slow-traces` | `100` | Maximum traces to retain in the Slow bucket |
 | `peekaboot.tracing.slow-trace-threshold-ms` | `1000` | Trace duration (ms) at or above which a trace is classified as slow |

@@ -30,7 +30,8 @@ public class PeekabootTracingAutoConfiguration {
                 Duration.ofMinutes(30),
                 properties.getMaxErrorTraces(),
                 properties.getMaxSlowTraces(),
-                properties.getSlowTraceThresholdMs()
+                properties.getSlowTraceThresholdMs(),
+                properties.getMaxLogsPerTrace()
         );
     }
 

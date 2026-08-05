@@ -43,8 +43,15 @@ public class TraceDataBundle {
         }
     }
 
-    public void addLog(LogCapturedEvent log) {
+    public void addLog(LogCapturedEvent log, int maxLogs) {
         logs.add(log);
+        if (logs.size() > maxLogs) {
+            synchronized (logs) {
+                if (logs.size() > maxLogs) {
+                    logs.subList(0, logs.size() - maxLogs).clear();
+                }
+            }
+        }
     }
 
     public void setRequest(RequestCompletedEvent request) {

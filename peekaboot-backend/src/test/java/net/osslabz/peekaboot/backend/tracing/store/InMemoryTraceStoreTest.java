@@ -305,6 +305,20 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
+    void logsAreCappedPerTrace() {
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5),
+                10, 10, 1000, 3);
+        for (int i = 1; i <= 5; i++) {
+            store.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "log" + i, "main"));
+        }
+
+        var bundle = store.getTrace("t1");
+        assertThat(bundle).isPresent();
+        assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message)
+                .containsExactly("log3", "log4", "log5");
+    }
+
+    @Test
     void lowercaseErrorLogAfterNonErrorLogClassifiesTraceIntoErrorBucket() {
         storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "fine", "main"));
         storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "error", "Logger", "boom", "main"));

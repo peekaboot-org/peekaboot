@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.tracing.store;
 
+import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -63,6 +64,20 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.spans()).hasSize(totalSpans);
+    }
+
+    @Test
+    void addLogTrimsOldestBeyondLimit() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        for (int i = 1; i <= 5; i++) {
+            bundle.addLog(createLog("log" + i), 3);
+        }
+
+        assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+    }
+
+    private LogCapturedEvent createLog(String message) {
+        return new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", message, "main");
     }
 
     private SpanData createSpan(String spanId, long creationOrder) {

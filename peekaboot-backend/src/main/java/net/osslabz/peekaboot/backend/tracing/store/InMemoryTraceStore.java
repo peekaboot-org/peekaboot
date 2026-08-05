@@ -26,10 +26,13 @@ public class InMemoryTraceStore implements TraceStore {
     private static final int DEFAULT_MAX_ERROR_TRACES = 100;
     private static final int DEFAULT_MAX_SLOW_TRACES = 100;
     private static final long DEFAULT_SLOW_TRACE_THRESHOLD_MS = 1000;
+    // keep in sync with PeekabootTracingProperties.maxLogsPerTrace
+    private static final int DEFAULT_MAX_LOGS_PER_TRACE = 500;
 
     private final Cache<String, TraceDataBundle> cache;
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
+    private final int maxLogsPerTrace;
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
     private final AtomicLong spanCounter = new AtomicLong(0);
@@ -45,8 +48,16 @@ public class InMemoryTraceStore implements TraceStore {
 
     public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter,
                               int maxErrorTraces, int maxSlowTraces, long slowTraceThresholdMs) {
+        this(maxTraces, maxSpansPerTrace, expireAfter,
+                maxErrorTraces, maxSlowTraces, slowTraceThresholdMs, DEFAULT_MAX_LOGS_PER_TRACE);
+    }
+
+    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter,
+                              int maxErrorTraces, int maxSlowTraces, long slowTraceThresholdMs,
+                              int maxLogsPerTrace) {
         this.maxSpansPerTrace = maxSpansPerTrace;
         this.slowTraceThresholdMs = slowTraceThresholdMs;
+        this.maxLogsPerTrace = maxLogsPerTrace;
         this.cache = Caffeine.newBuilder()
                 .maximumSize(maxTraces)
                 .expireAfterWrite(expireAfter)
@@ -79,7 +90,7 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public void addLog(LogCapturedEvent log) {
         TraceDataBundle bundle = resolveBundle(log.traceId());
-        bundle.addLog(log);
+        bundle.addLog(log, maxLogsPerTrace);
         // logs never affect slow classification and can only ever add a trace to
         // errorTraces, never remove it — so a full classify() pass is unnecessary here.
         if (!errorTraces.containsKey(bundle.traceId()) && "ERROR".equalsIgnoreCase(log.level())) {

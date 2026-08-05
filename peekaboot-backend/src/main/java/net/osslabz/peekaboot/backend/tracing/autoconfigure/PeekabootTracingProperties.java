@@ -17,6 +17,8 @@ public class PeekabootTracingProperties {
 
     private long slowTraceThresholdMs = 1000;
 
+    private int maxLogsPerTrace = 500;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -63,5 +65,13 @@ public class PeekabootTracingProperties {
 
     public void setSlowTraceThresholdMs(long slowTraceThresholdMs) {
         this.slowTraceThresholdMs = slowTraceThresholdMs;
+    }
+
+    public int getMaxLogsPerTrace() {
+        return maxLogsPerTrace;
+    }
+
+    public void setMaxLogsPerTrace(int maxLogsPerTrace) {
+        this.maxLogsPerTrace = maxLogsPerTrace;
     }
 }
