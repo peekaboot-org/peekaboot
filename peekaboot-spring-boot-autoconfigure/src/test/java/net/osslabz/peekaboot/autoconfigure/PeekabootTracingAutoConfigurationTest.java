@@ -2,7 +2,6 @@ package net.osslabz.peekaboot.autoconfigure;
 
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
-import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
@@ -73,7 +72,7 @@ class PeekabootTracingAutoConfigurationTest {
                         "peekaboot.tracing.max-error-traces=1",
                         "peekaboot.tracing.slow-trace-threshold-ms=1")
                 .run(context -> {
-                    InMemoryTraceStore store = (InMemoryTraceStore) context.getBean(TraceStore.class);
+                    TraceStore store = context.getBean(TraceStore.class);
                     // slow threshold 1ms: a 5ms span classifies as slow
                     Instant start = Instant.parse("2026-01-01T00:00:00Z");
                     store.addSpan(new SpanData("t1", "s1", null, "op", null,

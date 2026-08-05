@@ -78,7 +78,7 @@ peekaboot:
   dev-toolbar: true                    # Enable debug toolbar
   tracing:
     max-traces: 500                    # Reduce memory usage
-    slow-trace-threshold-ms: 2000      # Only flag traces slower than 2s
+    slow-trace-threshold-ms: 2000      # Only flag traces at or above 2s
   ui:
     tracing:
       slow-span-threshold-ms: 200      # Adjust slow span threshold

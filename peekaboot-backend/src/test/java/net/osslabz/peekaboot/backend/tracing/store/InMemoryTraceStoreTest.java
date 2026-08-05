@@ -210,7 +210,7 @@ class InMemoryTraceStoreTest {
     @Test
     void getTracesAllReturnsNewestFirst() throws InterruptedException {
         storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), null));
-        Thread.sleep(5);  // createdAt has millisecond resolution; same pattern as getRecentTraceData_returnsOrderedByCreation
+        Thread.sleep(5);  // createdAt has millisecond resolution; sleep to order deterministically
         storage.addSpan(createSpanData("t2", "s2", Instant.now(), Instant.now(), null));
 
         List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
