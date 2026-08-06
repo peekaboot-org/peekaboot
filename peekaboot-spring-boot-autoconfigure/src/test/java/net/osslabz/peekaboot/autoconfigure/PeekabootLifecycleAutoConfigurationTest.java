@@ -1,8 +1,14 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import net.osslabz.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import net.osslabz.peekaboot.backend.lifecycle.BuildInfoProvider;
+import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -71,13 +77,43 @@ class PeekabootLifecycleAutoConfigurationTest {
 
     @Test
     void brokenDataSourceDoesNotFailStartup() {
-        contextRunner
-            .withUserConfiguration(BrokenDataSourceConfig.class)
-            .run(context -> {
-                assertThat(context).hasNotFailed();
-                assertThat(context).hasBean("databaseMetadataList");
-                assertThat(context.getBean("databaseMetadataList", List.class)).isEmpty();
+        ListAppender<ILoggingEvent> appender = attachListAppender();
+        try {
+            contextRunner
+                .withUserConfiguration(BrokenDataSourceConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasBean("databaseMetadataList");
+                    assertThat(context.getBean("databaseMetadataList", List.class)).isEmpty();
+                });
+
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
             });
+        } finally {
+            detachListAppender(appender);
+        }
+    }
+
+    /**
+     * Captures {@link DataSourceMetadata}'s WARN log instead of letting it reach the
+     * console; {@link #brokenDataSourceDoesNotFailStartup()} asserts on the captured event.
+     */
+    private static ListAppender<ILoggingEvent> attachListAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setAdditive(false);
+        return appender;
+    }
+
+    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
+        logger.detachAppender(appender);
+        logger.setAdditive(true);
     }
 
     @Configuration

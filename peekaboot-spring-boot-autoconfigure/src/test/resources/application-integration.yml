@@ -5,9 +5,12 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+    open-in-view: false
   docker:
     compose:
       enabled: false
+  thymeleaf:
+    check-template-location: false
 
 peekaboot:
   enabled: true

@@ -144,4 +144,33 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- resolves org.mockito:mockito-core:jar to its local repo path so
+                 surefire can register it as a Java agent below, avoiding the
+                 inline-mock-maker's self-attach warning -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.10.0</version>
+                <executions>
+                    <execution>
+                        <id>mockito-agent-path</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.4</version>
+                <configuration>
+                    <argLine>-javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

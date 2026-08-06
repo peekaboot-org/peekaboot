@@ -1,5 +1,9 @@
 package net.osslabz.peekaboot.backend.filter;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletOutputStream;
@@ -14,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -267,10 +272,39 @@ class DevToolbarFilterTest {
             return null;
         }).when(chain).doFilter(eq(request), any());
 
-        filter.doFilter(request, response, chain);
+        ListAppender<ILoggingEvent> appender = attachListAppender();
+        try {
+            filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).isEqualTo(htmlContent);
+            String result = originalOutput.toString(StandardCharsets.UTF_8);
+            assertThat(result).isEqualTo(htmlContent);
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Failed to generate toolbar HTML: Provider error");
+            });
+        } finally {
+            detachListAppender(appender);
+        }
+    }
+
+    /**
+     * Captures {@link DevToolbarFilter}'s WARN log instead of letting it reach the
+     * console; {@link #shouldHandleToolbarGenerationError()} asserts on the captured event.
+     */
+    private static ListAppender<ILoggingEvent> attachListAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(DevToolbarFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setAdditive(false);
+        return appender;
+    }
+
+    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(DevToolbarFilter.class);
+        logger.detachAppender(appender);
+        logger.setAdditive(true);
     }
 
     @Test
