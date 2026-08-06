@@ -32,16 +32,21 @@ class ToolbarScriptTest {
             """;
 
     private WebClient webClient;
+    private CollectingJavaScriptErrorListener jsErrors;
 
     @AfterEach
     void tearDown() {
         if (webClient != null) {
             webClient.close();
         }
+        if (jsErrors != null) {
+            jsErrors.assertNoUnexpectedErrors();
+        }
     }
 
     private HtmlPage loadPageWithToolbar(String dataJson) throws IOException {
         webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setCssEnabled(false);
         MockWebConnection connection = new MockWebConnection();
         connection.setDefaultResponse(
@@ -90,6 +95,7 @@ class ToolbarScriptTest {
     @Test
     void idleModeWrapsWindowFetchWithInterceptor() throws IOException {
         webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setCssEnabled(false);
         MockWebConnection connection = new MockWebConnection();
         connection.setDefaultResponse(
@@ -113,6 +119,7 @@ class ToolbarScriptTest {
     @Test
     void regularModeDoesNotWrapWindowFetch() throws IOException {
         webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setCssEnabled(false);
         MockWebConnection connection = new MockWebConnection();
         connection.setDefaultResponse(

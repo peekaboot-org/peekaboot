@@ -22,10 +22,12 @@ class PeekabootUtilsEscapeHtmlTest {
 
     private WebClient webClient;
     private HtmlPage page;
+    private CollectingJavaScriptErrorListener jsErrors;
 
     @BeforeEach
     void setUp() throws IOException {
         webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setCssEnabled(false);
         MockWebConnection connection = new MockWebConnection();
         connection.setDefaultResponse("<html><head></head><body></body></html>");
@@ -39,6 +41,9 @@ class PeekabootUtilsEscapeHtmlTest {
     @AfterEach
     void tearDown() {
         webClient.close();
+        if (jsErrors != null) {
+            jsErrors.assertNoUnexpectedErrors();
+        }
     }
 
     private String escapeHtml(String jsArgumentLiteral) {

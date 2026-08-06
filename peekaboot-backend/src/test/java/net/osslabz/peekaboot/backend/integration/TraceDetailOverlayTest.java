@@ -34,12 +34,14 @@ class TraceDetailOverlayTest {
 
     private WebClient webClient;
     private String baseUrl;
+    private CollectingJavaScriptErrorListener jsErrors;
 
     @BeforeEach
     void setUp() {
         baseUrl = "http://localhost:" + port;
 
         webClient = new WebClient(BrowserVersion.CHROME);
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setJavaScriptEnabled(true);
         webClient.getOptions().setCssEnabled(false);
         webClient.getOptions().setThrowExceptionOnScriptError(false);
@@ -56,6 +58,9 @@ class TraceDetailOverlayTest {
     void tearDown() {
         if (webClient != null) {
             webClient.close();
+        }
+        if (jsErrors != null) {
+            jsErrors.assertNoUnexpectedErrors();
         }
     }
 
