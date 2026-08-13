@@ -1,14 +1,13 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
+import net.osslabz.peekaboot.backend.testsupport.LogCapture;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.List;
@@ -130,7 +129,7 @@ class FlywayMapperTest {
             ))
         );
 
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = LogCapture.attach(FlywayMapper.class, Level.DEBUG);
         try {
             FlywayInfo result = mapper.map(flywayData);
 
@@ -141,30 +140,8 @@ class FlywayMapperTest {
                         .isEqualTo("Failed to parse installedOn date: not-a-date");
             });
         } finally {
-            detachListAppender(appender);
+            LogCapture.detach(FlywayMapper.class, appender, true);
         }
-    }
-
-    /**
-     * Captures {@link FlywayMapper}'s DEBUG log (and the {@link java.time.format.DateTimeParseException}
-     * stack trace attached to it) instead of letting it reach the console;
-     * {@link #map_shouldTolerateMalformedInstalledOnDate()} asserts on the captured event.
-     */
-    private static ListAppender<ILoggingEvent> attachListAppender() {
-        Logger logger = (Logger) LoggerFactory.getLogger(FlywayMapper.class);
-        logger.setLevel(Level.DEBUG);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setAdditive(false);
-        return appender;
-    }
-
-    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(FlywayMapper.class);
-        logger.detachAppender(appender);
-        logger.setAdditive(true);
-        logger.setLevel(null);
     }
 
     @Test

@@ -121,11 +121,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReturnInsightsResponse() {
-            TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
-                    List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0),
-                    BucketCounts.empty()
-            );
+            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
             when(traceInsightsService.getInsights(anyInt(), any(), any(), any()))
                     .thenReturn(expectedResponse);
 
@@ -136,11 +132,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldPassLimitToService() {
-            TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
-                    List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0),
-                    BucketCounts.empty()
-            );
+            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
             when(traceInsightsService.getInsights(25, TraceBucket.ALL, null, null))
                     .thenReturn(expectedResponse);
 
@@ -151,11 +143,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldPassFiltersToService() {
-            TraceInsightsResponse expectedResponse = new TraceInsightsResponse(
-                    List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0),
-                    BucketCounts.empty()
-            );
+            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
             when(traceInsightsService.getInsights(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler"))
                     .thenReturn(expectedResponse);
 
@@ -176,6 +164,14 @@ class PeekabootControllerTest {
             controller.getTracesInsights(100, "not-a-bucket", null, null);
 
             verify(traceInsightsService).getInsights(100, TraceBucket.ALL, null, null);
+        }
+
+        private TraceInsightsResponse emptyInsightsResponse() {
+            return new TraceInsightsResponse(
+                    List.of(),
+                    new TraceListSummary(0, 0, 0, 0.0),
+                    BucketCounts.empty()
+            );
         }
     }
 

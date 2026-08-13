@@ -29,7 +29,11 @@ class ActuatorInsightsServiceTest {
         ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
         when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of());
 
-        insightsService = new ActuatorInsightsService(
+        insightsService = newInsightsService(dataSourceProvider);
+    }
+
+    private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
+        return new ActuatorInsightsService(
             rawService,
             new ActuatorRawMapper(),
             new HealthMapper(),
@@ -93,20 +97,7 @@ class ActuatorInsightsServiceTest {
         ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
         when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of(metadata));
 
-        ActuatorInsightsService serviceWithDataSource = new ActuatorInsightsService(
-            rawService,
-            new ActuatorRawMapper(),
-            new HealthMapper(),
-            new RuntimeMapper(),
-            new DataSourceMapper(),
-            new ApplicationMapper(),
-            new EnvironmentMapper(),
-            new LoggersMapper(),
-            new FlywayMapper(),
-            new ConfigMapper(),
-            new ScheduledTasksMapper(new CronDescriptionService()),
-            dataSourceProvider
-        );
+        ActuatorInsightsService serviceWithDataSource = newInsightsService(dataSourceProvider);
         when(rawService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = serviceWithDataSource.getInsights(Locale.ENGLISH);

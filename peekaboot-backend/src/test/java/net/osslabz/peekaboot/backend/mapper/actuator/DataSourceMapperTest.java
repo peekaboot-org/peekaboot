@@ -24,9 +24,7 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldMaskSensitiveProperties() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getConnectionParams()).thenReturn(Map.of(
             "user", new JdbcProperty(PropertySource.QUERY, "admin"),
             "password", new JdbcProperty(PropertySource.QUERY, "secret123")
@@ -40,9 +38,7 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldAggregateHealthStatus() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primaryDS");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("primaryDS");
 
         HealthResponse health = new HealthResponse(
             new HealthResponse.HealthBody(
@@ -71,9 +67,7 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldDetectDatabaseProduct() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL 15.1");
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
@@ -82,9 +76,7 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldMaskKeyAndTokenProperties() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getConnectionParams()).thenReturn(Map.of(
             "apiKey", new JdbcProperty(PropertySource.QUERY, "myapikey"),
             "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
@@ -100,9 +92,7 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldFilterNullMetadata() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
 
         List<DataSourceMetadata> listWithNulls = new java.util.ArrayList<>();
         listWithNulls.add(null);
@@ -126,9 +116,7 @@ class DataSourceMapperTest {
         "SomeExoticDatabase, UNKNOWN"
     })
     void map_shouldDetectDatabaseProductForEachVendor(String productName, DatabaseProduct expected) {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn(productName);
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
@@ -138,13 +126,18 @@ class DataSourceMapperTest {
 
     @Test
     void map_shouldDetectUnknownDatabaseProductWhenNameIsNull() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("ds");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn(null);
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
         assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.UNKNOWN);
+    }
+
+    private DataSourceMetadata mockMetadata(String name) {
+        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+        when(metadata.getDataSourceName()).thenReturn(name);
+        when(metadata.getHosts()).thenReturn(List.of());
+        return metadata;
     }
 }

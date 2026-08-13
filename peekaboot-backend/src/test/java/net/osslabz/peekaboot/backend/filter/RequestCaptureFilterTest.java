@@ -1,7 +1,6 @@
 package net.osslabz.peekaboot.backend.filter;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Span;
@@ -10,6 +9,7 @@ import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import net.osslabz.peekaboot.backend.testsupport.LogCapture;
 import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +21,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
@@ -371,7 +370,7 @@ class RequestCaptureFilterTest {
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenThrow(new RuntimeException("boom"));
 
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = LogCapture.attach(RequestCaptureFilter.class);
         try {
             filter.doFilter(request, response, chain);
 
@@ -382,27 +381,8 @@ class RequestCaptureFilterTest {
                 assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details: boom");
             });
         } finally {
-            detachListAppender(appender);
+            LogCapture.detach(RequestCaptureFilter.class, appender);
         }
-    }
-
-    /**
-     * Captures {@link RequestCaptureFilter}'s WARN log instead of letting it reach the
-     * console; {@link #shouldLogWarningAndNotPublishEventWhenCaptureFails()} asserts on the captured event.
-     */
-    private static ListAppender<ILoggingEvent> attachListAppender() {
-        Logger logger = (Logger) LoggerFactory.getLogger(RequestCaptureFilter.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setAdditive(false);
-        return appender;
-    }
-
-    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(RequestCaptureFilter.class);
-        logger.detachAppender(appender);
-        logger.setAdditive(true);
     }
 
     private void setupBasicRequestResponse() {

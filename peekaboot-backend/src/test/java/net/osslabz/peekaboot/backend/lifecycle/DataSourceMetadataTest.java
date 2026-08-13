@@ -1,12 +1,11 @@
 package net.osslabz.peekaboot.backend.lifecycle;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import net.osslabz.peekaboot.backend.testsupport.LogCapture;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
@@ -63,7 +62,7 @@ class DataSourceMetadataTest {
         DataSource failing = mock(DataSource.class);
         when(failing.getConnection()).thenThrow(new SQLException("db down"));
 
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = LogCapture.attach(DataSourceMetadata.class);
         try {
             Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("broken", failing);
 
@@ -74,7 +73,7 @@ class DataSourceMetadataTest {
                         .isEqualTo("Failed to extract metadata from DataSource 'broken': db down");
             });
         } finally {
-            detachListAppender(appender);
+            LogCapture.detach(DataSourceMetadata.class, appender);
         }
     }
 
@@ -84,7 +83,7 @@ class DataSourceMetadataTest {
         DataSource failing = mock(DataSource.class);
         when(failing.getConnection()).thenThrow(new IllegalStateException("unparseable"));
 
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = LogCapture.attach(DataSourceMetadata.class);
         try {
             Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("exotic", failing);
 
@@ -95,26 +94,8 @@ class DataSourceMetadataTest {
                         .isEqualTo("Failed to extract metadata from DataSource 'exotic': unparseable");
             });
         } finally {
-            detachListAppender(appender);
+            LogCapture.detach(DataSourceMetadata.class, appender);
         }
     }
 
-    /**
-     * Captures {@link DataSourceMetadata}'s WARN log instead of letting it reach the
-     * console; the negative-path scenarios below assert on the captured event.
-     */
-    private static ListAppender<ILoggingEvent> attachListAppender() {
-        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setAdditive(false);
-        return appender;
-    }
-
-    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
-        logger.detachAppender(appender);
-        logger.setAdditive(true);
-    }
 }

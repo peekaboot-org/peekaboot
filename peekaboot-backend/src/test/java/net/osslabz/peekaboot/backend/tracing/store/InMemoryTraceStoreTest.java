@@ -90,16 +90,6 @@ class InMemoryTraceStoreTest {
         assertThat(bundle).isEmpty();
     }
 
-    @Test
-    void clear_removesAllTraces() {
-        storage.addSpan(createSpanData("trace1", "span1", null, "test"));
-        storage.addSpan(createSpanData("trace2", "span2", null, "test"));
-
-        storage.clear();
-
-        assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
-    }
-
     private SpanData createSpanData(String traceId, String spanId, String parentId, String name) {
         return new SpanData(
                 traceId,

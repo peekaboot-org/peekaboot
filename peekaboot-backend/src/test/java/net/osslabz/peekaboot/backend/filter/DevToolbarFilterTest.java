@@ -1,7 +1,6 @@
 package net.osslabz.peekaboot.backend.filter;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Span;
@@ -13,6 +12,7 @@ import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import net.osslabz.peekaboot.backend.testsupport.LogCapture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +20,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -104,9 +103,7 @@ class DevToolbarFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         doAnswer(invocation -> {
             ContentBufferingResponseWrapper wrapper =
@@ -128,23 +125,12 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write(htmlContent);
-            // Also stub the mock to return the content type
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse(htmlContent);
 
         filter.doFilter(request, response, chain);
 
@@ -168,21 +154,12 @@ class DevToolbarFilterTest {
         when(span.context()).thenReturn(context);
         when(tracer.currentSpan()).thenReturn(span);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{}");
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write(htmlContent);
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse(htmlContent);
 
         filter.doFilter(request, response, chain);
 
@@ -198,22 +175,12 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><BODY>İİİ</BODY></html>";
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write(htmlContent);
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse(htmlContent);
 
         filter.doFilter(request, response, chain);
 
@@ -232,22 +199,12 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
         when(response.getCharacterEncoding()).thenReturn("ISO-8859-1");
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><body>Käse</body></html>";
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html;charset=ISO-8859-1");
-            wrapper.getWriter().write(htmlContent);
-            when(response.getContentType()).thenReturn("text/html;charset=ISO-8859-1");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubResponse("text/html;charset=ISO-8859-1", htmlContent);
 
         filter.doFilter(request, response, chain);
 
@@ -263,20 +220,10 @@ class DevToolbarFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         String htmlFragment = "<div>Just a fragment</div>";
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write(htmlFragment);
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse(htmlFragment);
 
         filter.doFilter(request, response, chain);
 
@@ -292,24 +239,14 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenThrow(new RuntimeException("Provider error"));
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
+        stubHtmlResponse(htmlContent);
 
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write(htmlContent);
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
-
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = LogCapture.attach(DevToolbarFilter.class);
         try {
             filter.doFilter(request, response, chain);
 
@@ -321,27 +258,8 @@ class DevToolbarFilterTest {
                         .isEqualTo("Failed to generate toolbar HTML: Provider error");
             });
         } finally {
-            detachListAppender(appender);
+            LogCapture.detach(DevToolbarFilter.class, appender);
         }
-    }
-
-    /**
-     * Captures {@link DevToolbarFilter}'s WARN log instead of letting it reach the
-     * console; {@link #shouldHandleToolbarGenerationError()} asserts on the captured event.
-     */
-    private static ListAppender<ILoggingEvent> attachListAppender() {
-        Logger logger = (Logger) LoggerFactory.getLogger(DevToolbarFilter.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setAdditive(false);
-        return appender;
-    }
-
-    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(DevToolbarFilter.class);
-        logger.detachAppender(appender);
-        logger.setAdditive(true);
     }
 
     @Test
@@ -351,9 +269,7 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(request.isAsyncStarted()).thenReturn(true);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         filter.doFilter(request, response, chain);
 
@@ -374,9 +290,7 @@ class DevToolbarFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         doAnswer(invocation -> {
             ContentBufferingResponseWrapper wrapper =
@@ -401,20 +315,10 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write("<html><body></body></html>");
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
 
@@ -430,18 +334,8 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(toolbarDataProvider.getIdleModeJson()).thenReturn("{\"idle\":true,\"basePath\":\"/peekaboot\"}");
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write("<html><body><div id=\"swagger-ui\"></div></body></html>");
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
+        stubHtmlResponse("<html><body><div id=\"swagger-ui\"></div></body></html>");
 
         filter.doFilter(request, response, chain);
 
@@ -458,25 +352,47 @@ class DevToolbarFilterTest {
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
 
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
-
-        doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/html");
-            wrapper.getWriter().write("<html><body></body></html>");
-            when(response.getContentType()).thenReturn("text/html");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+        stubHtmlResponse("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
 
         String result = originalOutput.toString(StandardCharsets.UTF_8);
         assertThat(result).doesNotContain("\"idle\":true");
+    }
+
+    /**
+     * Stubs {@code response.getOutputStream()} with a buffer-backed {@link TestServletOutputStream}
+     * and returns the buffer so the test can read back whatever the filter ultimately wrote.
+     */
+    private ByteArrayOutputStream stubResponseOutputStream() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        return originalOutput;
+    }
+
+    /** {@code stubResponse("text/html", content)} — the common case for the tests below. */
+    private void stubHtmlResponse(String content) throws Exception {
+        stubResponse("text/html", content);
+    }
+
+    /**
+     * Makes {@code chain.doFilter} write {@code content} through the {@link ContentBufferingResponseWrapper}
+     * the filter passes down, with the given content type, and stubs {@code response.getContentType()}
+     * to match so the filter's own content-type check (whether to inject the toolbar at all) sees it.
+     */
+    private void stubResponse(String contentType, String content) throws Exception {
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType(contentType);
+            wrapper.getWriter().write(content);
+            when(response.getContentType()).thenReturn(contentType);
+            return null;
+        }).when(chain).doFilter(eq(request), any());
     }
 
     private static class TestServletOutputStream extends ServletOutputStream {

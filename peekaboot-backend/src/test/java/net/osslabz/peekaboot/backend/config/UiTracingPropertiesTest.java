@@ -2,7 +2,7 @@ package net.osslabz.peekaboot.backend.config;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class UiTracingPropertiesTest {
 
@@ -10,11 +10,11 @@ class UiTracingPropertiesTest {
     void defaultValues() {
         UiTracingProperties props = new UiTracingProperties();
 
-        assertEquals(100L, props.getSlowSpanThresholdMs());
-        assertEquals(500L, props.getVerySlowSpanThresholdMs());
-        assertEquals(50L, props.getSlowQueryThresholdMs());
-        assertEquals(5, props.getHighQueryCountThreshold());
-        assertEquals(20, props.getHighTraceQueryCountThreshold());
+        assertThat(props.getSlowSpanThresholdMs()).isEqualTo(100L);
+        assertThat(props.getVerySlowSpanThresholdMs()).isEqualTo(500L);
+        assertThat(props.getSlowQueryThresholdMs()).isEqualTo(50L);
+        assertThat(props.getHighQueryCountThreshold()).isEqualTo(5);
+        assertThat(props.getHighTraceQueryCountThreshold()).isEqualTo(20);
     }
 
     @Test
@@ -26,10 +26,10 @@ class UiTracingPropertiesTest {
         props.setHighQueryCountThreshold(10);
         props.setHighTraceQueryCountThreshold(50);
 
-        assertEquals(200L, props.getSlowSpanThresholdMs());
-        assertEquals(1000L, props.getVerySlowSpanThresholdMs());
-        assertEquals(100L, props.getSlowQueryThresholdMs());
-        assertEquals(10, props.getHighQueryCountThreshold());
-        assertEquals(50, props.getHighTraceQueryCountThreshold());
+        assertThat(props.getSlowSpanThresholdMs()).isEqualTo(200L);
+        assertThat(props.getVerySlowSpanThresholdMs()).isEqualTo(1000L);
+        assertThat(props.getSlowQueryThresholdMs()).isEqualTo(100L);
+        assertThat(props.getHighQueryCountThreshold()).isEqualTo(10);
+        assertThat(props.getHighTraceQueryCountThreshold()).isEqualTo(50);
     }
 }

@@ -62,7 +62,7 @@ class OtelSpanExporterTest {
         assertThat(result.isSuccess()).isTrue();
         assertThat(publishedEvents).hasSize(1);
 
-        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = storage.getTrace(traceId).orElseThrow().spans();
+        List<net.osslabz.peekaboot.backend.tracing.store.SpanData> spans = storedSpans(traceId);
         assertThat(spans).hasSize(1);
 
         net.osslabz.peekaboot.backend.tracing.store.SpanData stored = spans.getFirst();
@@ -108,7 +108,7 @@ class OtelSpanExporterTest {
             SpanData span = createTestSpan(traceId, "0000000000000001", "op", kind);
             exporter.export(List.of(span));
 
-            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = storage.getTrace(traceId).orElseThrow().spans();
+            List<net.osslabz.peekaboot.backend.tracing.store.SpanData> stored = storedSpans(traceId);
             assertThat(stored).hasSize(1);
 
             if (kind == SpanKind.INTERNAL) {
@@ -231,8 +231,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.errorMessage()).isEqualTo("boom");
         assertThat(stored.errorClass()).isEqualTo("ERROR");
     }
@@ -248,8 +247,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.parentId()).isEqualTo(parentSpanId);
     }
 
@@ -262,8 +260,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.remoteServiceName()).isEqualTo("orders-service");
     }
 
@@ -276,8 +273,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.tags()).containsEntry("db.system", "postgresql");
     }
 
@@ -297,8 +293,7 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.events()).hasSize(1);
         assertThat(stored.events().getFirst().name()).isEqualTo("cache-miss");
         assertThat(stored.events().getFirst().timestamp()).isEqualTo(eventInstant);
@@ -317,9 +312,21 @@ class OtelSpanExporterTest {
 
         exporter.export(List.of(span));
 
-        net.osslabz.peekaboot.backend.tracing.store.SpanData stored =
-                storage.getTrace(traceId).orElseThrow().spans().getFirst();
+        net.osslabz.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.kind()).isEqualTo(expected);
+    }
+
+    /**
+     * Looks up the spans stored for {@code traceId}. Named to disambiguate from the imported
+     * OTel {@link SpanData}: the store's own {@code SpanData} record must stay fully qualified
+     * at every call site regardless, but this centralizes the lookup expression itself.
+     */
+    private List<net.osslabz.peekaboot.backend.tracing.store.SpanData> storedSpans(String traceId) {
+        return storage.getTrace(traceId).orElseThrow().spans();
+    }
+
+    private net.osslabz.peekaboot.backend.tracing.store.SpanData storedSpan(String traceId) {
+        return storedSpans(traceId).getFirst();
     }
 
     private SpanData createTestSpan(String traceId, String spanId, String name, SpanKind kind) {

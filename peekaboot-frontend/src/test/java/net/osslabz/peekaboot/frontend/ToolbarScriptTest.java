@@ -8,8 +8,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -44,7 +46,17 @@ class ToolbarScriptTest {
         }
     }
 
-    private HtmlPage loadPageWithToolbar(String dataJson) throws IOException {
+    /**
+     * Builds a fresh {@link WebClient}/{@link MockWebConnection} pair serving {@code dataJson}
+     * as the toolbar's bootstrap payload, and loads the test page. Shared by every test that
+     * needs a page to run {@code toolbar.js} against; callers add their own script execution
+     * (attach-shadow shim, toolbar.js itself, fetch stubs, ...) afterward.
+     */
+    private HtmlPage newPage(String dataJson) throws IOException {
+        return newPage(dataJson, connection -> { });
+    }
+
+    private HtmlPage newPage(String dataJson, Consumer<MockWebConnection> connectionCustomizer) throws IOException {
         webClient = new WebClient();
         jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
         webClient.getOptions().setCssEnabled(false);
@@ -53,8 +65,13 @@ class ToolbarScriptTest {
                 "<html><head></head><body>"
                 + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">" + dataJson + "</script>"
                 + "</body></html>");
+        connectionCustomizer.accept(connection);
         webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        return webClient.getPage("http://localhost/test.html");
+    }
+
+    private HtmlPage loadPageWithToolbar(String dataJson) throws IOException {
+        HtmlPage page = newPage(dataJson);
         page.executeJavaScript(ATTACH_SHADOW_SHIM);
 
         String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
@@ -69,16 +86,7 @@ class ToolbarScriptTest {
      * can be driven deterministically instead of waiting on real timers.
      */
     private HtmlPage loadPageWithFetchStub(String dataJson, String fetchStubJs) throws IOException {
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">" + dataJson + "</script>"
-                + "</body></html>");
-        webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        HtmlPage page = newPage(dataJson);
         page.executeJavaScript(ATTACH_SHADOW_SHIM);
         page.executeJavaScript("window.setTimeout = function(fn) { fn(); };");
         page.executeJavaScript(fetchStubJs);
@@ -120,18 +128,7 @@ class ToolbarScriptTest {
 
     @Test
     void idleModeWrapsWindowFetchWithInterceptor() throws IOException {
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">"
-                + "{\"idle\":true,\"basePath\":\"/peekaboot\"}"
-                + "</script>"
-                + "</body></html>");
-        webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        HtmlPage page = newPage("{\"idle\":true,\"basePath\":\"/peekaboot\"}");
 
         page.executeJavaScript(ATTACH_SHADOW_SHIM);
         page.executeJavaScript("window.__originalFetchBefore = window.fetch;");
@@ -144,18 +141,8 @@ class ToolbarScriptTest {
 
     @Test
     void regularModeDoesNotWrapWindowFetch() throws IOException {
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">"
-                + "{\"method\":\"GET\",\"path\":\"/x\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}"
-                + "</script>"
-                + "</body></html>");
-        webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        HtmlPage page = newPage(
+                "{\"method\":\"GET\",\"path\":\"/x\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}");
 
         page.executeJavaScript(ATTACH_SHADOW_SHIM);
         page.executeJavaScript("window.__originalFetchBefore = window.fetch;");
@@ -319,24 +306,15 @@ class ToolbarScriptTest {
 
     @Test
     void clickLazyLoadsTraceDetailScriptAndOpensItOnLoad() throws IOException {
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">"
-                + "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}"
-                + "</script>"
-                + "</body></html>");
         // The click handler lazy-loads this script as a real <script src> element;
         // serve harmless JS so the load succeeds and onload fires.
-        connection.setResponse(
-                new java.net.URL("http://localhost/peekaboot/ui/trace-detail/trace-detail.js"),
-                "window.PeekabootTraceDetail = { open: function(traceId, opts) { window.__openedWith = traceId; } };",
-                "text/javascript");
-        webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        URL traceDetailScriptUrl = new URL("http://localhost/peekaboot/ui/trace-detail/trace-detail.js");
+        HtmlPage page = newPage(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}",
+                connection -> connection.setResponse(
+                        traceDetailScriptUrl,
+                        "window.PeekabootTraceDetail = { open: function(traceId, opts) { window.__openedWith = traceId; } };",
+                        "text/javascript"));
         page.executeJavaScript(ATTACH_SHADOW_SHIM);
 
         String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
