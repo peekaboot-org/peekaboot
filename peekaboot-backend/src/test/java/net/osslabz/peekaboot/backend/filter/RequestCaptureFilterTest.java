@@ -1,8 +1,6 @@
 package net.osslabz.peekaboot.backend.filter;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -370,18 +368,15 @@ class RequestCaptureFilterTest {
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenThrow(new RuntimeException("boom"));
 
-        ListAppender<ILoggingEvent> appender = LogCapture.attach(RequestCaptureFilter.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
             filter.doFilter(request, response, chain);
 
             verify(chain).doFilter(request, response);
             verify(eventPublisher, never()).publishEvent(any());
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details: boom");
             });
-        } finally {
-            LogCapture.detach(RequestCaptureFilter.class, appender);
         }
     }
 

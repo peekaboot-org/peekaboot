@@ -1,8 +1,6 @@
 package net.osslabz.peekaboot.backend.filter;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -246,19 +244,16 @@ class DevToolbarFilterTest {
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
         stubHtmlResponse(htmlContent);
 
-        ListAppender<ILoggingEvent> appender = LogCapture.attach(DevToolbarFilter.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class)) {
             filter.doFilter(request, response, chain);
 
             String result = originalOutput.toString(StandardCharsets.UTF_8);
             assertThat(result).isEqualTo(htmlContent);
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Failed to generate toolbar HTML: Provider error");
             });
-        } finally {
-            LogCapture.detach(DevToolbarFilter.class, appender);
         }
     }
 

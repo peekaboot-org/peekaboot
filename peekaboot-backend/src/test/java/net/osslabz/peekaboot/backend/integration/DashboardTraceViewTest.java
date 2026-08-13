@@ -242,6 +242,19 @@ class DashboardTraceViewTest {
         assertThat(html).contains("data-bucket=\"slow\"");
     }
 
+    @Test
+    void featuresShouldIndicateTracingEnabled() throws Exception {
+        JsonNode features = getJson("/peekaboot/api/features");
+
+        assertThat(features.get("tracing").asBoolean())
+            .as("Tracing feature should be enabled")
+            .isTrue();
+
+        assertThat(features.get("devToolbar").asBoolean())
+            .as("DevToolbar feature should be enabled")
+            .isTrue();
+    }
+
     private JsonNode getJson(String path, Object... uriVariables) {
         String json = restClient.get()
             .uri(path, uriVariables)
@@ -257,18 +270,5 @@ class DashboardTraceViewTest {
             .accept(MediaType.TEXT_HTML)
             .retrieve()
             .body(String.class);
-    }
-
-    @Test
-    void featuresShouldIndicateTracingEnabled() throws Exception {
-        JsonNode features = getJson("/peekaboot/api/features");
-
-        assertThat(features.get("tracing").asBoolean())
-            .as("Tracing feature should be enabled")
-            .isTrue();
-
-        assertThat(features.get("devToolbar").asBoolean())
-            .as("DevToolbar feature should be enabled")
-            .isTrue();
     }
 }

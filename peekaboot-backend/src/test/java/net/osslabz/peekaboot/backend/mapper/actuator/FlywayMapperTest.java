@@ -1,8 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
@@ -129,18 +127,15 @@ class FlywayMapperTest {
             ))
         );
 
-        ListAppender<ILoggingEvent> appender = LogCapture.attach(FlywayMapper.class, Level.DEBUG);
-        try {
+        try (LogCapture capture = LogCapture.attach(FlywayMapper.class, Level.DEBUG)) {
             FlywayInfo result = mapper.map(flywayData);
 
             assertThat(result.migrations().get(0).installedOn()).isNull();
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Failed to parse installedOn date: not-a-date");
             });
-        } finally {
-            LogCapture.detach(FlywayMapper.class, appender, true);
         }
     }
 

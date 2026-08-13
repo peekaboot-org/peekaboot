@@ -1,8 +1,6 @@
 package net.osslabz.peekaboot.backend.lifecycle;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import net.osslabz.peekaboot.backend.testsupport.LogCapture;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
@@ -62,18 +60,15 @@ class DataSourceMetadataTest {
         DataSource failing = mock(DataSource.class);
         when(failing.getConnection()).thenThrow(new SQLException("db down"));
 
-        ListAppender<ILoggingEvent> appender = LogCapture.attach(DataSourceMetadata.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
             Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("broken", failing);
 
             assertThat(metadata).isEmpty();
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Failed to extract metadata from DataSource 'broken': db down");
             });
-        } finally {
-            LogCapture.detach(DataSourceMetadata.class, appender);
         }
     }
 
@@ -83,18 +78,15 @@ class DataSourceMetadataTest {
         DataSource failing = mock(DataSource.class);
         when(failing.getConnection()).thenThrow(new IllegalStateException("unparseable"));
 
-        ListAppender<ILoggingEvent> appender = LogCapture.attach(DataSourceMetadata.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
             Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("exotic", failing);
 
             assertThat(metadata).isEmpty();
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Failed to extract metadata from DataSource 'exotic': unparseable");
             });
-        } finally {
-            LogCapture.detach(DataSourceMetadata.class, appender);
         }
     }
 

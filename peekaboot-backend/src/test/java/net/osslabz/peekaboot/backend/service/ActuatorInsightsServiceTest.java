@@ -32,23 +32,6 @@ class ActuatorInsightsServiceTest {
         insightsService = newInsightsService(dataSourceProvider);
     }
 
-    private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
-        return new ActuatorInsightsService(
-            rawService,
-            new ActuatorRawMapper(),
-            new HealthMapper(),
-            new RuntimeMapper(),
-            new DataSourceMapper(),
-            new ApplicationMapper(),
-            new EnvironmentMapper(),
-            new LoggersMapper(),
-            new FlywayMapper(),
-            new ConfigMapper(),
-            new ScheduledTasksMapper(new CronDescriptionService()),
-            dataSourceProvider
-        );
-    }
-
     @Test
     void getInsights_shouldMapAllSections() {
         when(rawService.getInsightsData()).thenReturn(Map.of(
@@ -146,5 +129,22 @@ class ActuatorInsightsServiceTest {
         assertThat(response.scheduledTasks()).isNotNull();
         assertThat(response.scheduledTasks().tasks()).hasSize(1);
         assertThat(response.scheduledTasks().tasks().get(0).scheduleDescription()).isNotNull();
+    }
+
+    private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
+        return new ActuatorInsightsService(
+            rawService,
+            new ActuatorRawMapper(),
+            new HealthMapper(),
+            new RuntimeMapper(),
+            new DataSourceMapper(),
+            new ApplicationMapper(),
+            new EnvironmentMapper(),
+            new LoggersMapper(),
+            new FlywayMapper(),
+            new ConfigMapper(),
+            new ScheduledTasksMapper(new CronDescriptionService()),
+            dataSourceProvider
+        );
     }
 }
