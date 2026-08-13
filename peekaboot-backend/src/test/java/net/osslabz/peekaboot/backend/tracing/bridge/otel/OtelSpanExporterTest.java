@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -144,6 +145,57 @@ class OtelSpanExporterTest {
     }
 
     @Test
+    void shouldExportSpanWhenPathDoesNotMatchAnyExclusionRule() {
+        // Negative control for the skip tests above: a span whose path clearly
+        // isn't excluded must actually be exported, not just "not asserted".
+        String traceId = "0123456789abcdef0123456789abcdef";
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /api/users", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .build();
+
+        exporter.export(List.of(span));
+
+        assertThat(publishedEvents).hasSize(1);
+        assertThat(storage.getTrace(traceId)).isPresent();
+    }
+
+    @Test
+    void shouldPreferUrlPathOverHttpTargetTagWhenBothPresent() {
+        // url.path is present but doesn't itself match any exclusion rule; if
+        // extractPath() genuinely checks url.path first (short-circuiting
+        // before ever consulting http.target), the span must NOT be skipped
+        // even though http.target alone would match.
+        String traceId = "0123456789abcdef0123456789abcdef";
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /keep-me", SpanKind.SERVER)
+                .attributes(Attributes.builder()
+                        .put(URL_PATH_KEY, "/keep-me")
+                        .put(HTTP_TARGET_KEY, "/actuator/info")
+                        .build())
+                .build();
+
+        exporter.export(List.of(span));
+
+        assertThat(publishedEvents).hasSize(1);
+        assertThat(storage.getTrace(traceId)).isPresent();
+    }
+
+    @Test
+    void shouldPreferUrlPathOverHttpUrlTagWhenBothPresent() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /keep-me", SpanKind.SERVER)
+                .attributes(Attributes.builder()
+                        .put(URL_PATH_KEY, "/keep-me")
+                        .put(HTTP_URL_KEY, "http://localhost:8080/actuator/metrics")
+                        .build())
+                .build();
+
+        exporter.export(List.of(span));
+
+        assertThat(publishedEvents).hasSize(1);
+        assertThat(storage.getTrace(traceId)).isPresent();
+    }
+
+    @Test
     void shouldExtractPathFromHttpTargetTagWhenUrlPathAbsent() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/info", SpanKind.SERVER)
@@ -232,7 +284,12 @@ class OtelSpanExporterTest {
     @Test
     void shouldExtractEventsFromSpanData() {
         String traceId = "0123456789abcdef0123456789abcdef";
-        long eventNanos = System.nanoTime();
+        // A fixed, realistic epoch-nanos value (not System.nanoTime(), which is
+        // an arbitrary monotonic reading unrelated to wall-clock time) so the
+        // converted Instant can be asserted precisely, actually exercising
+        // OtelSpanExporter's private nanosToInstant() conversion.
+        Instant eventInstant = Instant.parse("2024-01-15T10:00:00.500Z");
+        long eventNanos = eventInstant.getEpochSecond() * 1_000_000_000L + eventInstant.getNano();
         EventData event = EventData.create(eventNanos, "cache-miss", Attributes.empty());
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
                 .events(List.of(event))
@@ -244,6 +301,7 @@ class OtelSpanExporterTest {
                 storage.getTrace(traceId).orElseThrow().spans().getFirst();
         assertThat(stored.events()).hasSize(1);
         assertThat(stored.events().getFirst().name()).isEqualTo("cache-miss");
+        assertThat(stored.events().getFirst().timestamp()).isEqualTo(eventInstant);
     }
 
     @Test

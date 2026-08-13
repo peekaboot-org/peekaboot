@@ -48,6 +48,10 @@ class MetricsServiceTest {
         MeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong memoryUsed = new AtomicLong(1024);
 
+        // Both same-name gauges get baseUnit("bytes"): MetricsService reads
+        // meters.get(0) off a MeterRegistry-backed list whose iteration order
+        // for same-named meters isn't guaranteed, so the baseUnit assertion
+        // below must hold regardless of which of the two is "first".
         Gauge.builder("jvm.memory.used", memoryUsed, AtomicLong::doubleValue)
                 .description("Memory used")
                 .baseUnit("bytes")
@@ -55,6 +59,7 @@ class MetricsServiceTest {
                 .register(registry);
 
         Gauge.builder("jvm.memory.used", () -> 2048)
+                .baseUnit("bytes")
                 .tags("area", "heap", "id", "Old Gen")
                 .register(registry);
 
@@ -89,8 +94,8 @@ class MetricsServiceTest {
         MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
         assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
-                .extracting(MetricStatistic::value)
-                .contains(1024.0);
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .contains(org.assertj.core.groups.Tuple.tuple("VALUE", 1024.0));
     }
 
     @Test
@@ -109,8 +114,8 @@ class MetricsServiceTest {
         MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
         assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
-                .extracting(MetricStatistic::value)
-                .contains(42.0);
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .contains(org.assertj.core.groups.Tuple.tuple("COUNT", 42.0));
     }
 
     @Test

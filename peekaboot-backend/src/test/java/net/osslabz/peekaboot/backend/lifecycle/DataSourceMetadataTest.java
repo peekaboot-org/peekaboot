@@ -43,7 +43,14 @@ class DataSourceMetadataTest {
         assertThat(m.getUsername()).isEqualTo("");
         assertThat(m.getHosts()).isEmpty();
         assertThat(m.getDatabaseName()).isEqualTo("metadata-test-2");
-        // JdbcUrlParser derives a MODE connection param from the h2 in-memory URL
+        // NOTE (F8, reviewed): DB_CLOSE_DELAY is NOT asserted here even though
+        // it's set on the configured JDBC URL below. DataSourceMetadata derives
+        // connectionParams from DatabaseMetaData.getURL() (the driver-reported
+        // URL), not the originally configured URL string; H2's driver strips
+        // session-only params like DB_CLOSE_DELAY when reporting that URL back
+        // (verified: getUrl() here returns "jdbc:h2:mem:metadata-test-2", with
+        // no DB_CLOSE_DELAY suffix). MODE is the only connection param this
+        // code path can ever observe for an H2 in-memory URL.
         assertThat(m.getConnectionParams()).containsKey("MODE");
         assertThat(m.getConnectionParams().get("MODE").value()).isEqualTo("MEMORY");
         assertThat(m.getDriverName()).isEqualTo("H2 JDBC Driver");

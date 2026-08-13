@@ -18,14 +18,12 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.MappedInterceptor;
 
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class PeekabootTracingAutoConfigurationTest {
 
@@ -145,10 +143,10 @@ class PeekabootTracingAutoConfigurationTest {
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {
                     WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
-                    InterceptorRegistry registry = new InterceptorRegistry();
+                    RecordingInterceptorRegistry registry = new RecordingInterceptorRegistry();
                     configurer.addInterceptors(registry);
 
-                    List<?> registered = getInterceptors(registry);
+                    List<Object> registered = registry.registered();
                     assertThat(registered).hasSize(1);
                     MappedInterceptor mapped = (MappedInterceptor) registered.getFirst();
 
@@ -158,17 +156,22 @@ class PeekabootTracingAutoConfigurationTest {
                 });
     }
 
-    private static List<?> getInterceptors(InterceptorRegistry registry) throws ReflectiveOperationException {
-        Method method = InterceptorRegistry.class.getDeclaredMethod("getInterceptors");
-        method.setAccessible(true);
-        return (List<?>) method.invoke(registry);
+    /**
+     * {@code InterceptorRegistry.getInterceptors()} is protected with no public
+     * accessor; a test-local subclass reaches it with compile-time safety
+     * instead of reflection.
+     */
+    private static final class RecordingInterceptorRegistry extends InterceptorRegistry {
+        List<Object> registered() {
+            return getInterceptors();
+        }
     }
 
     @Configuration
     static class ObservationRegistryConfig {
         @Bean
         ObservationRegistry observationRegistry() {
-            return mock(ObservationRegistry.class);
+            return ObservationRegistry.create();
         }
     }
 }

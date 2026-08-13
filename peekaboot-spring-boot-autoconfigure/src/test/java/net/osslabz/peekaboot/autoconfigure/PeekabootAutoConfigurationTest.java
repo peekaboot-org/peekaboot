@@ -40,13 +40,15 @@ class PeekabootAutoConfigurationTest {
 
     @Test
     void shouldRegisterBeansWhenEnabledAndEndpointClassesPresent() {
-        contextRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(PeekabootProperties.class);
-            // Proves the @ComponentScan actually pulls in the controller/service/
-            // mapper/config/actuator packages, not just the properties beans.
-            assertThat(context).hasSingleBean(PeekabootController.class);
-        });
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(PeekabootProperties.class);
+                    // Proves the @ComponentScan actually pulls in the controller/service/
+                    // mapper/config/actuator packages, not just the properties beans.
+                    assertThat(context).hasSingleBean(PeekabootController.class);
+                });
     }
 
     @Test

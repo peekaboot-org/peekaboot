@@ -201,6 +201,9 @@ class ToolbarScriptTest {
         assertThat(metricsHtml).contains("600ms");
         assertThat(metricsHtml).contains("peekaboot-stat error");
         assertThat(metricsHtml).contains("2 queries");
+        // queryDuration (150ms) > 100 triggers the query stat's own "warn" class
+        assertThat(metricsHtml).contains("150ms");
+        assertThat(metricsHtml).contains("peekaboot-stat warn");
         assertThat(metricsHtml).contains("❗1 err");
         assertThat(metricsHtml).contains("⚠2 warn");
 
@@ -277,8 +280,10 @@ class ToolbarScriptTest {
 
         webClient.waitForBackgroundJavaScript(2000);
 
+        // First poll (incomplete) schedules exactly one retry; the second
+        // poll is complete and stops the loop, so exactly 2 fetch() calls occur.
         int fetchCallCount = ((Number) page.executeJavaScript("window.__fetchCallCount").getJavaScriptResult()).intValue();
-        assertThat(fetchCallCount).isGreaterThanOrEqualTo(2);
+        assertThat(fetchCallCount).isEqualTo(2);
 
         String metricsHtml = (String) page.executeJavaScript(
                 "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
@@ -299,10 +304,13 @@ class ToolbarScriptTest {
 
         webClient.waitForBackgroundJavaScript(5000);
 
-        // retryDelay starts at 250 and doubles each time until totalDelay >= 32000,
-        // so there are a bounded number of retries before the code gives up.
+        // retryDelay starts at 250 and doubles each time (250, 500, 1000, 2000,
+        // 4000, 8000, 16000, 32000): the loop keeps retrying while totalDelay
+        // (the running sum before that iteration's delay) is still < 32000,
+        // which holds through the 8th call (totalDelay=31750), giving a 9th
+        // and final call whose totalDelay(63750) trips the cap and gives up.
         int fetchCallCount = ((Number) page.executeJavaScript("window.__fetchCallCount").getJavaScriptResult()).intValue();
-        assertThat(fetchCallCount).isGreaterThan(1);
+        assertThat(fetchCallCount).isEqualTo(9);
 
         String metricsHtml = (String) page.executeJavaScript(
                 "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
@@ -342,14 +350,20 @@ class ToolbarScriptTest {
         // loadTrace sets currentTraceId synchronously before scheduling any fetch.
         page.executeJavaScript("window.__peekaboot.loadTrace('trace-xyz', 'GET', '/persons', 200);");
 
+        String scriptSelector =
+                "document.head.querySelector('script[src*=\"trace-detail\"]')";
+        Boolean scriptPresentBeforeClick = (Boolean) page.executeJavaScript(
+                scriptSelector + " !== null").getJavaScriptResult();
+        assertThat(scriptPresentBeforeClick).as("script absent before click").isFalse();
+
         page.executeJavaScript(
                 "document.querySelector('.peekaboot-bar').dispatchEvent(new MouseEvent('click', {bubbles: true}));");
         webClient.waitForBackgroundJavaScript(2000);
 
         String scriptSrc = (String) page.executeJavaScript(
-                "(function() { const s = document.head.querySelector('script[src*=\"trace-detail\"]'); return s ? s.src : null; })()"
+                "(function() { const s = " + scriptSelector + "; return s ? s.src : null; })()"
         ).getJavaScriptResult();
-        assertThat(scriptSrc).endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
+        assertThat(scriptSrc).as("script present after click").endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
 
         String openedWith = (String) page.executeJavaScript("window.__openedWith").getJavaScriptResult();
         assertThat(openedWith).isEqualTo("trace-xyz");

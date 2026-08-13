@@ -1,5 +1,8 @@
 package net.osslabz.peekaboot.backend.service;
 
+import net.osslabz.jdbc.Host;
+import net.osslabz.jdbc.JdbcProperty;
+import net.osslabz.jdbc.PropertySource;
 import net.osslabz.peekaboot.backend.fixture.TestFixtureApplication;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.junit.jupiter.api.Test;
@@ -13,12 +16,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(
     classes = TestFixtureApplication.class,
@@ -85,13 +89,15 @@ class PeekabootActuatorServiceTest {
         assertThat(dataSources).isNotEmpty();
 
         Map<String, Object> dataSource = dataSources.get(0);
-        assertThat(dataSource.get("name")).isNotNull();
-        assertThat(dataSource.get("hosts")).isInstanceOf(List.class);
+        assertThat(dataSource.get("name")).isEqualTo("primary");
+
+        // A real Host is stubbed on the fixture so the host.toString() formatting
+        // loop (buildDataSourcesInfo()) actually runs, not just an empty ArrayList.
+        List<String> hosts = (List<String>) dataSource.get("hosts");
+        assertThat(hosts).containsExactly("db.example.com:5432");
 
         Map<String, Object> connectionParams = (Map<String, Object>) dataSource.get("connectionParams");
         assertThat(connectionParams).isNotNull();
-        // The H2 in-memory URL carries a derived MODE parameter, so
-        // buildDataSourcesInfo()'s per-param value/source formatting actually runs.
         assertThat(connectionParams).isNotEmpty();
         connectionParams.values().forEach(paramInfo ->
                 assertThat((Map<String, Object>) paramInfo).containsKeys("value", "source"));
@@ -117,16 +123,22 @@ class PeekabootActuatorServiceTest {
     /**
      * peekaboot-spring-boot-autoconfigure (which normally supplies the real
      * {@code List<DataSourceMetadata>} bean) is not a dependency of this module,
-     * so this fixture reproduces that wiring against the test's real DataSource
-     * to exercise {@code buildDataSourcesInfo()}'s formatting with real data.
+     * so this fixture reproduces that wiring. A mock (same pattern as
+     * {@code DataSourceMapperTest}) is used instead of a live DataSource so a
+     * real {@link Host} can be stubbed in — the H2 in-memory URL this module's
+     * test DataSource actually uses never yields a host, which would leave
+     * {@code buildDataSourcesInfo()}'s host.toString() formatting loop unexercised.
      */
     @TestConfiguration
     static class DataSourceMetadataFixtureConfig {
         @Bean
-        List<DataSourceMetadata> testDataSourceMetadataList(DataSource dataSource) {
-            return DataSourceMetadata.fromDataSource("primary", dataSource)
-                    .map(List::of)
-                    .orElse(List.of());
+        List<DataSourceMetadata> testDataSourceMetadataList() {
+            DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+            when(metadata.getDataSourceName()).thenReturn("primary");
+            when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
+            when(metadata.getConnectionParams()).thenReturn(
+                    Map.of("MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY")));
+            return List.of(metadata);
         }
     }
 }

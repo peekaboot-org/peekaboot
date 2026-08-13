@@ -1,9 +1,14 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import net.osslabz.peekaboot.backend.actuator.raw.FlywayResponse;
 import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.List;
@@ -125,18 +130,52 @@ class FlywayMapperTest {
             ))
         );
 
-        FlywayInfo result = mapper.map(flywayData);
+        ListAppender<ILoggingEvent> appender = attachListAppender();
+        try {
+            FlywayInfo result = mapper.map(flywayData);
 
-        assertThat(result.migrations().get(0).installedOn()).isNull();
+            assertThat(result.migrations().get(0).installedOn()).isNull();
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Failed to parse installedOn date: not-a-date");
+            });
+        } finally {
+            detachListAppender(appender);
+        }
+    }
+
+    /**
+     * Captures {@link FlywayMapper}'s DEBUG log (and the {@link java.time.format.DateTimeParseException}
+     * stack trace attached to it) instead of letting it reach the console;
+     * {@link #map_shouldTolerateMalformedInstalledOnDate()} asserts on the captured event.
+     */
+    private static ListAppender<ILoggingEvent> attachListAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(FlywayMapper.class);
+        logger.setLevel(Level.DEBUG);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setAdditive(false);
+        return appender;
+    }
+
+    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(FlywayMapper.class);
+        logger.detachAppender(appender);
+        logger.setAdditive(true);
+        logger.setLevel(null);
     }
 
     @Test
     void map_shouldSortNonNumericVersionsUsingFallback() {
+        // Fixture order ("1" then "abc") must differ from the expected sorted
+        // order below, otherwise a no-op comparator would pass this test too.
         FlywayResponse flywayData = new FlywayResponse(
             Map.of("application", new FlywayResponse.FlywayContext(
                 Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
-                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "abc"),
-                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "1")
+                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "1"),
+                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "abc")
                 ))),
                 null
             ))

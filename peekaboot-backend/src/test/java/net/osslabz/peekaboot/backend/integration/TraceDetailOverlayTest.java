@@ -136,14 +136,21 @@ class TraceDetailOverlayTest {
         page.executeJavaScript(toolbarJs);
 
         page.executeJavaScript("window.__peekaboot.loadTrace('trace-xyz', 'GET', '/persons', 200);");
+
+        String scriptSelector =
+                "document.head.querySelector('script[src*=\"trace-detail\"]')";
+        Boolean scriptPresentBeforeClick = (Boolean) page.executeJavaScript(
+                scriptSelector + " !== null").getJavaScriptResult();
+        assertThat(scriptPresentBeforeClick).as("script absent before click").isFalse();
+
         page.executeJavaScript(
                 "document.querySelector('.peekaboot-bar').dispatchEvent(new MouseEvent('click', {bubbles: true}));");
         webClient.waitForBackgroundJavaScript(2000);
 
         String scriptSrc = (String) page.executeJavaScript(
-                "(function() { const s = document.head.querySelector('script[src*=\"trace-detail\"]'); return s ? s.src : null; })()"
+                "(function() { const s = " + scriptSelector + "; return s ? s.src : null; })()"
         ).getJavaScriptResult();
-        assertThat(scriptSrc).endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
+        assertThat(scriptSrc).as("script present after click").endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
 
         String openedWith = (String) page.executeJavaScript("window.__openedWith").getJavaScriptResult();
         assertThat(openedWith).isEqualTo("trace-xyz");
