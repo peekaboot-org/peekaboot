@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -54,6 +55,8 @@ class DashboardTraceViewTest {
 
     @BeforeEach
     void setUp(TestInfo testInfo) {
+        traceStore.clear();
+
         baseUrl = "http://localhost:" + port;
         restClient = RestClient.builder().baseUrl(baseUrl).build();
 
@@ -71,52 +74,6 @@ class DashboardTraceViewTest {
         injectTestSpan();
     }
 
-    private void injectTestSpan() {
-        Instant start = Instant.now().minusMillis(100);
-        Instant end = Instant.now();
-        SpanData rootSpan = new SpanData(
-            testTraceId,
-            testSpanId,
-            null,
-            "GET /persons",
-            Span.Kind.SERVER,
-            start,
-            end,
-            Duration.between(start, end),
-            Map.of("http.method", "GET", "url.path", "/persons"),
-            List.of(),
-            null,
-            null,
-            null,
-            null,
-            null,
-            List.of(),
-            traceStore.nextCreationOrder()
-        );
-        traceStore.addSpan(rootSpan);
-
-        SpanData dbSpan = new SpanData(
-            testTraceId,
-            "db" + testSpanId,
-            testSpanId,
-            "SELECT * FROM person",
-            Span.Kind.CLIENT,
-            start.plusMillis(10),
-            end.minusMillis(10),
-            Duration.ofMillis(80),
-            Map.of("db.system", "h2", "db.statement", "SELECT * FROM person"),
-            List.of(),
-            null,
-            null,
-            null,
-            null,
-            null,
-            List.of(),
-            traceStore.nextCreationOrder()
-        );
-        traceStore.addSpan(dbSpan);
-    }
-
     @Test
     void traceFromToolbarShouldBeVisibleInDashboardApi() throws Exception {
         JsonNode response = getJson("/peekaboot/api/traces/insights");
@@ -125,16 +82,9 @@ class DashboardTraceViewTest {
         assertThat(traces).isNotNull();
         assertThat(traces.isArray()).isTrue();
 
-        boolean found = false;
-        for (JsonNode trace : traces) {
-            if (testTraceId.equals(trace.get("traceId").asText())) {
-                found = true;
-                break;
-            }
-        }
-        assertThat(found)
-            .as("Trace ID %s should be visible in dashboard API", testTraceId)
-            .isTrue();
+        List<String> traceIds = new ArrayList<>();
+        traces.forEach(t -> traceIds.add(t.get("traceId").asString()));
+        assertThat(traceIds).containsExactly(testTraceId);
     }
 
     @Test
@@ -210,11 +160,6 @@ class DashboardTraceViewTest {
 
     @Test
     void insightsEndpointFiltersByBucketAndReportsCounts() {
-        // Isolate from other tests' setUp()-injected traces and from
-        // whatever earlier methods in this class have accumulated, since
-        // the store is shared for the lifetime of the class.
-        traceStore.clear();
-
         Instant now = Instant.now();
         traceStore.addSpan(new SpanData("berr", "s1", null, "op", null, now, now, Duration.ZERO,
                 Map.of(), List.of(), "boom", "java.lang.RuntimeException",
@@ -227,8 +172,8 @@ class DashboardTraceViewTest {
 
         assertThat(errors.get("traces")).hasSize(1);
         assertThat(errors.get("traces").get(0).get("traceId").asString()).isEqualTo("berr");
-        assertThat(all.get("traces")).hasSize(2);
-        assertThat(all.get("bucketCounts").get("all").asInt()).isEqualTo(2);
+        assertThat(all.get("traces")).hasSize(3);
+        assertThat(all.get("bucketCounts").get("all").asInt()).isEqualTo(3);
         assertThat(all.get("bucketCounts").get("errors").asInt()).isEqualTo(1);
         assertThat(all.get("bucketCounts").get("slow").asInt()).isZero();
     }
@@ -270,5 +215,51 @@ class DashboardTraceViewTest {
             .accept(MediaType.TEXT_HTML)
             .retrieve()
             .body(String.class);
+    }
+
+    private void injectTestSpan() {
+        Instant start = Instant.now().minusMillis(100);
+        Instant end = Instant.now();
+        SpanData rootSpan = new SpanData(
+            testTraceId,
+            testSpanId,
+            null,
+            "GET /persons",
+            Span.Kind.SERVER,
+            start,
+            end,
+            Duration.between(start, end),
+            Map.of("http.method", "GET", "url.path", "/persons"),
+            List.of(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(),
+            traceStore.nextCreationOrder()
+        );
+        traceStore.addSpan(rootSpan);
+
+        SpanData dbSpan = new SpanData(
+            testTraceId,
+            "db" + testSpanId,
+            testSpanId,
+            "SELECT * FROM person",
+            Span.Kind.CLIENT,
+            start.plusMillis(10),
+            end.minusMillis(10),
+            Duration.ofMillis(80),
+            Map.of("db.system", "h2", "db.statement", "SELECT * FROM person"),
+            List.of(),
+            null,
+            null,
+            null,
+            null,
+            null,
+            List.of(),
+            traceStore.nextCreationOrder()
+        );
+        traceStore.addSpan(dbSpan);
     }
 }
