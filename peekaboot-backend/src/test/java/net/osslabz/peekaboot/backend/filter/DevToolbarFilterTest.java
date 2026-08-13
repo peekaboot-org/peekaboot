@@ -34,8 +34,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DevToolbarFilterTest {
 
-    @Mock
-    ToolbarDataProvider toolbarDataProvider;
+    ToolbarDataProvider toolbarDataProvider = new ToolbarDataProvider();
 
     @Mock
     Tracer tracer;
@@ -124,8 +123,6 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
         stubHtmlResponse(htmlContent);
@@ -153,15 +150,15 @@ class DevToolbarFilterTest {
         when(tracer.currentSpan()).thenReturn(span);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{}");
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
         stubHtmlResponse(htmlContent);
 
         filter.doFilter(request, response, chain);
 
-        verify(toolbarDataProvider).getToolbarSummaryJson("GET", "/users/123", 200, "abc123traceid");
+        // resolved traceId must reach the real, injected toolbar JSON
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("abc123traceid");
     }
 
     @Test
@@ -174,8 +171,6 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><BODY>İİİ</BODY></html>";
         stubHtmlResponse(htmlContent);
@@ -198,8 +193,6 @@ class DevToolbarFilterTest {
         when(response.getCharacterEncoding()).thenReturn("ISO-8859-1");
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200}");
 
         String htmlContent = "<html><body>Käse</body></html>";
         stubResponse("text/html;charset=ISO-8859-1", htmlContent);
@@ -238,14 +231,19 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+
+        // ToolbarDataProvider is a plain, real class with no injectable failure point;
+        // a locally-scoped mock is needed here to force the error path this test targets.
+        ToolbarDataProvider throwingProvider = mock(ToolbarDataProvider.class);
+        when(throwingProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
                 .thenThrow(new RuntimeException("Provider error"));
+        DevToolbarFilter throwingFilter = new DevToolbarFilter(throwingProvider, tracer);
 
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
         stubHtmlResponse(htmlContent);
 
         try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class)) {
-            filter.doFilter(request, response, chain);
+            throwingFilter.doFilter(request, response, chain);
 
             String result = originalOutput.toString(StandardCharsets.UTF_8);
             assertThat(result).isEqualTo(htmlContent);
@@ -311,8 +309,6 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
         stubHtmlResponse("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
@@ -327,7 +323,6 @@ class DevToolbarFilterTest {
         when(request.getRequestURI()).thenReturn("/swagger-ui/index.html");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(toolbarDataProvider.getIdleModeJson()).thenReturn("{\"idle\":true,\"basePath\":\"/peekaboot\"}");
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
         stubHtmlResponse("<html><body><div id=\"swagger-ui\"></div></body></html>");
@@ -348,8 +343,6 @@ class DevToolbarFilterTest {
         when(response.getStatus()).thenReturn(200);
 
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
-                .thenReturn("{\"method\":\"GET\",\"path\":\"/users/123\",\"status\":200,\"basePath\":\"/peekaboot\"}");
         stubHtmlResponse("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);

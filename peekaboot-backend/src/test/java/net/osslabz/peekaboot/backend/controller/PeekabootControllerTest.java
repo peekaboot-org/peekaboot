@@ -310,7 +310,8 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReturnResponseFromService() {
-            ActuatorInsightsResponse expected = mock(ActuatorInsightsResponse.class);
+            ActuatorInsightsResponse expected = new ActuatorInsightsResponse(
+                    null, null, null, null, null, null, null, null, null, null);
             when(actuatorInsightsService.getInsights(any())).thenReturn(expected);
 
             ActuatorInsightsResponse result = controller.getInsights(null);
