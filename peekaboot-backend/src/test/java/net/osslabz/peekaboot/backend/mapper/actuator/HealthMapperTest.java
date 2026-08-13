@@ -30,6 +30,27 @@ class HealthMapperTest {
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components()).hasSize(1);
         assertThat(result.components().get(0).name()).isEqualTo("db");
+        assertThat(result.components().get(0).status()).isEqualTo(HealthStatus.UP);
+    }
+
+    @Test
+    void map_shouldMapPerComponentStatusIndependentlyOfAggregateStatus() {
+        // Aggregate status is UP even though the "cache" component itself is DOWN,
+        // proving per-component status is read from the component, not copied
+        // from the top-level aggregate.
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of())),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health);
+
+        assertThat(result.status()).isEqualTo(HealthStatus.UP);
+        assertThat(result.components().get(0).status()).isEqualTo(HealthStatus.DOWN);
     }
 
     @Test

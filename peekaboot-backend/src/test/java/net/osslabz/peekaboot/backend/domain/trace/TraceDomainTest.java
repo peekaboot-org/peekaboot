@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.domain.trace;
 
+import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -140,5 +141,98 @@ class TraceDomainTest {
         assertThat(response.traces()).hasSize(1);
         assertThat(response.summary().traceCount()).isEqualTo(1);
         assertThat(response.summary().avgDurationMs()).isEqualTo(100.0);
+    }
+
+    @Test
+    void httpExchange_from_mapsAllFieldsWhenPresent() {
+        RequestCompletedEvent event = new RequestCompletedEvent(
+            "trace-1",
+            "POST", "/api/users", "sort=name",
+            Map.of("Content-Type", "application/json"),
+            "{\"name\":\"joe\"}", false,
+            "UserController", "create",
+            Map.of("sort", List.of("name")),
+            Map.of("field", List.of("value")),
+            List.of(new RequestCompletedEvent.UploadedFile("file", "photo.png", "image/png", 1024L)),
+            201,
+            Map.of("Location", "/api/users/1"),
+            50L
+        );
+
+        HttpExchange exchange = HttpExchange.from(event);
+
+        assertThat(exchange.request().method()).isEqualTo("POST");
+        assertThat(exchange.request().path()).isEqualTo("/api/users");
+        assertThat(exchange.request().query()).isEqualTo("sort=name");
+        assertThat(exchange.request().headers()).containsEntry("Content-Type", "application/json");
+        assertThat(exchange.request().body().truncated()).isFalse();
+        assertThat(exchange.request().body().content()).isEqualTo("{\"name\":\"joe\"}");
+        assertThat(exchange.request().controller().className()).isEqualTo("UserController");
+        assertThat(exchange.request().controller().method()).isEqualTo("create");
+        assertThat(exchange.request().params().query()).containsEntry("sort", List.of("name"));
+        assertThat(exchange.request().params().form()).containsEntry("field", List.of("value"));
+        assertThat(exchange.request().params().upload()).hasSize(1);
+        assertThat(exchange.request().params().upload().getFirst().fieldName()).isEqualTo("file");
+        assertThat(exchange.request().params().upload().getFirst().originalFilename()).isEqualTo("photo.png");
+        assertThat(exchange.request().params().upload().getFirst().contentType()).isEqualTo("image/png");
+        assertThat(exchange.request().params().upload().getFirst().size()).isEqualTo(1024L);
+        assertThat(exchange.response().status()).isEqualTo(201);
+        assertThat(exchange.response().headers()).containsEntry("Location", "/api/users/1");
+    }
+
+    @Test
+    void httpExchange_from_defaultsNullQueryParamsToEmptyMap() {
+        HttpExchange exchange = HttpExchange.from(minimalEvent(null, Map.of(), List.of(), Map.of(), Map.of()));
+
+        assertThat(exchange.request().params().query()).isEmpty();
+    }
+
+    @Test
+    void httpExchange_from_defaultsNullFormParamsToEmptyMap() {
+        HttpExchange exchange = HttpExchange.from(minimalEvent(Map.of(), null, List.of(), Map.of(), Map.of()));
+
+        assertThat(exchange.request().params().form()).isEmpty();
+    }
+
+    @Test
+    void httpExchange_from_defaultsNullUploadedFilesToEmptyList() {
+        HttpExchange exchange = HttpExchange.from(minimalEvent(Map.of(), Map.of(), null, Map.of(), Map.of()));
+
+        assertThat(exchange.request().params().upload()).isEmpty();
+    }
+
+    @Test
+    void httpExchange_from_defaultsNullRequestHeadersToEmptyMap() {
+        HttpExchange exchange = HttpExchange.from(minimalEvent(Map.of(), Map.of(), List.of(), null, Map.of()));
+
+        assertThat(exchange.request().headers()).isEmpty();
+    }
+
+    @Test
+    void httpExchange_from_defaultsNullResponseHeadersToEmptyMap() {
+        HttpExchange exchange = HttpExchange.from(minimalEvent(Map.of(), Map.of(), List.of(), Map.of(), null));
+
+        assertThat(exchange.response().headers()).isEmpty();
+    }
+
+    private RequestCompletedEvent minimalEvent(
+            Map<String, List<String>> queryParams,
+            Map<String, List<String>> formParams,
+            List<RequestCompletedEvent.UploadedFile> uploadedFiles,
+            Map<String, String> requestHeaders,
+            Map<String, String> responseHeaders) {
+        return new RequestCompletedEvent(
+            "trace-1",
+            "GET", "/api/users", null,
+            requestHeaders,
+            null, false,
+            "UserController", "list",
+            queryParams,
+            formParams,
+            uploadedFiles,
+            200,
+            responseHeaders,
+            10L
+        );
     }
 }

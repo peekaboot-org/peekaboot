@@ -195,11 +195,11 @@ class DashboardTraceViewTest {
 
         assertThat(summary).isNotNull();
         JsonNode queries = summary.get("queries");
-        int queryCount = queries != null && queries.has("count") ? queries.get("count").asInt(-1) : -1;
 
-        assertThat(queryCount)
-            .as("Summary should contain queries.count >= 0")
-            .isGreaterThanOrEqualTo(0);
+        assertThat(queries).isNotNull();
+        assertThat(queries.get("count").asInt(-1))
+            .as("the single DB span injected by injectTestSpan() must be counted as exactly one query")
+            .isEqualTo(1);
     }
 
     @Test

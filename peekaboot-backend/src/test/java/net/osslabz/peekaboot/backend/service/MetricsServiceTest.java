@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import net.osslabz.peekaboot.backend.domain.metrics.MetricGroup;
+import net.osslabz.peekaboot.backend.domain.metrics.MetricMeasurement;
+import net.osslabz.peekaboot.backend.domain.metrics.MetricStatistic;
 import net.osslabz.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.junit.jupiter.api.Test;
 
@@ -67,7 +69,48 @@ class MetricsServiceTest {
         MetricGroup group = result.metrics().get(0);
         assertThat(group.name()).isEqualTo("jvm.memory.used");
         assertThat(group.type()).isEqualTo("GAUGE");
+        assertThat(group.baseUnit()).isEqualTo("bytes");
         assertThat(group.measurements()).hasSize(2);
+    }
+
+    @Test
+    void getMetrics_reportsActualStatisticValueForGauge() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        AtomicLong memoryUsed = new AtomicLong(1024);
+
+        Gauge.builder("jvm.memory.used", memoryUsed, AtomicLong::doubleValue)
+                .tags("area", "heap")
+                .register(registry);
+
+        MetricsService service = new MetricsService(registry);
+
+        MetricsInfo result = service.getMetrics();
+
+        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
+        assertThat(measurement.statistics()).isNotEmpty();
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::value)
+                .contains(1024.0);
+    }
+
+    @Test
+    void getMetrics_reportsActualStatisticValueForCounter() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        Counter.builder("http.requests")
+                .tag("method", "GET")
+                .register(registry)
+                .increment(42);
+
+        MetricsService service = new MetricsService(registry);
+
+        MetricsInfo result = service.getMetrics();
+
+        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
+        assertThat(measurement.statistics()).isNotEmpty();
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::value)
+                .contains(42.0);
     }
 
     @Test

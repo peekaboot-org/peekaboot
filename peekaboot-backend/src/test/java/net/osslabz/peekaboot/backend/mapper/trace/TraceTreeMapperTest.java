@@ -464,6 +464,71 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
 
+    @Test
+    void map_shouldExtractRequestSummaryFromStandardTags() {
+        var root = createSpan("trace1", "root", null, "GET /api/users",
+                Span.Kind.SERVER, 0, 100,
+                Map.of("http.method", "GET", "http.target", "/api/users", "http.status_code", "200"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().request()).isNotNull();
+        assertThat(result.summary().request().method()).isEqualTo("GET");
+        assertThat(result.summary().request().path()).isEqualTo("/api/users");
+        assertThat(result.summary().request().statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void map_shouldExtractRequestSummaryFromFallbackTags() {
+        var root = createSpan("trace1", "root", null, "POST /api/orders",
+                Span.Kind.SERVER, 0, 100,
+                Map.of("http.request.method", "POST", "url.path", "/api/orders",
+                        "http.response.status_code", "201"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().request().method()).isEqualTo("POST");
+        assertThat(result.summary().request().path()).isEqualTo("/api/orders");
+        assertThat(result.summary().request().statusCode()).isEqualTo(201);
+    }
+
+    @Test
+    void map_shouldTolerateMalformedStatusCodeInRequestSummary() {
+        var root = createSpan("trace1", "root", null, "GET /api/users",
+                Span.Kind.SERVER, 0, 100,
+                Map.of("http.method", "GET", "http.status_code", "not-a-number"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().request().method()).isEqualTo("GET");
+        assertThat(result.summary().request().statusCode()).isNull();
+    }
+
+    @Test
+    void map_shouldMapSpanEventsFromNonEmptyEventsList() {
+        var eventTime = Instant.parse("2024-01-15T10:00:00.500Z");
+        var span = new SpanData(
+                "trace1", "span1", null, "op", Span.Kind.SERVER,
+                Instant.EPOCH, Instant.EPOCH.plusMillis(100), Duration.ofMillis(100),
+                Map.of(), List.of(new SpanData.Event("cache-miss", eventTime)),
+                null, null, null, null, null, List.of(), 0
+        );
+
+        var traceData = TraceData.fromSpans("trace1", List.of(span));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().events()).hasSize(1);
+        assertThat(result.rootSpan().events().getFirst().name()).isEqualTo("cache-miss");
+        assertThat(result.rootSpan().events().getFirst().timestamp()).isEqualTo(eventTime);
+    }
+
     // Helper methods to create test data
     private SpanData createSpan(String traceId, String spanId, String parentId, String name,
                                 Span.Kind kind, long startOffsetMs, long durationMs,

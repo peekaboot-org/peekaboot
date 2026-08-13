@@ -1,6 +1,8 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.peekaboot.backend.actuator.raw.LoggersResponse;
+import net.osslabz.peekaboot.backend.domain.loggers.LoggerGroup;
+import net.osslabz.peekaboot.backend.domain.loggers.LoggerInfo;
 import net.osslabz.peekaboot.backend.domain.loggers.LoggersInfo;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,15 @@ class LoggersMapperTest {
 
         assertThat(result.packages()).hasSize(2);
         assertThat(result.totalCount()).isEqualTo(3);
+
+        LoggerGroup exampleGroup = result.packages().stream()
+                .filter(g -> g.packageName().equals("com.example"))
+                .findFirst().orElseThrow();
+        assertThat(exampleGroup.loggers())
+                .extracting(LoggerInfo::name, LoggerInfo::effectiveLevel)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("com.example.service.UserService", "INFO"),
+                        org.assertj.core.groups.Tuple.tuple("com.example.controller.UserController", "DEBUG"));
     }
 
     @Test
@@ -39,6 +50,18 @@ class LoggersMapperTest {
 
         assertThat(result.configuredCount()).isEqualTo(1);
         assertThat(result.totalCount()).isEqualTo(2);
+
+        LoggerInfo foo = result.packages().get(0).loggers().stream()
+                .filter(l -> l.name().equals("com.example.Foo"))
+                .findFirst().orElseThrow();
+        assertThat(foo.configuredLevel()).isEqualTo("DEBUG");
+        assertThat(foo.effectiveLevel()).isEqualTo("INFO");
+
+        LoggerInfo bar = result.packages().get(0).loggers().stream()
+                .filter(l -> l.name().equals("com.example.Bar"))
+                .findFirst().orElseThrow();
+        assertThat(bar.configuredLevel()).isNull();
+        assertThat(bar.effectiveLevel()).isEqualTo("INFO");
     }
 
     @Test

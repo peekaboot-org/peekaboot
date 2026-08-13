@@ -1,6 +1,7 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
 import net.osslabz.peekaboot.backend.actuator.raw.ConfigPropsResponse;
+import net.osslabz.peekaboot.backend.domain.config.ConfigGroup;
 import net.osslabz.peekaboot.backend.domain.config.ConfigInfo;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +36,28 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops);
 
         assertThat(result.groups()).hasSize(2);
+        assertThat(result.groups())
+                .extracting(ConfigGroup::prefix)
+                .containsExactlyInAnyOrder("spring.datasource", "server");
+    }
+
+    @Test
+    void map_shouldFallBackToUnknownPrefixWhenPrefixIsNull() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("mystery-MysteryProperties", new ConfigPropsResponse.ConfigBean(
+                    null,
+                    Map.of("value", "1"),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops);
+
+        assertThat(result.groups()).hasSize(1);
+        assertThat(result.groups().get(0).prefix()).isEqualTo("unknown");
     }
 
     @Test

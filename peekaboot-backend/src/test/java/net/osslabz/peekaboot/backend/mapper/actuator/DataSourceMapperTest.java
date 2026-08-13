@@ -1,5 +1,6 @@
 package net.osslabz.peekaboot.backend.mapper.actuator;
 
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import net.osslabz.peekaboot.backend.actuator.raw.HealthResponse;
@@ -7,6 +8,8 @@ import net.osslabz.peekaboot.backend.domain.datasource.DataSourceInfo;
 import net.osslabz.peekaboot.backend.domain.health.HealthStatus;
 import net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
 import java.util.Map;
@@ -108,5 +111,40 @@ class DataSourceMapperTest {
 
         List<DataSourceInfo> result = mapper.map(listWithNulls, null);
         assertThat(result).hasSize(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "MySQL 8.0, MYSQL",
+        "MariaDB 10.6, MARIADB",
+        "H2, H2",
+        "Oracle Database 19c, ORACLE",
+        "Microsoft SQL Server 2019, SQLSERVER",
+        "SQLite, SQLITE",
+        "Apache Derby, DERBY",
+        "HSQL Database Engine, HSQLDB",
+        "SomeExoticDatabase, UNKNOWN"
+    })
+    void map_shouldDetectDatabaseProductForEachVendor(String productName, DatabaseProduct expected) {
+        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+        when(metadata.getDataSourceName()).thenReturn("ds");
+        when(metadata.getHosts()).thenReturn(List.of());
+        when(metadata.getDatabaseProductName()).thenReturn(productName);
+
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+
+        assertThat(result.get(0).databaseProduct()).isEqualTo(expected);
+    }
+
+    @Test
+    void map_shouldDetectUnknownDatabaseProductWhenNameIsNull() {
+        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+        when(metadata.getDataSourceName()).thenReturn("ds");
+        when(metadata.getHosts()).thenReturn(List.of());
+        when(metadata.getDatabaseProductName()).thenReturn(null);
+
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+
+        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.UNKNOWN);
     }
 }

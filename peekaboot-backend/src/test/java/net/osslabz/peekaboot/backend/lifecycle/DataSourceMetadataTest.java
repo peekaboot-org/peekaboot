@@ -32,6 +32,26 @@ class DataSourceMetadataTest {
     }
 
     @Test
+    void extractsRemainingMetadataFieldsFromWorkingDataSource() {
+        JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL("jdbc:h2:mem:metadata-test-2;DB_CLOSE_DELAY=-1");
+
+        Optional<DataSourceMetadata> metadata = DataSourceMetadata.fromDataSource("primary", dataSource);
+
+        assertThat(metadata).isPresent();
+        DataSourceMetadata m = metadata.get();
+        assertThat(m.getUsername()).isEqualTo("");
+        assertThat(m.getHosts()).isEmpty();
+        assertThat(m.getDatabaseName()).isEqualTo("metadata-test-2");
+        // JdbcUrlParser derives a MODE connection param from the h2 in-memory URL
+        assertThat(m.getConnectionParams()).containsKey("MODE");
+        assertThat(m.getConnectionParams().get("MODE").value()).isEqualTo("MEMORY");
+        assertThat(m.getDriverName()).isEqualTo("H2 JDBC Driver");
+        assertThat(m.getDriverVersion()).isNotBlank();
+        assertThat(m.getDatabaseProductVersion()).isNotBlank();
+    }
+
+    @Test
     void returnsEmptyWhenConnectionFails() throws SQLException {
         DataSource failing = mock(DataSource.class);
         when(failing.getConnection()).thenThrow(new SQLException("db down"));

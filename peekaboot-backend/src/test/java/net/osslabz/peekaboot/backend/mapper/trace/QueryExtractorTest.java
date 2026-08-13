@@ -255,6 +255,23 @@ class QueryExtractorTest {
         assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ? AND active = true");
     }
 
+    @Test
+    void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
+        var querySpan = createSpan("q1", "query", 50,
+                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
+                10);
+        var resultSetSpan = createSpan("rs1", "result-set", 5,
+                Map.of("jdbc.row-count", "not-a-number", "peer.service", "db"),
+                11);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan, resultSetSpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).rowCount()).isNull();
+    }
+
     private SpanData createSpan(String spanId, String name, long durationMs,
                                 Map<String, String> tags, long creationOrder) {
         Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);

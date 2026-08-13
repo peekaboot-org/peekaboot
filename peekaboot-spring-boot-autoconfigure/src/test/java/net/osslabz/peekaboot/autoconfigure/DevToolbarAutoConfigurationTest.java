@@ -74,6 +74,23 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
+    void shouldNotCreateFilterBeansWhenTracerBeanMissing() {
+        // TraceStore is on the classpath and present as a bean, but no Tracer
+        // bean exists: devToolbarFilter/requestCaptureFilter's
+        // @ConditionalOnBean(Tracer.class) must keep them unregistered, while
+        // toolbarDataProvider (no such condition) still registers.
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(TraceStoreOnlyConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                    assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                });
+    }
+
+    @Test
     void peekabootDisabledWinsOverDevToolbarFlag() {
         // peekaboot.enabled=false skips PeekabootAutoConfiguration (and with it
         // the PeekabootProperties bean); the toolbar must switch off cleanly
@@ -185,5 +202,13 @@ class DevToolbarAutoConfigurationTest {
     @Configuration
     @EnableConfigurationProperties(PeekabootProperties.class)
     static class MinimalPropertiesConfig {
+    }
+
+    @Configuration
+    static class TraceStoreOnlyConfig {
+        @Bean
+        TraceStore traceStore() {
+            return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        }
     }
 }

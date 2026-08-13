@@ -12,6 +12,7 @@ import net.osslabz.peekaboot.backend.mapper.trace.QueryExtractor;
 import net.osslabz.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import net.osslabz.peekaboot.backend.tracing.event.LogCapturedEvent;
+import net.osslabz.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import net.osslabz.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
@@ -291,6 +292,54 @@ class TraceInsightsServiceTest {
         assertThat(result.get().queries()).isNullOrEmpty();
     }
 
+    @Test
+    void getInsights_shouldFilterByRootActionType() {
+        addTrace("trace1", 100, false); // SERVER kind, no tags -> HTTP_REQUEST (default)
+        addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    @Test
+    void getInsights_shouldIgnoreInvalidRootActionTypeFilter() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "not-a-real-type", null);
+
+        // Invalid filter value is caught and ignored, so no filtering is applied
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    @Test
+    void getInsights_shouldFilterByRootOperationPartialCaseInsensitiveMatch() {
+        addTraceWithOperation("trace1", "GET /api/Users", 100);
+        addTraceWithOperation("trace2", "POST /orders", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    @Test
+    void getTraceInsights_shouldEnrichWithHttpExchange() {
+        addTrace("trace1", 100, false);
+        store.setRequest(new RequestCompletedEvent(
+                "trace1", "GET", "/users", null,
+                Map.of(), null, false,
+                "UserController", "list",
+                Map.of(), Map.of(), List.of(),
+                200, Map.of(), 100));
+
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().httpExchange()).isNotNull();
+        assertThat(result.get().httpExchange().request().method()).isEqualTo("GET");
+        assertThat(result.get().httpExchange().response().status()).isEqualTo(200);
+    }
+
     private TraceInsightsService newService(TraceStore store) {
         return new TraceInsightsService(store, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
     }
@@ -319,6 +368,28 @@ class TraceInsightsServiceTest {
                 store.nextCreationOrder()
         );
 
+        store.addSpan(span);
+    }
+
+    private void addConsumerTrace(String traceId, long durationMs) {
+        Instant start = Instant.EPOCH;
+        SpanData span = new SpanData(
+                traceId, "span-" + traceId, null, "receive message", Span.Kind.CONSUMER,
+                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
+                Map.of(), List.of(), null, null, null, null, null, List.of(),
+                store.nextCreationOrder()
+        );
+        store.addSpan(span);
+    }
+
+    private void addTraceWithOperation(String traceId, String operationName, long durationMs) {
+        Instant start = Instant.EPOCH;
+        SpanData span = new SpanData(
+                traceId, "span-" + traceId, null, operationName, Span.Kind.SERVER,
+                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
+                Map.of(), List.of(), null, null, null, null, null, List.of(),
+                store.nextCreationOrder()
+        );
         store.addSpan(span);
     }
 

@@ -62,6 +62,32 @@ class ToolbarScriptTest {
         return page;
     }
 
+    /**
+     * Loads the toolbar with a stubbed {@code window.fetch} (and an immediate,
+     * synchronous {@code window.setTimeout}) installed before toolbar.js runs,
+     * so the retry/backoff and rendering logic in {@code loadTrace}/{@code fetchTrace}
+     * can be driven deterministically instead of waiting on real timers.
+     */
+    private HtmlPage loadPageWithFetchStub(String dataJson, String fetchStubJs) throws IOException {
+        webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
+        webClient.getOptions().setCssEnabled(false);
+        MockWebConnection connection = new MockWebConnection();
+        connection.setDefaultResponse(
+                "<html><head></head><body>"
+                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">" + dataJson + "</script>"
+                + "</body></html>");
+        webClient.setWebConnection(connection);
+        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        page.executeJavaScript(ATTACH_SHADOW_SHIM);
+        page.executeJavaScript("window.setTimeout = function(fn) { fn(); };");
+        page.executeJavaScript(fetchStubJs);
+
+        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
+        page.executeJavaScript(toolbarJs);
+        return page;
+    }
+
     @Test
     void createsToolbarHostAndGlobalApi() throws IOException {
         HtmlPage page = loadPageWithToolbar(
@@ -138,5 +164,194 @@ class ToolbarScriptTest {
 
         ScriptResult wrapped = page.executeJavaScript("window.fetch === window.__originalFetchBefore");
         assertThat(wrapped.getJavaScriptResult()).isEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void updateToolbarRendersDurationClassQueryCountAndControllerName() throws IOException {
+        HtmlPage page = loadPageWithFetchStub(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":\"abc123\",\"basePath\":\"/peekaboot\"}",
+                """
+                window.fetch = function(url) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: function() {
+                            return Promise.resolve({
+                                rootSpan: {},
+                                durationMs: 600,
+                                summary: {
+                                    spans: { count: 1 },
+                                    queries: { count: 2, totalDurationMs: 150 },
+                                    logs: { errorCount: 1, warnCount: 2 }
+                                },
+                                queries: [1, 2],
+                                httpExchange: {
+                                    request: { controller: { class: "com.example.UserController", method: "list" } }
+                                }
+                            });
+                        }
+                    });
+                };
+                """);
+
+        webClient.waitForBackgroundJavaScript(2000);
+
+        String metricsHtml = (String) page.executeJavaScript(
+                "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
+        assertThat(metricsHtml).contains("600ms");
+        assertThat(metricsHtml).contains("peekaboot-stat error");
+        assertThat(metricsHtml).contains("2 queries");
+        assertThat(metricsHtml).contains("❗1 err");
+        assertThat(metricsHtml).contains("⚠2 warn");
+
+        String controllerText = (String) page.executeJavaScript(
+                "document.getElementById('pb-controller').textContent").getJavaScriptResult();
+        assertThat(controllerText).isEqualTo("→ UserController.list");
+    }
+
+    @Test
+    void updateToolbarUsesWarnDurationClassAboveOneHundredMs() throws IOException {
+        HtmlPage page = loadPageWithFetchStub(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":\"abc123\",\"basePath\":\"/peekaboot\"}",
+                """
+                window.fetch = function(url) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: function() {
+                            return Promise.resolve({
+                                rootSpan: {},
+                                durationMs: 150,
+                                summary: { spans: { count: 1 }, queries: { count: 0 }, logs: {} }
+                            });
+                        }
+                    });
+                };
+                """);
+
+        webClient.waitForBackgroundJavaScript(2000);
+
+        String metricsHtml = (String) page.executeJavaScript(
+                "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
+        assertThat(metricsHtml).contains("150ms");
+        assertThat(metricsHtml).contains("peekaboot-stat warn");
+        assertThat(metricsHtml).doesNotContain("queries");
+    }
+
+    @Test
+    void showPendingRendersWhenFetchRejects() throws IOException {
+        HtmlPage page = loadPageWithFetchStub(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":\"abc123\",\"basePath\":\"/peekaboot\"}",
+                "window.fetch = function(url) { return Promise.reject(new Error('network down')); };");
+
+        webClient.waitForBackgroundJavaScript(2000);
+
+        String metricsHtml = (String) page.executeJavaScript(
+                "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
+        assertThat(metricsHtml).contains("peekaboot-pending");
+    }
+
+    @Test
+    void fetchTraceRetriesUntilTraceIsComplete() throws IOException {
+        // First poll returns a trace with no rootSpan/summary (incomplete); the
+        // second poll returns a complete trace. The synchronous setTimeout stub
+        // in loadPageWithFetchStub lets the retry fire immediately.
+        HtmlPage page = loadPageWithFetchStub(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":\"abc123\",\"basePath\":\"/peekaboot\"}",
+                """
+                window.__fetchCallCount = 0;
+                window.fetch = function(url) {
+                    window.__fetchCallCount++;
+                    const complete = window.__fetchCallCount > 1;
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        json: function() {
+                            return Promise.resolve(complete
+                                ? { rootSpan: {}, durationMs: 42, summary: { spans: { count: 1 }, queries: { count: 0 }, logs: {} } }
+                                : {});
+                        }
+                    });
+                };
+                """);
+
+        webClient.waitForBackgroundJavaScript(2000);
+
+        int fetchCallCount = ((Number) page.executeJavaScript("window.__fetchCallCount").getJavaScriptResult()).intValue();
+        assertThat(fetchCallCount).isGreaterThanOrEqualTo(2);
+
+        String metricsHtml = (String) page.executeJavaScript(
+                "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
+        assertThat(metricsHtml).contains("42ms");
+    }
+
+    @Test
+    void fetchTraceRetriesOn404UntilBackoffCapThenShowsPending() throws IOException {
+        HtmlPage page = loadPageWithFetchStub(
+                "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":\"abc123\",\"basePath\":\"/peekaboot\"}",
+                """
+                window.__fetchCallCount = 0;
+                window.fetch = function(url) {
+                    window.__fetchCallCount++;
+                    return Promise.resolve({ ok: false, status: 404 });
+                };
+                """);
+
+        webClient.waitForBackgroundJavaScript(5000);
+
+        // retryDelay starts at 250 and doubles each time until totalDelay >= 32000,
+        // so there are a bounded number of retries before the code gives up.
+        int fetchCallCount = ((Number) page.executeJavaScript("window.__fetchCallCount").getJavaScriptResult()).intValue();
+        assertThat(fetchCallCount).isGreaterThan(1);
+
+        String metricsHtml = (String) page.executeJavaScript(
+                "document.getElementById('pb-metrics').innerHTML").getJavaScriptResult();
+        assertThat(metricsHtml).contains("peekaboot-pending");
+    }
+
+    @Test
+    void clickLazyLoadsTraceDetailScriptAndOpensItOnLoad() throws IOException {
+        webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
+        webClient.getOptions().setCssEnabled(false);
+        MockWebConnection connection = new MockWebConnection();
+        connection.setDefaultResponse(
+                "<html><head></head><body>"
+                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">"
+                + "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}"
+                + "</script>"
+                + "</body></html>");
+        // The click handler lazy-loads this script as a real <script src> element;
+        // serve harmless JS so the load succeeds and onload fires.
+        connection.setResponse(
+                new java.net.URL("http://localhost/peekaboot/ui/trace-detail/trace-detail.js"),
+                "window.PeekabootTraceDetail = { open: function(traceId, opts) { window.__openedWith = traceId; } };",
+                "text/javascript");
+        webClient.setWebConnection(connection);
+        HtmlPage page = webClient.getPage("http://localhost/test.html");
+        page.executeJavaScript(ATTACH_SHADOW_SHIM);
+
+        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
+        page.executeJavaScript(toolbarJs);
+
+        // This HtmlUnit configuration has no native fetch; stub it so the
+        // background poll loadTrace schedules doesn't blow up with a
+        // ReferenceError (its rejection is swallowed by fetchTrace's .catch).
+        page.executeJavaScript("window.fetch = function() { return Promise.reject(new Error('no network')); };");
+        // Simulate an active trace without going through the async fetch flow;
+        // loadTrace sets currentTraceId synchronously before scheduling any fetch.
+        page.executeJavaScript("window.__peekaboot.loadTrace('trace-xyz', 'GET', '/persons', 200);");
+
+        page.executeJavaScript(
+                "document.querySelector('.peekaboot-bar').dispatchEvent(new MouseEvent('click', {bubbles: true}));");
+        webClient.waitForBackgroundJavaScript(2000);
+
+        String scriptSrc = (String) page.executeJavaScript(
+                "(function() { const s = document.head.querySelector('script[src*=\"trace-detail\"]'); return s ? s.src : null; })()"
+        ).getJavaScriptResult();
+        assertThat(scriptSrc).endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
+
+        String openedWith = (String) page.executeJavaScript("window.__openedWith").getJavaScriptResult();
+        assertThat(openedWith).isEqualTo("trace-xyz");
     }
 }

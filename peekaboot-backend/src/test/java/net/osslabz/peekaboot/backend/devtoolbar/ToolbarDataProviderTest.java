@@ -93,4 +93,14 @@ class ToolbarDataProviderTest {
         assertThat(json).contains("\\u0000");
         assertThat(json).contains("\\u0007");
     }
+
+    @Test
+    void shouldGenerateIdleModeJson() {
+        String json = provider.getIdleModeJson();
+
+        assertThat(json).startsWith("{");
+        assertThat(json).endsWith("}");
+        assertThat(json).contains("\"idle\":true");
+        assertThat(json).contains("\"basePath\":\"/peekaboot\"");
+    }
 }

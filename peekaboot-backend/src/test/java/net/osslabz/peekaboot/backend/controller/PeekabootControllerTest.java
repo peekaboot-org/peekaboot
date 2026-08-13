@@ -1,7 +1,9 @@
 package net.osslabz.peekaboot.backend.controller;
 
+import net.osslabz.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import net.osslabz.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import net.osslabz.peekaboot.backend.config.PeekabootProperties;
+import net.osslabz.peekaboot.backend.domain.metrics.MetricsInfo;
 import net.osslabz.peekaboot.backend.domain.trace.BucketCounts;
 import net.osslabz.peekaboot.backend.domain.trace.CollectionFramework;
 import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
@@ -28,6 +30,7 @@ import org.springframework.http.ResponseEntity;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -275,6 +278,76 @@ class PeekabootControllerTest {
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features).doesNotContainKey("traceCaptureMode");
+        }
+    }
+
+    @Nested
+    class GetInsights {
+
+        @Test
+        void shouldDefaultToEnglishWhenLocaleIsNull() {
+            controller.getInsights(null);
+
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH);
+        }
+
+        @Test
+        void shouldDefaultToEnglishWhenLocaleIsBlank() {
+            controller.getInsights("  ");
+
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH);
+        }
+
+        @Test
+        void shouldReplaceUnderscoreWithHyphenBeforeParsingLocale() {
+            controller.getInsights("en_US");
+
+            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("en-US"));
+        }
+
+        @Test
+        void shouldParseLocaleWithHyphenDirectly() {
+            controller.getInsights("de-DE");
+
+            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("de-DE"));
+        }
+
+        @Test
+        void shouldReturnResponseFromService() {
+            ActuatorInsightsResponse expected = mock(ActuatorInsightsResponse.class);
+            when(actuatorInsightsService.getInsights(any())).thenReturn(expected);
+
+            ActuatorInsightsResponse result = controller.getInsights(null);
+
+            assertThat(result).isSameAs(expected);
+        }
+    }
+
+    @Nested
+    class GetRaw {
+
+        @Test
+        void shouldReturnDataFromService() {
+            ActuatorRawResponse expected = ActuatorRawResponse.wrap(Map.of("health", "UP"));
+            when(actuatorService.getData()).thenReturn(expected);
+
+            ActuatorRawResponse result = controller.getRaw();
+
+            assertThat(result).isSameAs(expected);
+        }
+    }
+
+    @Nested
+    class GetMetrics {
+
+        @Test
+        void shouldReturnMetricsFromService() {
+            MetricsInfo expected = MetricsInfo.empty();
+            when(metricsService.getMetrics()).thenReturn(expected);
+
+            MetricsInfo result = controller.getMetrics();
+
+            assertThat(result).isSameAs(expected);
         }
     }
 

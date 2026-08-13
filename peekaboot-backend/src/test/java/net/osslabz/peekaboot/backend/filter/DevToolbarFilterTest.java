@@ -4,6 +4,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletOutputStream;
@@ -28,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -150,6 +153,40 @@ class DevToolbarFilterTest {
         assertThat(result).contains("peekaboot-toolbar-data");
         assertThat(result).contains("<h1>Hello</h1>");
         assertThat(result).endsWith("</body></html>");
+    }
+
+    @Test
+    void shouldResolveTraceIdFromCurrentSpanWhenPresent() throws Exception {
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+
+        Span span = mock(Span.class);
+        TraceContext context = mock(TraceContext.class);
+        when(context.traceId()).thenReturn("abc123traceid");
+        when(span.context()).thenReturn(context);
+        when(tracer.currentSpan()).thenReturn(span);
+
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
+        when(response.getOutputStream()).thenReturn(servletOutputStream);
+        when(toolbarDataProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+                .thenReturn("{}");
+
+        String htmlContent = "<html><body><h1>Hello</h1></body></html>";
+        doAnswer(invocation -> {
+            ContentBufferingResponseWrapper wrapper =
+                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
+            wrapper.setContentType("text/html");
+            wrapper.getWriter().write(htmlContent);
+            when(response.getContentType()).thenReturn("text/html");
+            return null;
+        }).when(chain).doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        verify(toolbarDataProvider).getToolbarSummaryJson("GET", "/users/123", 200, "abc123traceid");
     }
 
     @Test

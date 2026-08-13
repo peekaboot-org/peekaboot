@@ -1,5 +1,9 @@
 package net.osslabz.peekaboot.backend.filter;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
@@ -17,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
@@ -356,6 +361,48 @@ class RequestCaptureFilterTest {
         filter.doFilter(request, response, chain);
 
         verify(response, never()).setHeader(eq("Server-Timing"), any());
+    }
+
+    @Test
+    void shouldLogWarningAndNotPublishEventWhenCaptureFails() throws Exception {
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/api/users");
+        when(request.getMethod()).thenReturn("GET");
+        when(response.getStatus()).thenReturn(200);
+        when(request.getHeaderNames()).thenThrow(new RuntimeException("boom"));
+
+        ListAppender<ILoggingEvent> appender = attachListAppender();
+        try {
+            filter.doFilter(request, response, chain);
+
+            verify(chain).doFilter(request, response);
+            verify(eventPublisher, never()).publishEvent(any());
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details: boom");
+            });
+        } finally {
+            detachListAppender(appender);
+        }
+    }
+
+    /**
+     * Captures {@link RequestCaptureFilter}'s WARN log instead of letting it reach the
+     * console; {@link #shouldLogWarningAndNotPublishEventWhenCaptureFails()} asserts on the captured event.
+     */
+    private static ListAppender<ILoggingEvent> attachListAppender() {
+        Logger logger = (Logger) LoggerFactory.getLogger(RequestCaptureFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        logger.setAdditive(false);
+        return appender;
+    }
+
+    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(RequestCaptureFilter.class);
+        logger.detachAppender(appender);
+        logger.setAdditive(true);
     }
 
     private void setupBasicRequestResponse() {

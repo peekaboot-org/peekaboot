@@ -5,6 +5,7 @@ import net.osslabz.peekaboot.backend.domain.flyway.FlywayInfo;
 import net.osslabz.peekaboot.backend.domain.flyway.MigrationState;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -95,5 +96,56 @@ class FlywayMapperTest {
 
         FlywayInfo result = mapper.map(flywayData);
         assertThat(result.migrations().get(0).executionTime()).isEqualTo(250);
+    }
+
+    @Test
+    void map_shouldParseInstalledOnDate() {
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, null, null, null, "2024-01-01T10:00:00Z", null, null, "SUCCESS", null, "1")
+                ))),
+                null
+            ))
+        );
+
+        FlywayInfo result = mapper.map(flywayData);
+
+        assertThat(result.migrations().get(0).installedOn()).isEqualTo(Instant.parse("2024-01-01T10:00:00Z"));
+    }
+
+    @Test
+    void map_shouldTolerateMalformedInstalledOnDate() {
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, null, null, null, "not-a-date", null, null, "SUCCESS", null, "1")
+                ))),
+                null
+            ))
+        );
+
+        FlywayInfo result = mapper.map(flywayData);
+
+        assertThat(result.migrations().get(0).installedOn()).isNull();
+    }
+
+    @Test
+    void map_shouldSortNonNumericVersionsUsingFallback() {
+        FlywayResponse flywayData = new FlywayResponse(
+            Map.of("application", new FlywayResponse.FlywayContext(
+                Map.of("flyway", new FlywayResponse.FlywayBean(List.of(
+                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "abc"),
+                    new FlywayResponse.Migration(null, null, null, null, null, null, null, "SUCCESS", null, "1")
+                ))),
+                null
+            ))
+        );
+
+        FlywayInfo result = mapper.map(flywayData);
+
+        // non-numeric parts fall back to 0 via parseIntSafe, so "abc" (0) sorts before "1"
+        assertThat(result.migrations().get(0).version()).isEqualTo("abc");
+        assertThat(result.migrations().get(1).version()).isEqualTo("1");
     }
 }

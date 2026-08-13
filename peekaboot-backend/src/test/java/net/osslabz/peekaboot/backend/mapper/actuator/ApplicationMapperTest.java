@@ -37,6 +37,11 @@ class ApplicationMapperTest {
         ApplicationInfo result = mapper.map(info, null);
         assertThat(result.git()).containsEntry("branch", "main");
         assertThat(result.git()).containsKey("commit");
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> commit = (Map<String, Object>) result.git().get("commit");
+        assertThat(commit).containsEntry("id", "abc123");
+        assertThat(commit).containsEntry("time", "2024-01-01T10:00:00Z");
     }
 
     @Test

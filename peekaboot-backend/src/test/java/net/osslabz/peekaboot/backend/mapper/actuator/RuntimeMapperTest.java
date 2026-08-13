@@ -106,4 +106,49 @@ class RuntimeMapperTest {
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
     }
+
+    @Test
+    void map_shouldReturnNullMemoryWhenHeapUsedAndMaxAreBothZero() {
+        InfoResponse info = new InfoResponse(
+            null, null, null, null,
+            new InfoResponse.ProcessInfo(
+                4,
+                new InfoResponse.ProcessInfo.MemoryInfo(
+                    new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L, 0L, 0L),
+                    null
+                ),
+                "user", 1L, 12345L
+            )
+        );
+        RuntimeInfo result = mapper.map(info, null);
+        assertThat(result.memory()).isNull();
+    }
+
+    @Test
+    void map_shouldSkipDiskEntryWhenTotalIsZeroOrNegative() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("diskSpace", new HealthResponse.HealthComponent(
+                    "UP",
+                    Map.of("total", 0L, "free", 0L, "path", "/")
+                )),
+                List.of()
+            ),
+            200
+        );
+        RuntimeInfo result = mapper.map(null, health);
+        assertThat(result.storage()).isEmpty();
+    }
+
+    @Test
+    void map_shouldReturnNullOsInfoWhenAllFieldsAreNull() {
+        InfoResponse info = new InfoResponse(
+            null, null, null,
+            new InfoResponse.OsInfo(null, null, null),
+            null
+        );
+        RuntimeInfo result = mapper.map(info, null);
+        assertThat(result.os()).isNull();
+    }
 }

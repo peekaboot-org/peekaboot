@@ -333,6 +333,38 @@ class IssueDetectorTest {
     }
 
     @Test
+    void detectIssues_shouldPreserveErrorAndRemoteServiceProperties() {
+        // Given: a span using the full-field constructor, so errorMessage/
+        // errorClass/remoteServiceName/creationOrder are all set to real values
+        SpanNode span = new SpanNode(
+                "span-id-456",
+                "remote-call",
+                "CLIENT",
+                1000L,
+                50L,
+                "ERROR",
+                List.of(),
+                Map.of(),
+                List.of(),
+                List.of(),
+                42L,
+                "boom",
+                "java.lang.RuntimeException",
+                "orders-service",
+                null
+        );
+        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        SpanNode resultSpan = result.rootSpan();
+        assertThat(resultSpan.creationOrder()).isEqualTo(42L);
+        assertThat(resultSpan.errorMessage()).isEqualTo("boom");
+        assertThat(resultSpan.errorClass()).isEqualTo("java.lang.RuntimeException");
+        assertThat(resultSpan.remoteServiceName()).isEqualTo("orders-service");
+    }
+
+    @Test
     void detectIssues_shouldHandleNullRootSpan() {
         // Given: A trace with no root span
         TraceTree trace = new TraceTree(

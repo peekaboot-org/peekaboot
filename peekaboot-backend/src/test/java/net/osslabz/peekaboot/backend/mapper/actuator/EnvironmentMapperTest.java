@@ -58,4 +58,42 @@ class EnvironmentMapperTest {
         assertThat(result.activeProfiles()).isEmpty();
         assertThat(result.propertySources()).isEmpty();
     }
+
+    @Test
+    void map_shouldFallBackToUnknownNameWhenPropertySourceNameIsNull() {
+        EnvResponse env = new EnvResponse(
+            List.of(),
+            List.of(new EnvResponse.PropertySource(
+                null,
+                Map.of("server.port", new EnvResponse.PropertyValue("8080", "application.properties"))
+            ))
+        );
+        EnvironmentInfo result = mapper.map(env);
+        assertThat(result.propertySources()).hasSize(1);
+        assertThat(result.propertySources().get(0).name()).isEqualTo("unknown");
+    }
+
+    @Test
+    void map_shouldReturnEmptyPropertiesWhenSourcePropertiesIsNull() {
+        EnvResponse env = new EnvResponse(
+            List.of(),
+            List.of(new EnvResponse.PropertySource("application.properties", null))
+        );
+        EnvironmentInfo result = mapper.map(env);
+        assertThat(result.propertySources()).hasSize(1);
+        assertThat(result.propertySources().get(0).properties()).isEmpty();
+    }
+
+    @Test
+    void map_shouldReturnNullValueWhenPropertyValueIsNull() {
+        EnvResponse env = new EnvResponse(
+            List.of(),
+            List.of(new EnvResponse.PropertySource(
+                "application.properties",
+                Map.of("some.flag", new EnvResponse.PropertyValue(null, "application.properties"))
+            ))
+        );
+        EnvironmentInfo result = mapper.map(env);
+        assertThat(result.propertySources().get(0).properties().get(0).value()).isNull();
+    }
 }

@@ -51,6 +51,16 @@ class PeekabootUtilsEscapeHtmlTest {
         return (String) result.getJavaScriptResult();
     }
 
+    private String formatDurationMs(String jsArgumentLiteral) {
+        ScriptResult result = page.executeJavaScript("PeekabootUtils.formatDurationMs(" + jsArgumentLiteral + ")");
+        return (String) result.getJavaScriptResult();
+    }
+
+    private String getDurationClass(String jsArgumentLiteral) {
+        ScriptResult result = page.executeJavaScript("PeekabootUtils.getDurationClass(" + jsArgumentLiteral + ")");
+        return (String) result.getJavaScriptResult();
+    }
+
     @Test
     void escapesElementContextCharacters() {
         assertThat(escapeHtml("'<script>alert(1)</scr' + 'ipt> & more'"))
@@ -78,5 +88,45 @@ class PeekabootUtilsEscapeHtmlTest {
     @Test
     void preservesNumericZero() {
         assertThat(escapeHtml("0")).isEqualTo("0");
+    }
+
+    @Test
+    void formatDurationMs_handlesNull() {
+        assertThat(formatDurationMs("null")).isEqualTo("-");
+    }
+
+    @Test
+    void formatDurationMs_formatsSubMillisecondAsLessThanOneMs() {
+        assertThat(formatDurationMs("0.5")).isEqualTo("<1ms");
+    }
+
+    @Test
+    void formatDurationMs_roundsMillisecondsBelowOneSecond() {
+        assertThat(formatDurationMs("500.4")).isEqualTo("500ms");
+    }
+
+    @Test
+    void formatDurationMs_formatsSecondsBelowOneMinute() {
+        assertThat(formatDurationMs("1500")).isEqualTo("1.50s");
+    }
+
+    @Test
+    void formatDurationMs_formatsMinutesAtOrAboveOneMinute() {
+        assertThat(formatDurationMs("90000")).isEqualTo("1.50m");
+    }
+
+    @Test
+    void getDurationClass_returnsVerySlowAboveFiveHundredMs() {
+        assertThat(getDurationClass("501")).isEqualTo("very-slow");
+    }
+
+    @Test
+    void getDurationClass_returnsSlowAboveOneHundredMs() {
+        assertThat(getDurationClass("101")).isEqualTo("slow");
+    }
+
+    @Test
+    void getDurationClass_returnsEmptyForFastDurations() {
+        assertThat(getDurationClass("100")).isEqualTo("");
     }
 }

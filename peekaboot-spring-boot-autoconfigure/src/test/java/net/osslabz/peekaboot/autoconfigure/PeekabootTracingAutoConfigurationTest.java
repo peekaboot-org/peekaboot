@@ -1,7 +1,9 @@
 package net.osslabz.peekaboot.autoconfigure;
 
+import io.micrometer.observation.ObservationRegistry;
 import net.osslabz.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import net.osslabz.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import net.osslabz.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import net.osslabz.peekaboot.backend.tracing.store.SpanData;
 import net.osslabz.peekaboot.backend.tracing.store.TraceBucket;
 import net.osslabz.peekaboot.backend.tracing.store.TraceStore;
@@ -9,13 +11,21 @@ import net.osslabz.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.servlet.handler.MappedInterceptor;
 
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class PeekabootTracingAutoConfigurationTest {
 
@@ -81,5 +91,84 @@ class PeekabootTracingAutoConfigurationTest {
                             store.nextCreationOrder()));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
+    }
+
+    // --- TracingInterceptorAutoConfiguration ---
+
+    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class));
+
+    @Test
+    void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(TracingHandlerInterceptor.class);
+                    assertThat(context).hasSingleBean(WebMvcConfigurer.class);
+                });
+    }
+
+    @Test
+    void shouldNotRegisterInterceptorWhenNoObservationRegistryBean() {
+        webContextRunner.run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
+        });
+    }
+
+    @Test
+    void shouldNotRegisterInterceptorWhenNotAWebApplication() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
+                });
+    }
+
+    @Test
+    void shouldNotRegisterInterceptorWhenPeekabootDisabled() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .withPropertyValues("peekaboot.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
+                });
+    }
+
+    @Test
+    void shouldRegisterInterceptorWithExpectedPathPatterns() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .run(context -> {
+                    WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
+                    InterceptorRegistry registry = new InterceptorRegistry();
+                    configurer.addInterceptors(registry);
+
+                    List<?> registered = getInterceptors(registry);
+                    assertThat(registered).hasSize(1);
+                    MappedInterceptor mapped = (MappedInterceptor) registered.getFirst();
+
+                    assertThat(mapped.getIncludePathPatterns()).containsExactly("/**");
+                    assertThat(mapped.getExcludePathPatterns()).containsExactlyInAnyOrder(
+                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
+                });
+    }
+
+    private static List<?> getInterceptors(InterceptorRegistry registry) throws ReflectiveOperationException {
+        Method method = InterceptorRegistry.class.getDeclaredMethod("getInterceptors");
+        method.setAccessible(true);
+        return (List<?>) method.invoke(registry);
+    }
+
+    @Configuration
+    static class ObservationRegistryConfig {
+        @Bean
+        ObservationRegistry observationRegistry() {
+            return mock(ObservationRegistry.class);
+        }
     }
 }
