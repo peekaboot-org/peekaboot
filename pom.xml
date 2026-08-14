@@ -3,7 +3,7 @@
     xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>net.osslabz</groupId>
+    <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-parent</artifactId>
     <version>0.0.4-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -19,18 +19,18 @@
         <module>peekaboot-example-app</module>
     </modules>
 
-    <url>https://github.com/osslabz/peekaboot</url>
+    <url>https://github.com/peekaboot-org/peekaboot</url>
 
     <properties>
-        <osslabz.encoding>UTF-8</osslabz.encoding>
-        <osslabz.java.version>25</osslabz.java.version>
+        <peekaboot.encoding>UTF-8</peekaboot.encoding>
+        <peekaboot.java.version>25</peekaboot.java.version>
 
-        <project.build.sourceEncoding>${osslabz.encoding}</project.build.sourceEncoding>
-        <project.reporting.outputEncoding>${osslabz.encoding}</project.reporting.outputEncoding>
+        <project.build.sourceEncoding>${peekaboot.encoding}</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>${peekaboot.encoding}</project.reporting.outputEncoding>
 
         <project.build.outputTimestamp>2025-04-23T12:21:37Z</project.build.outputTimestamp>
 
-        <maven.compiler.release>${osslabz.java.version}</maven.compiler.release>
+        <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
 
         <spring-boot.version>4.0.2</spring-boot.version>
     </properties>
@@ -46,15 +46,15 @@
         <developer>
             <name>Raphael</name>
             <email>raphael@peekaboot.org</email>
-            <organization>osslabz.net</organization>
-            <organizationUrl>https://www.osslabz.net</organizationUrl>
+            <organization>peekaboot.org</organization>
+            <organizationUrl>https://www.peekaboot.org</organizationUrl>
         </developer>
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/osslabz/peekaboot.git</connection>
-        <developerConnection>scm:git:https://github.com/osslabz/peekaboot.git</developerConnection>
-        <url>https://github.com/osslabz/peekaboot</url>
+        <connection>scm:git:https://github.com/peekaboot-org/peekaboot.git</connection>
+        <developerConnection>scm:git:https://github.com/peekaboot-org/peekaboot.git</developerConnection>
+        <url>https://github.com/peekaboot-org/peekaboot</url>
         <tag>dev</tag>
     </scm>
 
@@ -77,7 +77,7 @@
 
     <profiles>
         <profile>
-            <id>osslabz-release</id>
+            <id>peekaboot-release</id>
             <build>
                 <plugins>
                     <plugin>
@@ -95,7 +95,7 @@
                             <!-- settings from the maven-release-plugin itself -->
                             <autoVersionSubmodules>true</autoVersionSubmodules>
                             <useReleaseProfile>false</useReleaseProfile>
-                            <releaseProfiles>osslabz-release</releaseProfiles>
+                            <releaseProfiles>peekaboot-release</releaseProfiles>
                             <tagNameFormat>@{project.version}</tagNameFormat>
                             <scmCommentPrefix>[release]</scmCommentPrefix>
                             <scmReleaseCommitComment>@{prefix} set version to @{releaseLabel}</scmReleaseCommitComment>
@@ -138,6 +138,7 @@
                                     <goal>sign</goal>
                                 </goals>
                                 <configuration>
+                                    <keyname>AF63A903149704BD</keyname>
                                     <gpgArguments>
                                         <arg>--pinentry-mode</arg>
                                         <arg>loopback</arg>

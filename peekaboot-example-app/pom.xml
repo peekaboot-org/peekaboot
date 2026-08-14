@@ -12,7 +12,7 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
 
-    <groupId>net.osslabz</groupId>
+    <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-example-app</artifactId>
     <version>0.0.4-SNAPSHOT</version>
 
@@ -108,7 +108,7 @@
         </dependency>
 
         <dependency>
-            <groupId>net.osslabz</groupId>
+            <groupId>org.peekaboot</groupId>
             <artifactId>peekaboot-spring-boot-starter</artifactId>
             <version>${project.version}</version>
         </dependency>

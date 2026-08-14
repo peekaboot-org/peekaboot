@@ -16,7 +16,7 @@ A Spring Boot starter that provides embedded application introspection through a
 **Maven:**
 ```xml
 <dependency>
-    <groupId>net.osslabz</groupId>
+    <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
     <version>0.0.4-SNAPSHOT</version>
 </dependency>
@@ -24,7 +24,7 @@ A Spring Boot starter that provides embedded application introspection through a
 
 **Gradle:**
 ```groovy
-implementation 'net.osslabz:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT'
+implementation 'org.peekaboot:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT'
 ```
 
 ### 2. Access the dashboard

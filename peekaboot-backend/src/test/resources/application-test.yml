@@ -25,4 +25,4 @@ management:
 
 logging:
   level:
-    net.osslabz.peekaboot: DEBUG
+    org.peekaboot: DEBUG

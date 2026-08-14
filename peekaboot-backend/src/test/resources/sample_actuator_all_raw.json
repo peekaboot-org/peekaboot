@@ -53,9 +53,9 @@
               "flywayMapper",
               "configMapper"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/service/ActuatorInsightsService.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/service/ActuatorInsightsService.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.service.ActuatorInsightsService"
+            "type":"org.peekaboot.backend.service.ActuatorInsightsService"
           },
           "applicationTaskExecutor":{
             "aliases":[
@@ -208,9 +208,9 @@
               "jpaSharedEM_entityManagerFactory",
               "jpaMappingContext"
             ],
-            "resource":"net.osslabz.example.repository.PersonRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration",
+            "resource":"org.peekaboot.example.repository.PersonRepository defined in @EnableJpaRepositories declared on DataJpaRepositoriesRegistrar.EnableJpaRepositoriesConfiguration",
             "scope":"singleton",
-            "type":"net.osslabz.example.repository.PersonRepository"
+            "type":"org.peekaboot.example.repository.PersonRepository"
           },
           "org.springframework.boot.autoconfigure.aop.AopAutoConfiguration$AspectJAutoProxyingConfiguration":{
             "aliases":[
@@ -241,9 +241,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/HealthMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/HealthMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.HealthMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.HealthMapper"
           },
           "jmxMBeanExporter":{
             "aliases":[
@@ -823,7 +823,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.actuate.autoconfigure.env.EnvironmentEndpointProperties"
           },
-          "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration":{
+          "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration":{
             "aliases":[
 
             ],
@@ -832,7 +832,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration"
           },
           "org.springframework.boot.actuate.autoconfigure.management.ThreadDumpEndpointAutoConfiguration":{
             "aliases":[
@@ -1035,12 +1035,12 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
+              "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
               "traceLogStore"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration$LogbackAppenderRegistrar"
+            "type":"org.peekaboot.autoconfigure.DevToolbarAutoConfiguration$LogbackAppenderRegistrar"
           },
           "org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration$WebMvcAutoConfigurationAdapter":{
             "aliases":[
@@ -1170,7 +1170,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.autoconfigure.task.TaskSchedulingProperties"
           },
-          "net.osslabz.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration":{
+          "org.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration":{
             "aliases":[
 
             ],
@@ -1179,7 +1179,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.DataSourceProxyLoggingAutoConfiguration"
           },
           "org.springframework.boot.cache.autoconfigure.metrics.CacheMeterBinderProvidersConfiguration$CaffeineCacheMeterBinderProviderConfiguration":{
             "aliases":[
@@ -1295,9 +1295,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/ConfigMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/ConfigMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.ConfigMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.ConfigMapper"
           },
           "requestMappingHandlerAdapter":{
             "aliases":[
@@ -1509,11 +1509,11 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration"
+              "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.lifecycle.BuildInfoProvider"
+            "type":"org.peekaboot.backend.lifecycle.BuildInfoProvider"
           },
           "classLoaderMetrics":{
             "aliases":[
@@ -1670,7 +1670,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.example.ExampleApp"
+            "type":"org.peekaboot.example.ExampleApp"
           },
           "thymeleafViewResolver":{
             "aliases":[
@@ -1703,9 +1703,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/RuntimeMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/RuntimeMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.RuntimeMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.RuntimeMapper"
           },
           "errorAttributes":{
             "aliases":[
@@ -1969,12 +1969,12 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration",
+              "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration",
               "environment"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.lifecycle.EnvironmentInfo"
+            "type":"org.peekaboot.backend.lifecycle.EnvironmentInfo"
           },
           "org.springframework.boot.micrometer.metrics.autoconfigure.system.SystemMetricsAutoConfiguration":{
             "aliases":[
@@ -2049,9 +2049,9 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration"
+              "org.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/DataSourceProxyObservationAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/DataSourceProxyObservationAutoConfiguration.class]",
             "scope":"singleton",
             "type":"net.ttddyy.observation.boot.autoconfigure.DefaultDataSourceNameResolver"
           },
@@ -2290,12 +2290,12 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration",
-              "peekaboot.tracing-net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties"
+              "org.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration",
+              "peekaboot.tracing-org.peekaboot.tracing.autoconfigure.PeekabootTracingProperties"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/tracing/autoconfigure/PeekabootTracingAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/tracing/autoconfigure/PeekabootTracingAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.store.InMemorySpanStore"
+            "type":"org.peekaboot.tracing.store.InMemorySpanStore"
           },
           "management.opentelemetry.tracing.export.otlp-org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.otlp.OtlpTracingProperties":{
             "aliases":[
@@ -2392,9 +2392,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/LoggersMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/LoggersMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.LoggersMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.LoggersMapper"
           },
           "org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration":{
             "aliases":[
@@ -2437,9 +2437,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/EnvironmentMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/EnvironmentMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.EnvironmentMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.EnvironmentMapper"
           },
           "spanProcessors":{
             "aliases":[
@@ -2457,11 +2457,11 @@
 
             ],
             "dependencies":[
-              "peekaboot.ui.tracing-net.osslabz.peekaboot.backend.config.UiTracingProperties"
+              "peekaboot.ui.tracing-org.peekaboot.backend.config.UiTracingProperties"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/trace/IssueDetector.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/trace/IssueDetector.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.trace.IssueDetector"
+            "type":"org.peekaboot.backend.mapper.trace.IssueDetector"
           },
           "resultSetTracingObservationHandler":{
             "aliases":[
@@ -2493,9 +2493,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/config/PeekabootWebConfig.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/config/PeekabootWebConfig.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.config.PeekabootWebConfig$$SpringCGLIB$$0"
+            "type":"org.peekaboot.backend.config.PeekabootWebConfig$$SpringCGLIB$$0"
           },
           "propertiesEndpointAccessResolver":{
             "aliases":[
@@ -2558,11 +2558,11 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration"
+              "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.log.TraceLogStore"
+            "type":"org.peekaboot.backend.log.TraceLogStore"
           },
           "otelTracer":{
             "aliases":[
@@ -2601,7 +2601,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.actuate.endpoint.web.annotation.ControllerEndpointDiscoverer"
           },
-          "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties":{
+          "peekaboot-org.peekaboot.backend.config.PeekabootProperties":{
             "aliases":[
 
             ],
@@ -2610,7 +2610,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.config.PeekabootProperties"
+            "type":"org.peekaboot.backend.config.PeekabootProperties"
           },
           "diskSpaceHealthIndicator":{
             "aliases":[
@@ -2805,14 +2805,14 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
+              "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
               "traceQueryService",
               "peekabookActuatorService",
-              "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties"
+              "peekaboot-org.peekaboot.backend.config.PeekabootProperties"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.devtoolbar.ToolbarDataProvider"
+            "type":"org.peekaboot.backend.devtoolbar.ToolbarDataProvider"
           },
           "org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration$DefaultErrorViewResolverConfiguration":{
             "aliases":[
@@ -3009,7 +3009,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.health.autoconfigure.registry.HealthContributorRegistryAutoConfiguration"
           },
-          "net.osslabz.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration":{
+          "org.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration":{
             "aliases":[
 
             ],
@@ -3018,7 +3018,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.DataSourceProxyObservationAutoConfiguration"
           },
           "org.springframework.boot.actuate.autoconfigure.sbom.SbomEndpointAutoConfiguration":{
             "aliases":[
@@ -3120,9 +3120,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/DataSourceMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/DataSourceMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.DataSourceMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.DataSourceMapper"
           },
           "org.springframework.boot.actuate.autoconfigure.web.server.ManagementContextAutoConfiguration":{
             "aliases":[
@@ -3169,7 +3169,7 @@
             "scope":"singleton",
             "type":"jdk.proxy2.$Proxy154"
           },
-          "net.osslabz.peekaboot.autoconfigure.PeekabootAutoConfiguration":{
+          "org.peekaboot.autoconfigure.PeekabootAutoConfiguration":{
             "aliases":[
 
             ],
@@ -3178,7 +3178,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.PeekabootAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.PeekabootAutoConfiguration"
           },
           "org.springframework.boot.actuate.autoconfigure.endpoint.jackson.JacksonEndpointAutoConfiguration":{
             "aliases":[
@@ -3312,9 +3312,9 @@
             "dependencies":[
               "personRepository"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-example-app/target/classes/net/osslabz/example/ExampleService.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-example-app/target/classes/org/peekaboot/example/ExampleService.class]",
             "scope":"singleton",
-            "type":"net.osslabz.example.ExampleService$$SpringCGLIB$$0"
+            "type":"org.peekaboot.example.ExampleService$$SpringCGLIB$$0"
           },
           "org.springframework.boot.data.autoconfigure.metrics.DataRepositoryMetricsAutoConfiguration":{
             "aliases":[
@@ -3491,9 +3491,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/ApplicationMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/ApplicationMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.ApplicationMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.ApplicationMapper"
           },
           "tracingObservationHandlerGroup":{
             "aliases":[
@@ -3570,12 +3570,12 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration",
+              "org.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration",
               "inMemorySpanStore"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/tracing/autoconfigure/PeekabootTracingAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/tracing/autoconfigure/PeekabootTracingAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.query.TraceQueryService"
+            "type":"org.peekaboot.tracing.query.TraceQueryService"
           },
           "endpointObjectNameFactory":{
             "aliases":[
@@ -3679,13 +3679,13 @@
             ],
             "dependencies":[
               "traceQueryService",
-              "peekaboot.tracing-net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties",
-              "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties",
+              "peekaboot.tracing-org.peekaboot.tracing.autoconfigure.PeekabootTracingProperties",
+              "peekaboot-org.peekaboot.backend.config.PeekabootProperties",
               "traceLogStore"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/controller/TracingController.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/controller/TracingController.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.controller.TracingController"
+            "type":"org.peekaboot.backend.controller.TracingController"
           },
           "processInfoContributor":{
             "aliases":[
@@ -3802,7 +3802,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.http.converter.autoconfigure.DefaultClientHttpMessageConvertersCustomizer"
           },
-          "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration":{
+          "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration":{
             "aliases":[
 
             ],
@@ -3811,19 +3811,19 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.DevToolbarAutoConfiguration"
           },
           "otelSpanExporter":{
             "aliases":[
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration",
+              "org.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration",
               "inMemorySpanStore"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/tracing/autoconfigure/OtelTracingAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/tracing/autoconfigure/OtelTracingAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.bridge.otel.OtelSpanExporter"
+            "type":"org.peekaboot.tracing.bridge.otel.OtelSpanExporter"
           },
           "spring.jpa-org.springframework.boot.jpa.autoconfigure.JpaProperties":{
             "aliases":[
@@ -4191,9 +4191,9 @@
               "traceTreeMapper",
               "issueDetector"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/service/TraceInsightsService.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/service/TraceInsightsService.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.service.TraceInsightsService"
+            "type":"org.peekaboot.backend.service.TraceInsightsService"
           },
           "openTelemetrySdk":{
             "aliases":[
@@ -4450,9 +4450,9 @@
             "dependencies":[
               "exampleService"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-example-app/target/classes/net/osslabz/example/controller/PersonController.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-example-app/target/classes/org/peekaboot/example/controller/PersonController.class]",
             "scope":"singleton",
-            "type":"net.osslabz.example.controller.PersonController"
+            "type":"org.peekaboot.example.controller.PersonController"
           },
           "welcomePageNotAcceptableHandlerMapping":{
             "aliases":[
@@ -4499,9 +4499,9 @@
             "dependencies":[
               "exampleService"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-example-app/target/classes/net/osslabz/example/Scheduler.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-example-app/target/classes/org/peekaboot/example/Scheduler.class]",
             "scope":"singleton",
-            "type":"net.osslabz.example.Scheduler"
+            "type":"org.peekaboot.example.Scheduler"
           },
           "endpointOperationParameterMapper":{
             "aliases":[
@@ -4530,11 +4530,11 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
+              "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration",
               "toolbarDataProvider",
-              "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties"
+              "peekaboot-org.peekaboot.backend.config.PeekabootProperties"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/DevToolbarAutoConfiguration.class]",
             "scope":"singleton",
             "type":"org.springframework.boot.web.servlet.FilterRegistrationBean"
           },
@@ -4748,13 +4748,13 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration",
+              "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration",
               "environmentInfo",
               "buildInfoProviderFallback"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.lifecycle.ApplicationReadyListener"
+            "type":"org.peekaboot.backend.lifecycle.ApplicationReadyListener"
           },
           "org.springframework.boot.actuate.autoconfigure.web.mappings.MappingsEndpointAutoConfiguration":{
             "aliases":[
@@ -4905,7 +4905,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.jdbc.autoconfigure.metrics.DataSourcePoolMetricsAutoConfiguration$HikariDataSourceMetricsConfiguration"
           },
-          "peekaboot.tracing-net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties":{
+          "peekaboot.tracing-org.peekaboot.tracing.autoconfigure.PeekabootTracingProperties":{
             "aliases":[
 
             ],
@@ -4914,7 +4914,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties"
+            "type":"org.peekaboot.tracing.autoconfigure.PeekabootTracingProperties"
           },
           "org.springframework.boot.actuate.autoconfigure.context.properties.ConfigurationPropertiesReportEndpointAutoConfiguration":{
             "aliases":[
@@ -4985,9 +4985,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/actuator/FlywayMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/actuator/FlywayMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.actuator.FlywayMapper"
+            "type":"org.peekaboot.backend.mapper.actuator.FlywayMapper"
           },
           "javaInfoContributor":{
             "aliases":[
@@ -5000,7 +5000,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.actuate.info.JavaInfoContributor"
           },
-          "net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration":{
+          "org.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration":{
             "aliases":[
 
             ],
@@ -5009,7 +5009,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration"
+            "type":"org.peekaboot.tracing.autoconfigure.PeekabootTracingAutoConfiguration"
           },
           "org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration$JsonProblemDetailsConfiguration":{
             "aliases":[
@@ -5022,7 +5022,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration$JsonProblemDetailsConfiguration"
           },
-          "net.osslabz.peekaboot.autoconfigure.TracingControllerAutoConfiguration":{
+          "org.peekaboot.autoconfigure.TracingControllerAutoConfiguration":{
             "aliases":[
 
             ],
@@ -5031,7 +5031,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.TracingControllerAutoConfiguration"
+            "type":"org.peekaboot.autoconfigure.TracingControllerAutoConfiguration"
           },
           "management.endpoint.configprops-org.springframework.boot.actuate.autoconfigure.context.properties.ConfigurationPropertiesReportEndpointProperties":{
             "aliases":[
@@ -5169,7 +5169,7 @@
             "scope":"singleton",
             "type":"tools.jackson.databind.json.JsonMapper"
           },
-          "peekaboot.ui.tracing-net.osslabz.peekaboot.backend.config.UiTracingProperties":{
+          "peekaboot.ui.tracing-org.peekaboot.backend.config.UiTracingProperties":{
             "aliases":[
 
             ],
@@ -5178,7 +5178,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.config.UiTracingProperties"
+            "type":"org.peekaboot.backend.config.UiTracingProperties"
           },
           "jdbc-net.ttddyy.observation.boot.autoconfigure.JdbcProperties":{
             "aliases":[
@@ -5258,7 +5258,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.cache.metrics.CaffeineCacheMeterBinderProvider"
           },
-          "net.osslabz.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration":{
+          "org.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration":{
             "aliases":[
 
             ],
@@ -5267,7 +5267,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration"
+            "type":"org.peekaboot.tracing.autoconfigure.OtelTracingAutoConfiguration"
           },
           "org.springframework.data.jpa.util.JpaMetamodelCacheCleanup":{
             "aliases":[
@@ -5323,9 +5323,9 @@
             "dependencies":[
 
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/mapper/trace/TraceTreeMapper.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/mapper/trace/TraceTreeMapper.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.mapper.trace.TraceTreeMapper"
+            "type":"org.peekaboot.backend.mapper.trace.TraceTreeMapper"
           },
           "eagerTaskExecutorMetrics":{
             "aliases":[
@@ -5486,11 +5486,11 @@
               "peekabookActuatorService",
               "actuatorInsightsService",
               "traceInsightsService",
-              "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties"
+              "peekaboot-org.peekaboot.backend.config.PeekabootProperties"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/controller/PeekabootController.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/controller/PeekabootController.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.controller.PeekabootController"
+            "type":"org.peekaboot.backend.controller.PeekabootController"
           },
           "spring.jackson-org.springframework.boot.jackson.autoconfigure.JacksonProperties":{
             "aliases":[
@@ -5571,10 +5571,10 @@
 
             ],
             "dependencies":[
-              "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration",
+              "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration",
               "dataSource"
             ],
-            "resource":"class path resource [net/osslabz/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration.class]",
+            "resource":"class path resource [org/peekaboot/autoconfigure/PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration.class]",
             "scope":"singleton",
             "type":"java.util.ArrayList"
           },
@@ -6199,9 +6199,9 @@
               "endpointOperationParameterMapper",
               "endpointMediaTypes"
             ],
-            "resource":"file [/Users/xar/Documents/src-rv/osslabz/peekaboot/peekaboot-backend/target/classes/net/osslabz/peekaboot/backend/service/PeekabookActuatorService.class]",
+            "resource":"file [/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/peekaboot-backend/target/classes/org/peekaboot/backend/service/PeekabookActuatorService.class]",
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService"
+            "type":"org.peekaboot.backend.service.PeekabookActuatorService"
           },
           "cacheManagerCustomizers":{
             "aliases":[
@@ -6284,7 +6284,7 @@
             "scope":"singleton",
             "type":"org.springframework.boot.actuate.autoconfigure.logging.LogFileWebEndpointProperties"
           },
-          "net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration":{
+          "org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration":{
             "aliases":[
 
             ],
@@ -6293,7 +6293,7 @@
             ],
             "resource":null,
             "scope":"singleton",
-            "type":"net.osslabz.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration$$SpringCGLIB$$0"
+            "type":"org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration$DatabaseMetadataConfiguration$$SpringCGLIB$$0"
           }
         },
         "parentId":null
@@ -7885,7 +7885,7 @@
           "DevToolbarAutoConfiguration":[
             {
               "condition":"OnClassCondition",
-              "message":"@ConditionalOnClass found required class 'net.osslabz.peekaboot.tracing.query.TraceQueryService'"
+              "message":"@ConditionalOnClass found required class 'org.peekaboot.tracing.query.TraceQueryService'"
             },
             {
               "condition":"OnWebApplicationCondition",
@@ -7915,19 +7915,19 @@
           "PeekabootLifecycleAutoConfiguration#applicationReadyListener":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.backend.lifecycle.ApplicationReadyListener; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.backend.lifecycle.ApplicationReadyListener; SearchStrategy: all) did not find any beans"
             }
           ],
           "PeekabootLifecycleAutoConfiguration#buildInfoProviderFallback":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.backend.lifecycle.BuildInfoProvider; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.backend.lifecycle.BuildInfoProvider; SearchStrategy: all) did not find any beans"
             }
           ],
           "PeekabootLifecycleAutoConfiguration#environmentInfo":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.backend.lifecycle.EnvironmentInfo; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.backend.lifecycle.EnvironmentInfo; SearchStrategy: all) did not find any beans"
             }
           ],
           "PeekabootLifecycleAutoConfiguration.DatabaseMetadataConfiguration":[
@@ -7945,17 +7945,17 @@
           "TracingControllerAutoConfiguration":[
             {
               "condition":"OnClassCondition",
-              "message":"@ConditionalOnClass found required class 'net.osslabz.peekaboot.tracing.query.TraceQueryService'"
+              "message":"@ConditionalOnClass found required class 'org.peekaboot.tracing.query.TraceQueryService'"
             },
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnBean (types: net.osslabz.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) found bean 'traceQueryService'"
+              "message":"@ConditionalOnBean (types: org.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) found bean 'traceQueryService'"
             }
           ],
           "TracingController":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnBean (types: net.osslabz.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) found bean 'traceQueryService'"
+              "message":"@ConditionalOnBean (types: org.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) found bean 'traceQueryService'"
             }
           ],
           "OtelTracingAutoConfiguration":[
@@ -7971,7 +7971,7 @@
           "OtelTracingAutoConfiguration#otelSpanExporter":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.tracing.bridge.otel.OtelSpanExporter; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.tracing.bridge.otel.OtelSpanExporter; SearchStrategy: all) did not find any beans"
             }
           ],
           "PeekabootTracingAutoConfiguration":[
@@ -7983,13 +7983,13 @@
           "PeekabootTracingAutoConfiguration#inMemorySpanStore":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.tracing.store.InMemorySpanStore; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.tracing.store.InMemorySpanStore; SearchStrategy: all) did not find any beans"
             }
           ],
           "PeekabootTracingAutoConfiguration#traceQueryService":[
             {
               "condition":"OnBeanCondition",
-              "message":"@ConditionalOnMissingBean (types: net.osslabz.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) did not find any beans"
+              "message":"@ConditionalOnMissingBean (types: org.peekaboot.tracing.query.TraceQueryService; SearchStrategy: all) did not find any beans"
             }
           ],
           "DataSourceObservationAutoConfiguration":[
@@ -10234,7 +10234,7 @@
               }
             }
           },
-          "peekaboot.tracing-net.osslabz.peekaboot.tracing.autoconfigure.PeekabootTracingProperties":{
+          "peekaboot.tracing-org.peekaboot.tracing.autoconfigure.PeekabootTracingProperties":{
             "inputs":{
               "maxSpansPerTrace":{
 
@@ -10586,7 +10586,7 @@
               "enabled":"******"
             }
           },
-          "peekaboot-net.osslabz.peekaboot.backend.config.PeekabootProperties":{
+          "peekaboot-org.peekaboot.backend.config.PeekabootProperties":{
             "inputs":{
               "basePath":{
 
@@ -10826,7 +10826,7 @@
               }
             }
           },
-          "peekaboot.ui.tracing-net.osslabz.peekaboot.backend.config.UiTracingProperties":{
+          "peekaboot.ui.tracing-org.peekaboot.backend.config.UiTracingProperties":{
             "inputs":{
               "highTraceQueryCountThreshold":{
 
@@ -12974,7 +12974,7 @@
             "origin":"class path resource [application.yml] - 14:16",
             "value":"******"
           },
-          "logging.level.net.osslabz.peekaboot":{
+          "logging.level.org.peekaboot":{
             "origin":"class path resource [application.yml] - 18:28",
             "value":"******"
           },
@@ -13059,7 +13059,7 @@
       "name":"peekaboot-example-app",
       "time":"2026-01-11T06:43:46.332Z",
       "version":"0.0.2-SNAPSHOT",
-      "group":"net.osslabz"
+      "group":"org.peekaboot"
     },
     "java":{
       "jvm":{
@@ -13408,15 +13408,15 @@
         "configuredLevel":null,
         "effectiveLevel":"INFO"
       },
-      "net.osslabz":{
+      "org.peekaboot":{
         "configuredLevel":"INFO",
         "effectiveLevel":"INFO"
       },
-      "net.osslabz.example":{
+      "org.peekaboot.example":{
         "configuredLevel":null,
         "effectiveLevel":"INFO"
       },
-      "net.osslabz.example.ExampleApp":{
+      "org.peekaboot.example.ExampleApp":{
         "configuredLevel":null,
         "effectiveLevel":"INFO"
       },
@@ -13440,39 +13440,39 @@
         "configuredLevel":null,
         "effectiveLevel":"INFO"
       },
-      "net.osslabz.peekaboot":{
+      "org.peekaboot":{
         "configuredLevel":"TRACE",
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.autoconfigure":{
+      "org.peekaboot.autoconfigure":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.autoconfigure.DevToolbarAutoConfiguration":{
+      "org.peekaboot.autoconfigure.DevToolbarAutoConfiguration":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend":{
+      "org.peekaboot.backend":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend.filter":{
+      "org.peekaboot.backend.filter":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend.filter.DevToolbarFilter":{
+      "org.peekaboot.backend.filter.DevToolbarFilter":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend.lifecycle":{
+      "org.peekaboot.backend.lifecycle":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend.lifecycle.ApplicationReadyListener":{
+      "org.peekaboot.backend.lifecycle.ApplicationReadyListener":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
-      "net.osslabz.peekaboot.backend.lifecycle.DataSourceMetadata":{
+      "org.peekaboot.backend.lifecycle.DataSourceMetadata":{
         "configuredLevel":null,
         "effectiveLevel":"TRACE"
       },
@@ -19527,7 +19527,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":88,
             "methodName":"lambda$getData$4",
@@ -19537,7 +19537,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
             "fileName":null,
             "lineNumber":-1,
             "methodName":"accept",
@@ -19557,7 +19557,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":85,
             "methodName":"getData",
@@ -19567,7 +19567,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+            "className":"org.peekaboot.backend.controller.PeekabootController",
             "fileName":"PeekabootController.java",
             "lineNumber":58,
             "methodName":"getRaw",
@@ -19797,7 +19797,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.filter.DevToolbarFilter",
+            "className":"org.peekaboot.backend.filter.DevToolbarFilter",
             "fileName":"DevToolbarFilter.java",
             "lineNumber":59,
             "methodName":"doFilter",
@@ -20437,7 +20437,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":88,
             "methodName":"lambda$getData$4",
@@ -20447,7 +20447,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
             "fileName":null,
             "lineNumber":-1,
             "methodName":"accept",
@@ -20467,7 +20467,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":85,
             "methodName":"getData",
@@ -20477,7 +20477,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+            "className":"org.peekaboot.backend.controller.PeekabootController",
             "fileName":"PeekabootController.java",
             "lineNumber":58,
             "methodName":"getRaw",
@@ -20707,7 +20707,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.filter.DevToolbarFilter",
+            "className":"org.peekaboot.backend.filter.DevToolbarFilter",
             "fileName":"DevToolbarFilter.java",
             "lineNumber":59,
             "methodName":"doFilter",
@@ -21189,7 +21189,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":88,
             "methodName":"lambda$getData$4",
@@ -21199,7 +21199,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService$$Lambda/0x0000000401de3918",
             "fileName":null,
             "lineNumber":-1,
             "methodName":"accept",
@@ -21219,7 +21219,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.service.PeekabookActuatorService",
+            "className":"org.peekaboot.backend.service.PeekabookActuatorService",
             "fileName":"PeekabookActuatorService.java",
             "lineNumber":85,
             "methodName":"getData",
@@ -21229,7 +21229,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+            "className":"org.peekaboot.backend.controller.PeekabootController",
             "fileName":"PeekabootController.java",
             "lineNumber":58,
             "methodName":"getRaw",
@@ -21459,7 +21459,7 @@
           },
           {
             "classLoaderName":"app",
-            "className":"net.osslabz.peekaboot.backend.filter.DevToolbarFilter",
+            "className":"org.peekaboot.backend.filter.DevToolbarFilter",
             "fileName":"DevToolbarFilter.java",
             "lineNumber":59,
             "methodName":"doFilter",
@@ -24121,7 +24121,7 @@
           "time":"2026-01-11T06:59:59.999980Z"
         },
         "runnable":{
-          "target":"net.osslabz.example.Scheduler.cron1"
+          "target":"org.peekaboot.example.Scheduler.cron1"
         }
       },
       {
@@ -24131,7 +24131,7 @@
           "time":"2026-01-12T07:59:59.999041Z"
         },
         "runnable":{
-          "target":"net.osslabz.example.Scheduler.cron2"
+          "target":"org.peekaboot.example.Scheduler.cron2"
         }
       },
       {
@@ -24141,7 +24141,7 @@
           "time":"2026-01-17T09:14:59.999124Z"
         },
         "runnable":{
-          "target":"net.osslabz.example.Scheduler.cron3"
+          "target":"org.peekaboot.example.Scheduler.cron3"
         }
       }
     ],
@@ -24161,7 +24161,7 @@
           "time":"2026-01-11T06:49:30.932494Z"
         },
         "runnable":{
-          "target":"net.osslabz.example.Scheduler.fixedDelay"
+          "target":"org.peekaboot.example.Scheduler.fixedDelay"
         }
       }
     ],
@@ -24178,7 +24178,7 @@
           "time":"2026-01-11T07:49:20.812700Z"
         },
         "runnable":{
-          "target":"net.osslabz.example.Scheduler.fixedRate"
+          "target":"org.peekaboot.example.Scheduler.fixedRate"
         }
       }
     ]
@@ -24219,7 +24219,7 @@
               ]
             },
             {
-              "className":"net.osslabz.peekaboot.backend.filter.DevToolbarFilter",
+              "className":"org.peekaboot.backend.filter.DevToolbarFilter",
               "name":"devToolbarFilter",
               "servletNameMappings":[
 
@@ -24384,7 +24384,7 @@
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
                     "descriptor":"(Ljava/lang/String;)Lorg/springframework/http/ResponseEntity;",
                     "name":"getTraceRaw"
                   },
@@ -24412,14 +24412,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getTraceRaw(String)",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getTraceRaw(String)",
                 "predicate":"{GET [/peekaboot/api/traces/{traceId}/raw], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.TracingController",
+                    "className":"org.peekaboot.backend.controller.TracingController",
                     "descriptor":"(Ljava/lang/String;)Lorg/springframework/http/ResponseEntity;",
                     "name":"getTraceDetails"
                   },
@@ -24447,14 +24447,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.TracingController#getTraceDetails(String)",
+                "handler":"org.peekaboot.backend.controller.TracingController#getTraceDetails(String)",
                 "predicate":"{GET [/peekaboot/api/traces/{traceId}/details], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
                     "descriptor":"(I)Ljava/util/List;",
                     "name":"getTracesRaw"
                   },
@@ -24482,14 +24482,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getTracesRaw(int)",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getTracesRaw(int)",
                 "predicate":"{GET [/peekaboot/api/traces/raw], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.TracingController",
+                    "className":"org.peekaboot.backend.controller.TracingController",
                     "descriptor":"(Ljava/lang/String;)Lorg/springframework/http/ResponseEntity;",
                     "name":"getTrace"
                   },
@@ -24517,7 +24517,7 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.TracingController#getTrace(String)",
+                "handler":"org.peekaboot.backend.controller.TracingController#getTrace(String)",
                 "predicate":"{GET [/peekaboot/api/traces/{traceId}], produces [application/json]}"
               },
               {
@@ -24556,7 +24556,7 @@
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
                     "descriptor":"(Ljava/lang/String;)Lorg/springframework/http/ResponseEntity;",
                     "name":"getTraceInsights"
                   },
@@ -24584,14 +24584,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getTraceInsights(String)",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getTraceInsights(String)",
                 "predicate":"{GET [/peekaboot/api/traces/{traceId}/insights], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.TracingController",
+                    "className":"org.peekaboot.backend.controller.TracingController",
                     "descriptor":"(I)Ljava/util/List;",
                     "name":"getTraces"
                   },
@@ -24619,14 +24619,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.TracingController#getTraces(int)",
+                "handler":"org.peekaboot.backend.controller.TracingController#getTraces(int)",
                 "predicate":"{GET [/peekaboot/api/traces], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
                     "descriptor":"()Ljava/util/Map;",
                     "name":"getRaw"
                   },
@@ -24654,15 +24654,15 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getRaw()",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getRaw()",
                 "predicate":"{GET [/peekaboot/api/actuator/all/raw], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
-                    "descriptor":"(I)Lnet/osslabz/peekaboot/backend/domain/trace/TraceInsightsResponse;",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
+                    "descriptor":"(I)Lorg/peekaboot/backend/domain/trace/TraceInsightsResponse;",
                     "name":"getTracesInsights"
                   },
                   "requestMappingConditions":{
@@ -24689,7 +24689,7 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getTracesInsights(int)",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getTracesInsights(int)",
                 "predicate":"{GET [/peekaboot/api/traces/insights], produces [application/json]}"
               },
               {
@@ -24731,8 +24731,8 @@
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
-                    "descriptor":"()Lnet/osslabz/peekaboot/backend/api/insights/ActuatorInsightsResponse;",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
+                    "descriptor":"()Lorg/peekaboot/backend/api/insights/ActuatorInsightsResponse;",
                     "name":"getInsights"
                   },
                   "requestMappingConditions":{
@@ -24759,14 +24759,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getInsights()",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getInsights()",
                 "predicate":"{GET [/peekaboot/api/actuator/all/insights], produces [application/json]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.example.controller.PersonController",
+                    "className":"org.peekaboot.example.controller.PersonController",
                     "descriptor":"(Lorg/springframework/ui/Model;)Ljava/lang/String;",
                     "name":"index"
                   },
@@ -24791,14 +24791,14 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.example.controller.PersonController#index(Model)",
+                "handler":"org.peekaboot.example.controller.PersonController#index(Model)",
                 "predicate":"{GET [/]}"
               },
               {
                 "details":{
                   "handlerFunction":null,
                   "handlerMethod":{
-                    "className":"net.osslabz.peekaboot.backend.controller.PeekabootController",
+                    "className":"org.peekaboot.backend.controller.PeekabootController",
                     "descriptor":"()Ljava/util/Map;",
                     "name":"getFeatures"
                   },
@@ -24826,7 +24826,7 @@
                     ]
                   }
                 },
-                "handler":"net.osslabz.peekaboot.backend.controller.PeekabootController#getFeatures()",
+                "handler":"org.peekaboot.backend.controller.PeekabootController#getFeatures()",
                 "predicate":"{GET [/peekaboot/api/features], produces [application/json]}"
               },
               {
@@ -24927,7 +24927,7 @@
             "total":1995218165760,
             "free":961848963072,
             "threshold":10485760,
-            "path":"/Users/xar/Documents/src-rv/osslabz/peekaboot/.",
+            "path":"/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/.",
             "exists":true
           },
           "status":"UP"

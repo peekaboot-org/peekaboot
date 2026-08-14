@@ -26,7 +26,7 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   `peekaboot-frontend` and `peekaboot-backend` test trees): known engine
   incompatibilities are allow-listed, anything else fails the test.
 - Tests that trigger error paths capture the log event (logback `ListAppender`, via
-  the shared `net.osslabz.peekaboot.backend.testsupport.LogCapture` helper in
+  the shared `org.peekaboot.backend.testsupport.LogCapture` helper in
   `peekaboot-backend`) and assert it instead of letting it print.
 - Accepted, unavoidable noise:
   - `OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader

@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>net.osslabz</groupId>
+        <groupId>org.peekaboot</groupId>
         <artifactId>peekaboot-parent</artifactId>
         <version>0.0.4-SNAPSHOT</version>
     </parent>
@@ -113,7 +113,7 @@
         </dependency>
         <!-- UI resources so integration tests can serve/execute the real toolbar scripts -->
         <dependency>
-            <groupId>net.osslabz</groupId>
+            <groupId>org.peekaboot</groupId>
             <artifactId>peekaboot-frontend</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>

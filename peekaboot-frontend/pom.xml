@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>net.osslabz</groupId>
+        <groupId>org.peekaboot</groupId>
         <artifactId>peekaboot-parent</artifactId>
         <version>0.0.4-SNAPSHOT</version>
     </parent>

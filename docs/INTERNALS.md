@@ -67,7 +67,7 @@ Core module containing all business logic.
 ### Package Structure
 
 ```
-net.osslabz.peekaboot.backend/
+org.peekaboot.backend/
 ├── actuator/raw/           # Typed beans for actuator responses
 ├── api/insights/           # API response DTOs
 ├── config/                 # Configuration properties
