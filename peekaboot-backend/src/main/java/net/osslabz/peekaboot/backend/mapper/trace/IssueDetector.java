@@ -122,7 +122,8 @@ public class IssueDetector {
                 span.creationOrder(),
                 span.errorMessage(),
                 span.errorClass(),
-                span.remoteServiceName()
+                span.remoteServiceName(),
+                span.logs()
         );
     }
 

@@ -5,12 +5,14 @@ import net.osslabz.peekaboot.backend.domain.trace.IssueType;
 import net.osslabz.peekaboot.backend.domain.trace.RootActionType;
 import net.osslabz.peekaboot.backend.domain.trace.SpanIssue;
 import net.osslabz.peekaboot.backend.domain.trace.SpanNode;
+import net.osslabz.peekaboot.backend.domain.trace.TraceLog;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTabSummary;
 import net.osslabz.peekaboot.backend.domain.trace.TraceStatus;
 import net.osslabz.peekaboot.backend.domain.trace.TraceTree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -362,6 +364,25 @@ class IssueDetectorTest {
         assertThat(resultSpan.errorMessage()).isEqualTo("boom");
         assertThat(resultSpan.errorClass()).isEqualTo("java.lang.RuntimeException");
         assertThat(resultSpan.remoteServiceName()).isEqualTo("orders-service");
+    }
+
+    @Test
+    void detectIssues_shouldPreserveSpanLogs() {
+        // Given: root and child spans that both carry attached logs
+        List<TraceLog> childLogs = List.of(new TraceLog(
+                "child1", Instant.parse("2026-01-01T00:00:00Z"), "DEBUG", "ChildLogger", "child log", "main"));
+        List<TraceLog> rootLogs = List.of(new TraceLog(
+                "span1", Instant.parse("2026-01-01T00:00:01Z"), "INFO", "RootLogger", "root log", "main"));
+        SpanNode child = createSpan("child1", 10, "OK", Map.of(), List.of()).withLogs(childLogs);
+        SpanNode root = createSpan("span1", 50, "OK", Map.of(), List.of(child)).withLogs(rootLogs);
+        TraceTree trace = createTrace(root, createSummary(2, 0, 0L, 0));
+
+        // When
+        TraceTree result = detector.detectIssues(trace);
+
+        // Then: the rebuilt tree keeps the logs at every level
+        assertThat(result.rootSpan().logs()).isEqualTo(rootLogs);
+        assertThat(result.rootSpan().children().get(0).logs()).isEqualTo(childLogs);
     }
 
     @Test
