@@ -46,56 +46,6 @@ class ToolbarScriptTest {
         }
     }
 
-    /**
-     * Builds a fresh {@link WebClient}/{@link MockWebConnection} pair serving {@code dataJson}
-     * as the toolbar's bootstrap payload, and loads the test page. Shared by every test that
-     * needs a page to run {@code toolbar.js} against; callers add their own script execution
-     * (attach-shadow shim, toolbar.js itself, fetch stubs, ...) afterward.
-     */
-    private HtmlPage newPage(String dataJson) throws IOException {
-        return newPage(dataJson, connection -> { });
-    }
-
-    private HtmlPage newPage(String dataJson, Consumer<MockWebConnection> connectionCustomizer) throws IOException {
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">" + dataJson + "</script>"
-                + "</body></html>");
-        connectionCustomizer.accept(connection);
-        webClient.setWebConnection(connection);
-        return webClient.getPage("http://localhost/test.html");
-    }
-
-    private HtmlPage loadPageWithToolbar(String dataJson) throws IOException {
-        HtmlPage page = newPage(dataJson);
-        page.executeJavaScript(ATTACH_SHADOW_SHIM);
-
-        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
-        page.executeJavaScript(toolbarJs);
-        return page;
-    }
-
-    /**
-     * Loads the toolbar with a stubbed {@code window.fetch} (and an immediate,
-     * synchronous {@code window.setTimeout}) installed before toolbar.js runs,
-     * so the retry/backoff and rendering logic in {@code loadTrace}/{@code fetchTrace}
-     * can be driven deterministically instead of waiting on real timers.
-     */
-    private HtmlPage loadPageWithFetchStub(String dataJson, String fetchStubJs) throws IOException {
-        HtmlPage page = newPage(dataJson);
-        page.executeJavaScript(ATTACH_SHADOW_SHIM);
-        page.executeJavaScript("window.setTimeout = function(fn) { fn(); };");
-        page.executeJavaScript(fetchStubJs);
-
-        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
-        page.executeJavaScript(toolbarJs);
-        return page;
-    }
-
     @Test
     void createsToolbarHostAndGlobalApi() throws IOException {
         HtmlPage page = loadPageWithToolbar(
@@ -345,5 +295,55 @@ class ToolbarScriptTest {
 
         String openedWith = (String) page.executeJavaScript("window.__openedWith").getJavaScriptResult();
         assertThat(openedWith).isEqualTo("trace-xyz");
+    }
+
+    /**
+     * Builds a fresh {@link WebClient}/{@link MockWebConnection} pair serving {@code dataJson}
+     * as the toolbar's bootstrap payload, and loads the test page. Shared by every test that
+     * needs a page to run {@code toolbar.js} against; callers add their own script execution
+     * (attach-shadow shim, toolbar.js itself, fetch stubs, ...) afterward.
+     */
+    private HtmlPage newPage(String dataJson) throws IOException {
+        return newPage(dataJson, connection -> { });
+    }
+
+    private HtmlPage newPage(String dataJson, Consumer<MockWebConnection> connectionCustomizer) throws IOException {
+        webClient = new WebClient();
+        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
+        webClient.getOptions().setCssEnabled(false);
+        MockWebConnection connection = new MockWebConnection();
+        connection.setDefaultResponse(
+                "<html><head></head><body>"
+                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">" + dataJson + "</script>"
+                + "</body></html>");
+        connectionCustomizer.accept(connection);
+        webClient.setWebConnection(connection);
+        return webClient.getPage("http://localhost/test.html");
+    }
+
+    private HtmlPage loadPageWithToolbar(String dataJson) throws IOException {
+        HtmlPage page = newPage(dataJson);
+        page.executeJavaScript(ATTACH_SHADOW_SHIM);
+
+        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
+        page.executeJavaScript(toolbarJs);
+        return page;
+    }
+
+    /**
+     * Loads the toolbar with a stubbed {@code window.fetch} (and an immediate,
+     * synchronous {@code window.setTimeout}) installed before toolbar.js runs,
+     * so the retry/backoff and rendering logic in {@code loadTrace}/{@code fetchTrace}
+     * can be driven deterministically instead of waiting on real timers.
+     */
+    private HtmlPage loadPageWithFetchStub(String dataJson, String fetchStubJs) throws IOException {
+        HtmlPage page = newPage(dataJson);
+        page.executeJavaScript(ATTACH_SHADOW_SHIM);
+        page.executeJavaScript("window.setTimeout = function(fn) { fn(); };");
+        page.executeJavaScript(fetchStubJs);
+
+        String toolbarJs = Files.readString(Path.of("src/main/resources/static/peekaboot/ui/toolbar/toolbar.js"));
+        page.executeJavaScript(toolbarJs);
+        return page;
     }
 }

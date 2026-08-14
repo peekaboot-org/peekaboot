@@ -66,11 +66,6 @@ class TraceDetailOverlayTest {
         }
     }
 
-    private String getPersonsPageContent() throws Exception {
-        HtmlPage page = webClient.getPage(baseUrl + "/persons");
-        return page.asXml();
-    }
-
     @Test
     void toolbarHostShouldBeVisible() throws Exception {
         // The toolbar is injected as a div with id peekaboot-toolbar-host
@@ -189,5 +184,10 @@ class TraceDetailOverlayTest {
 
         String basePath = matcher.group(1);
         assertThat(basePath).as("BasePath should be /peekaboot").isEqualTo("/peekaboot");
+    }
+
+    private String getPersonsPageContent() throws Exception {
+        HtmlPage page = webClient.getPage(baseUrl + "/persons");
+        return page.asXml();
     }
 }
