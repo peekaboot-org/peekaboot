@@ -138,7 +138,7 @@
                                     <goal>sign</goal>
                                 </goals>
                                 <configuration>
-                                    <keyname>AF63A903149704BD</keyname>
+                                    <keyname>raphael@peekaboot.org</keyname>
                                     <gpgArguments>
                                         <arg>--pinentry-mode</arg>
                                         <arg>loopback</arg>
