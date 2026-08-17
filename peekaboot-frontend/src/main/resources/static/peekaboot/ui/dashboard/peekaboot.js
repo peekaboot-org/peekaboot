@@ -940,9 +940,7 @@
             card.className = 'card datasource-card';
             card.dataset.dsIndex = index;
 
-            const hostsStr = ds.hosts && ds.hosts.length > 0
-                ? ds.hosts.map(h => h.host + (h.port ? ':' + h.port : '')).join(', ')
-                : 'unknown';
+            const hostsStr = PeekabootUtils.formatHosts(ds.hosts);
 
             const isUp = ds.health === 'UP';
             const healthBadge = ds.health

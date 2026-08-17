@@ -25,10 +25,17 @@ const PeekabootUtils = (function() {
         return '';
     }
 
+    /** Formats API host objects ({hostname, port, instanceName}) as "hostname:port, ...". */
+    function formatHosts(hosts) {
+        if (!hosts || hosts.length === 0) return 'unknown';
+        return hosts.map(h => h.hostname + (h.port ? ':' + h.port : '')).join(', ');
+    }
+
     return {
         escapeHtml,
         formatDurationMs,
-        getDurationClass
+        getDurationClass,
+        formatHosts
     };
 })();
 

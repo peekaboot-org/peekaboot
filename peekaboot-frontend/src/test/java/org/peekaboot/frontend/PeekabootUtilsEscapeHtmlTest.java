@@ -129,4 +129,33 @@ class PeekabootUtilsEscapeHtmlTest {
     void getDurationClass_returnsEmptyForFastDurations() {
         assertThat(getDurationClass("100")).isEqualTo("");
     }
+
+    private String formatHosts(String jsArgumentLiteral) {
+        ScriptResult result = page.executeJavaScript("PeekabootUtils.formatHosts(" + jsArgumentLiteral + ")");
+        return (String) result.getJavaScriptResult();
+    }
+
+    @Test
+    void formatHosts_rendersHostnameAndPort() {
+        // API host objects carry "hostname" (net.osslabz.jdbc.Host), not "host"
+        assertThat(formatHosts("[{hostname: '127.0.0.1', port: 5432, instanceName: null}]"))
+                .isEqualTo("127.0.0.1:5432");
+    }
+
+    @Test
+    void formatHosts_joinsMultipleHosts() {
+        assertThat(formatHosts("[{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}]"))
+                .isEqualTo("db1:5432, db2:5433");
+    }
+
+    @Test
+    void formatHosts_omitsMissingPort() {
+        assertThat(formatHosts("[{hostname: 'db.local'}]")).isEqualTo("db.local");
+    }
+
+    @Test
+    void formatHosts_returnsUnknownForNullOrEmptyList() {
+        assertThat(formatHosts("null")).isEqualTo("unknown");
+        assertThat(formatHosts("[]")).isEqualTo("unknown");
+    }
 }
