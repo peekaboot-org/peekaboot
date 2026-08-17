@@ -59,6 +59,16 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
+    void shouldNotCreateBeansWhenPeekabootGloballyDisabled() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=false")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceStore.class);
+                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+                });
+    }
+
+    @Test
     void shouldApplyCustomProperties() {
         contextRunner
                 .withPropertyValues(

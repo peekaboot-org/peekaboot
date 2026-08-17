@@ -42,7 +42,7 @@ All properties are optional. Peekaboot works out of the box with sensible defaul
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `peekaboot.enabled` | `true` | Enable/disable the dashboard, API, toolbar, and observability defaults |
+| `peekaboot.enabled` | `true` | Master switch — disables all Peekaboot features entirely |
 | `peekaboot.dev-toolbar` | `false` | Enable debug toolbar injection into HTML responses |
 | `peekaboot.lifecycle.enabled` | `true` | Enable the startup summary log (environment, build info, server URLs, datasources) |
 
@@ -54,14 +54,14 @@ The UI and API are always served under the fixed `/peekaboot` prefix.
 |---------|-----------------|-------------------------|
 | **Dashboard UI & API** | `peekaboot.enabled=true` (default) | Servlet web application; Spring Boot Actuator on the classpath (included in the starter) |
 | **Debug Toolbar** | `peekaboot.enabled=true` **and** `peekaboot.dev-toolbar=true` (opt-in) | Servlet web application; a Micrometer `Tracer` bean (provided by `spring-boot-starter-opentelemetry`, included in the starter) |
-| **In-Memory Tracing** | `peekaboot.tracing.enabled=true` (default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
-| **Startup Summary** | `peekaboot.lifecycle.enabled=true` (default) | — |
+| **In-Memory Tracing** | `peekaboot.enabled=true` **and** `peekaboot.tracing.enabled=true` (both default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
+| **Startup Summary** | `peekaboot.enabled=true` **and** `peekaboot.lifecycle.enabled=true` (both default) | — |
 | **Observability Defaults** | `peekaboot.enabled=true` (default) | — |
 
 Notes:
 
-- The dashboard UI and API share a single switch — they cannot be enabled independently. The toolbar's expanded view loads its trace details from the API, so the toolbar effectively requires both `peekaboot.enabled` and tracing to be active for meaningful content.
-- `peekaboot.enabled=false` turns off the dashboard, API, toolbar, and the observability defaults — but **not** the in-memory trace store or the startup summary, which have their own independent toggles. To disable everything, also set `peekaboot.tracing.enabled=false` and `peekaboot.lifecycle.enabled=false`.
+- `peekaboot.enabled=false` disables everything — no beans, no instrumentation, no data collection. The per-feature toggles (`peekaboot.tracing.enabled`, `peekaboot.lifecycle.enabled`, `peekaboot.dev-toolbar`) narrow things down within an enabled Peekaboot.
+- The dashboard UI and API share a single switch — they cannot be enabled independently. The toolbar's expanded view loads its trace details from the API, so the toolbar effectively requires tracing to be active for meaningful content.
 
 ### Tracing Properties
 

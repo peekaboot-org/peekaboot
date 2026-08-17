@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnProperty(prefix = "peekaboot.tracing", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OtelTracingAutoConfiguration {
 

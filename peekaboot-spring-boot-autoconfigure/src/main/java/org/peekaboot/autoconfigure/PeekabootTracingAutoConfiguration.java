@@ -17,6 +17,7 @@ import java.time.Duration;
  * Configures TraceStore as the central storage for all trace data.
  */
 @AutoConfiguration
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
 @ConditionalOnProperty(prefix = "peekaboot.tracing", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(PeekabootTracingProperties.class)
 public class PeekabootTracingAutoConfiguration {

@@ -76,6 +76,13 @@ class PeekabootLifecycleAutoConfigurationTest {
     }
 
     @Test
+    void disabledWhenPeekabootGloballyDisabled() {
+        contextRunner
+            .withPropertyValues("peekaboot.enabled=false")
+            .run(context -> assertThat(context).doesNotHaveBean(ApplicationReadyListener.class));
+    }
+
+    @Test
     void brokenDataSourceDoesNotFailStartup() {
         ListAppender<ILoggingEvent> appender = attachListAppender();
         try {
