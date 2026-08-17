@@ -28,6 +28,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
+        <!-- EndpointExposureOutcomeContributor + EndpointExposure for the exposure contributor -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-actuator-autoconfigure</artifactId>
+        </dependency>
         <!-- compile-only reference for @ConditionalOnClass(HealthEndpoint) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

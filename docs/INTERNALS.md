@@ -125,7 +125,7 @@ toolbar) read it to correlate a response with its captured trace.
 
 The backend implements a Backend-for-Frontend pattern:
 
-1. **Raw Actuator Data**: `PeekabookActuatorService` calls actuator endpoints internally
+1. **Raw Actuator Data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
 2. **Typed Parsing**: `ActuatorRawMapper` converts raw JSON to typed beans
 3. **Domain Mapping**: Individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
@@ -134,6 +134,30 @@ The backend implements a Backend-for-Frontend pattern:
 Actuator Endpoints → Raw Beans → Domain Models → API Response
      (JSON)         (typed)      (clean DTOs)    (dashboard)
 ```
+
+### In-Process Actuator Invocation
+
+Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` builds
+its own `WebEndpointDiscoverer` with empty endpoint filters — bypassing
+`management.endpoints.web.exposure` *filtering* — and invokes each endpoint's
+READ operation directly (`operation.invoke(...)`). Data therefore flows without
+any actuator endpoint being reachable over the web.
+
+Bypassing exposure filtering is not enough on its own: Spring Boot only
+*creates* an endpoint bean when `@ConditionalOnAvailableEndpoint` matches, i.e.
+the endpoint is accessible **and** exposed via web, JMX (only when
+`spring.jmx.enabled=true`), or a custom contributor. Spring Boot's default web
+exposure is `health` only, so without help the `env`, `configprops`, `loggers`,
+`flyway`, and `scheduledtasks` beans would never exist.
+
+`PeekabootEndpointExposureOutcomeContributor` (registered under
+`EndpointExposureOutcomeContributor` in `META-INF/spring.factories`, a Spring
+Boot 3.4+ extension point) closes that gap: while `peekaboot.enabled=true` it
+reports every web-capable endpoint as exposed, so the beans are created. The
+regular HTTP mapping under `/actuator` still applies the
+`management.endpoints.web.exposure` property, so this does **not** expose any
+endpoint over the web — with Spring defaults only `/actuator/health` is
+reachable via HTTP while the dashboard has full data.
 
 ## peekaboot-frontend
 
@@ -173,7 +197,11 @@ Auto-configuration classes that wire everything together.
 | `PeekabootAutoConfiguration` | Core beans, component scan |
 | `DevToolbarAutoConfiguration` | Toolbar filter registration |
 | `PeekabootLifecycleAutoConfiguration` | Startup listeners |
-| `PeekabootDefaultsEnvironmentPostProcessor` | Default property values |
+| `PeekabootTracingAutoConfiguration` | Tracing properties and store |
+| `OtelTracingAutoConfiguration` | OpenTelemetry span exporter |
+| `TracingInterceptorAutoConfiguration` | Tracing handler interceptor |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `peekaboot.enabled` local-dev detection + default property values (via `spring.factories`) |
+| `PeekabootEndpointExposureOutcomeContributor` | Makes actuator endpoint beans available without web/JMX exposure (via `spring.factories`) |
 
 ### Conditional Loading
 
@@ -181,10 +209,14 @@ Auto-configuration uses Spring Boot conditionals:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
 @ConditionalOnClass(TraceStore.class)
 ```
+
+There is no `matchIfMissing` fallback for `peekaboot.enabled` — the default
+comes from `PeekabootDefaultsEnvironmentPostProcessor`, which detects local
+development and adds the property with lowest precedence.
 
 ### Default Properties
 
@@ -330,7 +362,7 @@ cd peekaboot-example-app && mvn spring-boot:run
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
 4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction)
-5. **Actuator not exposed**: All data accessed through internal `WebEndpointDiscoverer`
+5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application
 8. **Lowest-priority defaults**: Apps can always override peekaboot settings
