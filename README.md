@@ -143,11 +143,34 @@ logbook:
 |-----|---------|
 | **Health** | Component health status with details |
 | **Info** | Build info, Git commit, Java/OS details |
-| **Environment** | Application properties (secrets masked) |
+| **Environment** | All property sources with their values and precedence (secrets masked) |
+| **Config** | Effective `@ConfigurationProperties` values, grouped by prefix (secrets masked) |
 | **Loggers** | Runtime log level configuration |
 | **Flyway** | Database migration history |
 | **Scheduled Tasks** | Cron jobs, fixed-rate, and fixed-delay tasks |
 | **Traces** | Recent request traces with spans, queries, logs; filterable by All/Errors/Slow bucket with live counts |
+
+### Environment vs Config
+
+The two tabs look similar but answer different questions:
+
+- **Environment** shows the *input*: every property source Spring knows about
+  (command-line args, OS environment, JVM system properties, `application.yml`,
+  peekaboot's own defaults, …) in resolution order, with the raw values each
+  source supplies. Use it to answer *"which source wins for this key, and why
+  isn't my property taking effect?"* It also reveals properties nothing
+  consumes — typos and dead config.
+- **Config** shows the *output*: what the application actually uses. It lists
+  the values bound to `@ConfigurationProperties` beans, grouped by prefix —
+  after relaxed binding and type conversion, and including defaults set in Java
+  code that never appear in any property source. Use it to answer *"what is
+  this component really configured with?"*
+
+A property set in `application.yml` that feeds a `@ConfigurationProperties`
+bean appears in both; code defaults appear only under Config, and unconsumed or
+shadowed values appear only under Environment. (`@Value` injections are not
+covered by Config — look them up under Environment.) The same split exists in
+Spring Boot Actuator as `/env` vs `/configprops`, which back these two tabs.
 
 ## Debug Toolbar
 
@@ -169,7 +192,10 @@ The toolbar uses Shadow DOM for complete style isolation from the host applicati
 
 ## Security
 
-Peekaboot does not expose raw actuator endpoints. All data is accessed through its own API with sensitive values automatically masked.
+Peekaboot does not expose raw actuator endpoints — it invokes them in-process,
+so no `management.endpoints.web.exposure` configuration is needed (or wanted).
+All data is accessed through its own API with sensitive values automatically
+masked.
 
 To secure the dashboard:
 
