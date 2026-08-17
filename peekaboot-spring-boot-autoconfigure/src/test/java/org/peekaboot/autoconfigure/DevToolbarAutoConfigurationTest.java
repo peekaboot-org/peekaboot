@@ -28,6 +28,7 @@ class DevToolbarAutoConfigurationTest {
                     DevToolbarAutoConfiguration.class,
                     PeekabootAutoConfiguration.class
             ))
+            .withPropertyValues("peekaboot.enabled=true")
             .withUserConfiguration(MockActuatorConfig.class);
 
     @Test
@@ -65,7 +66,7 @@ class DevToolbarAutoConfigurationTest {
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class)
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
                 .withClassLoader(new FilteredClassLoader(TraceStore.class))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
@@ -87,6 +88,24 @@ class DevToolbarAutoConfigurationTest {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
                     assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
+        // matchIfMissing = false: without the environment post-processor's detected
+        // default the safe fallback is off, even with the toolbar flag set
+        new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        DevToolbarAutoConfiguration.class,
+                        PeekabootAutoConfiguration.class
+                ))
+                .withUserConfiguration(MockActuatorConfig.class, MockTracingConfig.class)
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
+                    assertThat(context).doesNotHaveBean("devToolbarFilter");
                 });
     }
 

@@ -13,7 +13,7 @@ import org.springframework.context.annotation.ComponentScan;
 
 @AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
 @ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
 @ComponentScan(basePackages = {
     "org.peekaboot.backend.controller",

@@ -31,7 +31,8 @@ class PeekabootTracingAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(
                     PeekabootTracingAutoConfiguration.class,
                     OtelTracingAutoConfiguration.class
-            ));
+            ))
+            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void shouldCreateCoreBeans() {
@@ -62,6 +63,21 @@ class PeekabootTracingAutoConfigurationTest {
     void shouldNotCreateBeansWhenPeekabootGloballyDisabled() {
         contextRunner
                 .withPropertyValues("peekaboot.enabled=false")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(TraceStore.class);
+                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+                });
+    }
+
+    @Test
+    void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
+        // matchIfMissing = false: without the environment post-processor's detected
+        // default the safe fallback is off
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootTracingAutoConfiguration.class,
+                        OtelTracingAutoConfiguration.class
+                ))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(TraceStore.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
@@ -104,7 +120,8 @@ class PeekabootTracingAutoConfigurationTest {
     // --- TracingInterceptorAutoConfiguration ---
 
     private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class));
+            .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {
@@ -128,6 +145,20 @@ class PeekabootTracingAutoConfigurationTest {
     @Test
     void shouldNotRegisterInterceptorWhenNotAWebApplication() {
         new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true")
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
+                });
+    }
+
+    @Test
+    void shouldNotRegisterInterceptorWhenGlobalEnabledPropertyMissing() {
+        // matchIfMissing = false: without the environment post-processor's detected
+        // default the safe fallback is off
+        new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {

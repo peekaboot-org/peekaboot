@@ -12,16 +12,59 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PeekabootDefaultsEnvironmentPostProcessorTest {
 
-    private final PeekabootDefaultsEnvironmentPostProcessor postProcessor =
-            new PeekabootDefaultsEnvironmentPostProcessor(java.util.function.Supplier::get);
+    /**
+     * Real detection inspects the launch context (thread, classloader, stack),
+     * which inside a JUnit run always reads "not local dev"; the override pins
+     * the detection result so both branches are testable.
+     */
+    private PeekabootDefaultsEnvironmentPostProcessor postProcessor(boolean localDevelopment) {
+        return new PeekabootDefaultsEnvironmentPostProcessor(java.util.function.Supplier::get) {
+            @Override
+            boolean localDevelopment() {
+                return localDevelopment;
+            }
+        };
+    }
 
     @Test
-    void skipsDefaultsWhenPeekabootDisabled() {
+    void enablesPeekabootByDefaultInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
+    }
+
+    @Test
+    void disablesPeekabootByDefaultOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isFalse();
+        assertThat(environment.getProperty("management.endpoint.health.show-details")).isNull();
+    }
+
+    @Test
+    void explicitEnabledTrueWinsOverDetection() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isTrue();
+    }
+
+    @Test
+    void explicitEnabledFalseWinsOverDetection() {
         MockEnvironment environment = new MockEnvironment();
         environment.setProperty("peekaboot.enabled", "false");
 
-        postProcessor.postProcessEnvironment(environment, new SpringApplication());
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
         assertThat(environment.getPropertySources().contains("peekabootDefaults")).isFalse();
         assertThat(environment.getProperty("management.endpoint.health.show-details")).isNull();
     }
@@ -30,7 +73,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     void loadsDefaultProperties() {
         ConfigurableEnvironment environment = new MockEnvironment();
 
-        postProcessor.postProcessEnvironment(environment, new SpringApplication());
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
         assertThat(environment.getProperty("management.endpoint.health.show-details"))
                 .isEqualTo("always");
@@ -49,7 +92,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 Map.of("management.endpoint.health.show-details", "never"));
         environment.getPropertySources().addFirst(appProperties);
 
-        postProcessor.postProcessEnvironment(environment, new SpringApplication());
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
         // App property should win over starter default
         assertThat(environment.getProperty("management.endpoint.health.show-details"))
@@ -60,7 +103,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     void defaultsHaveLowestPrecedence() {
         ConfigurableEnvironment environment = new MockEnvironment();
 
-        postProcessor.postProcessEnvironment(environment, new SpringApplication());
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
         // Verify peekabootDefaults is added last (lowest priority)
         assertThat(environment.getPropertySources().get("peekabootDefaults")).isNotNull();

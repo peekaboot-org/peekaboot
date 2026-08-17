@@ -36,7 +36,8 @@ class PeekabootLifecycleAutoConfigurationTest {
         .withConfiguration(AutoConfigurations.of(
             PeekabootLifecycleAutoConfiguration.class,
             ProjectInfoAutoConfiguration.class,
-            org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class));
+            org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class))
+        .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void buildInfoProviderUsesBuildPropertiesWhenAvailable() {
@@ -79,6 +80,15 @@ class PeekabootLifecycleAutoConfigurationTest {
     void disabledWhenPeekabootGloballyDisabled() {
         contextRunner
             .withPropertyValues("peekaboot.enabled=false")
+            .run(context -> assertThat(context).doesNotHaveBean(ApplicationReadyListener.class));
+    }
+
+    @Test
+    void disabledWhenGlobalEnabledPropertyMissing() {
+        // matchIfMissing = false: without the environment post-processor's detected
+        // default the safe fallback is off
+        new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(PeekabootLifecycleAutoConfiguration.class))
             .run(context -> assertThat(context).doesNotHaveBean(ApplicationReadyListener.class));
     }
 

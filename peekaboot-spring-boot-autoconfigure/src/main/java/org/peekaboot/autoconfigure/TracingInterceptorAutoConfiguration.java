@@ -21,7 +21,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 public class TracingInterceptorAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);

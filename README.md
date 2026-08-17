@@ -7,7 +7,7 @@ A Spring Boot starter that provides embedded application introspection through a
 - **App Insights Dashboard** - Standalone UI exposing actuator data: health, info, environment, loggers, flyway migrations, scheduled tasks
 - **Debug Toolbar** - Development-time toolbar injected into HTML responses showing request traces, queries, and logs
 - **In-Memory Tracing** - Micrometer-based distributed tracing with no external collector required. Integrates with OpenTelemetry via Spring Boot's tracing support
-- **Zero Configuration** - Sensible defaults for full observability out of the box
+- **Zero Configuration** - Activates automatically in local development with sensible defaults for full observability; off by default everywhere else
 
 ## Quick Start
 
@@ -32,7 +32,7 @@ implementation 'org.peekaboot:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT'
 - UI: `http://localhost:8080/peekaboot/`
 - API: `http://localhost:8080/peekaboot/api/`
 
-No additional configuration required. Peekaboot auto-configures optimal defaults for observability.
+No additional configuration required. Peekaboot activates automatically when the app runs locally (IDE, `spring-boot:run`/`bootRun`) and stays off everywhere else — see [When Each Feature Is Enabled](#when-each-feature-is-enabled).
 
 ## Configuration
 
@@ -42,7 +42,7 @@ All properties are optional. Peekaboot works out of the box with sensible defaul
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `peekaboot.enabled` | `true` | Master switch — disables all Peekaboot features entirely |
+| `peekaboot.enabled` | auto-detected | Master switch — defaults to `true` only when running locally (see below), `false` everywhere else |
 | `peekaboot.dev-toolbar` | `false` | Enable debug toolbar injection into HTML responses |
 | `peekaboot.lifecycle.enabled` | `true` | Enable the startup summary log (environment, build info, server URLs, datasources) |
 
@@ -50,18 +50,22 @@ The UI and API are always served under the fixed `/peekaboot` prefix.
 
 ### When Each Feature Is Enabled
 
+Peekaboot follows the same "local development only" heuristics as Spring Boot DevTools: the master switch `peekaboot.enabled` defaults to `true` only when the application runs on the `main` thread with the JDK's regular classpath classloader — i.e. launched from an IDE or via `spring-boot:run`/`bootRun`. It defaults to `false` for packaged jars (`java -jar`), wars in a servlet container, native images, AOT processing, and test runs (JUnit, Spring Boot tests, Cucumber). An explicit `peekaboot.enabled` setting — in `application.yml`, an environment variable, or a system property — always overrides the detection, in both directions.
+
 | Feature | Property switch | Additional requirements |
 |---------|-----------------|-------------------------|
-| **Dashboard UI & API** | `peekaboot.enabled=true` (default) | Servlet web application; Spring Boot Actuator on the classpath (included in the starter) |
-| **Debug Toolbar** | `peekaboot.enabled=true` **and** `peekaboot.dev-toolbar=true` (opt-in) | Servlet web application; a Micrometer `Tracer` bean (provided by `spring-boot-starter-opentelemetry`, included in the starter) |
-| **In-Memory Tracing** | `peekaboot.enabled=true` **and** `peekaboot.tracing.enabled=true` (both default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
-| **Startup Summary** | `peekaboot.enabled=true` **and** `peekaboot.lifecycle.enabled=true` (both default) | — |
-| **Observability Defaults** | `peekaboot.enabled=true` (default) | — |
+| **Dashboard UI & API** | `peekaboot.enabled` (auto-detected) | Servlet web application; Spring Boot Actuator on the classpath (included in the starter) |
+| **Debug Toolbar** | `peekaboot.enabled` **and** `peekaboot.dev-toolbar=true` (opt-in) | Servlet web application; a Micrometer `Tracer` bean (provided by `spring-boot-starter-opentelemetry`, included in the starter) |
+| **In-Memory Tracing** | `peekaboot.enabled` **and** `peekaboot.tracing.enabled=true` (default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
+| **Startup Summary** | `peekaboot.enabled` **and** `peekaboot.lifecycle.enabled=true` (default) | — |
+| **Observability Defaults** | `peekaboot.enabled` (auto-detected) | — |
 
 Notes:
 
-- `peekaboot.enabled=false` disables everything — no beans, no instrumentation, no data collection. The per-feature toggles (`peekaboot.tracing.enabled`, `peekaboot.lifecycle.enabled`, `peekaboot.dev-toolbar`) narrow things down within an enabled Peekaboot.
+- When Peekaboot is disabled, nothing activates — no beans, no instrumentation, no data collection. The per-feature toggles (`peekaboot.tracing.enabled`, `peekaboot.lifecycle.enabled`, `peekaboot.dev-toolbar`) narrow things down within an enabled Peekaboot.
 - The dashboard UI and API share a single switch — they cannot be enabled independently. The toolbar's expanded view loads its trace details from the API, so the toolbar effectively requires tracing to be active for meaningful content.
+- Tests count as "not local development" — a `@SpringBootTest` that needs Peekaboot must set `peekaboot.enabled=true` explicitly.
+- To deliberately run Peekaboot in a deployed environment (e.g. staging diagnosis), set `peekaboot.enabled=true`. Conversely, if you want the starter jar out of production builds entirely, exclude it via the Spring Boot Maven plugin's `excludes` or a Gradle `developmentOnly` dependency.
 
 ### Tracing Properties
 
@@ -103,7 +107,7 @@ peekaboot:
 ## Auto-Configured Defaults
 
 Peekaboot sets defaults for full observability. Any application property
-overrides them, and setting `peekaboot.enabled=false` skips them entirely.
+overrides them, and they are skipped entirely when Peekaboot is disabled.
 Note that some are security- or performance-relevant (health details,
 environment info, 100% trace sampling, Hibernate statistics) - review them
 before shipping the starter in a production profile:

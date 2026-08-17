@@ -18,7 +18,7 @@ import java.util.*;
         after = org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
 )
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
 

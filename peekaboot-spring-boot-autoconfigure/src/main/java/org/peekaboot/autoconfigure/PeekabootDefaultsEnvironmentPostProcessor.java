@@ -1,26 +1,34 @@
 package org.peekaboot.autoconfigure;
 
 import org.apache.commons.logging.Log;
+import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Applies Peekaboot's observability defaults (lowest precedence, so any
- * application property wins). Skipped entirely when peekaboot.enabled=false.
+ * Derives the default for {@code peekaboot.enabled} from the launch context
+ * (on only when running locally in an IDE or via spring-boot:run/bootRun) and
+ * applies Peekaboot's observability defaults (lowest precedence, so any
+ * application property wins). An explicit {@code peekaboot.enabled} setting
+ * always overrides the detection, and the observability defaults are skipped
+ * entirely when Peekaboot ends up disabled.
  */
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
+    private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
+    private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
 
     private final Log log;
@@ -32,7 +40,14 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        if (!environment.getProperty("peekaboot.enabled", Boolean.class, true)) {
+        boolean localDevelopment = localDevelopment();
+        // lowest precedence: any explicit peekaboot.enabled setting wins over the detection
+        environment.getPropertySources().addLast(new MapPropertySource(
+                DETECTION_PROPERTY_SOURCE_NAME, Map.of(ENABLED_PROPERTY, localDevelopment)));
+        log.debug("Local development " + (localDevelopment ? "detected" : "not detected")
+                + " - peekaboot " + (localDevelopment ? "enabled" : "disabled") + " by default");
+
+        if (!environment.getProperty(ENABLED_PROPERTY, Boolean.class, false)) {
             log.debug("Peekaboot is disabled - skipping peekaboot defaults");
             return;
         }
@@ -50,6 +65,11 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         } catch (IOException e) {
             throw new IllegalStateException("Failed to load peekaboot defaults from " + DEFAULTS_RESOURCE, e);
         }
+    }
+
+    /** Overridable for tests: real detection reads the launch context of the current thread. */
+    boolean localDevelopment() {
+        return LocalDevDetector.isLocalDevelopment(Thread.currentThread());
     }
 
     private PropertySource<?> loadYaml(Resource resource) throws IOException {

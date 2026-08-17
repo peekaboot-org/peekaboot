@@ -63,17 +63,19 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldRegisterBeansWhenEnabledPropertyMissing() {
-        // matchIfMissing = true
+    void shouldNotRegisterBeansWhenEnabledPropertyMissing() {
+        // matchIfMissing = false: without the environment post-processor's detected
+        // default the safe fallback is off
         contextRunner.run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(PeekabootController.class);
+            assertThat(context).doesNotHaveBean(PeekabootController.class);
         });
     }
 
     @Test
     void shouldNotRegisterBeansWhenHealthEndpointClassMissing() {
         contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
                 .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -84,6 +86,7 @@ class PeekabootAutoConfigurationTest {
     @Test
     void shouldNotRegisterBeansWhenInfoEndpointClassMissing() {
         contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
                 .withClassLoader(new FilteredClassLoader(InfoEndpoint.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
