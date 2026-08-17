@@ -323,6 +323,16 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void getInsights_shouldMatchRootOperationByFullyQualifiedTaskTarget() {
+        addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
+        addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    @Test
     void getTraceInsights_shouldEnrichWithHttpExchange() {
         addTrace("trace1", 100, false);
         store.setRequest(new RequestCompletedEvent(

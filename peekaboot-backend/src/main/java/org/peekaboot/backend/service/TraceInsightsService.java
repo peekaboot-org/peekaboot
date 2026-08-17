@@ -102,7 +102,16 @@ public class TraceInsightsService {
             return false;
         }
         // Support partial matching for flexibility
-        return tree.rootOperation().toLowerCase().contains(rootOperation.toLowerCase());
+        String operation = tree.rootOperation().toLowerCase();
+        String filter = rootOperation.toLowerCase();
+        if (operation.contains(filter)) {
+            return true;
+        }
+        // Scheduled task targets are fully qualified (package.Class.method) while span
+        // names use the bean name ("task class.method") - also match on the Class.method suffix
+        String[] segments = filter.split("\\.");
+        return segments.length > 2
+                && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
     }
 
     public Optional<TraceTree> getTraceInsights(String traceId) {
