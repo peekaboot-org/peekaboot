@@ -12,8 +12,8 @@
     let tracesLoaded = false;
     let metricsData = null;
     let metricsLoaded = false;
-    let selectedRootActionTypes = new Set(['HTTP_REQUEST', 'SCHEDULED_JOB',
-        'MESSAGE_CONSUMER', 'DATABASE', 'INTERNAL', 'RPC_CALL', 'UNKNOWN']);
+    // Empty set means "no type filter" - all traces are shown
+    let selectedRootActionTypes = new Set();
 
     let currentLocale = navigator.language || 'en-US';
     let useServerTimezone = false;  // Default: browser timezone
@@ -184,9 +184,9 @@
                 params.append('bucket', currentBucket);
             }
 
-            // Add rootActionType filter if only one type selected
-            if (selectedRootActionTypes.size === 1) {
-                params.append('rootActionType', Array.from(selectedRootActionTypes)[0]);
+            // Add rootActionType filter for the selected types (empty = no filter)
+            if (selectedRootActionTypes.size > 0) {
+                params.append('rootActionType', Array.from(selectedRootActionTypes).join(','));
             }
 
             // Add rootOperation filter if set
@@ -204,7 +204,7 @@
             }
             tracesData = data;
             tracesLoaded = true;
-            updateBucketCounts(data.bucketCounts);
+            updateBucketCounts(data.bucketCounts, data.filteredBucketCounts);
             renderTracesTab();
         } catch (error) {
             console.error('Error fetching traces:', error);
@@ -214,21 +214,25 @@
         }
     }
 
-    const ALL_ROOT_ACTION_TYPES = ['HTTP_REQUEST', 'SCHEDULED_JOB', 'MESSAGE_CONSUMER', 'RPC_CALL', 'DATABASE', 'INTERNAL', 'UNKNOWN'];
-
     const BUCKET_EMPTY_MESSAGES = {
         all: 'No traces recorded',
         errors: 'No error traces recorded',
         slow: 'No slow traces recorded'
     };
 
-    function updateBucketCounts(counts) {
+    function updateBucketCounts(counts, filteredCounts) {
         if (!counts) return;
         document.querySelectorAll('#traces-bucket .bucket-btn').forEach(btn => {
             const bucket = btn.dataset.bucket;
             const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
             const count = counts[bucket];
-            btn.textContent = count != null ? `${label} (${count})` : label;
+            if (count == null) {
+                btn.textContent = label;
+            } else if (filteredCounts) {
+                btn.textContent = `${label} (${filteredCounts[bucket]} / ${count})`;
+            } else {
+                btn.textContent = `${label} (${count})`;
+            }
         });
     }
 
@@ -240,25 +244,20 @@
         // Update filter indicator
         updateFilterIndicator();
 
+        // Filtering happens server-side; an empty result just needs the right message
         const traces = tracesData?.traces;
         if (!traces || traces.length === 0) {
-            noTracesEl.querySelector('p').textContent = BUCKET_EMPTY_MESSAGES[currentBucket];
-            noTracesEl.classList.remove('hidden');
-            return;
-        }
-
-        const filteredTraces = traces.filter(t =>
-            selectedRootActionTypes.has(t.rootActionType || 'UNKNOWN'));
-
-        if (filteredTraces.length === 0) {
-            noTracesEl.querySelector('p').textContent = 'No traces match the selected filters';
+            const isFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
+            noTracesEl.querySelector('p').textContent = isFiltered
+                ? 'No traces match the selected filters'
+                : BUCKET_EMPTY_MESSAGES[currentBucket];
             noTracesEl.classList.remove('hidden');
             return;
         }
 
         noTracesEl.classList.add('hidden');
 
-        filteredTraces.forEach(trace => {
+        traces.forEach(trace => {
             listEl.appendChild(renderTraceItem(trace));
         });
     }
@@ -270,11 +269,11 @@
 
         if (!filterBanner || !filterText) return;
 
-        const isTypeFiltered = selectedRootActionTypes.size < ALL_ROOT_ACTION_TYPES.length;
+        const isTypeFiltered = selectedRootActionTypes.size > 0;
         const isOperationFiltered = currentRootOperationFilter !== null;
         const isFiltered = isTypeFiltered || isOperationFiltered;
 
-        if (isFiltered && selectedRootActionTypes.size > 0) {
+        if (isFiltered) {
             let filterDescription = '';
 
             // Show type filter
@@ -301,10 +300,10 @@
     }
 
     function resetTracesFilter() {
-        ALL_ROOT_ACTION_TYPES.forEach(type => selectedRootActionTypes.add(type));
+        selectedRootActionTypes.clear();
         currentRootOperationFilter = null;
         document.querySelectorAll('#traces-filter input').forEach(cb => {
-            cb.checked = true;
+            cb.checked = false;
         });
         // Refetch with cleared filters
         tracesLoaded = false;

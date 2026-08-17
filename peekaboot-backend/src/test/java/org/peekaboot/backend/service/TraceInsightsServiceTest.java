@@ -323,6 +323,58 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void getInsights_shouldFilterByMultipleCommaSeparatedRootActionTypes() {
+        addTrace("trace1", 100, false);                                   // SERVER kind -> HTTP_REQUEST
+        addConsumerTrace("trace2", 100);                                  // CONSUMER kind -> MESSAGE_CONSUMER
+        addTraceWithOperation("trace3", "task scheduler.fixedRate", 100); // name contains "schedule" -> SCHEDULED_JOB
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request,message_consumer", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactlyInAnyOrder("trace1", "trace2");
+    }
+
+    @Test
+    void getInsights_shouldIgnoreInvalidTypesInCommaSeparatedFilter() {
+        addTrace("trace1", 100, false);
+        addConsumerTrace("trace2", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request,bogus", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    @Test
+    void getInsights_shouldReturnFilteredBucketCountsWhenTypeFilterActive() {
+        addTrace("trace1", 100, false);  // HTTP_REQUEST, ok
+        addTrace("trace2", 100, true);   // HTTP_REQUEST, error
+        addConsumerTrace("trace3", 100); // MESSAGE_CONSUMER, ok
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request", null);
+
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 1, 0));
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 1, 0));
+    }
+
+    @Test
+    void getInsights_shouldReturnFilteredBucketCountsForRootOperationFilter() {
+        addTraceWithOperation("trace1", "GET /api/users", 100);
+        addTraceWithOperation("trace2", "POST /orders", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    @Test
+    void getInsights_shouldOmitFilteredBucketCountsWithoutFilter() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.filteredBucketCounts()).isNull();
+    }
+
+    @Test
     void getInsights_shouldMatchRootOperationByFullyQualifiedTaskTarget() {
         addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
         addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);

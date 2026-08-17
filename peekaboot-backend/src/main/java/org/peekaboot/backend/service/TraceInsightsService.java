@@ -27,10 +27,13 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 
 @Service
 public class TraceInsightsService {
@@ -66,25 +69,11 @@ public class TraceInsightsService {
             return EMPTY_RESPONSE;
         }
 
-        // Parse rootActionType filter
-        RootActionType actionTypeFilter = null;
-        if (rootActionType != null && !rootActionType.isBlank()) {
-            try {
-                actionTypeFilter = RootActionType.valueOf(rootActionType.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                // Ignore invalid values, don't filter
-            }
-        }
+        Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
+        final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
-        final RootActionType finalActionTypeFilter = actionTypeFilter;
-        final String finalRootOperation = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
-
-        List<TraceTree> traceTrees = traceStore.getTraces(bucket, limit * 10).stream()  // overfetch to survive filtering
-                .map(bundle -> TraceData.fromSpans(bundle.traceId(), bundle.spans()))
-                .map(spanDeduplicator::deduplicate)
-                .map(traceTreeMapper::map)
-                .filter(tree -> finalActionTypeFilter == null || tree.rootActionType() == finalActionTypeFilter)
-                .filter(tree -> finalRootOperation == null || matchesRootOperation(tree, finalRootOperation))
+        List<TraceTree> traceTrees = mapBucket(bucket, limit * 10)  // overfetch to survive filtering
+                .filter(tree -> matchesFilters(tree, actionTypeFilter, operationFilter))
                 .map(issueDetector::detectIssues)
                 .limit(limit)
                 .toList();
@@ -94,7 +83,52 @@ public class TraceInsightsService {
                 traceStore.getTraceCount(TraceBucket.ERRORS),
                 traceStore.getTraceCount(TraceBucket.SLOW));
 
-        return new TraceInsightsResponse(traceTrees, calculateListSummary(traceTrees), bucketCounts);
+        BucketCounts filteredBucketCounts = null;
+        if (!actionTypeFilter.isEmpty() || operationFilter != null) {
+            filteredBucketCounts = new BucketCounts(
+                    countMatching(TraceBucket.ALL, actionTypeFilter, operationFilter),
+                    countMatching(TraceBucket.ERRORS, actionTypeFilter, operationFilter),
+                    countMatching(TraceBucket.SLOW, actionTypeFilter, operationFilter));
+        }
+
+        return new TraceInsightsResponse(traceTrees, calculateListSummary(traceTrees), bucketCounts, filteredBucketCounts);
+    }
+
+    /**
+     * Parses a comma-separated list of {@link RootActionType} names, silently dropping invalid
+     * values. An empty result means "no type filter".
+     */
+    private Set<RootActionType> parseRootActionTypes(String rootActionType) {
+        if (rootActionType == null || rootActionType.isBlank()) {
+            return Set.of();
+        }
+        Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
+        for (String token : rootActionType.split(",")) {
+            try {
+                types.add(RootActionType.valueOf(token.trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid values
+            }
+        }
+        return types;
+    }
+
+    private Stream<TraceTree> mapBucket(TraceBucket bucket, int limit) {
+        return traceStore.getTraces(bucket, limit).stream()
+                .map(bundle -> TraceData.fromSpans(bundle.traceId(), bundle.spans()))
+                .map(spanDeduplicator::deduplicate)
+                .map(traceTreeMapper::map);
+    }
+
+    private boolean matchesFilters(TraceTree tree, Set<RootActionType> actionTypes, String rootOperation) {
+        return (actionTypes.isEmpty() || actionTypes.contains(tree.rootActionType()))
+                && (rootOperation == null || matchesRootOperation(tree, rootOperation));
+    }
+
+    private int countMatching(TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
+        return (int) mapBucket(bucket, Integer.MAX_VALUE)
+                .filter(tree -> matchesFilters(tree, actionTypes, rootOperation))
+                .count();
     }
 
     private boolean matchesRootOperation(TraceTree tree, String rootOperation) {
