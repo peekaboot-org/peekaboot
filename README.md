@@ -42,10 +42,26 @@ All properties are optional. Peekaboot works out of the box with sensible defaul
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `peekaboot.enabled` | `true` | Enable/disable Peekaboot entirely |
+| `peekaboot.enabled` | `true` | Enable/disable the dashboard, API, toolbar, and observability defaults |
 | `peekaboot.dev-toolbar` | `false` | Enable debug toolbar injection into HTML responses |
+| `peekaboot.lifecycle.enabled` | `true` | Enable the startup summary log (environment, build info, server URLs, datasources) |
 
 The UI and API are always served under the fixed `/peekaboot` prefix.
+
+### When Each Feature Is Enabled
+
+| Feature | Property switch | Additional requirements |
+|---------|-----------------|-------------------------|
+| **Dashboard UI & API** | `peekaboot.enabled=true` (default) | Servlet web application; Spring Boot Actuator on the classpath (included in the starter) |
+| **Debug Toolbar** | `peekaboot.enabled=true` **and** `peekaboot.dev-toolbar=true` (opt-in) | Servlet web application; a Micrometer `Tracer` bean (provided by `spring-boot-starter-opentelemetry`, included in the starter) |
+| **In-Memory Tracing** | `peekaboot.tracing.enabled=true` (default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
+| **Startup Summary** | `peekaboot.lifecycle.enabled=true` (default) | — |
+| **Observability Defaults** | `peekaboot.enabled=true` (default) | — |
+
+Notes:
+
+- The dashboard UI and API share a single switch — they cannot be enabled independently. The toolbar's expanded view loads its trace details from the API, so the toolbar effectively requires both `peekaboot.enabled` and tracing to be active for meaningful content.
+- `peekaboot.enabled=false` turns off the dashboard, API, toolbar, and the observability defaults — but **not** the in-memory trace store or the startup summary, which have their own independent toggles. To disable everything, also set `peekaboot.tracing.enabled=false` and `peekaboot.lifecycle.enabled=false`.
 
 ### Tracing Properties
 
