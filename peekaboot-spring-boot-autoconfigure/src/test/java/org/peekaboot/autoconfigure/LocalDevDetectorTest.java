@@ -19,6 +19,17 @@ class LocalDevDetectorTest {
     }
 
     @Test
+    void detectsLocalDevForDevToolsRestartedThread() {
+        // DevTools relaunches the app on "restartedMain" with its RestartClassLoader
+        // and only ever enables itself in a local launch
+        Thread thread = new Thread(() -> {
+        }, "restartedMain");
+        thread.setContextClassLoader(new FakeRestartClassLoader());
+
+        assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK)).isTrue();
+    }
+
+    @Test
     void rejectsThreadNotNamedMain() {
         Thread thread = new Thread(() -> {
         }, "worker-1");
@@ -118,6 +129,10 @@ class LocalDevDetectorTest {
 
     /** Class name intentionally contains "AppClassLoader", like jdk.internal.loader.ClassLoaders$AppClassLoader. */
     private static final class FakeAppClassLoader extends ClassLoader {
+    }
+
+    /** Class name intentionally contains "RestartClassLoader", like DevTools' restart.classloader.RestartClassLoader. */
+    private static final class FakeRestartClassLoader extends ClassLoader {
     }
 
     private static final class PackagedArchiveClassLoader extends ClassLoader {

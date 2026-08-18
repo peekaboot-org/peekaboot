@@ -14,6 +14,11 @@ import java.util.Set;
  * thread runs on the JDK's {@code AppClassLoader} (packaged jars use Boot's
  * {@code LaunchedClassLoader}, wars the container's webapp loader) and no
  * test-framework or AOT frames are on the stack.
+ *
+ * <p>With DevTools on the classpath the application is relaunched on the
+ * {@code restartedMain} thread under DevTools' {@code RestartClassLoader}
+ * before the environment is built; since DevTools only enables itself in a
+ * local launch, that classloader is itself proof of local development.
  */
 final class LocalDevDetector {
 
@@ -35,11 +40,17 @@ final class LocalDevDetector {
         if (NativeDetector.inNativeImage()) {
             return false;
         }
+        ClassLoader classLoader = thread.getContextClassLoader();
+        if (classLoader == null) {
+            return false;
+        }
+        if (classLoader.getClass().getName().contains("RestartClassLoader")) {
+            return true;
+        }
         if (!"main".equals(thread.getName())) {
             return false;
         }
-        ClassLoader classLoader = thread.getContextClassLoader();
-        if (classLoader == null || !classLoader.getClass().getName().contains("AppClassLoader")) {
+        if (!classLoader.getClass().getName().contains("AppClassLoader")) {
             return false;
         }
         for (StackTraceElement element : stackTrace) {
