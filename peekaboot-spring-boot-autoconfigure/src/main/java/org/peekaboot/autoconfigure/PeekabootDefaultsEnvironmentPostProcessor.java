@@ -19,14 +19,15 @@ import java.util.Map;
 /**
  * Derives the default for {@code peekaboot.enabled} from the launch context
  * (on only when running locally in an IDE or via spring-boot:run/bootRun) and
- * applies Peekaboot's observability defaults (lowest precedence, so any
- * application property wins). An explicit {@code peekaboot.enabled} setting
- * always overrides the detection, and the observability defaults are skipped
- * entirely when Peekaboot ends up disabled.
+ * applies Peekaboot's defaults (lowest precedence, so any application property
+ * wins). An explicit {@code peekaboot.enabled} setting always overrides the
+ * detection.
  * <p>
- * Independent of the enabled state, OTLP metrics export is turned off so the
- * starter never pushes telemetry anywhere unless the application explicitly
- * opts in; traces and metrics stay collected in-process.
+ * All defaults live in yml resources: {@code peekaboot-no-push-defaults.yml}
+ * is applied unconditionally so the starter never pushes telemetry anywhere
+ * unless the application explicitly opts in, while the observability defaults
+ * in {@code peekaboot-defaults.yml} are skipped entirely when Peekaboot ends
+ * up disabled.
  */
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
@@ -35,6 +36,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
+    private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
 
     private final Log log;
 
@@ -52,29 +54,14 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected")
                 + " - peekaboot " + (localDevelopment ? "enabled" : "disabled") + " by default");
 
-        // Micrometer's OTLP registry pushes to localhost:4318 even without any
-        // configuration; never push unless the application explicitly opts in.
-        environment.getPropertySources().addLast(new MapPropertySource(
-                NO_PUSH_PROPERTY_SOURCE_NAME, Map.of("management.otlp.metrics.export.enabled", false)));
+        applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 
         if (!environment.getProperty(ENABLED_PROPERTY, Boolean.class, false)) {
             log.debug("Peekaboot is disabled - skipping peekaboot defaults");
             return;
         }
 
-        Resource resource = new ClassPathResource(DEFAULTS_RESOURCE);
-        if (!resource.exists()) {
-            log.warn("Peekaboot defaults resource not found: " + DEFAULTS_RESOURCE);
-            return;
-        }
-
-        try {
-            PropertySource<?> propertySource = loadYaml(resource);
-            environment.getPropertySources().addLast(propertySource);
-            log.debug("Loaded peekaboot defaults from " + DEFAULTS_RESOURCE);
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to load peekaboot defaults from " + DEFAULTS_RESOURCE, e);
-        }
+        applyDefaults(environment, PROPERTY_SOURCE_NAME, DEFAULTS_RESOURCE);
     }
 
     /** Overridable for tests: real detection reads the launch context of the current thread. */
@@ -82,11 +69,27 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         return LocalDevDetector.isLocalDevelopment(Thread.currentThread());
     }
 
-    private PropertySource<?> loadYaml(Resource resource) throws IOException {
+    private void applyDefaults(ConfigurableEnvironment environment, String propertySourceName, String resourceName) {
+        Resource resource = new ClassPathResource(resourceName);
+        if (!resource.exists()) {
+            log.warn("Peekaboot defaults resource not found: " + resourceName);
+            return;
+        }
+
+        try {
+            PropertySource<?> propertySource = loadYaml(propertySourceName, resource, resourceName);
+            environment.getPropertySources().addLast(propertySource);
+            log.debug("Loaded peekaboot defaults from " + resourceName);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load peekaboot defaults from " + resourceName, e);
+        }
+    }
+
+    private PropertySource<?> loadYaml(String propertySourceName, Resource resource, String resourceName) throws IOException {
         YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-        List<PropertySource<?>> propertySources = loader.load(PROPERTY_SOURCE_NAME, resource);
+        List<PropertySource<?>> propertySources = loader.load(propertySourceName, resource);
         if (propertySources.isEmpty()) {
-            throw new IllegalStateException("No property sources loaded from " + DEFAULTS_RESOURCE);
+            throw new IllegalStateException("No property sources loaded from " + resourceName);
         }
         return propertySources.get(0);
     }
