@@ -50,12 +50,11 @@ management:
       # Spring default: false | We enable for declarative observability
       enabled: true
 
-  otlp:
-    metrics:
-      export:
-        # Auto-export metrics to OTLP collector
-        # Spring default: true | We disable to avoid errors when no collector configured
-        enabled: false
+  # No OTLP push defaults needed here:
+  # - metrics: management.otlp.metrics.export.enabled=false is applied
+  #   unconditionally by PeekabootDefaultsEnvironmentPostProcessor
+  # - traces/logs: Boot only creates OTLP exporters when an endpoint
+  #   (management.opentelemetry.tracing.export.otlp.endpoint) is configured
 
 # Third-party library defaults (only apply if dependency present)
 

@@ -70,6 +70,37 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     }
 
     @Test
+    void disablesOtlpMetricsExportWhenPeekabootEnabled() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.otlp.metrics.export.enabled"))
+                .isEqualTo("false");
+    }
+
+    @Test
+    void disablesOtlpMetricsExportEvenWhenPeekabootDisabled() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.otlp.metrics.export.enabled"))
+                .isEqualTo("false");
+    }
+
+    @Test
+    void appPropertiesCanReenableOtlpMetricsExport() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("management.otlp.metrics.export.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.otlp.metrics.export.enabled"))
+                .isEqualTo("true");
+    }
+
+    @Test
     void loadsDefaultProperties() {
         ConfigurableEnvironment environment = new MockEnvironment();
 

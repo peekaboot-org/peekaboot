@@ -23,11 +23,16 @@ import java.util.Map;
  * application property wins). An explicit {@code peekaboot.enabled} setting
  * always overrides the detection, and the observability defaults are skipped
  * entirely when Peekaboot ends up disabled.
+ * <p>
+ * Independent of the enabled state, OTLP metrics export is turned off so the
+ * starter never pushes telemetry anywhere unless the application explicitly
+ * opts in; traces and metrics stay collected in-process.
  */
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
     private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
+    private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
 
@@ -46,6 +51,11 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
                 DETECTION_PROPERTY_SOURCE_NAME, Map.of(ENABLED_PROPERTY, localDevelopment)));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected")
                 + " - peekaboot " + (localDevelopment ? "enabled" : "disabled") + " by default");
+
+        // Micrometer's OTLP registry pushes to localhost:4318 even without any
+        // configuration; never push unless the application explicitly opts in.
+        environment.getPropertySources().addLast(new MapPropertySource(
+                NO_PUSH_PROPERTY_SOURCE_NAME, Map.of("management.otlp.metrics.export.enabled", false)));
 
         if (!environment.getProperty(ENABLED_PROPERTY, Boolean.class, false)) {
             log.debug("Peekaboot is disabled - skipping peekaboot defaults");
