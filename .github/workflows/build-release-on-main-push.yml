@@ -57,7 +57,7 @@ jobs:
 
       - name: 'get-latest-tag'
         id: 'get-latest-tag'
-        uses: "WyriHaximus/github-action-get-previous-tag@v1"
+        uses: "WyriHaximus/github-action-get-previous-tag@v2"
 
       - name: create-release-notes
         uses: softprops/action-gh-release@v3
