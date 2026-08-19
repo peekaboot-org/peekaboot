@@ -1,0 +1,53 @@
+/* Peekaboot design tokens — the single place to re-theme Peekaboot.
+   Selectors are doubled so the same declarations apply to the dashboard
+   document (:root) and to shadow roots of the toolbar and overlay (:host). */
+:root, :host {
+    --pk-bg: #ffffff;
+    --pk-bg-alt: #f6f8fa;
+    --pk-bg-hover: #f0f2f4;
+    --pk-border: #d1d5db;
+    --pk-text: #1f2937;
+    --pk-text-muted: #6b7280;
+    --pk-text-strong: #111827;
+    --pk-primary: #2563eb;
+    --pk-primary-light: #dbeafe;
+    --pk-success: #16a34a;
+    --pk-warning: #ca8a04;
+    --pk-danger: #dc2626;
+    --pk-purple: #7c3aed;
+
+    --pk-space-xs: 4px;
+    --pk-space-sm: 8px;
+    --pk-space-md: 16px;
+    --pk-space-lg: 24px;
+    --pk-space-xl: 32px;
+
+    --pk-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --pk-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    --pk-text-xs: 0.75rem;
+    --pk-text-sm: 0.875rem;
+    --pk-text-base: 1rem;
+    --pk-text-lg: 1.125rem;
+
+    --pk-radius: 6px;
+    --pk-radius-lg: 8px;
+    --pk-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+    --pk-transition: 0.2s ease;
+}
+
+[data-theme="dark"], :host([data-theme="dark"]) {
+    --pk-bg: #0d1117;
+    --pk-bg-alt: #161b22;
+    --pk-bg-hover: #21262d;
+    --pk-border: #30363d;
+    --pk-text: #c9d1d9;
+    --pk-text-muted: #8b949e;
+    --pk-text-strong: #f0f6fc;
+    --pk-primary: #58a6ff;
+    --pk-primary-light: #1f3a5c;
+    --pk-success: #3fb950;
+    --pk-warning: #d29922;
+    --pk-danger: #f85149;
+    --pk-purple: #a371f7;
+    --pk-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+}

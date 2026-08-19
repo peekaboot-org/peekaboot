@@ -1,0 +1,29 @@
+/* Reset and element defaults. Applies in both document and shadow scope. */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body, :host {
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-sm);
+    line-height: 1.5;
+    color: var(--pk-text);
+}
+
+body {
+    margin: 0;
+    background: var(--pk-bg);
+    transition: background-color var(--pk-transition), color var(--pk-transition);
+}
+
+mark {
+    background: #fef08a;
+    color: var(--pk-text-strong);
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+[data-theme="dark"] mark, :host([data-theme="dark"]) mark {
+    background: #854d0e;
+    color: #fef9c3;
+}
