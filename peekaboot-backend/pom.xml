@@ -111,13 +111,6 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- UI resources so integration tests can serve/execute the real toolbar scripts -->
-        <dependency>
-            <groupId>org.peekaboot</groupId>
-            <artifactId>peekaboot-frontend</artifactId>
-            <version>${project.version}</version>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-observation-test</artifactId>

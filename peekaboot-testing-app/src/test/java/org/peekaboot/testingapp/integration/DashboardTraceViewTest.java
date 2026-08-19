@@ -1,9 +1,9 @@
-package org.peekaboot.backend.integration;
+package org.peekaboot.testingapp.integration;
 
 import io.micrometer.tracing.Span;
-import org.peekaboot.backend.fixture.TestFixtureApplication;
-import org.peekaboot.backend.fixture.entity.Person;
-import org.peekaboot.backend.fixture.repository.PersonRepository;
+import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.entity.Person;
+import org.peekaboot.testingapp.repository.PersonRepository;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,7 +29,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(
-    classes = {TestFixtureApplication.class, SharedToolbarTestConfig.class},
+    classes = {TestingApp.class, SharedToolbarTestConfig.class},
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 @ActiveProfiles("test")

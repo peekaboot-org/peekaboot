@@ -32,4 +32,12 @@ public class PersonController {
         }
         return "index";
     }
+
+
+    @GetMapping("/persons")
+    public String persons(Model model) {
+
+        model.addAttribute("persons", personQueryService.findAll());
+        return "persons";
+    }
 }

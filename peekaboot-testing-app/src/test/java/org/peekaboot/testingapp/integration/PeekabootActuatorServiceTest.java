@@ -1,10 +1,11 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.testingapp.integration;
 
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
-import org.peekaboot.backend.fixture.TestFixtureApplication;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.service.PeekabootActuatorService;
+import org.peekaboot.testingapp.TestingApp;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
@@ -25,7 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(
-    classes = TestFixtureApplication.class,
+    classes = TestingApp.class,
     properties = {
         "management.endpoints.web.exposure.include=*",
         "management.endpoint.threaddump.access=unrestricted",
@@ -121,18 +122,19 @@ class PeekabootActuatorServiceTest {
     }
 
     /**
-     * peekaboot-spring-boot-autoconfigure (which normally supplies the real
-     * {@code List<DataSourceMetadata>} bean) is not a dependency of this module,
-     * so this fixture reproduces that wiring. A mock (same pattern as
-     * {@code DataSourceMapperTest}) is used instead of a live DataSource so a
-     * real {@link Host} can be stubbed in — the H2 in-memory URL this module's
-     * test DataSource actually uses never yields a host, which would leave
-     * {@code buildDataSourcesInfo()}'s host.toString() formatting loop unexercised.
+     * The bean name matches the one {@code PeekabootLifecycleAutoConfiguration}
+     * guards with {@code @ConditionalOnMissingBean(name = "databaseMetadataList")},
+     * so this fixture bean wins over the real one and this module's real, H2-backed
+     * DataSource is never consulted. A mock (same pattern as {@code DataSourceMapperTest})
+     * is used instead of a live DataSource so a real {@link Host} can be stubbed in
+     * — the H2 in-memory URL this module's test DataSource actually uses never yields
+     * a host, which would leave {@code buildDataSourcesInfo()}'s host.toString()
+     * formatting loop unexercised.
      */
     @TestConfiguration
     static class DataSourceMetadataFixtureConfig {
         @Bean
-        List<DataSourceMetadata> testDataSourceMetadataList() {
+        List<DataSourceMetadata> databaseMetadataList() {
             DataSourceMetadata metadata = mock(DataSourceMetadata.class);
             when(metadata.getDataSourceName()).thenReturn("primary");
             when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));

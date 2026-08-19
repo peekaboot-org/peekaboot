@@ -1,8 +1,8 @@
-package org.peekaboot.backend.integration;
+package org.peekaboot.testingapp.integration;
 
-import org.peekaboot.backend.fixture.TestFixtureApplication;
-import org.peekaboot.backend.fixture.entity.Person;
-import org.peekaboot.backend.fixture.repository.PersonRepository;
+import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.entity.Person;
+import org.peekaboot.testingapp.repository.PersonRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * in the peekaboot-spring-boot-autoconfigure module.
  */
 @SpringBootTest(
-    classes = {TestFixtureApplication.class, SharedToolbarTestConfig.class},
+    classes = {TestingApp.class, SharedToolbarTestConfig.class},
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 @ActiveProfiles("test")

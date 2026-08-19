@@ -1,4 +1,4 @@
-package org.peekaboot.backend.integration;
+package org.peekaboot.testingapp.integration;
 
 import org.htmlunit.ScriptException;
 import org.htmlunit.WebClient;

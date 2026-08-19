@@ -5,11 +5,16 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
-    show-sql: true
     open-in-view: false
+  flyway:
+    enabled: false
   docker:
     compose:
       enabled: false
+  task:
+    scheduling:
+      pool:
+        size: 1
 
 peekaboot:
   enabled: true
