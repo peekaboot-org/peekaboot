@@ -13,11 +13,16 @@
     </parent>
 
     <groupId>org.peekaboot</groupId>
-    <artifactId>peekaboot-example-app</artifactId>
+    <artifactId>peekaboot-testing-app</artifactId>
     <version>0.0.4-SNAPSHOT</version>
+
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>Peekaboot Testing App - sample application for manual and automated UI testing</description>
 
     <properties>
         <java.version>25</java.version>
+        <!-- not a published artifact: it exists to host the sample app and its UI tests -->
+        <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
     <dependencies>

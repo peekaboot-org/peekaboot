@@ -16,7 +16,7 @@
         <module>peekaboot-frontend</module>
         <module>peekaboot-spring-boot-autoconfigure</module>
         <module>peekaboot-spring-boot-starter</module>
-        <module>peekaboot-example-app</module>
+        <module>peekaboot-testing-app</module>
     </modules>
 
     <url>https://github.com/peekaboot-org/peekaboot</url>

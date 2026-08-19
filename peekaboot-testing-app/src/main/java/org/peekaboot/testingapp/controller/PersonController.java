@@ -1,6 +1,6 @@
-package org.peekaboot.example.controller;
+package org.peekaboot.testingapp.controller;
 
-import org.peekaboot.example.ExampleService;
+import org.peekaboot.testingapp.PersonQueryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
@@ -14,19 +14,19 @@ public class PersonController {
 
     private static final Logger log = LoggerFactory.getLogger(PersonController.class);
 
-    private final ExampleService exampleService;
+    private final PersonQueryService personQueryService;
 
 
-    public PersonController(ExampleService exampleService) {
+    public PersonController(PersonQueryService personQueryService) {
 
-        this.exampleService = exampleService;
+        this.personQueryService = personQueryService;
     }
 
 
     @GetMapping("/")
     public String index(@RequestParam(name = "error", defaultValue = "false") boolean error, Model model) {
 
-        model.addAttribute("persons", exampleService.findAll());
+        model.addAttribute("persons", personQueryService.findAll());
         if (error) {
             log.error("An error occurred while trying to find all persons");
         }

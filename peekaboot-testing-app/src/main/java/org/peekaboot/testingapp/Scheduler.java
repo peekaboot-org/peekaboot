@@ -1,4 +1,4 @@
-package org.peekaboot.example;
+package org.peekaboot.testingapp;
 
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -14,14 +14,14 @@ public class Scheduler {
     private static final Logger log = LoggerFactory.getLogger(Scheduler.class);
 
     @Autowired
-    private ExampleService exampleService;
+    private PersonQueryService personQueryService;
 
 
     @Scheduled(fixedRate = 1, timeUnit = TimeUnit.HOURS)
     public void fixedRate() {
 
         log.info("fixedRate start");
-        exampleService.getPerson(1);
+        personQueryService.getPerson(1);
 
         log.error("fixedRate failed");
     }

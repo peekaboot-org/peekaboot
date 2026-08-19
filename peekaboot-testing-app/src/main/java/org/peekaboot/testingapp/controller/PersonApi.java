@@ -1,9 +1,9 @@
-package org.peekaboot.example.controller;
+package org.peekaboot.testingapp.controller;
 
 import java.util.List;
 import java.util.Optional;
-import org.peekaboot.example.ExampleService;
-import org.peekaboot.example.entity.Person;
+import org.peekaboot.testingapp.PersonQueryService;
+import org.peekaboot.testingapp.entity.Person;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,25 +16,25 @@ public class PersonApi {
 
     private static final Logger log = LoggerFactory.getLogger(PersonApi.class);
 
-    private final ExampleService exampleService;
+    private final PersonQueryService personQueryService;
 
 
-    public PersonApi(ExampleService exampleService) {
+    public PersonApi(PersonQueryService personQueryService) {
 
-        this.exampleService = exampleService;
+        this.personQueryService = personQueryService;
     }
 
 
     @GetMapping("/api/person/all")
     public List<Person> findAll() {
 
-        return exampleService.findAll();
+        return personQueryService.findAll();
     }
 
 
     @GetMapping("/api/person/{id}")
     public Optional<Person> findById(@PathVariable("id") Long id) {
 
-        return exampleService.getPerson(id);
+        return personQueryService.getPerson(id);
     }
 }

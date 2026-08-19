@@ -10,7 +10,7 @@ peekaboot/
 ├── peekaboot-frontend/                   # Static web resources
 ├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
 ├── peekaboot-spring-boot-starter/        # Dependency aggregator
-└── peekaboot-example-app/                # Demo application
+└── peekaboot-testing-app/                # Sample app + UI tests
 ```
 
 ## Architecture Overview
@@ -353,7 +353,7 @@ mvn clean install
 mvn clean compile -DskipTests
 
 # Run example app
-cd peekaboot-example-app && mvn spring-boot:run
+cd peekaboot-testing-app && mvn spring-boot:run
 ```
 
 ## Key Design Decisions
