@@ -74,7 +74,7 @@ abstract class PlaywrightTestBase {
         page.waitForSelector("#loading",
                 new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         // ...but #loading also hides on the failure path, so require positive proof of a render
-        page.waitForSelector("#build-info > *");
+        page.waitForSelector("#build-info > *, #error:not(.hidden)");
         if (page.isVisible("#error")) {
             throw new IllegalStateException(
                     "dashboard failed to load: " + page.textContent("#error .message"));
