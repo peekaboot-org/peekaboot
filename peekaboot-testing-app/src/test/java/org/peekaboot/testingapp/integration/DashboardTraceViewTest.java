@@ -130,7 +130,7 @@ class DashboardTraceViewTest {
 
     @Test
     void dashboardShouldBeAccessible() {
-        var response = restClient.get()
+        Map<String, Object> response = restClient.get()
             .uri("/peekaboot/ui/dashboard/index.html")
             .accept(MediaType.TEXT_HTML)
             .exchange((req, res) -> {
