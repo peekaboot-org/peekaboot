@@ -15,7 +15,7 @@ jobs:
     if: github.actor == 'dependabot[bot]'
     steps:
       - name: dependabot-pr-fetch-metadata
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
 
       - name: dependabot-pr-approve
         run: gh pr review --approve "$PR_URL"
