@@ -1,0 +1,161 @@
+/* Shared Peekaboot UI primitives. Consumed by the dashboard document and by
+   the toolbar and trace-detail shadow roots. */
+
+/* Badge — one pill, five semantic variants */
+.pk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-space-xs);
+    padding: 2px 8px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.pk-badge--ok      { background: var(--pk-success); color: var(--pk-text-on-accent); }
+.pk-badge--warn    { background: var(--pk-warning); color: var(--pk-text-on-accent); }
+.pk-badge--error   { background: var(--pk-danger);  color: var(--pk-text-on-accent); }
+.pk-badge--info    { background: var(--pk-primary); color: var(--pk-text-on-accent); }
+.pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text-muted); }
+
+/* Collapsible group. State is aria-expanded + [hidden], not a class. */
+.pk-group {
+    margin-bottom: var(--pk-space-md);
+}
+.pk-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-space-md);
+    width: 100%;
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius) var(--pk-radius) 0 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--pk-transition);
+}
+.pk-group__header:hover { background: var(--pk-bg-hover); }
+.pk-group__header:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
+.pk-group__header[aria-expanded="false"] { border-radius: var(--pk-radius); }
+.pk-group__header::before {
+    content: '\25BE';
+    color: var(--pk-text-muted);
+    transition: transform var(--pk-transition);
+}
+.pk-group__header[aria-expanded="false"]::before { transform: rotate(-90deg); }
+.pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary); font-size: var(--pk-text-sm); }
+.pk-group__count { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-group__list {
+    border: 1px solid var(--pk-border);
+    border-top: none;
+    border-radius: 0 0 var(--pk-radius) var(--pk-radius);
+}
+
+/* Key/value row */
+.pk-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--pk-space-md);
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    border-bottom: 1px solid var(--pk-border);
+}
+.pk-kv:last-child { border-bottom: none; }
+.pk-kv__key {
+    flex-shrink: 0;
+    max-width: 50%;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-strong);
+    word-break: break-word;
+}
+.pk-kv__value {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    text-align: right;
+    word-break: break-word;
+}
+.pk-kv__value--mono      { font-family: var(--pk-font-mono); }
+.pk-kv__value--sensitive { color: var(--pk-warning); font-style: italic; }
+
+@media (max-width: 767px) {
+    .pk-kv { flex-direction: column; gap: var(--pk-space-xs); }
+    .pk-kv__key, .pk-kv__value { max-width: 100%; text-align: left; }
+}
+
+/* Meter — usage bar for memory and storage */
+.pk-meter {
+    height: 8px;
+    background: var(--pk-bg-alt);
+    border-radius: var(--pk-radius);
+    overflow: hidden;
+}
+.pk-meter__fill {
+    height: 100%;
+    background: var(--pk-success);
+    border-radius: var(--pk-radius);
+    transition: width var(--pk-transition);
+}
+.pk-meter__fill--warning { background: var(--pk-warning); }
+.pk-meter__fill--danger  { background: var(--pk-danger); }
+
+/* Button */
+.pk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-space-xs);
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: inherit;
+    font-size: var(--pk-text-sm);
+    cursor: pointer;
+    transition: background-color var(--pk-transition);
+}
+.pk-btn:hover { background: var(--pk-bg-hover); }
+.pk-btn:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
+.pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
+.pk-btn--small { padding: 2px var(--pk-space-sm); font-size: var(--pk-text-xs); }
+.pk-btn--select { padding-right: var(--pk-space-md); }
+.pk-btn[aria-pressed="true"], .pk-btn--active { background: var(--pk-primary); color: var(--pk-text-on-accent); }
+
+/* Tab strip */
+.pk-tabs {
+    display: flex;
+    gap: var(--pk-space-xs);
+    border-bottom: 1px solid var(--pk-border);
+    overflow-x: auto;
+}
+.pk-tab {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    margin-bottom: -1px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--pk-text-muted);
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.pk-tab:hover { color: var(--pk-text); }
+.pk-tab:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
+.pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary); }
+
+/* Empty state — centred, muted placeholder text shown when a list has no data */
+.pk-empty {
+    color: var(--pk-text-muted);
+    font-style: italic;
+    padding: var(--pk-space-md);
+    text-align: center;
+}
+
+/* Spinner, shared by every loading state */
+@keyframes pk-spin { to { transform: rotate(360deg); } }
+.pk-spinning { animation: pk-spin 1s linear infinite; }

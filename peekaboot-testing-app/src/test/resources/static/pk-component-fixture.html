@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <title>pk component fixture</title>
+    <link rel="stylesheet" href="/peekaboot/ui/assets/tokens.css">
+    <link rel="stylesheet" href="/peekaboot/ui/assets/base.css">
+    <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
+</head>
+<body>
+    <span class="pk-badge pk-badge--ok" id="badge-ok">UP</span>
+    <span class="pk-badge pk-badge--error" id="badge-error">DOWN</span>
+
+    <div class="pk-group" id="group">
+        <button class="pk-group__header" id="group-header" aria-expanded="false" aria-controls="group-list">
+            <span class="pk-group__name">application.yml</span>
+            <span class="pk-group__count">3 properties</span>
+        </button>
+        <div class="pk-group__list" id="group-list" hidden>
+            <div class="pk-kv">
+                <span class="pk-kv__key">server.port</span>
+                <span class="pk-kv__value pk-kv__value--mono">8080</span>
+            </div>
+            <div class="pk-kv">
+                <span class="pk-kv__key">spring.datasource.password</span>
+                <span class="pk-kv__value pk-kv__value--sensitive">********</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="pk-meter"><div class="pk-meter__fill pk-meter__fill--danger" style="width:95%"></div></div>
+</body>
+</html>
