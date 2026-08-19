@@ -28,6 +28,33 @@
         </div>
     </div>
 
-    <div class="pk-meter"><div class="pk-meter__fill pk-meter__fill--danger" style="width:95%"></div></div>
+    <div class="pk-group" id="group-expanded">
+        <button class="pk-group__header" id="group-header-expanded" aria-expanded="true" aria-controls="group-list-expanded">
+            <span class="pk-group__name">application-dev.yml</span>
+            <span class="pk-group__count">1 property</span>
+        </button>
+        <div class="pk-group__list" id="group-list-expanded">
+            <div class="pk-kv">
+                <span class="pk-kv__key">debug</span>
+                <span class="pk-kv__value pk-kv__value--mono">true</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="pk-meter" id="meter-base">
+        <div class="pk-meter__fill" id="meter-fill-base" style="width:40%"></div>
+    </div>
+    <div class="pk-meter" id="meter-danger">
+        <div class="pk-meter__fill pk-meter__fill--danger" id="meter-fill-danger" style="width:95%"></div>
+    </div>
+
+    <div class="pk-empty" id="empty">No data available</div>
+
+    <button class="pk-btn" id="btn">Refresh</button>
+
+    <div class="pk-tabs" id="tabs">
+        <button class="pk-tab" id="tab-selected" aria-selected="true">Overview</button>
+        <button class="pk-tab" id="tab-unselected" aria-selected="false">Details</button>
+    </div>
 </body>
 </html>
