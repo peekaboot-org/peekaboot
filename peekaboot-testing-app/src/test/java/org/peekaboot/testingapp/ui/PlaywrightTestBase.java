@@ -4,6 +4,9 @@ import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.options.LoadState;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,11 +37,14 @@ abstract class PlaywrightTestBase {
 
     @AfterAll
     static void closeBrowser() {
-        if (browser != null) {
-            browser.close();
-        }
-        if (playwright != null) {
-            playwright.close();
+        try {
+            if (browser != null) {
+                browser.close();
+            }
+        } finally {
+            if (playwright != null) {
+                playwright.close();
+            }
         }
     }
 
@@ -51,6 +57,12 @@ abstract class PlaywrightTestBase {
     @AfterEach
     void closePage() {
         if (page != null) {
+            try {
+                page.waitForLoadState(LoadState.NETWORKIDLE,
+                        new Page.WaitForLoadStateOptions().setTimeout(2000));
+            } catch (TimeoutError ignored) {
+                // best-effort drain of in-flight requests; teardown must never fail a passing test
+            }
             page.context().close();
         }
     }
@@ -58,6 +70,15 @@ abstract class PlaywrightTestBase {
     protected void openDashboard() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         page.waitForSelector("#dashboard-tab.active");
+        // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
+        page.waitForSelector("#loading",
+                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        // ...but #loading also hides on the failure path, so require positive proof of a render
+        page.waitForSelector("#build-info > *");
+        if (page.isVisible("#error")) {
+            throw new IllegalStateException(
+                    "dashboard failed to load: " + page.textContent("#error .message"));
+        }
     }
 
     protected void openPersonsPage() {
@@ -65,13 +86,27 @@ abstract class PlaywrightTestBase {
         page.waitForSelector("#peekaboot-toolbar-host");
     }
 
-    /** Resolved value of a CSS custom property on the first match of {@code selector}. */
+    /**
+     * Resolved value of a CSS custom property on the first match of {@code selector}.
+     * Throws if the property does not resolve to a value, since an empty string is
+     * indistinguishable from "both sides of a comparison are missing the token".
+     */
     protected String cssVar(String selector, String property) {
-        return (String) page.evalOnSelector(selector,
-                "(el, prop) => getComputedStyle(el).getPropertyValue(prop).trim()", property);
+        String value = (String) page.locator(selector).first()
+                .evaluate("(el, prop) => getComputedStyle(el).getPropertyValue(prop).trim()", property);
+        if (value.isEmpty()) {
+            throw new AssertionError(
+                    "CSS property '" + property + "' does not resolve on '" + selector + "'");
+        }
+        return value;
     }
 
-    /** Seeds the shared theme preference before any Peekaboot script runs. */
+    /**
+     * Seeds the shared theme preference before any Peekaboot script runs.
+     * Note: {@code addInitScript} re-runs on every navigation of this page, not just the
+     * first — a test that toggles the theme and then reloads will see the seeded value
+     * reapplied, not the toggled one.
+     */
     protected void setStoredTheme(String theme) {
         page.addInitScript("localStorage.setItem('peekaboot-theme', '" + theme + "');");
     }
