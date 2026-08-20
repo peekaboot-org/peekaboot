@@ -149,20 +149,6 @@ class TraceOverlayTest extends PlaywrightTestBase {
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
 
-    /**
-     * window.PeekabootTraceDetail stays assigned - dashboard/peekaboot.js is still a classic
-     * script (no imports) and calls it directly; see DashboardShellTest.
-     * dashboardLoadsTheTraceDetailOverlayModule for that side of the contract.
-     */
-    @Test
-    void windowPeekabootTraceDetailStillWorksForTheClassicDashboardScript() {
-        openOverlayFromToolbar();
-
-        assertThat(page.evaluate("() => typeof window.PeekabootTraceDetail")).isEqualTo("object");
-        assertThat(page.evaluate("() => typeof window.PeekabootTraceDetail.open")).isEqualTo("function");
-        assertThat(page.evaluate("() => typeof window.PeekabootTraceDetail.close")).isEqualTo("function");
-    }
-
     /** role=dialog + aria-modal, and a real accessible name, not just visual chrome. */
     @Test
     void overlayExposesDialogSemantics() {

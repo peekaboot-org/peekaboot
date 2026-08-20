@@ -6,35 +6,36 @@
     <title>peekaboot</title>
     <link rel="stylesheet" href="../assets/tokens.css">
     <link rel="stylesheet" href="../assets/base.css">
-    <link rel="stylesheet" href="../assets/peekaboot.css">
+    <link rel="stylesheet" href="../assets/components.css">
+    <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-    <header class="header">
-        <div class="container">
-            <div class="header-content">
+    <header class="pk-header">
+        <div class="pk-container">
+            <div class="pk-header__content">
                 <h1>peekaboot</h1>
-                <div class="header-actions">
-                    <span class="header-time" id="last-updated"></span>
+                <div class="pk-header__actions">
+                    <span class="pk-header__time" id="last-updated"></span>
                     <!-- Timezone Toggle -->
-                    <button class="btn btn-tz" id="timezone-toggle" title="Toggle timezone">
+                    <button class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone">
                         <span id="timezone-icon">&#127760;</span>
                         <span id="timezone-label">Browser</span>
                     </button>
-                    <span class="header-tz-info" id="tz-info"></span>
+                    <span class="pk-header__tz-info" id="tz-info"></span>
                     <!-- Locale Selector -->
-                    <select class="btn btn-select" id="locale-select" title="Language">
+                    <select class="pk-btn pk-btn--select" id="locale-select" title="Language">
                         <option value="en-US">EN</option>
                         <option value="de-DE">DE</option>
                         <option value="fr-FR">FR</option>
                         <option value="es-ES">ES</option>
                     </select>
-                    <button class="btn btn-icon" id="refresh-btn" title="Refresh now">
+                    <button class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now">
                         <span id="refresh-icon">&#8635;</span>
                     </button>
-                    <button class="btn btn-icon" id="pause-btn" title="Pause auto-refresh">
+                    <button class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh">
                         <span id="pause-icon">&#10074;&#10074;</span>
                     </button>
-                    <button class="btn btn-icon" id="theme-toggle" title="Toggle theme">
+                    <button class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme">
                         <span id="theme-icon"></span>
                     </button>
                 </div>
@@ -42,121 +43,122 @@
         </div>
     </header>
 
-    <main class="container">
-        <nav class="tabs" id="main-tabs">
-            <button class="tab active" data-tab="dashboard">Dashboard</button>
-            <button class="tab" data-tab="environment">Environment</button>
-            <button class="tab hidden" data-tab="flyway">Flyway</button>
-            <button class="tab hidden" data-tab="loggers">Loggers</button>
-            <button class="tab hidden" data-tab="config">Config</button>
-            <button class="tab hidden" data-tab="scheduled-tasks">Scheduled Tasks</button>
-            <button class="tab hidden" data-tab="metrics">Metrics</button>
-            <button class="tab hidden" data-tab="traces">Traces</button>
+    <main class="pk-container">
+        <nav class="pk-tabs" id="main-tabs" role="tablist">
+            <button class="pk-tab" role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
+            <button class="pk-tab" role="tab" data-tab="environment" aria-selected="false">Environment</button>
+            <button class="pk-tab hidden" role="tab" data-tab="flyway" aria-selected="false">Flyway</button>
+            <button class="pk-tab hidden" role="tab" data-tab="loggers" aria-selected="false">Loggers</button>
+            <button class="pk-tab hidden" role="tab" data-tab="config" aria-selected="false">Config</button>
+            <button class="pk-tab hidden" role="tab" data-tab="scheduled-tasks" aria-selected="false">Scheduled Tasks</button>
+            <button class="pk-tab hidden" role="tab" data-tab="metrics" aria-selected="false">Metrics</button>
+            <button class="pk-tab hidden" role="tab" data-tab="traces" aria-selected="false">Traces</button>
         </nav>
 
-        <div id="loading" class="loading">
-            <div class="loading-spinner"></div>
+        <div id="loading" class="pk-loading">
+            <div class="pk-spinner"></div>
             <p>Loading data...</p>
         </div>
 
-        <div id="error" class="error-banner hidden">
+        <div id="error" class="pk-error-banner hidden">
             <span class="message"></span>
-            <button class="close" id="error-close">&times;</button>
+            <button class="pk-error-banner__close" id="error-close">&times;</button>
         </div>
 
         <!-- Dashboard Tab -->
-        <section class="tab-content active" id="dashboard-tab">
-            <div class="grid">
-                <div class="card" id="build-card">
-                    <div class="card-header">
-                        <span class="icon">&#128230;</span>
+        <section class="pk-tab-panel active" id="dashboard-tab">
+            <div class="pk-grid">
+                <div class="pk-card" id="build-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#128230;</span>
                         <span>Build</span>
                     </div>
-                    <div class="card-body" id="build-info"></div>
+                    <div class="pk-card__body" id="build-info"></div>
                 </div>
 
-                <div class="card" id="git-card">
-                    <div class="card-header">
-                        <span class="icon">&#128256;</span>
+                <div class="pk-card" id="git-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#128256;</span>
                         <span>Git</span>
                     </div>
-                    <div class="card-body" id="git-info"></div>
+                    <div class="pk-card__body" id="git-info"></div>
                 </div>
 
-                <div class="card" id="spring-card">
-                    <div class="card-header">
-                        <span class="icon">&#127807;</span>
+                <div class="pk-card" id="spring-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#127807;</span>
                         <span>Spring</span>
                     </div>
-                    <div class="card-body" id="spring-info"></div>
+                    <div class="pk-card__body" id="spring-info"></div>
                 </div>
 
-                <div class="card" id="java-card">
-                    <div class="card-header">
-                        <span class="icon">&#9749;</span>
+                <div class="pk-card" id="java-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#9749;</span>
                         <span>Java</span>
                     </div>
-                    <div class="card-body" id="java-info"></div>
+                    <div class="pk-card__body" id="java-info"></div>
                 </div>
 
-                <div class="card" id="os-card">
-                    <div class="card-header">
-                        <span class="icon">&#128187;</span>
+                <div class="pk-card" id="os-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#128187;</span>
                         <span>System</span>
                     </div>
-                    <div class="card-body" id="os-info"></div>
+                    <div class="pk-card__body" id="os-info"></div>
                 </div>
 
-                <div class="card" id="jvm-defaults-card">
-                    <div class="card-header">
-                        <span class="icon">&#9881;</span>
+                <div class="pk-card" id="jvm-defaults-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon">&#9881;</span>
                         <span>JVM Defaults</span>
                     </div>
-                    <div class="card-body" id="jvm-defaults-info"></div>
+                    <div class="pk-card__body" id="jvm-defaults-info"></div>
                 </div>
             </div>
 
             <!-- DataSources Section -->
-            <div id="datasources-container" class="datasources-section section-margin hidden"></div>
+            <div id="datasources-container" class="pk-datasources pk-section hidden"></div>
 
             <!-- Memory Card with Disk Health -->
-            <div class="card grid-full section-margin" id="memory-card">
-                <div class="card-header">
-                    <span class="icon">&#128202;</span>
+            <div class="pk-card pk-grid--full pk-section" id="memory-card">
+                <div class="pk-card__header">
+                    <span class="pk-card__icon">&#128202;</span>
                     <span>Memory &amp; Storage</span>
-                    <span class="process-info" id="process-info"></span>
+                    <span class="pk-card__meta" id="process-info"></span>
                 </div>
-                <div class="card-body" id="memory-info"></div>
+                <div class="pk-card__body" id="memory-info"></div>
             </div>
 
-            <!-- Health Banner (clickable to show details) -->
-            <div class="health-banner grid-full section-margin clickable" id="health-banner">
-                <div class="health-status">
-                    <span class="health-dot" id="health-dot"></span>
-                    <span class="health-text">Health: <span id="health-status-text"></span></span>
-                </div>
-                <div class="health-right">
-                    <span class="health-summary" id="health-summary"></span>
-                    <span class="health-expand" id="health-expand">&#9654;</span>
-                </div>
-            </div>
+            <!-- Health Banner (a real button so it is keyboard operable; expands the details region below) -->
+            <button type="button" class="pk-health pk-grid--full pk-section" id="health-banner"
+                    aria-expanded="false" aria-controls="health-components">
+                <span class="pk-health__status">
+                    <span class="pk-health__dot" id="health-dot"></span>
+                    <span class="pk-health__text">Health: <span id="health-status-container"></span></span>
+                </span>
+                <span class="pk-health__right">
+                    <span class="pk-health__summary" id="health-summary"></span>
+                    <span class="pk-health__expand" id="health-expand">&#9654;</span>
+                </span>
+            </button>
 
             <!-- Health Components (hidden by default, shown on click) -->
-            <div id="health-components" class="section-margin hidden">
-                <div class="component-grid" id="components-grid"></div>
+            <div id="health-components" class="pk-section" hidden>
+                <div class="pk-component-grid" id="components-grid"></div>
             </div>
         </section>
 
         <!-- Traces Tab -->
-        <section class="tab-content" id="traces-tab">
-            <div id="traces-loading" class="loading hidden">
-                <div class="loading-spinner"></div>
+        <section class="pk-tab-panel" id="traces-tab">
+            <div id="traces-loading" class="pk-loading hidden">
+                <div class="pk-spinner"></div>
                 <p>Loading traces...</p>
             </div>
             <div id="traces-bucket" class="filter-section">
-                <button class="btn btn-small bucket-btn active" data-bucket="all">All</button>
-                <button class="btn btn-small bucket-btn" data-bucket="errors">Errors</button>
-                <button class="btn btn-small bucket-btn" data-bucket="slow">Slow</button>
+                <button class="pk-btn pk-btn--small" data-bucket="all">All</button>
+                <button class="pk-btn pk-btn--small" data-bucket="errors">Errors</button>
+                <button class="pk-btn pk-btn--small" data-bucket="slow">Slow</button>
             </div>
             <div id="traces-filter" class="filter-section">
                 <span class="filter-label">Filter by type:</span>
@@ -167,39 +169,39 @@
                 <label><input type="checkbox" value="DATABASE"> DB</label>
                 <label><input type="checkbox" value="INTERNAL"> Internal</label>
                 <label><input type="checkbox" value="UNKNOWN"> Unknown</label>
-                <button id="traces-filter-clear" class="btn btn-small hidden" title="Show all types">Clear filter</button>
+                <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>
             <div id="traces-active-filter" class="active-filter-banner hidden">
                 <span class="active-filter-text"></span>
             </div>
             <div id="traces-list"></div>
-            <div id="no-traces" class="no-data hidden">
+            <div id="no-traces" class="pk-empty hidden">
                 <p>No error traces recorded</p>
             </div>
         </section>
 
         <!-- Environment Tab -->
-        <section class="tab-content" id="environment-tab">
-            <div class="filter-wrapper">
-                <span class="filter-icon">&#128269;</span>
-                <input class="filter-input" type="text" id="env-filter" placeholder="Filter properties...">
+        <section class="pk-tab-panel" id="environment-tab">
+            <div class="pk-filter">
+                <span class="pk-filter__icon">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties...">
             </div>
             <div id="property-sources"></div>
         </section>
 
         <!-- Flyway Tab -->
-        <section class="tab-content" id="flyway-tab">
+        <section class="pk-tab-panel" id="flyway-tab">
             <div id="flyway-timeline"></div>
-            <div id="no-flyway" class="no-data hidden">
+            <div id="no-flyway" class="pk-empty hidden">
                 <p>No Flyway migrations found</p>
             </div>
         </section>
 
         <!-- Loggers Tab -->
-        <section class="tab-content" id="loggers-tab">
-            <div class="filter-wrapper">
-                <span class="filter-icon">&#128269;</span>
-                <input class="filter-input" type="text" id="loggers-filter" placeholder="Filter loggers...">
+        <section class="pk-tab-panel" id="loggers-tab">
+            <div class="pk-filter">
+                <span class="pk-filter__icon">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers...">
             </div>
             <div class="loggers-controls">
                 <label class="checkbox-label">
@@ -211,43 +213,41 @@
         </section>
 
         <!-- Config Tab -->
-        <section class="tab-content" id="config-tab">
-            <div class="filter-wrapper">
-                <span class="filter-icon">&#128269;</span>
-                <input class="filter-input" type="text" id="config-filter" placeholder="Filter config properties...">
+        <section class="pk-tab-panel" id="config-tab">
+            <div class="pk-filter">
+                <span class="pk-filter__icon">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties...">
             </div>
             <div id="config-groups"></div>
         </section>
 
         <!-- Scheduled Tasks Tab -->
-        <section class="tab-content" id="scheduled-tasks-tab">
+        <section class="pk-tab-panel" id="scheduled-tasks-tab">
             <div id="scheduled-tasks-summary" class="loggers-summary"></div>
             <div id="scheduled-tasks-groups"></div>
-            <div id="no-scheduled-tasks" class="no-data hidden">
+            <div id="no-scheduled-tasks" class="pk-empty hidden">
                 <p>No scheduled tasks configured</p>
             </div>
         </section>
 
         <!-- Metrics Tab -->
-        <section class="tab-content" id="metrics-tab">
-            <div class="filter-wrapper">
-                <span class="filter-icon">&#128269;</span>
-                <input class="filter-input" type="text" id="metrics-filter" placeholder="Filter metrics...">
-                <span class="filter-count" id="metrics-count"></span>
+        <section class="pk-tab-panel" id="metrics-tab">
+            <div class="pk-filter">
+                <span class="pk-filter__icon">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="metrics-filter" placeholder="Filter metrics...">
+                <span class="pk-filter__count" id="metrics-count"></span>
             </div>
             <div id="metrics-list"></div>
-            <div id="no-metrics" class="no-data hidden">
+            <div id="no-metrics" class="pk-empty hidden">
                 <p>No metrics available</p>
             </div>
         </section>
     </main>
 
-    <footer class="footer">
+    <footer class="pk-footer">
         <p>peekaboot - Application Monitoring Dashboard</p>
     </footer>
 
-    <script src="../shared/peekaboot-utils.js" defer></script>
-    <script src="../trace-detail/trace-detail.js" type="module"></script>
-    <script src="peekaboot.js" defer></script>
+    <script src="main.js" type="module"></script>
 </body>
 </html>

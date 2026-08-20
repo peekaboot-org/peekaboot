@@ -4,10 +4,7 @@
  * Loaded two ways:
  *  - lazily, via toolbar.js's `await import('../trace-detail/trace-detail.js')`, calling
  *    the named `open`/`close` exports;
- *  - eagerly, via a `<script type="module">` tag in dashboard/index.html. The dashboard's
- *    own peekaboot.js is still a classic `defer` script with no imports, so it cannot see
- *    the module exports - it calls `window.PeekabootTraceDetail` instead. That global stays
- *    assigned alongside the exports until peekaboot.js itself becomes a module.
+ *  - eagerly, via dashboard/main.js's `import {open, close} from '../trace-detail/trace-detail.js'`.
  *
  * This file holds only the shell (open/close, the chrome, tab wiring); each tab's
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
@@ -254,13 +251,6 @@ function countSpans(span) {
     });
     return count;
 }
-
-// dashboard/peekaboot.js is a classic script with no imports (see file header); it calls
-// this global directly. Task 13 converts peekaboot.js to a module and removes this.
-window.PeekabootTraceDetail = {
-    open: openTraceDetail,
-    close: closeTraceDetail
-};
 
 export const open = openTraceDetail;
 export const close = closeTraceDetail;

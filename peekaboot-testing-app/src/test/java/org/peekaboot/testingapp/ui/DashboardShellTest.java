@@ -28,18 +28,17 @@ class DashboardShellTest extends PlaywrightTestBase {
     }
 
     /**
-     * trace-detail.js gained a top-level `export`, which only parses as an ES module, so
-     * its <script> tag in index.html had to move from a classic `defer` script to
-     * type="module". peekaboot.js swallows a missing overlay silently
-     * (`if (!window.PeekabootTraceDetail) return`), so a broken/reverted script tag would
-     * leave the dashboard's trace-detail feature silently dead with every other test still
-     * green - this proves the module actually loaded and ran.
+     * main.js imports {open, close} directly from trace-detail.js (no more
+     * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
+     * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
+     * imported open() itself, before the traces tab that lists them exists (Task 15) - so a
+     * direct navigation to such a link is enough to prove the import actually loaded and
+     * ran, independent of whether the trace id resolves to anything real.
      */
     @Test
     void dashboardLoadsTheTraceDetailOverlayModule() {
-        openDashboard();
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
 
-        assertThat(page.evaluate("() => typeof window.PeekabootTraceDetail")).isEqualTo("object");
-        assertThat(page.evaluate("() => typeof window.PeekabootTraceDetail.open")).isEqualTo("function");
+        page.waitForSelector("#peekaboot-trace-overlay");
     }
 }
