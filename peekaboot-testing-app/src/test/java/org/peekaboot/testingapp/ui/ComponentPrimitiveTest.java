@@ -80,6 +80,17 @@ class ComponentPrimitiveTest extends PlaywrightTestBase {
         // outline, which is what actually needs pinning.
         assertThat(outlineStyle).isEqualTo("solid");
         assertThat(outlineWidth).isEqualTo("2px");
+
+        // page.focus() alone happens to satisfy Chromium's :focus-visible heuristic on
+        // this build, same as a real Tab keypress, but that's a heuristic, not a spec
+        // guarantee. Pin the other side too: a real mouse click on a fresh page must
+        // NOT produce the outline above, or this test could stop discriminating without
+        // ever failing.
+        openFixture();
+        page.click("#group-header");
+        String clickedOutlineStyle = (String) page.evalOnSelector("#group-header",
+                "el => getComputedStyle(el).outlineStyle");
+        assertThat(clickedOutlineStyle).isEqualTo("none");
     }
 
     @Test
