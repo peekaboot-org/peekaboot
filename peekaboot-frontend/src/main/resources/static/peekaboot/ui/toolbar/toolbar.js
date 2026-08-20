@@ -194,7 +194,14 @@ function initToolbar(data) {
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;
-        openOverlay();
+        // openOverlay()'s dynamic import can reject (404, offline, a host page's CSP
+        // blocking the module) - toolbar.js runs inside pages Peekaboot does not own, so
+        // an unhandled rejection here would surface as *their* error on any host wired to
+        // Sentry/Datadog/etc. Catch and log instead of letting it escape; the bar itself
+        // needs no state cleanup since nothing above sets one before the import settles.
+        openOverlay().catch(function(error) {
+            console.warn('Peekaboot: failed to open trace overlay', error);
+        });
     });
 
     // Idle mode (Swagger UI): no request of its own - intercept fetch calls and

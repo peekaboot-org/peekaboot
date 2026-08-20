@@ -234,6 +234,55 @@ class ToolbarTest extends PlaywrightTestBase {
     }
 
     /**
+     * openOverlay()'s dynamic import of trace-detail.js can reject (404, offline, a host
+     * page's CSP blocking the module) - toolbar.js runs inside pages Peekaboot does not
+     * own, so an unhandled rejection there would surface as *that host's* error on any
+     * page wired to Sentry/Datadog/etc. Aborting the module request is a real network
+     * failure (Chromium's real net stack refusing it), not a fabricated response, and
+     * makes the dynamic import deterministically reject. The click handler must catch it
+     * (a console.warn, no pageerror) and the bar must remain usable afterwards.
+     *
+     * A failed dynamic import of the same URL is cached by the browser's module map, so
+     * clicking again with the request still blocked - rather than unroute()-ing and
+     * expecting a real reopen - is the reliable way to prove the bar is not stuck: a
+     * second click must still reach the handler and log its own warning, not silently
+     * do nothing (which a broken listener - e.g. one that removed itself, or got wedged
+     * on the first rejection - would).
+     */
+    @Test
+    void openOverlayImportFailureIsCaughtAndLeavesTheBarUsable() {
+        java.util.List<String> pageErrors = new java.util.ArrayList<>();
+        page.onPageError(pageErrors::add);
+        page.route("**/trace-detail/trace-detail.js", route -> route.abort());
+
+        openPersonsPage();
+        page.waitForFunction(
+                "() => document.getElementById('peekaboot-toolbar-host')"
+              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+
+        // waitForConsoleMessage blocks until the warning fires (or times out), giving
+        // positive proof the rejection was handled rather than merely not-yet-observed.
+        page.waitForConsoleMessage(new Page.WaitForConsoleMessageOptions()
+                        .setPredicate(msg -> msg.type().equals("warning")),
+                () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                            + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+
+        assertThat(pageErrors).isEmpty();
+        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+
+        // Not stuck: a second click (still blocked) must still reach the handler and
+        // produce its own warning, rather than the listener having wedged or detached
+        // itself after the first rejection.
+        page.waitForConsoleMessage(new Page.WaitForConsoleMessageOptions()
+                        .setPredicate(msg -> msg.type().equals("warning")),
+                () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                            + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+
+        assertThat(pageErrors).isEmpty();
+        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+    }
+
+    /**
      * Idle mode (Swagger UI) wraps window.fetch and, on a real fetch to a real endpoint,
      * picks the trace id up from the response's real Server-Timing header - proving the
      * interceptor is wired to the module-local loadTrace rather than a dropped global.
