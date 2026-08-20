@@ -27,13 +27,33 @@ const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
 
+// Mirrors shared/theme.js's storedTheme()/storeTheme() pattern: storage can be blocked
+// (private browsing, some embedded/iframe contexts, strict cookie policies), and a throw
+// here happens during module evaluation, so an unguarded read would blank the whole
+// dashboard before any code runs.
+function safeStorageGet(key) {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+function safeStorageSet(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        /* preference simply will not persist */
+    }
+}
+
 let data = null;
 let features = {};
 let mainTabs = null;
 let refreshTimer = null;
 let isPaused = false;
-let locale = localStorage.getItem('peekaboot-locale') || navigator.language || 'en-US';
-let useServerTimezone = localStorage.getItem('peekaboot-use-server-tz') === 'true';
+let locale = safeStorageGet('peekaboot-locale') || navigator.language || 'en-US';
+let useServerTimezone = safeStorageGet('peekaboot-use-server-tz') === 'true';
 let serverTimezone = null;
 
 // --- Hash routing -----------------------------------------------------------------
@@ -292,7 +312,7 @@ function initLocaleSelector() {
     }
     select.addEventListener('change', () => {
         locale = select.value;
-        localStorage.setItem('peekaboot-locale', locale);
+        safeStorageSet('peekaboot-locale', locale);
         fetchData();
     });
 }
@@ -300,7 +320,7 @@ function initLocaleSelector() {
 function initTimezoneControls() {
     document.getElementById('timezone-toggle').addEventListener('click', () => {
         useServerTimezone = !useServerTimezone;
-        localStorage.setItem('peekaboot-use-server-tz', String(useServerTimezone));
+        safeStorageSet('peekaboot-use-server-tz', String(useServerTimezone));
         updateTimezoneDisplay();
         renderData();
     });

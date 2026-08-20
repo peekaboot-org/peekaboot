@@ -77,4 +77,43 @@ class DashboardShellTest extends PlaywrightTestBase {
                 "() => !!document.getElementById('peekaboot-trace-overlay')"
               + "?.shadowRoot?.querySelector('.pk-overlay__error')");
     }
+
+    /**
+     * main.js reads locale/timezone preferences from localStorage during module
+     * evaluation (before initTheme()/initTabs() etc. even run). In a storage-blocked
+     * context (private browsing, some embedded/iframe contexts, strict cookie policies)
+     * an unguarded read throws at import time and the whole module fails to evaluate -
+     * no DOMContentLoaded listener ever gets attached, so the dashboard never boots.
+     * Mirrors ThemeResolutionTest's resolveThemeDegradesToOsPreferenceWhenLocalStorageThrows.
+     */
+    @Test
+    void dashboardStillBootsWhenLocalStorageReadThrows() {
+        page.addInitScript("localStorage.getItem = () => { throw new Error('storage blocked'); };");
+
+        openDashboard();
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+    }
+
+    /**
+     * Changing the locale selector writes the new preference to localStorage before
+     * re-fetching data. An unguarded write throwing there must not stop the fetch (or
+     * escape as an uncaught exception from the change handler) - the dashboard should
+     * simply fail to persist the preference and carry on. Waiting for the re-fetch's
+     * response (carrying the new locale) is positive proof the handler ran past the
+     * throwing write, not just that nothing crashed synchronously.
+     */
+    @Test
+    void dashboardSurvivesLocalStorageWriteThrowingOnLocaleChange() {
+        page.addInitScript("localStorage.setItem = () => { throw new Error('storage blocked'); };");
+        java.util.List<String> pageErrors = new java.util.ArrayList<>();
+        page.onPageError(pageErrors::add);
+        openDashboard();
+
+        page.waitForResponse(response -> response.url().contains("locale=de-DE"),
+                () -> page.selectOption("#locale-select", "de-DE"));
+
+        assertThat(pageErrors).isEmpty();
+        assertThat(page.isVisible("#error")).isFalse();
+    }
 }
