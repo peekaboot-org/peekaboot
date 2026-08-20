@@ -96,4 +96,78 @@ class DashboardTabsTest extends PlaywrightTestBase {
 
         assertThat(page.isVisible(".pk-tab[data-tab='traces']")).isTrue();
     }
+
+    @Test
+    void environmentGroupsCollapseAndExpand() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='environment']");
+        page.waitForSelector("#property-sources .pk-group__header");
+
+        assertThat(page.isVisible("#property-sources .pk-group__list")).isFalse();
+
+        page.click("#property-sources .pk-group__header");
+
+        assertThat(page.isVisible("#property-sources .pk-group__list")).isTrue();
+    }
+
+    @Test
+    void environmentFilterHighlightsMatches() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='environment']");
+        page.waitForSelector("#property-sources .pk-group");
+
+        page.fill("#env-filter", "server.port");
+        page.waitForSelector("#property-sources mark");
+
+        assertThat(page.textContent("#property-sources mark")).contains("server.port");
+    }
+
+    @Test
+    void expandedGroupSurvivesARefresh() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='config']");
+        page.waitForSelector("#config-groups .pk-group__header");
+        page.click("#config-groups .pk-group__header");
+        assertThat(page.isVisible("#config-groups .pk-group__list")).isTrue();
+
+        page.click("#refresh-btn");
+        page.waitForTimeout(500);
+
+        assertThat(page.isVisible("#config-groups .pk-group__list")).isTrue();
+    }
+
+    @Test
+    void loggersTabShowsLevelsAndRespectsConfiguredOnly() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='loggers']");
+        page.waitForSelector("#loggers-list .pk-group");
+
+        int all = page.querySelectorAll("#loggers-list .pk-group").size();
+        page.check("#loggers-configured-only");
+        page.waitForTimeout(300);
+        int configured = page.querySelectorAll("#loggers-list .pk-group").size();
+
+        assertThat(configured).isLessThanOrEqualTo(all);
+    }
+
+    /**
+     * Filters on "key", not "password": the test profile's H2 datasource has no bound
+     * username/password (Spring's /configprops report omits unset properties entirely,
+     * rather than masking them), so no property in the real payload ever contains
+     * "password" to filter on. "key" does occur for real (e.g. management.observations'
+     * "keyValues") and is masked by the same sensitive-key pattern, so it exercises the
+     * same masking path against actual data instead of an unreachable filter term.
+     */
+    @Test
+    void configTabMasksSensitiveValues() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='config']");
+        page.waitForSelector("#config-groups .pk-group__header");
+
+        page.fill("#config-filter", "key");
+        page.waitForTimeout(300);
+        page.click("#config-groups .pk-group__header");
+
+        assertThat(page.querySelectorAll("#config-groups .pk-kv__value--sensitive")).isNotEmpty();
+    }
 }

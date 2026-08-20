@@ -11,10 +11,14 @@ import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.
 import {formatDateTime} from '../shared/format.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
+import * as environment from './tabs/environment.js';
+import * as flyway from './tabs/flyway.js';
+import * as loggers from './tabs/loggers.js';
+import * as config from './tabs/config.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview /* remaining tabs added in Tasks 14 and 15 */];
+const TABS = [overview, environment, flyway, loggers, config /* remaining tabs added in Task 15 */];
 
 const client = createClient();
 

@@ -18,7 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Integration test for dev toolbar filter behavior.
  * Boots the real sample app; the toolbar filter and its supporting beans come
  * from the real {@code DevToolbarAutoConfiguration}. SharedToolbarTestConfig
- * only supplies a deterministic mock {@code Tracer} and a small-capacity
+ * only supplies a deterministic hand-written {@code Tracer} and a small-capacity
  * TraceStore, so the real production wiring is what's actually under test.
  *
  * For auto-configuration ordering tests, see DevToolbarAutoConfigurationIntegrationTest

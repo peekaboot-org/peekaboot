@@ -260,6 +260,33 @@
 .pk-datasources__params[hidden] { display: none; }
 .pk-datasources__params-list { background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
+/* Environment — active profiles banner. Profile pills use the shared badge('info')
+   primitive rather than a bespoke tint: a --pk-primary-light fill with --pk-primary
+   text (the original .profile-badge combination) measures 4.23:1 in light theme,
+   under AA's 4.5:1 for this text size; --pk-badge--info's --pk-on-primary foreground
+   is already contrast-tuned (5.17:1 light / 7.49:1 dark). */
+.pk-profiles {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-space-xs);
+    padding: var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    margin-bottom: var(--pk-space-lg);
+}
+
+/* Loggers */
+.pk-loggers-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+.loggers-controls { margin-bottom: var(--pk-space-md); }
+.checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
+.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary); }
+/* .pk-kv__key already sits at --pk-text-strong by default; the modifier only adds
+   the extra weight the original .logger-name.configured used to mark a logger with
+   an explicit configured level. */
+.pk-kv__key--configured { font-weight: 700; }
+
 /* Flyway */
 .pk-flyway {
     background: var(--pk-bg);
