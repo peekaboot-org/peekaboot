@@ -27,6 +27,14 @@ class ThemeResolutionTest extends PlaywrightTestBase {
     }
 
     @Test
+    void corruptedStoredValueFallsBackToOsPreference() {
+        setStoredTheme("purple");
+        page.emulateMedia(new com.microsoft.playwright.Page.EmulateMediaOptions()
+                .setColorScheme(com.microsoft.playwright.options.ColorScheme.DARK));
+        assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
+    }
+
+    @Test
     void applyThemeSetsTheAttributeOnAnyTarget() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         Object result = page.evaluate("""
