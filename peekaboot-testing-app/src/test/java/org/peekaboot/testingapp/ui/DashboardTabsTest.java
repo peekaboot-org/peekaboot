@@ -207,13 +207,27 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
-     * aria-pressed flips synchronously inside the click handler, before the (re)fetch is
-     * even awaited, so asserting on it alone would pass with no wait at all - it proves
-     * nothing about whether bucketing actually happened. Waits on the bucket button's own
-     * count text instead, which only updates once the filtered response has rendered, and
-     * separately asserts the errors bucket actually rendered error traces - the sample
-     * app's deliberate Scheduler IllegalStateException guarantees at least one, so this is
-     * deterministic.
+     * Two things that look like they'd discriminate real bucket filtering, don't:
+     * TraceInsightsService computes bucketCounts unconditionally (independent of the
+     * requested bucket), so every bucket button's own count text is already correct
+     * before any click - waiting on it (the first attempt at this test) resolves
+     * immediately and proves nothing. And "every visible trace has .pk-badge--error"
+     * (the second attempt) is also not a valid predicate against real data: the
+     * backend's error-bucket membership is driven by any ERROR-level *log* during the
+     * trace, while the frontend's HAS_ERRORS badge is driven only by an actual span
+     * exception - confirmed empirically, the scheduler's fixedRate() logs an error
+     * without throwing and lands in the errors bucket with no badge, alongside
+     * fixedDelay()'s real exception, which does get one; a strict "every item has the
+     * badge" wait against this app's real data never resolves.
+     * <p>
+     * What genuinely differs between bucket responses is the item count. The errors
+     * bucket's total is already known from its button's text (see above - available
+     * before any click), so read it once, then wait for the rendered list to actually
+     * match it once real filtering has taken effect. The sanity assertion that it's
+     * smaller than the unfiltered count is what keeps this non-vacuous: confirmed by
+     * inspection that the unfiltered list contains a mix of error and non-error traces
+     * (the scheduler's deliberate failures alongside ordinary HTTP request traces for
+     * the dashboard's own page loads), so the two counts are never equal in practice.
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
@@ -222,12 +236,18 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#traces-list .pk-trace-item");
 
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']")).contains("All (");
+        int allCount = page.querySelectorAll("#traces-list .pk-trace-item").size();
+
+        String errorsButtonText = page.textContent("#traces-bucket .pk-btn[data-bucket='errors']");
+        int expectedErrorsCount = Integer.parseInt(errorsButtonText.replaceAll("\\D+", ""));
+        assertThat(expectedErrorsCount).isLessThan(allCount);
 
         page.click("#traces-bucket .pk-btn[data-bucket='errors']");
         page.waitForFunction(
-                "() => /^Errors \\(/.test(document.querySelector(\"#traces-bucket .pk-btn[data-bucket='errors']\").textContent)");
+                "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
+                expectedErrorsCount);
 
-        assertThat(page.querySelectorAll("#traces-list .pk-trace-item .pk-badge--error")).isNotEmpty();
+        assertThat(page.querySelectorAll("#traces-list .pk-trace-item")).hasSize(expectedErrorsCount);
     }
 
     @Test
@@ -236,7 +256,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");
 
-        page.click("#traces-list .pk-trace-item");
+        page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
 
         assertThat(page.url()).contains("#traces/");
@@ -247,7 +267,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");
-        page.click("#traces-list .pk-trace-item");
+        page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
 
         page.keyboard().press("Escape");

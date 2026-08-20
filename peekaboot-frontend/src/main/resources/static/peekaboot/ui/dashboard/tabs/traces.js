@@ -240,32 +240,33 @@ function renderTraceItem(trace, context) {
 
     const header = document.createElement('div');
     header.className = 'pk-trace-item__header';
-    // A <div>, not a <button>: it contains its own nested interactive element (the
-    // scheduler link below) for SCHEDULED_JOB traces, and interactive content isn't
-    // allowed inside a <button> - role="button" + tabindex + Enter/Space is the ARIA APG
-    // pattern for exactly this case, matching what the health banner does for its own
-    // (non-nested) case in overview.js.
-    header.setAttribute('role', 'button');
-    header.tabIndex = 0;
-    header.appendChild(renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation, context));
-    header.appendChild(renderStats(trace, context));
+
+    // A real <button>, not the header itself: for SCHEDULED_JOB traces the header also
+    // carries the scheduler link below, and a <button> cannot contain interactive
+    // content - nesting the link inside one would make it unreachable to assistive tech
+    // (Children Presentational: True on a role="button" div has the same effect, which
+    // is why that's not used here either). The button and the link are siblings under
+    // header instead, each independently focusable and named. Native Enter/Space
+    // activation comes free with a real <button>, so no hand-rolled keydown handler is
+    // needed, and since the link lives outside the button, no click-target guard is
+    // needed either.
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'pk-trace-item__open';
+    openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation));
+    openBtn.appendChild(renderStats(trace, context));
+    if (trace.traceId) {
+        openBtn.addEventListener('click', () => openTrace(trace.traceId, context));
+    }
+    header.appendChild(openBtn);
+
+    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink(context));
+
     item.appendChild(header);
-
-    const activate = (e) => {
-        if (e.target.closest('.pk-trace-item__scheduler-link')) return;
-        if (trace.traceId) openTrace(trace.traceId, context);
-    };
-    header.addEventListener('click', activate);
-    header.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        activate(e);
-    });
-
     return item;
 }
 
-function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation, context) {
+function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
     const mainLine = document.createElement('div');
     mainLine.className = 'pk-trace-item__main-line';
 
@@ -297,8 +298,6 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation, co
     if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
     else if (hasSlow) mainLine.appendChild(badge('SLOW', 'warn'));
 
-    if (actionType === 'SCHEDULED_JOB') mainLine.appendChild(renderSchedulerLink(context));
-
     return mainLine;
 }
 
@@ -314,9 +313,10 @@ function renderSchedulerLink(context) {
     link.title = 'View Scheduled Tasks';
     link.setAttribute('aria-label', 'View Scheduled Tasks');
     link.textContent = '\u{1F551}';
+    // No stopPropagation needed: the link is header's sibling, not a descendant of
+    // .pk-trace-item__open, so its click never reaches that button's own listener.
     link.addEventListener('click', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         context.navigate('scheduled-tasks');
     });
     return link;

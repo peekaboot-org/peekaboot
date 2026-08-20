@@ -321,8 +321,27 @@
     margin-bottom: var(--pk-space-md);
     overflow: hidden;
 }
-.pk-trace-item__header { display: flex; align-items: center; gap: var(--pk-space-md); padding: var(--pk-space-md); cursor: pointer; transition: background-color var(--pk-transition); flex-wrap: wrap; }
+.pk-trace-item__header { display: flex; align-items: center; gap: var(--pk-space-md); padding: var(--pk-space-md); transition: background-color var(--pk-transition); flex-wrap: wrap; }
 .pk-trace-item__header:hover { background: var(--pk-bg-alt); }
+/* Reset to look like the plain flex column it replaces - only its semantics (a real
+   <button>) are new, not its appearance. Sibling to .pk-trace-item__scheduler-link, not
+   its parent - a <button> cannot contain interactive content (the link), so the two
+   live side by side in .pk-trace-item__header instead of one nesting the other. */
+.pk-trace-item__open {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    gap: var(--pk-space-xs);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.pk-trace-item__open:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
 .pk-trace-item__main-line { display: flex; align-items: center; gap: var(--pk-space-sm); width: 100%; }
 .pk-trace-item__icon { margin-right: var(--pk-space-sm); font-size: 1.1em; }
 .pk-trace-item__path { flex: 1; font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
