@@ -1090,3 +1090,6 @@
     };
 
 })(window);
+
+export const open = window.PeekabootTraceDetail.open;
+export const close = window.PeekabootTraceDetail.close;
