@@ -17,6 +17,12 @@
 
     const STYLES = `
         :host {
+            /* .pk-trace-overlay below is position:fixed, so it contributes no size to
+               this host element's own box; without this, the host (and therefore
+               #peekaboot-trace-overlay, the light-DOM element callers query) collapses
+               to zero height even though its fixed-position content paints correctly. */
+            position: fixed;
+            inset: 0;
             --pk-bg: #0d1117;
             --pk-bg-alt: #161b22;
             --pk-bg-hover: #21262d;
