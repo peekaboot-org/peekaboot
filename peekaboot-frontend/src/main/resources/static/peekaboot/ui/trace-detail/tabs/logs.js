@@ -4,16 +4,7 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
-
-function buildSpanNames(rootSpan) {
-    const names = new Map();
-    (function walk(span) {
-        if (!span) return;
-        names.set(span.spanId, span.name);
-        (span.children || []).forEach(walk);
-    })(rootSpan);
-    return names;
-}
+import {buildSpanNames} from '../../shared/span-names.js';
 
 /**
  * Renders log rows. Pass showSpanColumn when rows come from more than one span,
@@ -35,7 +26,7 @@ export function renderLogRows(logs, {showSpanColumn = false, spanNames} = {}) {
     }).join('');
 }
 
-export function render(container, trace, context) {
+export function render(container, trace) {
     const spanNames = buildSpanNames(trace.rootSpan);
     const logs = trace.logs || [];
 

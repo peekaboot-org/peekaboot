@@ -3,19 +3,10 @@
  * and the span-logs popup reachable from a span's logs badge.
  */
 import {escapeHtml} from '../../shared/markup.js';
+import {buildSpanNames} from '../../shared/span-names.js';
 import {renderLogRows} from './logs.js';
 
-function buildSpanNames(rootSpan) {
-    const names = new Map();
-    (function walk(span) {
-        if (!span) return;
-        names.set(span.spanId, span.name);
-        (span.children || []).forEach(walk);
-    })(rootSpan);
-    return names;
-}
-
-export function render(container, trace, context) {
+export function render(container, trace) {
     const spanNames = buildSpanNames(trace.rootSpan);
     const totalDuration = trace.durationMs || 1;
     const traceStart = trace.startTimeMs || 0;

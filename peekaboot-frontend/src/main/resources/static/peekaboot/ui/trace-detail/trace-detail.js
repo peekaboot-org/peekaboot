@@ -23,6 +23,10 @@ import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
 import * as logs from './tabs/logs.js';
 
+// label/count are unused by the hand-written tab strip markup in render() below -
+// Task 17 replaces that markup with a shared tabStrip() helper driven by exactly
+// this shape, at which point they become load-bearing. Keeping them now avoids
+// re-adding the same fields to this array in that task.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
     {id: 'spans',   label: 'Spans',   render: spans.render},
@@ -58,7 +62,6 @@ export function openTraceDetail(traceId, options = {}) {
 
     previouslyFocusedElement = invokingElement;
     onCloseCallback = options.onClose || null;
-    const onSelectSpan = options.onSelectSpan || null;
     currentSession += 1;
     const session = currentSession;
 
@@ -88,7 +91,7 @@ export function openTraceDetail(traceId, options = {}) {
     shadow.appendChild(content);
     content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
 
-    fetchAndRender(content, traceId, {basePath, session, styleReady, onSelectSpan});
+    fetchAndRender(content, traceId, {basePath, session, styleReady});
 }
 
 export function closeTraceDetail() {
@@ -118,13 +121,13 @@ export function closeTraceDetail() {
     }
 }
 
-async function fetchAndRender(content, traceId, {basePath, session, styleReady, onSelectSpan}) {
+async function fetchAndRender(content, traceId, {basePath, session, styleReady}) {
     const client = createClient({basePath});
     try {
         const [trace] = await Promise.all([client.get(`/api/traces/${traceId}/insights`), styleReady]);
         // A newer open() superseded this one while the request was in flight.
         if (session !== currentSession) return;
-        render(content, trace, {basePath, client, onSelectSpan});
+        render(content, trace);
     } catch (error) {
         if (session !== currentSession) return;
         // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
@@ -147,7 +150,7 @@ function statusBadgeVariant(statusNum) {
     return 'error';
 }
 
-function render(content, trace, context) {
+function render(content, trace) {
     const rootSpan = trace.rootSpan || {};
     const tags = rootSpan.tags || {};
     const httpExchange = trace.httpExchange || {};
@@ -214,11 +217,11 @@ function render(content, trace, context) {
             tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
             tab.setAttribute('aria-selected', 'true');
             activeTab = tab.dataset.tab;
-            renderTabContent(tabContent, activeTab, trace, context);
+            renderTabContent(tabContent, activeTab, trace);
         });
     });
 
-    renderTabContent(tabContent, activeTab, trace, context);
+    renderTabContent(tabContent, activeTab, trace);
 
     // ESC key to close; closeTraceDetail removes the listener however
     // the overlay is dismissed (buttons, overlay click, ESC)
@@ -238,9 +241,9 @@ function render(content, trace, context) {
     container.focus();
 }
 
-function renderTabContent(container, tabId, trace, context) {
+function renderTabContent(container, tabId, trace) {
     const tab = TABS.find(t => t.id === tabId);
-    if (tab) tab.render(container, trace, context);
+    if (tab) tab.render(container, trace);
 }
 
 function countSpans(span) {

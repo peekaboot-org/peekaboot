@@ -4,7 +4,7 @@
 import {escapeHtml} from '../../shared/markup.js';
 import {durationSeverity} from '../../shared/severity.js';
 
-export function render(container, trace, context) {
+export function render(container, trace) {
     const queries = trace.queries || [];
 
     if (queries.length === 0) {

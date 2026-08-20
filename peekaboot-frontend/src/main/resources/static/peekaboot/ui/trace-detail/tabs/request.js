@@ -13,7 +13,7 @@ function tableRow(key, value, valueClass) {
     return `<tr><td>${escapeHtml(key)}</td><td${valueClass ? ` class="${valueClass}"` : ''}>${escapeHtml(value)}</td></tr>`;
 }
 
-export function render(container, trace, context) {
+export function render(container, trace) {
     const httpExchange = trace.httpExchange;
     const req = httpExchange?.request;
     const res = httpExchange?.response;
