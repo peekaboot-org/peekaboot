@@ -45,10 +45,22 @@ class SharedModuleTest extends PlaywrightTestBase {
     }
 
     @Test
+    void formatDurationRejectsNegativeValues() {
+        assertThat(evalModule("format.js", "m.formatDurationMs(-5)")).isEqualTo("-");
+    }
+
+    @Test
     void formatBytesScalesByMagnitude() {
         assertThat(evalModule("format.js", "m.formatBytes(0)")).isEqualTo("0 B");
         assertThat(evalModule("format.js", "m.formatBytes(1536)")).isEqualTo("1.50 KB");
         assertThat(evalModule("format.js", "m.formatBytes(-1)")).isEqualTo("-");
+    }
+
+    @Test
+    void formatBytesHandlesFractionalValuesBelowOne() {
+        // Math.log(0.5)/Math.log(1024) is negative, so the exponent must be clamped
+        // at zero instead of indexing BYTE_UNITS with -1.
+        assertThat(evalModule("format.js", "m.formatBytes(0.5)")).isEqualTo("0.50 B");
     }
 
     @Test
@@ -75,5 +87,44 @@ class SharedModuleTest extends PlaywrightTestBase {
         assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST').startsWith('&')"))
                 .isEqualTo(false);
         assertThat(evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.length")).isEqualTo(7);
+    }
+
+    @Test
+    void rootActionIconsMatchTheExpectedLiteralCharacters() {
+        // Pins every icon explicitly so a mapping swap (e.g. DATABASE <-> RPC_CALL)
+        // fails here instead of slipping through on the "not an entity" check alone.
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST') === '\\u{1F310}'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('SCHEDULED_JOB') === '\\u{1F551}'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('MESSAGE_CONSUMER') === '\\u{1F4E9}'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('UNKNOWN') === '❓'")).isEqualTo(true);
+    }
+
+    @Test
+    void formatDateTimeHandlesUnparseableValueWithoutSayingInvalidDate() {
+        Object result = evalModule("format.js", "m.formatDateTime('not-a-timestamp')");
+        assertThat(result).isEqualTo("not-a-timestamp");
+        assertThat((String) result).doesNotContain("Invalid Date");
+    }
+
+    @Test
+    void formatTimeOfDayHandlesUnparseableValueWithoutSayingInvalidDate() {
+        Object result = evalModule("format.js", "m.formatTimeOfDay('not-a-timestamp')");
+        assertThat(result).isEqualTo("not-a-timestamp");
+        assertThat((String) result).doesNotContain("Invalid Date");
+    }
+
+    @Test
+    void formatDateTimeTreatsEpochZeroAsAValidTimestamp() {
+        assertThat(evalModule("format.js", "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC'})"))
+                .isNotEqualTo("-");
+    }
+
+    @Test
+    void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
+        assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
+                .isNotEqualTo("-");
     }
 }
