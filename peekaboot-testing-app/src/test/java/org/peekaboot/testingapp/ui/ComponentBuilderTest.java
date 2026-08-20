@@ -17,7 +17,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ComponentBuilderTest extends PlaywrightTestBase {
 
     private Object evalBuilders(String body) {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
+            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+        }
         return page.evaluate(
                 "async (body) => { const m = await import('/peekaboot/ui/shared/components.js');"
               + " return await eval('(async () => {' + body + '})()'); }", body);
@@ -108,9 +110,12 @@ class ComponentBuilderTest extends PlaywrightTestBase {
                 const g = m.group({name: 'n', count: '1 item'});
                 document.body.appendChild(g.element);
                 g.header.click();
-                return g.header.getAttribute('aria-expanded') + ':' + g.list.hasAttribute('hidden');
+                const afterOpen = g.header.getAttribute('aria-expanded') + ':' + g.list.hasAttribute('hidden');
+                g.header.click();
+                const afterClose = g.header.getAttribute('aria-expanded') + ':' + g.list.hasAttribute('hidden');
+                return afterOpen + '|' + afterClose;
                 """))
-                .isEqualTo("true:false");
+                .isEqualTo("true:false|false:true");
     }
 
     @Test
@@ -140,10 +145,17 @@ class ComponentBuilderTest extends PlaywrightTestBase {
     void meterClampsAndClassifies() {
         assertThat(evalBuilders("return m.meter(150).querySelector('.pk-meter__fill').style.width;"))
                 .isEqualTo("100%");
-        assertThat(evalBuilders("return m.meter(95).querySelector('.pk-meter__fill').className;"))
-                .isEqualTo("pk-meter__fill pk-meter__fill--danger");
-        assertThat(evalBuilders("return m.meter(75).querySelector('.pk-meter__fill').className;"))
+        assertThat(evalBuilders("return m.meter(-10).querySelector('.pk-meter__fill').style.width;"))
+                .isEqualTo("0%");
+
+        assertThat(evalBuilders("return m.meter(69).querySelector('.pk-meter__fill').className;"))
+                .isEqualTo("pk-meter__fill");
+        assertThat(evalBuilders("return m.meter(70).querySelector('.pk-meter__fill').className;"))
                 .isEqualTo("pk-meter__fill pk-meter__fill--warning");
+        assertThat(evalBuilders("return m.meter(89).querySelector('.pk-meter__fill').className;"))
+                .isEqualTo("pk-meter__fill pk-meter__fill--warning");
+        assertThat(evalBuilders("return m.meter(90).querySelector('.pk-meter__fill').className;"))
+                .isEqualTo("pk-meter__fill pk-meter__fill--danger");
     }
 
     /**

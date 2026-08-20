@@ -12,7 +12,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SharedModuleTest extends PlaywrightTestBase {
 
     private Object evalModule(String module, String expression) {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
+            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+        }
         return page.evaluate(
                 "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
                 java.util.List.of("/peekaboot/ui/shared/" + module, expression));
