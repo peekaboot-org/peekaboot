@@ -314,7 +314,7 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" defer></script>");
+        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
         assertThat(result).contains("id=\"peekaboot-toolbar-data\"");
     }
 
@@ -332,7 +332,7 @@ class DevToolbarFilterTest {
         String result = originalOutput.toString(StandardCharsets.UTF_8);
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
         assertThat(result).contains("\"idle\":true");
-        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" defer></script>");
+        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
     }
 
     @Test

@@ -3,83 +3,56 @@
  *
  * Loaded by DevToolbarFilter via a small bootstrap:
  *   <script id="peekaboot-toolbar-data" type="application/json">{...}</script>
- *   <script src="/peekaboot/ui/toolbar/toolbar.js" defer></script>
+ *   <script src="/peekaboot/ui/toolbar/toolbar.js" type="module"></script>
  *
  * The data JSON carries method/path/status/traceId/basePath for regular pages
  * or {idle:true, basePath} for Swagger UI, where a fetch interceptor picks up
- * trace ids from Server-Timing headers instead. Clicking the bar lazy-loads
- * the trace-detail overlay.
+ * trace ids from Server-Timing headers instead. Clicking the bar (or pressing
+ * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
  */
-(function() {
-    'use strict';
+import {escapeHtml} from '../shared/markup.js';
+import {formatDurationMs} from '../shared/format.js';
+import {durationSeverity} from '../shared/severity.js';
+import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
+import {attachSharedStyles} from '../shared/shadow-styles.js';
 
-    const dataEl = document.getElementById('peekaboot-toolbar-data');
-    if (!dataEl || document.getElementById('peekaboot-toolbar-host')) return;
-    const data = JSON.parse(dataEl.textContent);
+const dataEl = document.getElementById('peekaboot-toolbar-data');
+if (dataEl && !document.getElementById('peekaboot-toolbar-host')) {
+    initToolbar(JSON.parse(dataEl.textContent));
+}
 
-    const TOOLBAR_CSS = `
-        .peekaboot-bar{display:flex;align-items:center;justify-content:space-between;background:#0d1117;color:#c9d1d9;font:12px/1.4 system-ui,-apple-system,sans-serif;padding:6px 12px;gap:16px;border-top:1px solid #30363d;cursor:pointer}
-        .peekaboot-bar:hover{background:#161b22}
-        .peekaboot-bar a{color:#58a6ff;text-decoration:none}
-        .peekaboot-bar a:hover{text-decoration:underline}
-        .peekaboot-left{display:flex;align-items:center;gap:12px}
-        .peekaboot-right{display:flex;align-items:center;gap:12px}
-        .peekaboot-status{font-weight:600;padding:2px 6px;border-radius:6px}
-        .peekaboot-status.s2xx{background:#3fb950;color:#0d1117}
-        .peekaboot-status.s3xx{background:#d29922;color:#0d1117}
-        .peekaboot-status.s4xx,.peekaboot-status.s5xx{background:#f85149;color:#0d1117}
-        .peekaboot-method{color:#8b949e}
-        .peekaboot-path{color:#f0f6fc;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .peekaboot-controller{color:#58a6ff;font-size:11px}
-        .peekaboot-metrics{display:flex;align-items:center;gap:16px}
-        .peekaboot-stat{display:flex;align-items:center;gap:4px;color:#c9d1d9;font-size:11px}
-        .peekaboot-stat .sep{color:#8b949e;opacity:0.6}
-        .peekaboot-stat .dur{font-family:ui-monospace,monospace}
-        .peekaboot-stat.warn .dur{color:#d29922}
-        .peekaboot-stat.error .dur{color:#f85149}
-        .peekaboot-log-counts{display:flex;align-items:center;gap:8px;font-size:11px}
-        .peekaboot-log-count.error{color:#f85149}
-        .peekaboot-log-count.warn{color:#d29922}
-        .peekaboot-trace{font-family:ui-monospace,monospace;font-size:11px;color:#8b949e}
-        .peekaboot-loading{color:#8b949e;font-size:11px}
-        .peekaboot-loading::after{content:'';animation:dots 1.5s infinite}
-        @keyframes dots{0%,20%{content:'.'}40%{content:'..'}60%,100%{content:'...'}}
-        .peekaboot-pending{color:#8b949e}
-    `;
-
+function initToolbar(data) {
     const host = document.createElement('div');
     host.id = 'peekaboot-toolbar-host';
     host.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;';
     document.body.appendChild(host);
+
     const shadow = host.attachShadow({mode: 'open'});
-
-    const style = document.createElement('style');
-    style.textContent = TOOLBAR_CSS;
-    shadow.appendChild(style);
-
-    function escapeHtml(s) {
-        if (s == null) return '';
-        return String(s).replace(/[&<>"']/g, function(c) {
-            return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
-        });
-    }
+    applyTheme(host, resolveTheme());
+    watchTheme(theme => applyTheme(host, theme));
+    attachSharedStyles(shadow, host, data.basePath, `${data.basePath}/ui/toolbar/toolbar.css`);
 
     const bar = document.createElement('div');
-    bar.className = 'peekaboot-bar';
+    bar.className = 'pk-toolbar';
+    bar.setAttribute('role', 'button');
+    bar.setAttribute('tabindex', '0');
+    bar.setAttribute('aria-haspopup', 'dialog');
+    bar.setAttribute('aria-label', 'Open request trace details');
+    bar.setAttribute('aria-disabled', 'true');
 
     bar.innerHTML = `
-        <div class="peekaboot-left">
-            <span class="peekaboot-status" id="pb-status"></span>
-            <span class="peekaboot-method" id="pb-method"></span>
-            <span class="peekaboot-path" id="pb-path"></span>
-            <span class="peekaboot-controller" id="pb-controller"></span>
-            <span class="peekaboot-metrics" id="pb-metrics">
-                <span class="peekaboot-pending">Waiting for request…</span>
+        <div class="pk-toolbar__side">
+            <span class="pk-badge" id="pk-status"></span>
+            <span class="pk-toolbar__method" id="pk-method"></span>
+            <span class="pk-toolbar__path" id="pk-path"></span>
+            <span class="pk-toolbar__controller" id="pk-controller"></span>
+            <span class="pk-toolbar__metrics" id="pk-metrics">
+                <span class="pk-toolbar__pending">Waiting for request…</span>
             </span>
         </div>
-        <div class="peekaboot-right">
-            <span class="peekaboot-trace" id="pb-trace">-</span>
-            <a href="${data.basePath}/" target="_blank" title="Open Dashboard" onclick="event.stopPropagation()">\u{1F4CA}</a>
+        <div class="pk-toolbar__side">
+            <span class="pk-toolbar__trace" id="pk-trace">-</span>
+            <a href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard" onclick="event.stopPropagation()">\u{1F4CA}</a>
         </div>
     `;
     shadow.appendChild(bar);
@@ -88,25 +61,28 @@
 
     function loadTrace(traceId, method, path, status) {
         currentTraceId = traceId;
-        const statusClass = 's' + Math.floor(status / 100) + 'xx';
+        bar.setAttribute('aria-disabled', traceId ? 'false' : 'true');
+
+        const statusFamily = Math.floor(status / 100);
+        const statusVariant = statusFamily === 2 ? 'ok' : (statusFamily === 3 ? 'warn' : 'error');
         const safePath = escapeHtml(path);
         const safeMethod = escapeHtml(method);
         const safeTraceId = escapeHtml(traceId);
 
-        const statusEl = shadow.getElementById('pb-status');
+        const statusEl = shadow.getElementById('pk-status');
         statusEl.textContent = status;
-        statusEl.className = 'peekaboot-status ' + statusClass;
+        statusEl.className = 'pk-badge pk-badge--' + statusVariant;
 
-        shadow.getElementById('pb-method').textContent = safeMethod;
-        const pathEl = shadow.getElementById('pb-path');
+        shadow.getElementById('pk-method').textContent = safeMethod;
+        const pathEl = shadow.getElementById('pk-path');
         pathEl.textContent = safePath;
         pathEl.title = safePath;
 
-        shadow.getElementById('pb-controller').textContent = '';
-        shadow.getElementById('pb-trace').textContent = safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-';
+        shadow.getElementById('pk-controller').textContent = '';
+        shadow.getElementById('pk-trace').textContent = safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-';
 
-        const metricsEl = shadow.getElementById('pb-metrics');
-        metricsEl.innerHTML = '<span class="peekaboot-loading">loading</span>';
+        const metricsEl = shadow.getElementById('pk-metrics');
+        metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
 
         if (traceId) {
             let retryDelay = 250;
@@ -151,8 +127,8 @@
                 const summary = trace.summary || {};
                 const httpExchange = trace.httpExchange || {};
                 const controller = httpExchange.request && httpExchange.request.controller || {};
-                const metricsEl = shadow.getElementById('pb-metrics');
-                const controllerEl = shadow.getElementById('pb-controller');
+                const metricsEl = shadow.getElementById('pk-metrics');
+                const controllerEl = shadow.getElementById('pk-controller');
 
                 if (controller.class && controller.method) {
                     const className = controller.class.split('.').pop();
@@ -162,60 +138,60 @@
                 let html = '';
 
                 const duration = trace.durationMs || 0;
-                const durationClass = duration > 500 ? 'error' : (duration > 100 ? 'warn' : '');
-                html += '<span class="peekaboot-stat ' + durationClass + '">⏱<span class="dur">' + duration + 'ms</span></span>';
+                const durationClass = durationSeverity(duration);
+                html += '<span class="pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '')
+                    + '">⏱<span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
 
                 const queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
                 const queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
                 if (queryCount > 0) {
-                    const qClass = queryDuration > 100 ? 'warn' : '';
-                    html += '<span class="peekaboot-stat ' + qClass + '">' + queryCount + ' queries<span class="sep"> | </span><span class="dur">' + queryDuration + 'ms</span></span>';
+                    const queryClass = durationSeverity(queryDuration);
+                    html += '<span class="pk-stat' + (queryClass ? ' pk-stat--' + queryClass : '')
+                        + '">' + queryCount + ' queries<span class="pk-stat__separator"> | </span><span class="pk-stat__duration">'
+                        + formatDurationMs(queryDuration) + '</span></span>';
                 }
 
                 const errorCount = summary.logs ? summary.logs.errorCount : 0;
                 const warnCount = summary.logs ? summary.logs.warnCount : 0;
-                if (errorCount > 0 || warnCount > 0) {
-                    html += '<span class="peekaboot-log-counts">';
-                    if (errorCount > 0) {
-                        html += '<span class="peekaboot-log-count error">❗' + errorCount + ' err</span>';
-                    }
-                    if (warnCount > 0) {
-                        html += '<span class="peekaboot-log-count warn">⚠' + warnCount + ' warn</span>';
-                    }
-                    html += '</span>';
+                if (errorCount > 0) {
+                    html += '<span class="pk-badge pk-badge--error">❗' + errorCount + ' err</span>';
+                }
+                if (warnCount > 0) {
+                    html += '<span class="pk-badge pk-badge--warn">⚠' + warnCount + ' warn</span>';
                 }
 
                 metricsEl.innerHTML = html;
             }
 
             function showPending() {
-                const metricsEl = shadow.getElementById('pb-metrics');
-                metricsEl.innerHTML = '<span class="peekaboot-pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
+                const metricsEl = shadow.getElementById('pk-metrics');
+                metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
             }
 
             setTimeout(fetchTrace, 50);
         }
     }
 
-    window.__peekaboot = { loadTrace: loadTrace, basePath: data.basePath };
+    async function openOverlay() {
+        const overlay = await import('../trace-detail/trace-detail.js');
+        overlay.open(currentTraceId, {basePath: data.basePath});
+    }
 
     if (!data.idle && data.traceId) {
         loadTrace(data.traceId, data.method, data.path, data.status);
     }
 
     bar.addEventListener('click', function(e) {
-        if (e.target.tagName === 'A') return;
+        if (e.target.closest('a')) return;
         if (!currentTraceId) return;
-        if (!window.PeekabootTraceDetail) {
-            const script = document.createElement('script');
-            script.src = data.basePath + '/ui/trace-detail/trace-detail.js';
-            script.onload = function() {
-                window.PeekabootTraceDetail.open(currentTraceId, { basePath: data.basePath });
-            };
-            document.head.appendChild(script);
-        } else {
-            window.PeekabootTraceDetail.open(currentTraceId, { basePath: data.basePath });
-        }
+        openOverlay();
+    });
+
+    bar.addEventListener('keydown', function(e) {
+        if (e.target !== bar) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        bar.click();
     });
 
     // Idle mode (Swagger UI): no request of its own - intercept fetch calls and
@@ -241,14 +217,14 @@
                 if (skip) return response;
 
                 const serverTiming = response.headers.get('Server-Timing');
-                if (serverTiming && window.__peekaboot) {
+                if (serverTiming) {
                     const match = serverTiming.match(/trace;desc="00-([a-f0-9]+)-([a-f0-9]+)-([a-f0-9]+)"/);
                     if (match) {
-                        window.__peekaboot.loadTrace(match[1], method, path, response.status);
+                        loadTrace(match[1], method, path, response.status);
                     }
                 }
                 return response;
             });
         };
     }
-})();
+}

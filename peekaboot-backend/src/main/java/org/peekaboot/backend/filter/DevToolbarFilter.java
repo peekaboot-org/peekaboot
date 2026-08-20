@@ -192,7 +192,7 @@ public class DevToolbarFilter implements Filter {
         return """
             <!-- Peekaboot Dev Toolbar -->
             <script id="peekaboot-toolbar-data" type="application/json">{{SUMMARY_JSON}}</script>
-            <script src="/peekaboot/ui/toolbar/toolbar.js" defer></script>
+            <script src="/peekaboot/ui/toolbar/toolbar.js" type="module"></script>
             """.replace("{{SUMMARY_JSON}}", dataJson);
     }
 
