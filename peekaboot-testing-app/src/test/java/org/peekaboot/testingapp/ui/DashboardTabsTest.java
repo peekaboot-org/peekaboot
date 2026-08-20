@@ -80,4 +80,20 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.getAttribute("#health-banner", "aria-expanded")).isEqualTo("true");
         assertThat(page.isVisible("#health-components")).isTrue();
     }
+
+    /**
+     * main.js fetches /api/features once at boot and unhides the traces/metrics tab
+     * buttons directly from the result - the only place those two buttons are ever
+     * unhidden, since neither has a tab module registered yet (Task 15). Tracing is
+     * enabled in the test profile (see TraceOverlayTest/ToolbarTest, which depend on
+     * real trace data), so this is a real assertion on a real feature flag, not a stub.
+     */
+    @Test
+    void tracesTabIsUnhiddenWhenTracingIsAvailable() {
+        openDashboard();
+        page.waitForFunction(
+                "() => !document.querySelector('.pk-tab[data-tab=\"traces\"]').classList.contains('hidden')");
+
+        assertThat(page.isVisible(".pk-tab[data-tab='traces']")).isTrue();
+    }
 }

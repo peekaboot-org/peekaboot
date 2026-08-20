@@ -2,10 +2,13 @@
    tabs, empty, spinner keyframes) live in ../assets/components.css and are
    not duplicated here. */
 
-/* Header */
+/* Header. color: var(--pk-on-primary), not white - white on dark theme's
+   --pk-primary (#58a6ff) is 2.53:1, well under AA; --pk-on-primary is
+   contrast-tuned per theme (5.17:1 light, identical to white there; 7.49:1
+   dark) and is what every other fill/on-fill pairing in this codebase uses. */
 .pk-header {
     background: var(--pk-primary);
-    color: white;
+    color: var(--pk-on-primary);
     padding: var(--pk-space-md);
     margin-bottom: var(--pk-space-lg);
 }
@@ -26,9 +29,12 @@
     align-items: center;
     gap: var(--pk-space-sm);
 }
+/* opacity 0.85 (not lower) so the de-emphasised text still clears AA's 4.5:1
+   against --pk-on-primary/--pk-primary in both themes (4.82:1 light, 7.05:1
+   dark) - 0.85 measured 4.2:1 light / 5.98:1 dark, failing light. */
 .pk-header__time {
     font-size: var(--pk-text-xs);
-    opacity: 0.85;
+    opacity: 0.95;
     display: none;
 }
 @media (min-width: 768px) {
@@ -36,7 +42,7 @@
 }
 .pk-header__tz-info {
     font-size: var(--pk-text-xs);
-    opacity: 0.85;
+    opacity: 0.95;
     margin-right: var(--pk-space-sm);
 }
 @media (max-width: 767px) {
@@ -124,9 +130,12 @@
     animation: pk-spin 1s linear infinite;
 }
 
-/* Error banner */
+/* Error banner. Background tint is 0.04 alpha, not the original 0.1 - the
+   danger-red text on a 0.1 tint measured 4.13:1 in light theme, under AA's
+   4.5:1 (dark was already fine at 5.33:1); 0.04 clears both (4.54:1 light,
+   5.54:1 dark) without a token for "danger, but tuned for text-on-tint". */
 .pk-error-banner {
-    background: rgba(220, 38, 38, 0.1);
+    background: rgba(220, 38, 38, 0.04);
     border: 1px solid var(--pk-danger);
     border-radius: var(--pk-radius);
     padding: var(--pk-space-md);
@@ -309,7 +318,8 @@
 .pk-task__timing-label { font-weight: 500; }
 .pk-task__target-row { margin-top: var(--pk-space-sm); }
 .pk-task__target { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: rgba(220, 38, 38, 0.1); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
+/* Same 0.04 tint as .pk-error-banner, for the same AA-contrast reason (see there). */
+.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: rgba(220, 38, 38, 0.04); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
 .pk-task__exception-label { font-weight: 600; color: var(--pk-danger); }
 @media (max-width: 767px) {
     .pk-task__row { flex-direction: column; align-items: flex-start; gap: var(--pk-space-sm); }

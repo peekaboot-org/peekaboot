@@ -45,14 +45,14 @@
 
     <main class="pk-container">
         <nav class="pk-tabs" id="main-tabs" role="tablist">
-            <button class="pk-tab" role="tab" data-tab="dashboard" aria-selected="true">Dashboard</button>
-            <button class="pk-tab" role="tab" data-tab="environment" aria-selected="false">Environment</button>
-            <button class="pk-tab hidden" role="tab" data-tab="flyway" aria-selected="false">Flyway</button>
-            <button class="pk-tab hidden" role="tab" data-tab="loggers" aria-selected="false">Loggers</button>
-            <button class="pk-tab hidden" role="tab" data-tab="config" aria-selected="false">Config</button>
-            <button class="pk-tab hidden" role="tab" data-tab="scheduled-tasks" aria-selected="false">Scheduled Tasks</button>
-            <button class="pk-tab hidden" role="tab" data-tab="metrics" aria-selected="false">Metrics</button>
-            <button class="pk-tab hidden" role="tab" data-tab="traces" aria-selected="false">Traces</button>
+            <button class="pk-tab" role="tab" id="dashboard-tab-btn" data-tab="dashboard" aria-controls="dashboard-tab" aria-selected="true">Dashboard</button>
+            <button class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
+            <button class="pk-tab hidden" role="tab" id="flyway-tab-btn" data-tab="flyway" aria-controls="flyway-tab" aria-selected="false">Flyway</button>
+            <button class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
+            <button class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
+            <button class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
+            <button class="pk-tab hidden" role="tab" id="metrics-tab-btn" data-tab="metrics" aria-controls="metrics-tab" aria-selected="false">Metrics</button>
+            <button class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
         </nav>
 
         <div id="loading" class="pk-loading">
@@ -66,7 +66,7 @@
         </div>
 
         <!-- Dashboard Tab -->
-        <section class="pk-tab-panel active" id="dashboard-tab">
+        <section class="pk-tab-panel active" id="dashboard-tab" role="tabpanel" aria-labelledby="dashboard-tab-btn">
             <div class="pk-grid">
                 <div class="pk-card" id="build-card">
                     <div class="pk-card__header">
@@ -150,7 +150,7 @@
         </section>
 
         <!-- Traces Tab -->
-        <section class="pk-tab-panel" id="traces-tab">
+        <section class="pk-tab-panel" id="traces-tab" role="tabpanel" aria-labelledby="traces-tab-btn">
             <div id="traces-loading" class="pk-loading hidden">
                 <div class="pk-spinner"></div>
                 <p>Loading traces...</p>
@@ -181,7 +181,7 @@
         </section>
 
         <!-- Environment Tab -->
-        <section class="pk-tab-panel" id="environment-tab">
+        <section class="pk-tab-panel" id="environment-tab" role="tabpanel" aria-labelledby="environment-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties...">
@@ -190,7 +190,7 @@
         </section>
 
         <!-- Flyway Tab -->
-        <section class="pk-tab-panel" id="flyway-tab">
+        <section class="pk-tab-panel" id="flyway-tab" role="tabpanel" aria-labelledby="flyway-tab-btn">
             <div id="flyway-timeline"></div>
             <div id="no-flyway" class="pk-empty hidden">
                 <p>No Flyway migrations found</p>
@@ -198,7 +198,7 @@
         </section>
 
         <!-- Loggers Tab -->
-        <section class="pk-tab-panel" id="loggers-tab">
+        <section class="pk-tab-panel" id="loggers-tab" role="tabpanel" aria-labelledby="loggers-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers...">
@@ -213,7 +213,7 @@
         </section>
 
         <!-- Config Tab -->
-        <section class="pk-tab-panel" id="config-tab">
+        <section class="pk-tab-panel" id="config-tab" role="tabpanel" aria-labelledby="config-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties...">
@@ -222,7 +222,7 @@
         </section>
 
         <!-- Scheduled Tasks Tab -->
-        <section class="pk-tab-panel" id="scheduled-tasks-tab">
+        <section class="pk-tab-panel" id="scheduled-tasks-tab" role="tabpanel" aria-labelledby="scheduled-tasks-tab-btn">
             <div id="scheduled-tasks-summary" class="loggers-summary"></div>
             <div id="scheduled-tasks-groups"></div>
             <div id="no-scheduled-tasks" class="pk-empty hidden">
@@ -231,7 +231,7 @@
         </section>
 
         <!-- Metrics Tab -->
-        <section class="pk-tab-panel" id="metrics-tab">
+        <section class="pk-tab-panel" id="metrics-tab" role="tabpanel" aria-labelledby="metrics-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="metrics-filter" placeholder="Filter metrics...">

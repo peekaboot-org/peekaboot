@@ -8,6 +8,7 @@
  */
 import {createClient} from '../shared/api.js';
 import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
+import {formatDateTime} from '../shared/format.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 
@@ -77,18 +78,24 @@ function navigate(tabId, detail = null) {
 
 // --- Tab strip ----------------------------------------------------------------------
 
+/**
+ * tabName comes straight from the URL hash (see handleHashChange) - found by comparing
+ * dataset.tab in a loop, not by interpolating it into a querySelector attribute
+ * selector, so a hash like "#a\"]" can't break out of the selector string.
+ */
 function activateTab(tabName) {
     const buttons = document.querySelectorAll('#main-tabs .pk-tab');
     const sections = document.querySelectorAll('.pk-tab-panel');
 
-    if (!document.querySelector(`.pk-tab[data-tab="${tabName}"]`)) {
+    let targetButton = Array.from(buttons).find(button => button.dataset.tab === tabName);
+    if (!targetButton) {
         tabName = 'dashboard'; // Fallback to dashboard
+        targetButton = Array.from(buttons).find(button => button.dataset.tab === tabName);
     }
 
     buttons.forEach(button => button.setAttribute('aria-selected', 'false'));
     sections.forEach(section => section.classList.remove('active'));
 
-    const targetButton = document.querySelector(`.pk-tab[data-tab="${tabName}"]`);
     if (targetButton) targetButton.setAttribute('aria-selected', 'true');
 
     const content = document.getElementById(`${tabName}-tab`);
@@ -124,6 +131,23 @@ function currentContext() {
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
         navigate
     };
+}
+
+/**
+ * Fetched once at boot, before the first fetchData() - feeds every registered tab's
+ * (optional) isAvailable(data, features) check, and also unhides the traces/metrics
+ * tab buttons directly (those two tabs aren't in TABS yet - Task 15 - so there is no
+ * tab module for the isAvailable path to drive for them until then).
+ */
+async function fetchFeatures() {
+    try {
+        features = await client.get('/api/features') || {};
+    } catch (error) {
+        console.warn('Could not fetch features:', error);
+        return;
+    }
+    if (features.tracing) document.querySelector('.pk-tab[data-tab="traces"]')?.classList.remove('hidden');
+    if (features.metrics) document.querySelector('.pk-tab[data-tab="metrics"]')?.classList.remove('hidden');
 }
 
 /**
@@ -178,7 +202,9 @@ async function fetchData() {
 }
 
 function updateLastUpdated() {
-    document.getElementById('last-updated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    const {locale: currentLocale, timeZone} = currentContext();
+    const time = formatDateTime(new Date(), {locale: currentLocale, timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    document.getElementById('last-updated').textContent = `Updated ${time}`;
 }
 
 // --- Auto-refresh ---------------------------------------------------------------------
@@ -275,13 +301,14 @@ function initErrorClose() {
 
 // --- Boot -------------------------------------------------------------------------------
 
-function init() {
+async function init() {
     initTheme();
     initTabs();
     initRefreshControls();
     initTimezoneControls();
     initLocaleSelector();
     initErrorClose();
+    await fetchFeatures();
     fetchData();
 }
 
