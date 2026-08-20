@@ -358,4 +358,37 @@ class TraceOverlayTest extends PlaywrightTestBase {
               + ".querySelector('.pk-query__sql')?.textContent ?? ''");
         assertThat(sql.toLowerCase()).contains("select");
     }
+
+    /**
+     * Regression test for a residual duplication: the SLOW label used to re-derive the
+     * 100ms slow threshold with a bare literal (`duration > 100`) on the same line that
+     * already computes `durationClass` from severity.js's durationSeverity() - now it just
+     * reads durationClass. Imports queries.js directly (SharedModuleTest's pk-blank.html
+     * pattern) rather than driving a real slow query through the app, and pins the exact
+     * SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) since an earlier
+     * off-by-one at this same boundary was a real bug in this project (see severity.js's
+     * own boundary test in SharedModuleTest).
+     */
+    @Test
+    void queriesTabSlowLabelFollowsTheSharedSeverityThresholdAtTheBoundary() {
+        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+
+        Object labels = page.evaluate("""
+            async () => {
+                const m = await import('/peekaboot/ui/trace-detail/tabs/queries.js');
+                const container = document.createElement('div');
+                m.render(container, {queries: [
+                    {sql: 'SELECT 1', durationMs: 99,  dbSystem: 'h2', rowCount: 1},
+                    {sql: 'SELECT 2', durationMs: 100, dbSystem: 'h2', rowCount: 1},
+                    {sql: 'SELECT 3', durationMs: 101, dbSystem: 'h2', rowCount: 1},
+                    {sql: 'SELECT 4', durationMs: 501, dbSystem: 'h2', rowCount: 1}
+                ]});
+                return Array.from(container.querySelectorAll('.pk-query__duration')).map(el => el.textContent);
+            }
+            """);
+
+        @SuppressWarnings("unchecked")
+        java.util.List<String> durationLabels = (java.util.List<String>) labels;
+        assertThat(durationLabels).containsExactly("99ms", "100ms", "101ms SLOW", "501ms SLOW");
+    }
 }

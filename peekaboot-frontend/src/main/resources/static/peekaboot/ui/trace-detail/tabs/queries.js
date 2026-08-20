@@ -24,7 +24,7 @@ export function render(container, trace) {
         html += '<div class="pk-query-header">';
         html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
         html += '<span class="pk-query-meta">';
-        html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${duration}ms${duration > 100 ? ' SLOW' : ''}</span>`;
+        html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${duration}ms${durationClass ? ' SLOW' : ''}</span>`;
         if (rowCount !== null && rowCount !== undefined) {
             html += `<span class="pk-query-rows">${escapeHtml(String(rowCount))} rows</span>`;
         }
