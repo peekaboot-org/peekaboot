@@ -32,6 +32,22 @@ class SharedModuleTest extends PlaywrightTestBase {
     }
 
     @Test
+    void escapeHtmlEscapesAmpersandsAndQuotesForAttributeContext() {
+        assertThat(evalModule("markup.js", "m.escapeHtml('<script>alert(1)<' + '/script> & more')"))
+                .isEqualTo("&lt;script&gt;alert(1)&lt;/script&gt; &amp; more");
+        assertThat(evalModule("markup.js", "m.escapeHtml('\" onmouseover=\"alert(1)')"))
+                .isEqualTo("&quot; onmouseover=&quot;alert(1)");
+        assertThat(evalModule("markup.js", "m.escapeHtml(\"' onmouseover='alert(1)\")"))
+                .isEqualTo("&#39; onmouseover=&#39;alert(1)");
+    }
+
+    @Test
+    void escapeHtmlTreatsUndefinedAsEmptyButPreservesFalsyZero() {
+        assertThat(evalModule("markup.js", "m.escapeHtml(undefined)")).isEqualTo("");
+        assertThat(evalModule("markup.js", "m.escapeHtml(0)")).isEqualTo("0");
+    }
+
+    @Test
     void highlightTextWrapsEveryMatchAndEscapesTheRest() {
         assertThat(evalModule("markup.js", "m.highlightText('a<b>a', 'a')"))
                 .isEqualTo("<mark>a</mark>&lt;b&gt;<mark>a</mark>");
@@ -76,12 +92,33 @@ class SharedModuleTest extends PlaywrightTestBase {
     }
 
     @Test
+    void formatHostsRendersHostnamePortAndFallbacks() {
+        // API host objects carry "hostname" (net.osslabz.jdbc.Host), not "host"
+        assertThat(evalModule("format.js",
+                "m.formatHosts([{hostname: '127.0.0.1', port: 5432, instanceName: null}])"))
+                .isEqualTo("127.0.0.1:5432");
+        assertThat(evalModule("format.js",
+                "m.formatHosts([{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}])"))
+                .isEqualTo("db1:5432, db2:5433");
+        assertThat(evalModule("format.js", "m.formatHosts([{hostname: 'db.local'}])")).isEqualTo("db.local");
+        assertThat(evalModule("format.js", "m.formatHosts(null)")).isEqualTo("unknown");
+        assertThat(evalModule("format.js", "m.formatHosts([])")).isEqualTo("unknown");
+    }
+
+    @Test
     void durationSeverityUsesOneSetOfThresholds() {
         assertThat(evalModule("severity.js", "m.durationSeverity(50)")).isEqualTo("");
         assertThat(evalModule("severity.js", "m.durationSeverity(101)")).isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.durationSeverity(501)")).isEqualTo("very-slow");
         assertThat(evalModule("severity.js", "m.SLOW_MS")).isEqualTo(100);
         assertThat(evalModule("severity.js", "m.VERY_SLOW_MS")).isEqualTo(500);
+    }
+
+    @Test
+    void durationSeverityAtExactlyTheSlowThresholdIsNotYetSlow() {
+        // Pins the boundary itself (ms > SLOW_MS, not >=) so an off-by-one in the
+        // comparison fails here instead of only showing up on values well past it.
+        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("");
     }
 
     @Test

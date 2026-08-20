@@ -187,7 +187,6 @@
 .pk-query__duration--very-slow { color: var(--pk-danger); }
 .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success); font-size: 11px; }
 .pk-query__sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
-.pk-query-params { margin-top: 8px; font-size: 11px; color: var(--pk-text-muted); }
 
 /* Logs tab styles */
 .pk-logs-filter { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }

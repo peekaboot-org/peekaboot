@@ -151,7 +151,7 @@
 /* Extra right padding clears room for a dropdown-style caret/chevron the
    consumer places absolutely inside the button. */
 .pk-btn--select { padding-right: var(--pk-space-md); }
-.pk-btn[aria-pressed="true"], .pk-btn--active { background: var(--pk-primary); color: var(--pk-on-primary); }
+.pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }
 
 /* Tab strip */
 .pk-tabs {

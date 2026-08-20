@@ -239,6 +239,10 @@ class DashboardTabsTest extends PlaywrightTestBase {
         int allCount = page.querySelectorAll("#traces-list .pk-trace-item").size();
 
         String errorsButtonText = page.textContent("#traces-bucket .pk-btn[data-bucket='errors']");
+        // Stripping non-digits only yields the right number because no type filter is
+        // active here: updateBucketCounts renders the plain "Errors (N)" form when
+        // filteredCounts is null, and switches to "Errors (M / N)" once a filter is
+        // applied - which this replaceAll would silently mangle into "MN".
         int expectedErrorsCount = Integer.parseInt(errorsButtonText.replaceAll("\\D+", ""));
         assertThat(expectedErrorsCount).isLessThan(allCount);
 
