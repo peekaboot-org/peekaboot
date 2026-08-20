@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
 import org.junit.jupiter.api.Test;
@@ -227,6 +228,102 @@ class TraceOverlayTest extends PlaywrightTestBase {
 
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+    }
+
+    /**
+     * The overlay's own four-tab strip is built by the same shared tabStrip() helper
+     * as the dashboard's - a real ArrowRight keypress (not a direct handler call) must
+     * move both the DOM focus and the aria-selected tab from Spans to Queries.
+     */
+    @Test
+    void overlayTabStripIsKeyboardNavigable() {
+        openOverlayFromToolbar();
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('.pk-tab[data-tab=\"spans\"]').focus()");
+
+        page.keyboard().press("ArrowRight");
+
+        String focused = (String) page.evaluate(
+                "() => { const host = document.getElementById('peekaboot-trace-overlay');"
+              + " return host.shadowRoot.activeElement?.dataset.tab; }");
+        String selected = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+
+        assertThat(focused).isEqualTo("queries");
+        assertThat(selected).isEqualTo("queries");
+
+        String content = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('#pk-tab-content').innerHTML");
+        assertThat(content).isNotEmpty();
+    }
+
+    /** Only the selected main tab stays in the tab order - roving tabindex. */
+    @Test
+    void onlyTheSelectedOverlayTabIsInTheTabOrder() {
+        openOverlayFromToolbar();
+
+        Object selectedTabIndex = page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
+        Object otherTabIndex = page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
+
+        assertThat(selectedTabIndex).isEqualTo(0);
+        assertThat(otherTabIndex).isEqualTo(-1);
+    }
+
+    /**
+     * Inspects the real accessibility tree for the overlay's strip too - proves the
+     * tab count/label TABS carries (dead in the hand-written markup this replaced)
+     * are genuinely rendered, not just present in the array.
+     */
+    @Test
+    void overlayTabStripExposesAsARealTablistInTheAccessibilityTree() {
+        openOverlayFromToolbar();
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+
+        Locator tablist = page.locator("#peekaboot-trace-overlay .pk-overlay__container > .pk-tabs");
+        String snapshot = tablist.ariaSnapshot();
+
+        assertThat(snapshot).contains("tablist");
+        assertThat(snapshot).contains("\"Spans\"");
+        // The " 1" is the queries count TABS.count(trace) computes for this real trace -
+        // pins that count is actually rendered into the tab, not just present in TABS.
+        assertThat(snapshot).contains("\"Queries 1\" [selected]");
+    }
+
+    /**
+     * The Request tab's own overview/request-headers/response-headers sub-tabs reuse
+     * the same shared tabStrip() helper as the main strips - migrated off hand-rolled
+     * click wiring (and a bespoke data-subtab attribute) alongside them, since it was
+     * the same missing-roving-tabindex defect.
+     */
+    @Test
+    void requestSubTabsAreKeyboardNavigable() {
+        openOverlayFromToolbar();
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('#pk-tab-content .pk-tab[data-tab=\"overview\"]')");
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('#pk-tab-content .pk-tab[data-tab=\"overview\"]').focus()");
+
+        page.keyboard().press("ArrowRight");
+
+        String selected = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('#pk-tab-content .pk-tab[aria-selected=\"true\"]').dataset.tab");
+        assertThat(selected).isEqualTo("request-headers");
+
+        String content = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('#pk-request-subtab-content').innerHTML");
+        assertThat(content).isNotEmpty();
     }
 
     @Test

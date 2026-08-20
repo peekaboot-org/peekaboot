@@ -15,15 +15,14 @@ import {rootActionIcon} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient} from '../shared/api.js';
+import {tabStrip} from '../shared/components.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
 import * as logs from './tabs/logs.js';
 
-// label/count are unused by the hand-written tab strip markup in render() below -
-// Task 17 replaces that markup with a shared tabStrip() helper driven by exactly
-// this shape, at which point they become load-bearing. Keeping them now avoids
-// re-adding the same fields to this array in that task.
+// label/count feed the tab strip built in render() below - label becomes each
+// button's text, count (when present) the small badge next to it.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
     {id: 'spans',   label: 'Spans',   render: spans.render},
@@ -184,12 +183,7 @@ function render(content, trace) {
                     </div>
                     <button type="button" class="pk-overlay__close" title="Close">&times;</button>
                 </div>
-                <div class="pk-tabs" role="tablist">
-                    <button type="button" class="pk-tab" role="tab" data-tab="request" aria-selected="false">Request</button>
-                    <button type="button" class="pk-tab" role="tab" data-tab="spans" aria-selected="true">Spans</button>
-                    <button type="button" class="pk-tab" role="tab" data-tab="queries" aria-selected="false">Queries <span class="pk-tab__count">${queryCount}</span></button>
-                    <button type="button" class="pk-tab" role="tab" data-tab="logs" aria-selected="false">Logs <span class="pk-tab__count">${logCount}</span></button>
-                </div>
+                <div class="pk-tabs"></div>
                 <div class="pk-overlay__content" id="pk-tab-content"></div>
                 <div id="pk-logs-popup" class="pk-logs-popup hidden"></div>
             </div>
@@ -205,20 +199,18 @@ function render(content, trace) {
         if (e.target === container) closeTraceDetail();
     });
 
-    let activeTab = 'spans';
-    const tabs = container.querySelectorAll('.pk-tab');
     const tabContent = container.querySelector('#pk-tab-content');
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.setAttribute('aria-selected', 'false'));
-            tab.setAttribute('aria-selected', 'true');
-            activeTab = tab.dataset.tab;
-            renderTabContent(tabContent, activeTab, trace);
-        });
+    tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
+        id: tab.id,
+        label: tab.label,
+        count: tab.count ? tab.count(trace) : undefined
+    })), {
+        onSelect: tabId => renderTabContent(tabContent, tabId, trace),
+        initial: 'spans'
     });
 
-    renderTabContent(tabContent, activeTab, trace);
+    renderTabContent(tabContent, 'spans', trace);
 
     // ESC key to close; closeTraceDetail removes the listener however
     // the overlay is dismissed (buttons, overlay click, ESC)

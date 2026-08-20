@@ -7,6 +7,7 @@
  * domain data itself, only decides which tab module to hand the fetched payload to.
  */
 import {createClient} from '../shared/api.js';
+import {tabStrip} from '../shared/components.js';
 import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
 import {formatDateTime} from '../shared/format.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
@@ -22,11 +23,13 @@ import * as traces from './tabs/traces.js';
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
 const TABS = [overview, environment, flyway, loggers, config, scheduledTasks, metrics, traces];
+const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
 
 let data = null;
 let features = {};
+let mainTabs = null;
 let refreshTimer = null;
 let isPaused = false;
 let locale = localStorage.getItem('peekaboot-locale') || navigator.language || 'en-US';
@@ -51,9 +54,11 @@ function setHash(tab, detail = null) {
 
 function handleHashChange() {
     const {tab, detail} = parseHash();
-    activateTab(tab);
-    renderTabById(tab);
-    if (tab === 'traces' && detail) {
+    const tabId = resolveTabId(tab);
+    mainTabs.select(tabId, {silent: true});
+    showTab(tabId);
+    renderTabById(tabId);
+    if (tabId === 'traces' && detail) {
         expandTraceById(detail);
     } else {
         // Browser Back removed the detail segment, or landed on a different tab -
@@ -93,51 +98,46 @@ function expandTraceById(traceId) {
  * metrics/traces that fetch their own data.
  */
 function navigate(tabId, detail = null, payload = null) {
-    const wasAlreadyActive = document.getElementById(`${tabId}-tab`)?.classList.contains('active') ?? false;
-    activateTab(tabId);
-    setHash(tabId, detail);
+    const resolvedId = resolveTabId(tabId);
+    const wasAlreadyActive = document.getElementById(`${resolvedId}-tab`)?.classList.contains('active') ?? false;
+    mainTabs.select(resolvedId, {silent: true});
+    showTab(resolvedId);
+    setHash(resolvedId, detail);
     if (payload) {
-        TABS.find(tab => tab.id === tabId)?.applyFilter?.(payload);
+        TABS.find(tab => tab.id === resolvedId)?.applyFilter?.(payload);
     } else if (!wasAlreadyActive) {
-        renderTabById(tabId);
+        renderTabById(resolvedId);
     }
 }
 
 // --- Tab strip ----------------------------------------------------------------------
 
 /**
- * tabName comes straight from the URL hash (see handleHashChange) - found by comparing
- * dataset.tab in a loop, not by interpolating it into a querySelector attribute
- * selector, so a hash like "#a\"]" can't break out of the selector string.
+ * tabId comes straight from the URL hash (see handleHashChange) or from another tab
+ * module's navigate() call - never trusted outright, so an unknown id (e.g. a stale
+ * or hand-edited hash) falls back to the dashboard tab instead of leaving every panel
+ * hidden or the tab strip's selection pointing at nothing.
  */
-function activateTab(tabName) {
-    const buttons = document.querySelectorAll('#main-tabs .pk-tab');
-    const sections = document.querySelectorAll('.pk-tab-panel');
+function resolveTabId(tabId) {
+    return TAB_IDS.includes(tabId) ? tabId : 'dashboard';
+}
 
-    let targetButton = Array.from(buttons).find(button => button.dataset.tab === tabName);
-    if (!targetButton) {
-        tabName = 'dashboard'; // Fallback to dashboard
-        targetButton = Array.from(buttons).find(button => button.dataset.tab === tabName);
-    }
-
-    buttons.forEach(button => button.setAttribute('aria-selected', 'false'));
-    sections.forEach(section => section.classList.remove('active'));
-
-    if (targetButton) targetButton.setAttribute('aria-selected', 'true');
-
-    const content = document.getElementById(`${tabName}-tab`);
+/** Toggles which `.pk-tab-panel` is visible - independent of the tab strip's own
+ * selection state (aria-selected/tabIndex), which tabStrip's select() owns. */
+function showTab(tabId) {
+    document.querySelectorAll('.pk-tab-panel').forEach(section => section.classList.remove('active'));
+    const content = document.getElementById(`${tabId}-tab`);
     if (content) content.classList.add('active');
 }
 
 function initTabs() {
-    document.querySelectorAll('#main-tabs .pk-tab').forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tabName = button.dataset.tab;
-            activateTab(tabName);
-            setHash(tabName);
-            renderTabById(tabName);
-        });
+    mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
+        onSelect: tabId => {
+            showTab(tabId);
+            setHash(tabId);
+            renderTabById(tabId);
+        },
+        initial: resolveTabId(parseHash().tab)
     });
 
     window.addEventListener('hashchange', handleHashChange);

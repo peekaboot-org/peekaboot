@@ -122,3 +122,84 @@ export function expandedKeys(container) {
         .map(header => header.parentElement?.dataset.groupKey)
         .filter(Boolean));
 }
+
+/**
+ * An ARIA tab strip with roving tabindex: only the selected tab stays in the tab
+ * order (tabIndex 0; every other tab -1), and Arrow/Home/End move between tabs,
+ * wrapping at the ends and skipping any tab currently hidden (offsetParent ===
+ * null). `tabs` is `[{id, label, count}]`.
+ *
+ * A `.pk-tab[data-tab="<id>"]` button already present in `container` is reused
+ * as-is - callers whose markup already carries aria-controls/id wiring (e.g. the
+ * dashboard's static tab buttons) keep that wiring untouched. Only when no such
+ * button exists yet does this build one from `label`/`count`.
+ *
+ * `select(id)` (also returned to the caller) always updates the DOM; it invokes
+ * `onSelect` too unless called with `{silent: true}` - the escape hatch a caller
+ * needs to sync the strip's visual selection (e.g. from hash-driven routing)
+ * without re-triggering the side effects `onSelect` runs for real user activation.
+ */
+export function tabStrip(container, tabs, {onSelect, initial} = {}) {
+    container.setAttribute('role', 'tablist');
+
+    const buttons = tabs.map(tab => {
+        let button = container.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
+        if (!button) {
+            button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'pk-tab';
+            button.dataset.tab = tab.id;
+            button.setAttribute('role', 'tab');
+            button.append(tab.label);
+            if (tab.count != null) {
+                const count = document.createElement('span');
+                count.className = 'pk-tab__count';
+                count.textContent = String(tab.count);
+                button.append(' ', count);
+            }
+            container.appendChild(button);
+        }
+        return button;
+    });
+
+    const visible = () => buttons.filter(button => button.offsetParent !== null);
+
+    function select(id, {focus = false, silent = false} = {}) {
+        buttons.forEach(button => {
+            const active = button.dataset.tab === id;
+            button.setAttribute('aria-selected', String(active));
+            button.tabIndex = active ? 0 : -1;
+            if (active && focus) button.focus();
+        });
+        if (onSelect && !silent) onSelect(id);
+    }
+
+    container.addEventListener('click', event => {
+        const button = event.target.closest('.pk-tab');
+        if (button) select(button.dataset.tab);
+    });
+
+    container.addEventListener('keydown', event => {
+        const OFFSETS = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1};
+        const candidates = visible();
+        const current = candidates.indexOf(event.target.closest('.pk-tab'));
+        if (current === -1) return;
+
+        let next = null;
+        if (event.key in OFFSETS) {
+            next = (current + OFFSETS[event.key] + candidates.length) % candidates.length;
+        } else if (event.key === 'Home') {
+            next = 0;
+        } else if (event.key === 'End') {
+            next = candidates.length - 1;
+        }
+
+        if (next !== null) {
+            event.preventDefault();
+            select(candidates[next].dataset.tab, {focus: true});
+        }
+    });
+
+    select(initial || tabs[0].id, {silent: true});
+    return {select};
+}

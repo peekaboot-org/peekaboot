@@ -4,6 +4,13 @@
  * tableRow collapse that duplication into one helper each.
  */
 import {escapeHtml} from '../../shared/markup.js';
+import {tabStrip} from '../../shared/components.js';
+
+const SUBTABS = [
+    {id: 'overview', label: 'Overview'},
+    {id: 'request-headers', label: 'Request Headers'},
+    {id: 'response-headers', label: 'Response Headers'}
+];
 
 function renderTable(rows) {
     return `<table class="pk-table">${rows.join('')}</table>`;
@@ -20,25 +27,13 @@ export function render(container, trace) {
 
     // Build sub-tab navigation - reuses the shared .pk-tabs/.pk-tab primitive, scoped
     // to margin-bottom by trace-detail.css's ".pk-overlay__content .pk-tabs" rule.
-    let html = '<div class="pk-tabs" role="tablist">';
-    html += '<button type="button" class="pk-tab" role="tab" data-subtab="overview" aria-selected="true">Overview</button>';
-    html += '<button type="button" class="pk-tab" role="tab" data-subtab="request-headers" aria-selected="false">Request Headers</button>';
-    html += '<button type="button" class="pk-tab" role="tab" data-subtab="response-headers" aria-selected="false">Response Headers</button>';
-    html += '</div>';
-    html += '<div id="pk-request-subtab-content"></div>';
+    container.innerHTML = '<div class="pk-tabs"></div><div id="pk-request-subtab-content"></div>';
 
-    container.innerHTML = html;
-
-    // Add sub-tab click handlers
-    const subtabs = container.querySelectorAll('.pk-tab');
     const subtabContent = container.querySelector('#pk-request-subtab-content');
 
-    subtabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            subtabs.forEach(t => t.setAttribute('aria-selected', 'false'));
-            tab.setAttribute('aria-selected', 'true');
-            renderRequestSubtab(subtabContent, tab.dataset.subtab, req, res, trace);
-        });
+    tabStrip(container.querySelector('.pk-tabs'), SUBTABS, {
+        onSelect: subtab => renderRequestSubtab(subtabContent, subtab, req, res, trace),
+        initial: 'overview'
     });
 
     // Render default sub-tab
