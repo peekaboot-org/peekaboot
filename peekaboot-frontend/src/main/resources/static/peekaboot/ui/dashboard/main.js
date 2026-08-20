@@ -15,10 +15,13 @@ import * as environment from './tabs/environment.js';
 import * as flyway from './tabs/flyway.js';
 import * as loggers from './tabs/loggers.js';
 import * as config from './tabs/config.js';
+import * as scheduledTasks from './tabs/scheduled-tasks.js';
+import * as metrics from './tabs/metrics.js';
+import * as traces from './tabs/traces.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview, environment, flyway, loggers, config /* remaining tabs added in Task 15 */];
+const TABS = [overview, environment, flyway, loggers, config, scheduledTasks, metrics, traces];
 
 const client = createClient();
 
@@ -133,25 +136,23 @@ function currentContext() {
         client,
         locale,
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
-        navigate
+        navigate,
+        features
     };
 }
 
 /**
  * Fetched once at boot, before the first fetchData() - feeds every registered tab's
- * (optional) isAvailable(data, features) check, and also unhides the traces/metrics
- * tab buttons directly (those two tabs aren't in TABS yet - Task 15 - so there is no
- * tab module for the isAvailable path to drive for them until then).
+ * (optional) isAvailable(data, features) check, which drives the traces/metrics tab
+ * buttons (see traces.js/metrics.js's own isAvailable) once the first fetchData() ->
+ * renderData() cycle runs.
  */
 async function fetchFeatures() {
     try {
         features = await client.get('/api/features') || {};
     } catch (error) {
         console.warn('Could not fetch features:', error);
-        return;
     }
-    if (features.tracing) document.querySelector('.pk-tab[data-tab="traces"]')?.classList.remove('hidden');
-    if (features.metrics) document.querySelector('.pk-tab[data-tab="metrics"]')?.classList.remove('hidden');
 }
 
 /**

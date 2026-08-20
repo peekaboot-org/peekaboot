@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -123,7 +125,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#property-sources .pk-group");
 
         page.fill("#env-filter", "server.port");
-        page.waitForTimeout(300);
+        page.waitForSelector("#property-sources mark", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
         page.click("#property-sources .pk-group__header");
 
         page.waitForSelector("#property-sources mark");
@@ -139,7 +141,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.isVisible("#config-groups .pk-group__list")).isTrue();
 
         page.click("#refresh-btn");
-        page.waitForTimeout(500);
+        page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
 
         assertThat(page.isVisible("#config-groups .pk-group__list")).isTrue();
     }
@@ -152,7 +154,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
 
         int all = page.querySelectorAll("#loggers-list .pk-group").size();
         page.check("#loggers-configured-only");
-        page.waitForTimeout(300);
+        page.waitForFunction("(prev) => document.querySelectorAll('#loggers-list .pk-group').length !== prev", all);
         int configured = page.querySelectorAll("#loggers-list .pk-group").size();
 
         assertThat(configured).isLessThanOrEqualTo(all);
@@ -176,9 +178,73 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#config-groups .pk-group__header");
 
         page.fill("#config-filter", "key");
-        page.waitForTimeout(300);
+        page.waitForSelector("#config-groups .pk-kv__value--sensitive", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
         page.click("#config-groups .pk-group__header");
 
         assertThat(page.querySelectorAll("#config-groups .pk-kv__value--sensitive")).isNotEmpty();
+    }
+
+    @Test
+    void scheduledTasksTabGroupsByScheduleType() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='scheduled-tasks']");
+        page.waitForSelector("#scheduled-tasks-groups .pk-group");
+
+        assertThat(page.querySelectorAll("#scheduled-tasks-groups .pk-group")).isNotEmpty();
+        assertThat(page.textContent("#scheduled-tasks-summary")).contains("Total:");
+    }
+
+    @Test
+    void metricsTabFiltersAndCounts() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='metrics']");
+        page.waitForSelector("#metrics-list .pk-group");
+
+        page.fill("#metrics-filter", "jvm.memory");
+        page.waitForFunction("() => document.querySelector('#metrics-count').textContent.includes('/')");
+
+        assertThat(page.textContent("#metrics-count")).contains("/");
+    }
+
+    @Test
+    void tracesTabListsTracesAndBucketsThem() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']")).contains("All (");
+
+        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        page.waitForTimeout(500);
+
+        assertThat(page.evaluate(
+                "() => document.querySelector('#traces-bucket .pk-btn[data-bucket=\"errors\"]')"
+              + ".getAttribute('aria-pressed')")).isEqualTo("true");
+    }
+
+    @Test
+    void clickingATraceOpensTheOverlayAndDeepLinks() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        page.click("#traces-list .pk-trace-item");
+        page.waitForSelector("#peekaboot-trace-overlay");
+
+        assertThat(page.url()).contains("#traces/");
+    }
+
+    @Test
+    void closingTheOverlayCleansTheHash() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+        page.click("#traces-list .pk-trace-item");
+        page.waitForSelector("#peekaboot-trace-overlay");
+
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+
+        assertThat(page.url()).endsWith("#traces");
     }
 }

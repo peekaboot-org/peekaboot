@@ -277,8 +277,9 @@
     margin-bottom: var(--pk-space-lg);
 }
 
-/* Loggers */
-.pk-loggers-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+/* Loggers. Also used by the scheduled-tasks summary row (.tasks-summary) - both are
+   just a wrapping row of count badges, with nothing logger-specific about the layout. */
+.pk-loggers-summary, .tasks-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
 .loggers-controls { margin-bottom: var(--pk-space-md); }
 .checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
 .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary); }
@@ -305,6 +306,12 @@
 .pk-flyway__time--slow { color: var(--pk-warning-text); }
 .pk-flyway__time--very-slow { color: var(--pk-danger); }
 .pk-flyway__script { padding: var(--pk-space-sm) var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); background: var(--pk-bg); border-top: 1px solid var(--pk-border); }
+
+/* Traces controls - the bucket buttons row and the type filter checkbox row share this
+   layout, hence one shared class rather than two near-identical rules. */
+.filter-section { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+.filter-label { font-size: var(--pk-text-xs); font-weight: 600; color: var(--pk-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.active-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); margin-bottom: var(--pk-space-md); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
 
 /* Trace list item */
 .pk-trace-item {
@@ -369,19 +376,11 @@
     text-decoration: none;
 }
 
-/* Metric group */
-.pk-metric { margin-bottom: var(--pk-space-sm); }
-.pk-metric__header { display: flex; align-items: center; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); cursor: pointer; transition: background-color var(--pk-transition); }
-.pk-metric__header:hover { background: var(--pk-bg-hover); }
-.pk-metric__header::before { content: '\25B6'; font-size: var(--pk-text-xs); color: var(--pk-text-muted); transition: transform var(--pk-transition); }
-.pk-metric__header[aria-expanded="true"]::before { transform: rotate(90deg); }
-.pk-metric__name { flex: 1; font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Metric group. The collapsible header/body is the shared .pk-group primitive (see its
+   --mono name modifier, reserved for metric names) - only the type-badge/unit slot and
+   the measurement rows inside the group's list are metric-specific. */
 .pk-metric__unit { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-.pk-metric__count { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-.pk-metric__content { border: 1px solid var(--pk-border); border-top: none; border-radius: 0 0 var(--pk-radius) var(--pk-radius); overflow: hidden; }
-.pk-metric__content[hidden] { display: none; }
 .pk-metric__description { padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg); font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-style: italic; border-bottom: 1px solid var(--pk-border); }
-.pk-metric__measurements { background: var(--pk-bg); }
 .pk-metric__measurement { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--pk-space-md); padding: var(--pk-space-sm) var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }
 .pk-metric__measurement:last-child { border-bottom: none; }
 .pk-metric__tags { display: flex; flex-wrap: wrap; gap: var(--pk-space-xs); flex: 1; }

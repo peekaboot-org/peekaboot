@@ -156,19 +156,13 @@
                 <p>Loading traces...</p>
             </div>
             <div id="traces-bucket" class="filter-section">
-                <button class="pk-btn pk-btn--small" data-bucket="all">All</button>
-                <button class="pk-btn pk-btn--small" data-bucket="errors">Errors</button>
-                <button class="pk-btn pk-btn--small" data-bucket="slow">Slow</button>
+                <button class="pk-btn pk-btn--small" data-bucket="all" aria-pressed="true">All</button>
+                <button class="pk-btn pk-btn--small" data-bucket="errors" aria-pressed="false">Errors</button>
+                <button class="pk-btn pk-btn--small" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
             <div id="traces-filter" class="filter-section">
                 <span class="filter-label">Filter by type:</span>
-                <label><input type="checkbox" value="HTTP_REQUEST"> HTTP</label>
-                <label><input type="checkbox" value="SCHEDULED_JOB"> Jobs</label>
-                <label><input type="checkbox" value="MESSAGE_CONSUMER"> Messages</label>
-                <label><input type="checkbox" value="RPC_CALL"> RPC</label>
-                <label><input type="checkbox" value="DATABASE"> DB</label>
-                <label><input type="checkbox" value="INTERNAL"> Internal</label>
-                <label><input type="checkbox" value="UNKNOWN"> Unknown</label>
+                <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
                 <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>
             <div id="traces-active-filter" class="active-filter-banner hidden">
@@ -223,7 +217,7 @@
 
         <!-- Scheduled Tasks Tab -->
         <section class="pk-tab-panel" id="scheduled-tasks-tab" role="tabpanel" aria-labelledby="scheduled-tasks-tab-btn">
-            <div id="scheduled-tasks-summary" class="loggers-summary"></div>
+            <div id="scheduled-tasks-summary" class="tasks-summary"></div>
             <div id="scheduled-tasks-groups"></div>
             <div id="no-scheduled-tasks" class="pk-empty hidden">
                 <p>No scheduled tasks configured</p>
