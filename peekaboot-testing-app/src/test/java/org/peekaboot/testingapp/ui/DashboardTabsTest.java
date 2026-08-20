@@ -157,7 +157,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForFunction("(prev) => document.querySelectorAll('#loggers-list .pk-group').length !== prev", all);
         int configured = page.querySelectorAll("#loggers-list .pk-group").size();
 
-        assertThat(configured).isLessThanOrEqualTo(all);
+        assertThat(configured).isLessThan(all);
     }
 
     /**
@@ -206,6 +206,15 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.textContent("#metrics-count")).contains("/");
     }
 
+    /**
+     * aria-pressed flips synchronously inside the click handler, before the (re)fetch is
+     * even awaited, so asserting on it alone would pass with no wait at all - it proves
+     * nothing about whether bucketing actually happened. Waits on the bucket button's own
+     * count text instead, which only updates once the filtered response has rendered, and
+     * separately asserts the errors bucket actually rendered error traces - the sample
+     * app's deliberate Scheduler IllegalStateException guarantees at least one, so this is
+     * deterministic.
+     */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
         openDashboard();
@@ -215,11 +224,10 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']")).contains("All (");
 
         page.click("#traces-bucket .pk-btn[data-bucket='errors']");
-        page.waitForTimeout(500);
+        page.waitForFunction(
+                "() => /^Errors \\(/.test(document.querySelector(\"#traces-bucket .pk-btn[data-bucket='errors']\").textContent)");
 
-        assertThat(page.evaluate(
-                "() => document.querySelector('#traces-bucket .pk-btn[data-bucket=\"errors\"]')"
-              + ".getAttribute('aria-pressed')")).isEqualTo("true");
+        assertThat(page.querySelectorAll("#traces-list .pk-trace-item .pk-badge--error")).isNotEmpty();
     }
 
     @Test
@@ -246,5 +254,27 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
 
         assertThat(page.url()).endsWith("#traces");
+    }
+
+    /**
+     * The scheduled-tasks "view traces" link pre-filters the Traces tab to that
+     * scheduler's own SCHEDULED_JOB traces (rootActionType + rootOperation), via
+     * context.navigate's payload argument routed to traces.js's applyFilter(). Proves
+     * the link actually arrives filtered, not just that it switches tabs.
+     */
+    @Test
+    void schedulerTracesLinkArrivesFiltered() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='scheduled-tasks']");
+        page.waitForSelector("#scheduled-tasks-groups .pk-group__header");
+        page.click("#scheduled-tasks-groups .pk-group__header");
+        page.waitForSelector(".pk-task__traces-link");
+
+        page.click(".pk-task__traces-link");
+        page.waitForSelector("#traces-tab.active");
+        page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
+
+        assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target:");
+        assertThat(page.isChecked("#traces-filter input[value='SCHEDULED_JOB']")).isTrue();
     }
 }

@@ -52,6 +52,7 @@ function setHash(tab, detail = null) {
 function handleHashChange() {
     const {tab, detail} = parseHash();
     activateTab(tab);
+    renderTabById(tab);
     if (tab === 'traces' && detail) {
         expandTraceById(detail);
     } else {
@@ -77,10 +78,29 @@ function expandTraceById(traceId) {
     });
 }
 
-/** Passed to every tab module as context.navigate. */
-function navigate(tabId, detail = null) {
+/**
+ * Passed to every tab module as context.navigate. `payload`, when given, is routed to
+ * the target tab's own (optional) applyFilter(payload) - kept a distinct third argument
+ * rather than overloading `detail`, which handleHashChange treats as a trace id for the
+ * traces tab specifically. A payload skips the generic renderTabById() call below: the
+ * target tab's applyFilter is expected to trigger its own re-render/fetch, and calling
+ * both would fire two overlapping fetches for one navigation.
+ *
+ * renderTabById() is also skipped when the target tab was already the active one - a
+ * call with no real tab switch (e.g. traces.js's openTrace() using this purely to update
+ * the hash for a trace it is opening/closing, while staying on the traces tab) has
+ * nothing new to render, and would otherwise force an unwanted extra fetch on tabs like
+ * metrics/traces that fetch their own data.
+ */
+function navigate(tabId, detail = null, payload = null) {
+    const wasAlreadyActive = document.getElementById(`${tabId}-tab`)?.classList.contains('active') ?? false;
     activateTab(tabId);
     setHash(tabId, detail);
+    if (payload) {
+        TABS.find(tab => tab.id === tabId)?.applyFilter?.(payload);
+    } else if (!wasAlreadyActive) {
+        renderTabById(tabId);
+    }
 }
 
 // --- Tab strip ----------------------------------------------------------------------
@@ -116,6 +136,7 @@ function initTabs() {
             const tabName = button.dataset.tab;
             activateTab(tabName);
             setHash(tabName);
+            renderTabById(tabName);
         });
     });
 
@@ -156,24 +177,37 @@ async function fetchFeatures() {
 }
 
 /**
- * Renders every registered tab against the latest data, and shows/hides each tab's
- * strip button according to its (optional) isAvailable(data, features) check - the
- * replacement for peekaboot.js's scattered "unhide this tab once its data shows up"
- * calls, now driven by the tab contract instead of one-off code per tab.
+ * Renders one tab against the latest data, and shows/hides its strip button according
+ * to its (optional) isAvailable(data, features) check - the replacement for
+ * peekaboot.js's scattered "unhide this tab once its data shows up" calls, now driven
+ * by the tab contract instead of one-off code per tab.
  */
-function renderData() {
+function renderTab(tab) {
     if (!data) return;
-    const context = currentContext();
+    const available = tab.isAvailable ? tab.isAvailable(data, features) : true;
+    const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
+    if (button) button.classList.toggle('hidden', !available);
+    if (!available) return;
 
-    TABS.forEach(tab => {
-        const available = tab.isAvailable ? tab.isAvailable(data, features) : true;
-        const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
-        if (button) button.classList.toggle('hidden', !available);
-        if (!available) return;
+    const section = document.getElementById(`${tab.id}-tab`);
+    if (section) tab.render(section, data, currentContext());
+}
 
-        const section = document.getElementById(`${tab.id}-tab`);
-        if (section) tab.render(section, data, context);
-    });
+/** Renders every registered tab against the latest data - the 30s auto-refresh path. */
+function renderData() {
+    TABS.forEach(renderTab);
+}
+
+/**
+ * Renders a single tab by id - used wherever a tab becomes newly active (tab-strip
+ * click, hash-driven navigation) so that metrics.js/traces.js, which fetch their own
+ * data and skip that fetch while their container isn't visible (see their own doc
+ * comments), get a render the moment they're switched to instead of waiting for the
+ * next 30s auto-refresh cycle.
+ */
+function renderTabById(tabId) {
+    const tab = TABS.find(t => t.id === tabId);
+    if (tab) renderTab(tab);
 }
 
 async function fetchData() {

@@ -1,9 +1,13 @@
 /**
  * The "Metrics" tab: Micrometer meters, filterable by name or tag, each expandable to
  * its measurements. Fetched from its own endpoint (not part of the main dashboard
- * payload), so it manages its own fetch/loading state independently of the other tabs.
+ * payload). render() is called on every 30s auto-refresh cycle for every available tab
+ * regardless of which is visible (see main.js's renderData()), so the actual network
+ * fetch is skipped here unless this tab's container is the active one - main.js's
+ * renderTabById() calls render() again the moment this tab becomes active, so switching
+ * to it never waits on the next cycle.
  */
-import {groupList, badge} from '../../shared/components.js';
+import {groupList, expandedKeys, badge} from '../../shared/components.js';
 import {escapeHtml, highlightText} from '../../shared/markup.js';
 import {formatBytes} from '../../shared/format.js';
 
@@ -12,29 +16,49 @@ export const label = 'Metrics';
 
 let latestMetrics = null;
 
+// The most recent render() call's container/context - read by the persistent filter
+// input listener below (wired once, see wireFilter) so a later locale change, or a
+// later fetch, always uses fresh values instead of whatever was current the first time
+// this tab was rendered.
+let currentContainer = null;
+let currentContext = null;
+
 export function isAvailable(data, features) {
     return Boolean(features?.metrics);
 }
 
 export function render(container, data, context) {
-    wireFilter(container, context);
-    fetchAndRender(container, context);
+    currentContainer = container;
+    currentContext = context;
+    wireFilter(container);
+    fetchAndRender();
 }
 
-function wireFilter(container, context) {
+function wireFilter(container) {
     const input = container.querySelector('#metrics-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
-    input.addEventListener('input', () => renderList(container, input.value.trim(), context.locale));
+    input.addEventListener('input', () => renderList(input.value.trim()));
 }
 
 function currentFilterValue(container) {
     return container.querySelector('#metrics-filter')?.value.trim() || '';
 }
 
-async function fetchAndRender(container, context) {
+async function fetchAndRender() {
+    const container = currentContainer;
+    const context = currentContext;
+    // Not the active tab - skip the network round trip. main.js's renderTabById() calls
+    // render() (and so this) again the instant this tab is switched to.
+    if (!container.classList.contains('active')) return;
+
     const listEl = container.querySelector('#metrics-list');
-    listEl.innerHTML = '<div class="pk-loading"><div class="pk-spinner"></div><p>Loading metrics...</p></div>';
+    // Only show the loading state on the very first fetch - a background refresh of an
+    // already-populated, currently visible list must not blank it for the round trip's
+    // duration (renderList replaces the content once the response is in hand).
+    if (latestMetrics === null) {
+        listEl.innerHTML = '<div class="pk-loading"><div class="pk-spinner"></div><p>Loading metrics...</p></div>';
+    }
 
     let result;
     try {
@@ -46,12 +70,16 @@ async function fetchAndRender(container, context) {
     if (result === null) return; // superseded by a newer request
 
     latestMetrics = result?.metrics || [];
-    renderList(container, currentFilterValue(container), context.locale);
+    renderList(currentFilterValue(container));
 }
 
-function renderList(container, filterQuery, locale) {
+function renderList(filterQuery) {
+    const container = currentContainer;
+    const context = currentContext;
     const listEl = container.querySelector('#metrics-list');
     const countEl = container.querySelector('#metrics-count');
+    // Must run before the container is cleared below - see environment.js.
+    const expanded = expandedKeys(listEl);
     listEl.innerHTML = '';
 
     const metrics = latestMetrics;
@@ -89,8 +117,9 @@ function renderList(container, filterQuery, locale) {
                 list.appendChild(descEl);
             }
             metric.measurements.forEach(measurement =>
-                list.appendChild(renderMeasurement(measurement, filterQuery, metric.baseUnit, locale)));
-        }
+                list.appendChild(renderMeasurement(measurement, filterQuery, metric.baseUnit, context.locale)));
+        },
+        expandedKeys: expanded
     });
 
     decorateGroupHeaders(listEl, filteredMetrics);

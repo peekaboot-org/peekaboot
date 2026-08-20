@@ -113,7 +113,7 @@ function renderTaskRow(task, type, context) {
     targetRow.appendChild(targetEl);
 
     if (context.features?.tracing) {
-        targetRow.appendChild(renderTracesLink(context));
+        targetRow.appendChild(renderTracesLink(context, task));
     }
 
     item.appendChild(targetRow);
@@ -125,32 +125,35 @@ function renderTaskRow(task, type, context) {
     return item;
 }
 
-function timingEl(label, value) {
+function timingEl(labelText, value) {
     const el = document.createElement('span');
     el.className = 'pk-task__timing';
     const labelEl = document.createElement('span');
     labelEl.className = 'pk-task__timing-label';
-    labelEl.textContent = label;
+    labelEl.textContent = labelText;
     el.append(labelEl, document.createTextNode(' ' + value));
     return el;
 }
 
 /**
- * Plain "jump to the Traces tab" navigation - the original also pre-applied a
- * rootActionType=SCHEDULED_JOB + target filter, but traces.js owns that filter
- * state privately (see its module doc comment) and exposes no way to set it
- * from outside, so the pre-filtering does not carry over in this migration.
+ * Navigates to the Traces tab pre-filtered to this scheduler's own SCHEDULED_JOB
+ * traces, via context.navigate's third (payload) argument - routed by main.js to
+ * traces.js's applyFilter(), which owns the actual filter state (see its doc comment).
  */
-function renderTracesLink(context) {
+function renderTracesLink(context, task) {
     const link = document.createElement('a');
     link.href = '#';
     link.className = 'pk-task__traces-link';
+    // title alone would not become the accessible name here: the emoji textContent is
+    // itself real content, so it (its Unicode name) would win instead. aria-label pins
+    // the name to the same text title already carries.
     link.title = 'View traces for this scheduler';
+    link.setAttribute('aria-label', 'View traces for this scheduler');
     link.textContent = '\u{1F50D}';
     link.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        context.navigate('traces');
+        context.navigate('traces', null, {rootActionType: 'SCHEDULED_JOB', rootOperation: task.target});
     });
     return link;
 }
@@ -158,10 +161,10 @@ function renderTracesLink(context) {
 function renderException(lastException) {
     const el = document.createElement('div');
     el.className = 'pk-task__exception';
-    const label = document.createElement('span');
-    label.className = 'pk-task__exception-label';
-    label.textContent = 'Error during last Execution:';
-    el.append(label, document.createTextNode(' ' + lastException));
+    const labelEl = document.createElement('span');
+    labelEl.className = 'pk-task__exception-label';
+    labelEl.textContent = 'Error during last Execution:';
+    el.append(labelEl, document.createTextNode(' ' + lastException));
     return el;
 }
 

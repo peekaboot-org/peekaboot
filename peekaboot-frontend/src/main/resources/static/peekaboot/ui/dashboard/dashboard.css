@@ -277,9 +277,9 @@
     margin-bottom: var(--pk-space-lg);
 }
 
-/* Loggers. Also used by the scheduled-tasks summary row (.tasks-summary) - both are
+/* Loggers. Also used by the scheduled-tasks summary row (.pk-tasks-summary) - both are
    just a wrapping row of count badges, with nothing logger-specific about the layout. */
-.pk-loggers-summary, .tasks-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+.pk-loggers-summary, .pk-tasks-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
 .loggers-controls { margin-bottom: var(--pk-space-md); }
 .checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
 .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary); }
@@ -309,9 +309,9 @@
 
 /* Traces controls - the bucket buttons row and the type filter checkbox row share this
    layout, hence one shared class rather than two near-identical rules. */
-.filter-section { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
-.filter-label { font-size: var(--pk-text-xs); font-weight: 600; color: var(--pk-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.active-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); margin-bottom: var(--pk-space-md); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
+.pk-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
+.pk-filter-row__label { font-size: var(--pk-text-xs); font-weight: 600; color: var(--pk-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.pk-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); margin-bottom: var(--pk-space-md); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
 
 /* Trace list item */
 .pk-trace-item {

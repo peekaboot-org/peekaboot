@@ -1,12 +1,17 @@
 /**
  * The "Traces" tab: recent request/job/message traces, bucketed (all/errors/slow) and
  * filterable by root action type, each opening the shared trace-detail overlay when
- * clicked. Owns its own bucket control, type filter and list - nothing here is shared
- * with or driven by another tab module.
+ * clicked. Owns its bucket control, type filter and list, but exposes one entry point -
+ * applyFilter() - for another tab (via context.navigate's payload) to pre-select a type
+ * and root operation without reaching into this module's private filter state.
  *
- * Fetched from its own endpoint (not part of the main dashboard payload), so it manages
- * its own fetch state independently of the other tabs; context.client's per-path
- * generation counter is the guard against a slow older response overwriting a newer one.
+ * Fetched from its own endpoint (not part of the main dashboard payload). render() is
+ * called on every 30s auto-refresh cycle for every available tab regardless of which is
+ * visible (see main.js's renderData()), so the actual network fetch is skipped here
+ * unless this tab's container is the active one - main.js's renderTabById() calls
+ * render() again the moment this tab becomes active, so switching to it never waits on
+ * the next cycle. context.client's per-path generation counter is the guard against a
+ * slow older response overwriting a newer one.
  */
 import {badge} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
@@ -19,7 +24,15 @@ export const label = 'Traces';
 
 // Empty set means "no type filter" - all traces are shown.
 let selectedRootActionTypes = new Set();
+let currentRootOperationFilter = null;
 let currentBucket = 'all';
+
+// The most recent render() call's container/context - read by the persistent bucket/
+// filter/clear listeners below (wired once, see wireControls) so a later locale or
+// timezone change, or a later fetch, always uses fresh values instead of whatever was
+// current the first time this tab was rendered.
+let currentContainer = null;
+let currentContext = null;
 
 const BUCKET_EMPTY_MESSAGES = {
     all: 'No traces recorded',
@@ -32,11 +45,34 @@ export function isAvailable(data, features) {
 }
 
 export function render(container, data, context) {
-    wireControls(container, context);
-    fetchAndRender(container, context);
+    currentContainer = container;
+    currentContext = context;
+    wireControls(container);
+    fetchAndRender();
 }
 
-function wireControls(container, context) {
+/**
+ * Pre-selects a root action type and/or root operation, called from another tab's
+ * cross-link via context.navigate(tabId, detail, payload) - see main.js's navigate().
+ * Requires at least one prior render() (always true in practice: a link that lands here
+ * only ever renders once this tab has already rendered at least once - see
+ * scheduled-tasks.js's own isAvailable/features gating).
+ */
+export function applyFilter({rootActionType, rootOperation} = {}) {
+    if (!currentContainer) return;
+
+    selectedRootActionTypes.clear();
+    if (rootActionType) selectedRootActionTypes.add(rootActionType);
+    currentRootOperationFilter = rootOperation || null;
+
+    currentContainer.querySelectorAll('#traces-filter input').forEach(cb => {
+        cb.checked = cb.value === rootActionType;
+    });
+
+    fetchAndRender();
+}
+
+function wireControls(container) {
     if (container.dataset.wired) return;
     container.dataset.wired = 'true';
 
@@ -47,26 +83,26 @@ function wireControls(container, context) {
             currentBucket = btn.dataset.bucket;
             container.querySelectorAll('#traces-bucket .pk-btn').forEach(b =>
                 b.setAttribute('aria-pressed', String(b === btn)));
-            fetchAndRender(container, context);
+            fetchAndRender();
         });
     });
 
-    renderTypeFilterCheckboxes(container, context);
+    renderTypeFilterCheckboxes(container);
 
     const clearBtn = container.querySelector('#traces-filter-clear');
-    if (clearBtn) clearBtn.addEventListener('click', () => resetFilter(container, context));
+    if (clearBtn) clearBtn.addEventListener('click', resetFilter);
 }
 
 /** Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
     root action type no longer means editing HTML. Each checkbox's accessible name comes
     from the wrapping <label>, matching the loggers tab's checkbox-label convention. */
-function renderTypeFilterCheckboxes(container, context) {
+function renderTypeFilterCheckboxes(container) {
     const filterEl = container.querySelector('#traces-filter');
     const clearBtn = filterEl.querySelector('#traces-filter-clear');
 
     ROOT_ACTION_TYPES.forEach(type => {
-        const label = document.createElement('label');
-        label.className = 'checkbox-label';
+        const checkboxLabel = document.createElement('label');
+        checkboxLabel.className = 'checkbox-label';
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -74,32 +110,40 @@ function renderTypeFilterCheckboxes(container, context) {
         checkbox.addEventListener('change', () => {
             if (checkbox.checked) selectedRootActionTypes.add(type);
             else selectedRootActionTypes.delete(type);
-            fetchAndRender(container, context);
+            fetchAndRender();
         });
 
-        label.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
-        filterEl.insertBefore(label, clearBtn);
+        checkboxLabel.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
+        filterEl.insertBefore(checkboxLabel, clearBtn);
     });
 }
 
-function resetFilter(container, context) {
+function resetFilter() {
     selectedRootActionTypes.clear();
-    container.querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
-    fetchAndRender(container, context);
+    currentRootOperationFilter = null;
+    currentContainer.querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
+    fetchAndRender();
 }
 
-async function fetchAndRender(container, context) {
+async function fetchAndRender() {
+    const container = currentContainer;
+    const context = currentContext;
+    // Not the active tab - skip the network round trip. main.js's renderTabById() calls
+    // render() (and so this) again the instant this tab is switched to, and every
+    // control here (bucket/checkbox/clear) is only reachable while it is visible anyway.
+    if (!container.classList.contains('active')) return;
+
     const loadingEl = container.querySelector('#traces-loading');
     const listEl = container.querySelector('#traces-list');
     const noTracesEl = container.querySelector('#no-traces');
 
     loadingEl.classList.remove('hidden');
-    listEl.innerHTML = '';
     noTracesEl.classList.add('hidden');
 
     const params = {limit: 50};
     if (currentBucket !== 'all') params.bucket = currentBucket;
     if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
+    if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
 
     try {
         const result = await context.client.get('/api/traces/insights', {params});
@@ -117,15 +161,18 @@ function updateBucketCounts(container, counts, filteredCounts) {
     if (!counts) return;
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         const bucket = btn.dataset.bucket;
-        const label = bucket.charAt(0).toUpperCase() + bucket.slice(1);
+        const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
         const count = counts[bucket];
-        if (count == null) btn.textContent = label;
-        else if (filteredCounts) btn.textContent = `${label} (${filteredCounts[bucket]} / ${count})`;
-        else btn.textContent = `${label} (${count})`;
+        if (count == null) btn.textContent = bucketLabel;
+        else if (filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]} / ${count})`;
+        else btn.textContent = `${bucketLabel} (${count})`;
     });
 }
 
 function renderList(container, result, context) {
+    // Not cleared until the response is in hand (see fetchAndRender) - otherwise every
+    // 30s refresh of the currently visible tab would blank the list for the network
+    // round trip's duration, even though nothing about it changed.
     const listEl = container.querySelector('#traces-list');
     const noTracesEl = container.querySelector('#no-traces');
     listEl.innerHTML = '';
@@ -134,7 +181,7 @@ function renderList(container, result, context) {
 
     const traces = result?.traces;
     if (!traces || traces.length === 0) {
-        const isFiltered = selectedRootActionTypes.size > 0;
+        const isFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
         noTracesEl.querySelector('p').textContent = isFiltered
             ? 'No traces match the selected filters'
             : BUCKET_EMPTY_MESSAGES[currentBucket];
@@ -148,13 +195,25 @@ function renderList(container, result, context) {
 
 function updateFilterIndicator(container) {
     const filterBanner = container.querySelector('#traces-active-filter');
-    const filterText = filterBanner?.querySelector('.active-filter-text');
+    const filterText = filterBanner?.querySelector('.pk-filter-banner__text');
     const clearBtn = container.querySelector('#traces-filter-clear');
     if (!filterBanner || !filterText) return;
 
-    if (selectedRootActionTypes.size > 0) {
-        const activeFilters = Array.from(selectedRootActionTypes).map(type => rootActionLabel(type)).join(', ');
-        filterText.textContent = `Filtering: Type: ${activeFilters}`;
+    const isTypeFiltered = selectedRootActionTypes.size > 0;
+    const isOperationFiltered = currentRootOperationFilter !== null;
+    const isFiltered = isTypeFiltered || isOperationFiltered;
+
+    if (isFiltered) {
+        let filterDescription = '';
+        if (isTypeFiltered) {
+            const activeFilters = Array.from(selectedRootActionTypes).map(type => rootActionLabel(type)).join(', ');
+            filterDescription = `Type: ${activeFilters}`;
+        }
+        if (isOperationFiltered) {
+            const operationLabel = currentRootOperationFilter.split('.').pop();
+            filterDescription += filterDescription ? ` | Target: ${operationLabel}` : `Target: ${operationLabel}`;
+        }
+        filterText.textContent = `Filtering: ${filterDescription}`;
         filterBanner.classList.remove('hidden');
         if (clearBtn) clearBtn.classList.remove('hidden');
     } else {
@@ -181,13 +240,26 @@ function renderTraceItem(trace, context) {
 
     const header = document.createElement('div');
     header.className = 'pk-trace-item__header';
+    // A <div>, not a <button>: it contains its own nested interactive element (the
+    // scheduler link below) for SCHEDULED_JOB traces, and interactive content isn't
+    // allowed inside a <button> - role="button" + tabindex + Enter/Space is the ARIA APG
+    // pattern for exactly this case, matching what the health banner does for its own
+    // (non-nested) case in overview.js.
+    header.setAttribute('role', 'button');
+    header.tabIndex = 0;
     header.appendChild(renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation, context));
     header.appendChild(renderStats(trace, context));
     item.appendChild(header);
 
-    header.addEventListener('click', (e) => {
+    const activate = (e) => {
         if (e.target.closest('.pk-trace-item__scheduler-link')) return;
         if (trace.traceId) openTrace(trace.traceId, context);
+    };
+    header.addEventListener('click', activate);
+    header.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        activate(e);
     });
 
     return item;
@@ -230,13 +302,17 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation, co
     return mainLine;
 }
 
-/** Plain "jump to Scheduled Tasks" navigation - see scheduled-tasks.js's own
-    cross-link for why this direction carries no pre-applied filter either. */
+/** Plain "jump to Scheduled Tasks" navigation - the original carried no filter either
+    (navigateToScheduledTasks() took no arguments), so this is a faithful move. */
 function renderSchedulerLink(context) {
     const link = document.createElement('a');
     link.href = '#';
     link.className = 'pk-trace-item__scheduler-link';
+    // title alone would not become the accessible name here: the emoji textContent is
+    // itself real content, so it (its Unicode name) would win instead. aria-label pins
+    // the name to the same text title already carries.
     link.title = 'View Scheduled Tasks';
+    link.setAttribute('aria-label', 'View Scheduled Tasks');
     link.textContent = '\u{1F551}';
     link.addEventListener('click', (e) => {
         e.preventDefault();

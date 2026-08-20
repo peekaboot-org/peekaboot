@@ -155,18 +155,18 @@
                 <div class="pk-spinner"></div>
                 <p>Loading traces...</p>
             </div>
-            <div id="traces-bucket" class="filter-section">
+            <div id="traces-bucket" class="pk-filter-row">
                 <button class="pk-btn pk-btn--small" data-bucket="all" aria-pressed="true">All</button>
                 <button class="pk-btn pk-btn--small" data-bucket="errors" aria-pressed="false">Errors</button>
                 <button class="pk-btn pk-btn--small" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
-            <div id="traces-filter" class="filter-section">
-                <span class="filter-label">Filter by type:</span>
+            <div id="traces-filter" class="pk-filter-row">
+                <span class="pk-filter-row__label">Filter by type:</span>
                 <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
                 <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>
-            <div id="traces-active-filter" class="active-filter-banner hidden">
-                <span class="active-filter-text"></span>
+            <div id="traces-active-filter" class="pk-filter-banner hidden">
+                <span class="pk-filter-banner__text"></span>
             </div>
             <div id="traces-list"></div>
             <div id="no-traces" class="pk-empty hidden">
@@ -217,11 +217,8 @@
 
         <!-- Scheduled Tasks Tab -->
         <section class="pk-tab-panel" id="scheduled-tasks-tab" role="tabpanel" aria-labelledby="scheduled-tasks-tab-btn">
-            <div id="scheduled-tasks-summary" class="tasks-summary"></div>
+            <div id="scheduled-tasks-summary" class="pk-tasks-summary"></div>
             <div id="scheduled-tasks-groups"></div>
-            <div id="no-scheduled-tasks" class="pk-empty hidden">
-                <p>No scheduled tasks configured</p>
-            </div>
         </section>
 
         <!-- Metrics Tab -->
@@ -232,9 +229,6 @@
                 <span class="pk-filter__count" id="metrics-count"></span>
             </div>
             <div id="metrics-list"></div>
-            <div id="no-metrics" class="pk-empty hidden">
-                <p>No metrics available</p>
-            </div>
         </section>
     </main>
 
