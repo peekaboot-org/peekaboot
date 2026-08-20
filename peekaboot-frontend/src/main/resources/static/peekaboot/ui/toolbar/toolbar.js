@@ -10,7 +10,6 @@
  * trace ids from Server-Timing headers instead. Clicking the bar (or pressing
  * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
  */
-import {escapeHtml} from '../shared/markup.js';
 import {formatDurationMs} from '../shared/format.js';
 import {durationSeverity} from '../shared/severity.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
@@ -34,52 +33,59 @@ function initToolbar(data) {
 
     const bar = document.createElement('div');
     bar.className = 'pk-toolbar';
-    bar.setAttribute('role', 'button');
-    bar.setAttribute('tabindex', '0');
-    bar.setAttribute('aria-haspopup', 'dialog');
-    bar.setAttribute('aria-label', 'Open request trace details');
-    bar.setAttribute('aria-disabled', 'true');
 
+    // A real <button> carries the "open trace details" action so keyboard users get it for
+    // free (Enter/Space -> a real click event, natively) and assistive tech gets a proper
+    // control - not a role="button" div, which ARIA defines as children-presentational and
+    // could flatten the dashboard link right out of the accessibility tree. The link is a
+    // sibling, not a descendant of the button, so it stays independently reachable.
     bar.innerHTML = `
-        <div class="pk-toolbar__side">
-            <span class="pk-badge" id="pk-status"></span>
-            <span class="pk-toolbar__method" id="pk-method"></span>
-            <span class="pk-toolbar__path" id="pk-path"></span>
-            <span class="pk-toolbar__controller" id="pk-controller"></span>
-            <span class="pk-toolbar__metrics" id="pk-metrics">
-                <span class="pk-toolbar__pending">Waiting for request…</span>
+        <button type="button" class="pk-toolbar__open" aria-label="Open request trace details" aria-disabled="true">
+            <span class="pk-toolbar__side">
+                <span class="pk-badge" id="pk-status"></span>
+                <span class="pk-toolbar__method" id="pk-method"></span>
+                <span class="pk-toolbar__path" id="pk-path"></span>
+                <span class="pk-toolbar__controller" id="pk-controller"></span>
+                <span class="pk-toolbar__metrics" id="pk-metrics">
+                    <span class="pk-toolbar__pending">Waiting for request…</span>
+                </span>
             </span>
-        </div>
-        <div class="pk-toolbar__side">
-            <span class="pk-toolbar__trace" id="pk-trace">-</span>
-            <a href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard" onclick="event.stopPropagation()">\u{1F4CA}</a>
-        </div>
+            <span class="pk-toolbar__side">
+                <span class="pk-toolbar__trace" id="pk-trace">-</span>
+            </span>
+        </button>
+        <a class="pk-toolbar__link" href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard">\u{1F4CA}</a>
     `;
     shadow.appendChild(bar);
+
+    const openButton = shadow.querySelector('.pk-toolbar__open');
+    // A dedicated listener (rather than the inline onclick CSP would block on host pages
+    // whose script-src disallows 'unsafe-inline') keeps the link's own click from also
+    // triggering the bar's open-overlay handler below.
+    shadow.querySelector('.pk-toolbar__link').addEventListener('click', e => e.stopPropagation());
 
     let currentTraceId = null;
 
     function loadTrace(traceId, method, path, status) {
         currentTraceId = traceId;
-        bar.setAttribute('aria-disabled', traceId ? 'false' : 'true');
+        openButton.setAttribute('aria-disabled', traceId ? 'false' : 'true');
 
         const statusFamily = Math.floor(status / 100);
         const statusVariant = statusFamily === 2 ? 'ok' : (statusFamily === 3 ? 'warn' : 'error');
-        const safePath = escapeHtml(path);
-        const safeMethod = escapeHtml(method);
-        const safeTraceId = escapeHtml(traceId);
 
         const statusEl = shadow.getElementById('pk-status');
         statusEl.textContent = status;
         statusEl.className = 'pk-badge pk-badge--' + statusVariant;
 
-        shadow.getElementById('pk-method').textContent = safeMethod;
+        // textContent/title are safe sinks on their own; escaping before assigning to them
+        // would double-escape (e.g. a literal "&" in the path would render as "&amp;").
+        shadow.getElementById('pk-method').textContent = method;
         const pathEl = shadow.getElementById('pk-path');
-        pathEl.textContent = safePath;
-        pathEl.title = safePath;
+        pathEl.textContent = path;
+        pathEl.title = path;
 
         shadow.getElementById('pk-controller').textContent = '';
-        shadow.getElementById('pk-trace').textContent = safeTraceId ? safeTraceId.substring(0, 16) + '...' : '-';
+        shadow.getElementById('pk-trace').textContent = traceId ? traceId.substring(0, 16) + '...' : '-';
 
         const metricsEl = shadow.getElementById('pk-metrics');
         metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
@@ -181,17 +187,14 @@ function initToolbar(data) {
         loadTrace(data.traceId, data.method, data.path, data.status);
     }
 
+    // Attached to the outer bar (not just the button) so a click anywhere on it - other
+    // than the dashboard link, which stops its own propagation above - opens the overlay,
+    // matching the pre-migration behaviour. A real <button> click (mouse or native
+    // Enter/Space activation) bubbles up to this listener like any other click.
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;
         openOverlay();
-    });
-
-    bar.addEventListener('keydown', function(e) {
-        if (e.target !== bar) return;
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        bar.click();
     });
 
     // Idle mode (Swagger UI): no request of its own - intercept fetch calls and

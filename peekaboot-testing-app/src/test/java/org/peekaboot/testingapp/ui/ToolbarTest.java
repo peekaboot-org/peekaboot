@@ -1,9 +1,13 @@
 package org.peekaboot.testingapp.ui;
 
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Exercises the real toolbar.js served by the running app in a real browser. Supersedes the
@@ -29,9 +33,20 @@ class ToolbarTest extends PlaywrightTestBase {
               + ".shadowRoot.getElementById(id).textContent", id);
     }
 
+    /**
+     * Headless Chromium's own default is prefers-color-scheme: light, so a naive
+     * "storage wins" test in the light direction would pass even if the stored preference
+     * were ignored entirely. Forcing the OS preference to the opposite of what's stored
+     * makes each test fail if resolveTheme() ever stops preferring localStorage.
+     */
+    private void emulateOppositeOsPreference(ColorScheme osPreference) {
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
+    }
+
     @Test
     void toolbarFollowsTheStoredLightPreference() {
         setStoredTheme("light");
+        emulateOppositeOsPreference(ColorScheme.DARK);
         openPersonsPage();
         page.waitForSelector("#peekaboot-toolbar-host");
 
@@ -41,6 +56,7 @@ class ToolbarTest extends PlaywrightTestBase {
     @Test
     void toolbarFollowsTheStoredDarkPreference() {
         setStoredTheme("dark");
+        emulateOppositeOsPreference(ColorScheme.LIGHT);
         openPersonsPage();
         page.waitForSelector("#peekaboot-toolbar-host");
 
@@ -87,8 +103,9 @@ class ToolbarTest extends PlaywrightTestBase {
     }
 
     /**
-     * The bar is a role=button/tabindex=0 control, not a plain div: Enter must open the
-     * overlay exactly like a mouse click, without requiring a click event at all.
+     * The "open trace details" control is a real &lt;button&gt;: Enter must open the overlay
+     * exactly like a mouse click, without any custom keydown handling (native button
+     * activation dispatches a real click event that bubbles to the bar's listener).
      */
     @Test
     void theBarIsKeyboardOperableAndOpensTheOverlayOnEnter() {
@@ -98,7 +115,7 @@ class ToolbarTest extends PlaywrightTestBase {
               + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
 
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('.pk-toolbar').focus()");
+                    + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
 
         page.waitForSelector("#peekaboot-trace-overlay");
@@ -106,8 +123,13 @@ class ToolbarTest extends PlaywrightTestBase {
     }
 
     /**
-     * The dashboard link inside the bar must stay independently focusable/activatable and
-     * must not also trigger the bar's own click-to-open-overlay action (event.stopPropagation).
+     * The dashboard link is a sibling of the "open trace details" button (not its
+     * descendant), so it stays independently focusable, and its own stopPropagation keeps
+     * a click on it from also triggering the bar's action. A negative assertion right after
+     * the click would pass trivially - opening the overlay is async (dynamic import + a
+     * module fetch), so the element couldn't exist yet even if the guard were deleted. Wait
+     * for a bounded *absence* instead (expecting a timeout), then prove the negative wasn't
+     * vacuous by clicking the real open button on the same page and confirming it does work.
      */
     @Test
     void theDashboardLinkDoesNotTriggerTheBarsOwnAction() {
@@ -123,13 +145,29 @@ class ToolbarTest extends PlaywrightTestBase {
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
                     + ".shadowRoot.querySelector('.pk-toolbar a').click()");
 
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+        assertThatThrownBy(() -> page.waitForSelector("#peekaboot-trace-overlay",
+                new Page.WaitForSelectorOptions()
+                        .setState(WaitForSelectorState.ATTACHED)
+                        .setTimeout(1000)))
+                .isInstanceOf(TimeoutError.class);
+
+        // Not vacuous: the bar's own action still works on this same page.
+        page.waitForFunction(
+                "() => document.getElementById('peekaboot-toolbar-host')"
+              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                    + ".shadowRoot.querySelector('.pk-toolbar').click()");
+        page.waitForSelector("#peekaboot-trace-overlay");
+        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
 
     /**
      * /persons runs a real JPA query and dispatches to a real controller method, so the trace's
      * insights (once the retry/backoff poll picks them up) carry a real query count and a real
-     * controller name - no fetch stubbing needed.
+     * controller name - no fetch stubbing needed. This also exercises the retry loop's happy
+     * path end to end: the trace is not complete on the toolbar's first poll (fired 50ms after
+     * load), so this wait only succeeds if isTraceComplete()'s retry-until-complete logic
+     * actually re-polls and picks up the completed trace.
      */
     @Test
     void toolbarShowsQueryCountAndControllerNameAfterTraceCompletes() {
@@ -172,8 +210,14 @@ class ToolbarTest extends PlaywrightTestBase {
 
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('?')",
+              + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending') !== null",
                 null, new Page.WaitForFunctionOptions().setTimeout(5000));
+
+        boolean hasPendingElement = (Boolean) page.evaluate(
+                "() => !!document.getElementById('peekaboot-toolbar-host')"
+              + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending')");
+        assertThat(hasPendingElement).isTrue();
+        assertThat(shadowText("pk-metrics")).contains("?");
     }
 
     /**

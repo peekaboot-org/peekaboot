@@ -11,15 +11,32 @@
     color: var(--pk-text);
     border-top: 1px solid var(--pk-border);
     font-size: var(--pk-text-xs);
-    cursor: pointer;
 }
 .pk-toolbar:hover { background: var(--pk-bg-alt); }
-.pk-toolbar:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
 .pk-toolbar a { color: var(--pk-primary); text-decoration: none; }
 .pk-toolbar a:hover { text-decoration: underline; }
 .pk-toolbar a:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
 
-.pk-toolbar__side { display: flex; align-items: center; gap: 12px; }
+/* Reset to look like the plain flex row it replaces - only its semantics (a real
+   <button>) are new, not its appearance. */
+.pk-toolbar__open {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: 1;
+    min-width: 0;
+    gap: var(--pk-space-md);
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.pk-toolbar__open:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
+
+.pk-toolbar__side { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pk-toolbar__method { color: var(--pk-text-muted); }
 .pk-toolbar__path {
     color: var(--pk-text-strong);
