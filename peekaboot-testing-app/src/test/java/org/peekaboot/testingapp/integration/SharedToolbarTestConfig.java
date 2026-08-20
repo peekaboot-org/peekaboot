@@ -1,7 +1,5 @@
 package org.peekaboot.testingapp.integration;
 
-import io.micrometer.tracing.Span;
-import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -11,22 +9,26 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
 import java.time.Duration;
-import java.util.UUID;
-
-import static org.mockito.Answers.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 
 /**
  * Shared test configuration for dev toolbar integration tests.
- * Supplies a deterministic mock {@link Tracer} and a small-capacity
+ * Supplies a deterministic {@link Tracer} and a small-capacity
  * {@link TraceStore}; the toolbar-injection beans themselves
  * (ToolbarDataProvider, the devToolbarFilter registration) come from the
  * real {@code DevToolbarAutoConfiguration} now that these tests boot the
  * real sample app, so this config no longer redefines them.
+ *
+ * <p>A stand-in {@code Tracer} is used rather than the real, auto-configured one:
+ * {@link DashboardTraceViewTest}'s exact trace-count assertions need the
+ * {@code TraceStore} to contain only what the test put there, and the real tracer
+ * would also capture the app's own spans (e.g. the JDBC calls each test's
+ * {@code setUp()} makes) into the same store.
  */
 @TestConfiguration
 public class SharedToolbarTestConfig {
+
+    private static final String FIXED_TRACE_ID = "cafebabecafebabecafebabecafebabe";
+    private static final String FIXED_SPAN_ID = "deadbeefdeadbeef";
 
     @Bean
     TraceStore traceStore() {
@@ -41,20 +43,6 @@ public class SharedToolbarTestConfig {
     @Bean
     @ConditionalOnMissingBean
     Tracer testTracer() {
-        // Deep stubs so the real datasource-micrometer instrumentation (a genuine
-        // main dependency here, unlike under the old backend-only fixture) can call
-        // unstubbed methods like spanBuilder() without NPEs; only currentSpan() is
-        // given a fixed, meaningful answer below.
-        Tracer tracer = mock(Tracer.class, RETURNS_DEEP_STUBS);
-        Span span = mock(Span.class);
-        TraceContext context = mock(TraceContext.class);
-
-        // Generate a valid hex trace ID for each call
-        lenient().when(context.traceId()).thenAnswer(inv -> UUID.randomUUID().toString().replace("-", "").substring(0, 32));
-        lenient().when(context.spanId()).thenAnswer(inv -> UUID.randomUUID().toString().replace("-", "").substring(0, 16));
-        lenient().when(span.context()).thenReturn(context);
-        lenient().when(tracer.currentSpan()).thenReturn(span);
-
-        return tracer;
+        return new DeterministicTracer(FIXED_TRACE_ID, FIXED_SPAN_ID);
     }
 }

@@ -14,7 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -28,12 +27,18 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Asserts on the dashboard's trace API against a {@link TraceStore} that holds only
+ * what the test itself injects. Two things keep it that way: {@link #setUp} clears the
+ * store before every single test, and {@link SharedToolbarTestConfig}'s stand-in
+ * {@code Tracer} means the app's own request handling never produces a span for the
+ * exporter to publish.
+ */
 @SpringBootTest(
     classes = {TestingApp.class, SharedToolbarTestConfig.class},
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
 @ActiveProfiles("test")
-@DirtiesContext(classMode = DirtiesContext.ClassMode.BEFORE_CLASS)
 class DashboardTraceViewTest {
 
     @LocalServerPort
