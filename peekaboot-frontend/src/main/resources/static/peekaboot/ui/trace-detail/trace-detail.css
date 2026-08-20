@@ -170,10 +170,10 @@
 /* Request tab styles */
 .pk-request-section { margin-bottom: 24px; }
 .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.pk-request-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.pk-request-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
-.pk-request-table td:first-child { width: 200px; color: var(--pk-text-muted); }
-.pk-request-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
+.pk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pk-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
+.pk-table td:first-child { width: 200px; color: var(--pk-text-muted); }
+.pk-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 .pk-request-masked { color: var(--pk-text-muted); font-style: italic; }
 .pk-controller-info { font-family: var(--pk-font-mono); font-size: 13px; color: var(--pk-text); padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
@@ -186,7 +186,7 @@
 .pk-query__duration--slow { color: var(--pk-warning); }
 .pk-query__duration--very-slow { color: var(--pk-danger); }
 .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success); font-size: 11px; }
-.pk-query-sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
+.pk-query__sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 .pk-query-params { margin-top: 8px; font-size: 11px; color: var(--pk-text-muted); }
 
 /* Logs tab styles */

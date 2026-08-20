@@ -3,49 +3,47 @@ package org.peekaboot.testingapp.integration;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.repository.PersonRepository;
-import org.htmlunit.BrowserVersion;
-import org.htmlunit.WebClient;
-import org.htmlunit.html.HtmlPage;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.client.RestTestClient;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Asserts on the toolbar-data injected into the server-rendered /persons page - not on
+ * any overlay/toolbar JS behaviour, so a plain HTTP client is enough; no browser needed.
+ *
+ * These four tests used to drive HtmlUnit. Everything HtmlUnit-specific that lived here
+ * (toolbarHostShouldBeVisible, toolbarScriptShouldLazyLoadTraceDetailScript,
+ * clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript, and the white-box
+ * assertion on toolbar.js's source text) was already removed in an earlier task - see
+ * org.peekaboot.testingapp.ui.ToolbarTest for the real-browser coverage that superseded
+ * them, in particular clickingTheBarOpensTheTraceOverlay.
+ */
 @SpringBootTest(
     classes = {TestingApp.class, SharedToolbarTestConfig.class},
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT
 )
+@AutoConfigureRestTestClient
 @ActiveProfiles("test")
 class TraceDetailOverlayTest {
 
-    @LocalServerPort
-    private int port;
+    @Autowired
+    private RestTestClient restTestClient;
 
     @Autowired
     private PersonRepository personRepository;
 
-    private WebClient webClient;
-    private String baseUrl;
-    private CollectingJavaScriptErrorListener jsErrors;
-
     @BeforeEach
     void setUp() {
-        baseUrl = "http://localhost:" + port;
-
-        webClient = new WebClient(BrowserVersion.CHROME);
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setJavaScriptEnabled(true);
-        webClient.getOptions().setCssEnabled(false);
-        webClient.getOptions().setThrowExceptionOnScriptError(false);
-
         personRepository.deleteAll();
         Person person = new Person();
         person.setFirstName("Test");
@@ -54,56 +52,14 @@ class TraceDetailOverlayTest {
         personRepository.save(person);
     }
 
-    @AfterEach
-    void tearDown() {
-        if (webClient != null) {
-            webClient.close();
-        }
-        if (jsErrors != null) {
-            jsErrors.assertNoUnexpectedErrors();
-        }
+    @Test
+    void injectedPageShouldLoadExternalToolbarScript() {
+        assertThat(getPersonsPageHtml()).contains("/peekaboot/ui/toolbar/toolbar.js");
     }
 
     @Test
-    void injectedPageShouldLoadExternalToolbarScript() throws Exception {
-        assertThat(getPersonsPageContent()).contains("/peekaboot/ui/toolbar/toolbar.js");
-    }
-
-    /*
-     * toolbarHostShouldBeVisible, toolbarScriptShouldLazyLoadTraceDetailScript and
-     * clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript used to live here.
-     *
-     * toolbarHostShouldBeVisible asserted that the raw server HTML (via page.asXml(), no
-     * JS executed) already contained "peekaboot-toolbar-host". That was only ever true by
-     * accident: the toolbar host div is created by toolbar.js at runtime, not present in
-     * the server-rendered HTML at all - the assertion passed previously only because
-     * HtmlUnit executed the old classic toolbar.js far enough to append the host div
-     * before failing on the unimplemented attachShadow(). Now that toolbar.js is
-     * `<script type="module">`, HtmlUnit's engine does not execute it at all (no host div,
-     * no error either - the element is simply not run), so there is no longer any HtmlUnit
-     * signal to assert on here.
-     *
-     * toolbarScriptShouldLazyLoadTraceDetailScript asserted that toolbar.js's source text
-     * contained the literal string "data.basePath + '/ui/trace-detail/trace-detail.js'" -
-     * a white-box check on implementation text, not behaviour, and toolbar.js now opens
-     * the overlay via `await import('../trace-detail/trace-detail.js')` instead, so the
-     * string is gone.
-     *
-     * clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript loaded the real
-     * toolbar.js source into an HtmlUnit page via page.executeJavaScript(toolbarJs) and
-     * drove window.__peekaboot.loadTrace() and a '.peekaboot-bar' click directly.
-     * toolbar.js is now an ES module (top-level import statements, a .pk-toolbar class,
-     * no window.__peekaboot), which HtmlUnit's JS engine cannot parse as a classic script.
-     *
-     * All three are superseded by org.peekaboot.testingapp.ui.ToolbarTest - in particular
-     * clickingTheBarOpensTheTraceOverlay - real Playwright tests that drive the actual
-     * served toolbar.js/trace-detail.js in a real browser end to end, including proving
-     * the host div appears (every ToolbarTest test waits on #peekaboot-toolbar-host).
-     */
-
-    @Test
-    void traceIdShouldMatchApiResponse() throws Exception {
-        String pageContent = getPersonsPageContent();
+    void traceIdShouldMatchApiResponse() {
+        String pageContent = getPersonsPageHtml();
 
         // Extract traceId from the peekaboot-toolbar-data script element
         Pattern traceIdPattern = Pattern.compile("\"traceId\":(null|\"([a-f0-9]+)\")");
@@ -117,14 +73,14 @@ class TraceDetailOverlayTest {
     }
 
     @Test
-    void toolbarShouldShowStatusCode() throws Exception {
+    void toolbarShouldShowStatusCode() {
         // The toolbar JSON should contain status code
-        assertThat(getPersonsPageContent()).contains("\"status\":200");
+        assertThat(getPersonsPageHtml()).contains("\"status\":200");
     }
 
     @Test
-    void toolbarShouldShowBasePath() throws Exception {
-        String pageContent = getPersonsPageContent();
+    void toolbarShouldShowBasePath() {
+        String pageContent = getPersonsPageHtml();
 
         // Extract basePath from toolbar JSON
         Pattern basePathPattern = Pattern.compile("\"basePath\":\"([^\"]+)\"");
@@ -136,8 +92,14 @@ class TraceDetailOverlayTest {
         assertThat(basePath).as("BasePath should be /peekaboot").isEqualTo("/peekaboot");
     }
 
-    private String getPersonsPageContent() throws Exception {
-        HtmlPage page = webClient.getPage(baseUrl + "/persons");
-        return page.asXml();
+    private String getPersonsPageHtml() {
+        return restTestClient.get()
+            .uri("/persons")
+            .accept(MediaType.TEXT_HTML)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(String.class)
+            .returnResult()
+            .getResponseBody();
     }
 }

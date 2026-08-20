@@ -242,4 +242,31 @@ class TraceOverlayTest extends PlaywrightTestBase {
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
+
+    @Test
+    void everyOverlayTabRendersContent() {
+        openOverlayFromToolbar();
+
+        for (String tab : java.util.List.of("request", "spans", "queries", "logs")) {
+            page.evaluate("id => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
+
+            String content = (String) page.evaluate(
+                    "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                  + ".querySelector('#pk-tab-content').innerHTML");
+            assertThat(content).as("tab %s renders something", tab).isNotEmpty();
+        }
+    }
+
+    @Test
+    void queriesTabListsTheJdbcQueryFromThePersonsPage() {
+        openOverlayFromToolbar();
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+
+        String sql = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('.pk-query__sql')?.textContent ?? ''");
+        assertThat(sql.toLowerCase()).contains("select");
+    }
 }

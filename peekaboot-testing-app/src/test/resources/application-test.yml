@@ -27,6 +27,13 @@ management:
   tracing:
     sampling:
       probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        # Default is 5s (OTel SDK's BatchSpanProcessor); Playwright tests open the trace
+        # overlay right after page load, well inside that window, so spans/queries/logs
+        # would not have reached the TraceStore yet. Shortened so exports are prompt.
+        schedule-delay: 50ms
 
 logging:
   level:
