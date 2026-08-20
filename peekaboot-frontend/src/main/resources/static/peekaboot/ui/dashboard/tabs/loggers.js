@@ -84,11 +84,6 @@ function renderGroups(container, filterQuery) {
         return;
     }
 
-    // See environment.js for why filtering forces every surviving group open.
-    const effectiveExpanded = filterQuery
-        ? new Set(filteredPackages.map(group => group.packageName))
-        : expanded;
-
     groupList(target, filteredPackages, {
         key: group => group.packageName,
         header: group => ({
@@ -98,7 +93,7 @@ function renderGroups(container, filterQuery) {
         }),
         items: (group, list) => group.loggers.forEach(logger =>
             list.appendChild(renderLoggerRow(logger, filterQuery))),
-        expandedKeys: effectiveExpanded
+        expandedKeys: expanded
     });
 
     // pk-group__name defaults to the primary-coloured style; logger package names use

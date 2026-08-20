@@ -64,11 +64,6 @@ function renderGroups(container, filterQuery) {
         return;
     }
 
-    // See environment.js for why filtering forces every surviving group open.
-    const effectiveExpanded = filterQuery
-        ? new Set(filteredGroups.map(group => group.prefix))
-        : expanded;
-
     groupList(target, filteredGroups, {
         key: group => group.prefix,
         header: group => ({
@@ -78,6 +73,6 @@ function renderGroups(container, filterQuery) {
         }),
         items: (group, list) => group.properties.forEach(prop => list.appendChild(
             kvRow(prop.key, prop.value, {sensitive: isSensitiveKey(prop.key), highlight: filterQuery}))),
-        expandedKeys: effectiveExpanded
+        expandedKeys: expanded
     });
 }

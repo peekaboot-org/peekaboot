@@ -110,6 +110,12 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.isVisible("#property-sources .pk-group__list")).isTrue();
     }
 
+    /**
+     * Filtering never auto-expands a group - a matching group renders collapsed just
+     * like an unfiltered one, so the header must be clicked open before a <mark>
+     * inside its list becomes visible. Same pattern as configTabMasksSensitiveValues
+     * below.
+     */
     @Test
     void environmentFilterHighlightsMatches() {
         openDashboard();
@@ -117,8 +123,10 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#property-sources .pk-group");
 
         page.fill("#env-filter", "server.port");
-        page.waitForSelector("#property-sources mark");
+        page.waitForTimeout(300);
+        page.click("#property-sources .pk-group__header");
 
+        page.waitForSelector("#property-sources mark");
         assertThat(page.textContent("#property-sources mark")).contains("server.port");
     }
 
@@ -154,9 +162,12 @@ class DashboardTabsTest extends PlaywrightTestBase {
      * Filters on "key", not "password": the test profile's H2 datasource has no bound
      * username/password (Spring's /configprops report omits unset properties entirely,
      * rather than masking them), so no property in the real payload ever contains
-     * "password" to filter on. "key" does occur for real (e.g. management.observations'
-     * "keyValues") and is masked by the same sensitive-key pattern, so it exercises the
-     * same masking path against actual data instead of an unreachable filter term.
+     * "password" to filter on. "key" does occur for real - confirmed via a temporary
+     * debug dump of the live /api/actuator/all/insights response against this exact
+     * test profile: the "management.observations" group's "keyValues" property (and
+     * "springdoc"'s "writerWithOrderByKeys") both survive the filter, and both are
+     * masked by the same sensitive-key pattern - so this exercises the real masking
+     * path against actual data instead of an unreachable filter term.
      */
     @Test
     void configTabMasksSensitiveValues() {

@@ -57,13 +57,6 @@ function renderGroups(container, filterQuery) {
         return;
     }
 
-    // While filtering, every surviving group has a match by construction - open them
-    // all so the highlighted hits are visible without an extra click. With no filter,
-    // fall back to whatever the user had expanded before this re-render.
-    const effectiveExpanded = filterQuery
-        ? new Set(filteredSources.map(source => source.name))
-        : expanded;
-
     groupList(target, filteredSources, {
         key: source => source.name,
         header: source => ({
@@ -73,7 +66,7 @@ function renderGroups(container, filterQuery) {
         }),
         items: (source, list) => source.properties.forEach(prop =>
             list.appendChild(kvRow(prop.key, formatValue(prop.value), {highlight: filterQuery}))),
-        expandedKeys: effectiveExpanded
+        expandedKeys: expanded
     });
 }
 
