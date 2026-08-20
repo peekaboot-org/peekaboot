@@ -131,14 +131,22 @@ function showTab(tabId) {
 }
 
 function initTabs() {
+    const initialTabId = resolveTabId(parseHash().tab);
     mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
         onSelect: tabId => {
             showTab(tabId);
             setHash(tabId);
             renderTabById(tabId);
         },
-        initial: resolveTabId(parseHash().tab)
+        initial: initialTabId
     });
+    // tabStrip's own initial select() is silent (button-only), so on a deep-linked
+    // boot (e.g. "#environment") the panel would otherwise stay on Dashboard until
+    // the deferred handleHashChange() below runs - a one-macrotask window where the
+    // accessibility tree (aria-selected) and the visible panel disagree. Setting the
+    // panel synchronously here keeps them atomic; handleHashChange() still runs to
+    // do the actual data render (and re-showTab()s the same id - a harmless no-op).
+    showTab(initialTabId);
 
     window.addEventListener('hashchange', handleHashChange);
 

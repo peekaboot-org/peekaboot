@@ -124,6 +124,8 @@ export function expandedKeys(container) {
 }
 
 /**
+ * tabStrip(container, tabs, {onSelect, initial}) -> {select(id, {focus, silent})}
+ *
  * An ARIA tab strip with roving tabindex: only the selected tab stays in the tab
  * order (tabIndex 0; every other tab -1), and Arrow/Home/End move between tabs,
  * wrapping at the ends and skipping any tab currently hidden (offsetParent ===

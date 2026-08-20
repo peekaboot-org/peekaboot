@@ -276,9 +276,15 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
-     * Inspects the real accessibility tree for the overlay's strip too - proves the
-     * tab count/label TABS carries (dead in the hand-written markup this replaced)
-     * are genuinely rendered, not just present in the array.
+     * Inspects the real accessibility tree for the overlay's strip too - confirms it
+     * exposes as an actual tablist with the right tabs and selected state, same as
+     * the dashboard's equivalent check. This alone does NOT prove TABS.count is
+     * load-bearing: the pre-change hand-rolled markup rendered an identical
+     * "Queries 1" from its own separately-computed queryCount, so this snapshot
+     * would very likely have passed before this change too. The actual proof is
+     * that render() no longer has that duplicate template text at all - a
+     * code-level fact (see the task report's TDD section for the discriminating
+     * evidence).
      */
     @Test
     void overlayTabStripExposesAsARealTablistInTheAccessibilityTree() {

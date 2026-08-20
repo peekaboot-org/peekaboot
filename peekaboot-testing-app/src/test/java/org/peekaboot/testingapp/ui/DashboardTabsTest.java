@@ -166,6 +166,28 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * Regression guard for a real bug tabStrip()'s {silent: true} option exists to
+     * fix: handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
+     * so that syncing the strip's visual selection on a hash-driven boot doesn't also
+     * re-trigger onSelect() - which calls setHash(tabId) with no detail argument, and
+     * would silently strip the "/deadbeef" segment off a URL like "#traces/deadbeef"
+     * before expandTraceById() even runs. Deep-linking straight to a trace detail URL
+     * (not clicking into it - clickingATraceOpensTheOverlayAndDeepLinks below goes
+     * through navigate(), whose own setHash(resolvedId, detail) call passes the real
+     * detail through and would self-correct the hash even without silent) must land
+     * with the URL intact once routing settles.
+     */
+    @Test
+    void deepLinkingDirectlyToATraceDetailPreservesTheDetailSegment() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')"
+              + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+
+        assertThat(page.url()).endsWith("#traces/deadbeef");
+    }
+
+    /**
      * The health banner used to be a click-handled <div> - not reachable by keyboard at
      * all. It is now a real <button> with aria-expanded/aria-controls; this proves Space
      * actually expands it, not just that a mouse click does (which every other test here
