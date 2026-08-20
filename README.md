@@ -104,6 +104,18 @@ peekaboot:
       slow-span-threshold-ms: 200      # Adjust slow span threshold
 ```
 
+### Theming
+
+The dashboard, the debug toolbar, and the trace-detail overlay all render from the same
+set of `--pk-*` CSS custom properties, defined once in `tokens.css`. Overriding those
+properties re-themes all three surfaces — there is nothing else to override; component
+styles and layout are never hardcoded outside of them.
+
+The toolbar and overlay follow the dashboard's light/dark choice automatically: all
+three surfaces are served same-origin and read the same `localStorage` key, so toggling
+the theme on the dashboard is picked up by the toolbar and overlay without any explicit
+wiring.
+
 ## Auto-Configured Defaults
 
 Peekaboot sets defaults for full observability. Any application property

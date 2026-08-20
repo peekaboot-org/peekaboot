@@ -161,32 +161,61 @@ reachable via HTTP while the dashboard has full data.
 
 ## peekaboot-frontend
 
-Static resources served from `/peekaboot/ui/`.
+Static resources served from `/peekaboot/ui/`, backing three UI surfaces — the
+standalone dashboard, the dev toolbar injected into host-app pages, and the trace-detail
+overlay — that share one design system. See `peekaboot-frontend/README.md` for the full
+picture (the shared-layer split, the shadow-DOM delivery mechanism, theme resolution,
+accessibility invariants, and the ids the test suite depends on); this section covers
+only the file layout and the headline decisions.
 
 ### File Structure
 
 ```
 static/peekaboot/ui/
 ├── assets/
-│   └── peekaboot.css       # All styling (dark/light themes)
-├── dashboard/
-│   ├── index.html          # Main dashboard page
-│   └── peekaboot.js        # Dashboard logic
+│   ├── tokens.css          # Design tokens (--pk-* custom properties) — the re-theme point
+│   ├── base.css             # Reset + bare element defaults
+│   └── components.css       # .pk-* component primitives (badge, group, kv, meter, tabs, ...)
 ├── shared/
-│   └── peekaboot-utils.js  # Shared utilities
-├── toolbar/
-│   └── toolbar.js          # Collapsed toolbar bar (loaded via injected script tag)
-└── trace-detail/
-    └── trace-detail.js     # Standalone trace viewer
+│   ├── api.js                # createClient() — fetch wrapper with per-path generation guards
+│   ├── components.js         # JS builders behind the .pk-* primitives
+│   ├── format.js              # Duration/byte/date formatting
+│   ├── markup.js               # escapeHtml, highlightText, isSensitiveKey
+│   ├── root-actions.js         # Root action type -> icon/label map
+│   ├── severity.js             # Duration/health severity thresholds (SLOW_MS, VERY_SLOW_MS)
+│   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
+│   ├── span-names.js           # spanId -> name lookup, shared by overlay tabs
+│   └── theme.js                # localStorage-backed theme resolution shared across surfaces
+├── dashboard/
+│   ├── index.html            # Dashboard document
+│   ├── dashboard.css         # Dashboard-only chrome
+│   ├── main.js                # Bootstrap: tab registry, hash routing, auto-refresh
+│   └── tabs/*.js               # One module per tab (8), each exporting id/label/render
+├── trace-detail/
+│   ├── trace-detail.css      # Overlay chrome
+│   ├── trace-detail.js        # Shell: open()/close(), tab wiring (shadow-rooted)
+│   └── tabs/*.js               # One module per tab (4: request, spans, queries, logs)
+└── toolbar/
+    ├── toolbar.css            # Toolbar chrome
+    └── toolbar.js              # Collapsed bar (shadow-rooted; lazy-imports trace-detail.js)
 ```
 
 ### Design Principles
 
-- **No build step**: Plain HTML/CSS/JS
-- **Shadow DOM**: Toolbar isolated from host app styles
+- **No build step**: Plain HTML/CSS/JS, ES modules
+- **Shared design system, three surfaces**: `assets/tokens.css`/`base.css`/`components.css`
+  are consumed by the dashboard document directly and by the toolbar's and overlay's
+  shadow roots via `attachSharedStyles()` — a "doubled selector" (`:root, :host { ... }`)
+  lets the identical stylesheet apply in both contexts. Before this, all three surfaces
+  duplicated palettes, `escapeHtml`, duration thresholds, and the collapsible-group CSS
+  independently.
+- **Shadow DOM**: Toolbar and trace-detail overlay isolated from host app styles
 - **Mobile-first**: Responsive design
-- **Lazy loading**: Trace-detail overlay JS loaded only on first use
-- **Theme support**: CSS variables for dark/light modes
+- **Lazy loading**: Trace-detail overlay JS loaded only on first use (dynamic `import()`
+  from `toolbar.js`; eager static import from `dashboard/main.js`)
+- **Theme support**: `--pk-*` CSS custom properties for dark/light modes, resolved once
+  in `shared/theme.js` from `localStorage['peekaboot-theme']` (falling back to
+  `prefers-color-scheme`) and shared across all three same-origin surfaces
 
 ## peekaboot-spring-boot-autoconfigure
 
@@ -321,6 +350,13 @@ ActuatorInsightsResponse
 | Integration | `*IntegrationTest.java` | Spring Boot context |
 | AutoConfig | `*AutoConfigurationTest.java` | Conditional bean loading |
 
+Any test that boots a Spring context — `@SpringBootTest`, including the Playwright UI
+suite under `org.peekaboot.testingapp.ui` — lives in `peekaboot-testing-app`, not
+`peekaboot-backend`. `peekaboot-backend`'s own test suite is pure unit tests with no
+Spring context; `peekaboot-frontend` currently has no test sources of its own (its
+behaviour is covered by the Playwright suite in `peekaboot-testing-app`, which boots the
+sample app and drives the real dashboard/toolbar/overlay in a headless browser).
+
 ### Testing Auto-Configuration
 
 Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests:
@@ -366,6 +402,11 @@ cd peekaboot-testing-app && mvn spring-boot:run
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application
 8. **Lowest-priority defaults**: Apps can always override peekaboot settings
+9. **Shared frontend design system, one override point**: The dashboard, toolbar, and
+   trace-detail overlay consume the same `tokens.css`/`base.css`/`components.css` (see
+   "peekaboot-frontend" above and `peekaboot-frontend/README.md`) instead of each
+   maintaining its own palette and primitives. `tokens.css` is the single documented
+   place a consuming application overrides to re-theme every surface.
 
 ## Auto-Configuration Ordering
 
