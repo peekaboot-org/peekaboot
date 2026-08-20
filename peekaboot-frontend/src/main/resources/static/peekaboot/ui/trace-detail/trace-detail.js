@@ -88,6 +88,9 @@ export function openTraceDetail(traceId, options = {}) {
 }
 
 export function closeTraceDetail() {
+    // Invalidates any fetchAndRender() still in flight from the overlay just removed, so
+    // it cannot re-render into (or re-register an ESC listener for) a detached node.
+    currentSession += 1;
     const existing = document.getElementById('peekaboot-trace-overlay');
     if (existing) {
         existing.remove();
@@ -120,7 +123,12 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady})
         render(content, trace);
     } catch (error) {
         if (session !== currentSession) return;
-        content.innerHTML = `<div class="pk-overlay"><div class="pk-overlay__error">`
+        // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
+        // which never was one either - but this screen is reachable and has a working
+        // control, so it needs a role and a name at minimum for a screen-reader user to
+        // know what landed on the page.
+        content.innerHTML = `<div class="pk-overlay" role="alertdialog" aria-modal="true" aria-label="Failed to load trace">`
+            + `<div class="pk-overlay__error">`
             + `Failed to load trace: ${escapeHtml(error.message)}<br><br>`
             + `<button type="button" class="pk-btn">Close</button></div></div>`;
         content.querySelector('.pk-overlay__error button').addEventListener('click', closeTraceDetail);
