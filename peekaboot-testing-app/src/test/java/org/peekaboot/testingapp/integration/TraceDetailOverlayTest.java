@@ -4,7 +4,6 @@ import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.repository.PersonRepository;
 import org.htmlunit.BrowserVersion;
-import org.htmlunit.MockWebConnection;
 import org.htmlunit.WebClient;
 import org.htmlunit.html.HtmlPage;
 import org.junit.jupiter.api.AfterEach;
@@ -15,7 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.net.URL;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,89 +65,41 @@ class TraceDetailOverlayTest {
     }
 
     @Test
-    void toolbarHostShouldBeVisible() throws Exception {
-        // The toolbar is injected as a div with id peekaboot-toolbar-host
-        assertThat(getPersonsPageContent()).contains("peekaboot-toolbar-host");
-    }
-
-    @Test
     void injectedPageShouldLoadExternalToolbarScript() throws Exception {
         assertThat(getPersonsPageContent()).contains("/peekaboot/ui/toolbar/toolbar.js");
     }
 
-    @Test
-    void toolbarScriptShouldLazyLoadTraceDetailScript() throws Exception {
-        // The toolbar script dynamically builds the path using data.basePath
-        String toolbarJs = webClient.getPage(baseUrl + "/peekaboot/ui/toolbar/toolbar.js")
-                .getWebResponse().getContentAsString();
-        assertThat(toolbarJs).contains("data.basePath + '/ui/trace-detail/trace-detail.js'");
-    }
-
-    @Test
-    void clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript() throws Exception {
-        // Real attachShadow() isn't implemented by HtmlUnit's JS engine (the
-        // known, accepted "Cannot find function attachShadow" noise), so the
-        // toolbar's IIFE aborts before registering its click handler on a page
-        // fetched directly from the running server. Drive the *real*, live
-        // toolbar.js content served by this app against a synthetic page with
-        // the same shadow-DOM shim the frontend module's ToolbarScriptTest
-        // uses, so the click -> lazy-load -> onload chain is actually
-        // exercised end-to-end instead of only substring-checked. The real
-        // trace-detail.js uses syntax HtmlUnit's JS engine can't parse (same
-        // documented incompatibility as toolbar.js), so a harmless stub
-        // stands in for it here — this test's scope is the toolbar's lazy-load
-        // wiring, not trace-detail.js's own internal correctness.
-        String toolbarJs = webClient.getPage(baseUrl + "/peekaboot/ui/toolbar/toolbar.js")
-                .getWebResponse().getContentAsString();
-
-        webClient.close();
-        webClient = new WebClient();
-        jsErrors = CollectingJavaScriptErrorListener.installOn(webClient);
-        webClient.getOptions().setCssEnabled(false);
-        MockWebConnection connection = new MockWebConnection();
-        connection.setDefaultResponse(
-                "<html><head></head><body>"
-                + "<script id=\"peekaboot-toolbar-data\" type=\"application/json\">"
-                + "{\"method\":\"GET\",\"path\":\"/persons\",\"status\":200,\"traceId\":null,\"basePath\":\"/peekaboot\"}"
-                + "</script>"
-                + "</body></html>");
-        connection.setResponse(new URL("http://localhost/peekaboot/ui/trace-detail/trace-detail.js"),
-                "window.PeekabootTraceDetail = { open: function(traceId, opts) { window.__openedWith = traceId; } };",
-                "text/javascript");
-        webClient.setWebConnection(connection);
-        HtmlPage page = webClient.getPage("http://localhost/test.html");
-
-        page.executeJavaScript("""
-                Element.prototype.attachShadow = function() {
-                    this.getElementById = function(id) { return this.querySelector('#' + id); };
-                    return this;
-                };
-                """);
-        // No native fetch in this HtmlUnit configuration; loadTrace()'s
-        // background poll must not blow up with a ReferenceError.
-        page.executeJavaScript("window.fetch = function() { return Promise.reject(new Error('no network')); };");
-        page.executeJavaScript(toolbarJs);
-
-        page.executeJavaScript("window.__peekaboot.loadTrace('trace-xyz', 'GET', '/persons', 200);");
-
-        String scriptSelector =
-                "document.head.querySelector('script[src*=\"trace-detail\"]')";
-        Boolean scriptPresentBeforeClick = (Boolean) page.executeJavaScript(
-                scriptSelector + " !== null").getJavaScriptResult();
-        assertThat(scriptPresentBeforeClick).as("script absent before click").isFalse();
-
-        page.executeJavaScript(
-                "document.querySelector('.peekaboot-bar').dispatchEvent(new MouseEvent('click', {bubbles: true}));");
-        webClient.waitForBackgroundJavaScript(2000);
-
-        String scriptSrc = (String) page.executeJavaScript(
-                "(function() { const s = " + scriptSelector + "; return s ? s.src : null; })()"
-        ).getJavaScriptResult();
-        assertThat(scriptSrc).as("script present after click").endsWith("/peekaboot/ui/trace-detail/trace-detail.js");
-
-        String openedWith = (String) page.executeJavaScript("window.__openedWith").getJavaScriptResult();
-        assertThat(openedWith).isEqualTo("trace-xyz");
-    }
+    /*
+     * toolbarHostShouldBeVisible, toolbarScriptShouldLazyLoadTraceDetailScript and
+     * clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript used to live here.
+     *
+     * toolbarHostShouldBeVisible asserted that the raw server HTML (via page.asXml(), no
+     * JS executed) already contained "peekaboot-toolbar-host". That was only ever true by
+     * accident: the toolbar host div is created by toolbar.js at runtime, not present in
+     * the server-rendered HTML at all - the assertion passed previously only because
+     * HtmlUnit executed the old classic toolbar.js far enough to append the host div
+     * before failing on the unimplemented attachShadow(). Now that toolbar.js is
+     * `<script type="module">`, HtmlUnit's engine does not execute it at all (no host div,
+     * no error either - the element is simply not run), so there is no longer any HtmlUnit
+     * signal to assert on here.
+     *
+     * toolbarScriptShouldLazyLoadTraceDetailScript asserted that toolbar.js's source text
+     * contained the literal string "data.basePath + '/ui/trace-detail/trace-detail.js'" -
+     * a white-box check on implementation text, not behaviour, and toolbar.js now opens
+     * the overlay via `await import('../trace-detail/trace-detail.js')` instead, so the
+     * string is gone.
+     *
+     * clickingToolbarShouldActuallyLazyLoadAndOpenTraceDetailScript loaded the real
+     * toolbar.js source into an HtmlUnit page via page.executeJavaScript(toolbarJs) and
+     * drove window.__peekaboot.loadTrace() and a '.peekaboot-bar' click directly.
+     * toolbar.js is now an ES module (top-level import statements, a .pk-toolbar class,
+     * no window.__peekaboot), which HtmlUnit's JS engine cannot parse as a classic script.
+     *
+     * All three are superseded by org.peekaboot.testingapp.ui.ToolbarTest - in particular
+     * clickingTheBarOpensTheTraceOverlay - real Playwright tests that drive the actual
+     * served toolbar.js/trace-detail.js in a real browser end to end, including proving
+     * the host div appears (every ToolbarTest test waits on #peekaboot-toolbar-host).
+     */
 
     @Test
     void traceIdShouldMatchApiResponse() throws Exception {
