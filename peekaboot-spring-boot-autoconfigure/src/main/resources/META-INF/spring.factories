@@ -3,3 +3,6 @@ org.peekaboot.autoconfigure.PeekabootDefaultsEnvironmentPostProcessor
 
 org.springframework.boot.actuate.autoconfigure.endpoint.condition.EndpointExposureOutcomeContributor=\
 org.peekaboot.autoconfigure.PeekabootEndpointExposureOutcomeContributor
+
+org.springframework.context.ApplicationListener=\
+org.peekaboot.autoconfigure.LogbackCaptureReinstaller

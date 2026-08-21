@@ -22,6 +22,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Auto-configuration for the development toolbar.
  * Configures filters for toolbar injection and request/log capture.
@@ -83,6 +86,16 @@ public class DevToolbarAutoConfiguration {
     }
 
     public static class LogbackAppenderRegistrar {
+
+        /**
+         * The Logback {@code LoggerContext} is JVM-wide while application contexts are not:
+         * several can be running at once, and every one that starts makes Spring Boot reset
+         * that shared context, detaching the appenders of all the others. The still-running
+         * contexts never learn of it, so {@link LogbackCaptureReinstaller} puts them back
+         * from here.
+         */
+        private static final Set<PeekabootLogbackAppender> LIVE_APPENDERS = ConcurrentHashMap.newKeySet();
+
         private final ApplicationEventPublisher eventPublisher;
         private PeekabootLogbackAppender appender;
 
@@ -103,6 +116,7 @@ public class DevToolbarAutoConfiguration {
 
             Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
             rootLogger.addAppender(appender);
+            LIVE_APPENDERS.add(appender);
         }
 
         @PreDestroy
@@ -112,11 +126,30 @@ public class DevToolbarAutoConfiguration {
             if (appender == null) {
                 return;
             }
+            LIVE_APPENDERS.remove(appender);
             if (LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext) {
                 loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).detachAppender(appender);
             }
             appender.stop();
             appender = null;
+        }
+
+        /**
+         * Re-attaches the appenders of every application context that is still running, after
+         * a Logback re-initialisation detached them.
+         */
+        static void reattachLiveAppenders() {
+            if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
+                return;
+            }
+            Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
+            for (PeekabootLogbackAppender appender : LIVE_APPENDERS) {
+                // a reset stops appenders as well as detaching them, and a stopped appender
+                // that is merely re-attached silently discards every event
+                appender.setContext(loggerContext);
+                appender.start();
+                rootLogger.addAppender(appender);
+            }
         }
     }
 }

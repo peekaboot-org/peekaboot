@@ -5,18 +5,29 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.logging.LoggingApplicationListener;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.bootstrap.DefaultBootstrapContext;
+import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.io.support.SpringFactoriesLoader;
 
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -152,6 +163,99 @@ class DevToolbarAutoConfigurationTest {
         assertThat(peekabootAppenderCount())
                 .as("appender detached after context close")
                 .isEqualTo(before);
+    }
+
+    /**
+     * Spring Boot re-initialises Logback for every application that starts in the JVM, which
+     * detaches and stops every appender registered in code. Appenders declared in
+     * {@code logback.xml} come back with the configuration that follows; peekaboot's does not,
+     * leaving an application context that is still serving requests recording traces with no
+     * logs against them.
+     *
+     * <p>Asserts on a captured event rather than on attachment, because an appender that is
+     * re-attached without being restarted is still silently dropping everything.
+     */
+    @Test
+    void logCaptureSurvivesLogbackReinitialisation() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class, CapturedLogRecorder.class)
+                .run(context -> {
+                    CapturedLogRecorder recorder = context.getBean(CapturedLogRecorder.class);
+                    logWithTraceId("before reinitialisation");
+                    assertThat(recorder.messages())
+                            .as("capture must work beforehand, or the assertion below would "
+                              + "pass on an appender that never captured anything")
+                            .contains("before reinitialisation");
+
+                    reinitialiseLogback();
+                    logWithTraceId("after reinitialisation");
+
+                    assertThat(recorder.messages())
+                            .as("log capture must survive the Logback re-initialisation that "
+                              + "every newly started application triggers")
+                            .contains("after reinitialisation");
+                });
+    }
+
+    /**
+     * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
+     * the logger context (which drops every listener, reset-resistant ones included) and then
+     * resetting it - reloads {@code logback-test.xml} so the console appender the rest of the
+     * suite logs through is restored, and then fires the event that carries the repair.
+     */
+    private void reinitialiseLogback() throws Exception {
+        ch.qos.logback.classic.LoggerContext loggerContext =
+                (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
+        loggerContext.stop();
+        loggerContext.reset();
+        new ch.qos.logback.classic.util.ContextInitializer(loggerContext).autoConfig();
+        loggerContext.start();
+
+        new LogbackCaptureReinstaller().onApplicationEvent(new ApplicationEnvironmentPreparedEvent(
+                new DefaultBootstrapContext(), new SpringApplication(), new String[0],
+                new StandardEnvironment()));
+    }
+
+    /** Only events carrying a traceId in the MDC are captured. */
+    private void logWithTraceId(String message) {
+        org.slf4j.MDC.put("traceId", "0123456789abcdef0123456789abcdef");
+        try {
+            org.slf4j.LoggerFactory.getLogger(DevToolbarAutoConfigurationTest.class).error(message);
+        } finally {
+            org.slf4j.MDC.remove("traceId");
+        }
+    }
+
+    /**
+     * The repair only reaches a running application context if Spring Boot instantiates the
+     * listener for every application, after the re-initialisation it is undoing.
+     */
+    @Test
+    void logbackCaptureReinstallerRunsForEveryApplicationAfterLoggingIsInitialised() {
+        assertThat(SpringFactoriesLoader.loadFactoryNames(
+                ApplicationListener.class, getClass().getClassLoader()))
+                .as("registered in spring.factories, so every application repairs the capture")
+                .contains(LogbackCaptureReinstaller.class.getName());
+
+        assertThat(new LogbackCaptureReinstaller().getOrder())
+                .as("must run after LoggingApplicationListener, which performs the reset")
+                .isGreaterThan(LoggingApplicationListener.DEFAULT_ORDER);
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class CapturedLogRecorder {
+
+        private final List<String> messages = new CopyOnWriteArrayList<>();
+
+        @EventListener
+        void onLogCaptured(LogCapturedEvent event) {
+            messages.add(event.message());
+        }
+
+        List<String> messages() {
+            return messages;
+        }
     }
 
     @Test
