@@ -111,7 +111,7 @@ class OrderTraceCaptureIntegrationTest {
         assertThat(spanNames)
                 .as("the report's three stages must each show up as their own span, or the "
                   + "Slow bucket trace is just one opaque span again - spans seen: %s", spanNames)
-                .contains("OrderReportStages#loadLines", "OrderReportStages#priceLines", "OrderReportStages#applyDiscounts");
+                .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
     }
 
     private static void collectSpanNames(JsonNode span, List<String> out) {

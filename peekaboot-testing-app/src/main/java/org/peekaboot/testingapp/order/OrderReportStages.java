@@ -24,7 +24,7 @@ public class OrderReportStages {
     }
 
 
-    @Observed(name = "order.report.load-lines")
+    @Observed(name = "order.report.load-lines", contextualName = "order.report.load-lines")
     List<OrderLine> loadLines(long orderId) {
 
         pause(400);
@@ -32,7 +32,7 @@ public class OrderReportStages {
     }
 
 
-    @Observed(name = "order.report.price-lines")
+    @Observed(name = "order.report.price-lines", contextualName = "order.report.price-lines")
     BigDecimal priceLines(List<OrderLine> lines) {
 
         pause(600);
@@ -42,7 +42,7 @@ public class OrderReportStages {
     }
 
 
-    @Observed(name = "order.report.apply-discounts")
+    @Observed(name = "order.report.apply-discounts", contextualName = "order.report.apply-discounts")
     BigDecimal applyDiscounts(BigDecimal total) {
 
         pause(400);
