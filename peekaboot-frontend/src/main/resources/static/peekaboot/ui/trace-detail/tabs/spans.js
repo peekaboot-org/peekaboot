@@ -61,6 +61,9 @@ export function render(container, trace) {
         const isCollapsed = toggle.textContent === '+';
 
         toggle.textContent = isCollapsed ? '-' : '+';
+        // The toggle is a real button now, so its expanded state has to be exposed.
+        toggle.setAttribute('aria-expanded', String(isCollapsed));
+        toggle.setAttribute('aria-label', isCollapsed ? 'Collapse child spans' : 'Expand child spans');
 
         // Show/hide descendant rows
         let sibling = row.nextElementSibling;
@@ -104,13 +107,13 @@ function showSpanLogsPopup(container, traceId, initialSpanId, initialSpanLogs, a
             ? `Logs for Trace ${copyableIdHtml(traceId, {label: 'traceId'})}`
             : `Logs for Span ${copyableIdHtml(spanId, {label: 'spanId'})} `
               + `(Part of trace ${copyableIdHtml(traceId, {label: 'traceId'})}). `
-              + `<span class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</span>`;
+              + `<button type="button" class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</button>`;
 
         popup.innerHTML = `
             <div class="pk-logs-popup-header">
-                <button class="pk-logs-popup-back" title="Back">&#8592;</button>
+                <button type="button" class="pk-logs-popup-back" title="Back" aria-label="Back to spans">&#8592;</button>
                 <span class="pk-logs-popup-title">${titleHtml}</span>
-                <button class="pk-logs-popup-close" title="Close">&times;</button>
+                <button type="button" class="pk-logs-popup-close" title="Close" aria-label="Close logs">&times;</button>
             </div>
             <div class="pk-logs-popup-content">${renderLogRows(logs, {showSpanColumn: showAllLogs, spanNames})}</div>
         `;
@@ -189,7 +192,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
 
     let nameHtml = `<div class="pk-gantt-name" style="padding-left: ${indent}px">`;
     if (hasChildren) {
-        nameHtml += `<span class="pk-gantt-toggle">-</span>`;
+        nameHtml += `<button type="button" class="pk-gantt-toggle" aria-expanded="true" aria-label="Collapse child spans">-</button>`;
     } else {
         nameHtml += `<span style="width:16px"></span>`;
     }
@@ -205,14 +208,14 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
 
     // Add query toggle for query spans with SQL
     if (hasQuery) {
-        nameHtml += `<span class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL">&#128196;</span>`;
+        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
     }
 
     // Add logs toggle for spans with logs
     if (hasLogs) {
         // Store logs as base64-encoded JSON to avoid HTML attribute escaping issues
         const logsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(spanLogs))));
-        nameHtml += `<span class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsBase64}">${spanLogs.length} logs</span>`;
+        nameHtml += `<button type="button" class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsBase64}">${spanLogs.length} logs</button>`;
     }
 
     nameHtml += `</div>`;
@@ -227,7 +230,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
             const eventTimeMs = new Date(event.timestamp).getTime();
             // Position relative to the entire trace timeline
             const eventLeft = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
-            trackHtml += `<div class="pk-gantt-event-marker" style="left: ${eventLeft}%"><span class="pk-gantt-event-tooltip">${escapeHtml(event.name)}</span></div>`;
+            trackHtml += `<button type="button" class="pk-gantt-event-marker" style="left: ${eventLeft}%" aria-label="Event: ${escapeHtml(event.name)}"><span class="pk-gantt-event-tooltip" aria-hidden="true">${escapeHtml(event.name)}</span></button>`;
         }
     });
     trackHtml += `</div>`;

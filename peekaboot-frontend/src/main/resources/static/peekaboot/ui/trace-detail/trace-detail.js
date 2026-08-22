@@ -36,6 +36,27 @@ let onCloseCallback = null;
 let themeUnwatch = null;
 let previouslyFocusedElement = null;
 let currentSession = 0;
+let inertedSiblings = [];
+
+/**
+ * Makes everything except the overlay host inert while the dialog is open.
+ *
+ * aria-modal="true" already tells assistive tech to ignore the rest of the page, but it
+ * does nothing for a sighted keyboard user: Tab would still walk out of the dialog into
+ * the page behind it. `inert` removes those subtrees from focus order and the a11y tree
+ * for real, which is a focus trap without hand-rolled Tab cycling - and it correctly
+ * covers the dev toolbar, which is a sibling host on document.body, not part of the page.
+ */
+function setBackgroundInert(overlayHost) {
+    inertedSiblings = Array.from(document.body.children)
+            .filter(child => child !== overlayHost && !child.inert);
+    inertedSiblings.forEach(child => { child.inert = true; });
+}
+
+function releaseBackgroundInert() {
+    inertedSiblings.forEach(child => { child.inert = false; });
+    inertedSiblings = [];
+}
 
 /**
  * The truly-focused element, descending through open shadow roots. document.activeElement
@@ -74,6 +95,7 @@ export function openTraceDetail(traceId, options = {}) {
     // exists, no network round trip required.
     overlayHost.style.cssText = 'position:fixed;inset:0;';
     document.body.appendChild(overlayHost);
+    setBackgroundInert(overlayHost);
 
     const shadow = overlayHost.attachShadow({mode: 'open'});
     applyTheme(overlayHost, resolveTheme());
@@ -99,6 +121,9 @@ export function closeTraceDetail() {
     if (existing) {
         existing.remove();
     }
+    // Before restoring focus below: the invoker is out in the page, which is still inert
+    // at this point, and focus() on an inert element is a no-op.
+    releaseBackgroundInert();
     if (escHandler) {
         document.removeEventListener('keydown', escHandler);
         escHandler = null;
@@ -171,13 +196,13 @@ function render(content, trace) {
         <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
             <div class="pk-overlay__container">
                 <div class="pk-overlay__header">
-                    <button type="button" class="pk-overlay__back" title="Back">&#8592;</button>
-                    <div class="pk-overlay__title" id="pk-overlay-title">
-                        <span class="pk-overlay__title-icon"></span>
+                    <button type="button" class="pk-overlay__back" title="Back" aria-label="Back">&#8592;</button>
+                    <h2 class="pk-overlay__title" id="pk-overlay-title">
+                        <span class="pk-overlay__title-icon" aria-hidden="true"></span>
                         <span class="pk-overlay__title-method">${escapeHtml(method)}</span>
                         <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
                         <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                    </div>
+                    </h2>
                     <div class="pk-overlay__meta">
                         <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
                         <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
@@ -185,7 +210,7 @@ function render(content, trace) {
                         <span>${queryCount} queries</span>
                         <span>${logCount} logs</span>
                     </div>
-                    <button type="button" class="pk-overlay__close" title="Close">&times;</button>
+                    <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
                 </div>
                 <div class="pk-tabs"></div>
                 <div class="pk-overlay__content" id="pk-tab-content"></div>

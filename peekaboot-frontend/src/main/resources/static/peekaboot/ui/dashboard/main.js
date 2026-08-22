@@ -294,13 +294,10 @@ function togglePause() {
     const pauseIcon = document.getElementById('pause-icon');
     const pauseBtn = document.getElementById('pause-btn');
 
-    if (isPaused) {
-        pauseIcon.innerHTML = '&#9654;';
-        pauseBtn.title = 'Resume auto-refresh';
-    } else {
-        pauseIcon.innerHTML = '&#10074;&#10074;';
-        pauseBtn.title = 'Pause auto-refresh';
-    }
+    const label = isPaused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+    pauseIcon.innerHTML = isPaused ? '&#9654;' : '&#10074;&#10074;';
+    pauseBtn.title = label;
+    pauseBtn.setAttribute('aria-label', label);
 }
 
 // --- Locale / timezone controls --------------------------------------------------------
@@ -332,12 +329,19 @@ function updateTimezoneDisplay() {
     const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const serverTz = serverTimezone ? serverTimezone.timezone : 'Unknown';
     document.getElementById('tz-info').textContent = useServerTimezone ? serverTz : browserTz;
+    // "Server"/"Browser" alone is not a usable button name - say which way it switches.
+    document.getElementById('timezone-toggle').setAttribute('aria-label', useServerTimezone
+            ? 'Timezone: server. Switch to browser timezone'
+            : 'Timezone: browser. Switch to server timezone');
 }
 
 // --- Theme ------------------------------------------------------------------------------
 
 function updateThemeIcon(theme) {
     document.getElementById('theme-icon').textContent = theme === 'light' ? '☾' : '☀';
+    // The glyph is aria-hidden, so the button's name has to say what pressing it does.
+    document.getElementById('theme-toggle').setAttribute(
+            'aria-label', theme === 'light' ? 'Switch to dark theme' : 'Switch to light theme');
 }
 
 function initTheme() {

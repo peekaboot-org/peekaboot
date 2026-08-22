@@ -1,0 +1,129 @@
+package org.peekaboot.testingapp.ui;
+
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.ReducedMotion;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Accessibility regressions that no other test would notice: every assertion here is
+ * about something invisible on screen, so a revert looks perfectly fine in a screenshot.
+ */
+class AccessibilityTest extends PlaywrightTestBase {
+
+    /**
+     * The header controls render a glyph inside the button. Text content outranks the
+     * title attribute in the accessible-name algorithm, so without an explicit label the
+     * name a screen reader announces is literally "↻", "❚❚" or "☾".
+     */
+    @Test
+    void iconOnlyControlsHaveTextualAccessibleNames() {
+        openDashboard();
+
+        assertThat(page.getAttribute("#refresh-btn", "aria-label")).isEqualTo("Refresh now");
+        assertThat(page.getAttribute("#pause-btn", "aria-label")).isEqualTo("Pause auto-refresh");
+        assertThat(page.getAttribute("#theme-toggle", "aria-label")).contains("theme");
+        assertThat(page.getAttribute("#error-close", "aria-label")).isEqualTo("Dismiss error");
+        assertThat(page.getAttribute("#locale-select", "aria-label")).isEqualTo("Language");
+
+        // and the glyphs themselves must not be read out alongside the label
+        assertThat(page.getAttribute("#refresh-icon", "aria-hidden")).isEqualTo("true");
+        assertThat(page.getAttribute("#pause-icon", "aria-hidden")).isEqualTo("true");
+        assertThat(page.getAttribute("#theme-icon", "aria-hidden")).isEqualTo("true");
+    }
+
+    /** A toggle whose label says "Pause" while it resumes is worse than no label at all. */
+    @Test
+    void statefulControlLabelsFollowTheirState() {
+        openDashboard();
+
+        page.click("#pause-btn");
+        assertThat(page.getAttribute("#pause-btn", "aria-label")).isEqualTo("Resume auto-refresh");
+        page.click("#pause-btn");
+        assertThat(page.getAttribute("#pause-btn", "aria-label")).isEqualTo("Pause auto-refresh");
+
+        String before = page.getAttribute("#theme-toggle", "aria-label");
+        page.click("#theme-toggle");
+        assertThat(page.getAttribute("#theme-toggle", "aria-label")).isNotEqualTo(before);
+    }
+
+    /** Decorative emoji would otherwise be announced: "package Build", "seedling Spring". */
+    @Test
+    void decorativeCardIconsAreHiddenFromAssistiveTech() {
+        openDashboard();
+
+        int icons = (int) (Integer) page.evaluate("() => document.querySelectorAll('.pk-card__icon').length");
+        int hidden = (int) (Integer) page.evaluate(
+                "() => document.querySelectorAll('.pk-card__icon[aria-hidden=\"true\"]').length");
+        assertThat(icons).isGreaterThan(0);
+        assertThat(hidden).isEqualTo(icons);
+    }
+
+    /**
+     * Card titles are real headings, so heading navigation - a primary screen-reader
+     * wayfinding mechanism - actually reaches the dashboard sections.
+     */
+    @Test
+    void dashboardExposesAHeadingOutline() {
+        openDashboard();
+
+        assertThat((Integer) page.evaluate("() => document.querySelectorAll('h1').length")).isEqualTo(1);
+        assertThat((Integer) page.evaluate("() => document.querySelectorAll('h2').length"))
+                .isGreaterThanOrEqualTo(6);
+    }
+
+    /** Without role="alert" the banner just un-hides and a failed refresh is silent. */
+    @Test
+    void errorBannerIsAnAlert() {
+        openDashboard();
+
+        assertThat(page.getAttribute("#error", "role")).isEqualTo("alert");
+    }
+
+    /**
+     * The health dot pulses for as long as the dashboard is open. Under a reduce-motion
+     * preference the animation must be cancelled, not merely shortened in wall-clock.
+     */
+    @Test
+    void reducedMotionCancelsPerpetualAnimation() {
+        page.emulateMedia(new Page.EmulateMediaOptions().setReducedMotion(ReducedMotion.REDUCE));
+        openDashboard();
+
+        // Read the number rather than the string: the computed value of a 0.01ms duration
+        // serialises as "1e-05s" in Chromium, so pinning any literal spelling is brittle.
+        double seconds = ((Number) page.evaluate(
+                "() => parseFloat(getComputedStyle(document.querySelector('.pk-spinner')).animationDuration)"))
+                .doubleValue();
+
+        assertThat(seconds).as("spinner animation-duration, in seconds").isLessThan(0.001);
+        assertThat(cssVar(".pk-spinner", "animation-iteration-count")).isEqualTo("1");
+    }
+
+    /**
+     * aria-modal="true" hides the page from assistive tech but does nothing for a sighted
+     * keyboard user - Tab would walk straight out of the dialog. inert on the siblings is
+     * what actually holds focus inside, and it must be released again on close or the
+     * whole page stays unusable.
+     */
+    @Test
+    void overlayMakesTheRestOfThePageInert() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')"
+              + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+
+        boolean siblingsInert = (boolean) page.evaluate(
+                "() => Array.from(document.body.children)"
+              + ".filter(el => el.id !== 'peekaboot-trace-overlay').every(el => el.inert)");
+        assertThat(siblingsInert).isTrue();
+
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                    + ".querySelector('.pk-overlay__error button').click()");
+        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay')");
+
+        boolean anyStillInert = (boolean) page.evaluate(
+                "() => Array.from(document.body.children).some(el => el.inert)");
+        assertThat(anyStillInert).isFalse();
+    }
+}

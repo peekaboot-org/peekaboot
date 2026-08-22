@@ -275,6 +275,10 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
 
     const iconEl = document.createElement('span');
     iconEl.className = 'pk-trace-item__icon';
+    // role="img" + aria-label, not title: title on a roleless <span> is not reliably
+    // exposed, and when rootOperation is present the action type is shown nowhere else.
+    iconEl.setAttribute('role', 'img');
+    iconEl.setAttribute('aria-label', rootActionLabel(actionType));
     iconEl.title = rootActionLabel(actionType);
     iconEl.textContent = rootActionIcon(actionType);
     mainLine.appendChild(iconEl);

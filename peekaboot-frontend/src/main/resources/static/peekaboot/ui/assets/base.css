@@ -27,3 +27,19 @@ mark {
     background: #854d0e;
     color: #fef9c3;
 }
+
+/* Honour the OS "reduce motion" setting. Peekaboot runs three infinite animations —
+   the health dot's pulse keeps going for as long as the dashboard is open, which is
+   exactly the perpetual movement this setting exists to stop. Nothing here is load-
+   bearing: the spinner is always paired with "Loading data..." text and the toolbar's
+   animated ellipsis with the word "loading", so cancelling the motion loses no meaning.
+   Selectors are unprefixed on purpose — this file is linked into the shadow roots too,
+   where `*` matches that root's own tree. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

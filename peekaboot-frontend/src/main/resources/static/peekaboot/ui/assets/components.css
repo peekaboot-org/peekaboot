@@ -166,7 +166,9 @@
 .pk-btn:hover { background: var(--pk-bg-hover); }
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
-.pk-btn--small { padding: 2px var(--pk-space-sm); font-size: var(--pk-text-xs); }
+/* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's
+   24px target floor, and the extra height must not push the label off-centre. */
+.pk-btn--small { padding: 2px var(--pk-space-sm); min-height: 24px; font-size: var(--pk-text-xs); }
 /* Primary bucket/segment selector - a top-level filter, so it carries more weight
    and a comfortable hit area rather than the compact --small treatment. */
 .pk-btn--bucket { padding: var(--pk-space-sm) var(--pk-space-md); font-size: var(--pk-text-sm); font-weight: 600; }
@@ -181,6 +183,9 @@
     align-items: baseline;
     gap: var(--pk-space-xs);
     max-width: 100%;
+    /* 22px measured; the inline-target exception arguably covers it, but a copy control
+       is a real click target rather than a word in a sentence, so give it the floor. */
+    min-height: 24px;
     padding: 1px var(--pk-space-xs);
     border: 1px solid transparent;
     border-radius: var(--pk-radius);

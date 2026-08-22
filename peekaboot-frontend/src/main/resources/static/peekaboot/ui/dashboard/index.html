@@ -21,27 +21,31 @@
                 </div>
                 <div class="pk-header__actions">
                     <span class="pk-header__time" id="last-updated"></span>
-                    <!-- Timezone Toggle -->
-                    <button class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone">
-                        <span id="timezone-icon">&#127760;</span>
+                    <!-- Timezone Toggle. Every control below carries an aria-label: the
+                         accessible name otherwise falls to the glyph inside it ("↻",
+                         "❚❚", "☾"), because text content outranks title. main.js keeps
+                         the labels of the three stateful ones in step with their icon. -->
+                    <button class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone"
+                            aria-label="Timezone: browser. Switch to server timezone">
+                        <span id="timezone-icon" aria-hidden="true">&#127760;</span>
                         <span id="timezone-label">Browser</span>
                     </button>
                     <span class="pk-header__tz-info" id="tz-info"></span>
                     <!-- Locale Selector -->
-                    <select class="pk-btn pk-btn--select" id="locale-select" title="Language">
+                    <select class="pk-btn pk-btn--select" id="locale-select" title="Language" aria-label="Language">
                         <option value="en-US">EN</option>
                         <option value="de-DE">DE</option>
                         <option value="fr-FR">FR</option>
                         <option value="es-ES">ES</option>
                     </select>
-                    <button class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now">
-                        <span id="refresh-icon">&#8635;</span>
+                    <button class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now" aria-label="Refresh now">
+                        <span id="refresh-icon" aria-hidden="true">&#8635;</span>
                     </button>
-                    <button class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh">
-                        <span id="pause-icon">&#10074;&#10074;</span>
+                    <button class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh" aria-label="Pause auto-refresh">
+                        <span id="pause-icon" aria-hidden="true">&#10074;&#10074;</span>
                     </button>
-                    <button class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme">
-                        <span id="theme-icon"></span>
+                    <button class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme" aria-label="Switch to dark theme">
+                        <span id="theme-icon" aria-hidden="true"></span>
                     </button>
                 </div>
             </div>
@@ -65,9 +69,11 @@
             <p>Loading data...</p>
         </div>
 
-        <div id="error" class="pk-error-banner hidden">
+        <!-- role="alert" so a failed refresh is announced. Without it the banner just
+             un-hides and a screen-reader user is left on silently stale data. -->
+        <div id="error" class="pk-error-banner hidden" role="alert">
             <span class="message"></span>
-            <button class="pk-error-banner__close" id="error-close">&times;</button>
+            <button class="pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -75,48 +81,48 @@
             <div class="pk-grid">
                 <div class="pk-card" id="build-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#128230;</span>
-                        <span>Build</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#128230;</span>
+                        <h2 class="pk-card__title">Build</h2>
                     </div>
                     <div class="pk-card__body" id="build-info"></div>
                 </div>
 
                 <div class="pk-card" id="git-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#128256;</span>
-                        <span>Git</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#128256;</span>
+                        <h2 class="pk-card__title">Git</h2>
                     </div>
                     <div class="pk-card__body" id="git-info"></div>
                 </div>
 
                 <div class="pk-card" id="spring-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#127807;</span>
-                        <span>Spring</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#127807;</span>
+                        <h2 class="pk-card__title">Spring</h2>
                     </div>
                     <div class="pk-card__body" id="spring-info"></div>
                 </div>
 
                 <div class="pk-card" id="java-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#9749;</span>
-                        <span>Java</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#9749;</span>
+                        <h2 class="pk-card__title">Java</h2>
                     </div>
                     <div class="pk-card__body" id="java-info"></div>
                 </div>
 
                 <div class="pk-card" id="os-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#128187;</span>
-                        <span>System</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#128187;</span>
+                        <h2 class="pk-card__title">System</h2>
                     </div>
                     <div class="pk-card__body" id="os-info"></div>
                 </div>
 
                 <div class="pk-card" id="jvm-defaults-card">
                     <div class="pk-card__header">
-                        <span class="pk-card__icon">&#9881;</span>
-                        <span>JVM Defaults</span>
+                        <span class="pk-card__icon" aria-hidden="true">&#9881;</span>
+                        <h2 class="pk-card__title">JVM Defaults</h2>
                     </div>
                     <div class="pk-card__body" id="jvm-defaults-info"></div>
                 </div>
@@ -128,8 +134,8 @@
             <!-- Memory Card with Disk Health -->
             <div class="pk-card pk-grid--full pk-section" id="memory-card">
                 <div class="pk-card__header">
-                    <span class="pk-card__icon">&#128202;</span>
-                    <span>Memory &amp; Storage</span>
+                    <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
+                    <h2 class="pk-card__title">Memory &amp; Storage</h2>
                     <span class="pk-card__meta" id="process-info"></span>
                 </div>
                 <div class="pk-card__body" id="memory-info"></div>

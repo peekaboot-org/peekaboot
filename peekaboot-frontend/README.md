@@ -195,6 +195,38 @@ this refactor and were only caught in review. Keep them true:
   corrected twice in this refactor (the toolbar's open button, then the traces tab's trace
   item header) — watch for it in any future "make this row clickable" change.
 
+  The trace-detail overlay violated this in seven places until 2026-08-22 — the gantt
+  expand/collapse triangle, the SQL and logs toggles, the gantt event markers, the
+  "show logs for all spans" link, the log span-filter cell and the span-filter clear —
+  all `<span>`s with click handlers, unreachable by keyboard. They are `<button>`s now,
+  each with the browser's button chrome reset away so nothing changed visually. If a new
+  control needs `cursor: pointer`, that is the smell: make it a `<button>` first.
+
+- **A control whose only content is an icon needs an explicit `aria-label`, and the icon
+  needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title
+  in the accessible-name algorithm, so a bare glyph button is announced as "↻" or "×".
+  When the control is stateful (pause/resume, theme, timezone), the label is updated in
+  `main.js` next to the icon swap — a label that lies about state is worse than none.
+
+- **Decorative emoji get `aria-hidden="true"`.** The dashboard's card icons would
+  otherwise be read as part of the heading: "package Build", "seedling Spring".
+
+- **Motion respects `prefers-reduced-motion`.** `base.css` cancels animations and
+  collapses transitions under that preference. This matters more than it looks: the
+  health dot's pulse and the toolbar's animated ellipsis are *infinite*, running for as
+  long as the surface is open. Nothing animated is load-bearing — the spinner is always
+  paired with "Loading data..." text — so cancelling motion never removes meaning.
+
+- **A modal needs `inert` on its siblings, not just `aria-modal`.** `aria-modal="true"`
+  hides the rest of the page from assistive tech but leaves Tab free to walk out of the
+  dialog for a sighted keyboard user. `trace-detail.js` sets `inert` on every other
+  `document.body` child on open (which also covers the dev toolbar, a sibling host) and
+  releases it on close — *before* restoring focus to the invoker, since `focus()` on an
+  inert element does nothing.
+
+- **Interactive targets are at least 24x24 CSS px** (WCAG 2.2 §2.5.8). Measured, not
+  computed from the CSS — `.pk-btn--small` looked like 24px on paper and rendered at 20.
+
 ## Ids the test suite depends on
 
 Renaming any of these silently breaks roughly a dozen Playwright test classes under

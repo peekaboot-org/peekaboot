@@ -94,6 +94,15 @@
     overflow: hidden;
     transition: background-color var(--pk-transition), border-color var(--pk-transition);
 }
+/* Card titles are real <h2>s so the dashboard has a heading outline to navigate by -
+   they inherit the header's own type, so the promotion is invisible on screen. */
+.pk-card__title {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+}
 .pk-card__header {
     display: flex;
     align-items: center;
@@ -158,7 +167,15 @@
 /* .message stays unprefixed: PlaywrightTestBase.openDashboard() asserts on
    the literal selector "#error .message". */
 .pk-error-banner .message { color: var(--pk-danger); }
+/* 24x24 minimum: as a bare glyph button this measured 10.5x18, under WCAG 2.2's
+   target-size floor. The box grows, the glyph does not. */
 .pk-error-banner__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    min-width: 24px;
+    min-height: 24px;
     background: none;
     border: none;
     color: var(--pk-danger);
@@ -228,7 +245,9 @@
 .pk-health:hover { background: var(--pk-bg-hover); }
 .pk-health:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 .pk-health--down { border-left-color: var(--pk-danger); }
-.pk-health--unknown { border-left-color: var(--pk-warning); }
+/* The text-tuned amber, not the fill: as a state stripe --pk-warning is 2.94:1 on
+   --pk-bg, under 1.4.11's 3:1 for non-text indicators. --pk-warning-text is 4.92:1. */
+.pk-health--unknown { border-left-color: var(--pk-warning-text); }
 .pk-health__status { display: flex; align-items: center; gap: var(--pk-space-sm); }
 .pk-health__dot {
     width: 12px;

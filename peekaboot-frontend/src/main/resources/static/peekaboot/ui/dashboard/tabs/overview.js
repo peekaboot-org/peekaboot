@@ -165,7 +165,8 @@ function renderDataSourceCard(ds) {
 
     const header = document.createElement('div');
     header.className = 'pk-card__header';
-    header.innerHTML = `<span class="pk-card__icon">\u{1F5C2}</span><span>${escapeHtml(ds.name || 'DataSource')}</span>`;
+    header.innerHTML = `<span class="pk-card__icon" aria-hidden="true">\u{1F5C2}</span>`
+            + `<h2 class="pk-card__title">${escapeHtml(ds.name || 'DataSource')}</h2>`;
     if (ds.health) header.appendChild(badge(ds.health, healthSeverity(ds.health)));
 
     const body = document.createElement('div');

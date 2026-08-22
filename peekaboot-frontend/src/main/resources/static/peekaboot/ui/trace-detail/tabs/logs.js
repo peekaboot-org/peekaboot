@@ -14,8 +14,8 @@ export function renderLogRows(logs, {showSpanColumn = false, spanNames} = {}) {
     return logs.map(log => {
         const spanId = log.spanId || '';
         const spanCell = showSpanColumn
-            ? `<span class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}">`
-              + `${escapeHtml(spanNames?.get(spanId) || spanId)}</span>`
+            ? `<button type="button" class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}" aria-label="Filter logs to span ${escapeHtml(spanId)}">`
+              + `${escapeHtml(spanNames?.get(spanId) || spanId)}</button>`
             : '';
         return `<div class="pk-log" data-level="${escapeHtml(log.level)}" data-span-id="${escapeHtml(spanId)}">`
              + `<span class="pk-log__time">${escapeHtml(formatTimeOfDay(log.timestamp))}</span>`
@@ -44,7 +44,7 @@ export function render(container, trace) {
         if (currentSpanFilter) {
             const spanName = spanNames.get(currentSpanFilter) || currentSpanFilter;
             const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
-            html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <span class="pk-logs-filter-span-clear" id="pk-clear-span-filter">&times;</span></span>`;
+            html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
         html += `<div id="pk-logs-list">${renderLogRows(logs, {showSpanColumn: true, spanNames})}</div>`;
