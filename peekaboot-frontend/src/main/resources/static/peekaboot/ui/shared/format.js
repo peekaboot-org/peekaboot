@@ -54,6 +54,54 @@ export function formatDateTime(value, {locale, timeZone, ...options} = {}) {
     }
 }
 
+/** value.toPrecision(digits), stripped back to a plain number string (no trailing zeros/exponent for typical magnitudes). */
+function toSignificant(value, digits) {
+    if (value === 0) return '0';
+    return Number(value.toPrecision(digits)).toString();
+}
+
+function formatCount(value) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/**
+ * Formats one insights series/measurement value per its configured unit (see
+ * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
+ * byte/duration formatters, percent is raw 0..1 and scaled for display, persec/
+ * bytes-persec append a rate suffix, count falls back to formatCount().
+ */
+export function formatMetricValue(value, unit) {
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
+
+    switch (unit) {
+        case 'bytes': return formatBytes(value);
+        case 'percent': return (value * 100).toFixed(1) + '%';
+        case 'millis': return formatDurationMs(value);
+        case 'persec': return toSignificant(value, 2) + '/s';
+        case 'bytes-persec': return formatBytes(value) + '/s';
+        case 'count':
+        default: return formatCount(value);
+    }
+}
+
+/**
+ * Formats one insights tile value per its configured format (see
+ * InsightsConfigResponse.Tile.format). duration/datetime tile values are seconds
+ * server-side (see InsightsService), hence the *1000 before handing off to the
+ * millisecond-based formatDurationMs/formatDateTime.
+ */
+export function formatTileValue(value, format, {locale, timeZone} = {}) {
+    if (value === null || value === undefined || Number.isNaN(value)) return '-';
+
+    switch (format) {
+        case 'duration': return formatDurationMs(value * 1000);
+        case 'datetime': return formatDateTime(value * 1000, {locale, timeZone});
+        case 'bytes': return formatBytes(value);
+        case 'count':
+        default: return formatCount(value);
+    }
+}
+
 export function formatTimeOfDay(value, {locale, timeZone} = {}) {
     if (value == null || value === '') return '-';
     const date = new Date(value);

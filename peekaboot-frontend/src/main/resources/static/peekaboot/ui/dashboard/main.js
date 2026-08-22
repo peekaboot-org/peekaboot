@@ -18,11 +18,12 @@ import * as loggers from './tabs/loggers.js';
 import * as config from './tabs/config.js';
 import * as scheduledTasks from './tabs/scheduled-tasks.js';
 import * as metrics from './tabs/metrics.js';
+import * as insights from './tabs/insights.js';
 import * as traces from './tabs/traces.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview, environment, flyway, loggers, config, scheduledTasks, metrics, traces];
+const TABS = [overview, environment, flyway, loggers, config, scheduledTasks, metrics, insights, traces];
 const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();

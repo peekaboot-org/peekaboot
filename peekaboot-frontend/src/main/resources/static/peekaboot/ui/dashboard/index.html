@@ -61,6 +61,7 @@
             <button class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
             <button class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
             <button class="pk-tab hidden" role="tab" id="metrics-tab-btn" data-tab="metrics" aria-controls="metrics-tab" aria-selected="false">Metrics</button>
+            <button class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
             <button class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
         </nav>
 
@@ -246,6 +247,12 @@
                 <span class="pk-filter__count" id="metrics-count"></span>
             </div>
             <div id="metrics-list"></div>
+        </section>
+
+        <section class="pk-tab-panel" id="insights-tab" role="tabpanel" aria-labelledby="insights-tab-btn">
+            <div id="insights-toolbar"></div>
+            <div id="insights-tiles"></div>
+            <div id="insights-panels"></div>
         </section>
     </main>
 

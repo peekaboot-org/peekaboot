@@ -466,6 +466,24 @@
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
 .pk-metric__stat-value { font-family: var(--pk-font-mono); font-weight: 600; color: var(--pk-text-strong); }
 
+/* Insights tab: toolbar, tiles row and panel cards. Chart rendering (uPlot, mounted
+   into .pk-insight-chart) and the SSE-driven .pk-insight-current/.pk-blink updates
+   are wired in the follow-up task - the styles below cover the shell this task
+   renders. */
+#insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
+#insights-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--pk-space-md); margin: var(--pk-space-md) 0; }
+.pk-insight-tile { padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
+.pk-insight-tile-label { font-size: var(--pk-text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pk-text-muted); }
+.pk-insight-tile-value { font-size: 1.2em; font-weight: 600; color: var(--pk-text-strong); }
+#insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--pk-space-md); }
+.pk-insight-panel { border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); padding: var(--pk-space-md); background: var(--pk-bg); }
+.pk-insight-panel__header { display: flex; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
+.pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
+.pk-insight-current { margin-left: auto; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
+.pk-insight-chart { min-height: 180px; }
+@keyframes pk-insight-blink { from { background-color: var(--pk-primary-light); } to { background-color: transparent; } }
+.pk-blink { animation: pk-insight-blink 0.6s ease-out; }
+
 /* Tab panels — the frozen #<tabId>-tab section ids, shown/hidden with a
    plain .active class (asserted verbatim by DashboardTabsTest). */
 .pk-tab-panel { display: none; }
