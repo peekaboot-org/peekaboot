@@ -159,9 +159,20 @@
 }
 
 /* Filter (search box used by the environment/loggers/config/metrics tabs) */
-.pk-filter { position: relative; }
+/* A row, not a block: the count sits beside the input, and the icon is centred
+   against the row. The row owns the trailing space - when the input carried it as
+   margin, the row grew taller than the input and the absolutely centred icon
+   dropped below it. */
+.pk-filter {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-md);
+    margin-bottom: var(--pk-space-lg);
+}
 .pk-filter__input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: var(--pk-space-sm) var(--pk-space-md);
     padding-left: 36px;
     border: 1px solid var(--pk-border);
@@ -169,7 +180,6 @@
     background: var(--pk-bg);
     color: var(--pk-text);
     font-size: var(--pk-text-sm);
-    margin-bottom: var(--pk-space-lg);
     transition: border-color var(--pk-transition), background-color var(--pk-transition);
 }
 .pk-filter__input:focus { outline: none; border-color: var(--pk-primary); }
@@ -182,7 +192,7 @@
     color: var(--pk-text-muted);
     pointer-events: none;
 }
-.pk-filter__count { margin-left: auto; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-filter__count { flex: 0 0 auto; font-size: var(--pk-text-xs); color: var(--pk-text-muted); white-space: nowrap; }
 
 /* Health banner — a real <button> so it is keyboard operable; aria-expanded
    drives the chevron, matching the .pk-group header pattern. */
@@ -288,24 +298,18 @@
    an explicit configured level. */
 .pk-kv__key--configured { font-weight: 700; }
 
-/* Flyway */
-.pk-flyway {
-    background: var(--pk-bg);
-    border: 1px solid var(--pk-border);
-    border-radius: var(--pk-radius-lg);
-    overflow: hidden;
-    border-left: 4px solid var(--pk-success);
-}
-.pk-flyway--failed { border-left-color: var(--pk-danger); }
-.pk-flyway--pending { border-left-color: var(--pk-text-muted); }
-.pk-flyway__header { display: flex; align-items: center; justify-content: space-between; padding: var(--pk-space-md); gap: var(--pk-space-md); flex-wrap: wrap; }
-.pk-flyway__version { font-weight: 600; font-size: var(--pk-text-base); color: var(--pk-primary); }
-.pk-flyway__description { flex: 1; color: var(--pk-text-strong); }
-.pk-flyway__details { display: flex; align-items: center; gap: var(--pk-space-lg); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); font-size: var(--pk-text-xs); color: var(--pk-text-muted); flex-wrap: wrap; }
-.pk-flyway__time, .pk-flyway__date, .pk-flyway__type { font-family: var(--pk-font-mono); }
-.pk-flyway__time--slow { color: var(--pk-warning-text); }
-.pk-flyway__time--very-slow { color: var(--pk-danger); }
-.pk-flyway__script { padding: var(--pk-space-sm) var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); background: var(--pk-bg); border-top: 1px solid var(--pk-border); }
+/* Flyway - a table of migrations; see .pk-table in components.css for the shared shape.
+   The state stripe moves to a row-leading border so a failed migration is still findable
+   at a glance in a history hundreds of rows long. */
+.pk-flyway-table { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
+.pk-flyway-row__version { font-weight: 600; color: var(--pk-primary); font-family: var(--pk-font-mono); }
+.pk-flyway-row__description { color: var(--pk-text-strong); }
+/* Only the script column may truncate - everything else is short and fixed-width. */
+.pk-flyway-row__script { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pk-text-muted); }
+.pk-flyway-row--failed td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
+.pk-flyway-row--pending td:first-child { box-shadow: inset 3px 0 0 var(--pk-text-muted); }
+.pk-flyway-row__time--slow { color: var(--pk-warning-text); }
+.pk-flyway-row__time--very-slow { color: var(--pk-danger); }
 
 /* Traces controls - the bucket buttons row and the type filter checkbox row share this
    layout, hence one shared class rather than two near-identical rules. */
@@ -413,7 +417,9 @@
 /* Tab panels — the frozen #<tabId>-tab section ids, shown/hidden with a
    plain .active class (asserted verbatim by DashboardTabsTest). */
 .pk-tab-panel { display: none; }
-.pk-tab-panel.active { display: block; animation: pk-fade-in 0.2s ease; }
+/* Panels start clear of the tab strip - without this the first control in a panel
+   sits flush against the strip's bottom border and reads as part of it. */
+.pk-tab-panel.active { display: block; padding-top: var(--pk-space-lg); animation: pk-fade-in 0.2s ease; }
 @keyframes pk-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }

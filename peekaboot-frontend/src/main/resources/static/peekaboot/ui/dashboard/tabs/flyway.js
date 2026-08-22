@@ -1,5 +1,9 @@
 /**
- * The "Flyway" tab: one card per migration, in the order the backend returns them.
+ * The "Flyway" tab: one table row per migration, in the order the backend returns them.
+ *
+ * A real schema history runs to dozens or hundreds of migrations, so each one gets a
+ * single scannable row rather than a card - the card layout spent roughly 130px per
+ * migration on three stacked lines.
  */
 import {badge} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
@@ -7,6 +11,8 @@ import {durationSeverity} from '../../shared/severity.js';
 
 export const id = 'flyway';
 export const label = 'Flyway';
+
+const COLUMNS = ['Version', 'Description', 'Script', 'Type', 'Duration', 'Installed', 'Status'];
 
 export function isAvailable(data) {
     return Boolean(data?.flyway?.migrations?.length);
@@ -17,7 +23,38 @@ export function render(container, data, {locale, timeZone} = {}) {
     const target = container.querySelector('#flyway-timeline');
     target.innerHTML = '';
 
-    migrations.forEach(migration => target.appendChild(renderCard(migration, {locale, timeZone})));
+    if (migrations.length === 0) {
+        return;
+    }
+
+    const scroll = document.createElement('div');
+    scroll.className = 'pk-table-scroll';
+
+    const table = document.createElement('table');
+    table.className = 'pk-table pk-flyway-table';
+    table.append(renderHead(), renderBody(migrations, {locale, timeZone}));
+
+    scroll.appendChild(table);
+    target.appendChild(scroll);
+}
+
+function renderHead() {
+    const head = document.createElement('thead');
+    const row = document.createElement('tr');
+    COLUMNS.forEach(label => {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = label;
+        row.appendChild(th);
+    });
+    head.appendChild(row);
+    return head;
+}
+
+function renderBody(migrations, dateOptions) {
+    const body = document.createElement('tbody');
+    migrations.forEach(migration => body.appendChild(renderRow(migration, dateOptions)));
+    return body;
 }
 
 function statusVariant(state) {
@@ -26,54 +63,49 @@ function statusVariant(state) {
     return 'muted';
 }
 
-function renderCard(migration, dateOptions) {
-    const card = document.createElement('div');
-    card.className = 'pk-flyway';
-    if (migration.state === 'FAILED') card.classList.add('pk-flyway--failed');
-    if (migration.state === 'PENDING') card.classList.add('pk-flyway--pending');
+function renderRow(migration, dateOptions) {
+    const row = document.createElement('tr');
+    if (migration.state === 'FAILED') row.classList.add('pk-flyway-row--failed');
+    if (migration.state === 'PENDING') row.classList.add('pk-flyway-row--pending');
 
-    const header = document.createElement('div');
-    header.className = 'pk-flyway__header';
-
-    const versionEl = document.createElement('span');
-    versionEl.className = 'pk-flyway__version';
-    versionEl.textContent = `V${migration.version}`;
-
-    const descriptionEl = document.createElement('span');
-    descriptionEl.className = 'pk-flyway__description';
-    descriptionEl.textContent = migration.description;
-
-    header.append(versionEl, descriptionEl, badge(migration.state, statusVariant(migration.state)));
-
-    const details = document.createElement('div');
-    details.className = 'pk-flyway__details';
-
-    if (migration.executionTime != null) {
-        details.appendChild(renderExecutionTime(migration.executionTime));
-    }
-
-    const dateEl = document.createElement('span');
-    dateEl.className = 'pk-flyway__date';
-    dateEl.textContent = formatDateTime(migration.installedOn, dateOptions);
-    details.appendChild(dateEl);
-
-    const typeEl = document.createElement('span');
-    typeEl.className = 'pk-flyway__type';
-    typeEl.textContent = migration.type;
-    details.appendChild(typeEl);
-
-    const script = document.createElement('div');
-    script.className = 'pk-flyway__script';
-    script.textContent = migration.script;
-
-    card.append(header, details, script);
-    return card;
+    row.append(
+        cell(`V${migration.version}`, 'pk-flyway-row__version pk-table__shrink'),
+        cell(migration.description, 'pk-flyway-row__description'),
+        cell(migration.script, 'pk-table__mono pk-flyway-row__script'),
+        cell(migration.type, 'pk-table__shrink'),
+        durationCell(migration.executionTime),
+        cell(formatDateTime(migration.installedOn, dateOptions), 'pk-table__shrink'),
+        statusCell(migration.state)
+    );
+    return row;
 }
 
-function renderExecutionTime(executionTime) {
+function cell(text, className) {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    td.textContent = text ?? '';
+    // the script column is the one that can genuinely overflow; a title keeps the
+    // full value reachable once the cell truncates
+    if (text) td.title = String(text);
+    return td;
+}
+
+function durationCell(executionTime) {
+    const td = document.createElement('td');
+    td.className = 'pk-table__num pk-table__shrink';
+    if (executionTime == null) {
+        td.textContent = '';
+        return td;
+    }
     const severity = durationSeverity(executionTime);
-    const timeEl = document.createElement('span');
-    timeEl.className = 'pk-flyway__time' + (severity ? ` pk-flyway__time--${severity}` : '');
-    timeEl.textContent = `⏱ ${formatDurationMs(executionTime)}`;
-    return timeEl;
+    if (severity) td.classList.add(`pk-flyway-row__time--${severity}`);
+    td.textContent = formatDurationMs(executionTime);
+    return td;
+}
+
+function statusCell(state) {
+    const td = document.createElement('td');
+    td.className = 'pk-table__shrink';
+    td.appendChild(badge(state, statusVariant(state)));
+    return td;
 }

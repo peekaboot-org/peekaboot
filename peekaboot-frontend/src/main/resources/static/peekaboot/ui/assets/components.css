@@ -148,9 +148,36 @@
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
 .pk-btn--small { padding: 2px var(--pk-space-sm); font-size: var(--pk-text-xs); }
+/* Primary bucket/segment selector - a top-level filter, so it carries more weight
+   and a comfortable hit area rather than the compact --small treatment. */
+.pk-btn--bucket { padding: var(--pk-space-sm) var(--pk-space-md); font-size: var(--pk-text-sm); font-weight: 600; }
 /* Extra right padding clears room for a dropdown-style caret/chevron the
    consumer places absolutely inside the button. */
 .pk-btn--select { padding-right: var(--pk-space-md); }
+
+/* Data table: one row per record, for tabs that list uniform items. Shared so any
+   such tab reads the same. The trace-detail overlay layers its own narrower
+   key/value rules on top of this in trace-detail.css. */
+.pk-table { width: 100%; border-collapse: collapse; font-size: var(--pk-text-xs); }
+.pk-table th {
+    padding: var(--pk-space-sm);
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--pk-border);
+}
+.pk-table td { padding: var(--pk-space-sm); border-bottom: 1px solid var(--pk-border); }
+.pk-table tbody tr:last-child td { border-bottom: none; }
+.pk-table__mono { font-family: var(--pk-font-mono); }
+/* Numeric columns line up on the decimal, so scanning a column does not jitter. */
+.pk-table__num { text-align: right; font-family: var(--pk-font-mono); font-variant-numeric: tabular-nums; }
+.pk-table__shrink { width: 1%; white-space: nowrap; }
+/* Wide tables scroll inside their own box rather than widening the page. */
+.pk-table-scroll { overflow-x: auto; }
 .pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }
 
 /* Tab strip */
