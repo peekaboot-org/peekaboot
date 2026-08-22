@@ -18,11 +18,14 @@ class InsightsServiceTest {
 
     private SimpleMeterRegistry registry;
     private InsightsService service;
+    // Micrometer gauges hold the state object via a WeakReference; without a strong
+    // reference here the GC can collect it between registration and sampling.
+    private AtomicLong cpuUsage;
 
     @BeforeEach
     void setUp() {
         registry = new SimpleMeterRegistry();
-        registry.gauge("process.cpu.usage", new AtomicLong(1)); // resolves the cpu panel's first series
+        cpuUsage = registry.gauge("process.cpu.usage", new AtomicLong(1)); // resolves the cpu panel's first series
         service = new InsightsService(registry, new InsightsProperties(),
                 new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP);
     }
