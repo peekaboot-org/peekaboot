@@ -90,7 +90,11 @@ function renderTaskRow(task, type, context) {
 
     const scheduleEl = document.createElement('span');
     scheduleEl.className = 'pk-task__schedule';
-    scheduleEl.title = task.schedule;
+    // the description truncates when the row is narrow, so the tooltip has to carry it
+    // as well as the raw expression it was derived from
+    scheduleEl.title = scheduleDisplay === task.schedule
+        ? task.schedule
+        : `${scheduleDisplay} (${task.schedule})`;
     scheduleEl.textContent = scheduleDisplay;
     left.appendChild(scheduleEl);
 

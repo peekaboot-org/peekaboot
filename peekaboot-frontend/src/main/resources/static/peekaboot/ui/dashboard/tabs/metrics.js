@@ -130,6 +130,10 @@ function renderList(filterQuery) {
  * (which the six-way .metric-type-badge.type-* CSS split collapsed into a single
  * badge('type', 'info')) are appended afterwards, and the name gets the --mono
  * modifier group()'s own doc comment reserves for metric names.
+ *
+ * The three trailing items move into a .pk-group__meta grid so they line up as columns
+ * down the list. The unit cell is always emitted, empty when the metric has no base
+ * unit, because a missing cell would slide the count into the unit's column.
  */
 function decorateGroupHeaders(listEl, metrics) {
     const metricsByName = new Map(metrics.map(metric => [metric.name, metric]));
@@ -141,13 +145,15 @@ function decorateGroupHeaders(listEl, metrics) {
         groupEl.querySelector('.pk-group__name').classList.add('pk-group__name--mono');
 
         const countEl = groupEl.querySelector('.pk-group__count');
-        countEl.before(badge(metric.type, 'info'));
-        if (metric.baseUnit) {
-            const unitEl = document.createElement('span');
-            unitEl.className = 'pk-metric__unit';
-            unitEl.textContent = metric.baseUnit;
-            countEl.before(unitEl);
-        }
+        const meta = document.createElement('span');
+        meta.className = 'pk-group__meta';
+
+        const unitEl = document.createElement('span');
+        unitEl.className = 'pk-metric__unit';
+        unitEl.textContent = metric.baseUnit || '';
+
+        countEl.replaceWith(meta);
+        meta.append(badge(metric.type, 'info'), unitEl, countEl);
     });
 }
 
