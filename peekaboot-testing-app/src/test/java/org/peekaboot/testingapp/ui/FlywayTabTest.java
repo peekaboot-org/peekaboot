@@ -1,6 +1,8 @@
 package org.peekaboot.testingapp.ui;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -38,7 +40,7 @@ class FlywayTabTest extends PlaywrightTestBase {
      * hundreds of migrations, so the row budget is what keeps the tab usable.
      */
     @Test
-    void flywayTabRendersOneTableRowPerMigration() {
+    void flywayTabRendersOneTableRowPerMigration() throws Exception {
         openDashboard();
         page.click(".pk-tab[data-tab='flyway']");
         page.waitForSelector("#flyway-timeline .pk-table tbody tr");
@@ -46,8 +48,11 @@ class FlywayTabTest extends PlaywrightTestBase {
         assertThat(page.querySelectorAll("#flyway-timeline .pk-table thead th"))
                 .as("the table is column-headed so each migration reads as a record")
                 .hasSize(7);
+
+        Resource[] migrations = new PathMatchingResourcePatternResolver()
+                .getResources("classpath:db/migration/V*.sql");
         assertThat(page.querySelectorAll("#flyway-timeline .pk-table tbody tr"))
-                .as("V1 and V2 are the two migrations this profile applies")
-                .hasSize(2);
+                .as("one table row per migration file on the classpath")
+                .hasSize(migrations.length);
     }
 }
