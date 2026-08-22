@@ -67,17 +67,23 @@ class TraceApiClient {
     JsonNode awaitTrace(String traceId) {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
         JsonNode lastSeen = null;
+        int previousSpanCount = -1;
         while (System.nanoTime() < deadline) {
             JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
             if (trace != null) {
                 lastSeen = trace;
-                if (trace.path("summary").path("spans").path("count").asInt() > 0) {
+                int spanCount = trace.path("summary").path("spans").path("count").asInt();
+                // A trace with an outbound call is exported in more than one BatchSpanProcessor
+                // flush, so a single non-zero read can be a partial snapshot. Requiring the count
+                // to hold steady across two consecutive polls confirms the flushes have caught up.
+                if (spanCount > 0 && spanCount == previousSpanCount) {
                     return trace;
                 }
+                previousSpanCount = spanCount;
             }
             sleepBriefly();
         }
-        throw new AssertionError("trace " + traceId + " never had an exported span within "
+        throw new AssertionError("trace " + traceId + " never had a stable exported span count within "
                 + TIMEOUT + "; last response: " + lastSeen);
     }
 

@@ -9,11 +9,13 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
+import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -124,6 +126,40 @@ class OrderTraceCaptureIntegrationTest {
                 .as("a trace in the Errors bucket must be classified as having errors, "
                   + "otherwise the bucket filter and the status badge disagree")
                 .isEqualTo("HAS_ERRORS");
+    }
+
+    @Test
+    void ordersPageTraceIncludesTheOutboundCustomerLookup() {
+        String traceId = traces.triggerAndCaptureTraceId("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId);
+
+        assertThat(spanNames(trace))
+                .as("the outbound customer lookup must appear as its own span, or the demo "
+                  + "trace shows only in-process work and the span tree looks flat")
+                .anySatisfy(name -> assertThat(name).contains("/api/person/"));
+    }
+
+    @Test
+    void placingAnOrderIsCapturedAsItsOwnTrace() {
+        traces.restClient().post()
+                .uri("/api/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new NewOrder(1L, "WIDGET-NEW", 2))
+                .retrieve()
+                .toBodilessEntity();
+
+        JsonNode trace = traces.awaitTraceInBucket("all", "http post /api/orders");
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("a POST handled by a controller must be classified as an HTTP request")
+                .isEqualTo("HTTP_REQUEST");
+    }
+
+    private static List<String> spanNames(JsonNode trace) {
+        List<String> names = new ArrayList<>();
+        collectSpanNames(trace.path("rootSpan"), names);
+        return names;
     }
 
     private static void collectSpanNames(JsonNode span, List<String> out) {
