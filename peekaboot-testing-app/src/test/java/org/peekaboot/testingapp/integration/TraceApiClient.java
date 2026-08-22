@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -84,15 +85,13 @@ class TraceApiClient {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
         List<String> seen = new ArrayList<>();
         while (System.nanoTime() < deadline) {
-            JsonNode response = fetchOrNull("/peekaboot/api/traces/insights?bucket=" + bucket);
-            if (response != null) {
-                seen.clear();
-                for (JsonNode trace : response.path("traces")) {
-                    String rootOperation = trace.path("rootOperation").asString("");
-                    seen.add(rootOperation);
-                    if (rootOperation.contains(rootOperationFragment)) {
-                        return trace;
-                    }
+            JsonNode response = fetch("/peekaboot/api/traces/insights?bucket=" + bucket);
+            seen.clear();
+            for (JsonNode trace : response.path("traces")) {
+                String rootOperation = trace.path("rootOperation").asString("");
+                seen.add(rootOperation);
+                if (rootOperation.contains(rootOperationFragment)) {
+                    return trace;
                 }
             }
             sleepBriefly();
@@ -102,12 +101,16 @@ class TraceApiClient {
                 + "; the bucket held: " + seen);
     }
 
+    private JsonNode fetch(String uri) {
+        String body = restClient.get().uri(uri).retrieve().body(String.class);
+        return body == null ? null : objectMapper.readTree(body);
+    }
+
     private JsonNode fetchOrNull(String uri) {
         try {
-            String body = restClient.get().uri(uri).retrieve().body(String.class);
-            return body == null ? null : objectMapper.readTree(body);
-        } catch (RuntimeException notYetAvailable) {
-            // single-trace lookups 404 until the first span for the trace lands
+            return fetch(uri);
+        } catch (HttpClientErrorException.NotFound notYetAvailable) {
+            // single-trace endpoint returns 404 until the first span for the trace is exported
             return null;
         }
     }
