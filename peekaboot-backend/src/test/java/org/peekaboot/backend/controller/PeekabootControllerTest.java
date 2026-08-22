@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
+import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -52,7 +53,7 @@ class PeekabootControllerTest {
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = new PeekabootController(actuatorInsightsService, traceInsightsService, metricsService, properties);
+        controller = new PeekabootController(actuatorInsightsService, traceInsightsService, metricsService, properties, null);
     }
 
     @Nested
@@ -228,6 +229,27 @@ class PeekabootControllerTest {
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features.get("unmaskingEnabled")).isEqualTo(true);
+        }
+
+        @Test
+        void shouldIncludeInsightsFeatureAsFalseWhenInsightsServiceAbsent() {
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("insights")).isEqualTo(false);
+        }
+
+        @Test
+        void shouldIncludeInsightsFeatureAsTrueWhenInsightsServicePresent() {
+            PeekabootController controllerWithInsights = new PeekabootController(
+                    actuatorInsightsService,
+                    traceInsightsService,
+                    metricsService,
+                    properties,
+                    mock(InsightsService.class));
+
+            Map<String, Object> features = controllerWithInsights.getFeatures();
+
+            assertThat(features.get("insights")).isEqualTo(true);
         }
     }
 

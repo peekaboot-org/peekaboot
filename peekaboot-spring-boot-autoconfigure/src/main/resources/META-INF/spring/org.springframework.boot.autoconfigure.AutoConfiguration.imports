@@ -4,3 +4,4 @@ org.peekaboot.autoconfigure.PeekabootAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootLifecycleAutoConfiguration
 org.peekaboot.autoconfigure.DevToolbarAutoConfiguration
 org.peekaboot.autoconfigure.TracingInterceptorAutoConfiguration
+org.peekaboot.autoconfigure.InsightsAutoConfiguration

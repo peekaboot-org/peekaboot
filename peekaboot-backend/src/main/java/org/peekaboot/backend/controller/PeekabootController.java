@@ -8,12 +8,14 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,15 +31,20 @@ public class PeekabootController {
     private final MetricsService metricsService;
     private final PeekabootProperties properties;
 
+    @Nullable
+    private final InsightsService insightsService;
+
     public PeekabootController(
             ActuatorInsightsService actuatorInsightsService,
             TraceInsightsService traceInsightsService,
             MetricsService metricsService,
-            PeekabootProperties properties) {
+            PeekabootProperties properties,
+            @Nullable InsightsService insightsService) {
         this.actuatorInsightsService = actuatorInsightsService;
         this.traceInsightsService = traceInsightsService;
         this.metricsService = metricsService;
         this.properties = properties;
+        this.insightsService = insightsService;
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -57,6 +64,7 @@ public class PeekabootController {
         features.put("metrics", metricsService.isAvailable());
         features.put("devToolbar", properties.isDevToolbar());
         features.put("unmaskingEnabled", properties.isEnableUnmasking());
+        features.put("insights", insightsService != null);
         return features;
     }
 
