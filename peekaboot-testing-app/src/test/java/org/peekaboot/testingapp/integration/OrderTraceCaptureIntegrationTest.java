@@ -10,6 +10,7 @@ import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.order.NewOrder;
+import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,9 @@ class OrderTraceCaptureIntegrationTest {
 
     @Autowired
     private OrderLineRepository orderLineRepository;
+
+    @Autowired
+    private OrderReconciler reconciler;
 
     private TraceApiClient traces;
 
@@ -154,6 +158,18 @@ class OrderTraceCaptureIntegrationTest {
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
                 .isEqualTo("HTTP_REQUEST");
+    }
+
+    @Test
+    void reconciliationJobIsCapturedAsAScheduledJobTrace() {
+        reconciler.reconcileOrders();
+
+        JsonNode trace = traces.awaitTraceInBucket("all", "order.reconcile.job");
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("a trace whose root span is the reconciliation job must classify as "
+                  + "SCHEDULED_JOB, or the Scheduled Tasks tab cannot link to its runs")
+                .isEqualTo("SCHEDULED_JOB");
     }
 
     private static List<String> spanNames(JsonNode trace) {
