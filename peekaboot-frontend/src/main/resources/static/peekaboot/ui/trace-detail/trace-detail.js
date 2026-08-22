@@ -16,6 +16,7 @@ import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
+import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
@@ -147,6 +148,9 @@ function statusBadgeVariant(statusNum) {
 }
 
 function render(content, trace) {
+    // delegated once on the container, which outlives every innerHTML swap below
+    bindCopyables(content);
+
     const rootSpan = trace.rootSpan || {};
     const tags = rootSpan.tags || {};
     const httpExchange = trace.httpExchange || {};
@@ -172,7 +176,7 @@ function render(content, trace) {
                         <span class="pk-overlay__title-icon"></span>
                         <span class="pk-overlay__title-method">${escapeHtml(method)}</span>
                         <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                        <span class="pk-overlay__title-traceid" title="${escapeHtml(trace.traceId || '')}">${escapeHtml(trace.traceId || '-')}</span>
+                        <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
                     </div>
                     <div class="pk-overlay__meta">
                         <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>

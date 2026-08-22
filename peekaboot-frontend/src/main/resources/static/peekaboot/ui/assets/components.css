@@ -59,14 +59,28 @@
    (primary-coloured); --strong matches .logger-group-name; --mono matches
    .metric-name (strong-coloured, monospace, ellipsis-truncated). */
 .pk-group__name--strong { color: var(--pk-text-strong); }
+/* Monospace only. The colour stays the primary of .pk-group__name: every group header
+   is expandable, so they must all carry the same affordance. */
 .pk-group__name--mono {
-    color: var(--pk-text-strong);
     font-family: var(--pk-font-mono);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 .pk-group__count { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+/* Trailing metadata as fixed columns. Each group is its own subtree, so grid cannot
+   align across rows - only fixed track widths keep the left edge of each column steady
+   from row to row instead of shifting with the content's length. */
+.pk-group__meta {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 5.5rem 5rem 8.5rem;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    justify-items: start;
+}
+.pk-group__meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-group__meta .pk-group__count { justify-self: end; font-variant-numeric: tabular-nums; }
 .pk-group__list {
     border: 1px solid var(--pk-border);
     border-top: none;
@@ -154,6 +168,48 @@
 /* Extra right padding clears room for a dropdown-style caret/chevron the
    consumer places absolutely inside the button. */
 .pk-btn--select { padding-right: var(--pk-space-md); }
+
+/* Copyable identifier - a labelled, full-length trace/span id that copies on click.
+   Reads as text until hovered, so a row full of ids does not look like a row of buttons. */
+.pk-copy {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--pk-space-xs);
+    max-width: 100%;
+    padding: 1px var(--pk-space-xs);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.pk-copy:hover { background: var(--pk-bg-hover); border-color: var(--pk-border); }
+.pk-copy:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
+.pk-copy__label { flex: 0 0 auto; color: var(--pk-text-muted); font-size: var(--pk-text-xs); }
+.pk-copy__value { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
+/* Only where the container is genuinely narrow; the id stays fully copyable either way. */
+.pk-copy--truncate .pk-copy__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-copy__icon { flex: 0 0 auto; opacity: 0; font-size: var(--pk-text-xs); transition: opacity var(--pk-transition); }
+.pk-copy:hover .pk-copy__icon,
+.pk-copy:focus-visible .pk-copy__icon,
+.pk-copy--copied .pk-copy__icon { opacity: 0.75; }
+.pk-copy--copied { color: var(--pk-success); }
+.pk-copy--copied .pk-copy__icon { opacity: 1; }
+.pk-copy--failed { color: var(--pk-danger); }
+.pk-copy--empty { color: var(--pk-text-muted); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
+/* Announced to screen readers on copy; never shown. */
+.pk-copy__status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
 
 /* Data table: one row per record, for tabs that list uniform items. Shared so any
    such tab reads the same. The trace-detail overlay layers its own narrower

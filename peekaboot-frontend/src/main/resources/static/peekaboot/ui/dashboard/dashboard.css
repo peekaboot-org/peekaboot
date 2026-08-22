@@ -351,7 +351,9 @@
 .pk-trace-item__path { flex: 1; font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-trace-item__action-label { font-size: var(--pk-text-xs); color: var(--pk-text-muted); margin-left: var(--pk-space-xs); }
 .pk-trace-item__duration { font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
-.pk-trace-item__id { font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); background: var(--pk-bg-alt); padding: var(--pk-space-xs) var(--pk-space-sm); border-radius: var(--pk-radius); }
+/* The trace id is a .pk-copy control (components.css); it only needs a width bound here
+   so a 32-character id cannot crowd the rest of the row. */
+.pk-trace-item__stats .pk-copy { max-width: 24ch; }
 .pk-trace-item__time { color: var(--pk-text-muted); font-size: var(--pk-text-sm); }
 .pk-trace-item__stats { display: flex; align-items: center; gap: var(--pk-space-md); margin-top: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-trace-item__stat-group { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
@@ -367,10 +369,23 @@
 /* Scheduled task item */
 .pk-task { padding: var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }
 .pk-task:last-child { border-bottom: none; }
-.pk-task__row { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; }
-.pk-task__left { display: flex; align-items: center; gap: var(--pk-space-sm); flex-shrink: 0; }
-.pk-task__right { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; }
-.pk-task__schedule { font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); font-weight: 600; color: var(--pk-text-strong); }
+/* The description is the only part that can grow without bound - a verbose cron reads
+   "every 30 minutes every hour between 9 and 17 every day between Monday and Friday".
+   It takes the slack and truncates; the timings and status keep their place at the right
+   rather than being wrapped onto a second line and stranded at the left margin. */
+.pk-task__row { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: nowrap; }
+.pk-task__left { display: flex; align-items: center; gap: var(--pk-space-sm); flex: 1; min-width: 0; }
+.pk-task__left > .pk-badge { flex: 0 0 auto; }
+.pk-task__right { display: flex; align-items: center; gap: var(--pk-space-md); flex: 0 0 auto; margin-left: auto; }
+.pk-task__schedule {
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    color: var(--pk-text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .pk-task__timing { font-size: var(--pk-text-xs); color: var(--pk-text-muted); white-space: nowrap; }
 .pk-task__timing-label { font-weight: 500; }
 .pk-task__target-row { margin-top: var(--pk-space-sm); }

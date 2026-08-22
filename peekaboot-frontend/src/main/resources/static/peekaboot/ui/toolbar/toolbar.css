@@ -47,7 +47,9 @@
 }
 .pk-toolbar__controller { color: var(--pk-primary); }
 .pk-toolbar__metrics { display: flex; align-items: center; gap: var(--pk-space-md); }
-.pk-toolbar__trace { font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
+/* Sits outside .pk-toolbar__open so the copy control inside it is a real, reachable
+   button rather than presentational children of the open button. */
+.pk-toolbar__trace { flex: 0 1 auto; min-width: 0; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
 .pk-toolbar__pending { color: var(--pk-text-muted); }
 
 .pk-stat { display: flex; align-items: center; gap: var(--pk-space-xs); }

@@ -18,6 +18,7 @@ import {escapeHtml} from '../../shared/markup.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
+import {copyableId, bindCopyables} from '../../shared/copyable.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -47,6 +48,8 @@ export function isAvailable(data, features) {
 export function render(container, data, context) {
     currentContainer = container;
     currentContext = context;
+    // delegated on the panel, which survives every re-render of the trace list
+    bindCopyables(container);
     wireControls(container);
     fetchAndRender();
 }
@@ -326,10 +329,9 @@ function renderStats(trace, context) {
     const stats = document.createElement('div');
     stats.className = 'pk-trace-item__stats';
 
-    const idEl = document.createElement('code');
-    idEl.className = 'pk-trace-item__id';
-    idEl.textContent = trace.traceId ? trace.traceId.substring(0, 16) + '...' : 'unknown';
-    stats.appendChild(idEl);
+    // truncated visually so a long list stays scannable, but the full id is what gets
+    // copied - and clicking it copies rather than expanding the row
+    stats.appendChild(copyableId(trace.traceId, {label: 'traceId', truncate: true}));
 
     const timeEl = document.createElement('span');
     timeEl.className = 'pk-trace-item__time';

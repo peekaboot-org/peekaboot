@@ -3,6 +3,7 @@
  * and the span-logs popup reachable from a span's logs badge.
  */
 import {escapeHtml} from '../../shared/markup.js';
+import {copyableIdHtml} from '../../shared/copyable.js';
 import {buildSpanNames} from '../../shared/span-names.js';
 import {renderLogRows} from './logs.js';
 
@@ -100,8 +101,9 @@ function showSpanLogsPopup(container, traceId, initialSpanId, initialSpanLogs, a
         }
 
         const titleHtml = showAllLogs
-            ? `Logs for Trace <code>${escapeHtml(traceId)}</code>`
-            : `Logs for Span <code>${escapeHtml(spanId)}</code> (Part of trace <code>${escapeHtml(traceId)}</code>). `
+            ? `Logs for Trace ${copyableIdHtml(traceId, {label: 'traceId'})}`
+            : `Logs for Span ${copyableIdHtml(spanId, {label: 'spanId'})} `
+              + `(Part of trace ${copyableIdHtml(traceId, {label: 'traceId'})}). `
               + `<span class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</span>`;
 
         popup.innerHTML = `

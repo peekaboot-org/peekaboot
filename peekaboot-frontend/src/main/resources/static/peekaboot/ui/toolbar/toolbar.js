@@ -14,6 +14,7 @@ import {formatDurationMs} from '../shared/format.js';
 import {durationSeverity} from '../shared/severity.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
+import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 
 const dataEl = document.getElementById('peekaboot-toolbar-data');
 if (dataEl && !document.getElementById('peekaboot-toolbar-host')) {
@@ -37,8 +38,9 @@ function initToolbar(data) {
     // A real <button> carries the "open trace details" action so keyboard users get it for
     // free (Enter/Space -> a real click event, natively) and assistive tech gets a proper
     // control - not a role="button" div, which ARIA defines as children-presentational and
-    // could flatten the dashboard link right out of the accessibility tree. The link is a
-    // sibling, not a descendant of the button, so it stays independently reachable.
+    // could flatten the dashboard link right out of the accessibility tree. The link and the
+    // copyable trace id are siblings, not descendants of the button, so both stay
+    // independently reachable.
     bar.innerHTML = `
         <button type="button" class="pk-toolbar__open" aria-label="Open request trace details" aria-disabled="true">
             <span class="pk-toolbar__side">
@@ -50,10 +52,8 @@ function initToolbar(data) {
                     <span class="pk-toolbar__pending">Waiting for request…</span>
                 </span>
             </span>
-            <span class="pk-toolbar__side">
-                <span class="pk-toolbar__trace" id="pk-trace">-</span>
-            </span>
         </button>
+        <span class="pk-toolbar__trace" id="pk-trace">-</span>
         <a class="pk-toolbar__link" href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard">\u{1F4CA}</a>
     `;
     shadow.appendChild(bar);
@@ -85,7 +85,10 @@ function initToolbar(data) {
         pathEl.title = path;
 
         shadow.getElementById('pk-controller').textContent = '';
-        shadow.getElementById('pk-trace').textContent = traceId ? traceId.substring(0, 16) + '...' : '-';
+        // full id, labelled and copyable - a truncated id cannot be pasted into a log
+        // search, which is the only reason to show it on the bar at all
+        shadow.getElementById('pk-trace').innerHTML = copyableIdHtml(traceId, {label: 'traceId'});
+        bindCopyables(shadow);
 
         const metricsEl = shadow.getElementById('pk-metrics');
         metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
