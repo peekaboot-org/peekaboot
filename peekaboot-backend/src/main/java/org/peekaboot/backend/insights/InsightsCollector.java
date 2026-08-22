@@ -4,7 +4,12 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
 
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,14 +17,27 @@ import java.util.concurrent.atomic.AtomicLongArray;
 
 /**
  * Samples every configured series into level 0 on each tick and rolls finer
- * levels up into coarser ones on request. Purely passive: methods are invoked
- * directly by the caller (tests now, the tick/roll-up threads in the next
- * task) - this class owns no threads of its own.
+ * levels up into coarser ones on request. Owns one virtual thread per level
+ * (see {@link #start()}) that drives {@link #tick(long)}/{@link #rollUp(int, long)}
+ * on a boundary-aligned schedule; the sampling methods themselves remain
+ * callable directly, which is how tests exercise them without starting threads.
  */
-public final class InsightsCollector {
+public final class InsightsCollector implements SmartLifecycle {
+
+    private static final Logger log = LoggerFactory.getLogger(InsightsCollector.class);
 
     /** Notified after each tick and each roll-up. */
     public interface Listener {
+        Listener NO_OP = new Listener() {
+            @Override
+            public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+            }
+
+            @Override
+            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
+            }
+        };
+
         void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles);
 
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
@@ -33,6 +51,8 @@ public final class InsightsCollector {
     private final AtomicLongArray levelEndEpochMs;
     private final Map<String, TileState> tiles = new LinkedHashMap<>();
     private final Listener listener;
+    private final List<Thread> threads = new ArrayList<>();
+    private volatile boolean running;
 
     public InsightsCollector(List<InsightsProperties.Level> levels, List<SeriesDef> series,
                               List<TileDef> tiles, MeterRegistry registry, Listener listener) {
@@ -57,6 +77,98 @@ public final class InsightsCollector {
             SeriesDef tileSeries = new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), "value", null, null);
             boolean live = Boolean.TRUE.equals(def.live());
             this.tiles.put(def.id(), new TileState(new SeriesSampler(tileSeries, registry), live));
+        }
+    }
+
+    /** Starts one virtual thread per level, each ticking/rolling up on its own boundary-aligned schedule. */
+    @Override
+    public synchronized void start() {
+        if (running) {
+            return;
+        }
+        running = true;
+        List<String> names = threadNames();
+        for (int level = 0; level < intervalMillis.length; level++) {
+            int boundLevel = level;
+            Thread thread = Thread.ofVirtual().name(names.get(level)).unstarted(() -> runLevel(boundLevel));
+            threads.add(thread);
+            thread.start();
+        }
+    }
+
+    /** Interrupts and joins every level thread (up to 2s each), then clears them. */
+    @Override
+    public synchronized void stop() {
+        running = false;
+        for (Thread thread : threads) {
+            thread.interrupt();
+        }
+        for (Thread thread : threads) {
+            try {
+                thread.join(2_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        threads.clear();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    /** Names the level threads would run under, without starting anything. */
+    List<String> threadNames() {
+        List<String> names = new ArrayList<>(intervalMillis.length);
+        names.add("peekaboot-insights-tick");
+        for (int level = 1; level < intervalMillis.length; level++) {
+            names.add("peekaboot-insights-agg-" + formatInterval(Duration.ofMillis(intervalMillis[level])));
+        }
+        return names;
+    }
+
+    /** Renders a duration compactly: whole hours as "Nh", whole minutes as "Nm", else "Ns"/"Nms". */
+    static String formatInterval(Duration duration) {
+        long millis = duration.toMillis();
+        if (millis % 3_600_000 == 0) {
+            return (millis / 3_600_000) + "h";
+        }
+        if (millis % 60_000 == 0) {
+            return (millis / 60_000) + "m";
+        }
+        if (millis % 1_000 == 0) {
+            return (millis / 1_000) + "s";
+        }
+        return millis + "ms";
+    }
+
+    /**
+     * Sleeps to the next boundary of {@code level}'s interval (offset by half the finer
+     * level's interval for aggregation levels, so its boundary write has landed), then runs
+     * {@code tick}/{@code rollUp} and repeats until interrupted.
+     */
+    private void runLevel(int level) {
+        long intervalMs = intervalMillis[level];
+        long offsetMs = level == 0 ? 0 : intervalMillis[level - 1] / 2;
+        while (!Thread.currentThread().isInterrupted()) {
+            long now = System.currentTimeMillis();
+            long next = ((now / intervalMs) + 1) * intervalMs + offsetMs;
+            try {
+                Thread.sleep(next - now);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            try {
+                if (level == 0) {
+                    tick(next);
+                } else {
+                    rollUp(level, next);
+                }
+            } catch (RuntimeException e) {
+                log.warn("Insights {} failed for level {}", level == 0 ? "tick" : "roll-up", level, e);
+            }
         }
     }
 
@@ -157,7 +269,7 @@ public final class InsightsCollector {
         private final SeriesSampler sampler;
         private final boolean live;
         private volatile double value = Double.NaN;
-        private boolean frozen;
+        private volatile boolean frozen;
 
         private TileState(SeriesSampler sampler, boolean live) {
             this.sampler = sampler;
