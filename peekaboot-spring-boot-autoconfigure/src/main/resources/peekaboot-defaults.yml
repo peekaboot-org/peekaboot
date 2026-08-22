@@ -15,6 +15,17 @@ management:
       # Controls visibility of health check details (db, disk, etc.)
       # Spring default: never | We show always to expose component health in dashboard
       show-details: always
+    env:
+      # Whether property VALUES are readable at all. Left at Spring's default the
+      # Environment tab renders "******" for every entry - os.name and server.port
+      # included - which makes the tab useless.
+      # Spring default: never | We show values; Spring's sanitizer still masks keys
+      # that look secret (password, secret, token, key, credentials, ...)
+      show-values: always
+    configprops:
+      # Same reasoning as endpoint.env above, for the Config tab
+      # Spring default: never | We show values, the sanitizer still masks secret keys
+      show-values: always
 
   info:
     env:

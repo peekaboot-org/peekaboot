@@ -115,6 +115,20 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     }
 
     @Test
+    void showsActuatorValuesSoTheEnvironmentAndConfigTabsAreReadable() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        // Spring's default is "never", which masks every value - not just secret ones -
+        // and leaves the dashboard's Environment and Config tabs showing only "******"
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isEqualTo("always");
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isEqualTo("always");
+    }
+
+    @Test
     void appPropertiesOverrideDefaults() {
         ConfigurableEnvironment environment = new MockEnvironment();
 
