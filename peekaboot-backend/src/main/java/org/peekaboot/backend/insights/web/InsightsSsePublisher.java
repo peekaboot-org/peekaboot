@@ -31,8 +31,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private final AtomicBoolean queueOverflowWarned = new AtomicBoolean();
-    private volatile Thread heartbeatThread;
-    private volatile Thread dispatchThread;
+    private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
+    private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
 
     public InsightsSsePublisher(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
@@ -44,8 +44,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError(e -> emitters.remove(emitter));
-        startHeartbeatIfNeeded();
-        startDispatchIfNeeded();
+        heartbeatLoop.startIfNeeded();
+        dispatchLoop.startIfNeeded();
         return emitter;
     }
 
@@ -148,6 +148,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name(eventName).data(json));
+                onDelivered(eventName);
             } catch (IOException | IllegalStateException e) {
                 log.debug("Dropping insights SSE subscriber after send failure", e);
                 emitter.completeWithError(e);
@@ -155,34 +156,13 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         }
     }
 
-    private void startHeartbeatIfNeeded() {
-        if (heartbeatThread != null) {
-            return;
-        }
-        synchronized (this) {
-            if (heartbeatThread != null) {
-                return;
-            }
-            heartbeatThread = Thread.ofVirtual()
-                    .name("peekaboot-insights-sse-heartbeat")
-                    .unstarted(this::runHeartbeatLoop);
-            heartbeatThread.start();
-        }
+    /** Test seam: invoked after each event successfully handed to an emitter's send(). No-op in production. */
+    void onDelivered(String eventName) {
     }
 
-    private void runHeartbeatLoop() {
-        try {
-            while (!emitters.isEmpty()) {
-                Thread.sleep(HEARTBEAT_INTERVAL);
-                heartbeat();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            synchronized (this) {
-                heartbeatThread = null;
-            }
-        }
+    private void heartbeatStep() throws InterruptedException {
+        Thread.sleep(HEARTBEAT_INTERVAL);
+        heartbeat();
     }
 
     void heartbeat() {
@@ -196,41 +176,16 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         }
     }
 
-    private void startDispatchIfNeeded() {
-        if (dispatchThread != null) {
-            return;
-        }
-        synchronized (this) {
-            if (dispatchThread != null) {
-                return;
-            }
-            dispatchThread = Thread.ofVirtual()
-                    .name("peekaboot-insights-sse-dispatch")
-                    .unstarted(this::runDispatchLoop);
-            dispatchThread.start();
-        }
-    }
-
     /**
-     * Drains the queue and broadcasts each event in arrival order, one thread at
-     * a time so ordering is preserved. Polls with a timeout (rather than a
-     * blocking take()) purely so the loop can notice emitters have drained to
-     * zero and exit; a real event never waits longer than that poll timeout.
+     * Polls with a timeout (rather than a blocking take()) purely so the loop
+     * can periodically re-check whether emitters have drained to zero; a real
+     * queued event never waits longer than this poll timeout, since offer()
+     * wakes a blocked poll() immediately.
      */
-    private void runDispatchLoop() {
-        try {
-            while (!emitters.isEmpty()) {
-                SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-                if (event != null) {
-                    broadcast(event.name(), event.json());
-                }
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            synchronized (this) {
-                dispatchThread = null;
-            }
+    private void dispatchStep() throws InterruptedException {
+        SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+        if (event != null) {
+            broadcast(event.name(), event.json());
         }
     }
 
@@ -239,5 +194,61 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     }
 
     private record SseEvent(String name, String json) {
+    }
+
+    @FunctionalInterface
+    private interface LoopStep {
+        void run() throws InterruptedException;
+    }
+
+    /**
+     * Lazily starts a named virtual thread that repeats {@code step} while
+     * subscribers remain, and stops itself once they don't. Starting and the
+     * exit decision both happen under {@code synchronized (InsightsSsePublisher.this)},
+     * so a subscribe() racing the loop's own "should I stop?" check can never
+     * observe a stale non-null thread handle for a loop that has already
+     * committed to exiting without rechecking - the two are mutually exclusive
+     * on the same monitor, closing that class of race at the source (shared by
+     * both the heartbeat and dispatch loops).
+     */
+    private final class ManagedLoop {
+        private final String name;
+        private final LoopStep step;
+        private Thread thread;
+
+        ManagedLoop(String name, LoopStep step) {
+            this.name = name;
+            this.step = step;
+        }
+
+        void startIfNeeded() {
+            synchronized (InsightsSsePublisher.this) {
+                if (thread != null) {
+                    return;
+                }
+                thread = Thread.ofVirtual().name(name).unstarted(this::run);
+                thread.start();
+            }
+        }
+
+        private void run() {
+            while (true) {
+                synchronized (InsightsSsePublisher.this) {
+                    if (emitters.isEmpty()) {
+                        thread = null;
+                        return;
+                    }
+                }
+                try {
+                    step.run();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    synchronized (InsightsSsePublisher.this) {
+                        thread = null;
+                    }
+                    return;
+                }
+            }
+        }
     }
 }

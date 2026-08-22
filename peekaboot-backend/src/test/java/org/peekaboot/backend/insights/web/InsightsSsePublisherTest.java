@@ -67,6 +67,35 @@ class InsightsSsePublisherTest {
     }
 
     @Test
+    void dispatchThreadKeepsDrainingAfterRapidDisconnectAndResubscribe() throws Exception {
+        CountDownLatch delivered = new CountDownLatch(1);
+
+        // Proxy for the exit/restart race: a subscriber disconnects (draining the
+        // emitter list to empty, which the dispatch loop's exit check may or may
+        // not have observed yet) and a new one immediately replaces it - the
+        // scenario a browser tab refresh (EventSource reconnect) produces. This
+        // can't force the exact nanosecond interleaving deterministically, but it
+        // exercises the real disconnect -> resubscribe -> deliver path end to end;
+        // correctness under the race itself is argued by ManagedLoop's atomic
+        // exit-under-synchronized reasoning (see its class-level Javadoc).
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            void onDelivered(String eventName) {
+                delivered.countDown();
+            }
+        };
+
+        var firstEmitter = publisher.subscribe();
+        firstEmitter.complete();
+        publisher.subscribe();
+
+        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+
+        assertThat(delivered.await(3, TimeUnit.SECONDS))
+                .as("dispatch thread keeps draining after a rapid disconnect/resubscribe").isTrue();
+    }
+
+    @Test
     void tickPayloadMapsNaNToNull() {
         Map<String, Double> values = new LinkedHashMap<>();
         values.put("a", 1.5);
