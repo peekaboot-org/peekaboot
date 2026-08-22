@@ -3,6 +3,8 @@ package org.peekaboot.testingapp.order;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.concurrent.TimeUnit;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
@@ -23,11 +25,16 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final OrderLineRepository orderLineRepository;
+    private final OrderReportStages reportStages;
 
-    public OrderService(OrderRepository orderRepository, OrderLineRepository orderLineRepository) {
+    public OrderService(
+            OrderRepository orderRepository,
+            OrderLineRepository orderLineRepository,
+            OrderReportStages reportStages) {
 
         this.orderRepository = orderRepository;
         this.orderLineRepository = orderLineRepository;
+        this.reportStages = reportStages;
     }
 
 
@@ -43,7 +50,7 @@ public class OrderService {
         List<OrderSummary> summaries = new ArrayList<>();
         for (CustomerOrder order : orders) {
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
-            long lineTotal = orderLineRepository.countByOrderId(order.getId());
+            long lineCount = orderLineRepository.countByOrderId(order.getId());
             boolean known = orderRepository.existsById(order.getId());
 
             BigDecimal total = lines.stream()
@@ -55,10 +62,30 @@ public class OrderService {
                     order.getReference(),
                     known ? order.getStatus() : "UNKNOWN",
                     order.getPlacedAt(),
-                    (int) lineTotal,
+                    (int) lineCount,
                     total,
                     "customer #" + order.getCustomerId()));
         }
         return summaries;
+    }
+
+
+    /**
+     * Deliberately slow, in three observed stages, so the Slow bucket holds a trace whose
+     * span tree shows where the time actually went.
+     */
+    public OrderReport buildReport(long orderId) {
+
+        long started = System.nanoTime();
+        CustomerOrder order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new NoSuchElementException("no order " + orderId));
+
+        List<OrderLine> lines = reportStages.loadLines(orderId);
+        BigDecimal total = reportStages.priceLines(lines);
+        reportStages.applyDiscounts(total);
+
+        long computeMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+        log.info("report for {} computed in {}ms", order.getReference(), computeMillis);
+        return new OrderReport(order.getReference(), lines.size(), total, computeMillis);
     }
 }

@@ -2,6 +2,8 @@ package org.peekaboot.testingapp.integration;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
@@ -87,5 +89,35 @@ class OrderTraceCaptureIntegrationTest {
                   + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
                   + "Traces tab has no high-query-count warning to show")
                 .isGreaterThan(20);
+    }
+
+    @Test
+    void slowReportLandsInTheSlowBucket() {
+        Long orderId = orderRepository.findAll().getFirst().getId();
+
+        traces.trigger("/api/orders/" + orderId + "/report");
+
+        JsonNode trace = traces.awaitTraceInBucket("slow", "/api/orders/{id}/report");
+
+        assertThat(trace.path("durationMs").asLong())
+                .as("the report endpoint must exceed the default "
+                  + "peekaboot.tracing.slow-trace-threshold-ms of 1000, or the Slow bucket "
+                  + "has nothing to show")
+                .isGreaterThanOrEqualTo(1000L);
+
+        List<String> spanNames = new ArrayList<>();
+        collectSpanNames(trace.path("rootSpan"), spanNames);
+
+        assertThat(spanNames)
+                .as("the report's three stages must each show up as their own span, or the "
+                  + "Slow bucket trace is just one opaque span again - spans seen: %s", spanNames)
+                .contains("OrderReportStages#loadLines", "OrderReportStages#priceLines", "OrderReportStages#applyDiscounts");
+    }
+
+    private static void collectSpanNames(JsonNode span, List<String> out) {
+        out.add(span.path("name").asString(""));
+        for (JsonNode child : span.path("children")) {
+            collectSpanNames(child, out);
+        }
     }
 }
