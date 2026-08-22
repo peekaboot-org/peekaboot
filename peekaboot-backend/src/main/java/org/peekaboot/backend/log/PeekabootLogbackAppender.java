@@ -1,6 +1,5 @@
 package org.peekaboot.backend.log;
 
-import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -12,21 +11,22 @@ import java.util.Map;
 /**
  * Logback appender that captures log events and publishes them via Spring events.
  * Uses MDC for traceId/spanId correlation since logback events contain frozen MDC state.
+ *
+ * <p>Every event Logback delivers is captured. The appender applies no threshold of its own:
+ * it hangs off the root logger, so the levels configured under {@code logging.level.*} have
+ * already decided what arrives, and a second hidden floor here only made the trace's log tab
+ * disagree with the log file. Per-trace volume stays bounded by
+ * {@code peekaboot.tracing.max-logs-per-trace}.
  */
 public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
 
     private static final String TRACE_ID_KEY = "traceId";
     private static final String SPAN_ID_KEY = "spanId";
 
-    private Level minLevel = Level.DEBUG;
     private ApplicationEventPublisher eventPublisher;
 
     public PeekabootLogbackAppender() {
         setName("peekaboot");
-    }
-
-    public void setMinLevel(Level minLevel) {
-        this.minLevel = minLevel;
     }
 
     public void setEventPublisher(ApplicationEventPublisher eventPublisher) {
@@ -36,10 +36,6 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
     @Override
     protected void append(ILoggingEvent event) {
         if (!isStarted()) {
-            return;
-        }
-
-        if (!event.getLevel().isGreaterOrEqual(minLevel)) {
             return;
         }
 
