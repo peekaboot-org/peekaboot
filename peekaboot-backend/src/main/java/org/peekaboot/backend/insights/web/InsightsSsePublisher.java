@@ -12,7 +12,11 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Fans collector events out to all connected dashboard SSE clients. */
 public class InsightsSsePublisher implements InsightsCollector.Listener {
@@ -20,21 +24,41 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     private static final Logger log = LoggerFactory.getLogger(InsightsSsePublisher.class);
 
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
+    private static final Duration DISPATCH_POLL_TIMEOUT = Duration.ofSeconds(1);
+    private static final int QUEUE_CAPACITY = 256;
 
     private final ObjectMapper objectMapper;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
+    private final AtomicBoolean queueOverflowWarned = new AtomicBoolean();
     private volatile Thread heartbeatThread;
+    private volatile Thread dispatchThread;
 
     public InsightsSsePublisher(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     public SseEmitter subscribe() {
-        // complete()/completeWithError() are overridden because outside a real
-        // request dispatch (e.g. in unit tests, or when our own broadcast loop
-        // calls them directly) Spring's container-driven onCompletion/onError
-        // callbacks never fire - there is no Handler registered to invoke them.
-        SseEmitter emitter = new SseEmitter(0L) {
+        SseEmitter emitter = newEmitter();
+        emitters.add(emitter);
+        emitter.onCompletion(() -> emitters.remove(emitter));
+        emitter.onTimeout(() -> emitters.remove(emitter));
+        emitter.onError(e -> emitters.remove(emitter));
+        startHeartbeatIfNeeded();
+        startDispatchIfNeeded();
+        return emitter;
+    }
+
+    /**
+     * complete()/completeWithError() are overridden because outside a real
+     * request dispatch (e.g. in unit tests, or when our own dispatch loop calls
+     * them directly) Spring's container-driven onCompletion/onError callbacks
+     * never fire - there is no Handler registered to invoke them. Package-visible
+     * (rather than inlined into subscribe()) so tests can override the emitter's
+     * send behavior.
+     */
+    SseEmitter newEmitter() {
+        return new SseEmitter(0L) {
             @Override
             public void complete() {
                 super.complete();
@@ -47,12 +71,6 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
                 emitters.remove(this);
             }
         };
-        emitters.add(emitter);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(e -> emitters.remove(emitter));
-        startHeartbeatIfNeeded();
-        return emitter;
     }
 
     public int subscriberCount() {
@@ -61,12 +79,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
 
     @Override
     public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
-        broadcast("tick", tickJson(epochMs, values, tiles));
+        enqueue("tick", tickJson(epochMs, values, tiles));
     }
 
     @Override
     public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
-        broadcast("rollup", rollupJson(level, epochMs, entries));
+        enqueue("rollup", rollupJson(level, epochMs, entries));
     }
 
     String tickJson(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
@@ -106,6 +124,24 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
             result.put(entry.getKey(), nullSafe(entry.getValue()));
         }
         return result;
+    }
+
+    /**
+     * Queues a prepared event for the dispatch thread instead of sending on the
+     * caller's thread: onTick/onRollUp run on the collector's tick/roll-up
+     * virtual threads, and a blocking synchronous send to a slow client must
+     * never delay sampling. Bounded; on overflow the oldest queued event is
+     * dropped and a warning logged once.
+     */
+    private void enqueue(String eventName, String json) {
+        SseEvent event = new SseEvent(eventName, json);
+        if (!queue.offer(event)) {
+            queue.poll();
+            queue.offer(event);
+            if (queueOverflowWarned.compareAndSet(false, true)) {
+                log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
+            }
+        }
     }
 
     private void broadcast(String eventName, String json) {
@@ -160,7 +196,48 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         }
     }
 
+    private void startDispatchIfNeeded() {
+        if (dispatchThread != null) {
+            return;
+        }
+        synchronized (this) {
+            if (dispatchThread != null) {
+                return;
+            }
+            dispatchThread = Thread.ofVirtual()
+                    .name("peekaboot-insights-sse-dispatch")
+                    .unstarted(this::runDispatchLoop);
+            dispatchThread.start();
+        }
+    }
+
+    /**
+     * Drains the queue and broadcasts each event in arrival order, one thread at
+     * a time so ordering is preserved. Polls with a timeout (rather than a
+     * blocking take()) purely so the loop can notice emitters have drained to
+     * zero and exit; a real event never waits longer than that poll timeout.
+     */
+    private void runDispatchLoop() {
+        try {
+            while (!emitters.isEmpty()) {
+                SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+                if (event != null) {
+                    broadcast(event.name(), event.json());
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            synchronized (this) {
+                dispatchThread = null;
+            }
+        }
+    }
+
     static Double nullSafe(double value) {
         return Double.isNaN(value) ? null : value;
+    }
+
+    private record SseEvent(String name, String json) {
     }
 }

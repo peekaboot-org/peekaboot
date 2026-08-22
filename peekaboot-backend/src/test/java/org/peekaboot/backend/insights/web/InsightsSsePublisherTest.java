@@ -2,9 +2,13 @@ package org.peekaboot.backend.insights.web;
 
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,6 +24,46 @@ class InsightsSsePublisherTest {
         emitter.complete();
         // completion callback runs synchronously for SseEmitter.complete()
         assertThat(publisher.subscriberCount()).isZero();
+    }
+
+    @Test
+    void onTickReturnsImmediatelyWhileDeliveryHappensOnDispatchThread() throws Exception {
+        CountDownLatch sendStarted = new CountDownLatch(1);
+        CountDownLatch releaseSend = new CountDownLatch(1);
+        CountDownLatch sendCompleted = new CountDownLatch(1);
+
+        // A publisher whose emitter blocks on send() until released, standing in
+        // for a slow/wedged client. If onTick sent synchronously, calling it
+        // below would block on this same latch and the test would time out.
+        InsightsSsePublisher slowPublisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            SseEmitter newEmitter() {
+                return new SseEmitter(0L) {
+                    @Override
+                    public void send(SseEventBuilder builder) throws IOException {
+                        sendStarted.countDown();
+                        try {
+                            releaseSend.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        sendCompleted.countDown();
+                    }
+                };
+            }
+        };
+        slowPublisher.subscribe();
+
+        long start = System.nanoTime();
+        slowPublisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        assertThat(elapsedMs).as("onTick must not block on the emitter send").isLessThan(500);
+
+        assertThat(sendStarted.await(2, TimeUnit.SECONDS))
+                .as("dispatch thread picks up the queued event").isTrue();
+        releaseSend.countDown();
+        assertThat(sendCompleted.await(2, TimeUnit.SECONDS))
+                .as("send eventually completes on the dispatch thread").isTrue();
     }
 
     @Test
