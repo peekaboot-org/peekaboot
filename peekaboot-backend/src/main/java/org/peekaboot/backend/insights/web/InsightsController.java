@@ -32,7 +32,7 @@ public class InsightsController {
     }
 
     @GetMapping(value = "/data", produces = MediaType.APPLICATION_JSON_VALUE)
-    public LevelDataResponse data(@RequestParam int level) {
+    public LevelDataResponse data(@RequestParam("level") int level) {
         return service.data(level);
     }
 
