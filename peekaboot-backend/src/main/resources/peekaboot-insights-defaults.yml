@@ -1,0 +1,262 @@
+# Peekaboot insights - default panels and tiles.
+# Applications override by placing their own peekaboot-insights.yml on the
+# classpath root (merged by id) or via peekaboot.insights.config-location.
+
+tiles:
+  - id: started-at
+    label: Started at
+    meter: process.start.time
+    format: datetime
+  - id: startup-time
+    label: Startup
+    meter: application.started.time
+    format: duration
+  - id: ready-time
+    label: Ready after
+    meter: application.ready.time
+    format: duration
+  - id: uptime
+    label: Uptime
+    meter: process.uptime
+    format: duration
+    live: true
+  - id: cpu-cores
+    label: CPU cores
+    meter: system.cpu.count
+    format: count
+  - id: heap-max
+    label: Heap max
+    meter: jvm.memory.max
+    tags: { area: heap }
+    format: bytes
+  - id: disk-total
+    label: Disk total
+    meter: disk.total
+    format: bytes
+  - id: pool-min
+    label: Pool min
+    meter: hikaricp.connections.min
+    format: count
+  - id: pool-max
+    label: Pool max
+    meter: hikaricp.connections.max
+    format: count
+
+panels:
+  - id: cpu
+    title: CPU usage
+    chart: line
+    unit: percent
+    order: 10
+    series:
+      - { id: process, label: Process, meter: process.cpu.usage }
+      - { id: system, label: System, meter: system.cpu.usage }
+      - { id: gc-overhead, label: GC overhead, meter: jvm.gc.overhead }
+
+  - id: load
+    title: System load
+    chart: line
+    unit: count
+    order: 20
+    series:
+      - { id: load1m, label: Load 1m, meter: system.load.average.1m }
+      - { id: cores, label: CPU cores, meter: system.cpu.count }
+
+  - id: heap
+    title: Heap memory
+    chart: line
+    unit: bytes
+    order: 30
+    series:
+      - { id: used, label: Used, meter: jvm.memory.used, tags: { area: heap } }
+      - { id: committed, label: Committed, meter: jvm.memory.committed, tags: { area: heap } }
+      - { id: max, label: Max, meter: jvm.memory.max, tags: { area: heap } }
+
+  - id: nonheap
+    title: Non-heap memory
+    chart: line
+    unit: bytes
+    order: 40
+    series:
+      - { id: used, label: Used, meter: jvm.memory.used, tags: { area: nonheap } }
+      - { id: committed, label: Committed, meter: jvm.memory.committed, tags: { area: nonheap } }
+
+  - id: gc
+    title: Garbage collection
+    chart: bars-line
+    unit: persec
+    order: 50
+    series:
+      - { id: pauses, label: Pauses, meter: jvm.gc.pause, stat: rate }
+      - { id: max-pause, label: Max pause, meter: jvm.gc.pause, stat: max, unit: millis }
+
+  - id: threads
+    title: Threads
+    chart: line
+    unit: count
+    order: 60
+    series:
+      - { id: live, label: Live, meter: jvm.threads.live }
+      - { id: daemon, label: Daemon, meter: jvm.threads.daemon }
+      - { id: peak, label: Peak, meter: jvm.threads.peak }
+
+  - id: http-throughput
+    title: HTTP throughput
+    chart: line
+    unit: persec
+    order: 70
+    series:
+      - { id: requests, label: Requests, meter: http.server.requests, stat: rate }
+      - { id: client-errors, label: 4xx, meter: http.server.requests, stat: rate, tags: { outcome: CLIENT_ERROR } }
+      - { id: server-errors, label: 5xx, meter: http.server.requests, stat: rate, tags: { outcome: SERVER_ERROR } }
+
+  - id: http-latency
+    title: HTTP latency
+    chart: line
+    unit: millis
+    order: 80
+    series:
+      - { id: avg, label: Avg, meter: http.server.requests, stat: avg }
+      - { id: max, label: Max, meter: http.server.requests, stat: max }
+
+  - id: http-active
+    title: HTTP in flight
+    chart: line
+    unit: count
+    order: 90
+    series:
+      - { id: active, label: Active requests, meter: http.server.requests.active }
+
+  - id: db-pool
+    title: DB pool
+    chart: line
+    unit: count
+    order: 100
+    series:
+      - { id: total, label: Total, meter: hikaricp.connections }
+      - { id: active, label: Active, meter: hikaricp.connections.active }
+      - { id: idle, label: Idle, meter: hikaricp.connections.idle }
+      - { id: pending, label: Pending, meter: hikaricp.connections.pending }
+      - { id: max, label: Max, meter: hikaricp.connections.max }
+
+  - id: db-pool-timing
+    title: DB pool timing
+    chart: line
+    unit: millis
+    order: 110
+    series:
+      - { id: acquire, label: Acquire avg, meter: hikaricp.connections.acquire, stat: avg }
+      - { id: usage, label: Usage avg, meter: hikaricp.connections.usage, stat: avg }
+
+  - id: jdbc-queries
+    title: JDBC queries
+    chart: line
+    unit: persec
+    order: 120
+    series:
+      - { id: rate, label: Queries, meter: jdbc.query, stat: rate }
+      - { id: avg, label: Avg time, meter: jdbc.query, stat: avg, unit: millis }
+
+  - id: repositories
+    title: Repositories
+    chart: line
+    unit: persec
+    order: 130
+    series:
+      - { id: rate, label: Invocations, meter: spring.data.repository.invocations, stat: rate }
+      - { id: avg, label: Avg time, meter: spring.data.repository.invocations, stat: avg, unit: millis }
+
+  - id: transactions
+    title: Transactions
+    chart: line
+    unit: persec
+    order: 140
+    series:
+      - { id: success, label: Success, meter: hibernate.transactions, stat: rate, tags: { result: success } }
+      - { id: failure, label: Failure, meter: hibernate.transactions, stat: rate, tags: { result: failure } }
+
+  - id: disk
+    title: Disk space
+    chart: line
+    unit: bytes
+    order: 150
+    series:
+      - { id: free, label: Free, meter: disk.free }
+      - { id: used, label: Used, meter: disk.total, subtract-meter: disk.free }
+      - { id: total, label: Total, meter: disk.total }
+
+  - id: log-events
+    title: Log events
+    chart: line
+    unit: persec
+    order: 160
+    series:
+      - { id: errors, label: Errors, meter: logback.events, stat: rate, tags: { level: error } }
+      - { id: warnings, label: Warnings, meter: logback.events, stat: rate, tags: { level: warn } }
+
+  # --- shipped but disabled by default ---------------------------------------
+
+  - id: thread-states
+    title: Thread states
+    chart: line
+    unit: count
+    order: 170
+    enabled: false
+    series:
+      - { id: runnable, label: Runnable, meter: jvm.threads.states, tags: { state: runnable } }
+      - { id: blocked, label: Blocked, meter: jvm.threads.states, tags: { state: blocked } }
+      - { id: waiting, label: Waiting, meter: jvm.threads.states, tags: { state: waiting } }
+      - { id: timed-waiting, label: Timed waiting, meter: jvm.threads.states, tags: { state: timed-waiting } }
+      - { id: new, label: New, meter: jvm.threads.states, tags: { state: new } }
+      - { id: terminated, label: Terminated, meter: jvm.threads.states, tags: { state: terminated } }
+
+  - id: hibernate-activity
+    title: Hibernate activity
+    chart: line
+    unit: persec
+    order: 180
+    enabled: false
+    series:
+      - { id: statements, label: Statements, meter: hibernate.statements, stat: rate }
+      - { id: entity-loads, label: Entity loads, meter: hibernate.entities.loads, stat: rate }
+      - { id: sessions, label: Sessions opened, meter: hibernate.sessions.open, stat: rate }
+
+  - id: executors
+    title: Executors
+    chart: line
+    unit: count
+    order: 190
+    enabled: false
+    series:
+      - { id: active, label: Active, meter: executor.active }
+      - { id: pool-size, label: Pool size, meter: executor.pool.size }
+      - { id: queued, label: Queued, meter: executor.queued }
+
+  - id: open-files
+    title: Open files
+    chart: line
+    unit: count
+    order: 200
+    enabled: false
+    series:
+      - { id: open, label: Open, meter: process.files.open }
+      - { id: max, label: Max, meter: process.files.max }
+
+  - id: tomcat-sessions
+    title: Tomcat sessions
+    chart: line
+    unit: count
+    order: 210
+    enabled: false
+    series:
+      - { id: active, label: Active, meter: tomcat.sessions.active.current }
+      - { id: created, label: Created, meter: tomcat.sessions.created, stat: rate }
+
+  - id: allocation
+    title: Memory allocation
+    chart: line
+    unit: bytes-persec
+    order: 220
+    enabled: false
+    series:
+      - { id: allocated, label: Allocated, meter: jvm.gc.memory.allocated, stat: rate }
