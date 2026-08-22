@@ -6,10 +6,17 @@
 
     <!-- OrderController's deliberately failing /boom endpoint (used to populate Peekaboot's
          Errors bucket in OrderTraceCaptureIntegrationTest) escapes as an unhandled exception,
-         which embedded Tomcat logs here as a full stack trace on top of the controller's own
-         deliberate error log line. That stack trace is redundant noise, not signal, so it is
-         silenced narrowly rather than left to violate the pristine-test-output requirement. -->
-    <logger name="org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/].[dispatcherServlet]" level="OFF"/>
+         which embedded Tomcat's request-handling valve logs as a full stack trace on top of
+         the controller's own deliberate error log line. The ancestor logger is targeted, not
+         the numbered instance-specific one (e.g. ".[Tomcat-4]."), because Spring Boot numbers
+         each embedded Tomcat engine per JVM - the numbered name only matches when this test
+         class runs in isolation, not across the full suite where other @SpringBootTest classes
+         have already started their own engines. This silences Tomcat's container-level
+         request-error logging for the whole test suite, which is acceptable because the
+         application's own error logging still prints and the tests assert on HTTP responses
+         and captured traces, so a genuine container failure surfaces as a failed assertion
+         rather than only as a log line. -->
+    <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
