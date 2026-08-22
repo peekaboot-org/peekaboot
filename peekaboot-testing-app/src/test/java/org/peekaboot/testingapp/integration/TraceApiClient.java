@@ -76,6 +76,13 @@ class TraceApiClient {
                 // A trace with an outbound call is exported in more than one BatchSpanProcessor
                 // flush, so a single non-zero read can be a partial snapshot. Requiring the count
                 // to hold steady across two consecutive polls confirms the flushes have caught up.
+                //
+                // This is a heuristic, not a completeness guarantee: the poll interval (50ms)
+                // equals the BatchSpanProcessor schedule-delay in application-test.yml, so a
+                // trace whose spans land in three or more separate flushes could look stable
+                // across exactly two polls and still be a partial tree. Two polls is empirically
+                // sufficient for today's trace shapes; if this ever flakes again, widen the
+                // stability window rather than assume the current shape generalises.
                 if (spanCount > 0 && spanCount == previousSpanCount) {
                     return trace;
                 }

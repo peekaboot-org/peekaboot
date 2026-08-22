@@ -43,7 +43,7 @@ public class CustomerClient {
             }
             return person.path("firstName").asString("") + " " + person.path("lastName").asString("");
         } catch (RuntimeException e) {
-            log.warn("customer lookup for {} failed, falling back to the id", customerId);
+            log.warn("customer lookup for {} failed, falling back to the id", customerId, e);
             return "customer #" + customerId;
         }
     }
