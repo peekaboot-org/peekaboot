@@ -200,7 +200,7 @@
 .pk-copy:hover .pk-copy__icon,
 .pk-copy:focus-visible .pk-copy__icon,
 .pk-copy--copied .pk-copy__icon { opacity: 0.75; }
-.pk-copy--copied { color: var(--pk-success); }
+.pk-copy--copied { color: var(--pk-success-text); }
 .pk-copy--copied .pk-copy__icon { opacity: 1; }
 .pk-copy--failed { color: var(--pk-danger); }
 .pk-copy--empty { color: var(--pk-text-muted); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }

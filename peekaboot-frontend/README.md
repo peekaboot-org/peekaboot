@@ -164,13 +164,15 @@ lets you match a condition on the host from inside its own shadow tree.
 These were learned the hard way — several contrast and ARIA regressions shipped during
 this refactor and were only caught in review. Keep them true:
 
-- **Never use `--pk-warning`, `--pk-primary` or `--pk-info` as text color on the page
-  background.** All three are tuned as fill colors; as text on `--pk-bg` they measure
-  2.9:1, 2.6:1 and 3.7:1 respectively — all under WCAG AA. `--pk-warning-text`,
-  `--pk-primary-text` and `--pk-info-text` exist for exactly this and are contrast-tuned
-  against both `--pk-bg` and `--pk-bg-alt` in both themes. `--pk-primary-text` is also
-  what focus rings and the selected-tab underline use, so they clear 1.4.11's 3:1 for
-  non-text UI.
+- **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text color
+  on the page background.** All four are tuned as fill colors; as text on `--pk-bg` they
+  measure 2.9:1, 3.3:1, 2.6:1 and 3.7:1 — all under WCAG AA. Every one has a `-text`
+  counterpart (`--pk-warning-text`, `--pk-success-text`, `--pk-primary-text`,
+  `--pk-info-text`) tuned against `--pk-bg`, `--pk-bg-alt` *and* `--pk-bg-hover` in both
+  themes; reach for those. `--pk-primary-text` is also what focus rings and the
+  selected-tab underline use, so they clear 1.4.11's 3:1 for non-text UI.
+  `--pk-danger` and `--pk-purple` are the two exceptions that are dark enough to double
+  as text colors (4.8:1 and 5.7:1), which is why they have no `-text` variant.
 - **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`,
   `--pk-info`) needs its own on-colour token as foreground** — `--pk-on-success`,
   `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info` respectively.

@@ -37,7 +37,8 @@
     --pk-on-info:    #0d1117;   /* 4.77:1 on --pk-info */
     --pk-primary-text: #487e1b; /* 4.91:1 on --pk-bg, 4.61:1 on --pk-bg-alt */
     --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt */
-    --pk-warning-text: #a16207; /* 4.92:1 on --pk-bg */
+    --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt */
+    --pk-warning-text: #a16207; /* 4.92:1 on --pk-bg, 4.62:1 on --pk-bg-alt */
 
     --pk-space-xs: 4px;
     --pk-space-sm: 8px;
@@ -78,9 +79,10 @@
     --pk-on-danger:  #0d1117;   /* 5.65:1 */
     --pk-on-primary: #0d1117;   /* 9.89:1 */
     --pk-on-info:    #0d1117;   /* 9.38:1 */
-    /* both clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
+    /* all four clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
     --pk-primary-text: #84cf3d; /* 9.89:1 on --pk-bg */
     --pk-info-text:    #38c6e8; /* 9.38:1 on --pk-bg */
+    --pk-success-text: #3fb950; /* 7.45:1 on --pk-bg */
     --pk-warning-text: #d29922; /* 7.50:1 on dark --pk-bg */
     --pk-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
 }

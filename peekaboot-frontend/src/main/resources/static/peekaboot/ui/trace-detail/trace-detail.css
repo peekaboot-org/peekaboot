@@ -66,7 +66,7 @@
 }
 
 .pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: 16px; }
-.pk-overlay__duration--slow { color: var(--pk-warning); }
+.pk-overlay__duration--slow { color: var(--pk-warning-text); }
 .pk-overlay__duration--very-slow { color: var(--pk-danger); }
 
 .pk-overlay__close {
@@ -183,9 +183,9 @@
 .pk-query-system { color: var(--pk-text-muted); }
 .pk-query-meta { display: flex; gap: 12px; align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
-.pk-query__duration--slow { color: var(--pk-warning); }
+.pk-query__duration--slow { color: var(--pk-warning-text); }
 .pk-query__duration--very-slow { color: var(--pk-danger); }
-.pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success); font-size: 11px; }
+.pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: 11px; }
 .pk-query__sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 
 /* Logs tab styles */
@@ -208,6 +208,6 @@
 .pk-log__level { width: 50px; font-weight: 600; }
 .pk-log__level--debug { color: var(--pk-text-muted); }
 .pk-log__level--info { color: var(--pk-info-text); }
-.pk-log__level--warn { color: var(--pk-warning); }
+.pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; word-break: break-word; }

@@ -72,7 +72,7 @@
 .pk-stat { display: flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-stat__duration { font-family: var(--pk-font-mono); }
 .pk-stat__separator { color: var(--pk-text-muted); opacity: 0.6; }
-.pk-stat--slow .pk-stat__duration { color: var(--pk-warning); }
+.pk-stat--slow .pk-stat__duration { color: var(--pk-warning-text); }
 .pk-stat--very-slow .pk-stat__duration { color: var(--pk-danger); }
 
 .pk-toolbar__loading { color: var(--pk-text-muted); }
