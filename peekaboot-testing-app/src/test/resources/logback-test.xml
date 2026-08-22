@@ -4,18 +4,18 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
-    <!-- OrderController's deliberately failing /boom endpoint (used to populate Peekaboot's
-         Errors bucket in OrderTraceCaptureIntegrationTest) escapes as an unhandled exception,
-         which embedded Tomcat's request-handling valve logs as a full stack trace on top of
-         the controller's own deliberate error log line. The ancestor logger is targeted, not
-         the numbered instance-specific one (e.g. ".[Tomcat-4]."), because Spring Boot numbers
-         each embedded Tomcat engine per JVM - the numbered name only matches when this test
-         class runs in isolation, not across the full suite where other @SpringBootTest classes
-         have already started their own engines. This silences Tomcat's container-level
-         request-error logging for the whole test suite, which is acceptable because the
-         application's own error logging still prints and the tests assert on HTTP responses
-         and captured traces, so a genuine container failure surfaces as a failed assertion
-         rather than only as a log line. -->
+    <!-- OrderController's deliberately failing /boom endpoint (populating Peekaboot's Errors
+         bucket in OrderTraceCaptureIntegrationTest) escapes as an unhandled exception, which
+         embedded Tomcat logs as a full stack trace. Spring Boot numbers each embedded Tomcat
+         per JVM (Tomcat, Tomcat-1, ...), so an instance-specific logger name only matches an
+         isolated run; Logback has no wildcard matching, and the numbered segment sits directly
+         under ContainerBase, so that ancestor is the narrowest static name that works across
+         runs. This silences ALL of ContainerBase's logging, not just per-request stack traces -
+         also cluster, realm, child and threaded start/stop failures, and background-process
+         errors, none of which any assertion here would catch. Accepted because this application
+         configures no clustering and no custom realm, so those paths never fire, and because the
+         application's own error logging is unaffected - a real application failure still prints
+         and is still asserted. -->
     <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
 
     <root level="INFO">
