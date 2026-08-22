@@ -54,7 +54,7 @@ function initToolbar(data) {
             </span>
         </button>
         <span class="pk-toolbar__trace" id="pk-trace">-</span>
-        <a class="pk-toolbar__link" href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard">\u{1F4CA}</a>
+        <a class="pk-toolbar__link" href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
     `;
     shadow.appendChild(bar);
 

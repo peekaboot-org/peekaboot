@@ -2,10 +2,15 @@
    the toolbar and trace-detail shadow roots. */
 
 /* Badge — one pill, five semantic variants. Each variant uses its own
-   on-colour token: --pk-warning/--pk-success/--pk-primary are fill-tuned,
-   not text-tuned, so white text on them fails WCAG AA (2.5-3.3:1) — dark
-   ink at --pk-on-* clears it (5.7-7.5:1). Matches the ink/fill choice
-   trace-detail.js already makes for its own status pills. */
+   on-colour token: --pk-warning/--pk-success/--pk-info are fill-tuned,
+   not text-tuned, so white text on them fails WCAG AA (2.6-3.7:1) — dark
+   ink at --pk-on-* clears it (5.1-7.5:1). Matches the ink/fill choice
+   trace-detail.js already makes for its own status pills.
+
+   --info deliberately does not reuse --pk-primary (it did, while --pk-primary
+   was a blue): since the brand turned green, a primary-filled INFO pill would
+   sit beside a green --pk-success UP pill and read as the same state. Holding
+   --pk-info in the cyan range keeps the two apart at pill size. */
 .pk-badge {
     display: inline-flex;
     align-items: center;
@@ -20,7 +25,7 @@
 .pk-badge--ok      { background: var(--pk-success); color: var(--pk-on-success); }
 .pk-badge--warn    { background: var(--pk-warning); color: var(--pk-on-warning); }
 .pk-badge--error   { background: var(--pk-danger);  color: var(--pk-on-danger); }
-.pk-badge--info    { background: var(--pk-primary); color: var(--pk-on-primary); }
+.pk-badge--info    { background: var(--pk-info); color: var(--pk-on-info); }
 .pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text); }
 
 /* Collapsible group. State is aria-expanded + [hidden], not a class. */
@@ -45,7 +50,7 @@
     transition: background-color var(--pk-transition);
 }
 .pk-group__header:hover { background: var(--pk-bg-hover); }
-.pk-group__header:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
+.pk-group__header:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 .pk-group__header[aria-expanded="false"] { border-radius: var(--pk-radius); }
 .pk-group__header::before {
     content: '\25BE';
@@ -53,7 +58,7 @@
     transition: transform var(--pk-transition);
 }
 .pk-group__header[aria-expanded="false"]::before { transform: rotate(-90deg); }
-.pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary); font-size: var(--pk-text-sm); }
+.pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary-text); font-size: var(--pk-text-sm); }
 /* Modifiers absorbing the four collapsible-group variants this primitive
    replaces: plain .pk-group__name matches .property-name/.config-group-name
    (primary-coloured); --strong matches .logger-group-name; --mono matches
@@ -159,7 +164,7 @@
     transition: background-color var(--pk-transition);
 }
 .pk-btn:hover { background: var(--pk-bg-hover); }
-.pk-btn:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
+.pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
 .pk-btn--small { padding: 2px var(--pk-space-sm); font-size: var(--pk-text-xs); }
 /* Primary bucket/segment selector - a top-level filter, so it carries more weight
@@ -186,7 +191,7 @@
     cursor: pointer;
 }
 .pk-copy:hover { background: var(--pk-bg-hover); border-color: var(--pk-border); }
-.pk-copy:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
+.pk-copy:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-copy__label { flex: 0 0 auto; color: var(--pk-text-muted); font-size: var(--pk-text-xs); }
 .pk-copy__value { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
 /* Only where the container is genuinely narrow; the id stays fully copyable either way. */
@@ -255,8 +260,8 @@
     white-space: nowrap;
 }
 .pk-tab:hover { color: var(--pk-text); }
-.pk-tab:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
-.pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary); }
+.pk-tab:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary-text); }
 
 /* Empty state — centred, muted placeholder text shown when a list has no data */
 .pk-empty {

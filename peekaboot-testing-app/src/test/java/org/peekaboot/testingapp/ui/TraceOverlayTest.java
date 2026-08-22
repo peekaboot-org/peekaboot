@@ -83,6 +83,10 @@ class TraceOverlayTest extends PlaywrightTestBase {
      * the --pk-on-primary token itself, which would pass even if both sides regressed back
      * to the same wrong token.
      *
+     * The pinned value is dark ink in both themes now that --pk-primary is the brand
+     * green: white on it measures 2.61:1, so the light theme can no longer get away
+     * with the plain white it used while --pk-primary was a blue.
+     *
      * Drives a real ERROR log entry (matching ToolbarTest's
      * toolbarShowsErrorLogCountWhenRequestLogsAnError) rather than the gantt "server" kind
      * badge: this test app's real request-capture path (RequestCaptureFilter /
@@ -127,7 +131,7 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
               + ".querySelector('.pk-logs-filter-span')).color");
 
-        assertThat(color).isEqualTo("rgb(255, 255, 255)");
+        assertThat(color).isEqualTo("rgb(13, 17, 23)");
     }
 
     @Test

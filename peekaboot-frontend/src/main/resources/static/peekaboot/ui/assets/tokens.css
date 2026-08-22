@@ -1,6 +1,20 @@
 /* Peekaboot design tokens — the single place to re-theme Peekaboot.
    Selectors are doubled so the same declarations apply to the dashboard
-   document (:root) and to shadow roots of the toolbar and overlay (:host). */
+   document (:root) and to shadow roots of the toolbar and overlay (:host).
+
+   The palette is built from the Peekaboot mark: its green is hsl(93 64% 43%)
+   and its ink is a blue-slate. That green is a mid-lightness one, so — like
+   --pk-warning before it — it is fill-tuned, not text-tuned: white on it is
+   only 2.6:1. Hence the pairing rule every surface follows:
+
+     --pk-primary       fills that carry --pk-on-primary ink on top
+     --pk-primary-text  anything drawn ON --pk-bg/--pk-bg-alt: text, focus
+                        rings, borders, the selected-tab underline
+
+   --pk-info no longer borrows --pk-primary. The pill it actually sits beside
+   in the health panel is --pk-success, so that is the hue it has to clear:
+   it is held ~47° off it (light) / ~64° (dark), far enough that an INFO pill
+   and an UP pill cannot be confused at pill size. */
 :root, :host {
     --pk-bg: #ffffff;
     --pk-bg-alt: #f6f8fa;
@@ -9,8 +23,9 @@
     --pk-text: #1f2937;
     --pk-text-muted: #6b7280;
     --pk-text-strong: #111827;
-    --pk-primary: #2563eb;
-    --pk-primary-light: #dbeafe;
+    --pk-primary: #66b327;      /* the mark's green, straight off the artwork */
+    --pk-primary-light: #eef8e6;
+    --pk-info: #0d8ca3;
     --pk-success: #16a34a;
     --pk-warning: #ca8a04;
     --pk-danger: #dc2626;
@@ -18,8 +33,11 @@
     --pk-on-success: #0d1117;   /* 5.74:1 on --pk-success */
     --pk-on-warning: #0d1117;   /* 6.44:1 on --pk-warning */
     --pk-on-danger:  #ffffff;   /* 4.83:1 on --pk-danger */
-    --pk-on-primary: #ffffff;   /* 5.17:1 on --pk-primary */
-    --pk-warning-text: #a16207; /* 4.92:1 on --pk-bg; --pk-warning itself is fill-tuned, not text-tuned */
+    --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
+    --pk-on-info:    #0d1117;   /* 4.77:1 on --pk-info */
+    --pk-primary-text: #487e1b; /* 4.91:1 on --pk-bg, 4.61:1 on --pk-bg-alt */
+    --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt */
+    --pk-warning-text: #a16207; /* 4.92:1 on --pk-bg */
 
     --pk-space-xs: 4px;
     --pk-space-sm: 8px;
@@ -48,8 +66,9 @@
     --pk-text: #c9d1d9;
     --pk-text-muted: #8b949e;
     --pk-text-strong: #f0f6fc;
-    --pk-primary: #58a6ff;
-    --pk-primary-light: #1f3a5c;
+    --pk-primary: #84cf3d;      /* the mark's green lifted for the dark surface */
+    --pk-primary-light: #1e2f13;
+    --pk-info: #38c6e8;
     --pk-success: #3fb950;
     --pk-warning: #d29922;
     --pk-danger: #f85149;
@@ -57,7 +76,11 @@
     --pk-on-success: #0d1117;   /* 7.45:1 */
     --pk-on-warning: #0d1117;   /* 7.50:1 */
     --pk-on-danger:  #0d1117;   /* 5.65:1 */
-    --pk-on-primary: #0d1117;   /* 7.49:1 */
+    --pk-on-primary: #0d1117;   /* 9.89:1 */
+    --pk-on-info:    #0d1117;   /* 9.38:1 */
+    /* both clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
+    --pk-primary-text: #84cf3d; /* 9.89:1 on --pk-bg */
+    --pk-info-text:    #38c6e8; /* 9.38:1 on --pk-bg */
     --pk-warning-text: #d29922; /* 7.50:1 on dark --pk-bg */
     --pk-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
 }

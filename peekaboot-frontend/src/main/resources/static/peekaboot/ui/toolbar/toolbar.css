@@ -13,9 +13,9 @@
     font-size: var(--pk-text-xs);
 }
 .pk-toolbar:hover { background: var(--pk-bg-alt); }
-.pk-toolbar a { color: var(--pk-primary); text-decoration: none; }
+.pk-toolbar a { color: var(--pk-primary-text); text-decoration: none; }
 .pk-toolbar a:hover { text-decoration: underline; }
-.pk-toolbar a:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: 1px; }
+.pk-toolbar a:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 /* Reset to look like the plain flex row it replaces - only its semantics (a real
    <button>) are new, not its appearance. */
@@ -34,7 +34,7 @@
     text-align: left;
     cursor: pointer;
 }
-.pk-toolbar__open:focus-visible { outline: 2px solid var(--pk-primary); outline-offset: -2px; }
+.pk-toolbar__open:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 
 .pk-toolbar__side { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .pk-toolbar__method { color: var(--pk-text-muted); }
@@ -45,7 +45,24 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.pk-toolbar__controller { color: var(--pk-primary); }
+.pk-toolbar__controller { color: var(--pk-primary-text); }
+
+/* The dashboard link is the Peekaboot mark. url() here resolves against this
+   stylesheet, so it works from the shadow root without knowing basePath.
+   Theme comes off the shadow host, which watchTheme() keeps in sync. */
+.pk-toolbar__link {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    background: url('../assets/logo-mark.png') center / contain no-repeat;
+}
+:host([data-theme="dark"]) .pk-toolbar__link { background-image: url('../assets/logo-mark-dark.png'); }
+/* Forced-colors modes drop background images. The mark is this link's only content
+   (it replaced a text glyph), so without a fallback the control becomes an invisible
+   18px box - the aria-label keeps it reachable, but not visible. */
+@media (forced-colors: active) {
+    .pk-toolbar__link { border: 1px solid currentColor; border-radius: var(--pk-radius); }
+}
 .pk-toolbar__metrics { display: flex; align-items: center; gap: var(--pk-space-md); }
 /* Sits outside .pk-toolbar__open so the copy control inside it is a real, reachable
    button rather than presentational children of the open button. */

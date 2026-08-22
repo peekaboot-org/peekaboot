@@ -14,6 +14,7 @@ No build step. Plain ES modules and CSS, served as-is.
 ```
 static/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
+│                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
 ├── shared/          api.js, components.js, format.js, markup.js, root-actions.js,
 │                    severity.js, shadow-styles.js, span-names.js, theme.js
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (8 tabs)
@@ -52,6 +53,47 @@ element these same `<link>` tags are loaded into. The identical file therefore w
 unmodified whether it's linked into `dashboard/index.html`'s `<head>` or into the
 toolbar's or overlay's shadow root — no surface-specific variant, no build step to
 generate one.
+
+## The icon set
+
+`assets/` also holds four PNGs, all derived from one piece of source artwork — the
+simplified Peekaboot mark (green hexagon, slate magnifier, green bars). The detailed
+version of the logo is deliberately *not* used here: below roughly 96px its interior
+detail (list rows, line chart, gloss) turns to noise, and the two places the UI shows a
+logo are 26px and 18px.
+
+| File | Used by |
+|---|---|
+| `favicon-16.png`, `favicon-32.png` | `<link rel="icon">` in `dashboard/index.html` |
+| `logo-mark.png` (96px) | `.pk-header__logo` and the toolbar's dashboard link, light theme |
+| `logo-mark-dark.png` (96px) | the same two, dark theme |
+
+There are two variants because the mark is two-tone. Its slate magnifier (`#263238`)
+measures 13.2:1 on a white background but **1.4:1 on the dark theme's `--pk-bg`** — it
+simply disappears. `logo-mark-dark.png` is the same artwork with that slate recoloured to
+a light neutral. Both surfaces swap it with a CSS `background-image` override rather than
+swapping an `<img src>`, so no JavaScript is involved:
+
+```css
+[data-theme="dark"] .pk-header__logo   { background-image: url('../assets/logo-mark-dark.png'); }  /* dashboard */
+:host([data-theme="dark"]) .pk-toolbar__link { background-image: url('../assets/logo-mark-dark.png'); }  /* shadow root */
+```
+
+The toolbar's `url()` resolves against `toolbar.css`'s own URL, which is why it works from
+inside a shadow root without knowing `basePath`.
+
+To regenerate from new source artwork (the masters live outside this repo, alongside it in
+`peekaboot-org/assets/`), crop to the artwork's bounding box, centre it in a square with
+~6% padding, and resample with Lanczos — the mark's anti-aliasing lives in the alpha
+channel with full-strength RGB underneath, so a fuzzy colour replacement recolours it
+cleanly without fringing:
+
+```sh
+magick peekaboot-logo-favicon.png -crop 909x1015+173+105 +repage \
+       -background none -gravity center -extent 1076x1076 master.png
+magick master.png -background none -filter Lanczos -resize 32x32 -strip favicon-32.png
+magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   # dark variant
+```
 
 ## `shared/` module inventory
 
@@ -122,16 +164,25 @@ lets you match a condition on the host from inside its own shadow tree.
 These were learned the hard way — several contrast and ARIA regressions shipped during
 this refactor and were only caught in review. Keep them true:
 
-- **Never use `--pk-warning` as text color on the page background.** It's tuned as a fill
-  color; as text on `--pk-bg` it measured 2.94:1, well under WCAG AA. `--pk-warning-text`
-  exists for exactly this (sensitive-value styling, warning copy) and is contrast-tuned
-  against `--pk-bg` in both themes.
-- **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`) needs
-  its own on-colour token as foreground** — `--pk-on-success`, `--pk-on-warning`,
-  `--pk-on-danger`, `--pk-on-primary` respectively. **Never `--pk-text-strong` or literal
-  `white`/`#fff` on one of these fills** — both have shipped as regressions (`white`/
-  `--pk-text-strong` measured 2.53:1 and, in another spot, ~2.3:1 in dark mode; the
-  `--pk-on-*` tokens clear 4.5:1+ in both themes by construction).
+- **Never use `--pk-warning`, `--pk-primary` or `--pk-info` as text color on the page
+  background.** All three are tuned as fill colors; as text on `--pk-bg` they measure
+  2.9:1, 2.6:1 and 3.7:1 respectively — all under WCAG AA. `--pk-warning-text`,
+  `--pk-primary-text` and `--pk-info-text` exist for exactly this and are contrast-tuned
+  against both `--pk-bg` and `--pk-bg-alt` in both themes. `--pk-primary-text` is also
+  what focus rings and the selected-tab underline use, so they clear 1.4.11's 3:1 for
+  non-text UI.
+- **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`,
+  `--pk-info`) needs its own on-colour token as foreground** — `--pk-on-success`,
+  `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info` respectively.
+  **Never `--pk-text-strong` or literal `white`/`#fff` on one of these fills** — both have
+  shipped as regressions (`white`/`--pk-text-strong` measured 2.53:1 and, in another spot,
+  ~2.3:1 in dark mode; the `--pk-on-*` tokens clear 4.5:1+ in both themes by
+  construction). Since the brand turned green every `--pk-on-*` is now dark ink, in both
+  themes — white on the green fill is 2.61:1.
+- **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a
+  blue. With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
+  `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~47° (light)
+  / ~64° (dark) off `--pk-success` in hue.
 - **Interactive elements are real controls with `:focus-visible`**, not `div`/`role`
   approximations. In particular: a `role="button"` container must not wrap a focusable
   child (e.g. a link) — ARIA defines a button's children as presentational, so assistive

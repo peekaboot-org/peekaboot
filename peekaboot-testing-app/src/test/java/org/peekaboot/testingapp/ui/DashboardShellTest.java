@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
 import org.junit.jupiter.api.Test;
@@ -19,12 +20,15 @@ class DashboardShellTest extends PlaywrightTestBase {
     }
 
     /**
-     * The header used a bare `color: white`, which is 5.17:1 on light theme's
-     * --pk-primary but only 2.53:1 on dark theme's (lighter, --primary is a blue tuned
-     * for dark backgrounds) --pk-primary - well under AA. --pk-on-primary is tuned per
-     * theme for exactly this fill; pinning the literal resolved colour (matching
-     * TraceOverlayTest's contrast regression tests) catches a revert back to plain
-     * white, which "looks right" in light theme and would pass every other test here.
+     * The header is a neutral --pk-bg surface, so the wordmark takes --pk-text-strong
+     * rather than an on-fill ink. It used to be a bare `color: white` on a --pk-primary
+     * slab, which was 5.17:1 while --pk-primary was a blue but only 2.53:1 in dark theme.
+     * Pinning the literal resolved colour (matching TraceOverlayTest's contrast
+     * regression tests) catches a revert to any hardcoded colour, which "looks right" in
+     * one theme and would pass every other test here.
+     *
+     * Both tests deliberately set the stored preference to the opposite of the emulated
+     * OS scheme, so they also prove the stored theme still wins over prefers-color-scheme.
      */
     @Test
     void headerTextIsContrastTunedInLightTheme() {
@@ -32,7 +36,7 @@ class DashboardShellTest extends PlaywrightTestBase {
         page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
         openDashboard();
 
-        assertThat(cssVar("h1", "color")).isEqualTo("rgb(255, 255, 255)");
+        assertThat(cssVar("h1", "color")).isEqualTo("rgb(17, 24, 39)");
     }
 
     @Test
@@ -41,7 +45,48 @@ class DashboardShellTest extends PlaywrightTestBase {
         page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
         openDashboard();
 
-        assertThat(cssVar("h1", "color")).isEqualTo("rgb(13, 17, 23)");
+        assertThat(cssVar("h1", "color")).isEqualTo("rgb(240, 246, 252)");
+    }
+
+    /**
+     * The mark's magnifier is a dark slate that measures 1.4:1 on the dark theme's
+     * --pk-bg, so the header swaps to a light-magnifier variant of the artwork. Nothing
+     * about that swap is visible to the other tests - a broken selector or a renamed file
+     * would silently leave the dark theme showing an all-but-invisible logo - so assert
+     * the resolved background-image directly. Split per theme rather than toggling within
+     * one test: setStoredTheme() stacks an init script that re-runs on every navigation.
+     */
+    @Test
+    void headerLogoUsesTheFullColourMarkInLightTheme() {
+        setStoredTheme("light");
+        openDashboard();
+
+        assertThat(cssVar(".pk-header__logo", "background-image"))
+                .contains("logo-mark.png")
+                .doesNotContain("logo-mark-dark.png");
+    }
+
+    @Test
+    void headerLogoUsesTheLightMagnifierMarkInDarkTheme() {
+        setStoredTheme("dark");
+        openDashboard();
+
+        assertThat(cssVar(".pk-header__logo", "background-image")).contains("logo-mark-dark.png");
+    }
+
+    /**
+     * The icon set is referenced only from CSS url() and <link rel="icon">, so a path
+     * typo or a packaging change that stopped shipping binaries from the frontend module
+     * would fail silently - no console error the other tests would notice, just a missing
+     * favicon and an empty logo box.
+     */
+    @Test
+    void iconAssetsAreServed() {
+        for (String asset : java.util.List.of(
+                "favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
+            APIResponse response = page.request().get(baseUrl + "/peekaboot/ui/assets/" + asset);
+            assertThat(response.status()).as(asset).isEqualTo(200);
+        }
     }
 
     @Test
