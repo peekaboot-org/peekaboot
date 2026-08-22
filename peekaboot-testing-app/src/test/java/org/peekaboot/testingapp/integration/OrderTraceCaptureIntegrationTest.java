@@ -114,6 +114,18 @@ class OrderTraceCaptureIntegrationTest {
                 .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
     }
 
+    @Test
+    void failingEndpointLandsInTheErrorsBucket() {
+        traces.trigger("/boom");
+
+        JsonNode trace = traces.awaitTraceInBucket("errors", "/boom");
+
+        assertThat(trace.path("status").asString(""))
+                .as("a trace in the Errors bucket must be classified as having errors, "
+                  + "otherwise the bucket filter and the status badge disagree")
+                .isEqualTo("HAS_ERRORS");
+    }
+
     private static void collectSpanNames(JsonNode span, List<String> out) {
         out.add(span.path("name").asString(""));
         for (JsonNode child : span.path("children")) {

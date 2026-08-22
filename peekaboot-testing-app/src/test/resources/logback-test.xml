@@ -4,6 +4,13 @@
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
+    <!-- OrderController's deliberately failing /boom endpoint (used to populate Peekaboot's
+         Errors bucket in OrderTraceCaptureIntegrationTest) escapes as an unhandled exception,
+         which embedded Tomcat logs here as a full stack trace on top of the controller's own
+         deliberate error log line. That stack trace is redundant noise, not signal, so it is
+         silenced narrowly rather than left to violate the pristine-test-output requirement. -->
+    <logger name="org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/].[dispatcherServlet]" level="OFF"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
