@@ -1,0 +1,123 @@
+package org.peekaboot.testingapp.integration;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.springframework.http.MediaType;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Drives the testing app and reads back what Peekaboot captured, through the same public
+ * API the dashboard uses.
+ *
+ * <p>Spans reach the {@code TraceStore} asynchronously via the OTel BatchSpanProcessor
+ * (50ms in the test profile), so every read is a poll with a deadline rather than a
+ * single fetch.
+ */
+class TraceApiClient {
+
+    /** The toolbar embeds its payload as JSON in a {@code <script id="peekaboot-toolbar-data">} tag. */
+    private static final Pattern TOOLBAR_TRACE_ID = Pattern.compile("\"traceId\"\\s*:\\s*\"([0-9a-fA-F]+)\"");
+
+    private static final Duration TIMEOUT = Duration.ofSeconds(15);
+    private static final long POLL_INTERVAL_MS = 50;
+
+    private final RestClient restClient;
+    private final ObjectMapper objectMapper;
+
+    TraceApiClient(int port, ObjectMapper objectMapper) {
+        this.restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+        this.objectMapper = objectMapper;
+    }
+
+    RestClient restClient() {
+        return restClient;
+    }
+
+    String triggerAndCaptureTraceId(String path) {
+        String html = restClient.get()
+                .uri(path)
+                .accept(MediaType.TEXT_HTML)
+                .retrieve()
+                .body(String.class);
+
+        Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
+        assertThat(matcher.find())
+                .as("dev toolbar must embed a trace id for %s - without one the request was "
+                  + "never traced and any capture assertion would be meaningless", path)
+                .isTrue();
+        return matcher.group(1);
+    }
+
+    void trigger(String path) {
+        try {
+            restClient.get().uri(path).accept(MediaType.ALL).retrieve().toBodilessEntity();
+        } catch (RuntimeException expectedForErrorPaths) {
+            // /boom answers 500 by design; the trace is what matters, not the response
+        }
+    }
+
+    JsonNode awaitTrace(String traceId) {
+        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        JsonNode lastSeen = null;
+        while (System.nanoTime() < deadline) {
+            JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
+            if (trace != null) {
+                lastSeen = trace;
+                if (trace.path("summary").path("spans").path("count").asInt() > 0) {
+                    return trace;
+                }
+            }
+            sleepBriefly();
+        }
+        throw new AssertionError("trace " + traceId + " never had an exported span within "
+                + TIMEOUT + "; last response: " + lastSeen);
+    }
+
+    JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
+        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        List<String> seen = new ArrayList<>();
+        while (System.nanoTime() < deadline) {
+            JsonNode response = fetchOrNull("/peekaboot/api/traces/insights?bucket=" + bucket);
+            if (response != null) {
+                seen.clear();
+                for (JsonNode trace : response.path("traces")) {
+                    String rootOperation = trace.path("rootOperation").asString("");
+                    seen.add(rootOperation);
+                    if (rootOperation.contains(rootOperationFragment)) {
+                        return trace;
+                    }
+                }
+            }
+            sleepBriefly();
+        }
+        throw new AssertionError("no trace whose rootOperation contains '" + rootOperationFragment
+                + "' reached the " + bucket + " bucket within " + TIMEOUT
+                + "; the bucket held: " + seen);
+    }
+
+    private JsonNode fetchOrNull(String uri) {
+        try {
+            String body = restClient.get().uri(uri).retrieve().body(String.class);
+            return body == null ? null : objectMapper.readTree(body);
+        } catch (RuntimeException notYetAvailable) {
+            // single-trace lookups 404 until the first span for the trace lands
+            return null;
+        }
+    }
+
+    private void sleepBriefly() {
+        try {
+            Thread.sleep(POLL_INTERVAL_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting for trace export", e);
+        }
+    }
+}
