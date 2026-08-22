@@ -1,0 +1,11 @@
+panels:
+  - id: broken
+    title: Broken
+    chart: line
+    unit: count
+    order: 10
+    series:
+      - id: s
+        label: S
+        meter: some.meter
+        stat: bogus
