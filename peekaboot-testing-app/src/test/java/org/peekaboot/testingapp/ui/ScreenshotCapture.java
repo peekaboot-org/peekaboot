@@ -1,0 +1,200 @@
+package org.peekaboot.testingapp.ui;
+
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.Page;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.context.ActiveProfiles;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * Captures the screenshots the peekaboot.org website ships. A tool, not a test: it asserts
+ * only that it produced files, and it is deliberately <strong>not</strong> named
+ * {@code *Test} so surefire's default includes never pick it up.
+ *
+ * <pre>
+ * mvn -pl peekaboot-testing-app test \
+ *     -Dtest=ScreenshotCapture \
+ *     -Dpeekaboot.screenshots.out=/absolute/output/dir
+ * </pre>
+ *
+ * <p>Runs under the {@code screenshots} profile (real Postgres via Docker Compose, Flyway
+ * on) so every dashboard tab has genuine content. Docker must be running.
+ */
+// inheritProfiles = false: PlaywrightTestBase carries @ActiveProfiles("test") - merging
+// that in (the default) would activate both "test" and "screenshots" and, since Spring
+// Boot's last-profile-wins rule applies to the *resolved* order rather than declaration
+// order, "test"'s H2/Flyway-disabled settings silently won over this profile's real
+// Postgres config. Confirmed empirically: with inheritProfiles left at its default, the
+// app started against H2's in-memory testdb rather than the Postgres compose service.
+@ActiveProfiles(profiles = "screenshots", inheritProfiles = false)
+class ScreenshotCapture extends PlaywrightTestBase {
+
+    private static final String OUTPUT_PROPERTY = "peekaboot.screenshots.out";
+    private static final int VIEWPORT_WIDTH = 1440;
+    private static final int VIEWPORT_HEIGHT = 900;
+
+    private static final List<String> DASHBOARD_TABS = List.of(
+            "dashboard", "environment", "flyway", "loggers", "config",
+            "scheduled-tasks", "metrics", "traces");
+
+    /**
+     * The selector each tab waits for beyond "panel active" before it counts as rendered
+     * with real data. Without this a tab can be photographed mid-fetch (an empty list),
+     * since {@code #<id>-tab.active} only proves the panel is showing, not that its own
+     * render() call has finished populating it.
+     */
+    private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
+            "dashboard", "#memory-info .pk-meter__fill",
+            "environment", "#property-sources .pk-group__header",
+            "flyway", "#flyway-timeline .pk-table tbody tr",
+            "loggers", "#loggers-list .pk-group",
+            "config", "#config-groups .pk-group__header",
+            "scheduled-tasks", "#scheduled-tasks-groups .pk-group",
+            "metrics", "#metrics-list .pk-group",
+            "traces", "#traces-list .pk-trace-item");
+
+    /**
+     * The traceId of the flagship /orders N+1 request, captured straight from that
+     * response's own toolbar payload in {@link #generateTraffic()} - see the field's use
+     * in {@link #captureDashboardTabs} for why this is not simply "click the first item
+     * in the traces list".
+     */
+    private String flagshipTraceId;
+
+    @Override
+    protected Page browserContextPage() {
+        return browser.newContext(new Browser.NewContextOptions()
+                .setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)).newPage();
+    }
+
+    @Test
+    void captureEverySurfaceInBothThemes() throws Exception {
+        Path outputDir = resolveOutputDir();
+
+        for (String theme : List.of("light", "dark")) {
+            captureDashboardTabs(outputDir, theme);
+            captureToolbar(outputDir, theme);
+        }
+
+        assertThat(outputDir).isDirectoryContaining(path -> path.toString().endsWith(".png"));
+    }
+
+    private Path resolveOutputDir() throws Exception {
+        String configured = System.getProperty(OUTPUT_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            throw new IllegalStateException(
+                    "-D" + OUTPUT_PROPERTY + "=<absolute-dir> is required; refusing to guess "
+                  + "where to write screenshots");
+        }
+        Path dir = Path.of(configured);
+        Files.createDirectories(dir);
+        return dir;
+    }
+
+    private void captureDashboardTabs(Path outputDir, String theme) {
+        newThemedPage(theme);
+        generateTraffic();
+        openDashboard();
+        assertAllTabButtonsVisible();
+
+        for (String tabId : DASHBOARD_TABS) {
+            page.click(".pk-tab[data-tab=\"" + tabId + "\"]");
+            page.waitForSelector("#" + tabId + "-tab.active");
+            page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
+            shoot(outputDir, "dashboard-" + tabId + "-" + theme);
+        }
+
+        // Traces is already the active tab (last of DASHBOARD_TABS). Deep-link to the
+        // flagship /orders trace by id rather than clicking the list's first (most recent)
+        // entry: the Flyway tab's own migration-info lookup opens a JDBC connection outside
+        // any request context, which Peekaboot captures as its own root-level "connection"
+        // trace - created after generateTraffic() finishes and clicking through the Flyway
+        // tab above, so it consistently sorts above /orders by the time this runs. Confirmed
+        // by inspection of a first attempt at this that screenshotted that connection trace
+        // instead of the intended N+1 example.
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", flagshipTraceId);
+        page.waitForSelector("#peekaboot-trace-overlay");
+        // The host element exists as soon as openTraceDetail() creates it, well before
+        // fetchAndRender() replaces the loading placeholder - wait for that placeholder to
+        // actually be gone, or the screenshot just shows "Loading trace data...".
+        page.waitForFunction(
+                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
+              + ".querySelector('.pk-overlay__loading')",
+                null, new Page.WaitForFunctionOptions().setTimeout(15000));
+        shoot(outputDir, "trace-detail-" + theme);
+    }
+
+    /**
+     * Fails loudly, naming every missing/hidden tab, rather than letting a later
+     * page.click() time out on a selector that quietly never existed. metrics and traces
+     * are gated on GET /api/features; a silently absent button would otherwise look like an
+     * ordinary Playwright timeout with no clue which tab caused it.
+     */
+    private void assertAllTabButtonsVisible() {
+        List<String> missing = new ArrayList<>();
+        for (String tabId : DASHBOARD_TABS) {
+            if (!page.isVisible(".pk-tab[data-tab=\"" + tabId + "\"]")) {
+                missing.add(tabId);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException(
+                    "dashboard tab button(s) missing or hidden, cannot capture: " + missing);
+        }
+    }
+
+    private void captureToolbar(Path outputDir, String theme) {
+        newThemedPage(theme);
+        page.navigate(baseUrl + "/orders");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        // The bar shows a "loading" placeholder in its metrics area while it fetches the
+        // request's own trace insights; wait for that to resolve so the screenshot shows
+        // the real duration/query/log metrics instead of a spinner.
+        page.waitForFunction(
+                "() => !document.getElementById('peekaboot-toolbar-host').shadowRoot"
+              + ".querySelector('.pk-toolbar__loading')");
+        shoot(outputDir, "toolbar-collapsed-" + theme);
+    }
+
+    private void newThemedPage(String theme) {
+        if (page != null) {
+            page.context().close();
+        }
+        page = browserContextPage();
+        setStoredTheme(theme);
+    }
+
+    private void shoot(Path outputDir, String name) {
+        page.screenshot(new Page.ScreenshotOptions()
+                .setPath(outputDir.resolve(name + ".png"))
+                .setFullPage(false));
+    }
+
+    /**
+     * Gives the Traces tab a real mix to list - an ordinary request, a slow report, a
+     * failing request and, last, the deliberately heavy N+1 /orders trace that
+     * peekaboot.tracing.max-spans-per-trace exists to keep intact. Its traceId is read
+     * straight from that response's own toolbar payload, the same JSON the toolbar itself
+     * renders from, so {@link #flagshipTraceId} names the real trace regardless of what
+     * else the dashboard's own tabs cause to be captured afterward.
+     */
+    private void generateTraffic() {
+        page.navigate(baseUrl + "/persons");
+        page.navigate(baseUrl + "/api/orders/1/report");
+        page.navigate(baseUrl + "/boom");
+        page.navigate(baseUrl + "/orders");
+        flagshipTraceId = (String) page.evaluate(
+                "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
+        if (flagshipTraceId == null || flagshipTraceId.isBlank()) {
+            throw new IllegalStateException("no traceId on the /orders toolbar payload - "
+                  + "cannot deep-link the flagship trace-detail screenshot");
+        }
+        page.waitForTimeout(500);
+    }
+}

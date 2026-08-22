@@ -21,7 +21,7 @@ import org.springframework.test.context.ActiveProfiles;
 abstract class PlaywrightTestBase {
 
     private static Playwright playwright;
-    private static Browser browser;
+    protected static Browser browser;
 
     @LocalServerPort
     protected int port;
@@ -51,7 +51,12 @@ abstract class PlaywrightTestBase {
     @BeforeEach
     void openPage() {
         baseUrl = "http://localhost:" + port;
-        page = browser.newContext().newPage();
+        page = browserContextPage();
+    }
+
+    /** Overridable so a subclass can fix the viewport without changing every test's context. */
+    protected Page browserContextPage() {
+        return browser.newContext().newPage();
     }
 
     @AfterEach

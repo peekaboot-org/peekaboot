@@ -15,6 +15,22 @@ datasource is a PostgreSQL container started automatically by Spring Boot's Dock
 support, so Docker needs to be running. Flyway migrations and a `@Scheduled` job give the
 Flyway and Scheduled Tasks tabs real data to show.
 
+### Demo endpoints
+
+A small order domain (`CustomerOrder`/`OrderLine`, seeded by `V3`/`V4`) exists purely to give
+Peekaboot's trace view something worth looking at:
+
+| Endpoint | What it demonstrates |
+| --- | --- |
+| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. Trips the high-trace-query-count warning in the Traces tab. |
+| `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time actually went. |
+| `POST /api/orders` | Places a new order. Shows up as its own `HTTP_REQUEST`-classified trace, distinct from a page load. |
+| `GET /boom` | Always throws. Gives the Errors bucket, the error badge and the toolbar's error styling something real to render. |
+| `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order and is captured as a `SCHEDULED_JOB` trace, so the Scheduled Tasks tab has a job worth opening. |
+
+`OrderTraceCaptureIntegrationTest` asserts what Peekaboot actually captured from these
+endpoints, not just what they returned.
+
 ## `src/test` — the automated UI suite
 
 The Playwright tests and every test that boots a Spring context live here. They activate the
@@ -64,3 +80,24 @@ CI (`.github/workflows/build-on-push.yml`) caches `~/.cache/ms-playwright` keyed
 Ubuntu runners have passwordless `sudo`, so `--with-deps` would be available there if a
 missing OS library ever turns a "Host validation warning" into an actual failure — that has
 not been necessary so far.
+
+## Screenshot capture (`ScreenshotCapture`)
+
+`src/test/java/.../ui/ScreenshotCapture.java` photographs every dashboard tab, the trace-detail
+overlay and the dev toolbar, in both light and dark themes, for the peekaboot.org website. It
+is a tool, not a test - deliberately not named `*Test`, so surefire's default includes never
+pick it up and a normal `mvn test` never runs it or touches Docker.
+
+It runs under the `screenshots` profile (`application-screenshots.yml`), which points at the
+real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,
+Environment and Traces tabs all show genuine content instead of an empty in-memory H2 state.
+**Docker must be running.**
+
+```bash
+mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+    -Dpeekaboot.screenshots.out=/absolute/path/to/output/dir
+```
+
+The output directory is required (the tool refuses to guess) and is created if missing. A
+successful run writes 20 PNGs: one per dashboard tab (8) plus the trace-detail overlay and the
+collapsed toolbar, each in light and dark.

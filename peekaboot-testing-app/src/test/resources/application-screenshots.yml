@@ -1,0 +1,49 @@
+# Capture profile for ScreenshotCapture: the real Postgres from compose.yml with Flyway on,
+# so the Flyway tab photographs a genuine migration history instead of an empty state.
+# Requires Docker. Never used by `mvn test`.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  docker:
+    compose:
+      enabled: true
+      # spring.docker.compose.skip.in-tests defaults to true - Boot skips Docker Compose
+      # lifecycle management under a test run unless this is explicitly turned off, which
+      # would otherwise leave this profile silently falling back to an embedded H2 database.
+      skip:
+        in-tests: false
+  task:
+    scheduling:
+      pool:
+        size: 1
+
+peekaboot:
+  enabled: true
+  dev-toolbar: true
+  tracing:
+    # Peekaboot's default is 100. The demo's N+1 /orders endpoint produces roughly 16-17
+    # spans per seeded order, so at the default the trace store truncates the trace before
+    # the deduplicator runs - the flagship Traces screenshot would then show a silently
+    # truncated trace with no high-query-count warning, the exact feature it exists to
+    # demonstrate. Mirrors the override on OrderTraceCaptureIntegrationTest.
+    max-spans-per-trace: 500
+
+management:
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        schedule-delay: 50ms
+
+logging:
+  level:
+    org.peekaboot: INFO
