@@ -1,14 +1,13 @@
 package org.peekaboot.backend.actuator.raw;
 
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,7 +20,7 @@ import java.util.Map;
 public class ActuatorRawMapper {
 
     private final ObjectMapper objectMapper;
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
     public ActuatorRawMapper() {
         this.objectMapper = JsonMapper.builder()
@@ -108,39 +107,7 @@ public class ActuatorRawMapper {
             return Map.of();
         }
         Object normalized = objectMapper.convertValue(rawData, Object.class);
-        Object masked = maskNode(null, normalized);
+        Object masked = treeMasker.mask(normalized);
         return masked instanceof Map ? (Map<String, Object>) masked : Map.of();
-    }
-
-    /**
-     * A sensitive key replaces its entire value - whatever shape that value is, not just
-     * a String - mirroring {@link MaskingEngine#mask(String, String)}'s "whole value
-     * replaced" rule generalised to a tree. An innocuous key recurses into Maps/Lists and
-     * runs the value-pattern rules on String leaves, exactly like a bare
-     * {@link MaskingEngine#maskValue(String)} call would.
-     */
-    private Object maskNode(String key, Object value) {
-        if (key != null && maskingEngine.isSensitiveKey(key)) {
-            return value == null ? null : maskingEngine.mask(key, "x");
-        }
-        if (value instanceof Map<?, ?> map) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            for (Map.Entry<?, ?> entry : map.entrySet()) {
-                String childKey = String.valueOf(entry.getKey());
-                result.put(childKey, maskNode(childKey, entry.getValue()));
-            }
-            return result;
-        }
-        if (value instanceof List<?> list) {
-            List<Object> result = new ArrayList<>(list.size());
-            for (Object element : list) {
-                result.add(maskNode(null, element));
-            }
-            return result;
-        }
-        if (value instanceof String s) {
-            return maskingEngine.maskValue(s);
-        }
-        return value;
     }
 }
