@@ -28,9 +28,11 @@ first match — a span matching more than one row always gets the one checked fi
 the most specific-sounding one. See
 [peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#root-action-type) for
 the full priority table and the classification gotchas (`HTTP_REQUEST` occupying two
-priorities, `SCHEDULED_JOB` being a name-substring match checked mid-list, and the
-resulting `INTERNAL` misclassification of scheduler-fired jobs whose bean/method name
-doesn't contain "schedule"/"cron"/"timer"/"job") instead of duplicating them here.
+priorities, `SCHEDULED_JOB` keyed on the `code.function`/`code.namespace` tag pair
+Spring's own scheduled-task observation sets rather than a name match, and the resulting
+`INTERNAL` classification both for schedulers Spring doesn't instrument — Quartz, a raw
+thread — and for a *direct* call to a `@Scheduled` method, which carries only `@Observed`'s
+own `class`/`method` tags, not Spring's pair) instead of duplicating them here.
 
 **Usage:** `RootActionType` enum, `rootActionType` field, `detectRootActionType()`
 

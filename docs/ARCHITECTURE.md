@@ -84,6 +84,8 @@ org.peekaboot.backend/
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers
 │   └── trace/              # Trace processing
+├── masking/                # MaskingEngine, MaskingRules, TagMasker, TreeMasker — the one place
+│                           # "is this key/value sensitive" is decided; see peekaboot.org/docs/security
 ├── service/                # Business services
 ├── tracing/                # In-memory tracing
 │   ├── autoconfigure/      # Tracing auto-configuration
@@ -91,7 +93,6 @@ org.peekaboot.backend/
 │   ├── event/              # Spring application events
 │   ├── interceptor/        # Tracing handler interceptor
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceBucket, TraceStoreEventListener
-└── util/                   # Utilities (masking, etc.)
 ```
 
 ### Tracing Flow
@@ -187,12 +188,14 @@ static/peekaboot/ui/
 │   ├── api.js                # createClient() — fetch wrapper with per-path generation guards
 │   ├── components.js         # JS builders behind the .pk-* primitives
 │   ├── format.js              # Duration/byte/date formatting
-│   ├── markup.js               # escapeHtml, highlightText, isSensitiveKey
+│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL
 │   ├── root-actions.js         # Root action type -> icon/label map
 │   ├── severity.js             # Duration/health severity thresholds (SLOW_MS, VERY_SLOW_MS)
 │   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
 │   ├── span-names.js           # spanId -> name lookup, shared by overlay tabs
-│   └── theme.js                # localStorage-backed theme resolution shared across surfaces
+│   ├── theme.js                # localStorage-backed theme resolution shared across surfaces
+│   └── unmask-control.js       # renderUnmaskControl() — the Environment/Config "Show secrets" toggle,
+│                                # rendered only when /api/features reports unmaskingEnabled
 ├── dashboard/
 │   ├── index.html            # Dashboard document
 │   ├── dashboard.css         # Dashboard-only chrome
@@ -244,8 +247,9 @@ Auto-configuration classes that wire everything together.
 
 ### Conditional Loading
 
-Auto-configuration uses Spring Boot conditionals. Only `DevToolbarAutoConfiguration` and
-`TracingInterceptorAutoConfiguration` carry the servlet guard:
+Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
+`DevToolbarAutoConfiguration` and `TracingInterceptorAutoConfiguration` all carry the
+servlet guard:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -256,9 +260,16 @@ Auto-configuration uses Spring Boot conditionals. Only `DevToolbarAutoConfigurat
 
 `PeekabootAutoConfiguration` &mdash; the class that component-scans the servlet-only
 `PeekabootWebConfig` and registers the controllers, services and actuator wiring &mdash;
-does **not** carry `@ConditionalOnWebApplication`, nor do
-`PeekabootLifecycleAutoConfiguration`, `PeekabootTracingAutoConfiguration` or
-`OtelTracingAutoConfiguration`. See [Known defects](#known-defects) below.
+needs it because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type;
+without the guard, a non-servlet application (WebFlux, or no web application at all) with
+`peekaboot.enabled=true` would still register the controller, actuator services and
+mappers, just with nothing servlet-specific ever invoking them &mdash; dead beans and
+wasted component-scan work, not a startup crash (`ApplicationContextRunner` confirms the
+context starts cleanly either way; only `WebMvcConfigurationSupport`, itself only wired up
+in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard now prevents
+even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootTracingAutoConfiguration` and
+`OtelTracingAutoConfiguration` still carry no such guard, since none of them touch anything
+servlet-specific.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` — the default
 comes from `PeekabootDefaultsEnvironmentPostProcessor`, which detects local
@@ -442,39 +453,15 @@ Recorded here so a maintainer sees them without having to rediscover them. Each 
 names the class at fault, the remedy, and the site page that carries the user-visible
 symptom.
 
-1. **No secret masking by default on the Environment/Config tabs.** Spring Boot 4.1
-   registers no default `SanitizingFunction`. Combined with Peekaboot's own
-   `show-values: always` for `env` and `configprops` (set in `peekaboot-defaults.yml`,
-   loaded by `PeekabootDefaultsEnvironmentPostProcessor`), the Environment and Config
-   tabs render every property value &mdash; including secrets &mdash; verbatim on an
-   unauthenticated endpoint. Remedy: ship a default `SanitizingFunction` bean, or drop
-   the `show-values: always` defaults. Symptom documented at
-   [peekaboot.org/docs/security](https://peekaboot.org/docs/security/#masking).
-2. **`PeekabootAutoConfiguration` is missing the servlet guard.** Unlike
-   `DevToolbarAutoConfiguration` and `TracingInterceptorAutoConfiguration`,
-   `PeekabootAutoConfiguration` carries no `@ConditionalOnWebApplication(Type.SERVLET)`,
-   yet it component-scans the servlet-only `PeekabootWebConfig`
-   (a `WebMvcConfigurer`). A non-servlet application (WebFlux, or no web application at
-   all) should fail fast at startup rather than silently staying inactive. Remedy: add
-   the annotation. Symptom documented at
-   [peekaboot.org/docs/requirements](https://peekaboot.org/docs/requirements/) and
-   [peekaboot.org/docs/how-activation-works](https://peekaboot.org/docs/how-activation-works/).
-3. **`max-spans-per-trace` truncates before deduplication.**
-   `PeekabootTracingProperties.maxSpansPerTrace` (default 100) caps span storage in
-   `InMemoryTraceStore` at write time, before `SpanDeduplicator` ever runs. A query-heavy
-   endpoint can lose the spans that would have triggered `HIGH_QUERY_COUNT` before
-   dedup gets a chance to collapse the duplicate JDBC/`datasource-proxy` span pairs that,
-   left uncollapsed, roughly double stored span volume &mdash; so the cap bites about
-   twice as early as its number suggests. Remedy: run deduplication (or at least count
-   distinct queries) before truncating, not after. Symptom documented at
-   [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/#span-deduplication).
-4. **Scheduled-job classification substring-matches the span name.**
-   `TraceTreeMapper.detectRootActionType()` classifies `SCHEDULED_JOB` only when the root
-   span's name contains "schedule", "cron", "timer" or "job". Whether a `@Scheduled`
-   method is recognised then depends on its bean/method name and on whether Spring's own
-   scheduled-task observation wraps it as the root span: `task
-   scheduler.fixedDelay` matches on "schedul", while `task
-   orderReconciler.reconcileOrders` matches nothing and classifies `INTERNAL`. Remedy:
-   key classification on span tags (or Spring's scheduled-task observation type) instead
-   of a name substring. Symptom documented at
-   [peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#root-action-type).
+1. **`QueryExtractor.findSql` doesn't recognise `db.query.text`.** It reads
+   `db.statement` (standard OpenTelemetry semantic convention), then falls back to any
+   `jdbc.query[N]` tag (the older `datasource-proxy`/Micrometer convention), then to the
+   span's own name if it looks like SQL. `datasource-micrometer-opentelemetry` &mdash;
+   the library `peekaboot-testing-app` actually uses for JDBC spans, and the newer
+   OpenTelemetry-native alternative to the two conventions above &mdash; tags query spans
+   with `db.query.text` instead, which `findSql` doesn't check. Confirmed against a real
+   captured trace (`GET /persons`, a real Hibernate query): `findSql` falls through to its
+   third branch and returns the span's own abbreviated name (e.g. `"SELECT person"`)
+   rather than the actual statement text. Remedy: add `db.query.text` as a fourth,
+   highest- or equal-priority branch in `findSql`. Symptom documented at
+   [peekaboot.org/docs/dev-toolbar](https://peekaboot.org/docs/dev-toolbar/#expanded-overlay).

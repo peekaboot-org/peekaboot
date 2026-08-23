@@ -102,7 +102,8 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
 | `format.js` | `formatDurationMs`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`. |
-| `markup.js` | `escapeHtml`, `highlightText`, `isSensitiveKey`. |
+| `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — the backend's masked-value literal (`"******"`), centralised here so a masked-value comparison only needs updating in one place. |
+| `unmask-control.js` | `renderUnmaskControl(slot, context)` — the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend no longer decides what's sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
 | `severity.js` | `SLOW_MS`, `VERY_SLOW_MS`, `durationSeverity`, `healthSeverity` — the one place duration and health thresholds are decided. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
