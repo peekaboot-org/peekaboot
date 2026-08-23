@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -17,7 +18,10 @@ import static org.mockito.Mockito.mock;
 
 class PeekabootAutoConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+    // PeekabootAutoConfiguration is now @ConditionalOnWebApplication(SERVLET), so most of
+    // this class exercises it through a servlet web application context; only
+    // shouldNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
             .withUserConfiguration(MockActuatorConfig.class);
 
@@ -70,6 +74,22 @@ class PeekabootAutoConfigurationTest {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(PeekabootController.class);
         });
+    }
+
+    @Test
+    void shouldNotRegisterBeansOnNonServletApplication() {
+        // peekaboot.enabled=true is the default in local development; on a reactive or
+        // non-web application PeekabootAutoConfiguration must stay inactive rather than
+        // partially activating a servlet-only component (PeekabootWebConfig).
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
+                .withUserConfiguration(MockActuatorConfig.class)
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(PeekabootController.class);
+                    assertThat(context).doesNotHaveBean(PeekabootProperties.class);
+                });
     }
 
     @Test
