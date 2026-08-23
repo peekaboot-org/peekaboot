@@ -115,9 +115,11 @@ public class TraceInsightsService {
 
     private Stream<TraceTree> mapBucket(TraceBucket bucket, int limit) {
         return traceStore.getTraces(bucket, limit).stream()
-                .map(bundle -> TraceData.fromSpans(bundle.traceId(), bundle.spans()))
-                .map(spanDeduplicator::deduplicate)
-                .map(traceTreeMapper::map);
+                .map(bundle -> {
+                    TraceData traceData = spanDeduplicator.deduplicate(
+                            TraceData.fromSpans(bundle.traceId(), bundle.spans()));
+                    return traceTreeMapper.map(traceData, bundle.truncated());
+                });
     }
 
     private boolean matchesFilters(TraceTree tree, Set<RootActionType> actionTypes, String rootOperation) {
@@ -157,7 +159,7 @@ public class TraceInsightsService {
                 .map(bundle -> {
                     TraceData traceData = spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
                     List<QueryInfo> queries = queryExtractor.extract(traceData);
-                    TraceTree tree = traceTreeMapper.map(traceData);
+                    TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
                     tree = issueDetector.detectIssues(tree);
                     return enrichWithDetails(tree, bundle, queries);
                 });
@@ -217,7 +219,8 @@ public class TraceInsightsService {
                 tree.inheritedAttributes(),
                 httpExchange,
                 logs.isEmpty() ? null : logs,
-                queries.isEmpty() ? null : queries
+                queries.isEmpty() ? null : queries,
+                tree.truncated()
         );
     }
 

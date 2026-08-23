@@ -64,6 +64,7 @@ class TraceWritePathBenchmark {
         TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity");
         rawSpans.forEach(span -> sanityBundle.addSpan(span, CAP));
         assertThat(sanityBundle.spans()).hasSize(REAL_QUERY_COUNT + 1);
+        assertThat(sanityBundle.truncated()).isFalse();
 
         for (int i = 0; i < WARMUP_ITERATIONS; i++) {
             timeOldPath(rawSpans, CAP);

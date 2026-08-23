@@ -39,6 +39,7 @@ public class TraceDataBundle {
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
     private final Map<String, String> parentRedirects = new HashMap<>();
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
+    private boolean truncated = false;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
     private final long createdAt;
@@ -70,6 +71,7 @@ public class TraceDataBundle {
             store(span);
             absorbDuplicateChildrenOf(span);
             if (spansById.size() > maxSpans) {
+                truncated = true;
                 evictOldest(spansById.size() - maxSpans);
             }
         }
@@ -167,6 +169,15 @@ public class TraceDataBundle {
 
     public void setRequest(RequestCompletedEvent request) {
         this.request = request;
+    }
+
+    /** True once the {@code maxSpans} cap in {@link #addSpan} has actually dropped a real
+     * (post-deduplication) span - never set merely because duplicate artifacts were folded
+     * away. Sticky: a trace that was ever truncated stays marked as such. */
+    public boolean truncated() {
+        synchronized (spansLock) {
+            return truncated;
+        }
     }
 
     public List<SpanData> spans() {

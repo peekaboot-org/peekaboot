@@ -104,6 +104,21 @@ class InMemoryTraceStoreTest {
 
         var bundle = capped.getTrace("t1").orElseThrow();
         assertThat(bundle.spans()).hasSize(2);
+        assertThat(bundle.truncated()).isFalse();
+    }
+
+    @Test
+    void addSpan_marksTheBundleTruncatedOnceRealSpansExceedTheCap() {
+        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        Instant now = Instant.now();
+        for (int i = 1; i <= 3; i++) {
+            capped.addSpan(new SpanData("t1", "s" + i, null, "op" + i, null, now, now, Duration.ZERO,
+                    Map.of(), List.of(), null, null, null, null, null, List.of(), capped.nextCreationOrder()));
+        }
+
+        var bundle = capped.getTrace("t1").orElseThrow();
+        assertThat(bundle.spans()).hasSize(2);
+        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test

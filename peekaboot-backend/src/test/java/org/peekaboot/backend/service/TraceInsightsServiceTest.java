@@ -433,6 +433,38 @@ class TraceInsightsServiceTest {
         assertThat(withDup.queries().get(0).sql()).isEqualTo(withoutDup.queries().get(0).sql());
     }
 
+    @Test
+    void getTraceInsights_surfacesTheTruncatedFlagFromTheBundle() {
+        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        for (int i = 1; i <= 3; i++) {
+            cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s" + i, "op" + i));
+        }
+        TraceInsightsService cappedService = newService(cappedStore);
+
+        Optional<TraceTree> result = cappedService.getTraceInsights("t1");
+
+        assertThat(result).isPresent();
+        assertThat(result.get().truncated()).isTrue();
+    }
+
+    @Test
+    void getInsights_surfacesTheTruncatedFlagInTheListToo() {
+        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
+        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s1", "op1"));
+        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s2", "op2"));
+        TraceInsightsService cappedService = newService(cappedStore);
+
+        TraceInsightsResponse response = cappedService.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces()).extracting(TraceTree::truncated).containsExactly(true);
+    }
+
+    private SpanData rootSpanWithoutTags(InMemoryTraceStore forStore, String traceId, String spanId, String name) {
+        Instant now = Instant.now();
+        return new SpanData(traceId, spanId, null, name, null, now, now, Duration.ZERO,
+                Map.of(), List.of(), null, null, null, null, null, List.of(), forStore.nextCreationOrder());
+    }
+
     private TraceInsightsService newService(TraceStore store) {
         return new TraceInsightsService(store, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
     }

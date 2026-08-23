@@ -209,6 +209,7 @@ function render(content, trace) {
                         <span>${spanCount} spans</span>
                         <span>${queryCount} queries</span>
                         <span>${logCount} logs</span>
+                        ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
                     </div>
                     <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
                 </div>

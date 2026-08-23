@@ -306,6 +306,35 @@ class TraceTreeMapperTest {
     }
 
     @Test
+    void map_defaultsTruncatedToFalseWhenOmitted() {
+        var singleSpan = createSpan("trace1", "only-span", null, "single-op",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)));
+
+        assertThat(result.truncated()).isFalse();
+    }
+
+    @Test
+    void map_carriesTheTruncatedFlagGivenByTheCaller() {
+        var singleSpan = createSpan("trace1", "only-span", null, "single-op",
+                Span.Kind.SERVER, 0, 100, Map.of());
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)), true);
+
+        assertThat(result.truncated()).isTrue();
+    }
+
+    @Test
+    void map_carriesTheTruncatedFlagEvenForAnEmptyTrace() {
+        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+
+        TraceTree result = mapper.map(traceData, true);
+
+        assertThat(result.truncated()).isTrue();
+    }
+
+    @Test
     void map_shouldConvertTimesToMilliseconds() {
         var baseTime = Instant.parse("2024-01-15T10:00:00Z");
         var span = new SpanData(

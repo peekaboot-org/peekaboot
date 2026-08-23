@@ -400,6 +400,24 @@ class IssueDetectorTest {
         assertThat(result.rootSpan()).isNull();
     }
 
+    @Test
+    void detectIssues_preservesTheTruncatedFlag() {
+        // Given: a trace the store marked truncated because the span cap dropped real spans
+        SpanNode span = createSpan("span1", 50, "OK", Map.of(), List.of());
+        TraceTree trace = new TraceTree(
+                "trace-1", 0, 50, TraceStatus.OK, RootActionType.UNKNOWN, "test-op",
+                span, createSummary(1, 0, 0L, 0), Map.of(),
+                null, null, null, true
+        );
+
+        // When
+        TraceTree result = detector.detectIssues(trace);
+
+        // Then: rebuilding the tree around the processed span tree must not silently
+        // reset the flag - a shortened trace must never look complete again
+        assertThat(result.truncated()).isTrue();
+    }
+
     private SpanNode createSpan(String spanId, long durationMs, String status,
                                  Map<String, Object> tags, List<SpanNode> children) {
         return new SpanNode(spanId, "test-op", "SERVER", 0, durationMs, status, children, tags, List.of(), List.of());

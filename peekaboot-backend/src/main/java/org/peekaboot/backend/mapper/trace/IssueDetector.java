@@ -37,7 +37,11 @@ public class IssueDetector {
                 trace.rootOperation(),
                 processedRoot,
                 trace.summary(),
-                trace.inheritedAttributes()
+                trace.inheritedAttributes(),
+                trace.httpExchange(),
+                trace.logs(),
+                trace.queries(),
+                trace.truncated()
         );
     }
 

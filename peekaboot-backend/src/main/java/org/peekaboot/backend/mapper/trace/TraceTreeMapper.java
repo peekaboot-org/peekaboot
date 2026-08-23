@@ -26,6 +26,16 @@ public class TraceTreeMapper {
     private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     public TraceTree map(TraceData traceData) {
+        return map(traceData, false);
+    }
+
+    /**
+     * @param truncated whether the {@code max-spans-per-trace} cap dropped real spans for
+     *                  this trace before it reached here - a property of how the trace was
+     *                  captured, not of its (already-deduplicated) span list, so it must be
+     *                  passed in rather than derived from {@code traceData}.
+     */
+    public TraceTree map(TraceData traceData, boolean truncated) {
         if (traceData == null || traceData.spans() == null || traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData != null ? traceData.traceId() : null,
@@ -36,7 +46,9 @@ public class TraceTreeMapper {
                     new TraceTabSummary(null, new TraceTabSummary.SpansSummary(0, 0L, 0),
                             new TraceTabSummary.QueriesSummary(0, 0L),
                             new TraceTabSummary.LogsSummary(0, 0, 0)),
-                    Map.of()
+                    Map.of(),
+                    null, null, null,
+                    truncated
             );
         }
 
@@ -79,7 +91,9 @@ public class TraceTreeMapper {
                 rootOperation,
                 rootSpan,
                 summary,
-                Map.of()  // No inherited attributes - all tags stay on spans
+                Map.of(),  // No inherited attributes - all tags stay on spans
+                null, null, null,
+                truncated
         );
     }
 

@@ -305,6 +305,12 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
     if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
     else if (hasSlow) mainLine.appendChild(badge('SLOW', 'warn'));
 
+    if (trace.truncated) {
+        const truncatedBadge = badge('TRUNCATED', 'warn');
+        truncatedBadge.title = 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped.';
+        mainLine.appendChild(truncatedBadge);
+    }
+
     return mainLine;
 }
 

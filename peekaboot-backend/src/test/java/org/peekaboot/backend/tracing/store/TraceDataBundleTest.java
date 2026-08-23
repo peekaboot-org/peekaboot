@@ -120,6 +120,29 @@ class TraceDataBundleTest {
         assertThat(bundle.spans())
                 .as("ten raw arrivals must not truncate a trace with only five real spans")
                 .hasSize(5);
+        assertThat(bundle.truncated())
+                .as("ten raw arrivals must not truncate a trace with only five real spans")
+                .isFalse();
+    }
+
+    @Test
+    void truncated_isFalseUntilRealSpansExceedTheCap() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        for (int i = 1; i <= 3; i++) {
+            bundle.addSpan(createSpan("span" + i, i), 3);
+        }
+
+        assertThat(bundle.truncated()).isFalse();
+    }
+
+    @Test
+    void truncated_becomesTrueOnceRealSpansExceedTheCapAndStaysTrue() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        for (int i = 1; i <= 5; i++) {
+            bundle.addSpan(createSpan("span" + i, i), 3);
+        }
+
+        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test
