@@ -3,7 +3,7 @@
  * sub-tabs. All three build the same `<table class="pk-table">` shape; renderTable/
  * tableRow collapse that duplication into one helper each.
  */
-import {escapeHtml} from '../../shared/markup.js';
+import {escapeHtml, MASK_LITERAL} from '../../shared/markup.js';
 import {tabStrip} from '../../shared/components.js';
 
 const SUBTABS = [
@@ -120,7 +120,7 @@ function renderRequestOverview(container, req, res, trace) {
 function renderRequestHeaders(container, req) {
     const reqHeaders = req?.headers || {};
     const rows = Object.keys(reqHeaders).length > 0
-        ? Object.entries(reqHeaders).sort().map(([k, v]) => tableRow(k, v, v === '********' ? 'pk-request-masked' : ''))
+        ? Object.entries(reqHeaders).sort().map(([k, v]) => tableRow(k, v, v === MASK_LITERAL ? 'pk-request-masked' : ''))
         : ['<tr><td colspan="2" class="pk-request-masked">No headers captured</td></tr>'];
 
     container.innerHTML = '<div class="pk-request-section"><h3>Request Headers</h3>' + renderTable(rows) + '</div>';

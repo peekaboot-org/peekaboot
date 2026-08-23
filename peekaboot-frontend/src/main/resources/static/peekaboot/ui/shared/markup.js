@@ -1,5 +1,13 @@
 const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
 
+/**
+ * The backend's mask literal (MaskingRules.MASK, mirroring Spring's own Sanitizer).
+ * A single source of truth here so a future literal change (this has happened once
+ * already - an earlier eight-star frontend copy silently stopped matching this
+ * six-star value) only needs updating in one place.
+ */
+export const MASK_LITERAL = '******';
+
 /** Escapes text for safe interpolation into an HTML string. */
 export function escapeHtml(text) {
     if (text == null) return '';
