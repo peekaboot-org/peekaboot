@@ -58,7 +58,15 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         running = true;
     }
 
-    /** Completes every open emitter and stops the loops, so nothing outlives the context. */
+    /**
+     * Stops the loops and completes every open emitter, so nothing outlives the context.
+     *
+     * <p>The loops go first: a loop thread wedged in a blocking send() holds that
+     * emitter's write lock, and complete() would then queue up behind it while the
+     * loop kept feeding further events into the same wedge. Emitters are snapshotted
+     * and cleared under the monitor before either step, so a broadcast racing this
+     * has nothing left to iterate.
+     */
     @Override
     public void stop() {
         List<SseEmitter> open;
@@ -68,6 +76,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             emitters.clear();
             queue.clear();
         }
+        dispatchLoop.stop();
+        heartbeatLoop.stop();
         for (SseEmitter emitter : open) {
             try {
                 emitter.complete();
@@ -75,8 +85,6 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
         }
-        dispatchLoop.stop();
-        heartbeatLoop.stop();
     }
 
     @Override
@@ -216,7 +224,15 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
     }
 
-    /** Package-visible so tests can stand in for (or wedge) the delivery step. */
+    /**
+     * Sends one event to every subscriber, in order, on the single dispatch thread.
+     * A peer that has stopped reading therefore holds up the subscribers behind it
+     * until the connector's write timeout fires (the heartbeat drops it 15s later at
+     * the latest) - accepted for a dev tool, where a handful of dashboards watch a
+     * single app.
+     *
+     * <p>Package-visible so tests can stand in for (or wedge) the delivery step.
+     */
     void broadcast(String eventName, String json) {
         for (SseEmitter emitter : emitters) {
             try {
