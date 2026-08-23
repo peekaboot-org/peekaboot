@@ -75,8 +75,45 @@ class ConfigMapperTest {
 
         ConfigInfo result = mapper.map(configprops);
 
-        assertThat(result.groups().get(0).properties()).anyMatch(p -> p.key().equals("password") && p.value().equals("********"));
+        assertThat(result.groups().get(0).properties()).anyMatch(p -> p.key().equals("password") && p.value().equals("******"));
         assertThat(result.groups().get(0).properties()).anyMatch(p -> p.key().equals("username") && p.value().equals("admin"));
+    }
+
+    @Test
+    void map_shouldNotMaskNegativeCaseKeysThatMerelyContainKey() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("jpa", new ConfigPropsResponse.ConfigBean(
+                    "spring.jpa",
+                    Map.of("key-generator", "sequence"),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops);
+
+        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("sequence");
+    }
+
+    @Test
+    void map_shouldMaskCredentialEmbeddedInValueUnderAnInnocuousKey() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("datasource", new ConfigPropsResponse.ConfigBean(
+                    "spring.datasource",
+                    Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops);
+
+        assertThat(result.groups().get(0).properties().get(0).value())
+            .isEqualTo("jdbc:postgresql://******@localhost/db");
     }
 
     @Test
@@ -106,6 +143,6 @@ class ConfigMapperTest {
         );
 
         ConfigInfo result = mapper.map(configprops);
-        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("********");
+        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
     }
 }

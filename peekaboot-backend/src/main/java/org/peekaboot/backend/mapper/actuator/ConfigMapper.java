@@ -4,20 +4,18 @@ import org.peekaboot.backend.actuator.raw.ConfigPropsResponse;
 import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.peekaboot.backend.domain.config.ConfigProperty;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 @Component
 public class ConfigMapper {
 
-    private static final Pattern SENSITIVE_PATTERN = Pattern.compile(
-        "password|secret|key|token|credential|credentials", Pattern.CASE_INSENSITIVE
-    );
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public ConfigInfo map(ConfigPropsResponse configprops) {
         if (configprops == null || configprops.contexts() == null) {
@@ -38,10 +36,7 @@ public class ConfigMapper {
                     for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
                         String key = entry.getKey();
                         String value = entry.getValue() != null ? entry.getValue().toString() : null;
-
-                        if (SENSITIVE_PATTERN.matcher(key).find()) {
-                            value = "********";
-                        }
+                        value = maskingEngine.mask(key, value);
 
                         properties.add(new ConfigProperty(key, value, null));
                     }
