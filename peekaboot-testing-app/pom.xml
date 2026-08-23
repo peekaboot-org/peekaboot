@@ -206,9 +206,27 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- This module deliberately does not inherit peekaboot-parent, so the
+                 parent's pluginManagement (version 10.0.0, failOnNoGitDirectory=false)
+                 does not apply here; without this block the bare declaration falls back
+                 to Spring Boot's managed 9.2.0, which fails the build when no usable
+                 .git is present (e.g. a worktree whose absolute gitdir pointer does not
+                 resolve on this machine, or an exported source tree). -->
             <plugin>
                 <groupId>io.github.git-commit-id</groupId>
                 <artifactId>git-commit-id-maven-plugin</artifactId>
+                <version>10.0.0</version>
+                <configuration>
+                    <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <includeOnlyProperties>
+                        <includeOnlyProperty>git.branch</includeOnlyProperty>
+                        <includeOnlyProperty>git.tag</includeOnlyProperty>
+                        <includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
+                        <includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
+                    </includeOnlyProperties>
+                    <commitIdGenerationMode>full</commitIdGenerationMode>
+                </configuration>
             </plugin>
             <!-- duplicated from peekaboot-parent: this module intentionally has a
                  different parent, so the shared build config cannot be inherited -->
