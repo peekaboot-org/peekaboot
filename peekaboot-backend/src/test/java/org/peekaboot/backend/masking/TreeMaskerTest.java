@@ -85,4 +85,35 @@ class TreeMaskerTest {
 
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
     }
+
+    // Known Defect C1: ConfigMapper's caller has a root node that IS one property's value,
+    // not a subtree it needs checked for descendants only - the sensitive key can name the
+    // root itself (a @ConfigurationProperties bean's "client-secret" entry). The one-arg
+    // mask(Object) overload checks descendants but never the root, so this key-aware
+    // overload exists to also check the root against isSensitiveKey.
+    @Test
+    void mask_withKey_shouldReplaceTheWholeValueWhenTheRootKeyItselfIsSensitive() {
+        Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue");
+
+        assertThat(masked).isEqualTo("******");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_withKey_shouldStillRecurseIntoDescendantsWhenTheRootKeyIsInnocuous() {
+        Map<String, Object> google = Map.of("clientId", "abc123", "clientSecret", "GOCSPX-SuperSecretValue");
+
+        Object masked = treeMasker.mask("registration", Map.of("google", google));
+
+        Map<String, Object> registration = (Map<String, Object>) masked;
+        Map<String, Object> maskedGoogle = (Map<String, Object>) registration.get("google");
+        assertThat(maskedGoogle).containsEntry("clientId", "abc123").containsEntry("clientSecret", "******");
+    }
+
+    @Test
+    void mask_withKeyAndUnmask_shouldReturnTheNodeVerbatimWhenUnmaskIsTrueEvenForASensitiveRootKey() {
+        Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", true);
+
+        assertThat(masked).isEqualTo("GOCSPX-SuperSecretValue");
+    }
 }

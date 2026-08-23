@@ -39,6 +39,26 @@ public final class TreeMasker {
         return unmask ? node : mask(node);
     }
 
+    /**
+     * Same as {@link #mask(Object)}, except {@code key} is checked against
+     * {@link MaskingEngine#isSensitiveKey(String)} for {@code node} itself, not just for
+     * its descendants - for a caller whose root node is one property's value rather than a
+     * whole subtree, e.g. a {@code @ConfigurationProperties} bean's {@code clientSecret}
+     * entry, where the sensitive key names the root, not a nested field.
+     */
+    public Object mask(String key, Object node) {
+        return maskNode(key, node);
+    }
+
+    /**
+     * Same as {@link #mask(String, Object)}, except when {@code unmask} is true, in which
+     * case masking is bypassed entirely and {@code node} is returned unchanged. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public Object mask(String key, Object node, boolean unmask) {
+        return unmask ? node : mask(key, node);
+    }
+
     private Object maskNode(String key, Object value) {
         if (key != null && maskingEngine.isSensitiveKey(key)) {
             return value == null ? null : maskingEngine.mask(key, "x");

@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.integration;
 
 import org.peekaboot.testingapp.TestingApp;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
@@ -28,6 +29,7 @@ import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findRawC
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@EnableConfigurationProperties(NestedConfigPropertiesFixture.class)
 class ActuatorMaskingIntegrationTest {
 
     @LocalServerPort
@@ -65,6 +67,26 @@ class ActuatorMaskingIntegrationTest {
                 .as("spring.datasource.password must be present in some environment property source")
                 .isNotNull();
         assertThat(passwordValue.asString()).isEqualTo("******");
+    }
+
+    /**
+     * Known Defect C1: {@code ConfigMapper} used to flatten a {@code @ConfigurationProperties}
+     * bean's nested Map/List values to a string with {@code Object.toString()} before masking,
+     * so a sensitive key nested inside the tree (e.g. {@code registration.google.client-secret})
+     * never reached {@code isSensitiveKey} - only the flattened text did, and that text matches
+     * no value pattern. {@code NestedConfigPropertiesFixture} reproduces that nesting.
+     */
+    @Test
+    void insightsEndpointMasksASensitiveKeyNestedInsideAConfigurationPropertiesTree() {
+        JsonNode config = getJson("/peekaboot/api/actuator/all/insights").path("config");
+
+        JsonNode registrationProperty = findConfigInfoProperty(config, "registration");
+        assertThat(registrationProperty)
+                .as("the nested-fixture.registration property must be present in /configprops")
+                .isNotNull();
+        String value = registrationProperty.path("value").asString();
+        assertThat(value).contains("client-secret=******");
+        assertThat(value).doesNotContain("fixture-client-secret");
     }
 
     /**

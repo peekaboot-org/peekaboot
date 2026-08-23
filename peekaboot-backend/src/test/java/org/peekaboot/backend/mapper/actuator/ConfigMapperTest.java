@@ -5,6 +5,7 @@ import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.junit.jupiter.api.Test;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -144,6 +145,33 @@ class ConfigMapperTest {
 
         ConfigInfo result = mapper.map(configprops);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
+    }
+
+    @Test
+    void map_shouldMaskSensitiveKeysNestedInsideAConfigurationPropertiesTree() {
+        Map<String, Object> google = new LinkedHashMap<>();
+        google.put("clientId", "abc123");
+        google.put("clientSecret", "GOCSPX-SuperSecretValue");
+        Map<String, Object> registration = new LinkedHashMap<>();
+        registration.put("google", google);
+
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("oauth2", new ConfigPropsResponse.ConfigBean(
+                    "spring.security.oauth2.client",
+                    Map.of("registration", registration),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops);
+
+        String value = result.groups().get(0).properties().get(0).value();
+        assertThat(value).contains("clientId=abc123");
+        assertThat(value).contains("clientSecret=******");
+        assertThat(value).doesNotContain("GOCSPX-SuperSecretValue");
     }
 
     @Test

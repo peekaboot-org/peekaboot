@@ -5,7 +5,7 @@ spring:
     # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
     # tabs have a real, secret-looking property to prove the masking engine against
     # (see DashboardTabsTest.configTabMasksSensitiveValues and
-    # PeekabootActuatorServiceEndToEndMaskingTest).
+    # ActuatorMaskingIntegrationTest).
     password: test-fixture-password
   jpa:
     hibernate:
@@ -24,6 +24,15 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
+
+# Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIntegrationTest can prove
+# ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree (Known
+# Defect C1) - the shape a real spring.security.oauth2.client.registration bean has.
+nested-fixture:
+  registration:
+    google:
+      client-id: fixture-client-id
+      client-secret: fixture-client-secret
 
 management:
   endpoint:

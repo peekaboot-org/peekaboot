@@ -5,6 +5,7 @@ import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.peekaboot.backend.domain.config.ConfigProperty;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -15,7 +16,7 @@ import java.util.Map;
 @Component
 public class ConfigMapper {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
     public ConfigInfo map(ConfigPropsResponse configprops) {
         return map(configprops, false);
@@ -44,8 +45,9 @@ public class ConfigMapper {
 
                     for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
                         String key = entry.getKey();
-                        String value = entry.getValue() != null ? entry.getValue().toString() : null;
-                        value = maskingEngine.mask(key, value, unmask);
+                        Object rawValue = entry.getValue();
+                        Object maskedValue = rawValue != null ? treeMasker.mask(key, rawValue, unmask) : null;
+                        String value = maskedValue != null ? maskedValue.toString() : null;
 
                         properties.add(new ConfigProperty(key, value, null));
                     }
