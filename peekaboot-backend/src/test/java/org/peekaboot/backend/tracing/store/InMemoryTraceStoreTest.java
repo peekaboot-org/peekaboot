@@ -84,6 +84,29 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
+    void addSpan_doesNotTruncateWhenDuplicateArtifactsPushRawArrivalsPastTheCap() {
+        // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
+        // would overflow a cap enforced before deduplication but not one enforced after.
+        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        Instant now = Instant.now();
+        SpanData root = new SpanData("t1", "root", null, "GET /orders", null, now, now, Duration.ZERO,
+                Map.of(), List.of(), null, null, null, null, null, List.of(), capped.nextCreationOrder());
+        SpanData duplicate = new SpanData("t1", "dup1", "query1", "query", null, now, now, Duration.ZERO,
+                Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "dataSource"), List.of(),
+                null, null, null, null, null, List.of(), capped.nextCreationOrder());
+        SpanData realQuery = new SpanData("t1", "query1", "root", "query", null, now, now, Duration.ZERO,
+                Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "sample_app_db"), List.of(),
+                null, null, null, null, null, List.of(), capped.nextCreationOrder());
+
+        capped.addSpan(root);
+        capped.addSpan(duplicate);
+        capped.addSpan(realQuery);
+
+        var bundle = capped.getTrace("t1").orElseThrow();
+        assertThat(bundle.spans()).hasSize(2);
+    }
+
+    @Test
     void getTrace_returnsEmptyForUnknownTraceId() {
         var bundle = storage.getTrace("unknown");
 

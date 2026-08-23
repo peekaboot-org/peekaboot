@@ -1,11 +1,13 @@
 package org.peekaboot.backend.tracing.store;
 
+import io.micrometer.tracing.Span;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -36,6 +38,88 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
+    }
+
+    @Test
+    void addSpan_collapsesDuplicateChildArrivingBeforeItsRealParent() {
+        // The expected OTel BatchSpanProcessor export ordering: a duplicate span is a
+        // direct child of the real span it duplicates, and a span cannot end (and so
+        // export) before the ancestor containing it does - so the duplicate normally
+        // arrives here first, before the real span it needs to be compared against.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
+        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
+
+        bundle.addSpan(duplicate, 100);
+        bundle.addSpan(real, 100);
+
+        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1");
+    }
+
+    @Test
+    void addSpan_collapsesDuplicateWhoseRealParentIsAlreadyStored() {
+        // The uncommon ordering - covered for robustness, not because it's expected in
+        // production, since a faithful fold must not assume the child-before-parent
+        // ordering is the only one it will ever see.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 1);
+        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 2);
+
+        bundle.addSpan(real, 100);
+        bundle.addSpan(duplicate, 100);
+
+        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1");
+    }
+
+    @Test
+    void addSpan_reparentsAGrandchildThatArrivedBeforeItsDuplicateAncestorWasFolded() {
+        // Nesting depth means the grandchild ends (and so exports) before the duplicate
+        // that contains it, which in turn ends before the real span - so all three arrive
+        // in the reverse of their logical parent-child order.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData grandchild = jdbcSpan("rs1", "dup1", "result-set", "dataSource", 1);
+        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 2);
+        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 3);
+
+        bundle.addSpan(grandchild, 100);
+        bundle.addSpan(duplicate, 100);
+        bundle.addSpan(real, 100);
+
+        List<SpanData> spans = bundle.spans();
+        assertThat(spans).extracting(SpanData::spanId).containsExactly("rs1", "parent1");
+        assertThat(spans.stream().filter(s -> "rs1".equals(s.spanId())).findFirst().orElseThrow().parentId())
+                .as("the grandchild must resolve to the surviving real span, not the folded-away duplicate")
+                .isEqualTo("parent1");
+    }
+
+    @Test
+    void addSpan_doesNotCollapseAChildWithDifferentTagsFromItsParent() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData parent = jdbcSpan("parent1", null, "query", "SELECT * FROM person", "sample_app_db", 1);
+        SpanData child = jdbcSpan("child1", "parent1", "query", "SELECT * FROM orders", "dataSource", 2);
+
+        bundle.addSpan(parent, 100);
+        bundle.addSpan(child, 100);
+
+        assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("parent1", "child1");
+    }
+
+    @Test
+    void addSpan_capCountsRealSpansNotDuplicateArtifacts() {
+        // Five real spans, each followed by its double-instrumented duplicate arriving
+        // first (as in production) - ten raw addSpan calls against a cap of five. If the
+        // cap counted raw arrivals rather than folded spans, this trace would truncate.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        long order = 1;
+        for (int i = 0; i < 5; i++) {
+            String realId = "real" + i;
+            bundle.addSpan(jdbcSpan("dup" + i, realId, "query", "SELECT " + i, "dataSource", order++), 5);
+            bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), 5);
+        }
+
+        assertThat(bundle.spans())
+                .as("ten raw arrivals must not truncate a trace with only five real spans")
+                .hasSize(5);
     }
 
     @Test
@@ -78,6 +162,23 @@ class TraceDataBundleTest {
 
     private LogCapturedEvent createLog(String message) {
         return new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", message, "main");
+    }
+
+    /** A JDBC-shaped span carrying the same query text every time, differing only by
+     * {@code peerService} - the shape {@link SpanDuplicateMatcher} treats as a duplicate. */
+    private SpanData jdbcSpan(String spanId, String parentId, String name, String peerService, long creationOrder) {
+        return jdbcSpan(spanId, parentId, name, "SELECT * FROM person", peerService, creationOrder);
+    }
+
+    private SpanData jdbcSpan(String spanId, String parentId, String name, String query, String peerService,
+                               long creationOrder) {
+        Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
+        return new SpanData(
+                "trace1", spanId, parentId, name, Span.Kind.CLIENT,
+                start, start.plusMillis(50), Duration.ofMillis(50),
+                new HashMap<>(Map.of("jdbc.query[0]", query, "peer.service", peerService)),
+                List.of(), null, null, null, null, null, List.of(), creationOrder
+        );
     }
 
     private SpanData createSpan(String spanId, long creationOrder) {

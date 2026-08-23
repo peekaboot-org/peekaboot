@@ -402,6 +402,37 @@ class TraceInsightsServiceTest {
         assertThat(result.get().httpExchange().response().status()).isEqualTo(200);
     }
 
+    @Test
+    void getTraceInsights_theDuplicatePairIsAlreadyCollapsedInTheStoreBeforeTheServiceRuns() {
+        // Given: a DB span whose double-instrumented duplicate arrives first (as the OTel
+        // BatchSpanProcessor's export ordering has it in production)
+        addTraceWithDuplicatedDbSpan("trace1", 100);
+
+        // Then: the store itself, not TraceInsightsService's read-time SpanDeduplicator
+        // pass, must already hold just the real span
+        assertThat(store.getTrace("trace1")).isPresent();
+        assertThat(store.getTrace("trace1").get().spans()).hasSize(2); // root span + the real query span
+    }
+
+    @Test
+    void getTraceInsights_returnsTheSameTreeWhetherOrNotTheDuplicateWasCaptured() {
+        // Given: one trace whose DB call was captured twice (real span + duplicate) and
+        // an equivalent trace whose DB call was only ever captured once
+        addTraceWithDuplicatedDbSpan("withDup", 100);
+        addTraceWithDbSpan("withoutDup", 100);
+
+        // When
+        TraceTree withDup = service.getTraceInsights("withDup").orElseThrow();
+        TraceTree withoutDup = service.getTraceInsights("withoutDup").orElseThrow();
+
+        // Then: folding the duplicate away on write must produce the exact tree the
+        // never-duplicated trace produces
+        assertThat(withDup.summary().spans().count()).isEqualTo(withoutDup.summary().spans().count());
+        assertThat(withDup.rootSpan().children()).hasSize(1);
+        assertThat(withDup.queries()).hasSize(1);
+        assertThat(withDup.queries().get(0).sql()).isEqualTo(withoutDup.queries().get(0).sql());
+    }
+
     private TraceInsightsService newService(TraceStore store) {
         return new TraceInsightsService(store, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
     }
@@ -514,6 +545,42 @@ class TraceInsightsServiceTest {
         );
 
         store.addSpan(rootSpan);
+        store.addSpan(dbSpan);
+    }
+
+    /** Same shape as {@link #addTraceWithDbSpan}, but the DB query span is captured twice -
+     * a duplicate (extra {@code peer.service} tag, same name and other tags) arriving as a
+     * direct child of the real span, added first, mirroring the OTel BatchSpanProcessor's
+     * export ordering (a span cannot end, and so export, before the ancestor containing it). */
+    private void addTraceWithDuplicatedDbSpan(String traceId, long totalDurationMs) {
+        Instant start = Instant.EPOCH;
+        Instant dbSpanStart = start.plusMillis(10);
+        String dbSpanId = "span-db-" + traceId;
+
+        SpanData rootSpan = new SpanData(
+                traceId, "span-root-" + traceId, null, "GET /users/{id}", Span.Kind.SERVER,
+                start, start.plusMillis(totalDurationMs), Duration.ofMillis(totalDurationMs),
+                Map.of("http.method", "GET", "http.url", "/users/123"), List.of(),
+                null, null, null, null, null, List.of(), store.nextCreationOrder()
+        );
+
+        SpanData duplicate = new SpanData(
+                traceId, "span-db-dup-" + traceId, dbSpanId, "SELECT users", Span.Kind.CLIENT,
+                dbSpanStart, dbSpanStart.plusMillis(50), Duration.ofMillis(50),
+                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?",
+                        "peer.service", "dataSource"),
+                List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()
+        );
+
+        SpanData dbSpan = new SpanData(
+                traceId, dbSpanId, "span-root-" + traceId, "SELECT users", Span.Kind.CLIENT,
+                dbSpanStart, dbSpanStart.plusMillis(50), Duration.ofMillis(50),
+                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"),
+                List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()
+        );
+
+        store.addSpan(rootSpan);
+        store.addSpan(duplicate);
         store.addSpan(dbSpan);
     }
 }

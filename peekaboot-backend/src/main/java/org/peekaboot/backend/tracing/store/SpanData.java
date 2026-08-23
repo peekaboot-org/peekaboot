@@ -38,4 +38,15 @@ public record SpanData(
     public boolean isComplete() {
         return endTime != null;
     }
+
+    /** Returns a copy of this span re-parented to {@code newParentId}. */
+    public SpanData withParentId(String newParentId) {
+        return new SpanData(
+                traceId, spanId, newParentId, name, kind,
+                startTime, endTime, duration,
+                tags, events, errorMessage, errorClass,
+                remoteServiceName, remoteIp, remotePort,
+                links, creationOrder
+        );
+    }
 }
