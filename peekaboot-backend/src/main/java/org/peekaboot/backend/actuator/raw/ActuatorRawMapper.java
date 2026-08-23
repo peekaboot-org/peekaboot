@@ -1,11 +1,14 @@
 package org.peekaboot.backend.actuator.raw;
 
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -18,6 +21,7 @@ import java.util.Map;
 public class ActuatorRawMapper {
 
     private final ObjectMapper objectMapper;
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public ActuatorRawMapper() {
         this.objectMapper = JsonMapper.builder()
@@ -82,5 +86,61 @@ public class ActuatorRawMapper {
      */
     private static boolean isConvertible(Object value) {
         return value != null && !(value instanceof String);
+    }
+
+    /**
+     * Masks the raw actuator response tree for {@code /peekaboot/api/actuator/all/raw} -
+     * the one caller ({@link org.peekaboot.backend.service.PeekabootActuatorService#getData()})
+     * that bypasses every typed mapper's masking by returning the raw payload as-is.
+     * Unlike {@link #map(Map)}, whose target shape is known upfront (the fixed set of
+     * actuator endpoints the insights mappers consume), the raw endpoint reaches every
+     * exposed actuator endpoint - "beans", "conditions", "mappings", "sbom", ... - whose
+     * shape is arbitrary and not modelled by any type here. So masking it can't dispatch
+     * to the domain mappers; it has to walk the generic tree instead.
+     *
+     * <p>Endpoint results may be POJOs at runtime (same as {@link #map(Map)} handles), so
+     * the whole tree is first normalised to plain Map/List/scalar via Jackson before the
+     * masking recursion runs.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> maskRawData(Map<String, Object> rawData) {
+        if (rawData == null) {
+            return Map.of();
+        }
+        Object normalized = objectMapper.convertValue(rawData, Object.class);
+        Object masked = maskNode(null, normalized);
+        return masked instanceof Map ? (Map<String, Object>) masked : Map.of();
+    }
+
+    /**
+     * A sensitive key replaces its entire value - whatever shape that value is, not just
+     * a String - mirroring {@link MaskingEngine#mask(String, String)}'s "whole value
+     * replaced" rule generalised to a tree. An innocuous key recurses into Maps/Lists and
+     * runs the value-pattern rules on String leaves, exactly like a bare
+     * {@link MaskingEngine#maskValue(String)} call would.
+     */
+    private Object maskNode(String key, Object value) {
+        if (key != null && maskingEngine.isSensitiveKey(key)) {
+            return value == null ? null : maskingEngine.mask(key, "x");
+        }
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String childKey = String.valueOf(entry.getKey());
+                result.put(childKey, maskNode(childKey, entry.getValue()));
+            }
+            return result;
+        }
+        if (value instanceof List<?> list) {
+            List<Object> result = new ArrayList<>(list.size());
+            for (Object element : list) {
+                result.add(maskNode(null, element));
+            }
+            return result;
+        }
+        if (value instanceof String s) {
+            return maskingEngine.maskValue(s);
+        }
+        return value;
     }
 }

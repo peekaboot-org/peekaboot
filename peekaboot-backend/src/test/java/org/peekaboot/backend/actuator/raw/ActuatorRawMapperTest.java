@@ -247,4 +247,127 @@ class ActuatorRawMapperTest {
         assertThat(response.info()).isNull();
         assertThat(response.scheduledtasks()).isNull();
     }
+
+    @Test
+    void maskRawData_shouldMaskTopLevelSensitiveKeyEntirely() {
+        Map<String, Object> data = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        assertThat(masked).containsEntry("apiKey", "******");
+    }
+
+    @Test
+    void maskRawData_shouldRecurseIntoNestedMapsAndMaskTheWholeValueForASensitiveKey() {
+        // Mirrors PeekabootActuatorService.buildDataSourcesInfo()'s connectionParams
+        // shape: {"password": {"value": "...", "source": "..."}}.
+        Map<String, Object> data = Map.of(
+            "dataSources", java.util.List.of(Map.of(
+                "connectionParams", Map.of(
+                    "password", Map.of("value", "hunter2", "source", "QUERY"),
+                    "ApplicationName", Map.of("value", "peekaboot-example-app", "source", "QUERY")
+                )
+            ))
+        );
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        @SuppressWarnings("unchecked")
+        var dataSources = (java.util.List<Map<String, Object>>) masked.get("dataSources");
+        @SuppressWarnings("unchecked")
+        var connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
+        assertThat(connectionParams).containsEntry("password", "******");
+        assertThat(connectionParams).containsEntry("ApplicationName", Map.of("value", "peekaboot-example-app", "source", "QUERY"));
+    }
+
+    @Test
+    void maskRawData_shouldApplyValuePatternRulesToStringValuesUnderNonSensitiveKeys() {
+        Map<String, Object> data = Map.of(
+            "env", Map.of("propertySources", java.util.List.of(Map.of(
+                "properties", Map.of("spring.datasource.url",
+                    Map.of("value", "jdbc:postgresql://admin:hunter2@localhost/db"))
+            )))
+        );
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        @SuppressWarnings("unchecked")
+        var env = (Map<String, Object>) masked.get("env");
+        @SuppressWarnings("unchecked")
+        var sources = (java.util.List<Map<String, Object>>) env.get("propertySources");
+        @SuppressWarnings("unchecked")
+        var properties = (Map<String, Object>) sources.get(0).get("properties");
+        @SuppressWarnings("unchecked")
+        var urlProperty = (Map<String, Object>) properties.get("spring.datasource.url");
+        assertThat(urlProperty.get("value")).isEqualTo("jdbc:postgresql://******@localhost/db");
+    }
+
+    @Test
+    void maskRawData_shouldLeaveNonSensitiveScalarsUntouched() {
+        Map<String, Object> data = Map.of("port", 8080, "enabled", true, "name", "peekaboot-example-app");
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        assertThat(masked).containsEntry("port", 8080);
+        assertThat(masked).containsEntry("enabled", true);
+        assertThat(masked).containsEntry("name", "peekaboot-example-app");
+    }
+
+    @Test
+    void maskRawData_shouldNotMaskNegativeCaseKeysThatMerelyContainKey() {
+        Map<String, Object> data = Map.of(
+            "spring.jpa.key-generator", "sequence",
+            "server.ssl.key-store", "classpath:keystore.p12"
+        );
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        assertThat(masked).containsEntry("spring.jpa.key-generator", "sequence");
+        assertThat(masked).containsEntry("server.ssl.key-store", "classpath:keystore.p12");
+    }
+
+    @Test
+    void maskRawData_shouldToleratePojoEndpointResultsNotJustMaps() {
+        // At runtime, endpoint results are POJOs (WebEndpointResponse, descriptor
+        // objects), not pre-parsed Maps - maskRawData must normalise these before
+        // it can recurse, exactly like map() already does. "account" (not
+        // "credentials") is used as the nesting key so this test actually exercises
+        // recursion into a POJO field rather than the sensitive-key whole-value-replace
+        // branch a key like "credentials" would hit one level up.
+        record Account(String username, String password) {}
+        record HealthPojo(int status, Account account) {}
+        Map<String, Object> data = Map.of("health", new HealthPojo(200, new Account("admin", "hunter2")));
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        @SuppressWarnings("unchecked")
+        var health = (Map<String, Object>) masked.get("health");
+        @SuppressWarnings("unchecked")
+        var account = (Map<String, Object>) health.get("account");
+        assertThat(account.get("username")).isEqualTo("admin");
+        assertThat(account.get("password")).isEqualTo("******");
+    }
+
+    @Test
+    void maskRawData_shouldHandleNullInput() {
+        assertThat(mapper.maskRawData(null)).isEmpty();
+    }
+
+    @Test
+    void maskRawData_shouldToleratesErrorPlaceholderStringValues() {
+        Map<String, Object> data = Map.of("env", "Error: env endpoint failed");
+
+        Map<String, Object> masked = mapper.maskRawData(data);
+
+        assertThat(masked).containsEntry("env", "Error: env endpoint failed");
+    }
+
+    @Test
+    void maskRawData_shouldMaskEntireFixtureWithoutBlowingUp() {
+        // The full sample payload must round-trip without error; spot-check a couple
+        // of the deeply-nested sensitive property names known to be present in it.
+        Map<String, Object> masked = mapper.maskRawData(rawData);
+
+        assertThat(masked).containsKeys("env", "configprops", "dataSources");
+    }
 }
