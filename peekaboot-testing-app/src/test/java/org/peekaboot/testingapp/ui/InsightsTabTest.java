@@ -3,17 +3,41 @@ package org.peekaboot.testingapp.ui;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class InsightsTabTest extends PlaywrightTestBase {
 
+    // Charts fail invisibly (a swallowed script error leaves the page mute in test
+    // output), so every browser-side signal is collected and dumped at teardown -
+    // the only way to see what headless Chromium actually did on a CI runner.
+    private final List<String> browserLog = new CopyOnWriteArrayList<>();
+
+    @BeforeEach
+    void captureBrowserConsole() {
+        page.onConsoleMessage(msg -> browserLog.add("console." + msg.type() + ": " + msg.text()));
+        page.onPageError(error -> browserLog.add("pageerror: " + error));
+        page.onRequestFailed(request ->
+                browserLog.add("requestfailed: " + request.url() + " -> " + request.failure()));
+        page.onResponse(response -> {
+            if (response.status() >= 400) {
+                browserLog.add("http" + response.status() + ": " + response.url());
+            }
+        });
+    }
+
     /** A subclass @AfterEach runs before the base class's, so the stream is gone by teardown. */
     @AfterEach
     void closeInsightsStream() {
+        if (!browserLog.isEmpty()) {
+            System.out.println("[browser] " + String.join("\n[browser] ", new ArrayList<>(browserLog)));
+        }
         closeLiveStreams();
     }
 
