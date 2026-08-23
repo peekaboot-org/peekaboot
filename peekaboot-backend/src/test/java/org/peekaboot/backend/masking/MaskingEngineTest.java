@@ -403,4 +403,27 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
         }
     }
+
+    @Nested
+    class MaskWithUnmaskFlag {
+
+        @Test
+        void mask_shouldReturnValueVerbatimWhenUnmaskIsTrueEvenForASensitiveKey() {
+            String result = engine.mask("database.password", "hunter2", true);
+
+            assertThat(result).isEqualTo("hunter2");
+        }
+
+        @Test
+        void mask_shouldBehaveLikeTheTwoArgOverloadWhenUnmaskIsFalse() {
+            String result = engine.mask("database.password", "hunter2", false);
+
+            assertThat(result).isEqualTo("******");
+        }
+
+        @Test
+        void mask_shouldStillReturnNullForANullValueWhenUnmaskIsTrue() {
+            assertThat(engine.mask("database.password", null, true)).isNull();
+        }
+    }
 }

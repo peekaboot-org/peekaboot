@@ -30,6 +30,15 @@ public final class TreeMasker {
         return maskNode(null, node);
     }
 
+    /**
+     * Same as {@link #mask(Object)}, except when {@code unmask} is true, in which case
+     * masking is bypassed entirely and {@code node} is returned unchanged. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public Object mask(Object node, boolean unmask) {
+        return unmask ? node : mask(node);
+    }
+
     private Object maskNode(String key, Object value) {
         if (key != null && maskingEngine.isSensitiveKey(key)) {
             return value == null ? null : maskingEngine.mask(key, "x");

@@ -69,4 +69,20 @@ class TreeMaskerTest {
     void mask_shouldReturnNullForNullNode() {
         assertThat(treeMasker.mask(null)).isNull();
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldReturnTreeUnchangedWhenUnmaskIsTrue() {
+        Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), true);
+
+        assertThat((Map<String, Object>) masked).containsEntry("apiKey", "AKIAABCDEFGHIJKLMNOP");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldBehaveLikeTheOneArgOverloadWhenUnmaskIsFalse() {
+        Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), false);
+
+        assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
+    }
 }

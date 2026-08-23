@@ -32,4 +32,13 @@ public final class TagMasker {
         }
         return result;
     }
+
+    /**
+     * Same as {@link #mask(Map)}, except when {@code unmask} is true, in which case masking
+     * is bypassed entirely and {@code tags} is returned unchanged. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public Map<String, String> mask(Map<String, String> tags, boolean unmask) {
+        return unmask ? tags : mask(tags);
+    }
 }

@@ -91,6 +91,20 @@ public final class MaskingEngine {
     }
 
     /**
+     * Same as {@link #mask(String, String)}, except when {@code unmask} is true, in which
+     * case masking is bypassed entirely and {@code value} is returned verbatim. Exists so
+     * the controlled-unmasking decision - already made once, upstream, from
+     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter - can
+     * be threaded down to this call without re-deriving it here. {@code unmask} defaulting
+     * to {@code false} (Java's primitive default) means a caller that passes nothing masks,
+     * the same default-deny the two-arg {@link #mask(String, String)} already gives every
+     * caller that isn't part of the unmasking feature at all.
+     */
+    public String mask(String key, String value, boolean unmask) {
+        return unmask ? value : mask(key, value);
+    }
+
+    /**
      * Runs the value rules against {@code value} with no key in play at all - a bare
      * value such as SQL text or a log line. Masks only the matched span(s); the rest of
      * the value is returned untouched.
