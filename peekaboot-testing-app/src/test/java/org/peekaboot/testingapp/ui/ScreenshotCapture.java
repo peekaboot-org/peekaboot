@@ -125,7 +125,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     @Override
     protected Page browserContextPage() {
-        return browser.newContext(new Browser.NewContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+        return browser.newContext(newContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
                 .newPage();
     }
 

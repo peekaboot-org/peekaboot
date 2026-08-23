@@ -61,7 +61,18 @@ abstract class PlaywrightTestBase {
 
     /** Overridable so a subclass can fix the viewport without changing every test's context. */
     protected Page browserContextPage() {
-        return browser.newContext().newPage();
+        return browser.newContext(newContextOptions()).newPage();
+    }
+
+    /**
+     * Base options every context needs; overriders of {@link #browserContextPage()} should
+     * chain onto this. Pins the browser locale: on a POSIX-locale host (CI runners, LANG=C)
+     * headless Chromium reports navigator.language as the invalid BCP-47 tag "en-US@posix",
+     * which blows up any Intl constructor - uPlot's module-scope
+     * Intl.NumberFormat(navigator.language) then kills the whole chart library.
+     */
+    protected static Browser.NewContextOptions newContextOptions() {
+        return new Browser.NewContextOptions().setLocale("en-US");
     }
 
     @AfterEach
