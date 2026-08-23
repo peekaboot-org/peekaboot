@@ -48,6 +48,25 @@ class AccessibilityTest extends PlaywrightTestBase {
         assertThat(page.getAttribute("#theme-toggle", "aria-label")).isNotEqualTo(before);
     }
 
+    /**
+     * The Insights toolbar's level selector is a bare {@code <select>}: with no label of
+     * its own a screen reader announces it as its current value and nothing more. The
+     * per-panel selectors next to it are labelled by their panel title.
+     */
+    @Test
+    void insightsLevelSelectorsAreLabelled() {
+        openDashboard();
+        page.click("#insights-tab-btn");
+        page.waitForSelector("#insights-level");
+
+        assertThat(page.getAttribute("#insights-level", "aria-label"))
+                .isEqualTo("Aggregation level for all panels");
+        assertThat(page.getAttribute("#insights-panels .pk-insight-panel-level", "aria-label"))
+                .endsWith("aggregation level");
+
+        closeLiveStreams();   // the only test here that opens the Insights tab's SSE stream
+    }
+
     /** Decorative emoji would otherwise be announced: "package Build", "seedling Spring". */
     @Test
     void decorativeCardIconsAreHiddenFromAssistiveTech() {

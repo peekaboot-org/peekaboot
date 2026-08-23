@@ -115,7 +115,7 @@ function levelOptionsHtml() {
 function renderToolbar(container) {
     const toolbar = container.querySelector('#insights-toolbar');
     toolbar.innerHTML = `
-        <select id="insights-level">${levelOptionsHtml()}</select>
+        <select id="insights-level" aria-label="Aggregation level for all panels">${levelOptionsHtml()}</select>
         <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
     `;
 
