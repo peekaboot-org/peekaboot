@@ -243,6 +243,10 @@ class MaskingEngineTest {
 
         @Test
         void maskValue_shouldMaskSlackToken() {
+            // Split literal, deliberately: this file is full of strings shaped exactly
+            // like the credentials the engine detects, and GitHub's push protection scans
+            // for the same shapes. Concatenation is folded at compile time, so the value
+            // under test is unchanged; it just never appears contiguously in the source.
             String value = "xoxb" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx";
 
             String result = engine.maskValue(value);
@@ -252,6 +256,10 @@ class MaskingEngineTest {
 
         @Test
         void maskValue_shouldMaskStripeLiveKey() {
+            // Split literal, deliberately: this file is full of strings shaped exactly
+            // like the credentials the engine detects, and GitHub's push protection scans
+            // for the same shapes. Concatenation is folded at compile time, so the value
+            // under test is unchanged; it just never appears contiguously in the source.
             String value = "sk_live" + "_4eC39HqLyjWDarjtT1zdp7dcEXAMPLE";
 
             String result = engine.maskValue(value);
