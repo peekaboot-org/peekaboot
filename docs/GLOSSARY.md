@@ -23,16 +23,23 @@ The first span in a trace with no parent within the trace. The root span determi
 
 ### Root Action Type
 The category of work initiated by the root span. Used to classify and filter traces.
+`detectRootActionType()` checks these rules in priority order and returns the first
+match — a span matching more than one row always gets the one checked first. Note
+`HTTP_REQUEST` occupies two priorities: the tag-based check (2) fires before Scheduled
+Job/Database are even considered; the bare-`SERVER` fallback (6) only fires after every
+other rule, including Scheduled Job's name check, has already failed. E.g. a `CONSUMER`
+span named `...job` is `MESSAGE_CONSUMER` (priority 1), never `SCHEDULED_JOB`.
 
-| Value | Description | Detection |
-|-------|-------------|-----------|
-| `HTTP_REQUEST` | Web request handler | SERVER kind + http.* tags |
-| `SCHEDULED_JOB` | Scheduled/cron task | Name contains "schedule", "cron", "timer", "job" |
-| `MESSAGE_CONSUMER` | Message queue consumer | CONSUMER kind or messaging.* tags |
-| `RPC_CALL` | Remote procedure call | SERVER kind + rpc.* tags |
-| `DATABASE` | Database operation | CLIENT kind + db.* tags |
-| `INTERNAL` | Internal operation | null kind |
-| `UNKNOWN` | Unclassified | Fallback |
+| Priority | Value | Detection |
+|---|-------|-----------|
+| 1 | `MESSAGE_CONSUMER` | CONSUMER kind or messaging.* tag |
+| 2 | `HTTP_REQUEST` | SERVER kind + http.* tag |
+| 3 | `RPC_CALL` | SERVER kind + rpc.* tag |
+| 4 | `SCHEDULED_JOB` | Name contains "schedule", "cron", "timer", "job" |
+| 5 | `DATABASE` | CLIENT kind + db.* tag |
+| 6 | `HTTP_REQUEST` (fallback) | SERVER kind, no other tag matched |
+| 7 | `INTERNAL` | null kind |
+| 8 | `UNKNOWN` | Fallback |
 
 **Usage:** `RootActionType` enum, `rootActionType` field, `detectRootActionType()`
 
@@ -117,8 +124,8 @@ Aggregate statistics across multiple traces in list responses.
 | Field | Description |
 |-------|-------------|
 | `traceCount` | Number of traces |
-| `errorCount` | Traces with errors |
-| `slowCount` | Traces with slow spans |
+| `errorCount` | Traces with `TraceStatus.HAS_ERRORS` |
+| `slowCount` | Traces with a `SLOW`/`VERY_SLOW` issue on any span — **not** the same as the Slow bucket, which is a whole-trace duration check against `slow-trace-threshold-ms`; see [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) |
 | `avgDurationMs` | Average trace duration |
 
 **Usage:** `TraceListSummary` record, `summary` field on `TraceInsightsResponse`
