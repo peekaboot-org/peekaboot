@@ -24,13 +24,6 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
-  tracing:
-    # Peekaboot's default is 100. The demo's N+1 /orders endpoint produces roughly 16-17
-    # spans per seeded order, so at the default the trace store truncates the trace before
-    # the deduplicator runs - the flagship Traces screenshot would then show a silently
-    # truncated trace with no high-query-count warning, the exact feature it exists to
-    # demonstrate. Mirrors the override on OrderTraceCaptureIntegrationTest.
-    max-spans-per-trace: 500
 
 management:
   endpoint:

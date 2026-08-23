@@ -33,15 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(
         classes = TestingApp.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        // Each JDBC call is captured twice (once directly, once nested under its own
-        // sibling span - a known double-instrumentation artifact that SpanDeduplicator
-        // collapses back down) before the trace store's default 100-span-per-trace cap
-        // even applies. Left at the default, that cap truncates this deliberately heavy
-        // trace long before all seeded orders' queries are captured, so raising
-        // SEEDED_ORDERS alone cannot cross the query-count threshold. Raised here, scoped
-        // to just this test, so the trace captures the endpoint's full N+1 shape.
-        properties = "peekaboot.tracing.max-spans-per-trace=500")
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class OrderTraceCaptureIntegrationTest {
 

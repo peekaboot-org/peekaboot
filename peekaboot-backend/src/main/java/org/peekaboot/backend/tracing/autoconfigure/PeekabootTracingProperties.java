@@ -9,7 +9,7 @@ public class PeekabootTracingProperties {
 
     private int maxTraces = 1000;
 
-    private int maxSpansPerTrace = 100;
+    private int maxSpansPerTrace = 500;
 
     private int maxErrorTraces = 100;
 
