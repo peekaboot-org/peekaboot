@@ -1,19 +1,16 @@
+<p align="center">
+  <img src="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark.png" width="64" height="64" alt="Peekaboot">
+</p>
+
 # Peekaboot
 
-A Spring Boot starter that provides embedded application introspection through a lightweight web UI. View health, info, tracing, and diagnostics without external infrastructure.
+Embedded application introspection for Spring Boot — health, config, migrations, logs,
+schedules, metrics and traces in one dashboard, with no external infrastructure.
 
-## Features
+## Quick start
 
-- **App Insights Dashboard** - Standalone UI exposing actuator data: health, info, environment, loggers, flyway migrations, scheduled tasks
-- **Debug Toolbar** - Development-time toolbar injected into HTML responses showing request traces, queries, and logs
-- **In-Memory Tracing** - Micrometer-based distributed tracing with no external collector required. Integrates with OpenTelemetry via Spring Boot's tracing support
-- **Zero Configuration** - Activates automatically in local development with sensible defaults for full observability; off by default everywhere else
+**Maven**
 
-## Quick Start
-
-### 1. Add dependency
-
-**Maven:**
 ```xml
 <dependency>
     <groupId>org.peekaboot</groupId>
@@ -22,216 +19,66 @@ A Spring Boot starter that provides embedded application introspection through a
 </dependency>
 ```
 
-**Gradle:**
+**Gradle**
+
 ```groovy
-implementation 'org.peekaboot:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT'
+implementation("org.peekaboot:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT")
 ```
 
-### 2. Access the dashboard
+Run your app the way you already do. Peekaboot detects local development and turns itself
+on — open the dashboard at `http://localhost:8080/peekaboot/`.
 
-- UI: `http://localhost:8080/peekaboot/`
-- API: `http://localhost:8080/peekaboot/api/`
+![The Peekaboot dashboard](docs/images/dashboard.png)
 
-No additional configuration required. Peekaboot activates automatically when the app runs locally (IDE, `spring-boot:run`/`bootRun`) and stays off everywhere else — see [When Each Feature Is Enabled](#when-each-feature-is-enabled).
+## What you get
 
-## Configuration
+- App-insights dashboard: health, environment, config, Flyway, loggers, scheduled tasks and
+  metrics, all read from Actuator in-process — nothing exposed under `/actuator/**`
+- In-memory request tracing via Micrometer/OpenTelemetry, no collector to run
+- A dev toolbar (`peekaboot.dev-toolbar: true`) that also correlates logs to each trace and
+  captures full request/response detail — neither is captured without it
+- Zero configuration: on automatically in local development, off everywhere else
 
-All properties are optional. Peekaboot works out of the box with sensible defaults.
+## Documentation
 
-### Core Properties
+Full docs — configuration reference, security guidance, the dashboard tour, and more — live
+at **[peekaboot.org](https://peekaboot.org)**.
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `peekaboot.enabled` | auto-detected | Master switch — defaults to `true` only when running locally (see below), `false` everywhere else |
-| `peekaboot.dev-toolbar` | `false` | Enable debug toolbar injection into HTML responses |
-| `peekaboot.lifecycle.enabled` | `true` | Enable the startup summary log (environment, build info, server URLs, datasources) |
+| Page | |
+| --- | --- |
+| [Quick start](https://peekaboot.org/docs/quick-start/) | One dependency, no configuration, a dashboard on your next run |
+| [Configuration](https://peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
+| [Security](https://peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
+| [The dashboard](https://peekaboot.org/docs/dashboard/) | A tour of every tab |
 
-The UI and API are always served under the fixed `/peekaboot` prefix.
+## Working on Peekaboot
 
-### When Each Feature Is Enabled
-
-Peekaboot follows the same "local development only" heuristics as Spring Boot DevTools: the master switch `peekaboot.enabled` defaults to `true` only when the application runs on the `main` thread with the JDK's regular classpath classloader — i.e. launched from an IDE or via `spring-boot:run`/`bootRun`. It defaults to `false` for packaged jars (`java -jar`), wars in a servlet container, native images, AOT processing, and test runs (JUnit, Spring Boot tests, Cucumber). An explicit `peekaboot.enabled` setting — in `application.yml`, an environment variable, or a system property — always overrides the detection, in both directions.
-
-| Feature | Property switch | Additional requirements |
-|---------|-----------------|-------------------------|
-| **Dashboard UI & API** | `peekaboot.enabled` (auto-detected) | Servlet web application; Spring Boot Actuator on the classpath (included in the starter) |
-| **Debug Toolbar** | `peekaboot.enabled` **and** `peekaboot.dev-toolbar=true` (opt-in) | Servlet web application; a Micrometer `Tracer` bean (provided by `spring-boot-starter-opentelemetry`, included in the starter) |
-| **In-Memory Tracing** | `peekaboot.enabled` **and** `peekaboot.tracing.enabled=true` (default) | OpenTelemetry SDK on the classpath for span capture (included in the starter) |
-| **Startup Summary** | `peekaboot.enabled` **and** `peekaboot.lifecycle.enabled=true` (default) | — |
-| **Observability Defaults** | `peekaboot.enabled` (auto-detected) | — |
-
-Notes:
-
-- When Peekaboot is disabled, nothing activates — no beans, no instrumentation, no data collection. The per-feature toggles (`peekaboot.tracing.enabled`, `peekaboot.lifecycle.enabled`, `peekaboot.dev-toolbar`) narrow things down within an enabled Peekaboot.
-- The dashboard UI and API share a single switch — they cannot be enabled independently. The toolbar's expanded view loads its trace details from the API, so the toolbar effectively requires tracing to be active for meaningful content.
-- Tests count as "not local development" — a `@SpringBootTest` that needs Peekaboot must set `peekaboot.enabled=true` explicitly.
-- To deliberately run Peekaboot in a deployed environment (e.g. staging diagnosis), set `peekaboot.enabled=true`. Conversely, if you want the starter jar out of production builds entirely, exclude it via the Spring Boot Maven plugin's `excludes` or a Gradle `developmentOnly` dependency.
-
-### Tracing Properties
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `peekaboot.tracing.enabled` | `true` | Enable/disable in-memory tracing |
-| `peekaboot.tracing.max-traces` | `1000` | Maximum traces to retain in the All bucket |
-| `peekaboot.tracing.max-spans-per-trace` | `100` | Maximum spans per trace |
-| `peekaboot.tracing.max-logs-per-trace` | `500` | Maximum logs per trace |
-| `peekaboot.tracing.max-error-traces` | `100` | Maximum traces to retain in the Errors bucket |
-| `peekaboot.tracing.max-slow-traces` | `100` | Maximum traces to retain in the Slow bucket |
-| `peekaboot.tracing.slow-trace-threshold-ms` | `1000` | Trace duration (ms) at or above which a trace is classified as slow |
-
-Traces are organized into three buckets: **All** (every captured trace, size-capped with a 30-minute TTL), **Errors** (traces with at least one error span or ERROR-level log), and **Slow** (traces at or above the slow-trace threshold). Errors and Slow entries survive All-bucket eviction. The trace API and dashboard accept a `bucket=all|errors|slow` filter (default `all`).
-
-### UI Thresholds
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `peekaboot.ui.tracing.slow-span-threshold-ms` | `100` | Threshold for marking spans as slow |
-| `peekaboot.ui.tracing.very-slow-span-threshold-ms` | `500` | Threshold for marking spans as very slow |
-| `peekaboot.ui.tracing.slow-query-threshold-ms` | `50` | Threshold for marking queries as slow |
-| `peekaboot.ui.tracing.high-query-count-threshold` | `5` | Warning threshold for queries per span |
-| `peekaboot.ui.tracing.high-trace-query-count-threshold` | `20` | Warning threshold for total trace queries |
-
-### Example Configuration
-
-```yaml
-peekaboot:
-  dev-toolbar: true                    # Enable debug toolbar
-  tracing:
-    max-traces: 500                    # Reduce memory usage
-    slow-trace-threshold-ms: 2000      # Only flag traces at or above 2s
-  ui:
-    tracing:
-      slow-span-threshold-ms: 200      # Adjust slow span threshold
+```
+peekaboot/
+├── peekaboot-backend/                    # Core logic and APIs
+├── peekaboot-frontend/                   # Static web resources
+├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
+├── peekaboot-spring-boot-starter/        # Dependency aggregator
+└── peekaboot-testing-app/                # Sample app + UI tests
 ```
 
-### Theming
+```bash
+mvn clean install   # full build, all modules
+mvn test             # test suite only
 
-The dashboard, the debug toolbar, and the trace-detail overlay all render from the same
-set of `--pk-*` CSS custom properties, defined once in `tokens.css`. Overriding those
-properties re-themes all three surfaces — there is nothing else to override; component
-styles and layout are never hardcoded outside of them.
-
-The toolbar and overlay follow the dashboard's light/dark choice automatically: all
-three surfaces are served same-origin and read the same `localStorage` key, so toggling
-the theme on the dashboard is picked up by the toolbar and overlay without any explicit
-wiring.
-
-## Auto-Configured Defaults
-
-Peekaboot sets defaults for full observability. Any application property
-overrides them, and they are skipped entirely when Peekaboot is disabled.
-Note that some are security- or performance-relevant (health details,
-environment info, 100% trace sampling, Hibernate statistics) - review them
-before shipping the starter in a production profile:
-
-```yaml
-management:
-  endpoint.health.show-details: always
-  info.env.enabled: true
-  info.java.enabled: true
-  info.os.enabled: true
-  info.process.enabled: true
-  info.git.enabled: true
-  tracing.sampling.probability: 1.0
-  observations.annotations.enabled: true
-  otlp.metrics.export.enabled: false
-spring:
-  jpa.properties.hibernate.generate_statistics: true
-
-# third-party integrations (only apply if the library is present)
-decorator.datasource.datasource-proxy:
-  format-sql: true
-  query.log-level: TRACE
-logbook:
-  predicate.include: [path: /api/**]
-  format.style: http
-  strategy: body-only-if-status-at-least
-  minimum-status: 400
+cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app
 ```
 
-## Dashboard Tabs
-
-| Tab | Content |
-|-----|---------|
-| **Health** | Component health status with details |
-| **Info** | Build info, Git commit, Java/OS details |
-| **Environment** | All property sources with their values and precedence (secrets masked) |
-| **Config** | Effective `@ConfigurationProperties` values, grouped by prefix (secrets masked) |
-| **Loggers** | Runtime log level configuration |
-| **Flyway** | Database migration history |
-| **Scheduled Tasks** | Cron jobs, fixed-rate, and fixed-delay tasks |
-| **Traces** | Recent request traces with spans, queries, logs; filterable by All/Errors/Slow bucket with live counts |
-
-### Environment vs Config
-
-The two tabs look similar but answer different questions:
-
-- **Environment** shows the *input*: every property source Spring knows about
-  (command-line args, OS environment, JVM system properties, `application.yml`,
-  peekaboot's own defaults, …) in resolution order, with the raw values each
-  source supplies. Use it to answer *"which source wins for this key, and why
-  isn't my property taking effect?"* It also reveals properties nothing
-  consumes — typos and dead config.
-- **Config** shows the *output*: what the application actually uses. It lists
-  the values bound to `@ConfigurationProperties` beans, grouped by prefix —
-  after relaxed binding and type conversion, and including defaults set in Java
-  code that never appear in any property source. Use it to answer *"what is
-  this component really configured with?"*
-
-A property set in `application.yml` that feeds a `@ConfigurationProperties`
-bean appears in both; code defaults appear only under Config, and unconsumed or
-shadowed values appear only under Environment. (`@Value` injections are not
-covered by Config — look them up under Environment.) The same split exists in
-Spring Boot Actuator as `/env` vs `/configprops`, which back these two tabs.
-
-## Debug Toolbar
-
-When `peekaboot.dev-toolbar=true`, an unobtrusive toolbar is injected at the bottom of HTML responses:
-
-**Collapsed view shows:**
-- HTTP status code (color-coded)
-- Request duration
-- Database query count
-- Trace ID
-
-**Expanded view provides:**
-- Full span tree with timing
-- Database queries with SQL and duration
-- Correlated log messages
-- Request details
-
-The toolbar uses Shadow DOM for complete style isolation from the host application.
-
-## Security
-
-Peekaboot does not expose raw actuator endpoints — it invokes them in-process,
-so no `management.endpoints.web.exposure` configuration is needed (or wanted).
-All data is accessed through its own API with sensitive values automatically
-masked.
-
-To secure the dashboard:
-
-```java
-@Configuration
-public class SecurityConfig {
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        return http
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/peekaboot/**").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
-            .httpBasic(Customizer.withDefaults())
-            .build();
-    }
-}
-```
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
+[`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
+[`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms, and
+[`peekaboot-frontend/README.md`](peekaboot-frontend/README.md) for the frontend's design
+system.
 
 ## Requirements
 
 - Java 25+
-- Spring Boot 4.0+
-- OpenTelemetry tracing (via `spring-boot-starter-opentelemetry`)
+- Spring Boot 4.1 (built and tested against)
 
 ## License
 
