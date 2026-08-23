@@ -588,6 +588,13 @@ function connectStream() {
     });
 }
 
+/**
+ * Verified by hand (stop the app, let the browser's EventSource reconnect, watch
+ * every loaded level re-snapshot before the next delta lands): killing and
+ * re-establishing the stream on cue is not something the Playwright suite can do
+ * deterministically, and a test that only usually reconnects in time is worse than
+ * none.
+ */
 async function resync() {
     for (const level of [...levels.keys()]) {
         // a load that is still in flight already returns post-reconnect data, and
