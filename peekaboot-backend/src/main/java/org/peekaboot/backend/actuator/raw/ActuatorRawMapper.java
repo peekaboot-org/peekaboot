@@ -101,13 +101,23 @@ public class ActuatorRawMapper {
      * the whole tree is first normalised to plain Map/List/scalar via Jackson before the
      * masking recursion runs.
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> maskRawData(Map<String, Object> rawData) {
+        return maskRawData(rawData, false);
+    }
+
+    /**
+     * Same as {@link #maskRawData(Map)}, except when {@code unmask} is true, in which case
+     * masking is bypassed entirely and the normalised tree is returned verbatim. See
+     * {@link org.peekaboot.backend.masking.MaskingEngine#mask(String, String, boolean)} for
+     * why this shape.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> maskRawData(Map<String, Object> rawData, boolean unmask) {
         if (rawData == null) {
             return Map.of();
         }
         Object normalized = objectMapper.convertValue(rawData, Object.class);
-        Object masked = treeMasker.mask(normalized);
+        Object masked = treeMasker.mask(normalized, unmask);
         return masked instanceof Map ? (Map<String, Object>) masked : Map.of();
     }
 }

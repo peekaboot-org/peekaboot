@@ -18,6 +18,15 @@ public class ConfigMapper {
     private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public ConfigInfo map(ConfigPropsResponse configprops) {
+        return map(configprops, false);
+    }
+
+    /**
+     * Same as {@link #map(ConfigPropsResponse)}, except when {@code unmask} is true, in
+     * which case every property value is returned verbatim. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public ConfigInfo map(ConfigPropsResponse configprops, boolean unmask) {
         if (configprops == null || configprops.contexts() == null) {
             return new ConfigInfo(List.of());
         }
@@ -36,7 +45,7 @@ public class ConfigMapper {
                     for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
                         String key = entry.getKey();
                         String value = entry.getValue() != null ? entry.getValue().toString() : null;
-                        value = maskingEngine.mask(key, value);
+                        value = maskingEngine.mask(key, value, unmask);
 
                         properties.add(new ConfigProperty(key, value, null));
                     }

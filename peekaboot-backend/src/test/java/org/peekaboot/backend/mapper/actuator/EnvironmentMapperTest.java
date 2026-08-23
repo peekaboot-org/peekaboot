@@ -155,4 +155,30 @@ class EnvironmentMapperTest {
         assertThat(result.propertySources().get(0).properties().get(0).value())
             .isEqualTo("jdbc:postgresql://******@localhost/db");
     }
+
+    @Test
+    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+        EnvResponse env = new EnvResponse(
+            List.of(),
+            List.of(new EnvResponse.PropertySource(
+                "application.properties",
+                Map.of("spring.datasource.password", new EnvResponse.PropertyValue("hunter2", "application.properties"))
+            ))
+        );
+        EnvironmentInfo result = mapper.map(env, true);
+        assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("hunter2");
+    }
+
+    @Test
+    void map_shouldStillMaskWhenUnmaskIsFalse() {
+        EnvResponse env = new EnvResponse(
+            List.of(),
+            List.of(new EnvResponse.PropertySource(
+                "application.properties",
+                Map.of("spring.datasource.password", new EnvResponse.PropertyValue("hunter2", "application.properties"))
+            ))
+        );
+        EnvironmentInfo result = mapper.map(env, false);
+        assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("******");
+    }
 }

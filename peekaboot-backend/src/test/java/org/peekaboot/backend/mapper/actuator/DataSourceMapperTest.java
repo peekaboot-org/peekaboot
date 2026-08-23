@@ -112,6 +112,30 @@ class DataSourceMapperTest {
     }
 
     @Test
+    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+        DataSourceMetadata metadata = mockMetadata("ds");
+        when(metadata.getConnectionParams()).thenReturn(Map.of(
+            "password", new JdbcProperty(PropertySource.QUERY, "secret123")
+        ));
+
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, true);
+
+        assertThat(result.get(0).properties()).containsEntry("password", "secret123");
+    }
+
+    @Test
+    void map_shouldStillMaskWhenUnmaskIsFalse() {
+        DataSourceMetadata metadata = mockMetadata("ds");
+        when(metadata.getConnectionParams()).thenReturn(Map.of(
+            "password", new JdbcProperty(PropertySource.QUERY, "secret123")
+        ));
+
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
+
+        assertThat(result.get(0).properties()).containsEntry("password", "******");
+    }
+
+    @Test
     void map_shouldFilterNullMetadata() {
         DataSourceMetadata metadata = mockMetadata("ds");
 

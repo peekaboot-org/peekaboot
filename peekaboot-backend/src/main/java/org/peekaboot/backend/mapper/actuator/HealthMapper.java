@@ -19,18 +19,27 @@ public class HealthMapper {
     private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
     public HealthInfo map(HealthResponse health) {
+        return map(health, false);
+    }
+
+    /**
+     * Same as {@link #map(HealthResponse)}, except when {@code unmask} is true, in which
+     * case every component detail value is returned verbatim. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public HealthInfo map(HealthResponse health, boolean unmask) {
         if (health == null || health.body() == null) {
             return new HealthInfo(HealthStatus.UNKNOWN, List.of());
         }
 
         HealthResponse.HealthBody body = health.body();
         HealthStatus status = HealthStatus.fromString(body.status());
-        List<HealthComponent> components = extractComponents(body);
+        List<HealthComponent> components = extractComponents(body, unmask);
 
         return new HealthInfo(status, components);
     }
 
-    private List<HealthComponent> extractComponents(HealthResponse.HealthBody body) {
+    private List<HealthComponent> extractComponents(HealthResponse.HealthBody body, boolean unmask) {
         if (body.components() == null || body.components().isEmpty()) {
             return List.of();
         }
@@ -41,7 +50,7 @@ public class HealthMapper {
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
-            result.add(new HealthComponent(name, componentStatus, maskDetails(details)));
+            result.add(new HealthComponent(name, componentStatus, maskDetails(details, unmask)));
         }
         return result;
     }
@@ -51,8 +60,8 @@ public class HealthMapper {
      * built-in indicators (db, diskSpace, ...), its shape isn't controlled here at all.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> maskDetails(Map<String, Object> details) {
-        Object masked = treeMasker.mask(details);
+    private Map<String, Object> maskDetails(Map<String, Object> details, boolean unmask) {
+        Object masked = treeMasker.mask(details, unmask);
         return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
     }
 }

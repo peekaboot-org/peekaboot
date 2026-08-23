@@ -145,4 +145,38 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
     }
+
+    @Test
+    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("datasource", new ConfigPropsResponse.ConfigBean(
+                    "spring.datasource",
+                    Map.of("password", "secret123"),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops, true);
+        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("secret123");
+    }
+
+    @Test
+    void map_shouldStillMaskWhenUnmaskIsFalse() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(
+            Map.of("application", new ConfigPropsResponse.ConfigContext(
+                Map.of("datasource", new ConfigPropsResponse.ConfigBean(
+                    "spring.datasource",
+                    Map.of("password", "secret123"),
+                    Map.of()
+                )),
+                null
+            ))
+        );
+
+        ConfigInfo result = mapper.map(configprops, false);
+        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
+    }
 }

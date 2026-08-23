@@ -19,6 +19,15 @@ public class DataSourceMapper {
     private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
+        return map(metadataList, health, false);
+    }
+
+    /**
+     * Same as {@link #map(List, HealthResponse)}, except when {@code unmask} is true, in
+     * which case every connection property value is returned verbatim. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
         if (metadataList == null || metadataList.isEmpty()) {
             return List.of();
         }
@@ -27,13 +36,13 @@ public class DataSourceMapper {
 
         return metadataList.stream()
             .filter(m -> m != null)
-            .map(m -> mapSingle(m, dbHealth))
+            .map(m -> mapSingle(m, dbHealth, unmask))
             .toList();
     }
 
-    private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthStatus dbHealth) {
+    private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthStatus dbHealth, boolean unmask) {
         List<net.osslabz.jdbc.Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
-        Map<String, String> maskedProperties = maskSensitiveProperties(metadata.getConnectionParams());
+        Map<String, String> maskedProperties = maskSensitiveProperties(metadata.getConnectionParams(), unmask);
         DatabaseProduct product = detectDatabaseProduct(metadata);
 
         return new DataSourceInfo(
@@ -67,7 +76,7 @@ public class DataSourceMapper {
         return DatabaseProduct.UNKNOWN;
     }
 
-    private Map<String, String> maskSensitiveProperties(Map<String, JdbcProperty> properties) {
+    private Map<String, String> maskSensitiveProperties(Map<String, JdbcProperty> properties, boolean unmask) {
         if (properties == null) return Map.of();
 
         Map<String, String> result = new LinkedHashMap<>();
@@ -75,7 +84,7 @@ public class DataSourceMapper {
             String key = entry.getKey();
             String value = entry.getValue() != null ? entry.getValue().value() : null;
 
-            result.put(key, maskingEngine.mask(key, value));
+            result.put(key, maskingEngine.mask(key, value, unmask));
         }
         return result;
     }

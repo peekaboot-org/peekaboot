@@ -363,6 +363,24 @@ class ActuatorRawMapperTest {
     }
 
     @Test
+    void maskRawData_shouldReturnRealValueWhenUnmaskIsTrue() {
+        Map<String, Object> data = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
+
+        Map<String, Object> masked = mapper.maskRawData(data, true);
+
+        assertThat(masked).containsEntry("apiKey", "AKIAABCDEFGHIJKLMNOP");
+    }
+
+    @Test
+    void maskRawData_shouldStillMaskWhenUnmaskIsFalse() {
+        Map<String, Object> data = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
+
+        Map<String, Object> masked = mapper.maskRawData(data, false);
+
+        assertThat(masked).containsEntry("apiKey", "******");
+    }
+
+    @Test
     void maskRawData_shouldMaskEntireFixtureWithoutBlowingUp() {
         // The full sample payload must round-trip without error; spot-check a couple
         // of the deeply-nested sensitive property names known to be present in it.

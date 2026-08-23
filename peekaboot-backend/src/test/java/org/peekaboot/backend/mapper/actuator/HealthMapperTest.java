@@ -147,6 +147,40 @@ class HealthMapperTest {
     }
 
     @Test
+    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("customIndicator", new HealthResponse.HealthComponent("UP",
+                    Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health, true);
+
+        assertThat(result.components().get(0).details()).containsEntry("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678");
+    }
+
+    @Test
+    void map_shouldStillMaskWhenUnmaskIsFalse() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("customIndicator", new HealthResponse.HealthComponent("UP",
+                    Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health, false);
+
+        assertThat(result.components().get(0).details()).containsEntry("apiKey", "******");
+    }
+
+    @Test
     void map_shouldLeaveNonStringDetailValuesUntouched() {
         HealthResponse health = new HealthResponse(
             new HealthResponse.HealthBody(
