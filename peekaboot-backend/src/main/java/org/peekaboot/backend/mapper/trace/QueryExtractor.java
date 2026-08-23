@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import org.peekaboot.backend.domain.trace.QueryInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.stereotype.Component;
@@ -13,6 +14,8 @@ import java.util.Map;
 
 @Component
 public class QueryExtractor {
+
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public List<QueryInfo> extract(TraceData traceData) {
         if (traceData == null || traceData.spans() == null) {
@@ -63,6 +66,12 @@ public class QueryExtractor {
         if (sql == null) {
             return null;
         }
+        // Value patterns only - not column-aware literal masking. Parsing SQL to find
+        // which literal belongs to a "password" column is a much larger, more
+        // error-prone job; captured traces are documented as containing plaintext SQL.
+        // This still catches a JWT, an AWS key, a PEM block or a credential-bearing URL
+        // pasted into the statement.
+        sql = maskingEngine.maskValue(sql);
 
         // Get database system from various sources
         String dbSystem = findDbSystem(tags);

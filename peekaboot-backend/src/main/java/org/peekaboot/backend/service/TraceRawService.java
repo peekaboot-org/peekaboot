@@ -8,6 +8,8 @@ import org.peekaboot.backend.domain.trace.TraceRawData;
 import org.peekaboot.backend.domain.trace.TraceRawResponse;
 import org.peekaboot.backend.domain.trace.TraceRawSummary;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -27,6 +29,7 @@ public class TraceRawService {
     private final TraceStore traceStore;
     private final QueryExtractor queryExtractor;
     private final CollectionFramework collectionFramework;
+    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     public TraceRawService(
             @Nullable TraceStore traceStore,
@@ -80,6 +83,12 @@ public class TraceRawService {
         TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
         List<QueryInfo> queries = queryExtractor.extract(traceData);
 
+        // This endpoint embeds SpanData directly - unlike the insights endpoints, it
+        // never passes through TraceTreeMapper, so tag masking has to happen here.
+        List<SpanData> maskedSpans = traceData.spans().stream()
+                .map(this::maskSpanTags)
+                .toList();
+
         List<TraceLog> logs = bundle.logs().stream()
                 .map(e -> new TraceLog(
                         e.spanId(),
@@ -120,10 +129,20 @@ public class TraceRawService {
                 traceData.endTime(),
                 traceData.duration() != null ? traceData.duration().toMillis() : 0,
                 perTraceSummary,
-                traceData.spans(),
+                maskedSpans,
                 logs,
                 queries,
                 httpExchange
+        );
+    }
+
+    private SpanData maskSpanTags(SpanData span) {
+        return new SpanData(
+                span.traceId(), span.spanId(), span.parentId(), span.name(), span.kind(),
+                span.startTime(), span.endTime(), span.duration(),
+                tagMasker.mask(span.tags()),
+                span.events(), span.errorMessage(), span.errorClass(), span.remoteServiceName(),
+                span.remoteIp(), span.remotePort(), span.links(), span.creationOrder()
         );
     }
 

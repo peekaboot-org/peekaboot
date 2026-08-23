@@ -148,6 +148,34 @@ class TraceRawServiceTest {
         assertThat(noStore.getTrace("t1")).isEmpty();
     }
 
+    /**
+     * The raw trace endpoints embed SpanData directly (not routed through
+     * TraceTreeMapper), so they need their own tag masking rather than inheriting it.
+     */
+    @Test
+    void getTracesMasksSensitiveShapedSpanTags() {
+        store.addSpan(span("t1", "root", null, "GET /persons", 100,
+                Map.of("http.request.header.authorization", "Bearer abc123", "http.method", "GET"), null));
+
+        TraceRawResponse response = service.getTraces(10, TraceBucket.ALL);
+
+        Map<String, String> tags = response.traces().getFirst().spans().getFirst().tags();
+        assertThat(tags).containsEntry("http.request.header.authorization", "******");
+        assertThat(tags).containsEntry("http.method", "GET");
+    }
+
+    @Test
+    void getTraceMasksSensitiveShapedSpanTags() {
+        store.addSpan(span("t1", "root", null, "GET /persons", 100,
+                Map.of("http.url", "https://admin:hunter2@example.com/api"), null));
+
+        Optional<TraceRawData> trace = service.getTrace("t1");
+
+        assertThat(trace).isPresent();
+        assertThat(trace.get().spans().getFirst().tags().get("http.url"))
+                .isEqualTo("https://******@example.com/api");
+    }
+
     private SpanData span(String traceId, String spanId, String parentId, String name,
             long durationMs, Map<String, String> tags, String errorClass) {
         return new SpanData(traceId, spanId, parentId, name, null,

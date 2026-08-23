@@ -125,6 +125,43 @@ class TraceTreeMapperTest {
     }
 
     @Test
+    void map_shouldMaskASensitiveShapedTagValue() {
+        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100,
+                Map.of("http.request.header.authorization", "Bearer abc123"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().tags()).containsEntry("http.request.header.authorization", "******");
+    }
+
+    @Test
+    void map_shouldNotMaskOrdinaryTagsLikeHttpMethod() {
+        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100,
+                Map.of("http.method", "GET", "http.status_code", "200"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().tags()).containsEntry("http.method", "GET");
+        assertThat(result.rootSpan().tags()).containsEntry("http.status_code", "200");
+    }
+
+    @Test
+    void map_shouldApplyValuePatternRulesToATagValueUnderAnInnocuousKey() {
+        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100,
+                Map.of("http.url", "https://admin:hunter2@example.com/api"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().tags().get("http.url")).isEqualTo("https://******@example.com/api");
+    }
+
+    @Test
     void map_shouldPreserveDifferentTagsOnChildren() {
         // Given: Children with different values for db.name
         var parent = createSpan("trace1", "parent", null, "parent-op",

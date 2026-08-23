@@ -272,6 +272,42 @@ class QueryExtractorTest {
         assertThat(queries.get(0).rowCount()).isNull();
     }
 
+    /**
+     * The engine's value patterns only, not column-aware SQL literal masking: no attempt
+     * is made to identify which literal belongs to a "password" column, only high-precision
+     * provider-shaped credentials (a JWT, an AWS key, a PEM block, a credential-bearing
+     * URL) embedded in the SQL text.
+     */
+    @Test
+    void extract_shouldMaskACredentialBearingUrlEmbeddedInSql() {
+        var querySpan = createSpan("span1", "query", 20,
+                Map.of("db.statement",
+                        "INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook')",
+                        "db.system", "postgresql"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).sql())
+                .isEqualTo("INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')");
+    }
+
+    @Test
+    void extract_shouldLeaveOrdinarySqlWithNoEmbeddedCredentialUntouched() {
+        var querySpan = createSpan("span1", "query", 20,
+                Map.of("db.statement", "SELECT * FROM users WHERE email = ?", "db.system", "postgresql"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE email = ?");
+    }
+
     private SpanData createSpan(String spanId, String name, long durationMs,
                                 Map<String, String> tags, long creationOrder) {
         Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);

@@ -7,6 +7,8 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class TraceTreeMapper {
+
+    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     public TraceTree map(TraceData traceData) {
         if (traceData == null || traceData.spans() == null || traceData.spans().isEmpty()) {
@@ -183,10 +187,11 @@ public class TraceTreeMapper {
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
-        // Copy tags directly (no hoisting)
+        // Copy tags directly (no hoisting), masked - db.statement, http.url etc. may
+        // carry a credential the key name alone can't catch.
         Map<String, Object> tags = new HashMap<>();
         if (spanData.tags() != null) {
-            tags.putAll(spanData.tags());
+            tags.putAll(tagMasker.mask(spanData.tags()));
         }
 
         // Map events
