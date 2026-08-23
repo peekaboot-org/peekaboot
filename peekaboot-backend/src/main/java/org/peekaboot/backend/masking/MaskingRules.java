@@ -89,16 +89,25 @@ final class MaskingRules {
             Pattern.compile("\\bxox[baprs]-[0-9A-Za-z-]{10,}\\b")),
         new ValuePattern("Stripe key",
             Pattern.compile("\\b[sr]k_live_[0-9A-Za-z]{20,}\\b")),
-        // No bare "sk-<anything>" rule: that prefix is far too common outside API keys
-        // (AWS security group ids, Kubernetes secret names, "sk-cluster-prod-eu-west-1a-
-        // worker-nodes"-style infra identifiers) to use as a standalone signal, and every
-        // OpenAI key format still in active issuance is prefixed - only the deprecated,
-        // no-longer-issued legacy sk-<48 chars> shape would go undetected by narrowing
-        // this way.
         new ValuePattern("OpenAI project key",
             Pattern.compile("\\bsk-proj-[A-Za-z0-9_-]{20,}\\b")),
         new ValuePattern("Anthropic key",
             Pattern.compile("\\bsk-ant-[A-Za-z0-9_-]{20,}\\b")),
+        // Legacy (pre-project-key) OpenAI format: "sk-" plus an unbroken 48-character
+        // alphanumeric run, no hyphens/underscores anywhere in the tail. That's the key
+        // difference from an infra identifier that merely starts with "sk-"
+        // ("sk-cluster-prod-eu-west-1a-worker-nodes"): the identifier's run breaks at
+        // its first hyphen, only 7 characters in, so it never reaches the 20-character
+        // floor. Tightening the tail to [A-Za-z0-9] (no "-"/"_") is what makes that
+        // separation possible - the same char class this project used to use, with
+        // "-"/"_" allowed, is exactly what made the infra identifier match in the first
+        // place. Doesn't overlap the two prefixed rules above: "sk-proj-" and "sk-ant-"
+        // both put a hyphen right after "sk-", four or three characters in, so this
+        // pattern's required run breaks there too and it never fires for either -
+        // whichever of the three rules matches a given value, the masked span is the
+        // same (the whole key), so which one "wins" is never observable.
+        new ValuePattern("Legacy OpenAI key",
+            Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
         // The upstream regex has no capturing group; group 1 is added here so
         // MaskingEngine can mask the userinfo only, leaving scheme://host:port/path intact.
         new ValuePattern("Credentials in a URL", 1,

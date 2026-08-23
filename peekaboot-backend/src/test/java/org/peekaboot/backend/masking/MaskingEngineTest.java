@@ -277,6 +277,37 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("******");
         }
 
+        // The legacy, pre-project-key OpenAI format: "sk-" plus an unbroken run of
+        // alphanumerics, no hyphens or underscores anywhere in the tail - still common
+        // in the wild. Restored after being dropped in favor of "sk-proj-" alone; see
+        // MaskingRules' comment on the "Legacy OpenAI key" value pattern for why
+        // tightening the tail character class (rather than dropping the bare rule
+        // outright) is what lets this coexist with the infra-identifier negative case
+        // below.
+        @Test
+        void maskValue_shouldMaskLegacyOpenAiKey() {
+            String value = "sk-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("******");
+        }
+
+        // The legacy pattern's tightened char class ([A-Za-z0-9], no "-"/"_") is what
+        // keeps it from also matching "sk-proj-"/"sk-ant-" values (that literal hyphen
+        // right after "sk-" breaks the required run at 4/3 characters) - so a
+        // sk-proj-shaped value should still mask, and mask exactly once, whichever of
+        // the three sk- rules ends up firing for it.
+        @Test
+        void maskValue_shouldMaskAnOpenAiProjectKeyExactlyOnceWithTheLegacyPatternAlsoActive() {
+            String key = "sk-proj-" + "A".repeat(40);
+            String value = "key=" + key + "&ok=1";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("key=******&ok=1");
+        }
+
         @Test
         void maskValue_shouldMaskOnlyUserinfoInJdbcUrl() {
             String value = "jdbc:postgresql://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
@@ -367,12 +398,12 @@ class MaskingEngineTest {
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
-        // A bare "sk-" prefix is not itself a signal - it also names ordinary infra
-        // identifiers (a cluster/node group name, here). Every OpenAI key format still
-        // issued today is prefixed ("sk-proj-", matched separately); only the deprecated,
-        // no-longer-issued legacy sk-<48 chars> shape would be missed by not matching bare
-        // "sk-" at all, which is the accepted trade-off - see MaskingRules' comment on
-        // the "OpenAI project key" value pattern.
+        // The legacy OpenAI pattern requires an unbroken 20+ character alphanumeric run
+        // right after "sk-" - this infra identifier's run breaks at its first hyphen,
+        // only 7 characters in ("cluster"), so it never reaches that floor. See
+        // MaskingRules' comment on the "Legacy OpenAI key" value pattern for why the
+        // char class is tightened to [A-Za-z0-9] (no "-"/"_") specifically to achieve
+        // this separation.
         @Test
         void maskValue_shouldNotTouchAnSkPrefixedInfraIdentifier() {
             String value = "sk-cluster-prod-eu-west-1a-worker-nodes";
