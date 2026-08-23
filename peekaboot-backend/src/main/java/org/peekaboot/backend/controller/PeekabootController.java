@@ -54,16 +54,18 @@ public class PeekabootController {
     }
 
     @GetMapping(value = "/api/actuator/all/raw", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ActuatorRawResponse getRaw() {
-        return peekabootActuatorService.getData();
+    public ActuatorRawResponse getRaw(@RequestParam(name = "unmask", defaultValue = "false") boolean unmask) {
+        return peekabootActuatorService.getData(resolveUnmask(unmask));
     }
 
     @GetMapping(value = "/api/actuator/all/insights", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ActuatorInsightsResponse getInsights(@RequestParam(name = "locale", required = false) String locale) {
+    public ActuatorInsightsResponse getInsights(
+            @RequestParam(name = "locale", required = false) String locale,
+            @RequestParam(name = "unmask", defaultValue = "false") boolean unmask) {
         Locale parsedLocale = (locale != null && !locale.isBlank())
             ? Locale.forLanguageTag(locale.replace('_', '-'))
             : Locale.ENGLISH;
-        return actuatorInsightsService.getInsights(parsedLocale);
+        return actuatorInsightsService.getInsights(parsedLocale, resolveUnmask(unmask));
     }
 
     @GetMapping(value = "/api/features", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -72,7 +74,20 @@ public class PeekabootController {
         features.put("tracing", traceRawService.isTracingAvailable());
         features.put("metrics", metricsService.isAvailable());
         features.put("devToolbar", properties.isDevToolbar());
+        features.put("unmaskingEnabled", properties.isEnableUnmasking());
         return features;
+    }
+
+    /**
+     * The single place the two independent unmasking opt-ins are combined: the
+     * server-side {@code peekaboot.enable-unmasking} property and the request's
+     * {@code unmask} parameter. Neither is sufficient alone - while the property is
+     * false, {@code requestedUnmask} is ignored, so the request can never be a bypass
+     * on its own. Every endpoint that carries property values calls this exactly once
+     * and threads the result down, rather than re-deriving the decision per mapper.
+     */
+    private boolean resolveUnmask(boolean requestedUnmask) {
+        return properties.isEnableUnmasking() && requestedUnmask;
     }
 
     @GetMapping(value = "/api/metrics", produces = MediaType.APPLICATION_JSON_VALUE)

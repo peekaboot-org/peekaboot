@@ -53,7 +53,7 @@ class ActuatorInsightsServiceTest {
             )))
         ));
 
-        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
         assertThat(response.health().status()).isEqualTo(HealthStatus.UP);
         assertThat(response.application().springBootVersion()).isEqualTo("4.0.1");
@@ -83,7 +83,7 @@ class ActuatorInsightsServiceTest {
         ActuatorInsightsService serviceWithDataSource = newInsightsService(dataSourceProvider);
         when(rawService.getInsightsData()).thenReturn(Map.of());
 
-        ActuatorInsightsResponse response = serviceWithDataSource.getInsights(Locale.ENGLISH);
+        ActuatorInsightsResponse response = serviceWithDataSource.getInsights(Locale.ENGLISH, false);
 
         assertThat(response.dataSources()).hasSize(1);
         assertThat(response.dataSources().get(0).name()).isEqualTo("primaryDS");
@@ -93,7 +93,7 @@ class ActuatorInsightsServiceTest {
     void getInsights_shouldHandleMissingData() {
         when(rawService.getInsightsData()).thenReturn(Map.of());
 
-        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
         assertThat(response.health().status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(response.dataSources()).isEmpty();
@@ -103,7 +103,7 @@ class ActuatorInsightsServiceTest {
     void getInsights_shouldIncludeServerInfo() {
         when(rawService.getInsightsData()).thenReturn(Map.of());
 
-        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
         assertThat(response.server()).isNotNull();
         assertThat(response.server().timezone()).isNotNull();
@@ -124,7 +124,7 @@ class ActuatorInsightsServiceTest {
             )
         ));
 
-        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH);
+        ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
         assertThat(response.scheduledTasks()).isNotNull();
         assertThat(response.scheduledTasks().tasks()).hasSize(1);

@@ -133,9 +133,14 @@ public class PeekabootActuatorService {
      * Backs GET /peekaboot/api/actuator/all/raw. Unlike {@link #getRawData()}, this masks -
      * getRawData() itself stays unmasked for {@link #getInsightsData()}'s and its own
      * lower-level callers, which route their masking through the typed mappers instead.
+     *
+     * <p>{@code unmask} is the caller's already-resolved decision (from
+     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter,
+     * combined once in PeekabootController) - this is the broadest surface Peekaboot
+     * exposes, so it must honour that decision identically to the insights endpoints.
      */
-    public ActuatorRawResponse getData() {
-        return ActuatorRawResponse.wrap(rawMapper.maskRawData(getRawData()));
+    public ActuatorRawResponse getData(boolean unmask) {
+        return ActuatorRawResponse.wrap(rawMapper.maskRawData(getRawData(), unmask));
     }
 
 

@@ -36,6 +36,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -275,6 +276,22 @@ class PeekabootControllerTest {
 
             assertThat(features).doesNotContainKey("traceCaptureMode");
         }
+
+        @Test
+        void shouldReportUnmaskingDisabledByDefault() {
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("unmaskingEnabled")).isEqualTo(false);
+        }
+
+        @Test
+        void shouldReportUnmaskingEnabledWhenThePropertyIsSet() {
+            properties.setEnableUnmasking(true);
+
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("unmaskingEnabled")).isEqualTo(true);
+        }
     }
 
     @Nested
@@ -282,41 +299,73 @@ class PeekabootControllerTest {
 
         @Test
         void shouldDefaultToEnglishWhenLocaleIsNull() {
-            controller.getInsights(null);
+            controller.getInsights(null, false);
 
-            verify(actuatorInsightsService).getInsights(Locale.ENGLISH);
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH, false);
         }
 
         @Test
         void shouldDefaultToEnglishWhenLocaleIsBlank() {
-            controller.getInsights("  ");
+            controller.getInsights("  ", false);
 
-            verify(actuatorInsightsService).getInsights(Locale.ENGLISH);
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH, false);
         }
 
         @Test
         void shouldReplaceUnderscoreWithHyphenBeforeParsingLocale() {
-            controller.getInsights("en_US");
+            controller.getInsights("en_US", false);
 
-            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("en-US"));
+            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("en-US"), false);
         }
 
         @Test
         void shouldParseLocaleWithHyphenDirectly() {
-            controller.getInsights("de-DE");
+            controller.getInsights("de-DE", false);
 
-            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("de-DE"));
+            verify(actuatorInsightsService).getInsights(Locale.forLanguageTag("de-DE"), false);
         }
 
         @Test
         void shouldReturnResponseFromService() {
             ActuatorInsightsResponse expected = new ActuatorInsightsResponse(
                     null, null, null, null, null, null, null, null, null, null);
-            when(actuatorInsightsService.getInsights(any())).thenReturn(expected);
+            when(actuatorInsightsService.getInsights(any(), anyBoolean())).thenReturn(expected);
 
-            ActuatorInsightsResponse result = controller.getInsights(null);
+            ActuatorInsightsResponse result = controller.getInsights(null, false);
 
             assertThat(result).isSameAs(expected);
+        }
+
+        /**
+         * The single most important test in the unmasking feature: the request's
+         * unmask=true parameter must never be a bypass on its own. properties starts
+         * with enableUnmasking false (PeekabootProperties' own default), so this pins
+         * that the controller still resolves to masked in that state regardless of
+         * what the request asks for.
+         */
+        @Test
+        void shouldIgnoreUnmaskTrueWhenUnmaskingIsDisabled() {
+            controller.getInsights(null, true);
+
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH, false);
+        }
+
+        @Test
+        void shouldRequestUnmaskedDataOnlyWhenBothThePropertyAndTheParameterAreTrue() {
+            properties.setEnableUnmasking(true);
+
+            controller.getInsights(null, true);
+
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH, true);
+        }
+
+        @Test
+        void shouldStayMaskedWhenUnmaskingIsEnabledButTheParameterIsNotSet() {
+            properties.setEnableUnmasking(true);
+
+            controller.getInsights(null, false);
+
+            verify(actuatorInsightsService).getInsights(Locale.ENGLISH, false);
         }
     }
 
@@ -326,11 +375,41 @@ class PeekabootControllerTest {
         @Test
         void shouldReturnDataFromService() {
             ActuatorRawResponse expected = ActuatorRawResponse.wrap(Map.of("health", "UP"));
-            when(actuatorService.getData()).thenReturn(expected);
+            when(actuatorService.getData(anyBoolean())).thenReturn(expected);
 
-            ActuatorRawResponse result = controller.getRaw();
+            ActuatorRawResponse result = controller.getRaw(false);
 
             assertThat(result).isSameAs(expected);
+        }
+
+        /**
+         * getRaw() is the broadest surface Peekaboot exposes and historically the one
+         * masking bypass this codebase already had - it must resolve the unmask decision
+         * identically to getInsights() above, not re-derive it.
+         */
+        @Test
+        void shouldIgnoreUnmaskTrueWhenUnmaskingIsDisabled() {
+            controller.getRaw(true);
+
+            verify(actuatorService).getData(false);
+        }
+
+        @Test
+        void shouldRequestUnmaskedDataOnlyWhenBothThePropertyAndTheParameterAreTrue() {
+            properties.setEnableUnmasking(true);
+
+            controller.getRaw(true);
+
+            verify(actuatorService).getData(true);
+        }
+
+        @Test
+        void shouldStayMaskedWhenUnmaskingIsEnabledButTheParameterIsNotSet() {
+            properties.setEnableUnmasking(true);
+
+            controller.getRaw(false);
+
+            verify(actuatorService).getData(false);
         }
     }
 

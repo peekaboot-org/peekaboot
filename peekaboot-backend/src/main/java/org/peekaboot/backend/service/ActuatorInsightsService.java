@@ -56,19 +56,25 @@ public class ActuatorInsightsService {
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
-    public ActuatorInsightsResponse getInsights(Locale locale) {
+    /**
+     * {@code unmask} is the caller's already-resolved decision (from
+     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter,
+     * combined once in PeekabootController) - threaded to every mapper here that carries
+     * property values, so none of them re-derives it.
+     */
+    public ActuatorInsightsResponse getInsights(Locale locale, boolean unmask) {
         Map<String, Object> rawData = rawService.getInsightsData();
         ActuatorParsedData typed = rawMapper.map(rawData);
 
         return new ActuatorInsightsResponse(
             applicationMapper.map(typed.info(), typed.spring()),
             runtimeMapper.map(typed.info(), typed.health()),
-            dataSourceMapper.map(dataSourceMetadataList, typed.health()),
-            healthMapper.map(typed.health()),
-            environmentMapper.map(typed.env()),
+            dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
+            healthMapper.map(typed.health(), unmask),
+            environmentMapper.map(typed.env(), unmask),
             loggersMapper.map(typed.loggers()),
             flywayMapper.map(typed.flyway()),
-            configMapper.map(typed.configprops()),
+            configMapper.map(typed.configprops(), unmask),
             scheduledTasksMapper.map(typed.scheduledtasks(), locale),
             ServerInfo.current(locale)
         );
