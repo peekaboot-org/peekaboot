@@ -435,6 +435,7 @@ class DevToolbarAutoConfigurationIntegrationTest {
 ```
 
 The `afterName` attribute (string-based) is used instead of class reference to avoid compile-time dependency on the tracing autoconfigure module.
+
 ## Known defects
 
 Recorded here so a maintainer sees them without having to rediscover them. Each entry
