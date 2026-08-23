@@ -10,6 +10,7 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,13 +37,7 @@ public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
-    private static final Set<String> SENSITIVE_HEADERS = Set.of(
-            "authorization",
-            "cookie",
-            "set-cookie",
-            "x-auth-token",
-            "x-api-key"
-    );
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
@@ -119,16 +114,12 @@ public class RequestCaptureFilter implements Filter {
         long durationMs = System.currentTimeMillis() - startTime;
 
         Map<String, String> requestHeaders = new HashMap<>();
-        Collections.list(request.getHeaderNames()).forEach(name -> {
-            String value = isSensitiveHeader(name) ? "********" : request.getHeader(name);
-            requestHeaders.put(name, value);
-        });
+        Collections.list(request.getHeaderNames()).forEach(name ->
+                requestHeaders.put(name, maskingEngine.mask(name, request.getHeader(name))));
 
         Map<String, String> responseHeaders = new HashMap<>();
-        response.getHeaderNames().forEach(name -> {
-            String value = isSensitiveHeader(name) ? "********" : response.getHeader(name);
-            responseHeaders.put(name, value);
-        });
+        response.getHeaderNames().forEach(name ->
+                responseHeaders.put(name, maskingEngine.mask(name, response.getHeader(name))));
 
         // getParameterMap() merges query-string and form-body parameters;
         // split them using the actual query string
@@ -180,10 +171,6 @@ public class RequestCaptureFilter implements Filter {
 
         eventPublisher.publishEvent(event);
         log.trace("Published RequestCompletedEvent for trace {}", traceId);
-    }
-
-    private boolean isSensitiveHeader(String headerName) {
-        return SENSITIVE_HEADERS.contains(headerName.toLowerCase());
     }
 
     private Set<String> parseQueryStringKeys(String queryString) {

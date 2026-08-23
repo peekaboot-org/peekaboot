@@ -167,10 +167,37 @@ class RequestCaptureFilterTest {
         verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
-        assertThat(event.requestHeaders()).containsEntry("authorization", "********");
-        assertThat(event.requestHeaders()).containsEntry("cookie", "********");
-        assertThat(event.requestHeaders()).containsEntry("x-api-key", "********");
+        assertThat(event.requestHeaders()).containsEntry("authorization", "******");
+        assertThat(event.requestHeaders()).containsEntry("cookie", "******");
+        assertThat(event.requestHeaders()).containsEntry("x-api-key", "******");
         assertThat(event.requestHeaders()).containsEntry("content-type", "application/json");
+    }
+
+    /**
+     * The engine is strictly broader than the old hardcoded five-header set: it also
+     * catches headers the old set omitted by name, like Proxy-Authorization, which
+     * carries a credential just as much as Authorization does.
+     */
+    @Test
+    void shouldMaskHeadersTheOldHardcodedSetDidNotCover() throws Exception {
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/api/users");
+        when(request.getMethod()).thenReturn("GET");
+        when(response.getStatus()).thenReturn(200);
+
+        Enumeration<String> headerNames = Collections.enumeration(java.util.List.of("proxy-authorization"));
+        when(request.getHeaderNames()).thenReturn(headerNames);
+        when(request.getHeader("proxy-authorization")).thenReturn("Basic dXNlcjpwYXNz");
+
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+        when(request.getParameterMap()).thenReturn(Map.of());
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        assertThat(captor.getValue().requestHeaders()).containsEntry("proxy-authorization", "******");
     }
 
     @Test
@@ -289,7 +316,7 @@ class RequestCaptureFilterTest {
         verify(eventPublisher).publishEvent(captor.capture());
 
         RequestCompletedEvent event = captor.getValue();
-        assertThat(event.responseHeaders()).containsEntry("set-cookie", "********");
+        assertThat(event.responseHeaders()).containsEntry("set-cookie", "******");
         assertThat(event.responseHeaders()).containsEntry("content-type", "application/json");
     }
 
