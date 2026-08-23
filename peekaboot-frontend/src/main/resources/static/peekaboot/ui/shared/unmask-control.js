@@ -51,7 +51,6 @@ function buildButton(context) {
 
 function updateButton(button, revealed) {
     button.setAttribute('aria-pressed', String(revealed));
-    button.classList.toggle('pk-unmask-toggle--active', revealed);
     button.querySelector('.pk-unmask-toggle__label').textContent =
         revealed ? 'Secrets shown — click to hide' : 'Show secrets';
 }
