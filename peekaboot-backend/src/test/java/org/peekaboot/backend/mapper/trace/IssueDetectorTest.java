@@ -390,7 +390,8 @@ class IssueDetectorTest {
         // Given: A trace with no root span
         TraceTree trace = new TraceTree(
                 "trace1", 0, 0, TraceStatus.OK, RootActionType.UNKNOWN, null, null,
-                createSummary(0, 0, 0L, 0), Map.of()
+                createSummary(0, 0, 0L, 0), Map.of(),
+                null, null, null, false
         );
 
         // When
@@ -427,7 +428,8 @@ class IssueDetectorTest {
         return new TraceTree(
                 "trace-1", 0, rootSpan != null ? rootSpan.durationMs() : 0,
                 TraceStatus.OK, RootActionType.UNKNOWN, rootSpan != null ? rootSpan.name() : null,
-                rootSpan, summary, Map.of()
+                rootSpan, summary, Map.of(),
+                null, null, null, false
         );
     }
 

@@ -75,7 +75,8 @@ class TraceDomainTest {
             "GET /api/users",
             rootSpan,
             summary,
-            Map.of("service.name", "user-service")
+            Map.of("service.name", "user-service"),
+            null, null, null, false
         );
 
         assertThat(tree.traceId()).isEqualTo("trace-abc123");
@@ -131,7 +132,8 @@ class TraceDomainTest {
         );
         TraceTree tree = new TraceTree(
             "trace-1", 0L, 100L, TraceStatus.OK, HTTP_REQUEST, "op",
-            rootSpan, tabSummary, Map.of()
+            rootSpan, tabSummary, Map.of(),
+            null, null, null, false
         );
 
         TraceListSummary summary = new TraceListSummary(1, 0, 0, 100.0);

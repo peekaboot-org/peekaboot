@@ -475,7 +475,8 @@ class PeekabootControllerTest {
                         new TraceTabSummary.QueriesSummary(0, 0L),
                         new TraceTabSummary.LogsSummary(0, 0, 0)
                 ),
-                Map.of()
+                Map.of(),
+                null, null, null, false
         );
     }
 }

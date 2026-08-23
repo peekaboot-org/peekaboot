@@ -17,19 +17,4 @@ public record TraceTree(
     List<TraceLog> logs,
     List<QueryInfo> queries,
     boolean truncated
-) {
-    public TraceTree(
-            String traceId,
-            long startTimeMs,
-            long durationMs,
-            TraceStatus status,
-            RootActionType rootActionType,
-            String rootOperation,
-            SpanNode rootSpan,
-            TraceTabSummary summary,
-            Map<String, Object> inheritedAttributes
-    ) {
-        this(traceId, startTimeMs, durationMs, status, rootActionType, rootOperation,
-                rootSpan, summary, inheritedAttributes, null, null, null, false);
-    }
-}
+) {}
