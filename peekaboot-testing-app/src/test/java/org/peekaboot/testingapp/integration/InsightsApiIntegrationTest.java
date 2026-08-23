@@ -93,8 +93,8 @@ class InsightsApiIntegrationTest {
     void streamDeliversTickEventWithinFiveSeconds() throws Exception {
         // Closed explicitly (not just the response stream) so the client-side socket
         // drops right away. The server only notices the disconnect on its next
-        // heartbeat to this subscriber (InsightsSsePublisher, 15s), which briefly
-        // delays Tomcat's graceful shutdown at JVM exit - expected, not a test flake.
+        // heartbeat to this subscriber (InsightsSsePublisher, 15s); context shutdown
+        // completes the emitter regardless, so Tomcat is not held at JVM exit.
         try (HttpClient client = HttpClient.newHttpClient()) {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("http://localhost:" + port + "/peekaboot/api/insights/stream"))

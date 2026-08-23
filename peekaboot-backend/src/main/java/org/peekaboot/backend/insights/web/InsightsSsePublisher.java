@@ -4,6 +4,7 @@ import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -17,9 +18,16 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
-/** Fans collector events out to all connected dashboard SSE clients. */
-public class InsightsSsePublisher implements InsightsCollector.Listener {
+/**
+ * Fans collector events out to all connected dashboard SSE clients.
+ *
+ * <p>A {@link SmartLifecycle} so that context shutdown completes every open
+ * emitter: an emitter left open holds its async servlet request, and the
+ * container's graceful shutdown then waits for it (measured: 30s at JVM exit).
+ */
+public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsSsePublisher.class);
 
@@ -33,14 +41,67 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     private final AtomicBoolean queueOverflowWarned = new AtomicBoolean();
     private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
     private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
+    /**
+     * True from construction on: the publisher serves subscribers as soon as it
+     * exists, so start() has nothing to do. The flag is here to make stop() final -
+     * the connector outlives this lifecycle phase, so a client reconnecting during
+     * shutdown must not be handed an emitter that would hold the shutdown open.
+     */
+    private volatile boolean running = true;
 
     public InsightsSsePublisher(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
+    @Override
+    public void start() {
+        running = true;
+    }
+
+    /** Completes every open emitter and stops the loops, so nothing outlives the context. */
+    @Override
+    public void stop() {
+        List<SseEmitter> open;
+        synchronized (this) {
+            running = false;
+            open = List.copyOf(emitters);
+            emitters.clear();
+            queue.clear();
+        }
+        for (SseEmitter emitter : open) {
+            try {
+                emitter.complete();
+            } catch (RuntimeException e) {
+                log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
+            }
+        }
+        dispatchLoop.stop();
+        heartbeatLoop.stop();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
     public SseEmitter subscribe() {
         SseEmitter emitter = newEmitter();
-        emitters.add(emitter);
+        boolean accepted;
+        synchronized (this) {
+            accepted = running;
+            if (accepted) {
+                // Anything still queued belongs to a subscriber that has since left;
+                // delivering it would burst stale history into this fresh client.
+                if (emitters.isEmpty()) {
+                    queue.clear();
+                }
+                emitters.add(emitter);
+            }
+        }
+        if (!accepted) {
+            emitter.complete();
+            return emitter;
+        }
         emitter.onCompletion(() -> emitters.remove(emitter));
         emitter.onTimeout(() -> emitters.remove(emitter));
         emitter.onError(e -> emitters.remove(emitter));
@@ -79,12 +140,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
 
     @Override
     public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
-        enqueue("tick", tickJson(epochMs, values, tiles));
+        enqueue("tick", () -> tickJson(epochMs, values, tiles));
     }
 
     @Override
     public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
-        enqueue("rollup", rollupJson(level, epochMs, entries));
+        enqueue("rollup", () -> rollupJson(level, epochMs, entries));
     }
 
     String tickJson(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
@@ -127,24 +188,36 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     }
 
     /**
-     * Queues a prepared event for the dispatch thread instead of sending on the
-     * caller's thread: onTick/onRollUp run on the collector's tick/roll-up
-     * virtual threads, and a blocking synchronous send to a slow client must
-     * never delay sampling. Bounded; on overflow the oldest queued event is
-     * dropped and a warning logged once.
+     * Queues an event for the dispatch thread instead of sending on the caller's
+     * thread: onTick/onRollUp run on the collector's tick/roll-up virtual threads,
+     * and a blocking synchronous send to a slow client must never delay sampling.
+     * The payload is only rendered to JSON when the dispatch thread picks the event
+     * up, keeping serialization off the collector threads as well - safe because
+     * the collector hands out a fresh, unshared map per event.
+     *
+     * <p>Nothing is queued while no one is subscribed: an unwatched app would
+     * otherwise fill the queue within the hour and log a "queue full" warning
+     * during entirely normal operation. Bounded; on overflow the oldest queued
+     * event is dropped and a warning logged once.
      */
-    private void enqueue(String eventName, String json) {
+    private void enqueue(String eventName, Supplier<String> json) {
         SseEvent event = new SseEvent(eventName, json);
-        if (!queue.offer(event)) {
-            queue.poll();
-            queue.offer(event);
-            if (queueOverflowWarned.compareAndSet(false, true)) {
-                log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
+        synchronized (this) {
+            if (emitters.isEmpty()) {
+                return;
+            }
+            if (!queue.offer(event)) {
+                queue.poll();
+                queue.offer(event);
+                if (queueOverflowWarned.compareAndSet(false, true)) {
+                    log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
+                }
             }
         }
     }
 
-    private void broadcast(String eventName, String json) {
+    /** Package-visible so tests can stand in for (or wedge) the delivery step. */
+    void broadcast(String eventName, String json) {
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event().name(eventName).data(json));
@@ -185,7 +258,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
     private void dispatchStep() throws InterruptedException {
         SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         if (event != null) {
-            broadcast(event.name(), event.json());
+            broadcast(event.name(), event.json().get());
         }
     }
 
@@ -193,7 +266,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
         return Double.isNaN(value) ? null : value;
     }
 
-    private record SseEvent(String name, String json) {
+    private record SseEvent(String name, Supplier<String> json) {
     }
 
     @FunctionalInterface
@@ -231,6 +304,29 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
             }
         }
 
+        /**
+         * Interrupts and joins the loop thread. The handle is taken (and cleared)
+         * under the monitor but the join happens outside it - the loop acquires
+         * the same monitor on every iteration, and an interrupt does not free a
+         * thread blocked on monitor entry.
+         */
+        void stop() {
+            Thread loopThread;
+            synchronized (InsightsSsePublisher.this) {
+                loopThread = thread;
+                thread = null;
+            }
+            if (loopThread == null) {
+                return;
+            }
+            loopThread.interrupt();
+            try {
+                loopThread.join(2_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         private void run() {
             while (true) {
                 synchronized (InsightsSsePublisher.this) {
@@ -247,6 +343,10 @@ public class InsightsSsePublisher implements InsightsCollector.Listener {
                         thread = null;
                     }
                     return;
+                } catch (RuntimeException e) {
+                    // A failed step must not take the loop with it: the thread
+                    // handle would stay set and no subscribe() would ever restart it.
+                    log.warn("Insights SSE loop {} step failed; continuing", name, e);
                 }
             }
         }

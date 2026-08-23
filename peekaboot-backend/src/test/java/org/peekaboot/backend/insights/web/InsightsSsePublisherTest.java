@@ -7,8 +7,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,6 +96,116 @@ class InsightsSsePublisherTest {
 
         assertThat(delivered.await(3, TimeUnit.SECONDS))
                 .as("dispatch thread keeps draining after a rapid disconnect/resubscribe").isTrue();
+    }
+
+    @Test
+    void nothingIsQueuedWhileNobodyIsSubscribed() throws Exception {
+        BlockingQueue<String> broadcasts = new LinkedBlockingQueue<>();
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            void broadcast(String eventName, String json) {
+                broadcasts.add(eventName);
+            }
+        };
+
+        // More events than the queue holds: with nobody watching, none of them may
+        // be queued at all - otherwise a dashboard-less app fills the queue, logs
+        // the "queue full" warning, and buries the first viewer under stale events.
+        for (int i = 0; i < 300; i++) {
+            publisher.onTick(i, Map.of("a", 1.0), Map.of());
+        }
+        publisher.subscribe();
+
+        assertThat(broadcasts.poll(500, TimeUnit.MILLISECONDS))
+                .as("no stale burst on the first subscribe").isNull();
+        publisher.onTick(9_000, Map.of("a", 1.0), Map.of());
+        assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("fresh events still flow").isEqualTo("tick");
+    }
+
+    @Test
+    void firstSubscriberStartsFromAnEmptyQueue() throws Exception {
+        CountDownLatch broadcastStarted = new CountDownLatch(1);
+        CountDownLatch releaseBroadcast = new CountDownLatch(1);
+        BlockingQueue<String> broadcasts = new LinkedBlockingQueue<>();
+
+        // Wedging the dispatch loop inside broadcast() is what makes the leftover
+        // state reachable: events queued for a subscriber that disconnects before
+        // they are drained.
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            void broadcast(String eventName, String json) {
+                broadcasts.add(eventName);
+                if (broadcastStarted.getCount() > 0) {
+                    broadcastStarted.countDown();
+                    try {
+                        releaseBroadcast.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        };
+
+        SseEmitter first = publisher.subscribe();
+        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        assertThat(broadcastStarted.await(3, TimeUnit.SECONDS)).as("dispatch wedged in broadcast").isTrue();
+        assertThat(broadcasts.take()).isEqualTo("tick");
+
+        publisher.onTick(2_000, Map.of("a", 2.0), Map.of()); // queues up behind the wedge
+        first.complete();                                    // ... and its subscriber leaves
+        publisher.subscribe();                               // 0 -> 1: must start from an empty queue
+        releaseBroadcast.countDown();
+
+        assertThat(broadcasts.poll(1, TimeUnit.SECONDS))
+                .as("the event queued for the departed subscriber is dropped").isNull();
+        publisher.onTick(3_000, Map.of("a", 3.0), Map.of());
+        assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("fresh events still flow").isEqualTo("tick");
+    }
+
+    @Test
+    void dispatchLoopSurvivesAFailingBroadcast() throws Exception {
+        BlockingQueue<String> broadcasts = new LinkedBlockingQueue<>();
+        AtomicBoolean failNext = new AtomicBoolean(true);
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            void broadcast(String eventName, String json) {
+                if (failNext.getAndSet(false)) {
+                    throw new IllegalStateException("expected failure from dispatchLoopSurvivesAFailingBroadcast");
+                }
+                broadcasts.add(eventName);
+            }
+        };
+
+        publisher.subscribe();
+        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
+
+        assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                .as("the loop keeps running after a step threw").isEqualTo("tick");
+    }
+
+    @Test
+    void stopCompletesSubscribers() {
+        publisher.start();
+        publisher.subscribe();
+        assertThat(publisher.subscriberCount()).isEqualTo(1);
+
+        publisher.stop();
+
+        assertThat(publisher.subscriberCount()).as("open emitters must not outlive the context").isZero();
+        assertThat(publisher.isRunning()).isFalse();
+    }
+
+    @Test
+    void subscribingAfterStopHandsBackAClosedStream() {
+        publisher.start();
+        publisher.stop();
+
+        // The connector outlives this lifecycle phase, so a reconnecting dashboard
+        // can still reach us - it must not get an emitter that holds shutdown open.
+        publisher.subscribe();
+
+        assertThat(publisher.subscriberCount()).isZero();
     }
 
     @Test
