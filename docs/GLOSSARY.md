@@ -53,11 +53,15 @@ In the Scheduled Tasks tab, "target" refers to the fully qualified method name o
 scheduled task (e.g., `net.example.TaskService.processItems`), read from Actuator's
 `scheduledtasks` endpoint.
 
-**Relationship:** A scheduled task's `target` does **not** become the trace's
-`rootOperation`. They're sourced independently and never match in practice: `target` is
-the fully-qualified method name, while `rootOperation` is the root span's own name (see
-above) &mdash; typically `task <bean>.<method>` when Spring's scheduler fired it. This
-mismatch is why the Scheduled Tasks tab cannot link a task to its trace runs; see
+**Relationship:** A scheduled task's `target` does **not** equal the trace's
+`rootOperation` outright: `target` is the fully-qualified method name, while
+`rootOperation` is the root span's own name (see above) &mdash; typically
+`task <bean>.<method>` when Spring's scheduler fired it. `TraceInsightsService`'s
+`matchesRootOperation` bridges that mismatch with a `Class.method` suffix fallback (the
+last two dot-segments of `target` matched against `rootOperation`), which is what lets
+the Scheduled Tasks tab's "View traces" link (`dashboard/tabs/scheduled-tasks.js`) filter
+correctly to a task's own runs; see `DashboardTabsTest.schedulerTracesLinkArrivesFiltered`
+for the end-to-end proof, and
 [peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/) for the trace-side
 vocabulary.
 

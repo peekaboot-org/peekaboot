@@ -45,7 +45,9 @@ management:
 
   info:
     env:
-      # Exposes environment variables in /actuator/info
+      # Publishes info.* properties (e.g. info.app.* from application.yml) in
+      # /actuator/info - not OS/system environment variables, which is what the
+      # Environment tab (management.endpoint.env) already covers.
       # Spring default: false | We enable for environment visibility in dashboard
       enabled: true
     java:
