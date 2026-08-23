@@ -97,17 +97,24 @@ class InsightsTabTest extends PlaywrightTestBase {
     void tickPushBlinksTileValue() {
         openInsights();
         String value = "#insights-tiles [data-tile-id='uptime'] .pk-insight-tile-value";
-        // rendered from /config, i.e. everything the tab knows before the stream opens
-        String beforeStream = page.textContent(value);
+        String before = page.textContent(value);
 
-        // the test profile ticks every 250ms, but the budget is deliberately not a
-        // tight one: what is under test is that a pushed tick reaches the DOM, not
-        // how fast a loaded CI host gets it there
-        page.waitForSelector("#insights-tiles [data-tile-id='uptime'] .pk-blink",
-                new Page.WaitForSelectorOptions().setTimeout(15000));
+        // The changed value and the blink have to be observed together: .pk-blink is only
+        // added for a value that actually changed, but it outlives its animation, so
+        // finding it on its own says nothing about any tick after this read. The test
+        // profile ticks every 250ms; the budget is deliberately generous, since what is
+        // under test is that a pushed tick reaches the DOM, not how fast a loaded CI host
+        // gets it there.
+        page.waitForFunction(
+                "([selector, previous]) => {"
+              + "  const element = document.querySelector(selector);"
+              + "  return !!element && element.textContent !== previous"
+              + "      && element.classList.contains('pk-blink');"
+              + "}",
+                List.of(value, before),
+                new Page.WaitForFunctionOptions().setTimeout(15000));
 
-        // ...and the blink must be carrying a pushed value, not just a re-render
-        assertThat(page.textContent(value)).isNotEqualTo(beforeStream);
+        assertThat(page.textContent(value)).as("uptime only ever grows").isNotEqualTo(before);
     }
 
     @Test
