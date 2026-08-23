@@ -20,6 +20,7 @@ export const id = 'insights';
 export const label = 'Insights';
 
 const STAT_NAMES = ['min', 'max', 'avg', 'median', 'p90', 'p95', 'p99'];
+const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
 
 let initialized = false;
 let config = null;          // /config response
@@ -213,6 +214,8 @@ function createPanelState(definition, element) {
         overridden: definition.level != null,
         chart: null,
         creating: false,
+        // set while the card shows "no data" instead of a chart (see hasData)
+        empty: false,
         // bumped by every rebuild, so an async build that a level or theme switch
         // has overtaken can tell and stand down
         generation: 0,
@@ -445,6 +448,16 @@ async function createPanelChart(panel) {
     // the card may have scrolled away, or its level may never have loaded
     if (!snapshot || !panel.visible || panel.chart) return;
 
+    // A panel whose subsystem is absent - no connection pool, no Hibernate - never
+    // receives a datapoint, and axes and a legend drawn over nothing but nulls read
+    // as a broken chart. The card says "no data" instead, and is charted after all
+    // if the meter turns up later (meters register lazily, on first use).
+    if (!hasData(panel)) {
+        setEmpty(panel, true);
+        return;
+    }
+    setEmpty(panel, false);
+
     try {
         panel.chart = createChart({
             panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles
@@ -453,6 +466,41 @@ async function createPanelChart(panel) {
     } catch (error) {
         console.warn(`Insights panel "${panel.definition.id}" could not be charted:`, error);
     }
+}
+
+/**
+ * Whether any of the panel's series has ever carried a real value. Read from the
+ * level-0 store rather than the panel's charted level: level 0 holds every series
+ * and grows with every tick, so it answers "does this meter exist at all?" without
+ * waiting out the first roll-up of a slower level.
+ *
+ * A store with no samples at all - an app opened within its first tick - answers
+ * yes: nothing is known about any panel yet, and calling them all empty would be
+ * a wrong answer where charting them is merely a premature one.
+ */
+function hasData(panel) {
+    const snapshot = levels.get(0);
+    if (!snapshot || !snapshot.count) return true;
+    return panel.definition.series.some(series => {
+        const values = snapshot.series[series.id];
+        if (!Array.isArray(values)) return false;
+        for (let i = values.length - 1; i >= 0; i--) {
+            if (values[i] != null) return true;
+        }
+        return false;
+    });
+}
+
+/** Swaps the chart mount between the "no data" message and an empty mount, ready for a chart. */
+function setEmpty(panel, empty) {
+    panel.empty = empty;
+    panel.element.classList.toggle(EMPTY_PANEL_CLASS, empty);
+    panel.mount.replaceChildren();
+    if (!empty) return;
+    const message = document.createElement('div');
+    message.className = 'pk-insight-empty';
+    message.textContent = 'No data';
+    panel.mount.appendChild(message);
 }
 
 function destroyChart(panel) {
@@ -499,7 +547,12 @@ function flush() {
     }
     updateReadouts();
     panels.forEach(panel => {
-        if (panel.dirty && panel.visible && panel.chart) redraw(panel);
+        if (panel.chart) {
+            if (panel.dirty && panel.visible) redraw(panel);
+        } else if (panel.empty && hasData(panel)) {
+            setEmpty(panel, false);
+            if (panel.visible) createPanelChart(panel);
+        }
     });
 }
 

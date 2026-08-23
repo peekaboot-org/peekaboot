@@ -75,6 +75,24 @@ class InsightsTabTest extends PlaywrightTestBase {
         page.waitForSelector(lastPanel + " canvas");
     }
 
+    /**
+     * A panel whose meter this app does not have (insights-test-panels.yml adds one on
+     * purpose) says so, instead of drawing axes and a legend over nothing but nulls.
+     */
+    @Test
+    void panelWithoutAnyDataSaysSoInsteadOfCharting() {
+        openInsights();
+        String absent = "#insights-panels .pk-insight-panel[data-panel-id='absent-subsystem']";
+        page.locator(absent).scrollIntoViewIfNeeded();
+
+        page.waitForSelector(absent + ".pk-insight-panel--empty .pk-insight-empty");
+        assertThat(page.textContent(absent + " .pk-insight-empty")).isEqualTo("No data");
+        assertThat(page.locator(absent + " canvas").count()).isZero();
+
+        // ...while the panels whose meters do exist are charted as usual
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+    }
+
     @Test
     void tickPushBlinksTileValue() {
         openInsights();

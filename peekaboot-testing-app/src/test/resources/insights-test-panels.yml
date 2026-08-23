@@ -1,0 +1,12 @@
+# Merged on top of the bundled panels under the "test" profile (see application-test.yml).
+# The meter deliberately does not exist in this app: it is how InsightsTabTest gets a panel
+# whose subsystem is absent - the situation of an app without a connection pool or Hibernate -
+# without stubbing anything.
+panels:
+  - id: absent-subsystem
+    title: Absent subsystem
+    chart: line
+    unit: count
+    order: 900
+    series:
+      - { id: gauge, label: Gauge, meter: no.such.meter }

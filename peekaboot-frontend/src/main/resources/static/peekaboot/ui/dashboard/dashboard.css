@@ -482,6 +482,9 @@
 .pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
 .pk-insight-current { margin-left: auto; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
 .pk-insight-chart { min-height: 180px; }
+/* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */
+.pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }
+.pk-insight-empty { color: var(--pk-text-muted); font-size: var(--pk-text-sm); font-style: italic; }
 .pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-insight-chart .u-legend th { font-weight: 500; }
 /* min/max band edges and percentile hairlines take their panel series' colour and

@@ -25,6 +25,7 @@ peekaboot:
   enabled: true
   dev-toolbar: true
   insights:
+    config-location: classpath:insights-test-panels.yml
     levels:
       - interval: 250ms
         size: 90
