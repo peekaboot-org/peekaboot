@@ -4,6 +4,8 @@ import org.peekaboot.backend.actuator.raw.HealthResponse;
 import org.peekaboot.backend.domain.health.HealthComponent;
 import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -13,6 +15,8 @@ import java.util.Map;
 
 @Component
 public class HealthMapper {
+
+    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
     public HealthInfo map(HealthResponse health) {
         if (health == null || health.body() == null) {
@@ -37,8 +41,18 @@ public class HealthMapper {
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
-            result.add(new HealthComponent(name, componentStatus, details));
+            result.add(new HealthComponent(name, componentStatus, maskDetails(details)));
         }
         return result;
+    }
+
+    /**
+     * A consuming app's custom HealthIndicator can put anything in details - unlike the
+     * built-in indicators (db, diskSpace, ...), its shape isn't controlled here at all.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> maskDetails(Map<String, Object> details) {
+        Object masked = treeMasker.mask(details);
+        return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
     }
 }

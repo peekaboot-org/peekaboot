@@ -104,4 +104,64 @@ class HealthMapperTest {
         assertThat(result.components()).hasSize(1);
         assertThat(result.components().get(0).details()).containsEntry("database", "PostgreSQL");
     }
+
+    /**
+     * A consuming app's custom HealthIndicator can put anything in its details map -
+     * unlike the built-in indicators, its shape isn't controlled by Peekaboot at all.
+     */
+    @Test
+    void map_shouldMaskASensitiveKeyInComponentDetails() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("customIndicator", new HealthResponse.HealthComponent("UP",
+                    Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health);
+
+        Map<String, Object> details = result.components().get(0).details();
+        assertThat(details).containsEntry("apiKey", "******");
+        assertThat(details).containsEntry("region", "eu-west-1");
+    }
+
+    @Test
+    void map_shouldApplyValuePatternRulesToComponentDetailValues() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("customIndicator", new HealthResponse.HealthComponent("UP",
+                    Map.of("endpoint", "https://admin:hunter2@internal.example.com/status"))),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health);
+
+        assertThat(result.components().get(0).details().get("endpoint"))
+            .isEqualTo("https://******@internal.example.com/status");
+    }
+
+    @Test
+    void map_shouldLeaveNonStringDetailValuesUntouched() {
+        HealthResponse health = new HealthResponse(
+            new HealthResponse.HealthBody(
+                "UP",
+                Map.of("diskSpace", new HealthResponse.HealthComponent("UP",
+                    Map.of("total", 500_000_000L, "free", 250_000_000L))),
+                List.of()
+            ),
+            200
+        );
+
+        HealthInfo result = mapper.map(health);
+
+        Map<String, Object> details = result.components().get(0).details();
+        assertThat(details).containsEntry("total", 500_000_000L);
+        assertThat(details).containsEntry("free", 250_000_000L);
+    }
 }
