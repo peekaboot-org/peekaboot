@@ -225,6 +225,119 @@ class RequestCaptureFilterTest {
     }
 
     @Test
+    void shouldMaskSensitiveQueryParameterValues() throws Exception {
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/search");
+        when(request.getMethod()).thenReturn("GET");
+        when(response.getStatus()).thenReturn(200);
+        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+        when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
+
+        Map<String, String[]> params = new HashMap<>();
+        params.put("api_key", new String[]{"xyz"});
+        params.put("q", new String[]{"widgets"});
+        when(request.getParameterMap()).thenReturn(params);
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        RequestCompletedEvent event = captor.getValue();
+        assertThat(event.queryParams()).containsEntry("api_key", List.of("******"));
+        assertThat(event.queryParams()).containsEntry("q", List.of("widgets"));
+    }
+
+    @Test
+    void shouldMaskTheRawQueryStringPerParameter() throws Exception {
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/search");
+        when(request.getMethod()).thenReturn("GET");
+        when(response.getStatus()).thenReturn(200);
+        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+        when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
+
+        Map<String, String[]> params = new HashMap<>();
+        params.put("api_key", new String[]{"xyz"});
+        params.put("q", new String[]{"widgets"});
+        when(request.getParameterMap()).thenReturn(params);
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        assertThat(captor.getValue().queryString()).isEqualTo("api_key=******&q=widgets");
+    }
+
+    @Test
+    void shouldMaskSensitiveFormParameterValues() throws Exception {
+        // getParameterMap() merges query-string and form-body parameters; only actual
+        // query-string keys belong in queryParams and only body keys in formParams -
+        // "password" here has no query-string counterpart, so it lands in formParams.
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/login");
+        when(request.getMethod()).thenReturn("POST");
+        when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
+        when(request.getQueryString()).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+
+        Map<String, String[]> params = new HashMap<>();
+        params.put("username", new String[]{"alice"});
+        params.put("password", new String[]{"hunter2"});
+        when(request.getParameterMap()).thenReturn(params);
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        RequestCompletedEvent event = captor.getValue();
+        assertThat(event.formParams()).containsEntry("username", List.of("alice"));
+        assertThat(event.formParams()).containsEntry("password", List.of("******"));
+    }
+
+    @Test
+    void shouldPreserveAQueryStringPairWithNoValue() throws Exception {
+        setupTraceContext("trace1");
+        when(request.getRequestURI()).thenReturn("/search");
+        when(request.getMethod()).thenReturn("GET");
+        when(response.getStatus()).thenReturn(200);
+        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
+        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
+        when(request.getQueryString()).thenReturn("debug&q=widgets");
+
+        Map<String, String[]> params = new HashMap<>();
+        params.put("debug", new String[]{""});
+        params.put("q", new String[]{"widgets"});
+        when(request.getParameterMap()).thenReturn(params);
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        assertThat(captor.getValue().queryString()).isEqualTo("debug&q=widgets");
+    }
+
+    @Test
+    void shouldReturnNullQueryStringWhenThereIsNone() throws Exception {
+        setupTraceContext("trace1");
+        setupBasicRequestResponse();
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+
+        assertThat(captor.getValue().queryString()).isNull();
+    }
+
+    @Test
     void shouldSeparateQueryAndFormParameters() throws Exception {
         // getParameterMap() merges query-string and form-body parameters;
         // only actual query-string keys belong in queryParams and only
