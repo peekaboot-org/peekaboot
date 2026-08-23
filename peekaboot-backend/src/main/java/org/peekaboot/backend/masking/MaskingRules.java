@@ -72,7 +72,13 @@ final class MaskingRules {
         // The upstream regex has no capturing group; group 1 is added here so
         // MaskingEngine can mask the userinfo only, leaving scheme://host:port/path intact.
         new ValuePattern("Credentials in a URL", 1,
-            Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]+:[^/\\s:@]+)@"))
+            Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]+:[^/\\s:@]+)@")),
+        // Distinct from "Credentials in a URL" above and not subsumed by it: this is the
+        // query-parameter shape (scheme://host/db?password=...), the more common of the
+        // two for JDBC. Group 2 (the value only) is masked, leaving the parameter name
+        // and the rest of the URL intact.
+        new ValuePattern("Credentials in a URL query", 2,
+            Pattern.compile("(?i)([?&;](?:password|passwd|pwd|secret|token|api[-_]?key|access[-_]?key)=)([^&;\\s]+)"))
     );
 
     private MaskingRules() {

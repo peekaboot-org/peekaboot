@@ -257,6 +257,47 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("jdbc:postgresql://******@localhost:5432/mydb");
             assertThat(result).contains("localhost", "5432", "mydb").doesNotContain("dbuser", "S3cr3tPassw0rd");
         }
+
+        /**
+         * The query-parameter credential shape (spring.datasource.url containing
+         * "?password=..."), distinct from the userinfo shape above and not covered by
+         * it - the canonical case the value patterns exist for.
+         */
+        @Test
+        void maskValue_shouldMaskOnlyThePasswordValueInAJdbcUrlQueryParameter() {
+            String value = "jdbc:mysql://localhost:3306/mydb?user=root&password=hunter2";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("jdbc:mysql://localhost:3306/mydb?user=root&password=******");
+            assertThat(result).contains("localhost", "3306", "mydb", "user=root").doesNotContain("hunter2");
+        }
+
+        @Test
+        void maskValue_shouldMaskAnApiKeyInAUrlQueryParameter() {
+            String value = "https://api.example.com/v1/data?api_key=abc123&format=json";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("https://api.example.com/v1/data?api_key=******&format=json");
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"password", "passwd", "pwd", "secret", "token", "api-key", "api_key", "access-key", "access_key"})
+        void maskValue_shouldMaskEachUrlQueryCredentialParameterName(String paramName) {
+            String value = "https://example.com/callback?" + paramName + "=s3cr3t&ok=1";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("https://example.com/callback?" + paramName + "=******&ok=1");
+        }
+
+        @Test
+        void maskValue_shouldNotMaskAnOrdinaryQueryParameter() {
+            String value = "https://example.com/search?query=widgets&page=2";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
     }
 
     @Nested
