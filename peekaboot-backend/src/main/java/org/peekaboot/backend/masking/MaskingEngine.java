@@ -35,6 +35,14 @@ public final class MaskingEngine {
         .map(rule -> tokenize(rule, true))
         .toList();
 
+    private static final List<List<String>> WHOLE_KEY_NAME_TOKEN_RULES = MaskingRules.WHOLE_KEY_NAME_RULES.stream()
+        .map(rule -> tokenize(rule, true))
+        .toList();
+
+    private static final List<List<String>> KEY_NAME_EXCEPTION_TOKENS = MaskingRules.KEY_NAME_EXCEPTIONS.stream()
+        .map(rule -> tokenize(rule, true))
+        .toList();
+
     /**
      * True if {@code key} names something structurally sensitive - matched
      * case-insensitively, anywhere in the key, on a separator boundary (dot, hyphen,
@@ -53,6 +61,16 @@ public final class MaskingEngine {
      * still require an exact, whole-token match - never a substring - so this fallback
      * doesn't reopen the over-matching a bare substring check would cause (e.g.
      * "passwordless" staying a distinct token from "password" either way).
+     *
+     * <p>Three refinements sit on top of that token-anywhere check, in order:
+     * {@link MaskingRules#KEY_NAME_EXCEPTIONS} short-circuits a single-token key to
+     * "not sensitive" even though it would otherwise match a rule word exactly (see
+     * {@link MaskingRules} for why "PWD" needs this and "db.pwd" doesn't); then the
+     * ordinary {@link MaskingRules#KEY_NAME_RULES} match anywhere in the key,
+     * subsequence-style, same as always; then {@link MaskingRules#WHOLE_KEY_NAME_RULES}
+     * match only when the rule's tokens are the *entire* key, not merely present in it -
+     * "cookie" is sensitive as an HTTP header name but not as a token buried inside
+     * server.servlet.session.cookie.same-site.
      */
     public boolean isSensitiveKey(String key) {
         if (key == null || key.isBlank()) {
@@ -60,9 +78,19 @@ public final class MaskingEngine {
         }
         List<String> camelAwareTokens = tokenize(key, true);
         List<String> separatorOnlyTokens = tokenize(key, false);
+        for (List<String> exceptionTokens : KEY_NAME_EXCEPTION_TOKENS) {
+            if (camelAwareTokens.equals(exceptionTokens) || separatorOnlyTokens.equals(exceptionTokens)) {
+                return false;
+            }
+        }
         for (List<String> ruleTokens : KEY_NAME_TOKEN_RULES) {
             if (containsSubsequence(camelAwareTokens, ruleTokens)
                     || containsSubsequence(separatorOnlyTokens, ruleTokens)) {
+                return true;
+            }
+        }
+        for (List<String> ruleTokens : WHOLE_KEY_NAME_TOKEN_RULES) {
+            if (camelAwareTokens.equals(ruleTokens) || separatorOnlyTokens.equals(ruleTokens)) {
                 return true;
             }
         }

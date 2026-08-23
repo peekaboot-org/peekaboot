@@ -40,12 +40,13 @@ class MaskingEngineTest {
             "app.encryption-key",
             "authorization",
             "app.auth",
-            "cookie",
-            "set-cookie",
+            "Cookie",
+            "Set-Cookie",
             "app.session-id",
             "app.salt",
             "app.signature",
-            "app.certificate",
+            "app.certificate-password",
+            "app.certificate-private-key",
         })
         void isSensitiveKey_shouldMatchEachKeyNameRule(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
@@ -79,8 +80,36 @@ class MaskingEngineTest {
             "server.port",
             "spring.application.name",
             "peekaboot.tracing.max-spans-per-trace",
+            // I3: server.ssl.certificate is a filesystem path, not a secret - identically
+            // shaped to server.ssl.key-store above. Actual key material is already caught
+            // by the PEM value pattern.
+            "server.ssl.certificate",
+            "server.ssl.trust-certificate",
+            // I4: PWD is set by every POSIX shell, so it hits every developer on the
+            // most-viewed property source (systemEnvironment). password/passwd already
+            // cover the real password case in practice.
+            "PWD",
+            "OLDPWD",
         })
         void isSensitiveKey_shouldNotMatchNegativeCases(String key) {
+            assertThat(engine.isSensitiveKey(key)).isFalse();
+        }
+
+        // I2: the cookie/set-cookie rules exist for HTTP header names (Cookie, Set-Cookie
+        // exactly), not for the token "cookie" appearing anywhere in a compound key.
+        // Session-cookie *configuration* is not a secret and is exactly what someone
+        // opens the Environment tab to check when debugging a SameSite problem.
+        @ParameterizedTest
+        @ValueSource(strings = {
+            "server.servlet.session.cookie.name",
+            "server.servlet.session.cookie.max-age",
+            "server.servlet.session.cookie.same-site",
+            "server.servlet.session.cookie.http-only",
+            "server.servlet.session.cookie.secure",
+            "server.servlet.session.cookie.path",
+            "server.servlet.session.cookie.domain",
+        })
+        void isSensitiveKey_shouldNotMatchCookieConfigurationKeys(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
@@ -231,8 +260,8 @@ class MaskingEngineTest {
         }
 
         @Test
-        void maskValue_shouldMaskOpenAiKey() {
-            String value = "sk-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
+        void maskValue_shouldMaskOpenAiProjectKey() {
+            String value = "sk-proj-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
 
             String result = engine.maskValue(value);
 
@@ -338,6 +367,19 @@ class MaskingEngineTest {
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
 
+        // A bare "sk-" prefix is not itself a signal - it also names ordinary infra
+        // identifiers (a cluster/node group name, here). Every OpenAI key format still
+        // issued today is prefixed ("sk-proj-", matched separately); only the deprecated,
+        // no-longer-issued legacy sk-<48 chars> shape would be missed by not matching bare
+        // "sk-" at all, which is the accepted trade-off - see MaskingRules' comment on
+        // the "OpenAI project key" value pattern.
+        @Test
+        void maskValue_shouldNotTouchAnSkPrefixedInfraIdentifier() {
+            String value = "sk-cluster-prod-eu-west-1a-worker-nodes";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+
         @Test
         void maskValue_shouldReturnNullForNullValue() {
             assertThat(engine.maskValue(null)).isNull();
@@ -401,6 +443,22 @@ class MaskingEngineTest {
             String result = engine.mask("X-Request-Id", "550e8400-e29b-41d4-a716-446655440000");
 
             assertThat(result).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
+        }
+
+        // I2 pin: narrowing cookie/set-cookie to whole-key matches must not stop them
+        // masking the actual HTTP headers they exist for.
+        @Test
+        void mask_shouldMaskTheCookieHeader() {
+            String result = engine.mask("Cookie", "session=abc123");
+
+            assertThat(result).isEqualTo("******");
+        }
+
+        @Test
+        void mask_shouldMaskTheSetCookieHeader() {
+            String result = engine.mask("Set-Cookie", "session=abc123; Path=/; HttpOnly");
+
+            assertThat(result).isEqualTo("******");
         }
     }
 

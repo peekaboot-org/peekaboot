@@ -13,7 +13,27 @@ import java.util.regex.Pattern;
  * all match the same rule regardless of whether the key uses dots, hyphens, underscores
  * or camelCase. Bare "key" is deliberately absent from this list: it would mask
  * spring.jpa.key-generator, server.ssl.key-store (a filesystem path, not a secret) and
- * key-alias.
+ * key-alias. Bare "certificate" is absent for the same reason - server.ssl.certificate is
+ * also a filesystem path, not a secret, identically shaped to server.ssl.key-store; actual
+ * key material is already caught by the PEM value pattern, so only the two compound names
+ * that name a secret outright ("certificate-password", "certificate-private-key") are
+ * listed.
+ *
+ * <p>{@link #WHOLE_KEY_NAME_RULES} lists key names that are sensitive only as the entire
+ * key, not as one token inside a longer compound name - "cookie" and "set-cookie" name an
+ * HTTP header ({@code Cookie}, {@code Set-Cookie}) outright, but the token "cookie" also
+ * appears inside ordinary session-cookie *configuration*
+ * (server.servlet.session.cookie.same-site and siblings), which is not a secret and is
+ * exactly what someone opens the Environment tab to check.
+ *
+ * <p>{@link #KEY_NAME_EXCEPTIONS} lists single-token keys that would otherwise match a
+ * {@link #KEY_NAME_RULES} entry exactly but are well-known non-secrets under that exact
+ * spelling - "PWD", the POSIX shell's current-working-directory variable, happens to be
+ * spelled identically to the "pwd" password abbreviation once lowercased, and PWD is set
+ * by every shell, so it hits every developer on the most-viewed property source
+ * (systemEnvironment). "password"/"passwd" already cover the real password case in
+ * practice, so this exception applies only when a key's entire name equals the rule word -
+ * a compound like "db.pwd" is untouched and still masks.
  *
  * <p>{@link #LEGACY_KEY_PATTERNS} carries a handful of Spring Boot 2.x's removed
  * {@code Sanitizer} defaults that don't fit that compound-name shape - they are matched
@@ -37,9 +57,13 @@ final class MaskingRules {
         "credential", "credentials",
         "api-key", "apikey", "private-key", "secret-key", "signing-key", "encryption-key",
         "authorization", "auth",
-        "cookie", "set-cookie", "session-id",
-        "salt", "signature", "certificate"
+        "session-id",
+        "salt", "signature", "certificate-password", "certificate-private-key"
     );
+
+    static final List<String> WHOLE_KEY_NAME_RULES = List.of("cookie", "set-cookie");
+
+    static final List<String> KEY_NAME_EXCEPTIONS = List.of("pwd");
 
     static final List<Pattern> LEGACY_KEY_PATTERNS = List.of(
         Pattern.compile("vcap_services", Pattern.CASE_INSENSITIVE),
@@ -65,8 +89,14 @@ final class MaskingRules {
             Pattern.compile("\\bxox[baprs]-[0-9A-Za-z-]{10,}\\b")),
         new ValuePattern("Stripe key",
             Pattern.compile("\\b[sr]k_live_[0-9A-Za-z]{20,}\\b")),
-        new ValuePattern("OpenAI key",
-            Pattern.compile("\\bsk-[A-Za-z0-9_-]{20,}\\b")),
+        // No bare "sk-<anything>" rule: that prefix is far too common outside API keys
+        // (AWS security group ids, Kubernetes secret names, "sk-cluster-prod-eu-west-1a-
+        // worker-nodes"-style infra identifiers) to use as a standalone signal, and every
+        // OpenAI key format still in active issuance is prefixed - only the deprecated,
+        // no-longer-issued legacy sk-<48 chars> shape would go undetected by narrowing
+        // this way.
+        new ValuePattern("OpenAI project key",
+            Pattern.compile("\\bsk-proj-[A-Za-z0-9_-]{20,}\\b")),
         new ValuePattern("Anthropic key",
             Pattern.compile("\\bsk-ant-[A-Za-z0-9_-]{20,}\\b")),
         // The upstream regex has no capturing group; group 1 is added here so
