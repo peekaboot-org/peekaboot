@@ -58,11 +58,17 @@ async function init(container, context) {
         renderTiles(container);
         renderPanels(container);
         initPanels(container);
-        // level 0 backs the panel readouts and is where every tick lands, so it is
-        // loaded up front rather than on a panel's demand
-        await loadLevel(0);
-        observeCharts();
+        // the stream is opened before the first snapshot is fetched: tiles and
+        // readouts then go live with the next tick instead of waiting on a
+        // request that carries every series' whole ring. A tick arriving before
+        // the snapshot lands has nowhere to go and is dropped - the snapshot it
+        // is waiting for already contains that sample.
         connectStream();
+        observeCharts();
+        // level 0 backs the panel readouts and is where every tick lands, so it
+        // is loaded up front rather than on a panel's demand; the charts coming
+        // into view share this one request
+        await ensureLevel(0);
     } catch (error) {
         console.warn('Insights tab failed to initialise:', error);
         teardown();
@@ -375,30 +381,50 @@ function showChart(panel) {
     }
 }
 
+/**
+ * Loads what the panel needs (the library, its level) and then builds the chart.
+ *
+ * `creating` makes a second call bow out while the first is still awaiting, so a
+ * rebuild that lands in that window would be silently dropped and the panel left
+ * blank - it is this call that has to notice the bumped generation and start the
+ * rebuild over. The retry cannot run away: it only happens when a *new* rebuild
+ * arrived during this call's own await.
+ */
 async function createPanelChart(panel) {
     if (panel.chart || panel.creating) return;
     panel.creating = true;
     const generation = panel.generation;
     const level = panel.level;
+
+    let snapshot;
     try {
         await ensureUplot();
         await ensureLevel(level);
-        const snapshot = levels.get(level);
-        // the card may have scrolled away or been rebuilt while we were loading
-        if (!snapshot || !panel.visible || panel.generation !== generation || panel.chart) return;
+        snapshot = levels.get(level);
+    } catch (error) {
+        panel.creating = false;
+        // ensureUplot() drops its cached promise on failure, so the next time this
+        // card enters the viewport the script load is attempted again
+        console.warn(`Insights panel "${panel.definition.id}" could not be charted:`, error);
+        return;
+    }
+    panel.creating = false;
+
+    if (panel.generation !== generation) {
+        if (panel.visible && !panel.chart) createPanelChart(panel);
+        return;
+    }
+    // the card may have scrolled away, or its level may never have loaded
+    if (!snapshot || !panel.visible || panel.chart) return;
+
+    try {
         panel.chart = createChart({
             panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles
         });
         panel.dirty = false;
     } catch (error) {
         console.warn(`Insights panel "${panel.definition.id}" could not be charted:`, error);
-        return;    // a broken uPlot load must not be retried on a loop
-    } finally {
-        panel.creating = false;
     }
-    // a rebuild landed while we were loading: it found creating=true and bowed
-    // out, so starting it over is this call's job
-    if (!panel.chart && panel.visible && panel.generation !== generation) createPanelChart(panel);
 }
 
 function destroyChart(panel) {

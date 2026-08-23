@@ -71,10 +71,18 @@ class InsightsTabTest extends PlaywrightTestBase {
     @Test
     void tickPushBlinksTileValue() {
         openInsights();
+        String value = "#insights-tiles [data-tile-id='uptime'] .pk-insight-tile-value";
+        // rendered from /config, i.e. everything the tab knows before the stream opens
+        String beforeStream = page.textContent(value);
 
-        // the test profile ticks every 250ms - a pushed value must retrigger the blink class
+        // the test profile ticks every 250ms, but the budget is deliberately not a
+        // tight one: what is under test is that a pushed tick reaches the DOM, not
+        // how fast a loaded CI host gets it there
         page.waitForSelector("#insights-tiles [data-tile-id='uptime'] .pk-blink",
-                new Page.WaitForSelectorOptions().setTimeout(5000));
+                new Page.WaitForSelectorOptions().setTimeout(15000));
+
+        // ...and the blink must be carrying a pushed value, not just a re-render
+        assertThat(page.textContent(value)).isNotEqualTo(beforeStream);
     }
 
     @Test
@@ -87,6 +95,23 @@ class InsightsTabTest extends PlaywrightTestBase {
 
         assertThat(request.url()).contains("level=1");
         // the rebuilt chart (min/max bands + avg) must come back up on the new level
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+    }
+
+    @Test
+    void rapidLevelSwitchingLeavesEveryPanelCharted() {
+        openInsights();
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+
+        // both switches must land inside the first rebuild's data fetch - dispatched in
+        // one task, since two selectOption round trips can straddle it instead
+        page.evaluate("() => {"
+                + "const select = document.querySelector('#insights-level');"
+                + "for (const level of ['1', '0']) {"
+                + "  select.value = level;"
+                + "  select.dispatchEvent(new Event('change'));"
+                + "}}");
+
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
     }
 }
