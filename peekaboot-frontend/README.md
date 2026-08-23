@@ -17,10 +17,18 @@ static/peekaboot/ui/
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
 ├── shared/          api.js, components.js, format.js, markup.js, root-actions.js,
 │                    severity.js, shadow-styles.js, span-names.js, theme.js
-├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (8 tabs)
+├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (9 tabs, plus the
+│                    Insights tab's own insights-chart.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
-└── toolbar/         toolbar.css, toolbar.js
+├── toolbar/         toolbar.css, toolbar.js
+└── vendor/          uplot/ — the only third-party code, loaded on demand (see below)
 ```
+
+The Insights tab charts with [uPlot](https://github.com/leeoniya/uPlot), vendored under
+`vendor/uplot/` (MIT, version pinned in `VERSION`). It is the one exception to "plain ES
+modules": `insights-chart.js` injects the script and stylesheet the first time a chart
+actually has to be drawn, so no other page — and no dashboard that never opens the tab —
+loads it.
 
 ## The three shared layers
 
