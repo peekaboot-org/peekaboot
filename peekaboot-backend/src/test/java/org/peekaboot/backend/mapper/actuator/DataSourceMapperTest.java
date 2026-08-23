@@ -33,7 +33,28 @@ class DataSourceMapperTest {
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
         assertThat(result.get(0).properties()).containsEntry("user", "admin");
-        assertThat(result.get(0).properties()).containsEntry("password", "********");
+        assertThat(result.get(0).properties()).containsEntry("password", "******");
+    }
+
+    /**
+     * The pre-engine regex was a bare substring match on "key", so any connection param
+     * whose name merely contained "key" - not just the compound "api-key"/"apiKey" shape -
+     * was masked too (e.g. "keyStore", "encryptionKeyPath"). The masking engine deliberately
+     * drops bare "key" as a rule (it would otherwise mask server.ssl.key-store and
+     * spring.jpa.key-generator elsewhere), so routing DataSourceMapper through the engine
+     * narrows what gets masked here. This is the intended behaviour, not a regression -
+     * pinned explicitly so a future reader sees it was a deliberate choice.
+     */
+    @Test
+    void map_shouldNoLongerMaskConnectionParamsThatOnlyContainBareKey() {
+        DataSourceMetadata metadata = mockMetadata("ds");
+        when(metadata.getConnectionParams()).thenReturn(Map.of(
+            "keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")
+        ));
+
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+
+        assertThat(result.get(0).properties()).containsEntry("keyStore", "classpath:keystore.p12");
     }
 
     @Test
@@ -85,8 +106,8 @@ class DataSourceMapperTest {
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
-        assertThat(result.get(0).properties()).containsEntry("apiKey", "********");
-        assertThat(result.get(0).properties()).containsEntry("authToken", "********");
+        assertThat(result.get(0).properties()).containsEntry("apiKey", "******");
+        assertThat(result.get(0).properties()).containsEntry("authToken", "******");
         assertThat(result.get(0).properties()).containsEntry("server", "localhost");
     }
 

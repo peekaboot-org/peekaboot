@@ -6,19 +6,17 @@ import org.peekaboot.backend.actuator.raw.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 @Component
 public class DataSourceMapper {
 
-    private static final Pattern SENSITIVE_PATTERN = Pattern.compile(
-        "password|secret|key|token|credential", Pattern.CASE_INSENSITIVE
-    );
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
         if (metadataList == null || metadataList.isEmpty()) {
@@ -77,11 +75,7 @@ public class DataSourceMapper {
             String key = entry.getKey();
             String value = entry.getValue() != null ? entry.getValue().value() : null;
 
-            if (SENSITIVE_PATTERN.matcher(key).find()) {
-                result.put(key, "********");
-            } else {
-                result.put(key, value);
-            }
+            result.put(key, maskingEngine.mask(key, value));
         }
         return result;
     }
