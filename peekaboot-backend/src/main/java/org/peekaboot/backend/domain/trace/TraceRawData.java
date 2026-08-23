@@ -18,7 +18,8 @@ public record TraceRawData(
     List<SpanData> spans,
     List<TraceLog> logs,
     List<QueryInfo> queries,
-    HttpExchange httpExchange
+    HttpExchange httpExchange,
+    boolean truncated
 ) {
     public record PerTraceSummary(
         TraceRawSummary.CountDuration spans,

@@ -266,6 +266,26 @@ class TraceTreeMapperTest {
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 
+    // Known Defect I5: errorMessage/errorClass used to pass straight through unmasked -
+    // only tags went through TagMasker - even though a realistic exception message can
+    // itself carry a credential, e.g. an HTTP client exception that echoes the failing
+    // request's URL back with a query-string API key attached.
+    @Test
+    void map_shouldMaskACredentialEmbeddedInTheSpanErrorMessage() {
+        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
+        var errorSpan = createSpanWithError("trace1", "error", "root", "error-op",
+                Span.Kind.CLIENT, 10, 50, Map.of(),
+                "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
+                "org.springframework.web.client.HttpClientErrorException");
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root, errorSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        SpanNode maskedErrorSpan = result.rootSpan().children().getFirst();
+        assertThat(maskedErrorSpan.errorMessage()).doesNotContain("SECRET").contains("api_key=******");
+    }
+
     @Test
     void map_shouldReturnOkStatusWhenNoErrors() {
         var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());

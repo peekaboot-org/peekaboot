@@ -176,6 +176,54 @@ class TraceRawServiceTest {
                 .isEqualTo("https://******@example.com/api");
     }
 
+    // TraceTree already carries a truncated flag (Known Defect: max-spans-per-trace
+    // eviction); TraceRawData didn't, even though /raw is an API surface too. bundle's
+    // own truncated flag (set once the maxSpansPerTrace cap actually evicts a real span)
+    // must reach the response.
+    @Test
+    void getTraceCarriesTheTruncatedFlagFromTheBundle() {
+        InMemoryTraceStore smallStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
+        TraceRawService smallService = new TraceRawService(smallStore, new QueryExtractor());
+        smallStore.addSpan(span("t1", "root", null, "GET /persons", 100, Map.of(), null));
+        smallStore.addSpan(span("t1", "child", "root", "SELECT", 10, Map.of(), null));
+
+        Optional<TraceRawData> trace = smallService.getTrace("t1");
+
+        assertThat(trace).isPresent();
+        assertThat(trace.get().truncated()).isTrue();
+    }
+
+    @Test
+    void getTraceCarriesFalseWhenNotTruncated() {
+        store.addSpan(span("t1", "root", null, "GET /persons", 100, Map.of(), null));
+
+        Optional<TraceRawData> trace = service.getTrace("t1");
+
+        assertThat(trace).isPresent();
+        assertThat(trace.get().truncated()).isFalse();
+    }
+
+    // Known Defect I5: errorMessage/errorClass used to pass straight through unmasked -
+    // only tags went through TagMasker - even though a realistic exception message can
+    // itself carry a credential, e.g. an HTTP client exception that echoes the failing
+    // request's URL back with a query-string API key attached.
+    @Test
+    void getTraceMasksACredentialEmbeddedInTheSpanErrorMessage() {
+        SpanData errorSpan = new SpanData("t1", "root", null, "GET /persons", null,
+                START, START.plusMillis(100), Duration.ofMillis(100),
+                Map.of(), List.of(),
+                "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
+                "org.springframework.web.client.HttpClientErrorException",
+                null, null, null, List.of(), store.nextCreationOrder());
+        store.addSpan(errorSpan);
+
+        Optional<TraceRawData> trace = service.getTrace("t1");
+
+        assertThat(trace).isPresent();
+        String errorMessage = trace.get().spans().getFirst().errorMessage();
+        assertThat(errorMessage).doesNotContain("SECRET").contains("api_key=******");
+    }
+
     private SpanData span(String traceId, String spanId, String parentId, String name,
             long durationMs, Map<String, String> tags, String errorClass) {
         return new SpanData(traceId, spanId, parentId, name, null,

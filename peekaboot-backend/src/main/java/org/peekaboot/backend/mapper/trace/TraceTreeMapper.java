@@ -23,7 +23,8 @@ import java.util.stream.Collectors;
 @Component
 public class TraceTreeMapper {
 
-    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
+    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final TagMasker tagMasker = new TagMasker(maskingEngine);
 
     public TraceTree map(TraceData traceData) {
         return map(traceData, false);
@@ -202,7 +203,9 @@ public class TraceTreeMapper {
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
         // Copy tags directly (no hoisting), masked - db.statement, http.url etc. may
-        // carry a credential the key name alone can't catch.
+        // carry a credential the key name alone can't catch. errorMessage below is masked
+        // the same way - it can carry the same kind of credential, e.g. an exception
+        // message that echoes back the failing request's URL.
         Map<String, Object> tags = new HashMap<>();
         if (spanData.tags() != null) {
             tags.putAll(tagMasker.mask(spanData.tags()));
@@ -228,7 +231,7 @@ public class TraceTreeMapper {
                 events,
                 List.of(),  // issues added by IssueDetector
                 spanData.creationOrder(),
-                spanData.errorMessage(),
+                maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 spanData.remoteServiceName()
         );

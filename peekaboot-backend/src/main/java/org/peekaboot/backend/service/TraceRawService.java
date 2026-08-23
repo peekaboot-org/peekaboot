@@ -29,7 +29,8 @@ public class TraceRawService {
     private final TraceStore traceStore;
     private final QueryExtractor queryExtractor;
     private final CollectionFramework collectionFramework;
-    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
+    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final TagMasker tagMasker = new TagMasker(maskingEngine);
 
     public TraceRawService(
             @Nullable TraceStore traceStore,
@@ -84,9 +85,10 @@ public class TraceRawService {
         List<QueryInfo> queries = queryExtractor.extract(traceData);
 
         // This endpoint embeds SpanData directly - unlike the insights endpoints, it
-        // never passes through TraceTreeMapper, so tag masking has to happen here.
+        // never passes through TraceTreeMapper, so tag/errorMessage masking has to
+        // happen here.
         List<SpanData> maskedSpans = traceData.spans().stream()
-                .map(this::maskSpanTags)
+                .map(this::maskSpan)
                 .toList();
 
         List<TraceLog> logs = bundle.logs().stream()
@@ -132,16 +134,17 @@ public class TraceRawService {
                 maskedSpans,
                 logs,
                 queries,
-                httpExchange
+                httpExchange,
+                bundle.truncated()
         );
     }
 
-    private SpanData maskSpanTags(SpanData span) {
+    private SpanData maskSpan(SpanData span) {
         return new SpanData(
                 span.traceId(), span.spanId(), span.parentId(), span.name(), span.kind(),
                 span.startTime(), span.endTime(), span.duration(),
                 tagMasker.mask(span.tags()),
-                span.events(), span.errorMessage(), span.errorClass(), span.remoteServiceName(),
+                span.events(), maskingEngine.maskValue(span.errorMessage()), span.errorClass(), span.remoteServiceName(),
                 span.remoteIp(), span.remotePort(), span.links(), span.creationOrder()
         );
     }
