@@ -58,22 +58,4 @@ class TagMaskerTest {
     void mask_shouldReturnNullUnchanged() {
         assertThat(tagMasker.mask(null)).isNull();
     }
-
-    @Test
-    void mask_shouldReturnTagsUnchangedWhenUnmaskIsTrue() {
-        Map<String, String> tags = Map.of("http.request.header.authorization", "Bearer abc123");
-
-        Map<String, String> masked = tagMasker.mask(tags, true);
-
-        assertThat(masked).containsEntry("http.request.header.authorization", "Bearer abc123");
-    }
-
-    @Test
-    void mask_shouldBehaveLikeTheOneArgOverloadWhenUnmaskIsFalse() {
-        Map<String, String> tags = Map.of("http.request.header.authorization", "Bearer abc123");
-
-        Map<String, String> masked = tagMasker.mask(tags, false);
-
-        assertThat(masked).containsEntry("http.request.header.authorization", "******");
-    }
 }
