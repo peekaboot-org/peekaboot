@@ -1,5 +1,4 @@
 const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
-const SENSITIVE_KEY = /password|secret|key|token|credential/i;
 
 /** Escapes text for safe interpolation into an HTML string. */
 export function escapeHtml(text) {
@@ -27,9 +26,4 @@ export function highlightText(text, query) {
     }
 
     return result + escapeHtml(value.substring(lastIndex));
-}
-
-/** True for property/config keys whose value should be masked before display. */
-export function isSensitiveKey(key) {
-    return SENSITIVE_KEY.test(key);
 }

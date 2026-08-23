@@ -286,15 +286,12 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
-     * Filters on "key", not "password": the test profile's H2 datasource has no bound
-     * username/password (Spring's /configprops report omits unset properties entirely,
-     * rather than masking them), so no property in the real payload ever contains
-     * "password" to filter on. "key" does occur for real - confirmed via a temporary
-     * debug dump of the live /api/actuator/all/insights response against this exact
-     * test profile: the "management.observations" group's "keyValues" property (and
-     * "springdoc"'s "writerWithOrderByKeys") both survive the filter, and both are
-     * masked by the same sensitive-key pattern - so this exercises the real masking
-     * path against actual data instead of an unreachable filter term.
+     * application-test.yml binds spring.datasource.password as a fixture value purely so
+     * this test has a real, secret-looking property to filter on and check against the
+     * masking engine's actual output - the test profile's H2 datasource doesn't otherwise
+     * need it. Filtering on "password" would previously have found nothing: Spring's
+     * /configprops report omits unset properties entirely rather than masking them, and
+     * before that fixture existed no property in the real payload contained "password".
      */
     @Test
     void configTabMasksSensitiveValues() {
@@ -302,11 +299,21 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.click(".pk-tab[data-tab='config']");
         page.waitForSelector("#config-groups .pk-group__header");
 
-        page.fill("#config-filter", "key");
-        page.waitForSelector("#config-groups .pk-kv__value--sensitive", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
-        page.click("#config-groups .pk-group__header");
+        page.fill("#config-filter", "password");
+        // Rows render into the DOM regardless of the group's expand/collapse state -
+        // only the group's [hidden] wrapper controls visibility - so this waits for
+        // attachment, not visibility.
+        page.waitForSelector("#config-groups .pk-kv__key", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
 
-        assertThat(page.querySelectorAll("#config-groups .pk-kv__value--sensitive")).isNotEmpty();
+        String maskedValue = (String) page.evaluate("""
+            () => {
+                const row = Array.from(document.querySelectorAll('#config-groups .pk-kv'))
+                    .find(r => r.querySelector('.pk-kv__key').textContent === 'password');
+                return row ? row.querySelector('.pk-kv__value').textContent : null;
+            }
+            """);
+
+        assertThat(maskedValue).isEqualTo("******");
     }
 
     @Test

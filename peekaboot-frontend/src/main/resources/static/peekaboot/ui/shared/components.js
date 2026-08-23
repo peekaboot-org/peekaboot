@@ -18,8 +18,12 @@ function setKvText(element, text, highlight) {
 /**
  * A key/value row. `highlight`, when given, is a plain query string -- kvRow calls
  * highlightText() itself, so no caller can pass raw markup through key/value/highlight.
+ *
+ * Values arrive already masked by the backend when sensitive (a literal `******`), so
+ * kvRow has no `sensitive` option of its own to decide or flag - there is nothing left
+ * for the frontend to know that the rendered text doesn't already say.
  */
-export function kvRow(key, value, {sensitive = false, mono = false, tight = false, highlight} = {}) {
+export function kvRow(key, value, {mono = false, tight = false, highlight} = {}) {
     const row = document.createElement('div');
     row.className = 'pk-kv' + (tight ? ' pk-kv--tight' : '');
 
@@ -28,9 +32,7 @@ export function kvRow(key, value, {sensitive = false, mono = false, tight = fals
     setKvText(keyEl, key == null ? '' : String(key), highlight);
 
     const valueEl = document.createElement('span');
-    valueEl.className = 'pk-kv__value'
-        + (sensitive ? ' pk-kv__value--sensitive' : '')
-        + (mono ? ' pk-kv__value--mono' : '');
+    valueEl.className = 'pk-kv__value' + (mono ? ' pk-kv__value--mono' : '');
     setKvText(valueEl, value == null ? '-' : String(value), highlight);
 
     row.append(keyEl, valueEl);

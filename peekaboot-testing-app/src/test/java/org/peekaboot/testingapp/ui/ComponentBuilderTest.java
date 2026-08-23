@@ -38,14 +38,6 @@ class ComponentBuilderTest extends PlaywrightTestBase {
     }
 
     @Test
-    void kvRowMarksSensitiveValues() {
-        assertThat(evalBuilders(
-                "return m.kvRow('password', '***', {sensitive: true})"
-              + ".querySelector('.pk-kv__value').className;"))
-                .isEqualTo("pk-kv__value pk-kv__value--sensitive");
-    }
-
-    @Test
     void kvRowAppliesMonoAndTightModifiers() {
         assertThat(evalBuilders(
                 "return m.kvRow('k', 'v', {mono: true, tight: true}).className;"))

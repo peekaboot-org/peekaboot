@@ -125,7 +125,6 @@
     word-break: break-word;
 }
 .pk-kv__value--mono      { font-family: var(--pk-font-mono); }
-.pk-kv__value--sensitive { color: var(--pk-warning-text); font-style: italic; }
 
 @media (max-width: 767px) {
     .pk-kv { flex-direction: column; gap: var(--pk-space-xs); }

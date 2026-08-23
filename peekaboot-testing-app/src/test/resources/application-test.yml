@@ -2,6 +2,11 @@ spring:
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
+    # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
+    # tabs have a real, secret-looking property to prove the masking engine against
+    # (see DashboardTabsTest.configTabMasksSensitiveValues and
+    # PeekabootActuatorServiceEndToEndMaskingTest).
+    password: test-fixture-password
   jpa:
     hibernate:
       ddl-auto: create-drop

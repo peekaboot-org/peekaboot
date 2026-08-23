@@ -94,15 +94,6 @@ class ComponentPrimitiveTest extends PlaywrightTestBase {
     }
 
     @Test
-    void sensitiveValueIsVisuallyDistinct() {
-        openFixture();
-
-        String sensitive = (String) page.evalOnSelector(".pk-kv__value--sensitive",
-                "el => getComputedStyle(el).fontStyle");
-        assertThat(sensitive).isEqualTo("italic");
-    }
-
-    @Test
     void meterFillRespectsItsWidth() {
         openFixture();
 

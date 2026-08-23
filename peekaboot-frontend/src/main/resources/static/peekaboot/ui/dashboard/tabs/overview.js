@@ -3,7 +3,7 @@
  * the memory/storage usage meters and the health banner + component grid.
  */
 import {kvRow, badge, meter} from '../../shared/components.js';
-import {escapeHtml, isSensitiveKey} from '../../shared/markup.js';
+import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatHosts} from '../../shared/format.js';
 
@@ -188,9 +188,10 @@ function renderDataSourceCard(ds) {
 
         const list = document.createElement('div');
         list.className = 'pk-datasources__params-list';
+        // The backend (MaskingEngine) already masked sensitive connection params -
+        // this just renders whatever value it sent, same as every other tab.
         params.forEach(([key, value]) => {
-            const sensitive = isSensitiveKey(key);
-            list.appendChild(kvRow(key, sensitive ? '********' : value, {tight: true, mono: true, sensitive}));
+            list.appendChild(kvRow(key, value, {tight: true, mono: true}));
         });
         paramsEl.appendChild(list);
 

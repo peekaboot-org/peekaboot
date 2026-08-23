@@ -1,9 +1,10 @@
 /**
- * The "Config" tab: @ConfigurationProperties groups, filterable, with sensitive
- * values (password/secret/key/token/credential) masked via kvRow's sensitive flag.
+ * The "Config" tab: @ConfigurationProperties groups, filterable. Sensitive values
+ * arrive already masked from the backend (MaskingEngine) - this tab just renders
+ * what the API gives it, with no sensitivity decision of its own.
  */
 import {groupList, expandedKeys, kvRow} from '../../shared/components.js';
-import {escapeHtml, isSensitiveKey} from '../../shared/markup.js';
+import {escapeHtml} from '../../shared/markup.js';
 
 export const id = 'config';
 export const label = 'Config';
@@ -72,7 +73,7 @@ function renderGroups(container, filterQuery) {
             highlight: filterQuery
         }),
         items: (group, list) => group.properties.forEach(prop => list.appendChild(
-            kvRow(prop.key, prop.value, {sensitive: isSensitiveKey(prop.key), highlight: filterQuery}))),
+            kvRow(prop.key, prop.value, {highlight: filterQuery}))),
         expandedKeys: expanded
     });
 }

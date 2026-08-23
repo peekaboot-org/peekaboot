@@ -54,16 +54,6 @@ class SharedModuleTest extends PlaywrightTestBase {
     }
 
     @Test
-    void isSensitiveKeyMatchesCredentialLikeNames() {
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('db.password')")).isEqualTo(true);
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('api-secret')")).isEqualTo(true);
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('apiKey')")).isEqualTo(true);
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('auth.token')")).isEqualTo(true);
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('credential.store')")).isEqualTo(true);
-        assertThat(evalModule("markup.js", "m.isSensitiveKey('server.port')")).isEqualTo(false);
-    }
-
-    @Test
     void formatDurationScalesByMagnitude() {
         assertThat(evalModule("format.js", "m.formatDurationMs(0.4)")).isEqualTo("<1ms");
         assertThat(evalModule("format.js", "m.formatDurationMs(250)")).isEqualTo("250ms");
