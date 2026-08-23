@@ -126,6 +126,30 @@ class TraceDataBundleTest {
     }
 
     @Test
+    void addSpan_boundsTheRedirectTableAsRealSpansAreEvicted() {
+        // Regression test: the redirect table used to gain one entry per fold and never
+        // shrink, so it grew for the trace's whole life regardless of maxSpans. Here 500
+        // real+duplicate pairs are folded against a cap of 10 - if the table weren't pruned
+        // as spans are evicted, it would hold close to 500 entries by the end.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        int cap = 10;
+        int pairs = 500;
+        long order = 1;
+        for (int i = 0; i < pairs; i++) {
+            String realId = "real" + i;
+            bundle.addSpan(jdbcSpan("dup" + i, realId, "query", "SELECT " + i, "dataSource", order++), cap);
+            bundle.addSpan(jdbcSpan(realId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
+        }
+
+        assertThat(bundle.spans()).hasSize(cap);
+        assertThat(bundle.truncated()).isTrue();
+        assertThat(bundle.parentRedirectCountForTesting())
+                .as("the redirect table must be pruned as spans are evicted, not grow with "
+                  + "every duplicate ever folded over the trace's whole life")
+                .isLessThanOrEqualTo(cap * 2);
+    }
+
+    @Test
     void truncated_isFalseUntilRealSpansExceedTheCap() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         for (int i = 1; i <= 3; i++) {

@@ -27,10 +27,12 @@ import java.util.Map;
  * <p>The fold below therefore checks both directions on every insertion: does the arriving
  * span turn out to duplicate its own already-stored parent (the uncommon ordering), and does
  * an already-stored span turn out to duplicate the span that just arrived (the expected
- * ordering). A folded-away duplicate's id is kept in a redirect table for the bundle's
- * lifetime, so a later span whose stated parent was already folded away - a grandchild of the
- * duplicate, which arrives before the duplicate does - still resolves to the surviving
- * ancestor when the trace is read back out via {@link #spans()}.
+ * ordering). A folded-away duplicate's id is kept in a redirect table so a later span whose
+ * stated parent was already folded away - a grandchild of the duplicate, which arrives before
+ * the duplicate does - still resolves to the surviving ancestor when the trace is read back
+ * out via {@link #spans()}. That table is pruned as spans are evicted (see
+ * {@link #evictOldest}), so it stays bounded by the {@code maxSpans} cap rather than growing
+ * for the trace's whole life.
  */
 public class TraceDataBundle {
 
@@ -38,6 +40,10 @@ public class TraceDataBundle {
     private final Object spansLock = new Object();
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
     private final Map<String, String> parentRedirects = new HashMap<>();
+    // reverse index of parentRedirects, pruned in evictOldest so the redirect table stays
+    // bounded by currently-retained real spans rather than growing for the trace's whole
+    // life under sustained duplicate-producing traffic
+    private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     private boolean truncated = false;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
@@ -86,7 +92,7 @@ public class TraceDataBundle {
         String resolvedParentId = resolve(span.parentId());
         SpanData parent = resolvedParentId != null ? spansById.get(resolvedParentId) : null;
         if (parent != null && SpanDuplicateMatcher.isDuplicate(span, parent)) {
-            parentRedirects.put(span.spanId(), parent.spanId());
+            recordRedirect(span.spanId(), parent.spanId());
             return true;
         }
         return false;
@@ -116,10 +122,18 @@ public class TraceDataBundle {
             SpanData candidate = spansById.get(childId);
             if (candidate != null && SpanDuplicateMatcher.isDuplicate(candidate, survivor)) {
                 spansById.remove(childId);
-                parentRedirects.put(childId, survivor.spanId());
+                recordRedirect(childId, survivor.spanId());
                 it.remove();
             }
         }
+    }
+
+    /** Records that {@code removedId} folded into {@code survivorId}, maintaining
+     * {@link #redirectsPointingAt} alongside {@link #parentRedirects} so the entry can be
+     * pruned in {@link #evictOldest} once {@code survivorId} itself is evicted. */
+    private void recordRedirect(String removedId, String survivorId) {
+        parentRedirects.put(removedId, survivorId);
+        redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).add(removedId);
     }
 
     /** Follows the redirect chain for a (possibly folded-away) span id to the span it
@@ -139,6 +153,17 @@ public class TraceDataBundle {
             it.remove();
             removeFromParentIndex(evicted);
             childrenByParentId.remove(evicted.spanId());
+            pruneRedirectsPointingAt(evicted.spanId());
+        }
+    }
+
+    /** An evicted real span can no longer be resolved to, so any redirects that folded a
+     * duplicate into it are dead weight - drop them rather than let {@link #parentRedirects}
+     * grow for the trace's whole life regardless of the {@code maxSpans} cap. */
+    private void pruneRedirectsPointingAt(String evictedSpanId) {
+        List<String> redirected = redirectsPointingAt.remove(evictedSpanId);
+        if (redirected != null) {
+            redirected.forEach(parentRedirects::remove);
         }
     }
 
@@ -177,6 +202,14 @@ public class TraceDataBundle {
     public boolean truncated() {
         synchronized (spansLock) {
             return truncated;
+        }
+    }
+
+    /** Test-only: exposes the redirect table's size so a bound on its growth can be pinned
+     * without reflection. Package-private - not part of the public API. */
+    int parentRedirectCountForTesting() {
+        synchronized (spansLock) {
+            return parentRedirects.size();
         }
     }
 
