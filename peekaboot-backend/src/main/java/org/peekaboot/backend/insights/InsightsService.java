@@ -33,6 +33,7 @@ public final class InsightsService implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsService.class);
 
+    private static final String CLASSPATH_PREFIX = "classpath:";
     private static final String DEFAULTS_LOCATION = "peekaboot-insights-defaults.yml";
     private static final String USER_LOCATION = "peekaboot-insights.yml";
 
@@ -47,11 +48,11 @@ public final class InsightsService implements SmartLifecycle {
         properties.validate();
         this.properties = properties;
 
-        Resource defaults = new ClassPathResource(DEFAULTS_LOCATION);
+        Resource defaults = resourceLoader.getResource(CLASSPATH_PREFIX + DEFAULTS_LOCATION);
         Resource userOverride = properties.getConfigLocation() != null
                 ? resourceLoader.getResource(properties.getConfigLocation())
                 : new ClassPathResource(USER_LOCATION);
-        PanelsFile file = PanelConfigLoader.load(defaults, userOverride);
+        PanelsFile file = load(defaults, userOverride);
 
         this.panels = file.panels().stream()
                 .filter(panel -> panel.enabled() == null || panel.enabled())
@@ -64,6 +65,25 @@ public final class InsightsService implements SmartLifecycle {
         this.seriesCount = namespacedSeries.size();
 
         this.collector = new InsightsCollector(properties.getLevels(), namespacedSeries, tiles, registry, listener);
+    }
+
+    /**
+     * The bundled defaults on their own first: they are ours, so a failure there is
+     * our bug and has to surface. The user's override is merged on top separately,
+     * because it is theirs - a typo in it costs them their panel customisation, not
+     * the application Peekaboot is embedded in.
+     */
+    private static PanelsFile load(Resource defaults, Resource userOverride) {
+        PanelsFile bundled = PanelConfigLoader.load(defaults, null);
+        if (userOverride == null || !userOverride.exists()) {
+            return bundled;
+        }
+        try {
+            return PanelConfigLoader.load(defaults, userOverride);
+        } catch (RuntimeException e) {
+            log.error("Ignoring invalid insights panel config {}; using the bundled defaults", userOverride, e);
+            return bundled;
+        }
     }
 
     private static SeriesDef namespaced(String panelId, SeriesDef series) {
