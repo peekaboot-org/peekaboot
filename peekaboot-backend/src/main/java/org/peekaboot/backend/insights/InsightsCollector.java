@@ -44,6 +44,7 @@ public final class InsightsCollector implements SmartLifecycle {
     }
 
     private final long[] intervalMillis;
+    private final int[] levelSizes;
     private final Map<String, SeriesSampler> samplers = new LinkedHashMap<>();
     private final Map<String, DoubleRing> level0Rings = new LinkedHashMap<>();
     /** Per series id, one StatsRing per level; index 0 (level 0) is unused. */
@@ -58,8 +59,10 @@ public final class InsightsCollector implements SmartLifecycle {
                               List<TileDef> tiles, MeterRegistry registry, Listener listener) {
         this.listener = listener;
         this.intervalMillis = new long[levels.size()];
+        this.levelSizes = new int[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
             intervalMillis[i] = levels.get(i).getInterval().toMillis();
+            levelSizes[i] = levels.get(i).getSize();
         }
         this.levelEndEpochMs = new AtomicLongArray(levels.size());
 
@@ -174,19 +177,59 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Samples every series into level 0, samples tiles, and notifies the listener. */
     void tick(long epochMs) {
+        long elapsedMs = elapsedSince(0, epochMs);
+        fillMissed(0, epochMs);
+
         Map<String, Double> values = new LinkedHashMap<>();
         for (Map.Entry<String, SeriesSampler> entry : samplers.entrySet()) {
-            double value = entry.getValue().sample(intervalMillis[0]);
+            double value = entry.getValue().sample(elapsedMs);
             level0Rings.get(entry.getKey()).add(value);
             values.put(entry.getKey(), value);
         }
         levelEndEpochMs.set(0, epochMs);
 
         for (TileState tile : tiles.values()) {
-            tile.sample(intervalMillis[0]);
+            tile.sample(elapsedMs);
         }
 
         listener.onTick(epochMs, values, tileValues());
+    }
+
+    /**
+     * Millis of meter activity this sample covers: the time since the level's last
+     * stamped boundary, so a rate/delta derived across a gap is divided by the time
+     * that really passed. Falls back to the nominal interval for the first sample
+     * and for a backwards clock jump.
+     */
+    private long elapsedSince(int level, long epochMs) {
+        long previous = levelEndEpochMs.get(level);
+        return previous > 0 && epochMs > previous ? epochMs - previous : intervalMillis[level];
+    }
+
+    /**
+     * Appends one empty entry per boundary this level slept through (a suspended
+     * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)},
+     * so a silently skipped boundary would shift every older sample one interval
+     * into the future; the spec calls for NaN gaps instead. Capped at the ring size,
+     * beyond which every visible sample is a gap anyway. Listeners see no synthetic
+     * events - clients mirror the same geometry from the event's epoch.
+     */
+    private void fillMissed(int level, long epochMs) {
+        long previous = levelEndEpochMs.get(level);
+        if (previous <= 0 || epochMs <= previous) {
+            return;
+        }
+        long missed = (epochMs - previous) / intervalMillis[level] - 1;
+        int count = (int) Math.min(Math.max(missed, 0), levelSizes[level]);
+        if (level == 0) {
+            for (DoubleRing ring : level0Rings.values()) {
+                for (int i = 0; i < count; i++) ring.add(Double.NaN);
+            }
+        } else {
+            for (StatsRing[] rings : statsRings.values()) {
+                for (int i = 0; i < count; i++) rings[level].add(AggregateStats.EMPTY);
+            }
+        }
     }
 
     /**
@@ -198,6 +241,8 @@ public final class InsightsCollector implements SmartLifecycle {
         if (level < 1 || level >= intervalMillis.length) {
             throw new IllegalArgumentException("level must be in [1, " + (intervalMillis.length - 1) + "]");
         }
+        fillMissed(level, epochMs);
+
         int n = (int) (intervalMillis[level] / intervalMillis[level - 1]);
         Map<String, AggregateStats> entries = new LinkedHashMap<>();
         for (Map.Entry<String, StatsRing[]> entry : statsRings.entrySet()) {

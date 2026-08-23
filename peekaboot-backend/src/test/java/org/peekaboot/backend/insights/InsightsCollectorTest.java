@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,6 +102,69 @@ class InsightsCollectorTest {
         assertThat(snapshot.statValues().get("g").get("min")).containsExactly(100.0);
         assertThat(snapshot.statValues().get("g").get("max")).containsExactly(200.0);
         assertThat(snapshot.statValues().get("g").get("avg")).containsExactly(150.0);
+    }
+
+    @Test
+    void tickAfterMissedBoundariesFillsTheGapWithNaN() {
+        gaugeValue.set(5);
+        collector.tick(10_000);
+        gaugeValue.set(9);
+        collector.tick(40_000); // three intervals later: two boundaries were missed
+
+        LevelSnapshot snapshot = collector.snapshot(0);
+        assertThat(snapshot.count()).isEqualTo(4);
+        assertThat(snapshot.endEpochMs()).isEqualTo(40_000);
+        double[] values = snapshot.tickValues().get("g");
+        assertThat(values[0]).isEqualTo(5.0);
+        assertThat(values[1]).isNaN();
+        assertThat(values[2]).isNaN();
+        assertThat(values[3]).isEqualTo(9.0);
+        // gaps are ring geometry only - no synthetic events reach the listener
+        assertThat(events).containsExactly("tick:5.0", "tick:9.0");
+    }
+
+    @Test
+    void gapLongerThanTheRingFillsAtMostTheRing() {
+        collector.tick(10_000);
+        collector.tick(10_000 + 100 * 10_000L); // a suspend far longer than the 6-slot ring
+
+        LevelSnapshot snapshot = collector.snapshot(0);
+        assertThat(snapshot.count()).isEqualTo(6);
+        assertThat(snapshot.tickValues().get("g")[4]).isNaN();
+        assertThat(snapshot.tickValues().get("g")[5]).isEqualTo(0.0);
+    }
+
+    @Test
+    void rateSampledAfterAGapSpansTheRealElapsedTime() {
+        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), "rate", null, null);
+        InsightsCollector rateCollector = new InsightsCollector(levels, List.of(rate), List.of(),
+                registry, InsightsCollector.Listener.NO_OP);
+        Counter counter = registry.counter("test.counter");
+
+        rateCollector.tick(10_000);   // baseline
+        counter.increment(30);
+        rateCollector.tick(40_000);   // 30 counts over the real 30s, not over one nominal interval
+
+        double[] values = rateCollector.snapshot(0).tickValues().get("r");
+        assertThat(values[3]).isEqualTo(1.0);
+    }
+
+    @Test
+    void rollUpAfterMissedBoundariesFillsTheGapWithEmptyStats() {
+        for (int i = 1; i <= 6; i++) {
+            gaugeValue.set(10);
+            collector.tick(i * 10_000L);
+        }
+        collector.rollUp(1, 60_000);
+        collector.rollUp(1, 240_000); // three intervals later: two boundaries were missed
+
+        LevelSnapshot snapshot = collector.snapshot(1);
+        assertThat(snapshot.count()).isEqualTo(4);
+        assertThat(snapshot.endEpochMs()).isEqualTo(240_000);
+        double[] avgs = snapshot.statValues().get("g").get("avg");
+        assertThat(avgs[0]).isEqualTo(10.0);
+        assertThat(avgs[1]).isNaN();
+        assertThat(avgs[2]).isNaN();
     }
 
     @Test
