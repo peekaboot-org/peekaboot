@@ -307,27 +307,55 @@ function seriesArray(snapshot, key) {
     return snapshot.series[key];
 }
 
+/**
+ * An event is only applicable if it is newer than what the mirrored ring already
+ * holds: a /data snapshot loaded while events were in flight (first subscribe, or
+ * a reconnect resync) already contains them, and appending them again would
+ * duplicate samples and shift the whole history.
+ */
+function isStale(snapshot, event) {
+    return snapshot.endEpochMs > 0 && event.epochMs <= snapshot.endEpochMs;
+}
+
+/**
+ * Boundaries the server skipped between the ring's end and this event. Samples
+ * carry no timestamps - sample i sits (count - 1 - i) intervals before endEpochMs -
+ * so a gap has to be pushed as nulls or every older sample shifts forward in time.
+ * Capped at the ring size; beyond that everything visible is a gap anyway.
+ */
+function missedSamples(snapshot, event) {
+    if (!snapshot.endEpochMs || !snapshot.intervalMs) return 0;
+    const missed = Math.floor((event.epochMs - snapshot.endEpochMs) / snapshot.intervalMs) - 1;
+    return Math.max(0, Math.min(missed, snapshot.size));
+}
+
 function appendTick(event) {
     const snapshot = levels.get(0);
-    if (!snapshot) return;
+    if (!snapshot || isStale(snapshot, event)) return;
     const values = event.values ?? {};
     Object.keys(values).forEach(key => seriesArray(snapshot, key));
-    Object.entries(snapshot.series).forEach(([key, series]) =>
-            pushCapped(series, numberOrNull(values[key]), snapshot.size));
-    snapshot.count = Math.min(snapshot.count + 1, snapshot.size);
+    const missed = missedSamples(snapshot, event);
+    Object.entries(snapshot.series).forEach(([key, series]) => {
+        for (let i = 0; i < missed; i++) pushCapped(series, null, snapshot.size);
+        pushCapped(series, numberOrNull(values[key]), snapshot.size);
+    });
+    snapshot.count = Math.min(snapshot.count + missed + 1, snapshot.size);
     snapshot.endEpochMs = event.epochMs;
 }
 
 function appendRollup(event) {
     const snapshot = levels.get(event.level);
-    if (!snapshot) return;
+    if (!snapshot || isStale(snapshot, event)) return;
     const entries = event.entries ?? {};
     Object.keys(entries).forEach(key => seriesArray(snapshot, key));
+    const missed = missedSamples(snapshot, event);
     Object.entries(snapshot.series).forEach(([key, stats]) => {
-        STAT_NAMES.forEach(name =>
-                pushCapped(stats[name], numberOrNull(entries[key]?.[name]), snapshot.size));
+        STAT_NAMES.forEach(name => {
+            for (let i = 0; i < missed; i++) pushCapped(stats[name], null, snapshot.size);
+            pushCapped(stats[name], numberOrNull(entries[key]?.[name]), snapshot.size);
+        });
     });
-    snapshot.count = Math.min(snapshot.count + 1, snapshot.size);
+    snapshot.count = Math.min(snapshot.count + missed + 1, snapshot.size);
     snapshot.endEpochMs = event.epochMs;
 }
 
