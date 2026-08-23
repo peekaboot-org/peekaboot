@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights.web;
 
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.LogCapture;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -12,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -182,6 +184,57 @@ class InsightsSsePublisherTest {
 
         assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
                 .as("the loop keeps running after a step threw").isEqualTo("tick");
+    }
+
+    @Test
+    void queueOverflowWarnsOncePerEpisode() throws Exception {
+        BlockingQueue<String> broadcasts = new LinkedBlockingQueue<>();
+        AtomicReference<CountDownLatch> gate = new AtomicReference<>(new CountDownLatch(1));
+
+        // Wedging the dispatch loop at a gate we open and close is what makes an
+        // overflow episode reproducible: while the gate is shut nothing drains.
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            void broadcast(String eventName, String json) {
+                try {
+                    gate.get().await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                broadcasts.add(eventName);
+            }
+        };
+        publisher.subscribe();
+
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
+            flood(publisher);
+            assertThat(overflowWarnings(logs)).as("the first overflow episode warns").isEqualTo(1);
+
+            gate.get().countDown();
+            // taking well over half the queue's capacity proves the backlog drained,
+            // so the offers of the next flood start out succeeding again
+            for (int i = 0; i < 200; i++) {
+                assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("backlog drains").isEqualTo("tick");
+            }
+
+            gate.set(new CountDownLatch(1));
+            flood(publisher);
+            assertThat(overflowWarnings(logs)).as("a second episode is not silent").isEqualTo(2);
+        }
+    }
+
+    /** More events than the dispatch queue holds, so a wedged loop makes it overflow. */
+    private static void flood(InsightsSsePublisher publisher) {
+        for (int i = 0; i < 400; i++) {
+            publisher.onTick(i, Map.of("a", 1.0), Map.of());
+        }
+    }
+
+    private static long overflowWarnings(LogCapture logs) {
+        return logs.appender().list.stream()
+                .filter(event -> event.getFormattedMessage().contains("dispatch queue full"))
+                .count();
     }
 
     @Test

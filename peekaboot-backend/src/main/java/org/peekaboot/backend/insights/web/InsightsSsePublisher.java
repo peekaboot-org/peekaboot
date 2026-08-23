@@ -17,7 +17,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 /**
@@ -38,7 +37,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private final ObjectMapper objectMapper;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
-    private final AtomicBoolean queueOverflowWarned = new AtomicBoolean();
+    /**
+     * Guarded by this publisher's monitor, like every other access to the queue:
+     * set when an episode of overflow starts warning, cleared as soon as an offer
+     * succeeds again, so a later episode is never swallowed as a duplicate.
+     */
+    private boolean queueOverflowWarned;
     private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
     private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
     /**
@@ -102,6 +106,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 // delivering it would burst stale history into this fresh client.
                 if (emitters.isEmpty()) {
                     queue.clear();
+                    queueOverflowWarned = false;
                 }
                 emitters.add(emitter);
             }
@@ -206,7 +211,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * <p>Nothing is queued while no one is subscribed: an unwatched app would
      * otherwise fill the queue within the hour and log a "queue full" warning
      * during entirely normal operation. Bounded; on overflow the oldest queued
-     * event is dropped and a warning logged once.
+     * event is dropped and a warning logged once per overflow episode - a stream
+     * that recovers and later floods again has to say so a second time.
      */
     private void enqueue(String eventName, Supplier<String> json) {
         SseEvent event = new SseEvent(eventName, json);
@@ -214,12 +220,15 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             if (emitters.isEmpty()) {
                 return;
             }
-            if (!queue.offer(event)) {
-                queue.poll();
-                queue.offer(event);
-                if (queueOverflowWarned.compareAndSet(false, true)) {
-                    log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
-                }
+            if (queue.offer(event)) {
+                queueOverflowWarned = false;
+                return;
+            }
+            queue.poll();
+            queue.offer(event);
+            if (!queueOverflowWarned) {
+                queueOverflowWarned = true;
+                log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
             }
         }
     }
