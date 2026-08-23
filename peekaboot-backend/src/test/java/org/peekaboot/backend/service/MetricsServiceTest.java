@@ -176,4 +176,26 @@ class MetricsServiceTest {
                 .containsEntry("env", "prod")
                 .containsEntry("region", "us-east");
     }
+
+    /**
+     * Standard Micrometer/Spring tags (area, id, uri, ...) are harmless, but a custom
+     * meter registered by the consuming application can carry an arbitrary tag - the
+     * same conditional risk as a custom HealthIndicator's details.
+     */
+    @Test
+    void getMetrics_masksASensitiveShapedTag() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+
+        Gauge.builder("custom.upstream.calls", () -> 1)
+                .tags(Tags.of("api-key", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))
+                .register(registry);
+
+        MetricsService service = new MetricsService(registry);
+
+        MetricsInfo result = service.getMetrics();
+
+        assertThat(result.metrics().get(0).measurements().get(0).tags())
+                .containsEntry("api-key", "******")
+                .containsEntry("region", "eu-west-1");
+    }
 }

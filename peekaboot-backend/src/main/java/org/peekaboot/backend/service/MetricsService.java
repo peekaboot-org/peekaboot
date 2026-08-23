@@ -7,6 +7,8 @@ import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TagMasker;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +25,7 @@ public class MetricsService {
 
     @Nullable
     private final MeterRegistry meterRegistry;
+    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     public MetricsService(@Nullable MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
@@ -62,13 +65,13 @@ public class MetricsService {
 
             List<MetricMeasurement> measurements = new ArrayList<>();
             for (Meter meter : meters) {
-                Map<String, String> tags = meter.getId().getTags().stream()
+                Map<String, String> tags = tagMasker.mask(meter.getId().getTags().stream()
                         .collect(Collectors.toMap(
                                 Tag::getKey,
                                 Tag::getValue,
                                 (v1, v2) -> v1,
                                 LinkedHashMap::new
-                        ));
+                        )));
 
                 List<MetricStatistic> statistics = StreamSupport.stream(meter.measure().spliterator(), false)
                         .map(measurement -> new MetricStatistic(
