@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
+import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
 import org.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.springframework.beans.factory.ObjectProvider;
@@ -48,6 +49,8 @@ public class PeekabootActuatorService {
 
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
+    private final ActuatorRawMapper rawMapper;
+
 
     public PeekabootActuatorService(
         ApplicationContext context,
@@ -56,8 +59,10 @@ public class PeekabootActuatorService {
         ObjectProvider<PathMapper> pathMappers,
         ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
         ObjectProvider<OperationInvokerAdvisor> advisors,
-        ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
+        ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider,
+        ActuatorRawMapper rawMapper) {
 
+        this.rawMapper = rawMapper;
         this.discoverer = new WebEndpointDiscoverer(
             context,
             parameterMapper,
@@ -124,8 +129,13 @@ public class PeekabootActuatorService {
         return results;
     }
 
+    /**
+     * Backs GET /peekaboot/api/actuator/all/raw. Unlike {@link #getRawData()}, this masks -
+     * getRawData() itself stays unmasked for {@link #getInsightsData()}'s and its own
+     * lower-level callers, which route their masking through the typed mappers instead.
+     */
     public ActuatorRawResponse getData() {
-        return ActuatorRawResponse.wrap(getRawData());
+        return ActuatorRawResponse.wrap(rawMapper.maskRawData(getRawData()));
     }
 
 

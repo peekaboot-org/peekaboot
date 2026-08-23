@@ -103,6 +103,27 @@ class PeekabootActuatorServiceTest {
         connectionParams.values().forEach(paramInfo ->
                 assertThat((Map<String, Object>) paramInfo).containsKeys("value", "source"));
         assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value")).isEqualTo("MEMORY");
+
+        // getRawData() is the unmasked, low-level accessor - PeekabootActuatorServiceTest's
+        // sibling assertions on getData() (below) are what prove the HTTP-facing raw
+        // endpoint actually masks; this one exists to pin that getRawData() itself still
+        // doesn't, so a future change can't accidentally move masking to the wrong layer.
+        assertThat(((Map<String, Object>) connectionParams.get("password")).get("value")).isEqualTo("hunter2");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getDataMasksSensitiveConnectionParamsUnlikeGetRawData() {
+        // getData() backs GET /peekaboot/api/actuator/all/raw - the endpoint the design
+        // spec calls out as a full masking bypass. This proves it no longer is one.
+        Map<String, Object> raw = service.getData().spring().actuator();
+
+        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
+        Map<String, Object> connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
+
+        assertThat(connectionParams.get("password")).isEqualTo("******");
+        // A non-sensitive key survives untouched, confirming this isn't a blanket wipe.
+        assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value")).isEqualTo("MEMORY");
     }
 
     @TestConfiguration
@@ -139,7 +160,9 @@ class PeekabootActuatorServiceTest {
             when(metadata.getDataSourceName()).thenReturn("primary");
             when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
             when(metadata.getConnectionParams()).thenReturn(
-                    Map.of("MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY")));
+                    Map.of(
+                            "MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY"),
+                            "password", new JdbcProperty(PropertySource.QUERY, "hunter2")));
             return List.of(metadata);
         }
     }
