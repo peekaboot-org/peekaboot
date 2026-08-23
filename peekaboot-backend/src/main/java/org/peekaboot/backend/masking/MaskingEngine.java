@@ -32,21 +32,37 @@ import java.util.regex.Pattern;
 public final class MaskingEngine {
 
     private static final List<List<String>> KEY_NAME_TOKEN_RULES = MaskingRules.KEY_NAME_RULES.stream()
-        .map(MaskingEngine::tokenize)
+        .map(rule -> tokenize(rule, true))
         .toList();
 
     /**
      * True if {@code key} names something structurally sensitive - matched
      * case-insensitively, anywhere in the key, on a separator boundary (dot, hyphen,
      * underscore or a camelCase transition all count).
+     *
+     * <p>The key is tokenized two ways and a rule match on either is enough. The
+     * camelCase-aware tokenization ({@link #tokenize(String, boolean)} with splitting on)
+     * catches a genuine no-separator compound name ("clientSecret"). On its own it would
+     * also mis-split an inconsistently-cased spelling of a single-word rule -
+     * "PassWord" becomes ["pass", "word"], neither of which is "password" - because it
+     * cannot tell "a new word starts here" from "this word merely has a stray internal
+     * capital", and Spring's relaxed binding means the caller doesn't control how an
+     * external property source spells a key. The separator-only tokenization (splitting
+     * off) doesn't attempt that distinction at all: it lowercases first, so "PassWord"
+     * collapses to the single token "password" and matches directly. Both tokenizations
+     * still require an exact, whole-token match - never a substring - so this fallback
+     * doesn't reopen the over-matching a bare substring check would cause (e.g.
+     * "passwordless" staying a distinct token from "password" either way).
      */
     public boolean isSensitiveKey(String key) {
         if (key == null || key.isBlank()) {
             return false;
         }
-        List<String> tokens = tokenize(key);
+        List<String> camelAwareTokens = tokenize(key, true);
+        List<String> separatorOnlyTokens = tokenize(key, false);
         for (List<String> ruleTokens : KEY_NAME_TOKEN_RULES) {
-            if (containsSubsequence(tokens, ruleTokens)) {
+            if (containsSubsequence(camelAwareTokens, ruleTokens)
+                    || containsSubsequence(separatorOnlyTokens, ruleTokens)) {
                 return true;
             }
         }
@@ -116,13 +132,19 @@ public final class MaskingEngine {
     }
 
     /**
-     * Splits {@code text} into lowercase tokens on dots, hyphens, underscores, any other
-     * non-alphanumeric character, and camelCase transitions (a lowercase/digit followed
-     * by an uppercase letter).
+     * Splits {@code text} into lowercase tokens on dots, hyphens, underscores and any
+     * other non-alphanumeric character. When {@code splitCamelCaseBoundaries} is true, a
+     * boundary is also inserted at a camelCase transition (a lowercase letter or digit
+     * followed by an uppercase letter) before lowercasing, so a genuine no-separator
+     * compound like "clientSecret" splits into ["client", "secret"]. When false, no such
+     * boundary is inserted, so a single word spelled with inconsistent casing - "PassWord"
+     * - stays one token, "password", instead of being mis-split into ["pass", "word"].
      */
-    private static List<String> tokenize(String text) {
-        String withCamelBoundaries = text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-");
-        String[] parts = withCamelBoundaries.toLowerCase(Locale.ROOT).split("[^a-z0-9]+");
+    private static List<String> tokenize(String text, boolean splitCamelCaseBoundaries) {
+        String normalized = splitCamelCaseBoundaries
+            ? text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-")
+            : text;
+        String[] parts = normalized.toLowerCase(Locale.ROOT).split("[^a-z0-9]+");
         List<String> tokens = new ArrayList<>(parts.length);
         for (String part : parts) {
             if (!part.isEmpty()) {

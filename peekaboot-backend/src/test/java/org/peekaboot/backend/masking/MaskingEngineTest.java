@@ -83,6 +83,23 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldNotMatchNegativeCases(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
+
+        // "password" must not match inside "passwordless" - there is no boundary between
+        // them, so this pins that the whole-token check (both tokenizations) rejects a
+        // partial match rather than falling back to a substring check.
+        @ParameterizedTest
+        @ValueSource(strings = {"passwordless", "app.passwordless.enabled"})
+        void isSensitiveKey_shouldNotMatchPasswordAsAPrefixOfALongerWord(String key) {
+            assertThat(engine.isSensitiveKey(key)).isFalse();
+        }
+
+        // "oauth2" must not match the bare "auth" rule - it is one token, not "auth"
+        // followed by a separator, so a whole-token check must reject it.
+        @Test
+        void isSensitiveKey_shouldNotMatchAuthAsASubstringOfOauth2() {
+            assertThat(engine.isSensitiveKey(
+                "spring.security.oauth2.client.registration.google.client-id")).isFalse();
+        }
     }
 
     @Nested
@@ -111,6 +128,24 @@ class MaskingEngineTest {
         @Test
         void isSensitiveKey_shouldReturnFalseForBlankKey() {
             assertThat(engine.isSensitiveKey("  ")).isFalse();
+        }
+    }
+
+    @Nested
+    class MixedCaseSpellings {
+
+        // A camelCase-boundary tokenizer alone would mis-split these: "PassWord" becomes
+        // ["pass", "word"], neither of which is the rule token "password". Spring's relaxed
+        // binding means the caller does not control how an external property source spells
+        // a key, so a rule word with a stray internal capital must still match.
+        @Test
+        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfPassword() {
+            assertThat(engine.isSensitiveKey("spring.datasource.PassWord")).isTrue();
+        }
+
+        @Test
+        void isSensitiveKey_shouldMatchAMixedCaseSpellingOfAnotherSingleWordRule() {
+            assertThat(engine.isSensitiveKey("app.SeCreT")).isTrue();
         }
     }
 
@@ -169,7 +204,8 @@ class MaskingEngineTest {
 
         @Test
         void maskValue_shouldMaskGcpApiKey() {
-            String value = "key=AIzaSyDaGmWKa4JsXZ-HjGw7ISLan_amDpqx1x0";
+            // Obviously fake, unlike a real GCP key: EXAMPLE plus zero-padding.
+            String value = "key=AIzaEXAMPLE0000000000000000000000000000";
 
             String result = engine.maskValue(value);
 
