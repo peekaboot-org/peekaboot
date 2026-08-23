@@ -195,6 +195,12 @@ class ScreenshotCapture extends PlaywrightTestBase {
             throw new IllegalStateException("no traceId on the /orders toolbar payload - "
                   + "cannot deep-link the flagship trace-detail screenshot");
         }
+        // The toolbar payload above is read the instant the response committed; the
+        // /orders trace's ~80+ spans arrive at the store asynchronously afterward via
+        // Spring's event listener. No element on this page flips state when that finishes,
+        // so there's nothing to waitForSelector/waitForFunction on - a fixed pause is the
+        // only option to let span capture settle before the dashboard/trace-detail
+        // screenshots below read this trace back.
         page.waitForTimeout(500);
     }
 }

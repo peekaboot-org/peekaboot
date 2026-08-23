@@ -244,7 +244,8 @@ Auto-configuration classes that wire everything together.
 
 ### Conditional Loading
 
-Auto-configuration uses Spring Boot conditionals:
+Auto-configuration uses Spring Boot conditionals. Only `DevToolbarAutoConfiguration` and
+`TracingInterceptorAutoConfiguration` carry the servlet guard:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -253,13 +254,25 @@ Auto-configuration uses Spring Boot conditionals:
 @ConditionalOnClass(TraceStore.class)
 ```
 
+`PeekabootAutoConfiguration` &mdash; the class that component-scans the servlet-only
+`PeekabootWebConfig` and registers the controllers, services and actuator wiring &mdash;
+does **not** carry `@ConditionalOnWebApplication`, nor do
+`PeekabootLifecycleAutoConfiguration`, `PeekabootTracingAutoConfiguration` or
+`OtelTracingAutoConfiguration`. See [Known defects](#known-defects) below.
+
 There is no `matchIfMissing` fallback for `peekaboot.enabled` — the default
 comes from `PeekabootDefaultsEnvironmentPostProcessor`, which detects local
 development and adds the property with lowest precedence.
 
 ### Default Properties
 
-`PeekabootDefaultsEnvironmentPostProcessor` loads `peekaboot-defaults.yml` with lowest precedence, enabling full observability while allowing apps to override.
+`PeekabootDefaultsEnvironmentPostProcessor` loads two yml resources with lowest
+precedence, both overridable by an app's own `application.yml`:
+
+- `peekaboot-defaults.yml` &mdash; enables full observability, but only when Peekaboot is
+  enabled; skipped entirely otherwise.
+- `peekaboot-no-push-defaults.yml` &mdash; applies unconditionally, even when Peekaboot
+  itself is disabled, to keep telemetry from leaving the process by default.
 
 ## Tracing Integration
 
@@ -333,21 +346,26 @@ SpanData
 ├── startTime, endTime, duration
 ├── tags: Map<String, String>
 ├── events: List<Event>
-└── errorMessage, errorClass
+├── errorMessage, errorClass
+├── remoteServiceName, remoteIp, remotePort
+├── links: List<LinkData>
+└── creationOrder: long
 ```
 
 ### Insights Domain
 
 ```
 ActuatorInsightsResponse
-├── health: HealthInfo
 ├── application: ApplicationInfo
+├── runtime: RuntimeInfo
+├── dataSources: List<DataSourceInfo>
+├── health: HealthInfo
 ├── environment: EnvironmentInfo
 ├── loggers: LoggersInfo
 ├── flyway: FlywayInfo
-├── scheduledTasks: ScheduledTasksInfo
 ├── config: ConfigInfo
-└── traces: List<TraceInfo>
+├── scheduledTasks: ScheduledTasksInfo
+└── server: ServerInfo
 ```
 
 ## Testing
@@ -417,3 +435,45 @@ class DevToolbarAutoConfigurationIntegrationTest {
 ```
 
 The `afterName` attribute (string-based) is used instead of class reference to avoid compile-time dependency on the tracing autoconfigure module.
+## Known defects
+
+Recorded here so a maintainer sees them without having to rediscover them. Each entry
+names the class at fault, the remedy, and the site page that carries the user-visible
+symptom.
+
+1. **No secret masking by default on the Environment/Config tabs.** Spring Boot 4.1
+   registers no default `SanitizingFunction`. Combined with Peekaboot's own
+   `show-values: always` for `env` and `configprops` (set in `peekaboot-defaults.yml`,
+   loaded by `PeekabootDefaultsEnvironmentPostProcessor`), the Environment and Config
+   tabs render every property value &mdash; including secrets &mdash; verbatim on an
+   unauthenticated endpoint. Remedy: ship a default `SanitizingFunction` bean, or drop
+   the `show-values: always` defaults. Symptom documented at
+   [peekaboot.org/docs/security](https://peekaboot.org/docs/security/#masking).
+2. **`PeekabootAutoConfiguration` is missing the servlet guard.** Unlike
+   `DevToolbarAutoConfiguration` and `TracingInterceptorAutoConfiguration`,
+   `PeekabootAutoConfiguration` carries no `@ConditionalOnWebApplication(Type.SERVLET)`,
+   yet it component-scans the servlet-only `PeekabootWebConfig`
+   (a `WebMvcConfigurer`). A non-servlet application (WebFlux, or no web application at
+   all) should fail fast at startup rather than silently staying inactive. Remedy: add
+   the annotation. Symptom documented at
+   [peekaboot.org/docs/requirements](https://peekaboot.org/docs/requirements/) and
+   [peekaboot.org/docs/how-activation-works](https://peekaboot.org/docs/how-activation-works/).
+3. **`max-spans-per-trace` truncates before deduplication.**
+   `PeekabootTracingProperties.maxSpansPerTrace` (default 100) caps span storage in
+   `InMemoryTraceStore` at write time, before `SpanDeduplicator` ever runs. A query-heavy
+   endpoint can lose the spans that would have triggered `HIGH_QUERY_COUNT` before
+   dedup gets a chance to collapse the duplicate JDBC/`datasource-proxy` span pairs that,
+   left uncollapsed, roughly double stored span volume &mdash; so the cap bites about
+   twice as early as its number suggests. Remedy: run deduplication (or at least count
+   distinct queries) before truncating, not after. Symptom documented at
+   [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/#span-deduplication).
+4. **Scheduled-job classification substring-matches the span name.**
+   `TraceTreeMapper.detectRootActionType()` classifies `SCHEDULED_JOB` only when the root
+   span's name contains "schedule", "cron", "timer" or "job". Whether a `@Scheduled`
+   method is recognised then depends on its bean/method name and on whether Spring's own
+   scheduled-task observation wraps it as the root span: `task
+   scheduler.fixedDelay` matches on "schedul", while `task
+   orderReconciler.reconcileOrders` matches nothing and classifies `INTERNAL`. Remedy:
+   key classification on span tags (or Spring's scheduled-task observation type) instead
+   of a name substring. Symptom documented at
+   [peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#root-action-type).

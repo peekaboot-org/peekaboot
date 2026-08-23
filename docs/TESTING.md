@@ -66,9 +66,11 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     `peekaboot-testing-app`.
   - `Mockito is currently self-attaching to enable the inline-mock-maker...` plus the JDK's
     4-line `WARNING: A Java agent has been loaded dynamically...` block, in
-    `peekaboot-testing-app` only — the static `-javaagent` fix applied to `peekaboot-backend`'s
-    and `peekaboot-spring-boot-autoconfigure`'s surefire `argLine` (above) was never applied to
-    this module.
+    `peekaboot-testing-app` only — `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure`
+    each pin their surefire `argLine` to
+    `-javaagent:${org.mockito:mockito-core:jar}`, loading Mockito's inline mock-maker as a
+    static agent instead of letting it self-attach; that fix was never applied to this
+    module's `pom.xml`.
   - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than
     the version Flyway has been verified with. The latest verified version of H2 is
     <version>.` — a Flyway/H2 version-compatibility `WARN`, printed once per Spring context

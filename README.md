@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark.png" width="64" height="64" alt="Peekaboot">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark-dark.png">
+    <img src="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark.png" width="64" height="64" alt="Peekaboot">
+  </picture>
 </p>
 
 # Peekaboot
@@ -32,8 +35,9 @@ on — open the dashboard at `http://localhost:8080/peekaboot/`.
 
 ## What you get
 
-- App-insights dashboard: health, environment, config, Flyway, loggers, scheduled tasks and
-  metrics, all read from Actuator in-process — nothing exposed under `/actuator/**`
+- App-insights dashboard: health, environment, config, Flyway, loggers and scheduled tasks,
+  read from Actuator in-process, plus metrics read directly from Micrometer's
+  `MeterRegistry` — nothing exposed under `/actuator/**`
 - In-memory request tracing via Micrometer/OpenTelemetry, no collector to run
 - A dev toolbar (`peekaboot.dev-toolbar: true`) that also correlates logs to each trace and
   captures full request/response detail — neither is captured without it
@@ -71,9 +75,10 @@ cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
 [`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
-[`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms, and
+[`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms,
 [`peekaboot-frontend/README.md`](peekaboot-frontend/README.md) for the frontend's design
-system.
+system, and [`peekaboot-testing-app/README.md`](peekaboot-testing-app/README.md) for the
+sample app's demo scenarios and the screenshot-capture command.
 
 ## Requirements
 

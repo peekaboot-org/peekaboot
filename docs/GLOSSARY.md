@@ -23,39 +23,41 @@ The first span in a trace with no parent within the trace. The root span determi
 
 ### Root Action Type
 The category of work initiated by the root span. Used to classify and filter traces.
-`detectRootActionType()` checks these rules in priority order and returns the first
-match — a span matching more than one row always gets the one checked first. Note
-`HTTP_REQUEST` occupies two priorities: the tag-based check (2) fires before Scheduled
-Job/Database are even considered; the bare-`SERVER` fallback (6) only fires after every
-other rule, including Scheduled Job's name check, has already failed. E.g. a `CONSUMER`
-span named `...job` is `MESSAGE_CONSUMER` (priority 1), never `SCHEDULED_JOB`.
-
-| Priority | Value | Detection |
-|---|-------|-----------|
-| 1 | `MESSAGE_CONSUMER` | CONSUMER kind or messaging.* tag |
-| 2 | `HTTP_REQUEST` | SERVER kind + http.* tag |
-| 3 | `RPC_CALL` | SERVER kind + rpc.* tag |
-| 4 | `SCHEDULED_JOB` | Name contains "schedule", "cron", "timer", "job" |
-| 5 | `DATABASE` | CLIENT kind + db.* tag |
-| 6 | `HTTP_REQUEST` (fallback) | SERVER kind, no other tag matched |
-| 7 | `INTERNAL` | null kind |
-| 8 | `UNKNOWN` | Fallback |
+`detectRootActionType()` checks a fixed set of rules in priority order and returns the
+first match — a span matching more than one row always gets the one checked first, not
+the most specific-sounding one. See
+[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#root-action-type) for
+the full priority table and the classification gotchas (`HTTP_REQUEST` occupying two
+priorities, `SCHEDULED_JOB` being a name-substring match checked mid-list, and the
+resulting `INTERNAL` misclassification of scheduler-fired jobs whose bean/method name
+doesn't contain "schedule"/"cron"/"timer"/"job") instead of duplicating them here.
 
 **Usage:** `RootActionType` enum, `rootActionType` field, `detectRootActionType()`
 
 ### Root Operation
-The name of the root span, typically identifying the specific endpoint, scheduled method, or operation being performed. This is the value used for filtering traces by a specific operation.
+The root span's raw name (`rootSpanData.name()`), exactly as the instrumentation that
+created the span wrote it &mdash; not reformatted by Peekaboot. This is the value used
+for filtering traces by a specific operation.
 
 **Examples:**
-- HTTP: `"GET /api/users"` or `"UserController.getUsers"`
-- Scheduled: `"net.example.TaskService.processItems"`
+- HTTP: `"http get /orders"` or `"http get /api/orders/{id}/report"`
+- Scheduled (direct call to the `@Observed` method): `"order.reconcile.job"`
+- Scheduled (fired by Spring's scheduler): `"task orderReconciler.reconcileOrders"`
 
 **Usage:** `rootOperation` field, derived from `rootSpan.name()`
 
 ### Target (Scheduled Tasks)
-In the Scheduled Tasks tab, "target" refers to the fully qualified method name of the scheduled task (e.g., `net.example.TaskService.processItems`). This corresponds to the `rootOperation` when filtering traces for that scheduled job.
+In the Scheduled Tasks tab, "target" refers to the fully qualified method name of the
+scheduled task (e.g., `net.example.TaskService.processItems`), read from Actuator's
+`scheduledtasks` endpoint.
 
-**Relationship:** A scheduled task's `target` becomes the trace's `rootOperation` when that task executes.
+**Relationship:** A scheduled task's `target` does **not** become the trace's
+`rootOperation`. They're sourced independently and never match in practice: `target` is
+the fully-qualified method name, while `rootOperation` is the root span's own name (see
+above) &mdash; typically `task <bean>.<method>` when Spring's scheduler fired it. This
+mismatch is why the Scheduled Tasks tab cannot link a task to its trace runs; see
+[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/) for the trace-side
+vocabulary.
 
 ## Data Representations
 
@@ -87,15 +89,11 @@ A detected problem or concern within a span, identified by analysis.
 **Usage:** `SpanIssue` record, `issues` list
 
 ### Issue Type
-Category of detected issue.
-
-| Value | Description | Default Threshold |
-|-------|-------------|-------------------|
-| `SLOW` | Span exceeds slow threshold | 100ms |
-| `VERY_SLOW` | Span exceeds very slow threshold | 500ms |
-| `ERROR` | Span has error status | - |
-| `SLOW_QUERY` | Database query too slow | 50ms |
-| `HIGH_QUERY_COUNT` | Too many queries in a span (5) or in the whole trace (20) | 5 / 20 queries |
+Category of detected issue: `SLOW`, `VERY_SLOW`, `ERROR`, `SLOW_QUERY`, and
+`HIGH_QUERY_COUNT`. See
+[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#issues) for what each
+one fires on, and [peekaboot.org/docs/configuration](https://peekaboot.org/docs/configuration/)
+for the current default thresholds and their property names.
 
 **Usage:** `IssueType` enum
 

@@ -20,6 +20,15 @@ import org.springframework.stereotype.Component;
  * {@code contextualName} overrides it, and {@code detectRootActionType()} classifies a
  * trace as {@code SCHEDULED_JOB} from the root span's <em>name</em> containing "job" -
  * {@code name} alone only renames the metric.
+ *
+ * <p>That classification only holds for a <em>direct</em> call to
+ * {@link #reconcileOrders()}, where this method's own {@code @Observed} span is the
+ * trace root. When Spring's scheduler fires the method instead, Spring's own scheduled-
+ * task observation wraps it and becomes the root span, named {@code task
+ * orderReconciler.reconcileOrders} - a name that matches no classifier substring, so the
+ * trace classifies {@code INTERNAL} instead. This is a known product defect: see
+ * {@code docs/ARCHITECTURE.md}'s "Known defects" section and
+ * <a href="https://peekaboot.org/docs/concepts/">peekaboot.org/docs/concepts</a>.
  */
 @Component
 public class OrderReconciler {

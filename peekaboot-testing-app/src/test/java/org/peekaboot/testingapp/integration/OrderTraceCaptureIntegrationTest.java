@@ -160,6 +160,18 @@ class OrderTraceCaptureIntegrationTest {
                 .isEqualTo("HTTP_REQUEST");
     }
 
+    /**
+     * Calls {@link OrderReconciler#reconcileOrders()} directly rather than waiting for
+     * Spring's scheduler to fire it, so this method's own {@code @Observed} span (named
+     * {@code order.reconcile.job}) is the trace root and classifies SCHEDULED_JOB. When
+     * Spring's scheduler fires the same method instead, Spring's own scheduled-task
+     * observation wraps it and becomes the root span (named
+     * {@code task orderReconciler.reconcileOrders}), which matches no classifier
+     * substring and classifies INTERNAL instead - a known product defect, see
+     * {@code docs/ARCHITECTURE.md}'s "Known defects" section. This test exercises only
+     * the direct-invocation shape; it guards the {@code contextualName} mechanism that
+     * makes SCHEDULED_JOB classification possible at all, not scheduler-fired capture.
+     */
     @Test
     void reconciliationJobIsCapturedAsAScheduledJobTrace() {
         reconciler.reconcileOrders();
@@ -167,8 +179,9 @@ class OrderTraceCaptureIntegrationTest {
         JsonNode trace = traces.awaitTraceInBucket("all", "order.reconcile.job");
 
         assertThat(trace.path("rootActionType").asString(""))
-                .as("a trace whose root span is the reconciliation job must classify as "
-                  + "SCHEDULED_JOB, or the Scheduled Tasks tab cannot link to its runs")
+                .as("a direct call makes reconcileOrders()'s own @Observed span the "
+                  + "trace root, which must classify SCHEDULED_JOB; this does not hold "
+                  + "for the scheduler-fired shape, which classifies INTERNAL")
                 .isEqualTo("SCHEDULED_JOB");
     }
 
