@@ -19,10 +19,11 @@ import java.util.Map;
  * is later read, so the per-trace span cap counts real work rather than the
  * double-instrumented artifacts {@link SpanDuplicateMatcher} identifies. This matters because
  * spans arrive one at a time, in the order the OTel {@code BatchSpanProcessor} exports them -
- * which, for causally nested spans, is child-before-parent (a span cannot finish, and so
- * cannot export, before the ancestor that contains it). A duplicate span is a direct child of
- * the real span it duplicates, so in the common case the duplicate arrives *before* the real
- * span it needs to be compared against even exists in the bundle yet.
+ * which, for causally nested spans, is child-before-parent - a parent span's duration fully
+ * contains its children's, so a child always ends, and so exports, before the ancestor
+ * containing it does. A duplicate span is a direct child of the real span it duplicates, so
+ * in the common case the duplicate arrives *before* the real span it needs to be compared
+ * against even exists in the bundle yet.
  *
  * <p>The fold below therefore checks both directions on every insertion: does the arriving
  * span turn out to duplicate its own already-stored parent (the uncommon ordering), and does
