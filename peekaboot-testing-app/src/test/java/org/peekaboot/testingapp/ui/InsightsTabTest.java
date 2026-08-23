@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Request;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -50,5 +52,41 @@ class InsightsTabTest extends PlaywrightTestBase {
         List<String> labels = (List<String>) options;
 
         assertThat(labels).hasSize(3);
+    }
+
+    @Test
+    void chartsRenderOnlyInViewportAndLazilyBelowFold() {
+        page.setViewportSize(1000, 600);
+        openInsights();
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+
+        // the last panel starts below the fold in this viewport -> no chart instantiated yet
+        String lastPanel = "#insights-panels .pk-insight-panel[data-panel-id='log-events']";
+        assertThat(page.locator(lastPanel + " canvas").count()).isZero();
+
+        page.locator(lastPanel).scrollIntoViewIfNeeded();
+        page.waitForSelector(lastPanel + " canvas");
+    }
+
+    @Test
+    void tickPushBlinksTileValue() {
+        openInsights();
+
+        // the test profile ticks every 250ms - a pushed value must retrigger the blink class
+        page.waitForSelector("#insights-tiles [data-tile-id='uptime'] .pk-blink",
+                new Page.WaitForSelectorOptions().setTimeout(5000));
+    }
+
+    @Test
+    void switchingGlobalLevelRefetchesDataAndRebuildsCharts() {
+        openInsights();
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+
+        Request request = page.waitForRequest("**/api/insights/data?level=1",
+                () -> page.selectOption("#insights-level", "1"));
+
+        assertThat(request.url()).contains("level=1");
+        // the rebuilt chart (min/max bands + avg) must come back up on the new level
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
     }
 }

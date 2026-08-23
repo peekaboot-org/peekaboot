@@ -28,5 +28,7 @@ export function createClient({basePath = '/peekaboot'} = {}) {
         return generations.get(path) === generation ? body : null;
     }
 
-    return {get};
+    // basePath is exposed for callers that cannot go through get(), e.g. the
+    // insights tab's EventSource
+    return {get, basePath};
 }

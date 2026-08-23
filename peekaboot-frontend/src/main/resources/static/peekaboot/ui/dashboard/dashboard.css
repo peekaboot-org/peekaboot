@@ -466,10 +466,11 @@
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
 .pk-metric__stat-value { font-family: var(--pk-font-mono); font-weight: 600; color: var(--pk-text-strong); }
 
-/* Insights tab: toolbar, tiles row and panel cards. Chart rendering (uPlot, mounted
-   into .pk-insight-chart) and the SSE-driven .pk-insight-current/.pk-blink updates
-   are wired in the follow-up task - the styles below cover the shell this task
-   renders. */
+/* Insights tab: toolbar, tiles row and panel cards. uPlot mounts into
+   .pk-insight-chart and brings its own stylesheet (vendor/uplot/uplot.min.css,
+   lazy-loaded with the library); only the legend is re-tuned here to sit in the
+   card's type scale. .pk-blink is retriggered on every tile/readout value that
+   an SSE tick actually changed. */
 #insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
 #insights-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--pk-space-md); margin: var(--pk-space-md) 0; }
 .pk-insight-tile { padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
@@ -481,6 +482,11 @@
 .pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
 .pk-insight-current { margin-left: auto; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
 .pk-insight-chart { min-height: 180px; }
+.pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-insight-chart .u-legend th { font-weight: 500; }
+/* min/max band edges and percentile hairlines take their panel series' colour and
+   would otherwise repeat every label five times over (see insights-chart.js) */
+.pk-insight-chart .u-legend tr.pk-insight-legend-muted { display: none; }
 @keyframes pk-insight-blink { from { background-color: var(--pk-primary-light); } to { background-color: transparent; } }
 .pk-blink { animation: pk-insight-blink 0.6s ease-out; }
 
