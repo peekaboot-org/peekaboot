@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
+import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -59,6 +61,9 @@ class OrderTraceCaptureIntegrationTest {
 
     @Autowired
     private OrderReconciler reconciler;
+
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
 
     private TraceApiClient traces;
 
@@ -161,28 +166,69 @@ class OrderTraceCaptureIntegrationTest {
     }
 
     /**
-     * Calls {@link OrderReconciler#reconcileOrders()} directly rather than waiting for
-     * Spring's scheduler to fire it, so this method's own {@code @Observed} span (named
-     * {@code order.reconcile.job}) is the trace root and classifies SCHEDULED_JOB. When
-     * Spring's scheduler fires the same method instead, Spring's own scheduled-task
-     * observation wraps it and becomes the root span (named
-     * {@code task orderReconciler.reconcileOrders}), which matches no classifier
-     * substring and classifies INTERNAL instead - a known product defect, see
-     * {@code docs/ARCHITECTURE.md}'s "Known defects" section. This test exercises only
-     * the direct-invocation shape; it guards the {@code contextualName} mechanism that
-     * makes SCHEDULED_JOB classification possible at all, not scheduler-fired capture.
+     * Calls {@link OrderReconciler#reconcileOrders()} directly rather than going through
+     * Spring's scheduler, so this method's own {@code @Observed} span (named
+     * {@code order.reconcile.job}) is the trace root. That span carries only its own
+     * {@code class}/{@code method} tags, not the {@code code.function}/
+     * {@code code.namespace} pair Spring's {@code DefaultScheduledTaskObservationConvention}
+     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB. Before this
+     * defect was fixed it did, purely because the span's name happened to contain "job";
+     * this test now guards against that false positive recurring.
+     * {@link #reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace()} covers
+     * the shape that does classify SCHEDULED_JOB - the one the defect was actually about.
      */
     @Test
-    void reconciliationJobIsCapturedAsAScheduledJobTrace() {
+    void directReconciliationCallDoesNotClassifyAsScheduledJob() {
         reconciler.reconcileOrders();
 
         JsonNode trace = traces.awaitTraceInBucket("all", "order.reconcile.job");
 
         assertThat(trace.path("rootActionType").asString(""))
-                .as("a direct call makes reconcileOrders()'s own @Observed span the "
-                  + "trace root, which must classify SCHEDULED_JOB; this does not hold "
-                  + "for the scheduler-fired shape, which classifies INTERNAL")
+                .as("a direct call carries none of Spring's scheduled-task tags, so its "
+                  + "root span must not be misclassified as SCHEDULED_JOB just because "
+                  + "its name contains \"job\"")
+                .isEqualTo("INTERNAL");
+    }
+
+    /**
+     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes every
+     * {@code fixedDelay}, instead of waiting on the timer: {@code reconcileOrders()} is
+     * scheduled every 2 minutes, far past what an integration test should block on. The
+     * {@link ScheduledTaskHolder} bean (Spring's {@code ScheduledAnnotationBeanPostProcessor})
+     * exposes the {@link ScheduledTask} registered for every {@code @Scheduled} method;
+     * running its {@code Runnable} here is the real production code path, not a stand-in
+     * for it - it builds the same {@code ScheduledTaskObservationContext}, sets the same
+     * {@code code.function}/{@code code.namespace} tags, and names the root span
+     * {@code task orderReconciler.reconcileOrders}, exactly as a live scheduler firing it
+     * would.
+     */
+    @Test
+    void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
+        runScheduledReconciliation();
+
+        JsonNode trace = traces.awaitTraceInBucket("all", "task orderReconciler.reconcileOrders");
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("Spring's scheduled-task observation wraps the call and becomes the "
+                  + "trace root when the scheduler fires it; that root span's "
+                  + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
+    }
+
+    private void runScheduledReconciliation() {
+        // Task#toString() delegates down to the underlying ScheduledMethodRunnable's
+        // toString() ("<declaringClass>.<method>"); getTask() itself wraps the runnable
+        // in an outcome-tracking decorator, so matching on the runnable's type directly
+        // isn't an option.
+        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
+        scheduledTaskHolder.getScheduledTasks().stream()
+                .map(ScheduledTask::getTask)
+                .filter(task -> taskDescription.equals(task.toString()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(
+                        "OrderReconciler#reconcileOrders is not registered as a scheduled task"))
+                .getRunnable()
+                .run();
     }
 
     private static List<String> spanNames(JsonNode trace) {

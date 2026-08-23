@@ -17,18 +17,17 @@ import org.springframework.stereotype.Component;
  *
  * <p>Both {@code name} and {@code contextualName} are set: Micrometer names the span
  * after the annotated method ({@code OrderReconciler#reconcileOrders}) unless
- * {@code contextualName} overrides it, and {@code detectRootActionType()} classifies a
- * trace as {@code SCHEDULED_JOB} from the root span's <em>name</em> containing "job" -
- * {@code name} alone only renames the metric.
+ * {@code contextualName} overrides it.
  *
- * <p>That classification only holds for a <em>direct</em> call to
- * {@link #reconcileOrders()}, where this method's own {@code @Observed} span is the
- * trace root. When Spring's scheduler fires the method instead, Spring's own scheduled-
- * task observation wraps it and becomes the root span, named {@code task
- * orderReconciler.reconcileOrders} - a name that matches no classifier substring, so the
- * trace classifies {@code INTERNAL} instead. This is a known product defect: see
- * {@code docs/ARCHITECTURE.md}'s "Known defects" section and
- * <a href="https://peekaboot.org/docs/concepts/">peekaboot.org/docs/concepts</a>.
+ * <p>{@code detectRootActionType()} classifies a trace as {@code SCHEDULED_JOB} from the
+ * root span's {@code code.function}/{@code code.namespace} tags, which Spring's
+ * {@code DefaultScheduledTaskObservationConvention} sets when its scheduler actually
+ * fires this method - Spring's own scheduled-task observation wraps the call and becomes
+ * the root span (named {@code task orderReconciler.reconcileOrders}) in that case. A
+ * <em>direct</em> call to {@link #reconcileOrders()} does not go through that
+ * observation: this method's own {@code @Observed} span becomes the trace root instead,
+ * carrying only its own {@code class}/{@code method} tags, so it classifies
+ * {@code INTERNAL}.
  */
 @Component
 public class OrderReconciler {

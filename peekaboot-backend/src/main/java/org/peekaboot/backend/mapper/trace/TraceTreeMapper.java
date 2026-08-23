@@ -119,12 +119,16 @@ public class TraceTreeMapper {
 
         Span.Kind kind = rootSpan.kind();
         Map<String, String> tags = rootSpan.tags() != null ? rootSpan.tags() : Map.of();
-        String name = rootSpan.name() != null ? rootSpan.name().toLowerCase() : "";
 
         boolean hasHttpTags = tags.keySet().stream().anyMatch(k -> k.startsWith("http."));
         boolean hasDbTags = tags.keySet().stream().anyMatch(k -> k.startsWith("db."));
         boolean hasMessagingTags = tags.keySet().stream().anyMatch(k -> k.startsWith("messaging."));
         boolean hasRpcTags = tags.keySet().stream().anyMatch(k -> k.startsWith("rpc."));
+        // Spring's DefaultScheduledTaskObservationConvention is the only convention that sets
+        // this exact pair of low-cardinality keys (ScheduledTaskObservationDocumentation.
+        // LowCardinalityKeyNames), so their presence together identifies a @Scheduled task
+        // span reliably, unlike testing the span's name for "schedule"/"cron"/"timer"/"job".
+        boolean hasScheduledTaskTags = tags.containsKey("code.function") && tags.containsKey("code.namespace");
 
         // 1. CONSUMER kind OR messaging.* tags -> MESSAGE_CONSUMER
         if (kind == Span.Kind.CONSUMER || hasMessagingTags) {
@@ -138,9 +142,12 @@ public class TraceTreeMapper {
         if (kind == Span.Kind.SERVER && hasRpcTags) {
             return RootActionType.RPC_CALL;
         }
-        // 4. Name contains "schedule"/"cron"/"timer"/"job" -> SCHEDULED_JOB
-        if (name.contains("schedule") || name.contains("cron") ||
-                name.contains("timer") || name.contains("job")) {
+        // 4. Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
+        //    @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
+        //    Sender/Receiver-style contexts), so this can't be pre-empted by the SERVER/
+        //    CLIENT-kind branches above and below it; it must still run before the null-kind
+        //    catch-all (7), which is exactly where an unrecognised scheduled span used to fall.
+        if (hasScheduledTaskTags) {
             return RootActionType.SCHEDULED_JOB;
         }
         // 5. CLIENT kind + db.* tags as root -> DATABASE

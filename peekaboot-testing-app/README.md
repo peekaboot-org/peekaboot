@@ -26,7 +26,7 @@ Peekaboot's trace view something worth looking at:
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time actually went. |
 | `POST /api/orders` | Places a new order. Shows up as its own `HTTP_REQUEST`-classified trace, distinct from a page load. |
 | `GET /boom` | Always throws. Gives the Errors bucket, the error badge and the toolbar's error styling something real to render. |
-| `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Called directly (as the integration test does), its root span name comes from the `@Observed` annotation and classifies `SCHEDULED_JOB`; fired by Spring's scheduler, Spring's own observation wraps it and the root span name (`task orderReconciler.reconcileOrders`) matches no classifier substring, so it classifies `INTERNAL` instead — a known classification gap, see [Root Action Type](https://peekaboot.org/docs/concepts/). |
+| `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, Spring's own scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation — its own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
 
 `OrderTraceCaptureIntegrationTest` asserts what Peekaboot actually captured from these
 endpoints, not just what they returned.

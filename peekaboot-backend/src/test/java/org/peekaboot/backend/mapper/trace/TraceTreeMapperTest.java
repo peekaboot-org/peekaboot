@@ -369,9 +369,14 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldDetectScheduledJobRootActionTypeFromSchedule() {
-        var rootSpan = createSpan("trace1", "root", null, "scheduled-task",
-                Span.Kind.SERVER, 0, 100, Map.of());
+    void map_shouldDetectScheduledJobRootActionTypeFromScheduledTaskTags() {
+        // The shape Spring's DefaultScheduledTaskObservationConvention actually produces:
+        // no Span.Kind (it isn't a Sender/Receiver-style context) plus the code.function/
+        // code.namespace low-cardinality tag pair.
+        var rootSpan = createSpan("trace1", "root", null, "task orderReconciler.reconcileOrders",
+                null, 0, 100, Map.of(
+                        "code.function", "reconcileOrders",
+                        "code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"));
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -381,31 +386,10 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldDetectScheduledJobRootActionTypeFromCron() {
-        var rootSpan = createSpan("trace1", "root", null, "cron-cleanup",
-                Span.Kind.SERVER, 0, 100, Map.of());
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
-    }
-
-    @Test
-    void map_shouldDetectScheduledJobRootActionTypeFromTimer() {
-        var rootSpan = createSpan("trace1", "root", null, "timer-heartbeat",
-                Span.Kind.SERVER, 0, 100, Map.of());
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
-    }
-
-    @Test
-    void map_shouldDetectScheduledJobRootActionTypeFromJob() {
+    void map_shouldNotDetectScheduledJobFromNameAloneWithoutTags() {
+        // A bean that merely happens to have "job" in its name must not be misclassified;
+        // detection is tag-only now. No scheduled-task tags -> falls through to the SERVER
+        // default (HTTP_REQUEST), same as any other untagged SERVER-kind root span.
         var rootSpan = createSpan("trace1", "root", null, "batch-job-processor",
                 Span.Kind.SERVER, 0, 100, Map.of());
 
@@ -413,7 +397,21 @@ class TraceTreeMapperTest {
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
+    }
+
+    @Test
+    void map_shouldNotDetectScheduledJobFromPartialTagPair() {
+        // Both code.function and code.namespace must be present; code.function alone is not
+        // enough (it's a generic low-cardinality key other conventions could also set).
+        var rootSpan = createSpan("trace1", "root", null, "some-operation",
+                null, 0, 100, Map.of("code.function", "reconcileOrders"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
     }
 
     @Test

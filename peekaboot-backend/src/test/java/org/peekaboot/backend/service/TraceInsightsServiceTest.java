@@ -324,9 +324,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsights_shouldFilterByMultipleCommaSeparatedRootActionTypes() {
-        addTrace("trace1", 100, false);                                   // SERVER kind -> HTTP_REQUEST
-        addConsumerTrace("trace2", 100);                                  // CONSUMER kind -> MESSAGE_CONSUMER
-        addTraceWithOperation("trace3", "task scheduler.fixedRate", 100); // name contains "schedule" -> SCHEDULED_JOB
+        addTrace("trace1", 100, false);           // SERVER kind -> HTTP_REQUEST
+        addConsumerTrace("trace2", 100);           // CONSUMER kind -> MESSAGE_CONSUMER
+        addScheduledJobTrace("trace3", 100);       // scheduled-task tags -> SCHEDULED_JOB
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request,message_consumer", null);
 
@@ -439,6 +439,18 @@ class TraceInsightsServiceTest {
                 traceId, "span-" + traceId, null, "receive message", Span.Kind.CONSUMER,
                 start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
                 Map.of(), List.of(), null, null, null, null, null, List.of(),
+                store.nextCreationOrder()
+        );
+        store.addSpan(span);
+    }
+
+    private void addScheduledJobTrace(String traceId, long durationMs) {
+        Instant start = Instant.EPOCH;
+        SpanData span = new SpanData(
+                traceId, "span-" + traceId, null, "task orderReconciler.reconcileOrders", null,
+                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
+                Map.of("code.function", "reconcileOrders", "code.namespace", "org.peekaboot.example.OrderReconciler"),
+                List.of(), null, null, null, null, null, List.of(),
                 store.nextCreationOrder()
         );
         store.addSpan(span);
