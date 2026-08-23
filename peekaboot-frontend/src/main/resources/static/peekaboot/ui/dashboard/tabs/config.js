@@ -5,6 +5,7 @@
  */
 import {groupList, expandedKeys, kvRow} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
+import {renderUnmaskControl} from '../../shared/unmask-control.js';
 
 export const id = 'config';
 export const label = 'Config';
@@ -15,9 +16,10 @@ export function isAvailable(data) {
     return Boolean(data?.config?.groups?.length);
 }
 
-export function render(container, data) {
+export function render(container, data, context) {
     currentData = data;
     wireFilter(container);
+    renderUnmaskControl(container.querySelector('#config-unmask-slot'), context);
     renderGroups(container, currentFilterValue(container));
 }
 

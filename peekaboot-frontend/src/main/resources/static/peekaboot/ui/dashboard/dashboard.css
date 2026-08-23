@@ -221,6 +221,13 @@
 }
 .pk-filter__count { flex: 0 0 auto; font-size: var(--pk-text-xs); color: var(--pk-text-muted); white-space: nowrap; }
 
+/* Unmask toggle (Environment/Config tabs) - a .pk-btn, so it already gets real
+   :focus-visible styling and the 24px target floor from .pk-btn--small for free.
+   Deliberately NOT the generic .pk-btn[aria-pressed="true"] green: revealing real
+   secrets is not a neutral selection state like a bucket filter, so the pressed
+   state is danger-coloured instead, overriding that rule by loading after it. */
+.pk-unmask-toggle[aria-pressed="true"] { background: var(--pk-danger); border-color: var(--pk-danger); color: var(--pk-on-danger); }
+
 /* Health banner — a real <button> so it is keyboard operable; aria-expanded
    drives the chevron, matching the .pk-group header pattern. */
 .pk-health {

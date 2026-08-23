@@ -4,15 +4,17 @@
  */
 import {groupList, expandedKeys, kvRow, badge} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
+import {renderUnmaskControl} from '../../shared/unmask-control.js';
 
 export const id = 'environment';
 export const label = 'Environment';
 
 let currentData = null;
 
-export function render(container, data) {
+export function render(container, data, context) {
     currentData = data;
     wireFilter(container);
+    renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
     renderGroups(container, currentFilterValue(container));
 }
 

@@ -190,6 +190,9 @@
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties...">
+                <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
+                     is true - empty, not hidden, when the backend gate is off. -->
+                <span id="env-unmask-slot"></span>
             </div>
             <div id="property-sources"></div>
         </section>
@@ -222,6 +225,9 @@
             <div class="pk-filter">
                 <span class="pk-filter__icon">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties...">
+                <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
+                     is true - empty, not hidden, when the backend gate is off. -->
+                <span id="config-unmask-slot"></span>
             </div>
             <div id="config-groups"></div>
         </section>

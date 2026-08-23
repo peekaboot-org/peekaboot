@@ -55,6 +55,11 @@ let isPaused = false;
 let locale = safeStorageGet('peekaboot-locale') || navigator.language || 'en-US';
 let useServerTimezone = safeStorageGet('peekaboot-use-server-tz') === 'true';
 let serverTimezone = null;
+// Whether the next fetch should ask the API for real values instead of "******" -
+// the Environment/Config tabs' unmask control (shared/unmask-control.js). Deliberately
+// NOT persisted (no localStorage, unlike locale/timezone/theme above): a "show me
+// secrets" toggle that survives a reload is a footgun, so a reload always starts masked.
+let unmaskRequested = false;
 
 // --- Hash routing -----------------------------------------------------------------
 
@@ -186,8 +191,22 @@ function currentContext() {
         locale,
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
         navigate,
-        features
+        features,
+        unmaskRequested,
+        toggleUnmask
     };
+}
+
+/**
+ * Flips the shared unmask request and re-fetches - the Environment and Config tabs
+ * both render off the one payload fetchData() pulls, so there is one shared "reveal"
+ * state rather than a per-tab copy (see shared/unmask-control.js's doc comment for the
+ * full reasoning). Mirrors the locale-select pattern below: a per-view setting change
+ * simply triggers a fresh fetchData() call rather than optimistically patching the DOM.
+ */
+function toggleUnmask() {
+    unmaskRequested = !unmaskRequested;
+    fetchData();
 }
 
 /**
@@ -249,7 +268,7 @@ async function fetchData() {
         if (!data) loadingEl.classList.remove('hidden');
         errorEl.classList.add('hidden');
 
-        const result = await client.get(API_PATH, {params: {locale}});
+        const result = await client.get(API_PATH, {params: {locale, unmask: unmaskRequested ? 'true' : undefined}});
         if (result === null) return; // superseded by a newer request
 
         data = result;
