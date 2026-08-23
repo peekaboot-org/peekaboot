@@ -10,6 +10,9 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
+import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
+import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findRawConfigPropsProperty;
 
 /**
  * Proves Defect 1's fix end-to-end through the real HTTP API, not just at the mapper/
@@ -79,40 +82,5 @@ class ActuatorMaskingIntegrationTest {
                 .as("the spring.datasource.password fixture property must be present in the raw payload")
                 .isNotNull();
         assertThat(passwordValue.asString()).isEqualTo("******");
-    }
-
-    private JsonNode findEnvironmentPropertyValue(JsonNode environmentInfo, String key) {
-        for (JsonNode source : environmentInfo.path("propertySources")) {
-            for (JsonNode property : source.path("properties")) {
-                if (key.equals(property.path("key").asString(null))) {
-                    return property.path("value");
-                }
-            }
-        }
-        return null;
-    }
-
-    private JsonNode findConfigInfoProperty(JsonNode configInfo, String key) {
-        for (JsonNode group : configInfo.path("groups")) {
-            for (JsonNode property : group.path("properties")) {
-                if (key.equals(property.path("key").asString(null))) {
-                    return property;
-                }
-            }
-        }
-        return null;
-    }
-
-    /** Raw /configprops shape: {contexts: {<ctx>: {beans: {<bean>: {properties: {<key>: <value>}}}}}}. */
-    private JsonNode findRawConfigPropsProperty(JsonNode configprops, String key) {
-        for (JsonNode context : configprops.path("contexts").values()) {
-            for (JsonNode bean : context.path("beans").values()) {
-                JsonNode properties = bean.path("properties");
-                if (properties.has(key)) {
-                    return properties.path(key);
-                }
-            }
-        }
-        return null;
     }
 }

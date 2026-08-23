@@ -114,9 +114,10 @@ class PeekabootActuatorServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void getDataMasksSensitiveConnectionParamsUnlikeGetRawData() {
-        // getData() backs GET /peekaboot/api/actuator/all/raw - the endpoint the design
-        // spec calls out as a full masking bypass. This proves it no longer is one.
-        Map<String, Object> raw = service.getData().spring().actuator();
+        // getData(false) backs GET /peekaboot/api/actuator/all/raw when unmasking isn't
+        // in effect - the endpoint the design spec calls out as a full masking bypass.
+        // This proves it no longer is one.
+        Map<String, Object> raw = service.getData(false).spring().actuator();
 
         List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
         Map<String, Object> connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
@@ -124,6 +125,23 @@ class PeekabootActuatorServiceTest {
         assertThat(connectionParams.get("password")).isEqualTo("******");
         // A non-sensitive key survives untouched, confirming this isn't a blanket wipe.
         assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value")).isEqualTo("MEMORY");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void getDataReturnsRealConnectionParamsWhenAskedToUnmask() {
+        // getData(true) is only ever reached once the controller has already resolved
+        // peekaboot.enable-unmasking AND the request's unmask parameter to true (see
+        // PeekabootController.resolveUnmask) - this proves the service itself honours
+        // that decision rather than re-deriving it.
+        Map<String, Object> raw = service.getData(true).spring().actuator();
+
+        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
+        Map<String, Object> connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
+
+        // Unlike the masked case (whole-object replaced by "******"), an unmasked node
+        // is returned unchanged - so this is still the {value, source} shape.
+        assertThat(((Map<String, Object>) connectionParams.get("password")).get("value")).isEqualTo("hunter2");
     }
 
     @TestConfiguration
