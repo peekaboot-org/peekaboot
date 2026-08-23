@@ -28,6 +28,14 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 - Tests that trigger error paths capture the log event (logback `ListAppender`, via
   the shared `org.peekaboot.backend.testsupport.LogCapture` helper in
   `peekaboot-backend`) and assert it instead of letting it print.
+- `peekaboot-testing-app`'s `logback-test.xml` sets `org.apache.catalina.core.ContainerBase`
+  to `OFF`: `OrderController`'s deliberately failing `/boom` endpoint escapes as an unhandled
+  exception, which embedded Tomcat logs as a full stack trace under a per-JVM
+  instance-numbered logger name (`Tomcat`, `Tomcat-1`, ...) that Logback — which has no
+  wildcard matching — can't target directly; `ContainerBase` is the narrowest static ancestor
+  that covers every run. Accepted because the module configures no clustering and no custom
+  realm (the only other things that logger would silence) and the application's own error
+  logging is unaffected — a real application failure still prints and is still asserted.
 - Accepted, unavoidable noise:
   - `OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader
     classes because bootstrap classpath has been appended` — a lowercase-`warning`
@@ -38,6 +46,33 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     module only) — fired by protobuf's reflective `Unsafe` access, a transitive
     OTel/gRPC dependency. Third-party, not application or test code; a real fix
     would mean a protobuf/gRPC version bump, out of scope for test cleanup.
+  - `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`,
+    and the `IllegalStateException: fixedDelay failed` from `Scheduler.fixedDelay()` (logged
+    by Spring's `TaskUtils$LoggingErrorHandler` as `ERROR ... Unexpected error occurred in
+    scheduled task`, with the full stack trace) — deliberate demo signal in
+    `peekaboot-testing-app`, giving the dashboard's Errors bucket a scheduled-job failure to
+    show.
+  - `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and
+    has not been acknowledged`, one line per stale order — deliberate demo signal giving the
+    Logs tab WARN content on a non-HTTP (`SCHEDULED_JOB`) trace.
+  - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is
+    unreachable` — `OrderController`'s deliberately failing `/boom` endpoint, exercised to
+    populate the Errors bucket and the toolbar's error styling.
+  - `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find
+    all persons` — `PersonController`'s deliberate error path (`/?error=true`), same purpose.
+  - `WARN ... o.s.core.events.SpringDocAppInitializer : SpringDoc /v3/api-docs endpoint is
+    enabled by default...` and the matching `/swagger-ui.html` line — SpringDoc's
+    enabled-by-default warnings, printed once per Spring context start in
+    `peekaboot-testing-app`.
+  - `Mockito is currently self-attaching to enable the inline-mock-maker...` plus the JDK's
+    4-line `WARNING: A Java agent has been loaded dynamically...` block, in
+    `peekaboot-testing-app` only — the static `-javaagent` fix applied to `peekaboot-backend`'s
+    and `peekaboot-spring-boot-autoconfigure`'s surefire `argLine` (above) was never applied to
+    this module.
+  - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than
+    the version Flyway has been verified with. The latest verified version of H2 is
+    <version>.` — a Flyway/H2 version-compatibility `WARN`, printed once per Spring context
+    start.
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset

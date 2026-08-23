@@ -71,7 +71,6 @@ Overall health status of a trace.
 |-------|-------------|
 | `OK` | No issues detected |
 | `HAS_ERRORS` | One or more spans have errors |
-| `HAS_SLOW_SPANS` | Contains spans exceeding thresholds |
 
 **Usage:** `TraceStatus` enum, `status` field
 
@@ -144,20 +143,20 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 |-------|-------------|
 | `method` | HTTP method (GET, POST, etc.) |
 | `path` | Request path |
-| `queryString` | Raw query string |
+| `query` | Raw query string |
 | `headers` | HTTP request headers |
 | `body.content` | Request body content |
 | `body.truncated` | Whether body was truncated |
-| `controller.className` | Spring controller class |
-| `controller.methodName` | Handler method name |
+| `controller.class` | Spring controller class |
+| `controller.method` | Handler method name |
 | `params.query` | URL query parameters |
 | `params.form` | Form parameters |
-| `params.files` | Uploaded files |
+| `params.upload` | Uploaded files |
 
 **HttpResponse fields:**
 | Field | Description |
 |-------|-------------|
-| `statusCode` | HTTP status code |
+| `status` | HTTP status code |
 | `headers` | HTTP response headers |
 
 **Usage:** `HttpExchange` record, `httpExchange` field on `TraceTree` and `TraceRawData`

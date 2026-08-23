@@ -1,6 +1,10 @@
-# Peekaboot Internals
+# Peekaboot Architecture
 
 Technical documentation for contributors and maintainers.
+
+> This file and its siblings in `docs/` are for people changing the code. Consumer
+> documentation — quick start, configuration, security, the dashboard tour — lives at
+> [peekaboot.org](https://peekaboot.org).
 
 ## Module Structure
 
@@ -159,6 +163,9 @@ regular HTTP mapping under `/actuator` still applies the
 endpoint over the web — with Spring defaults only `/actuator/health` is
 reachable via HTTP while the dashboard has full data.
 
+See [peekaboot.org/docs/security](https://peekaboot.org/docs/security/) for what this
+exposure model means in practice for securing a deployment.
+
 ## peekaboot-frontend
 
 Static resources served from `/peekaboot/ui/`, backing three UI surfaces — the
@@ -216,6 +223,9 @@ static/peekaboot/ui/
 - **Theme support**: `--pk-*` CSS custom properties for dark/light modes, resolved once
   in `shared/theme.js` from `localStorage['peekaboot-theme']` (falling back to
   `prefers-color-scheme`) and shared across all three same-origin surfaces
+
+See [peekaboot.org/docs/theming](https://peekaboot.org/docs/theming/) for how a consuming
+application overrides `tokens.css` to re-theme all three surfaces.
 
 ## peekaboot-spring-boot-autoconfigure
 
@@ -379,25 +389,12 @@ class DevToolbarAutoConfigurationIntegrationTest {
 }
 ```
 
-## Build
-
-```bash
-# Full build with tests
-mvn clean install
-
-# Quick compile
-mvn clean compile -DskipTests
-
-# Run example app
-cd peekaboot-testing-app && mvn spring-boot:run
-```
-
 ## Key Design Decisions
 
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction)
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application
