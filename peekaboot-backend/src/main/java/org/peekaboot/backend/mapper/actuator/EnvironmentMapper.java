@@ -4,6 +4,7 @@ import org.peekaboot.backend.actuator.raw.EnvResponse;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
 import org.peekaboot.backend.domain.environment.PropertySourceGroup;
 import org.peekaboot.backend.domain.environment.PropertyValue;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -12,6 +13,8 @@ import java.util.Map;
 
 @Component
 public class EnvironmentMapper {
+
+    private final MaskingEngine maskingEngine = new MaskingEngine();
 
     public EnvironmentInfo map(EnvResponse env) {
         if (env == null) {
@@ -49,7 +52,7 @@ public class EnvironmentMapper {
             EnvResponse.PropertyValue pv = entry.getValue();
             String value = pv.value() != null ? pv.value().toString() : null;
             String origin = pv.origin();
-            result.add(new PropertyValue(key, value, origin));
+            result.add(new PropertyValue(key, maskingEngine.mask(key, value), origin));
         }
         return result;
     }
