@@ -236,9 +236,10 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     /**
      * Sends one event to every subscriber, in order, on the single dispatch thread.
      * A peer that has stopped reading therefore holds up the subscribers behind it
-     * until the connector's write timeout fires (the heartbeat drops it 15s later at
-     * the latest) - accepted for a dev tool, where a handful of dashboards watch a
-     * single app.
+     * until the servlet container's write timeout fires. The heartbeat is no help
+     * there: its send() to that same emitter takes the emitter's write lock, which
+     * the stuck send already holds, so it blocks rather than detecting the dead peer.
+     * Accepted for a dev tool, where a handful of dashboards watch a single app.
      *
      * <p>Package-visible so tests can stand in for (or wedge) the delivery step.
      */
