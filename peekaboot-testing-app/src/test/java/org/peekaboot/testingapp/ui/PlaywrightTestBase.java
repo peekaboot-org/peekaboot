@@ -102,6 +102,15 @@ abstract class PlaywrightTestBase {
         }
     }
 
+    /**
+     * Closes whatever the page is holding open - the Insights tab's EventSource above all.
+     * A live SSE stream keeps the teardown's NETWORKIDLE drain from ever settling, so a
+     * test that opens one pays the drain's full timeout unless it navigates away first.
+     */
+    protected void closeLiveStreams() {
+        page.navigate("about:blank");
+    }
+
     protected void openPersonsPage() {
         page.navigate(baseUrl + "/persons");
         page.waitForSelector("#peekaboot-toolbar-host");

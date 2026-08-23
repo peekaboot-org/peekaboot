@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -9,6 +10,12 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class InsightsTabTest extends PlaywrightTestBase {
+
+    /** A subclass @AfterEach runs before the base class's, so the stream is gone by teardown. */
+    @AfterEach
+    void closeInsightsStream() {
+        closeLiveStreams();
+    }
 
     private void openInsights() {
         openDashboard();
