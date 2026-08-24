@@ -6,12 +6,25 @@ import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
 import org.peekaboot.backend.actuator.parsed.SpringInfo;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ApplicationMapper {
 
+    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
+
     public ApplicationInfo map(InfoResponse info, SpringInfo spring) {
+        return map(info, spring, false);
+    }
+
+    /**
+     * Same as {@link #map(InfoResponse, SpringInfo)}, except when {@code unmask} is true, in
+     * which case {@code info.build()} is returned verbatim. See
+     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     */
+    public ApplicationInfo map(InfoResponse info, SpringInfo spring, boolean unmask) {
         Map<String, Object> build = Collections.emptyMap();
         Map<String, Object> git = Collections.emptyMap();
         String javaVersion = null;
@@ -19,7 +32,7 @@ public class ApplicationMapper {
 
         if (info != null) {
             if (info.build() != null) {
-                build = info.build();
+                build = maskBuild(info.build(), unmask);
             }
             if (info.git() != null) {
                 git = mapGitInfo(info.git());
@@ -36,6 +49,17 @@ public class ApplicationMapper {
         String frameworkVersion = spring != null ? spring.frameworkVersion() : null;
 
         return new ApplicationInfo(build, git, bootVersion, frameworkVersion, javaVersion, javaVendor);
+    }
+
+    /**
+     * Unlike git and the JVM/Spring version fields, which are all populated here, {@code
+     * info.build} is a free-form map a consuming app supplies itself - not controlled by
+     * this mapper at all.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> maskBuild(Map<String, Object> build, boolean unmask) {
+        Object masked = treeMasker.mask(build, unmask);
+        return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
     }
 
     private Map<String, Object> mapGitInfo(InfoResponse.GitInfo gitInfo) {

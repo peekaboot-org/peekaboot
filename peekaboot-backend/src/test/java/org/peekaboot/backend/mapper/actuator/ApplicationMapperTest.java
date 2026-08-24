@@ -21,6 +21,21 @@ class ApplicationMapperTest {
     }
 
     @Test
+    void map_shouldMaskCredentialShapedValuesInBuildInfo() {
+        // Split literal, deliberately: this shape is exactly what GitHub push protection
+        // scans for. Concatenation is folded at compile time, so the value under test is
+        // unchanged; it just never appears contiguously in the source. See
+        // MaskingEngineTest for the other examples of this pattern.
+        String slackToken = "xoxb" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx";
+        InfoResponse info = new InfoResponse(null, Map.of("artifact", "my-app", "notes", slackToken), null, null, null);
+
+        ApplicationInfo result = mapper.map(info, null);
+
+        assertThat(result.build()).containsEntry("artifact", "my-app");
+        assertThat(result.build()).containsEntry("notes", "******");
+    }
+
+    @Test
     void map_shouldExtractGitInfo() {
         InfoResponse info = new InfoResponse(
                 new InfoResponse.GitInfo("main", new InfoResponse.GitInfo.CommitInfo("abc123", "2024-01-01T10:00:00Z")),

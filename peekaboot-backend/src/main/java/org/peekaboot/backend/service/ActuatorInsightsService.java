@@ -66,7 +66,7 @@ public final class ActuatorInsightsService {
         ActuatorParsedData typed = responseParser.parse(rawData);
 
         return new ActuatorInsightsResponse(
-                applicationMapper.map(typed.info(), typed.spring()),
+                applicationMapper.map(typed.info(), typed.spring(), unmask),
                 runtimeMapper.map(typed.info(), typed.health()),
                 dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
                 healthMapper.map(typed.health(), unmask),
