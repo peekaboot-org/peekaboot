@@ -60,21 +60,25 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     populate the Errors bucket and the toolbar's error styling.
   - `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find
     all persons` — `PersonController`'s deliberate error path (`/?error=true`), same purpose.
-  - `WARN ... o.s.core.events.SpringDocAppInitializer : SpringDoc /v3/api-docs endpoint is
-    enabled by default...` and the matching `/swagger-ui.html` line — SpringDoc's
-    enabled-by-default warnings, printed once per Spring context start in
-    `peekaboot-testing-app`.
-  - `Mockito is currently self-attaching to enable the inline-mock-maker...` plus the JDK's
-    4-line `WARNING: A Java agent has been loaded dynamically...` block, in
-    `peekaboot-testing-app` only — `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure`
-    each pin their surefire `argLine` to
-    `-javaagent:${org.mockito:mockito-core:jar}`, loading Mockito's inline mock-maker as a
-    static agent instead of letting it self-attach; that fix was never applied to this
-    module's `pom.xml`.
   - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than
     the version Flyway has been verified with. The latest verified version of H2 is
     <version>.` — a Flyway/H2 version-compatibility `WARN`, printed once per Spring context
     start.
+
+## Known flakes
+- `TraceOverlayTest` — a Playwright `TargetClosedError` was seen once from `@AfterEach`'s
+  `page.context().close()`, in `closeButtonDismissesTheOverlayOnTheErrorPath`. Root-caused and
+  fixed: the collapsed toolbar's own fetch ladder (`toolbar.js`) keeps polling
+  `/api/traces/{id}/insights` for up to 4.75s after page load, independent of any one test's
+  lifetime. That test routes the same endpoint (`page.route("**/api/traces/*/insights", route ->
+  route.abort())`) and never unroutes it, so a scheduled poll can still fire while teardown's
+  `context().close()` is mid-flight, and Playwright's client tries to sync interception patterns
+  against a target that is already closing. `PlaywrightTestBase.closePage()` now catches
+  `TargetClosedError` around `context().close()` as a benign teardown race, the same tolerance it
+  already gives `TimeoutError` around the network-idle wait. Characterised by running `mvn -pl
+  peekaboot-testing-app test -Dtest=TraceOverlayTest` repeatedly before the fix (reproduced once
+  in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
+  previously-failing method).
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset

@@ -5,6 +5,7 @@ import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.impl.TargetClosedError;
 import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.AfterAll;
@@ -63,12 +64,23 @@ abstract class PlaywrightTestBase {
     void closePage() {
         if (page != null) {
             try {
-                page.waitForLoadState(LoadState.NETWORKIDLE,
-                        new Page.WaitForLoadStateOptions().setTimeout(2000));
+                page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(2000));
             } catch (TimeoutError ignored) {
                 // best-effort drain of in-flight requests; teardown must never fail a passing test
             }
-            page.context().close();
+            try {
+                page.context().close();
+            } catch (TargetClosedError ignored) {
+                // The collapsed toolbar's own fetch ladder (toolbar.js) keeps polling
+                // /api/traces/{id}/insights for up to 4.75s after page load, regardless of
+                // whether the test that opened the page is still running. A test that routes
+                // that endpoint (page.route(...)) and never unroutes it leaves the interceptor
+                // registered through teardown, so a scheduled poll can still fire while this
+                // close() is in flight; Playwright then tries to sync interception patterns
+                // against a target that is already gone. The context is closing either way -
+                // that is this call's whole goal - so a race in Playwright's own internal
+                // bookkeeping on the way there is not a real teardown failure.
+            }
         }
     }
 
@@ -76,13 +88,11 @@ abstract class PlaywrightTestBase {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         page.waitForSelector("#dashboard-tab.active");
         // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
-        page.waitForSelector("#loading",
-                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         // ...but #loading also hides on the failure path, so require positive proof of a render
         page.waitForSelector("#build-info > *, #error:not(.hidden)");
         if (page.isVisible("#error")) {
-            throw new IllegalStateException(
-                    "dashboard failed to load: " + page.textContent("#error .message"));
+            throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
     }
 
@@ -97,11 +107,11 @@ abstract class PlaywrightTestBase {
      * indistinguishable from "both sides of a comparison are missing the token".
      */
     protected String cssVar(String selector, String property) {
-        String value = (String) page.locator(selector).first()
+        String value = (String) page.locator(selector)
+                .first()
                 .evaluate("(el, prop) => getComputedStyle(el).getPropertyValue(prop).trim()", property);
         if (value.isEmpty()) {
-            throw new AssertionError(
-                    "CSS property '" + property + "' does not resolve on '" + selector + "'");
+            throw new AssertionError("CSS property '" + property + "' does not resolve on '" + selector + "'");
         }
         return value;
     }
