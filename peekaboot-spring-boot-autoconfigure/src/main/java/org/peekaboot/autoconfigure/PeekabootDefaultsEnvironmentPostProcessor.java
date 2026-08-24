@@ -16,11 +16,11 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 /**
- * Derives the default for {@code peekaboot.enabled} from the launch context
- * (on only when running locally in an IDE or via spring-boot:run/bootRun) and
- * applies Peekaboot's defaults (lowest precedence, so any application property
- * wins). An explicit {@code peekaboot.enabled} setting always overrides the
- * detection.
+ * Derives the defaults for {@code peekaboot.enabled} and {@code peekaboot.dev-toolbar}
+ * from the launch context (on only when running locally in an IDE or via
+ * spring-boot:run/bootRun) and applies Peekaboot's defaults (lowest precedence, so any
+ * application property wins). An explicit {@code peekaboot.enabled} or {@code
+ * peekaboot.dev-toolbar} setting always overrides the detection.
  * <p>
  * All defaults live in yml resources: {@code peekaboot-no-push-defaults.yml}
  * is applied unconditionally so the starter never pushes telemetry anywhere
@@ -34,6 +34,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
+    private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
 
@@ -50,13 +51,17 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         boolean localDevelopment = localDevelopment();
-        // lowest precedence: any explicit peekaboot.enabled setting wins over the detection
+        // lowest precedence: any explicit peekaboot.enabled / peekaboot.dev-toolbar setting
+        // wins over the detection. The toolbar follows the launch context rather than
+        // peekaboot.enabled, so switching Peekaboot on deliberately in a shared environment
+        // does not also start injecting the toolbar into every page.
         environment
                 .getPropertySources()
                 .addLast(new MapPropertySource(
-                        DETECTION_PROPERTY_SOURCE_NAME, Map.of(ENABLED_PROPERTY, localDevelopment)));
-        log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot "
-                + (localDevelopment ? "enabled" : "disabled") + " by default");
+                        DETECTION_PROPERTY_SOURCE_NAME,
+                        Map.of(ENABLED_PROPERTY, localDevelopment, DEV_TOOLBAR_PROPERTY, localDevelopment)));
+        log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot and the"
+                + " dev toolbar " + (localDevelopment ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 

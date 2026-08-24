@@ -1,14 +1,13 @@
 package org.peekaboot.autoconfigure;
 
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.SpringApplication;
-import org.springframework.mock.env.MockEnvironment;
-import org.springframework.core.env.ConfigurableEnvironment;
-import org.springframework.core.env.MapPropertySource;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.SpringApplication;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.MapPropertySource;
+import org.springframework.mock.env.MockEnvironment;
 
 class PeekabootDefaultsEnvironmentPostProcessorTest {
 
@@ -42,8 +41,10 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
 
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
-        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isFalse();
-        assertThat(environment.getProperty("management.endpoint.health.show-details")).isNull();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isFalse();
+        assertThat(environment.getProperty("management.endpoint.health.show-details"))
+                .isNull();
     }
 
     @Test
@@ -54,7 +55,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
 
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
-        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isTrue();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isTrue();
     }
 
     @Test
@@ -65,8 +67,10 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
-        assertThat(environment.getPropertySources().contains("peekabootDefaults")).isFalse();
-        assertThat(environment.getProperty("management.endpoint.health.show-details")).isNull();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isFalse();
+        assertThat(environment.getProperty("management.endpoint.health.show-details"))
+                .isNull();
     }
 
     @Test
@@ -108,8 +112,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         assertThat(environment.getProperty("management.endpoint.health.show-details"))
                 .isEqualTo("always");
-        assertThat(environment.getProperty("management.info.java.enabled"))
-                .isEqualTo("true");
+        assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("management.tracing.sampling.probability"))
                 .isEqualTo("1.0");
     }
@@ -133,8 +136,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         ConfigurableEnvironment environment = new MockEnvironment();
 
         // Simulate app properties with higher priority
-        MapPropertySource appProperties = new MapPropertySource("appProperties",
-                Map.of("management.endpoint.health.show-details", "never"));
+        MapPropertySource appProperties =
+                new MapPropertySource("appProperties", Map.of("management.endpoint.health.show-details", "never"));
         environment.getPropertySources().addFirst(appProperties);
 
         postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
@@ -154,11 +157,69 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getPropertySources().get("peekabootDefaults")).isNotNull();
 
         // Add app properties after - they should still win
-        MapPropertySource appProperties = new MapPropertySource("appProperties",
-                Map.of("management.info.os.enabled", "false"));
+        MapPropertySource appProperties =
+                new MapPropertySource("appProperties", Map.of("management.info.os.enabled", "false"));
         environment.getPropertySources().addFirst(appProperties);
 
-        assertThat(environment.getProperty("management.info.os.enabled"))
-                .isEqualTo("false");
+        assertThat(environment.getProperty("management.info.os.enabled")).isEqualTo("false");
+    }
+
+    @Test
+    void enablesTheDevToolbarByDefaultInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+                .isTrue();
+    }
+
+    @Test
+    void disablesTheDevToolbarByDefaultOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+                .isFalse();
+    }
+
+    /**
+     * Switching Peekaboot on deliberately outside a local run must not also start injecting
+     * the toolbar into every page - the toolbar default follows the launch context, not the
+     * enabled flag.
+     */
+    @Test
+    void explicitEnabledTrueOutsideLocalDevelopmentLeavesTheToolbarOff() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
+        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+                .isFalse();
+    }
+
+    @Test
+    void explicitDevToolbarFalseWinsInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.dev-toolbar", "false");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+                .isFalse();
+    }
+
+    @Test
+    void explicitDevToolbarTrueWinsOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.dev-toolbar", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
+                .isTrue();
     }
 }
