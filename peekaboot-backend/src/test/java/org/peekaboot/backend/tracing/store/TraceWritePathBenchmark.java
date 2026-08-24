@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * cost of the fold logic itself from the unrelated fact that the default cap also changed
  * (100 -&gt; 500) as part of the same defect fix.
  *
- * <p>Not picked up by Surefire's default include patterns ({@code **&#47;*Test.java} etc.) -
+ * <p>Not picked up by Surefire's default include patterns (<code>**&#47;*Test.java</code> etc.) -
  * wall-clock measurement has no place in the pristine, deterministic default test run. Run it
  * on demand:
  *
