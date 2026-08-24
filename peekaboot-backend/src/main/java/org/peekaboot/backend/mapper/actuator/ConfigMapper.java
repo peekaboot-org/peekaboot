@@ -38,20 +38,7 @@ public class ConfigMapper {
             if (context.beans() == null) continue;
 
             for (ConfigPropsResponse.ConfigBean bean : context.beans().values()) {
-                String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
-
-                if (bean.properties() != null) {
-                    List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
-
-                    for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
-                        String key = entry.getKey();
-                        Object rawValue = entry.getValue();
-                        Object maskedValue = rawValue != null ? treeMasker.mask(key, rawValue, unmask) : null;
-                        String value = maskedValue != null ? maskedValue.toString() : null;
-
-                        properties.add(new ConfigProperty(key, value, null));
-                    }
-                }
+                collectBeanProperties(bean, byPrefix, unmask);
             }
         }
 
@@ -60,5 +47,23 @@ public class ConfigMapper {
             .toList();
 
         return new ConfigInfo(groups);
+    }
+
+    private void collectBeanProperties(
+            ConfigPropsResponse.ConfigBean bean, Map<String, List<ConfigProperty>> byPrefix, boolean unmask) {
+        if (bean.properties() == null) {
+            return;
+        }
+        String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
+        List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
+        for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
+            properties.add(mapProperty(entry.getKey(), entry.getValue(), unmask));
+        }
+    }
+
+    private ConfigProperty mapProperty(String key, Object rawValue, boolean unmask) {
+        Object maskedValue = rawValue != null ? treeMasker.mask(key, rawValue, unmask) : null;
+        String value = maskedValue != null ? maskedValue.toString() : null;
+        return new ConfigProperty(key, value, null);
     }
 }
