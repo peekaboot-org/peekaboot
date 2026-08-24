@@ -37,18 +37,18 @@ public class Scheduler {
 
     @Scheduled(cron = "0 0 * * * *")
     public void cron1() {
-
+        // intentionally empty - exists so the dashboard has a cron schedule to render
     }
 
 
     @Scheduled(cron = "0 0/30 9-17 * * MON-FRI")
     public void cron2() {
-
+        // intentionally empty - exists so the dashboard has a cron schedule to render
     }
 
 
     @Scheduled(cron = "0 15 10 ? * 6#3")
     public void cron3() {
-
+        // intentionally empty - exists so the dashboard has a cron schedule to render
     }
 }
