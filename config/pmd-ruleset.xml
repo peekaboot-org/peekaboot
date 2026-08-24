@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="peekaboot"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>PMD quickstart, minus rules that conflict with deliberate project decisions.</description>
+
+    <rule ref="rulesets/java/quickstart.xml">
+        <!-- The volatile fields are deliberate cross-thread visibility flags (async
+             servlet responses); SpotBugs' AT_STALE_THREAD_WRITE_OF_PRIMITIVE check
+             requires exactly this modifier, so the two tools would deadlock. -->
+        <exclude name="AvoidUsingVolatile"/>
+        <!-- SLF4J parameterized logging with cheap arguments is the project style;
+             wrapping every call in an isXxxEnabled() guard doubles each log site for
+             no measurable gain. -->
+        <exclude name="GuardLogStatement"/>
+    </rule>
+
+</ruleset>
