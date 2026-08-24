@@ -47,7 +47,9 @@ Leaving it advertises a gate the branch does not have.
 
 ### 2.1 Latent duplicate-span residue in `TraceDataBundle`, currently unreachable
 
-Found while proving the read-time dedup pass removable (§5.1).
+Found while proving the read-time dedup pass removable (§5.1). Full analysis, including the
+harness output for all 14 arrival permutations:
+[`analysis/span-dedup-arrival-orders.md`](analysis/span-dedup-arrival-orders.md).
 
 On a **triple**-nested mutually-duplicate chain `R←D←X`, arrival orders `R,X,D` and `X,R,D` leave a
 duplicate: `isDuplicateOfStoredParent` (`TraceDataBundle.java:91-99`) returns early without running
