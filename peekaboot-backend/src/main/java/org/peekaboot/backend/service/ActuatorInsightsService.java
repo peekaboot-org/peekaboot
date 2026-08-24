@@ -14,7 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 
 @Service
-public class ActuatorInsightsService {
+public final class ActuatorInsightsService {
 
     private final PeekabootActuatorService rawService;
     private final ActuatorRawMapper rawMapper;

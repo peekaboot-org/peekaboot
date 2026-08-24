@@ -31,7 +31,7 @@ import org.springframework.stereotype.Service;
 
 
 @Service
-public class PeekabootActuatorService {
+public final class PeekabootActuatorService {
 
     /**
      * Endpoints whose READ operation is expensive or dangerous to invoke on
