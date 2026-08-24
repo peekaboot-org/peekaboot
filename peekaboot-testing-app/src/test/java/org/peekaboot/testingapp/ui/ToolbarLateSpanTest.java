@@ -18,6 +18,11 @@ import org.springframework.context.annotation.Import;
  * <p>Real app, real spans, real browser: {@link LateSpanFixture} ends a genuine child span ~800ms
  * after the response, and the assertions below check that it really is the same trace and really
  * did end after the response, rather than trusting the tracing wiring.
+ *
+ * <p>That 800ms is not incidental: it has to outlast the toolbar's first render, or the "duration
+ * changes" assertion below has nothing to change to and times out. See {@link
+ * LateSpanFixture.LateSpanController#LATE_WORK} for the exact margin against the fetch ladder and
+ * the test export delay.
  */
 @Import(LateSpanFixture.class)
 class ToolbarLateSpanTest extends PlaywrightTestBase {

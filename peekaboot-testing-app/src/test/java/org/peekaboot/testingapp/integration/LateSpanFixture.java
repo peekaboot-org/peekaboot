@@ -33,9 +33,26 @@ public class LateSpanFixture {
     public static class LateSpanController {
 
         /**
-         * Long enough that the bar provably renders at least once before the span lands: the fetch
-         * ladder's first two attempts fall at 250ms and 750ms, so a render carrying this duration
-         * cannot be the first one.
+         * Long enough that the bar provably renders at least once before the span lands - not an
+         * accident of round numbers, but a margin against two numbers this class does not own:
+         *
+         * <ul>
+         *   <li>the toolbar's fetch ladder ({@code attemptDelays} in {@code toolbar.js}): attempts
+         *       land 250ms and 750ms (cumulative) after the page loads;
+         *   <li>the test profile's OTel span export {@code schedule-delay} ({@code
+         *       application-test.yml}), 50ms - the lag between a span ending and it becoming
+         *       visible to the {@code /insights} endpoint the toolbar polls.
+         * </ul>
+         *
+         * <p>The root span ends the instant the response is sent, i.e. effectively t=0 here, so by
+         * the toolbar's first fetch attempt (250ms) it has long cleared its own 50ms export lag: the
+         * first render is expected then, carrying only the root span's short duration - the
+         * assertion's baseline. Even if that attempt is missed and the second (750ms) supplies the
+         * first render instead, it too lands before this span ends, so the baseline still excludes
+         * it. Either way {@code LATE_WORK} must clear the relevant attempt time by more than the
+         * export delay could claw back; today's tightest case is 750ms vs. 800ms, a 50ms margin.
+         * Changing the ladder, the export delay, or this value invalidates that arithmetic - redo it
+         * rather than assume it still holds.
          */
         public static final Duration LATE_WORK = Duration.ofMillis(800);
 
