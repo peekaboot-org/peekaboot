@@ -36,11 +36,11 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
     private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
+    private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
     private static final String ENV_SHOW_VALUES_PROPERTY = "management.endpoint.env.show-values";
     private static final String CONFIGPROPS_SHOW_VALUES_PROPERTY = "management.endpoint.configprops.show-values";
-    private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
     private static final String DEV_TOOLBAR_DEFAULTS_RESOURCE = "peekaboot-dev-toolbar-defaults.yml";

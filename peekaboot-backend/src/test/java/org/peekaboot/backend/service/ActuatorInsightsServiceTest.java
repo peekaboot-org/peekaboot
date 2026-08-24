@@ -18,13 +18,13 @@ import org.springframework.beans.factory.ObjectProvider;
 
 class ActuatorInsightsServiceTest {
 
-    private PeekabootActuatorService rawService;
+    private PeekabootActuatorService actuatorService;
     private ActuatorInsightsService insightsService;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
-        rawService = mock(PeekabootActuatorService.class);
+        actuatorService = mock(PeekabootActuatorService.class);
         ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
         when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of());
 
@@ -33,7 +33,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldMapAllSections() {
-        when(rawService.getInsightsData())
+        when(actuatorService.getInsightsData())
                 .thenReturn(Map.of(
                         "health", Map.of("body", Map.of("status", "UP", "components", Map.of()), "status", 200),
                         "info",
@@ -104,7 +104,7 @@ class ActuatorInsightsServiceTest {
         when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of(metadata));
 
         ActuatorInsightsService serviceWithDataSource = newInsightsService(dataSourceProvider);
-        when(rawService.getInsightsData()).thenReturn(Map.of());
+        when(actuatorService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = serviceWithDataSource.getInsights(Locale.ENGLISH, false);
 
@@ -114,7 +114,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldHandleMissingData() {
-        when(rawService.getInsightsData()).thenReturn(Map.of());
+        when(actuatorService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
@@ -124,7 +124,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldIncludeServerInfo() {
-        when(rawService.getInsightsData()).thenReturn(Map.of());
+        when(actuatorService.getInsightsData()).thenReturn(Map.of());
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
@@ -136,7 +136,7 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldPassLocaleToScheduledTasksMapper() {
-        when(rawService.getInsightsData())
+        when(actuatorService.getInsightsData())
                 .thenReturn(Map.of(
                         "scheduledtasks",
                         Map.of(
@@ -159,7 +159,7 @@ class ActuatorInsightsServiceTest {
 
     private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
         return new ActuatorInsightsService(
-                rawService,
+                actuatorService,
                 new ActuatorResponseParser(),
                 new HealthMapper(),
                 new RuntimeMapper(),

@@ -152,7 +152,9 @@ public class QueryExtractor {
     }
 
     private String findDbSystem(Map<String, String> tags) {
-        // 1. Current OpenTelemetry semantic convention
+        // 1. Current OpenTelemetry semantic convention, ahead of db.system, which is the
+        // same convention's superseded spelling: when a library emits both, the current
+        // one is authoritative.
         String system = tags.get("db.system.name");
         if (system != null) {
             return system;

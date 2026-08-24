@@ -17,7 +17,7 @@ class ActuatorResponseParserTest {
     @BeforeAll
     static void loadSampleData() throws Exception {
         JsonMapper jsonMapper = JsonMapper.builder().build();
-        try (InputStream is = ActuatorResponseParserTest.class.getResourceAsStream("/sample_actuator_all_raw.json")) {
+        try (InputStream is = ActuatorResponseParserTest.class.getResourceAsStream("/sample_actuator_all.json")) {
             rawData = jsonMapper.readValue(is, new TypeReference<>() {});
         }
     }

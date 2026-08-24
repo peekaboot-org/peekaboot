@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 @Service
 public final class ActuatorInsightsService {
 
-    private final PeekabootActuatorService rawService;
+    private final PeekabootActuatorService actuatorService;
     private final ActuatorResponseParser responseParser;
     private final HealthMapper healthMapper;
     private final RuntimeMapper runtimeMapper;
@@ -29,7 +29,7 @@ public final class ActuatorInsightsService {
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
     public ActuatorInsightsService(
-            PeekabootActuatorService rawService,
+            PeekabootActuatorService actuatorService,
             ActuatorResponseParser responseParser,
             HealthMapper healthMapper,
             RuntimeMapper runtimeMapper,
@@ -41,7 +41,7 @@ public final class ActuatorInsightsService {
             ConfigMapper configMapper,
             ScheduledTasksMapper scheduledTasksMapper,
             ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
-        this.rawService = rawService;
+        this.actuatorService = actuatorService;
         this.responseParser = responseParser;
         this.healthMapper = healthMapper;
         this.runtimeMapper = runtimeMapper;
@@ -62,7 +62,7 @@ public final class ActuatorInsightsService {
      * property values, so none of them re-derives it.
      */
     public ActuatorInsightsResponse getInsights(Locale locale, boolean unmask) {
-        Map<String, Object> rawData = rawService.getInsightsData();
+        Map<String, Object> rawData = actuatorService.getInsightsData();
         ActuatorParsedData typed = responseParser.parse(rawData);
 
         return new ActuatorInsightsResponse(
