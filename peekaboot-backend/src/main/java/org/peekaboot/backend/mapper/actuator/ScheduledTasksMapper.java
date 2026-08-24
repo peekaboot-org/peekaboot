@@ -25,35 +25,30 @@ public class ScheduledTasksMapper {
             return new ScheduledTasksInfo(List.of(), 0, 0, 0);
         }
 
+        var cronTasks = orEmpty(response.cron());
+        var fixedDelayTasks = orEmpty(response.fixedDelay());
+        var fixedRateTasks = orEmpty(response.fixedRate());
+
         List<ScheduledTaskInfo> tasks = new ArrayList<>();
-
-        if (response.cron() != null) {
-            for (var cron : response.cron()) {
-                tasks.add(mapCronTask(cron, locale));
-            }
+        for (var cron : cronTasks) {
+            tasks.add(mapCronTask(cron, locale));
         }
-
-        if (response.fixedDelay() != null) {
-            for (var fixed : response.fixedDelay()) {
-                tasks.add(mapFixedTask(fixed, TaskType.FIXED_DELAY));
-            }
+        for (var fixed : fixedDelayTasks) {
+            tasks.add(mapFixedTask(fixed, TaskType.FIXED_DELAY));
         }
-
-        if (response.fixedRate() != null) {
-            for (var fixed : response.fixedRate()) {
-                tasks.add(mapFixedTask(fixed, TaskType.FIXED_RATE));
-            }
+        for (var fixed : fixedRateTasks) {
+            tasks.add(mapFixedTask(fixed, TaskType.FIXED_RATE));
         }
 
         tasks.sort(Comparator
             .comparing(ScheduledTaskInfo::type)
             .thenComparing(ScheduledTaskInfo::target));
 
-        int cronCount = response.cron() != null ? response.cron().size() : 0;
-        int fixedDelayCount = response.fixedDelay() != null ? response.fixedDelay().size() : 0;
-        int fixedRateCount = response.fixedRate() != null ? response.fixedRate().size() : 0;
+        return new ScheduledTasksInfo(tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size());
+    }
 
-        return new ScheduledTasksInfo(tasks, cronCount, fixedDelayCount, fixedRateCount);
+    private static <T> List<T> orEmpty(List<T> list) {
+        return list != null ? list : List.of();
     }
 
     private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
