@@ -24,7 +24,6 @@ import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
-import org.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -43,19 +42,16 @@ public class TraceInsightsService {
     @Nullable
     private final TraceStore traceStore;
 
-    private final SpanDeduplicator spanDeduplicator;
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
     private final QueryExtractor queryExtractor;
 
     public TraceInsightsService(
             @Nullable TraceStore traceStore,
-            SpanDeduplicator spanDeduplicator,
             TraceTreeMapper traceTreeMapper,
             IssueDetector issueDetector,
             QueryExtractor queryExtractor) {
         this.traceStore = traceStore;
-        this.spanDeduplicator = spanDeduplicator;
         this.traceTreeMapper = traceTreeMapper;
         this.issueDetector = issueDetector;
         this.queryExtractor = queryExtractor;
@@ -126,8 +122,7 @@ public class TraceInsightsService {
         }
         return traceStore.getTraces(bucket, limit).stream()
                 .map(bundle -> {
-                    TraceData traceData =
-                            spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
+                    TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
                     return traceTreeMapper.map(traceData, bundle.truncated());
                 })
                 .filter(Objects::nonNull);
@@ -167,7 +162,7 @@ public class TraceInsightsService {
         }
 
         return traceStore.getTrace(traceId).map(bundle -> {
-            TraceData traceData = spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
+            TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
             List<QueryInfo> queries = queryExtractor.extract(traceData);
             TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
             tree = issueDetector.detectIssues(tree);

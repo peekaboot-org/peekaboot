@@ -7,10 +7,8 @@ import java.util.Set;
 /**
  * Decides whether two spans are the same JDBC call captured twice - Peekaboot's JDBC
  * instrumentation double-emits a span for every call, nested one under the other, differing
- * only in which service-identifier tag carries the real datasource name. Shared between
- * {@link org.peekaboot.backend.mapper.trace.SpanDeduplicator} (which collapses duplicates in
- * an already-complete span list, at read time) and {@link TraceDataBundle} (which folds them
- * away incrementally, at write time).
+ * only in which service-identifier tag carries the real datasource name. Used by
+ * {@link TraceDataBundle}, which folds duplicates away incrementally as spans are written.
  */
 public final class SpanDuplicateMatcher {
 

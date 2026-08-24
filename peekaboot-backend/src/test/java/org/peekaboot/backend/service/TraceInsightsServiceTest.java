@@ -18,7 +18,6 @@ import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
-import org.peekaboot.backend.mapper.trace.SpanDeduplicator;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -468,8 +467,8 @@ class TraceInsightsServiceTest {
         // BatchSpanProcessor's export ordering has it in production)
         addTraceWithDuplicatedDbSpan("trace1", 100);
 
-        // Then: the store itself, not TraceInsightsService's read-time SpanDeduplicator
-        // pass, must already hold just the real span
+        // Then: the store itself must already hold just the real span - TraceInsightsService
+        // has no read-time dedup pass of its own to fall back on
         assertThat(store.getTrace("trace1")).isPresent();
         assertThat(store.getTrace("trace1").get().spans()).hasSize(2); // root span + the real query span
     }
@@ -544,7 +543,7 @@ class TraceInsightsServiceTest {
     }
 
     private TraceInsightsService newService(TraceStore store) {
-        return new TraceInsightsService(store, new SpanDeduplicator(), traceTreeMapper, issueDetector, queryExtractor);
+        return new TraceInsightsService(store, traceTreeMapper, issueDetector, queryExtractor);
     }
 
     private void addTrace(String traceId, long durationMs, boolean hasError) {
