@@ -1,17 +1,16 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.HealthResponse;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.health.HealthComponent;
 import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class HealthMapper {
@@ -45,7 +44,8 @@ public class HealthMapper {
         }
 
         List<HealthComponent> result = new ArrayList<>();
-        for (Map.Entry<String, HealthResponse.HealthComponent> entry : body.components().entrySet()) {
+        for (Map.Entry<String, HealthResponse.HealthComponent> entry :
+                body.components().entrySet()) {
             String name = entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());

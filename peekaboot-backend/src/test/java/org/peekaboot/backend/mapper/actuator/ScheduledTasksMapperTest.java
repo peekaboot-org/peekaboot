@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
+import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
 import org.peekaboot.backend.domain.scheduledtasks.*;
 import org.peekaboot.backend.service.CronDescriptionService;
 

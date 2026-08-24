@@ -1,16 +1,15 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.LoggersResponse;
-import org.peekaboot.backend.domain.loggers.LoggerGroup;
-import org.peekaboot.backend.domain.loggers.LoggerInfo;
-import org.peekaboot.backend.domain.loggers.LoggersInfo;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.parsed.LoggersResponse;
+import org.peekaboot.backend.domain.loggers.LoggerGroup;
+import org.peekaboot.backend.domain.loggers.LoggerInfo;
+import org.peekaboot.backend.domain.loggers.LoggersInfo;
 
 class LoggersMapperTest {
 
@@ -31,7 +30,8 @@ class LoggersMapperTest {
 
         LoggerGroup exampleGroup = result.packages().stream()
                 .filter(g -> g.packageName().equals("com.example"))
-                .findFirst().orElseThrow();
+                .findFirst()
+                .orElseThrow();
         assertThat(exampleGroup.loggers())
                 .extracting(LoggerInfo::name, LoggerInfo::effectiveLevel)
                 .containsExactlyInAnyOrder(
@@ -53,13 +53,15 @@ class LoggersMapperTest {
 
         LoggerInfo foo = result.packages().get(0).loggers().stream()
                 .filter(l -> l.name().equals("com.example.Foo"))
-                .findFirst().orElseThrow();
+                .findFirst()
+                .orElseThrow();
         assertThat(foo.configuredLevel()).isEqualTo("DEBUG");
         assertThat(foo.effectiveLevel()).isEqualTo("INFO");
 
         LoggerInfo bar = result.packages().get(0).loggers().stream()
                 .filter(l -> l.name().equals("com.example.Bar"))
-                .findFirst().orElseThrow();
+                .findFirst()
+                .orElseThrow();
         assertThat(bar.configuredLevel()).isNull();
         assertThat(bar.effectiveLevel()).isEqualTo("INFO");
     }
@@ -81,9 +83,7 @@ class LoggersMapperTest {
 
     @Test
     void map_shouldHandleSinglePartPackageName() {
-        Map<String, LoggersResponse.LoggerInfo> loggers = Map.of(
-            "ROOT", new LoggersResponse.LoggerInfo(null, "INFO")
-        );
+        Map<String, LoggersResponse.LoggerInfo> loggers = Map.of("ROOT", new LoggersResponse.LoggerInfo(null, "INFO"));
         LoggersResponse loggersData = new LoggersResponse(List.of(), loggers, Map.of());
         LoggersInfo result = mapper.map(loggersData);
 

@@ -1,54 +1,42 @@
 package org.peekaboot.backend.controller;
 
-import org.peekaboot.backend.actuator.raw.ActuatorRawResponse;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.BucketCounts;
-import org.peekaboot.backend.domain.trace.CollectionFramework;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceListSummary;
-import org.peekaboot.backend.domain.trace.TraceRawData;
-import org.peekaboot.backend.domain.trace.TraceRawResponse;
-import org.peekaboot.backend.domain.trace.TraceRawSummary;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
-import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.backend.service.TraceInsightsService;
-import org.peekaboot.backend.service.TraceRawService;
 import org.peekaboot.backend.tracing.store.TraceBucket;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 class PeekabootControllerTest {
 
-    private PeekabootActuatorService actuatorService;
     private ActuatorInsightsService actuatorInsightsService;
     private TraceInsightsService traceInsightsService;
-    private TraceRawService traceRawService;
     private MetricsService metricsService;
     private PeekabootProperties properties;
 
@@ -56,64 +44,29 @@ class PeekabootControllerTest {
 
     @BeforeEach
     void setUp() {
-        actuatorService = mock(PeekabootActuatorService.class);
         actuatorInsightsService = mock(ActuatorInsightsService.class);
         traceInsightsService = mock(TraceInsightsService.class);
-        traceRawService = mock(TraceRawService.class);
         metricsService = mock(MetricsService.class);
         properties = new PeekabootProperties();
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = new PeekabootController(
-                actuatorService,
-                actuatorInsightsService,
-                traceInsightsService,
-                traceRawService,
-                metricsService,
-                properties
-        );
+        controller = new PeekabootController(actuatorInsightsService, traceInsightsService, metricsService, properties);
     }
 
     @Nested
-    class GetTracesRaw {
+    class RemovedRawEndpoints {
 
+        /**
+         * The /raw endpoints had no caller in the dashboard or the toolbar and were the
+         * broadest surface Peekaboot exposed. They are gone, not deprecated - nothing is
+         * released, so there is no consumer to keep working.
+         */
         @Test
-        void shouldReturnTracesFromService() {
-            TraceRawResponse expectedResponse = new TraceRawResponse(
-                    CollectionFramework.BRAVE,
-                    TraceRawSummary.empty(),
-                    List.of()
-            );
-            when(traceRawService.getTraces(anyInt(), any()))
-                    .thenReturn(expectedResponse);
-
-            TraceRawResponse result = controller.getTracesRaw(50, null);
-
-            assertThat(result.collectionFramework()).isEqualTo(CollectionFramework.BRAVE);
-        }
-
-        @Test
-        void shouldClampNegativeLimit() {
-            // a negative limit would throw from Stream.limit and produce a 500
-            controller.getTracesRaw(-5, null);
-
-            verify(traceRawService).getTraces(eq(0), any());
-        }
-
-        @Test
-        void shouldClampExcessiveLimit() {
-            // huge limits would overflow downstream multiplications
-            controller.getTracesRaw(Integer.MAX_VALUE, null);
-
-            verify(traceRawService).getTraces(eq(10_000), any());
-        }
-
-        @Test
-        void shouldPassParsedBucketToService() {
-            controller.getTracesRaw(50, "errors");
-
-            verify(traceRawService).getTraces(50, TraceBucket.ERRORS);
+        void shouldNoLongerExposeAnyRawEndpoint() {
+            assertThat(PeekabootController.class.getDeclaredMethods())
+                    .extracting(java.lang.reflect.Method::getName)
+                    .doesNotContain("getRaw", "getTracesRaw", "getTraceRaw");
         }
     }
 
@@ -168,38 +121,7 @@ class PeekabootControllerTest {
         }
 
         private TraceInsightsResponse emptyInsightsResponse() {
-            return new TraceInsightsResponse(
-                    List.of(),
-                    new TraceListSummary(0, 0, 0, 0.0),
-                    BucketCounts.empty()
-            );
-        }
-    }
-
-    @Nested
-    class GetTraceRaw {
-
-        @Test
-        void shouldReturnTraceWhenFound() {
-            TraceRawData traceRawData = createTraceRawData("trace-123");
-            when(traceRawService.getTrace("trace-123"))
-                    .thenReturn(Optional.of(traceRawData));
-
-            ResponseEntity<TraceRawData> result = controller.getTraceRaw("trace-123");
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(result.getBody()).isNotNull();
-            assertThat(result.getBody().traceId()).isEqualTo("trace-123");
-        }
-
-        @Test
-        void shouldReturn404WhenTraceNotFound() {
-            when(traceRawService.getTrace("unknown"))
-                    .thenReturn(Optional.empty());
-
-            ResponseEntity<TraceRawData> result = controller.getTraceRaw("unknown");
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            return new TraceInsightsResponse(List.of(), new TraceListSummary(0, 0, 0, 0.0), BucketCounts.empty());
         }
     }
 
@@ -209,8 +131,7 @@ class PeekabootControllerTest {
         @Test
         void shouldReturnTraceTreeWhenFound() {
             TraceTree traceTree = createTraceTree("trace-456");
-            when(traceInsightsService.getTraceInsights("trace-456"))
-                    .thenReturn(Optional.of(traceTree));
+            when(traceInsightsService.getTraceInsights("trace-456")).thenReturn(Optional.of(traceTree));
 
             ResponseEntity<TraceTree> result = controller.getTraceInsights("trace-456");
 
@@ -221,8 +142,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReturn404WhenTraceNotFound() {
-            when(traceInsightsService.getTraceInsights("unknown"))
-                    .thenReturn(Optional.empty());
+            when(traceInsightsService.getTraceInsights("unknown")).thenReturn(Optional.empty());
 
             ResponseEntity<TraceTree> result = controller.getTraceInsights("unknown");
 
@@ -235,7 +155,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldIncludeTracingFeatureWhenTracingAvailable() {
-            when(traceRawService.isTracingAvailable()).thenReturn(true);
+            when(traceInsightsService.isTracingAvailable()).thenReturn(true);
 
             Map<String, Object> features = controller.getFeatures();
 
@@ -245,7 +165,7 @@ class PeekabootControllerTest {
         @Test
         void shouldIncludeTracingFeatureAsFalseWhenTracingUnavailable() {
             // tracing disabled: the service bean exists but has no TraceStore
-            when(traceRawService.isTracingAvailable()).thenReturn(false);
+            when(traceInsightsService.isTracingAvailable()).thenReturn(false);
 
             Map<String, Object> features = controller.getFeatures();
 
@@ -327,8 +247,8 @@ class PeekabootControllerTest {
 
         @Test
         void shouldReturnResponseFromService() {
-            ActuatorInsightsResponse expected = new ActuatorInsightsResponse(
-                    null, null, null, null, null, null, null, null, null, null);
+            ActuatorInsightsResponse expected =
+                    new ActuatorInsightsResponse(null, null, null, null, null, null, null, null, null, null);
             when(actuatorInsightsService.getInsights(any(), anyBoolean())).thenReturn(expected);
 
             ActuatorInsightsResponse result = controller.getInsights(null, false);
@@ -370,50 +290,6 @@ class PeekabootControllerTest {
     }
 
     @Nested
-    class GetRaw {
-
-        @Test
-        void shouldReturnDataFromService() {
-            ActuatorRawResponse expected = ActuatorRawResponse.wrap(Map.of("health", "UP"));
-            when(actuatorService.getData(anyBoolean())).thenReturn(expected);
-
-            ActuatorRawResponse result = controller.getRaw(false);
-
-            assertThat(result).isSameAs(expected);
-        }
-
-        /**
-         * getRaw() is the broadest surface Peekaboot exposes and historically the one
-         * masking bypass this codebase already had - it must resolve the unmask decision
-         * identically to getInsights() above, not re-derive it.
-         */
-        @Test
-        void shouldIgnoreUnmaskTrueWhenUnmaskingIsDisabled() {
-            controller.getRaw(true);
-
-            verify(actuatorService).getData(false);
-        }
-
-        @Test
-        void shouldRequestUnmaskedDataOnlyWhenBothThePropertyAndTheParameterAreTrue() {
-            properties.setEnableUnmasking(true);
-
-            controller.getRaw(true);
-
-            verify(actuatorService).getData(true);
-        }
-
-        @Test
-        void shouldStayMaskedWhenUnmaskingIsEnabledButTheParameterIsNotSet() {
-            properties.setEnableUnmasking(true);
-
-            controller.getRaw(false);
-
-            verify(actuatorService).getData(false);
-        }
-    }
-
-    @Nested
     class GetMetrics {
 
         @Test
@@ -427,27 +303,6 @@ class PeekabootControllerTest {
         }
     }
 
-    private TraceRawData createTraceRawData(String traceId) {
-        return new TraceRawData(
-                CollectionFramework.BRAVE,
-                traceId,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(100),
-                100L,
-                new TraceRawData.PerTraceSummary(
-                        new TraceRawSummary.CountDuration(1, 100L),
-                        new TraceRawSummary.CountDuration(0, 0L),
-                        new TraceRawSummary.Count(0),
-                        new TraceRawSummary.Count(0)
-                ),
-                List.of(),
-                List.of(),
-                List.of(),
-                null,
-                false
-        );
-    }
-
     private TraceTree createTraceTree(String traceId) {
         SpanNode rootSpan = new SpanNode(
                 "span-" + traceId,
@@ -459,8 +314,7 @@ class PeekabootControllerTest {
                 List.of(),
                 Map.of(),
                 List.of(),
-                List.of()
-        );
+                List.of());
 
         return new TraceTree(
                 traceId,
@@ -474,10 +328,11 @@ class PeekabootControllerTest {
                         null,
                         new TraceTabSummary.SpansSummary(1, 100L, 0),
                         new TraceTabSummary.QueriesSummary(0, 0L),
-                        new TraceTabSummary.LogsSummary(0, 0, 0)
-                ),
+                        new TraceTabSummary.LogsSummary(0, 0, 0)),
                 Map.of(),
-                null, null, null, false
-        );
+                null,
+                null,
+                null,
+                false);
     }
 }

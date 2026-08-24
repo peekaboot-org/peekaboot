@@ -1,63 +1,33 @@
 package org.peekaboot.testingapp.integration;
 
-import net.osslabz.jdbc.Host;
-import net.osslabz.jdbc.JdbcProperty;
-import net.osslabz.jdbc.PropertySource;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.peekaboot.backend.service.PeekabootActuatorService;
-import org.peekaboot.testingapp.TestingApp;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
-import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
-import org.springframework.test.context.ActiveProfiles;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(
-    classes = TestingApp.class,
-    properties = {
-        "management.endpoints.web.exposure.include=*",
-        "management.endpoint.threaddump.access=unrestricted",
-        "management.endpoint.heapdump.access=unrestricted"
-    }
-)
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import net.osslabz.jdbc.Host;
+import net.osslabz.jdbc.JdbcProperty;
+import net.osslabz.jdbc.PropertySource;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.service.PeekabootActuatorService;
+import org.peekaboot.testingapp.TestingApp;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+
+@SpringBootTest(classes = TestingApp.class, properties = "management.endpoints.web.exposure.include=*")
 @ActiveProfiles("test")
-@Import({
-    PeekabootActuatorServiceTest.ThrowingEndpointConfig.class,
-    PeekabootActuatorServiceTest.DataSourceMetadataFixtureConfig.class
-})
+@Import(PeekabootActuatorServiceTest.DataSourceMetadataFixtureConfig.class)
 class PeekabootActuatorServiceTest {
 
     @Autowired
     private PeekabootActuatorService service;
-
-    @Autowired
-    private ApplicationContext context;
-
-    @Test
-    void rawDataExcludesExpensiveEndpoints() {
-        // Precondition: with exposure=* the expensive endpoints exist in the context,
-        // so their absence from the result is due to filtering, not availability.
-        assertThat(context.getBeansOfType(org.springframework.boot.actuate.management.ThreadDumpEndpoint.class)).isNotEmpty();
-        assertThat(context.getBeansOfType(org.springframework.boot.actuate.management.HeapDumpWebEndpoint.class)).isNotEmpty();
-
-        Map<String, Object> raw = service.getRawData();
-
-        assertThat(raw).containsKey("health");
-        assertThat(raw).doesNotContainKeys("threaddump", "heapdump", "logfile");
-    }
 
     @Test
     void insightsDataInvokesOnlyConsumedEndpoints() {
@@ -65,28 +35,19 @@ class PeekabootActuatorServiceTest {
 
         // spring and dataSources are built locally, the rest must be limited to
         // the endpoints the insights mappers actually consume.
-        Set<String> allowed = Set.of("spring", "dataSources",
-                "health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
+        Set<String> allowed = Set.of(
+                "spring", "dataSources", "health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
         assertThat(data.keySet()).isSubsetOf(allowed);
         assertThat(data).containsKeys("health", "info", "env");
         assertThat(data).doesNotContainKeys("beans", "conditions", "mappings", "threaddump", "metrics");
     }
 
     @Test
-    void rawDataCapturesEndpointInvocationExceptionAsErrorMessage() {
-        assertThat(context.getBeansOfType(ThrowingEndpoint.class)).isNotEmpty();
-
-        Map<String, Object> raw = service.getRawData();
-
-        assertThat(raw.get("throwingtest")).isEqualTo("Error: boom");
-    }
-
-    @Test
     @SuppressWarnings("unchecked")
-    void rawDataFormatsDataSourceHostsAndConnectionParams() {
-        Map<String, Object> raw = service.getRawData();
+    void insightsDataFormatsDataSourceHostsAndConnectionParams() {
+        Map<String, Object> data = service.getInsightsData();
 
-        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
+        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) data.get("dataSources");
         assertThat(dataSources).isNotEmpty();
 
         Map<String, Object> dataSource = dataSources.get(0);
@@ -100,64 +61,18 @@ class PeekabootActuatorServiceTest {
         Map<String, Object> connectionParams = (Map<String, Object>) dataSource.get("connectionParams");
         assertThat(connectionParams).isNotNull();
         assertThat(connectionParams).isNotEmpty();
-        connectionParams.values().forEach(paramInfo ->
-                assertThat((Map<String, Object>) paramInfo).containsKeys("value", "source"));
-        assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value")).isEqualTo("MEMORY");
+        connectionParams
+                .values()
+                .forEach(
+                        paramInfo -> assertThat((Map<String, Object>) paramInfo).containsKeys("value", "source"));
+        assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value"))
+                .isEqualTo("MEMORY");
 
-        // getRawData() is the unmasked, low-level accessor - PeekabootActuatorServiceTest's
-        // sibling assertions on getData() (below) are what prove the HTTP-facing raw
-        // endpoint actually masks; this one exists to pin that getRawData() itself still
-        // doesn't, so a future change can't accidentally move masking to the wrong layer.
-        assertThat(((Map<String, Object>) connectionParams.get("password")).get("value")).isEqualTo("hunter2");
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void getDataMasksSensitiveConnectionParamsUnlikeGetRawData() {
-        // getData(false) backs GET /peekaboot/api/actuator/all/raw when unmasking isn't
-        // in effect - the endpoint the design spec calls out as a full masking bypass.
-        // This proves it no longer is one.
-        Map<String, Object> raw = service.getData(false).spring().actuator();
-
-        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
-        Map<String, Object> connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
-
-        assertThat(connectionParams.get("password")).isEqualTo("******");
-        // A non-sensitive key survives untouched, confirming this isn't a blanket wipe.
-        assertThat(((Map<String, Object>) connectionParams.get("MODE")).get("value")).isEqualTo("MEMORY");
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    void getDataReturnsRealConnectionParamsWhenAskedToUnmask() {
-        // getData(true) is only ever reached once the controller has already resolved
-        // peekaboot.enable-unmasking AND the request's unmask parameter to true (see
-        // PeekabootController.resolveUnmask) - this proves the service itself honours
-        // that decision rather than re-deriving it.
-        Map<String, Object> raw = service.getData(true).spring().actuator();
-
-        List<Map<String, Object>> dataSources = (List<Map<String, Object>>) raw.get("dataSources");
-        Map<String, Object> connectionParams = (Map<String, Object>) dataSources.get(0).get("connectionParams");
-
-        // Unlike the masked case (whole-object replaced by "******"), an unmasked node
-        // is returned unchanged - so this is still the {value, source} shape.
-        assertThat(((Map<String, Object>) connectionParams.get("password")).get("value")).isEqualTo("hunter2");
-    }
-
-    @TestConfiguration
-    static class ThrowingEndpointConfig {
-        @Bean
-        ThrowingEndpoint throwingEndpoint() {
-            return new ThrowingEndpoint();
-        }
-    }
-
-    @Endpoint(id = "throwingtest")
-    static class ThrowingEndpoint {
-        @ReadOperation
-        public String read() {
-            throw new IllegalStateException("boom");
-        }
+        // getInsightsData() is the unmasked, low-level accessor - masking happens further
+        // downstream in ActuatorInsightsService's typed mappers (see DataSourceMapperTest
+        // and ActuatorMaskingIntegrationTest), not here.
+        assertThat(((Map<String, Object>) connectionParams.get("password")).get("value"))
+                .isEqualTo("hunter2");
     }
 
     /**
@@ -177,8 +92,8 @@ class PeekabootActuatorServiceTest {
             DataSourceMetadata metadata = mock(DataSourceMetadata.class);
             when(metadata.getDataSourceName()).thenReturn("primary");
             when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
-            when(metadata.getConnectionParams()).thenReturn(
-                    Map.of(
+            when(metadata.getConnectionParams())
+                    .thenReturn(Map.of(
                             "MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY"),
                             "password", new JdbcProperty(PropertySource.QUERY, "hunter2")));
             return List.of(metadata);

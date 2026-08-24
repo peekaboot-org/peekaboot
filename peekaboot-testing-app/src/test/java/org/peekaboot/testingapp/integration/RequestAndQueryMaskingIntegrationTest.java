@@ -1,10 +1,16 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.micrometer.tracing.Span;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -21,20 +27,14 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * Proves two masking fixes (Fix round 1: C1, C2) end to end through the real HTTP API and
  * a real Spring context - a unit test on the mapper/filter alone would not catch either,
  * since both defects existed despite RequestCaptureFilter's header masking and
  * QueryExtractor's own unit tests being green: the bug was in the parts neither test
- * exercised (parameters/query string; a raw span embedded straight into TraceRawData
- * without going through TraceTreeMapper at all).
+ * exercised (parameters/query string). These assertions now run against
+ * {@code /api/traces/{traceId}/insights} - the only trace endpoint left, so it is the
+ * only path this masking has to hold on.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -66,14 +66,18 @@ class RequestAndQueryMaskingIntegrationTest {
      * test-only Spring bean.
      */
     @Test
-    void aSecretBearingQueryParameterComesBackMaskedFromTheRawTraceApi() {
-        restClient().get().uri("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets")
-                .retrieve().toBodilessEntity();
+    void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
+        restClient()
+                .get()
+                .uri("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets")
+                .retrieve()
+                .toBodilessEntity();
 
         JsonNode listed = traces().awaitTraceInBucket("all", "/masking-test/search");
-        JsonNode trace = fetchRawTrace(listed.path("traceId").asString());
+        JsonNode trace = fetchTrace(listed.path("traceId").asString());
 
-        JsonNode queryParams = trace.path("httpExchange").path("request").path("params").path("query");
+        JsonNode queryParams =
+                trace.path("httpExchange").path("request").path("params").path("query");
         assertThat(queryParams.path("api_key").get(0).asString()).isEqualTo("******");
         assertThat(queryParams.path("q").get(0).asString()).isEqualTo("widgets");
         assertThat(trace.path("httpExchange").path("request").path("query").asString())
@@ -81,16 +85,20 @@ class RequestAndQueryMaskingIntegrationTest {
     }
 
     @Test
-    void aSecretBearingFormFieldComesBackMaskedFromTheRawTraceApi() {
-        restClient().post().uri("/masking-test/login")
+    void aSecretBearingFormFieldComesBackMaskedFromTheTraceInsightsApi() {
+        restClient()
+                .post()
+                .uri("/masking-test/login")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body("username=alice&password=hunter2")
-                .retrieve().toBodilessEntity();
+                .retrieve()
+                .toBodilessEntity();
 
         JsonNode listed = traces().awaitTraceInBucket("all", "/masking-test/login");
-        JsonNode trace = fetchRawTrace(listed.path("traceId").asString());
+        JsonNode trace = fetchTrace(listed.path("traceId").asString());
 
-        JsonNode formParams = trace.path("httpExchange").path("request").path("params").path("form");
+        JsonNode formParams =
+                trace.path("httpExchange").path("request").path("params").path("form");
         assertThat(formParams.path("password").get(0).asString()).isEqualTo("******");
         assertThat(formParams.path("username").get(0).asString()).isEqualTo("alice");
     }
@@ -104,41 +112,71 @@ class RequestAndQueryMaskingIntegrationTest {
      * pre-existing, unrelated gap, not something this fix round's C2 scope covers, noted
      * in the task report rather than silently fixed here. Using a directly-added SpanData
      * with a "db.statement" tag (the shape QueryExtractor does recognise, and the one
-     * TraceRawServiceTest/DashboardTraceViewTest already use) isolates that from what
-     * this test is actually proving: that TraceRawService's real HTTP-facing endpoint
-     * masks the SQL it serves, not just the QueryExtractor unit in isolation.
+     * DashboardTraceViewTest already uses) isolates that from what this test is actually
+     * proving: that the trace insights endpoint's real HTTP-facing response masks the SQL
+     * it serves, not just the QueryExtractor unit in isolation.
      */
     @Test
-    void sqlCarryingACredentialShapedValueComesBackMaskedFromTheRawTraceApi() {
+    void sqlCarryingACredentialShapedValueComesBackMaskedFromTheTraceInsightsApi() {
         String traceId = "masking-test-sql-" + System.nanoTime();
         Instant start = Instant.now();
         traceStore.addSpan(new SpanData(
-                traceId, "root", null, "GET /masking-test/sql-fixture", Span.Kind.SERVER,
-                start, start.plusMillis(50), Duration.ofMillis(50),
-                Map.of(), List.of(), null, null, null, null, null, List.of(),
-                traceStore.nextCreationOrder()
-        ));
+                traceId,
+                "root",
+                null,
+                "GET /masking-test/sql-fixture",
+                Span.Kind.SERVER,
+                start,
+                start.plusMillis(50),
+                Duration.ofMillis(50),
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                traceStore.nextCreationOrder()));
         traceStore.addSpan(new SpanData(
-                traceId, "db", "root", "query", Span.Kind.CLIENT,
-                start.plusMillis(5), start.plusMillis(20), Duration.ofMillis(15),
-                Map.of("db.system", "h2", "db.statement",
+                traceId,
+                "db",
+                "root",
+                "query",
+                Span.Kind.CLIENT,
+                start.plusMillis(5),
+                start.plusMillis(20),
+                Duration.ofMillis(15),
+                Map.of(
+                        "db.system",
+                        "h2",
+                        "db.statement",
                         "INSERT INTO webhooks (callback_url) VALUES "
                                 + "('https://admin:hunter2@internal.example.com/callback')"),
-                List.of(), null, null, null, null, null, List.of(),
-                traceStore.nextCreationOrder()
-        ));
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                traceStore.nextCreationOrder()));
 
-        JsonNode trace = fetchRawTrace(traceId);
+        JsonNode trace = fetchTrace(traceId);
 
         assertThat(trace.path("queries")).hasSize(1);
         String sql = trace.path("queries").get(0).path("sql").asString();
-        assertThat(sql).isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
-                + "('https://******@internal.example.com/callback')");
+        assertThat(sql)
+                .isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
+                        + "('https://******@internal.example.com/callback')");
     }
 
-    private JsonNode fetchRawTrace(String traceId) {
-        String body = restClient().get().uri("/peekaboot/api/traces/" + traceId + "/raw")
-                .retrieve().body(String.class);
+    private JsonNode fetchTrace(String traceId) {
+        String body = restClient()
+                .get()
+                .uri("/peekaboot/api/traces/" + traceId + "/insights")
+                .retrieve()
+                .body(String.class);
         return objectMapper.readTree(body);
     }
 

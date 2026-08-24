@@ -3,8 +3,8 @@ package org.peekaboot.backend.service;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.peekaboot.backend.actuator.raw.ActuatorParsedData;
-import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
+import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
+import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 public final class ActuatorInsightsService {
 
     private final PeekabootActuatorService rawService;
-    private final ActuatorRawMapper rawMapper;
+    private final ActuatorResponseParser responseParser;
     private final HealthMapper healthMapper;
     private final RuntimeMapper runtimeMapper;
     private final DataSourceMapper dataSourceMapper;
@@ -30,7 +30,7 @@ public final class ActuatorInsightsService {
 
     public ActuatorInsightsService(
             PeekabootActuatorService rawService,
-            ActuatorRawMapper rawMapper,
+            ActuatorResponseParser responseParser,
             HealthMapper healthMapper,
             RuntimeMapper runtimeMapper,
             DataSourceMapper dataSourceMapper,
@@ -42,7 +42,7 @@ public final class ActuatorInsightsService {
             ScheduledTasksMapper scheduledTasksMapper,
             ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
         this.rawService = rawService;
-        this.rawMapper = rawMapper;
+        this.responseParser = responseParser;
         this.healthMapper = healthMapper;
         this.runtimeMapper = runtimeMapper;
         this.dataSourceMapper = dataSourceMapper;
@@ -63,7 +63,7 @@ public final class ActuatorInsightsService {
      */
     public ActuatorInsightsResponse getInsights(Locale locale, boolean unmask) {
         Map<String, Object> rawData = rawService.getInsightsData();
-        ActuatorParsedData typed = rawMapper.map(rawData);
+        ActuatorParsedData typed = responseParser.parse(rawData);
 
         return new ActuatorInsightsResponse(
                 applicationMapper.map(typed.info(), typed.spring()),

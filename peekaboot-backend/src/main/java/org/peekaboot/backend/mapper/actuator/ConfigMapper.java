@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.peekaboot.backend.actuator.raw.ConfigPropsResponse;
+import org.peekaboot.backend.actuator.parsed.ConfigPropsResponse;
 import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.peekaboot.backend.domain.config.ConfigProperty;

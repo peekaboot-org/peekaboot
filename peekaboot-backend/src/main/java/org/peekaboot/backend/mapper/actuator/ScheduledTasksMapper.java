@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
+import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
 import org.peekaboot.backend.domain.scheduledtasks.*;
 import org.peekaboot.backend.service.CronDescriptionService;
 import org.springframework.stereotype.Component;

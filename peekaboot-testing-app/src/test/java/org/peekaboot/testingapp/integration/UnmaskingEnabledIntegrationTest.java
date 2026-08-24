@@ -1,18 +1,17 @@
 package org.peekaboot.testingapp.integration;
 
-import org.peekaboot.testingapp.TestingApp;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
+import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
+
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
-import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
-import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findRawConfigPropsProperty;
 
 /**
  * Proves the second half of the two-independent-opt-ins design end to end through the
@@ -31,8 +30,7 @@ import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findRawC
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "peekaboot.enable-unmasking=true"
-)
+        properties = "peekaboot.enable-unmasking=true")
 @ActiveProfiles("test")
 class UnmaskingEnabledIntegrationTest {
 
@@ -42,14 +40,20 @@ class UnmaskingEnabledIntegrationTest {
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     private JsonNode getJson(String uri) {
-        String body = RestClient.builder().baseUrl("http://localhost:" + port).build()
-                .get().uri(uri).retrieve().body(String.class);
+        String body = RestClient.builder()
+                .baseUrl("http://localhost:" + port)
+                .build()
+                .get()
+                .uri(uri)
+                .retrieve()
+                .body(String.class);
         return jsonMapper.readTree(body);
     }
 
     @Test
     void insightsEndpointReturnsRealValuesWhenUnmaskIsRequested() {
-        JsonNode config = getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
+        JsonNode config =
+                getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty.path("value").asString()).isEqualTo("test-fixture-password");
@@ -57,7 +61,8 @@ class UnmaskingEnabledIntegrationTest {
 
     @Test
     void insightsEndpointAlsoUnmasksTheEnvironmentTab() {
-        JsonNode environment = getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("environment");
+        JsonNode environment =
+                getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("environment");
 
         JsonNode passwordValue = findEnvironmentPropertyValue(environment, "spring.datasource.password");
         assertThat(passwordValue.asString()).isEqualTo("test-fixture-password");
@@ -73,28 +78,6 @@ class UnmaskingEnabledIntegrationTest {
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
-    }
-
-    /**
-     * getRaw() is the broadest surface Peekaboot exposes - it must resolve identically
-     * to the insights endpoint above.
-     */
-    @Test
-    void rawEndpointReturnsRealValuesWhenUnmaskIsRequested() {
-        JsonNode configprops = getJson("/peekaboot/api/actuator/all/raw?unmask=true")
-                .path("spring").path("actuator").path("configprops");
-
-        JsonNode passwordValue = findRawConfigPropsProperty(configprops, "password");
-        assertThat(passwordValue.asString()).isEqualTo("test-fixture-password");
-    }
-
-    @Test
-    void rawEndpointStaysMaskedWhenUnmaskParameterIsNotSet() {
-        JsonNode configprops = getJson("/peekaboot/api/actuator/all/raw")
-                .path("spring").path("actuator").path("configprops");
-
-        JsonNode passwordValue = findRawConfigPropsProperty(configprops, "password");
-        assertThat(passwordValue.asString()).isEqualTo("******");
     }
 
     @Test

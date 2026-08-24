@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.peekaboot.backend.actuator.raw.LoggersResponse;
+import org.peekaboot.backend.actuator.parsed.LoggersResponse;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.domain.loggers.LoggerInfo;
 import org.peekaboot.backend.domain.loggers.LoggersInfo;

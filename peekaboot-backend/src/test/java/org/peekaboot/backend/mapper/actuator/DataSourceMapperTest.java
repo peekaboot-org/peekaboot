@@ -1,22 +1,21 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import net.osslabz.jdbc.DatabaseProduct;
-import net.osslabz.jdbc.JdbcProperty;
-import net.osslabz.jdbc.PropertySource;
-import org.peekaboot.backend.actuator.raw.HealthResponse;
-import org.peekaboot.backend.domain.datasource.DataSourceInfo;
-import org.peekaboot.backend.domain.health.HealthStatus;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
-
-import java.util.List;
-import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+import net.osslabz.jdbc.DatabaseProduct;
+import net.osslabz.jdbc.JdbcProperty;
+import net.osslabz.jdbc.PropertySource;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.domain.datasource.DataSourceInfo;
+import org.peekaboot.backend.domain.health.HealthStatus;
+import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 
 class DataSourceMapperTest {
 
@@ -25,10 +24,10 @@ class DataSourceMapperTest {
     @Test
     void map_shouldMaskSensitiveProperties() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams()).thenReturn(Map.of(
-            "user", new JdbcProperty(PropertySource.QUERY, "admin"),
-            "password", new JdbcProperty(PropertySource.QUERY, "secret123")
-        ));
+        when(metadata.getConnectionParams())
+                .thenReturn(Map.of(
+                        "user", new JdbcProperty(PropertySource.QUERY, "admin"),
+                        "password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
@@ -48,9 +47,8 @@ class DataSourceMapperTest {
     @Test
     void map_shouldNoLongerMaskConnectionParamsThatOnlyContainBareKey() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams()).thenReturn(Map.of(
-            "keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")
-        ));
+        when(metadata.getConnectionParams())
+                .thenReturn(Map.of("keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
@@ -62,13 +60,9 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
 
         HealthResponse health = new HealthResponse(
-            new HealthResponse.HealthBody(
-                "UP",
-                Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())),
-                List.of()
-            ),
-            200
-        );
+                new HealthResponse.HealthBody(
+                        "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of()),
+                200);
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
@@ -98,11 +92,11 @@ class DataSourceMapperTest {
     @Test
     void map_shouldMaskKeyAndTokenProperties() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams()).thenReturn(Map.of(
-            "apiKey", new JdbcProperty(PropertySource.QUERY, "myapikey"),
-            "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
-            "server", new JdbcProperty(PropertySource.QUERY, "localhost")
-        ));
+        when(metadata.getConnectionParams())
+                .thenReturn(Map.of(
+                        "apiKey", new JdbcProperty(PropertySource.QUERY, "myapikey"),
+                        "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
+                        "server", new JdbcProperty(PropertySource.QUERY, "localhost")));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
 
@@ -114,9 +108,8 @@ class DataSourceMapperTest {
     @Test
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams()).thenReturn(Map.of(
-            "password", new JdbcProperty(PropertySource.QUERY, "secret123")
-        ));
+        when(metadata.getConnectionParams())
+                .thenReturn(Map.of("password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, true);
 
@@ -126,9 +119,8 @@ class DataSourceMapperTest {
     @Test
     void map_shouldStillMaskWhenUnmaskIsFalse() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams()).thenReturn(Map.of(
-            "password", new JdbcProperty(PropertySource.QUERY, "secret123")
-        ));
+        when(metadata.getConnectionParams())
+                .thenReturn(Map.of("password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 

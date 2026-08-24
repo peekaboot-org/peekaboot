@@ -61,6 +61,14 @@ public class TraceInsightsService {
         this.queryExtractor = queryExtractor;
     }
 
+    /**
+     * Tracing is wired only when peekaboot.tracing.enabled is true; without it the
+     * nullable collaborators stay absent and every trace endpoint reports empty.
+     */
+    public boolean isTracingAvailable() {
+        return traceStore != null;
+    }
+
     public TraceInsightsResponse getInsights(
             int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
         if (traceStore == null) {

@@ -1,4 +1,4 @@
-package org.peekaboot.backend.actuator.raw;
+package org.peekaboot.backend.actuator.parsed;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;

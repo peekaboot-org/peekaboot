@@ -1,14 +1,13 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.HealthResponse;
-import org.peekaboot.backend.actuator.raw.InfoResponse;
-import org.peekaboot.backend.domain.runtime.RuntimeInfo;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.actuator.parsed.InfoResponse;
+import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 
 class RuntimeMapperTest {
 
@@ -16,11 +15,7 @@ class RuntimeMapperTest {
 
     @Test
     void map_shouldExtractOsInfo() {
-        InfoResponse info = new InfoResponse(
-            null, null, null,
-            new InfoResponse.OsInfo("amd64", "Linux", "5.15"),
-            null
-        );
+        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsInfo("amd64", "Linux", "5.15"), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os().name()).isEqualTo("Linux");
         assertThat(result.os().version()).isEqualTo("5.15");
@@ -30,16 +25,15 @@ class RuntimeMapperTest {
     @Test
     void map_shouldExtractDiskSpaceFromHealth() {
         HealthResponse health = new HealthResponse(
-            new HealthResponse.HealthBody(
-                "UP",
-                Map.of("diskSpace", new HealthResponse.HealthComponent(
-                    "UP",
-                    Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/")
-                )),
-                List.of()
-            ),
-            200
-        );
+                new HealthResponse.HealthBody(
+                        "UP",
+                        Map.of(
+                                "diskSpace",
+                                new HealthResponse.HealthComponent(
+                                        "UP",
+                                        Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"))),
+                        List.of()),
+                200);
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).usedPercent()).isEqualTo(60.0);
@@ -58,16 +52,20 @@ class RuntimeMapperTest {
     @Test
     void map_shouldExtractMemoryInfo() {
         InfoResponse info = new InfoResponse(
-            null, null, null, null,
-            new InfoResponse.ProcessInfo(
-                4,
-                new InfoResponse.ProcessInfo.MemoryInfo(
-                    new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(200_000_000L, 100_000_000L, 500_000_000L, 100_000_000L),
-                    new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(60_000_000L, 50_000_000L, -1L, 50_000_000L)
-                ),
-                "user", 1L, 12345L
-            )
-        );
+                null,
+                null,
+                null,
+                null,
+                new InfoResponse.ProcessInfo(
+                        4,
+                        new InfoResponse.ProcessInfo.MemoryInfo(
+                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(
+                                        200_000_000L, 100_000_000L, 500_000_000L, 100_000_000L),
+                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(
+                                        60_000_000L, 50_000_000L, -1L, 50_000_000L)),
+                        "user",
+                        1L,
+                        12345L));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNotNull();
         assertThat(result.memory().heapUsed()).isEqualTo(100_000_000L);
@@ -92,16 +90,13 @@ class RuntimeMapperTest {
     @Test
     void map_shouldUseFallbackPathForDiskSpace() {
         HealthResponse health = new HealthResponse(
-            new HealthResponse.HealthBody(
-                "UP",
-                Map.of("diskSpace", new HealthResponse.HealthComponent(
-                    "UP",
-                    Map.of("total", 1000L, "free", 500L)
-                )),
-                List.of()
-            ),
-            200
-        );
+                new HealthResponse.HealthBody(
+                        "UP",
+                        Map.of(
+                                "diskSpace",
+                                new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L))),
+                        List.of()),
+                200);
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
@@ -110,16 +105,17 @@ class RuntimeMapperTest {
     @Test
     void map_shouldReturnNullMemoryWhenHeapUsedAndMaxAreBothZero() {
         InfoResponse info = new InfoResponse(
-            null, null, null, null,
-            new InfoResponse.ProcessInfo(
-                4,
-                new InfoResponse.ProcessInfo.MemoryInfo(
-                    new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L, 0L, 0L),
-                    null
-                ),
-                "user", 1L, 12345L
-            )
-        );
+                null,
+                null,
+                null,
+                null,
+                new InfoResponse.ProcessInfo(
+                        4,
+                        new InfoResponse.ProcessInfo.MemoryInfo(
+                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L, 0L, 0L), null),
+                        "user",
+                        1L,
+                        12345L));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNull();
     }
@@ -127,27 +123,20 @@ class RuntimeMapperTest {
     @Test
     void map_shouldSkipDiskEntryWhenTotalIsZeroOrNegative() {
         HealthResponse health = new HealthResponse(
-            new HealthResponse.HealthBody(
-                "UP",
-                Map.of("diskSpace", new HealthResponse.HealthComponent(
-                    "UP",
-                    Map.of("total", 0L, "free", 0L, "path", "/")
-                )),
-                List.of()
-            ),
-            200
-        );
+                new HealthResponse.HealthBody(
+                        "UP",
+                        Map.of(
+                                "diskSpace",
+                                new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"))),
+                        List.of()),
+                200);
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }
 
     @Test
     void map_shouldReturnNullOsInfoWhenAllFieldsAreNull() {
-        InfoResponse info = new InfoResponse(
-            null, null, null,
-            new InfoResponse.OsInfo(null, null, null),
-            null
-        );
+        InfoResponse info = new InfoResponse(null, null, null, new InfoResponse.OsInfo(null, null, null), null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }

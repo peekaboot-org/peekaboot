@@ -6,7 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
-import org.peekaboot.backend.actuator.raw.HealthResponse;
+import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;

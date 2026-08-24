@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import org.peekaboot.backend.actuator.raw.FlywayResponse;
+import org.peekaboot.backend.actuator.parsed.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
 import org.peekaboot.backend.domain.flyway.MigrationInfo;
 import org.peekaboot.backend.domain.flyway.MigrationState;

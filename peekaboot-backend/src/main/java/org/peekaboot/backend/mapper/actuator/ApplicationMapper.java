@@ -1,13 +1,12 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.InfoResponse;
-import org.peekaboot.backend.actuator.raw.SpringInfo;
-import org.peekaboot.backend.domain.application.ApplicationInfo;
-import org.springframework.stereotype.Component;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import org.peekaboot.backend.actuator.parsed.InfoResponse;
+import org.peekaboot.backend.actuator.parsed.SpringInfo;
+import org.peekaboot.backend.domain.application.ApplicationInfo;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ApplicationMapper {

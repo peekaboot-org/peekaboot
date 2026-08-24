@@ -6,8 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
-import org.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringBootVersion;
@@ -32,12 +30,6 @@ import org.springframework.stereotype.Service;
 public final class PeekabootActuatorService {
 
     /**
-     * Endpoints whose READ operation is expensive or dangerous to invoke on
-     * every dashboard load (full JVM thread dump, heap dump file, log file).
-     */
-    private static final Set<String> EXPENSIVE_ENDPOINTS = Set.of("heapdump", "threaddump", "logfile");
-
-    /**
      * The only actuator endpoints the insights mappers consume.
      */
     private static final Set<String> INSIGHTS_ENDPOINTS =
@@ -47,8 +39,6 @@ public final class PeekabootActuatorService {
 
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
-    private final ActuatorRawMapper rawMapper;
-
     public PeekabootActuatorService(
             ApplicationContext context,
             ParameterValueMapper parameterMapper,
@@ -56,10 +46,8 @@ public final class PeekabootActuatorService {
             ObjectProvider<PathMapper> pathMappers,
             ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
             ObjectProvider<OperationInvokerAdvisor> advisors,
-            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider,
-            ActuatorRawMapper rawMapper) {
+            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
 
-        this.rawMapper = rawMapper;
         this.discoverer = new WebEndpointDiscoverer(
                 context,
                 parameterMapper,
@@ -71,10 +59,6 @@ public final class PeekabootActuatorService {
                 List.of() // Empty operation filters
                 );
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
-    }
-
-    public Map<String, Object> getRawData() {
-        return collectData(key -> !EXPENSIVE_ENDPOINTS.contains(key));
     }
 
     /**
@@ -120,20 +104,6 @@ public final class PeekabootActuatorService {
         }
 
         return results;
-    }
-
-    /**
-     * Backs GET /peekaboot/api/actuator/all/raw. Unlike {@link #getRawData()}, this masks -
-     * getRawData() itself stays unmasked for {@link #getInsightsData()}'s and its own
-     * lower-level callers, which route their masking through the typed mappers instead.
-     *
-     * <p>{@code unmask} is the caller's already-resolved decision (from
-     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter,
-     * combined once in PeekabootController) - this is the broadest surface Peekaboot
-     * exposes, so it must honour that decision identically to the insights endpoints.
-     */
-    public ActuatorRawResponse getData(boolean unmask) {
-        return ActuatorRawResponse.wrap(rawMapper.maskRawData(getRawData(), unmask));
     }
 
     private Map<String, String> buildSpringInfo() {
