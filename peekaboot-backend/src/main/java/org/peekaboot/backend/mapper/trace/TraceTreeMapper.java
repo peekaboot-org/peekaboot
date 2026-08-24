@@ -105,7 +105,7 @@ public class TraceTreeMapper {
         }
         List<SpanData> orphans = new ArrayList<>();
         for (SpanData span : spans) {
-            if (span == rootSpanData) {
+            if (span.equals(rootSpanData)) {
                 continue;
             }
             if (span.parentId() == null || !spanById.containsKey(span.parentId())) {
