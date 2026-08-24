@@ -78,22 +78,35 @@ public final class MaskingEngine {
         }
         List<String> camelAwareTokens = tokenize(key, true);
         List<String> separatorOnlyTokens = tokenize(key, false);
-        for (List<String> exceptionTokens : KEY_NAME_EXCEPTION_TOKENS) {
-            if (camelAwareTokens.equals(exceptionTokens) || separatorOnlyTokens.equals(exceptionTokens)) {
-                return false;
+        if (matchesAnyRuleExactly(KEY_NAME_EXCEPTION_TOKENS, camelAwareTokens, separatorOnlyTokens)) {
+            return false;
+        }
+        return matchesAnyRuleSubsequence(camelAwareTokens, separatorOnlyTokens)
+                || matchesAnyRuleExactly(WHOLE_KEY_NAME_TOKEN_RULES, camelAwareTokens, separatorOnlyTokens)
+                || matchesAnyLegacyPattern(key);
+    }
+
+    private static boolean matchesAnyRuleExactly(
+            List<List<String>> rules, List<String> camelAwareTokens, List<String> separatorOnlyTokens) {
+        for (List<String> ruleTokens : rules) {
+            if (camelAwareTokens.equals(ruleTokens) || separatorOnlyTokens.equals(ruleTokens)) {
+                return true;
             }
         }
+        return false;
+    }
+
+    private static boolean matchesAnyRuleSubsequence(List<String> camelAwareTokens, List<String> separatorOnlyTokens) {
         for (List<String> ruleTokens : KEY_NAME_TOKEN_RULES) {
             if (containsSubsequence(camelAwareTokens, ruleTokens)
                     || containsSubsequence(separatorOnlyTokens, ruleTokens)) {
                 return true;
             }
         }
-        for (List<String> ruleTokens : WHOLE_KEY_NAME_TOKEN_RULES) {
-            if (camelAwareTokens.equals(ruleTokens) || separatorOnlyTokens.equals(ruleTokens)) {
-                return true;
-            }
-        }
+        return false;
+    }
+
+    private static boolean matchesAnyLegacyPattern(String key) {
         for (Pattern legacyPattern : MaskingRules.LEGACY_KEY_PATTERNS) {
             if (legacyPattern.matcher(key).find()) {
                 return true;
