@@ -182,7 +182,7 @@ public class RequestCaptureFilter implements Filter {
             return Set.of();
         }
         Set<String> keys = new HashSet<>();
-        for (String pair : queryString.split("&")) {
+        for (String pair : queryString.split("&", -1)) {
             int equalsIndex = pair.indexOf('=');
             String key = equalsIndex >= 0 ? pair.substring(0, equalsIndex) : pair;
             if (!key.isBlank()) {
@@ -204,7 +204,7 @@ public class RequestCaptureFilter implements Filter {
         if (queryString == null || queryString.isBlank()) {
             return queryString;
         }
-        String[] pairs = queryString.split("&");
+        String[] pairs = queryString.split("&", -1);
         StringBuilder result = new StringBuilder();
         for (int i = 0; i < pairs.length; i++) {
             if (i > 0) {

@@ -49,7 +49,7 @@ public class LoggersMapper {
     }
 
     private String extractPackageName(String loggerName) {
-        String[] parts = loggerName.split("\\.");
+        String[] parts = loggerName.split("\\.", -1);
         if (parts.length >= 2) {
             return parts[0] + "." + parts[1];
         }

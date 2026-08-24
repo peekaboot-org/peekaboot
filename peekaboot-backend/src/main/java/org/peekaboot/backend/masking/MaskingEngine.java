@@ -186,7 +186,7 @@ public final class MaskingEngine {
         String normalized = splitCamelCaseBoundaries
             ? text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-")
             : text;
-        String[] parts = normalized.toLowerCase(Locale.ROOT).split("[^a-z0-9]+");
+        String[] parts = normalized.toLowerCase(Locale.ROOT).split("[^a-z0-9]+", -1);
         List<String> tokens = new ArrayList<>(parts.length);
         for (String part : parts) {
             if (!part.isEmpty()) {

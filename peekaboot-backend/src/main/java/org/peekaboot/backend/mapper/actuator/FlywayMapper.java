@@ -69,8 +69,8 @@ public class FlywayMapper {
         if (v1 == null) return -1;
         if (v2 == null) return 1;
 
-        String[] parts1 = v1.split("\\.");
-        String[] parts2 = v2.split("\\.");
+        String[] parts1 = v1.split("\\.", -1);
+        String[] parts2 = v2.split("\\.", -1);
 
         int maxLen = Math.max(parts1.length, parts2.length);
         for (int i = 0; i < maxLen; i++) {

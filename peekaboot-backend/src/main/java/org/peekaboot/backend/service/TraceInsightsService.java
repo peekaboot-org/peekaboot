@@ -104,7 +104,7 @@ public class TraceInsightsService {
             return Set.of();
         }
         Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
-        for (String token : rootActionType.split(",")) {
+        for (String token : rootActionType.split(",", -1)) {
             try {
                 types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException e) {
@@ -146,7 +146,7 @@ public class TraceInsightsService {
         }
         // Scheduled task targets are fully qualified (package.Class.method) while span
         // names use the bean name ("task class.method") - also match on the Class.method suffix
-        String[] segments = filter.split("\\.");
+        String[] segments = filter.split("\\.", -1);
         return segments.length > 2
                 && operation.contains(segments[segments.length - 2] + "." + segments[segments.length - 1]);
     }
