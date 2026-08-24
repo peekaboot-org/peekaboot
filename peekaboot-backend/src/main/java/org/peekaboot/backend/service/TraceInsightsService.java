@@ -2,8 +2,6 @@ package org.peekaboot.backend.service;
 
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
-import org.peekaboot.backend.domain.trace.HttpRequest;
-import org.peekaboot.backend.domain.trace.HttpResponse;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
