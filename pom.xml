@@ -33,6 +33,10 @@
         <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
 
         <spring-boot.version>4.1.0</spring-boot.version>
+
+        <!-- Files whose content differs from this commit (where formatting was
+             introduced) are formatted; untouched legacy files are left alone. -->
+        <spotless.ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</spotless.ratchetFrom>
     </properties>
 
     <licenses>
@@ -223,6 +227,28 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.5.1</version>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>3.10.0</version>
+                <configuration>
+                    <ratchetFrom>${spotless.ratchetFrom}</ratchetFrom>
+                    <java>
+                        <palantirJavaFormat>
+                            <version>2.97.0</version>
+                        </palantirJavaFormat>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
