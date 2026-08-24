@@ -4,6 +4,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Locale;
 
 class ProcessInfoTest {
 
@@ -30,7 +31,7 @@ class ProcessInfoTest {
     @Test
     void current_shouldReturnUidAndGid() {
         ProcessInfo info = ProcessInfo.current();
-        String osName = System.getProperty("os.name").toLowerCase();
+        String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         if (osName.contains("win")) {
             assertThat(info.uid()).isNull();
             assertThat(info.gid()).isNull();

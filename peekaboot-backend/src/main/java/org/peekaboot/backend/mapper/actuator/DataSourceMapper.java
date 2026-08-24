@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 @Component
 public class DataSourceMapper {
@@ -63,7 +64,7 @@ public class DataSourceMapper {
         String productName = metadata.getDatabaseProductName();
         if (productName == null) return DatabaseProduct.UNKNOWN;
 
-        String lower = productName.toLowerCase();
+        String lower = productName.toLowerCase(Locale.ROOT);
         if (lower.contains("postgresql")) return DatabaseProduct.POSTGRESQL;
         if (lower.contains("mysql")) return DatabaseProduct.MYSQL;
         if (lower.contains("mariadb")) return DatabaseProduct.MARIADB;

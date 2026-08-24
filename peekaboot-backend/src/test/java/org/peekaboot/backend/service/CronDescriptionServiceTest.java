@@ -15,7 +15,7 @@ class CronDescriptionServiceTest {
         String result = service.describe("0 0 * * * *", Locale.ENGLISH);
 
         assertThat(result).isNotNull();
-        assertThat(result.toLowerCase()).contains("hour");
+        assertThat(result.toLowerCase(Locale.ROOT)).contains("hour");
     }
 
     @Test
@@ -23,7 +23,7 @@ class CronDescriptionServiceTest {
         String result = service.describe("0 * * * * *", Locale.GERMAN);
 
         assertThat(result).isNotNull();
-        assertThat(result.toLowerCase()).contains("minute");
+        assertThat(result.toLowerCase(Locale.ROOT)).contains("minute");
     }
 
     @Test
@@ -60,6 +60,6 @@ class CronDescriptionServiceTest {
         String result = service.describe("0 0 * * * *", null);
 
         assertThat(result).isNotNull();
-        assertThat(result.toLowerCase()).contains("hour");
+        assertThat(result.toLowerCase(Locale.ROOT)).contains("hour");
     }
 }

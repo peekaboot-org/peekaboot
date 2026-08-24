@@ -6,6 +6,7 @@ import com.microsoft.playwright.options.ColorScheme;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import java.util.Locale;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -360,7 +361,7 @@ class TraceOverlayTest extends PlaywrightTestBase {
         String sql = (String) page.evaluate(
                 "() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
               + ".querySelector('.pk-query__sql')?.textContent ?? ''");
-        assertThat(sql.toLowerCase()).contains("select");
+        assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 
     /**

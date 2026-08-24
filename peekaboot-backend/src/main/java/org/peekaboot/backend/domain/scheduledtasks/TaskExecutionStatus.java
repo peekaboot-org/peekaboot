@@ -1,5 +1,7 @@
 package org.peekaboot.backend.domain.scheduledtasks;
 
+import java.util.Locale;
+
 public enum TaskExecutionStatus {
     SUCCESS,
     FAILED,
@@ -9,7 +11,7 @@ public enum TaskExecutionStatus {
 
     public static TaskExecutionStatus fromString(String status) {
         if (status == null) return UNKNOWN;
-        return switch (status.toUpperCase()) {
+        return switch (status.toUpperCase(Locale.ROOT)) {
             case "SUCCESS" -> SUCCESS;
             case "FAILED", "ERROR" -> FAILED;
             case "PENDING" -> PENDING;

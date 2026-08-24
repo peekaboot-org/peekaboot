@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.Locale;
 
 public class DevToolbarFilter implements Filter {
 
@@ -85,7 +86,7 @@ public class DevToolbarFilter implements Filter {
         }
 
         // Skip static file extensions
-        String lowerPath = path.toLowerCase();
+        String lowerPath = path.toLowerCase(Locale.ROOT);
         for (String ext : EXCLUDED_EXTENSIONS) {
             if (lowerPath.endsWith(ext)) {
                 return true;

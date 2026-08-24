@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 @Component
 public class QueryExtractor {
@@ -139,7 +140,7 @@ public class QueryExtractor {
 
         // 3. Span name if it looks like SQL
         if (spanName != null) {
-            String upper = spanName.toUpperCase();
+            String upper = spanName.toUpperCase(Locale.ROOT);
             if (upper.startsWith("SELECT ") || upper.startsWith("INSERT ") ||
                 upper.startsWith("UPDATE ") || upper.startsWith("DELETE ")) {
                 return spanName;

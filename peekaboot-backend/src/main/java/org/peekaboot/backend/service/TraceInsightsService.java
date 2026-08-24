@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
+import java.util.Locale;
 
 @Service
 public class TraceInsightsService {
@@ -105,7 +106,7 @@ public class TraceInsightsService {
         Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
         for (String token : rootActionType.split(",")) {
             try {
-                types.add(RootActionType.valueOf(token.trim().toUpperCase()));
+                types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException e) {
                 // Ignore invalid values
             }
@@ -138,8 +139,8 @@ public class TraceInsightsService {
             return false;
         }
         // Support partial matching for flexibility
-        String operation = tree.rootOperation().toLowerCase();
-        String filter = rootOperation.toLowerCase();
+        String operation = tree.rootOperation().toLowerCase(Locale.ROOT);
+        String filter = rootOperation.toLowerCase(Locale.ROOT);
         if (operation.contains(filter)) {
             return true;
         }

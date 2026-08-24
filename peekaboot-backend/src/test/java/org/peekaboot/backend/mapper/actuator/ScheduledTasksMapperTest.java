@@ -171,7 +171,7 @@ class ScheduledTasksMapperTest {
 
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.tasks().get(0).scheduleDescription()).isNotNull();
-        assertThat(result.tasks().get(0).scheduleDescription().toLowerCase()).contains("hour");
+        assertThat(result.tasks().get(0).scheduleDescription().toLowerCase(Locale.ROOT)).contains("hour");
     }
 
     @Test

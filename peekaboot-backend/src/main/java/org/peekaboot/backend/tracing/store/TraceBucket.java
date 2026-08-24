@@ -1,5 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
+import java.util.Locale;
+
 public enum TraceBucket {
     ALL,
     ERRORS,
@@ -14,7 +16,7 @@ public enum TraceBucket {
             return ALL;
         }
         try {
-            return valueOf(value.toUpperCase());
+            return valueOf(value.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return ALL;
         }
