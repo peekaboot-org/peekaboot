@@ -160,11 +160,10 @@ class ToolbarTest extends PlaywrightTestBase {
 
     /**
      * /persons runs a real JPA query and dispatches to a real controller method, so the trace's
-     * insights (once the retry/backoff poll picks them up) carry a real query count and a real
-     * controller name - no fetch stubbing needed. This also exercises the retry loop's happy
-     * path end to end: the trace is not complete on the toolbar's first poll (fired 50ms after
-     * load), so this wait only succeeds if isTraceComplete()'s retry-until-complete logic
-     * actually re-polls and picks up the completed trace.
+     * insights (once the fetch ladder picks them up) carry a real query count and a real
+     * controller name - no fetch stubbing needed. This also exercises the ladder's happy path
+     * end to end: the query spans have not reached the store when the first attempt fires, so
+     * this wait only succeeds if the later attempts run and re-render with what they find.
      */
     @Test
     void toolbarShowsQueryCountAndControllerNameAfterTraceCompletes() {
@@ -198,8 +197,10 @@ class ToolbarTest extends PlaywrightTestBase {
 
     /**
      * Aborting the specific trace-insights request is a real network failure (Chromium's real
-     * net stack refusing the request), not a fabricated response - loadTrace's fetchTrace().catch
-     * must still render the pending state instead of leaving "loading" up forever.
+     * net stack refusing the request), not a fabricated response - the bar must still render the
+     * pending state instead of leaving "loading" up forever. Pending is deliberately withheld
+     * until the last of the four attempts has failed, which lands at 4.75s, so the wait is given
+     * room beyond that rather than racing it.
      */
     @Test
     void toolbarShowsPendingWhenTheTraceRequestFails() {
@@ -211,7 +212,7 @@ class ToolbarTest extends PlaywrightTestBase {
                 "() => document.getElementById('peekaboot-toolbar-host')"
                         + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending') !== null",
                 null,
-                new Page.WaitForFunctionOptions().setTimeout(5000));
+                new Page.WaitForFunctionOptions().setTimeout(10000));
 
         boolean hasPendingElement = (Boolean) page.evaluate("() => !!document.getElementById('peekaboot-toolbar-host')"
                 + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending')");

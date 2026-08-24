@@ -94,41 +94,47 @@ function initToolbar(data) {
         metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
 
         if (traceId) {
-            let retryDelay = 250;
-            const maxTotalDelay = 32000;
-            let totalDelay = 0;
+            // Four fixed attempts rather than backoff-until-complete: every one runs, so a
+            // span that ends after the root - an @Async continuation, a streamed body - still
+            // reaches the bar, which the old loop missed because it stopped the first time a
+            // trace looked finished. Waits are measured from the previous attempt, so the last
+            // lands at 4.75s; with peekaboot's 200ms span export delay, a trace absent by then
+            // is not coming.
+            const attemptDelays = [250, 500, 1000, 3000];
+            let rendered = false;
 
-            function isTraceComplete(trace) {
-                return trace && trace.rootSpan && trace.summary && trace.summary.spans && trace.summary.spans.count > 0;
+            function attempt(index) {
+                if (currentTraceId !== traceId || index >= attemptDelays.length) return;
+                setTimeout(function() {
+                    if (currentTraceId !== traceId) return;
+                    fetch(data.basePath + '/api/traces/' + traceId + '/insights')
+                        .then(function(resp) {
+                            if (currentTraceId !== traceId) return null;
+                            return resp.ok ? resp.json() : null;
+                        })
+                        .then(function(trace) {
+                            if (currentTraceId !== traceId) return;
+                            // a 404 or an empty result leaves the previous render standing
+                            if (trace && trace.rootSpan) updateToolbar(trace);
+                            else if (isLastAttempt(index)) showPendingIfUnrendered();
+                        })
+                        .catch(function() {
+                            if (currentTraceId === traceId && isLastAttempt(index)) {
+                                showPendingIfUnrendered();
+                            }
+                        })
+                        .finally(function() { attempt(index + 1); });
+                }, attemptDelays[index]);
             }
 
-            function fetchTrace() {
-                if (currentTraceId !== traceId) return;
-                fetch(data.basePath + '/api/traces/' + traceId + '/insights')
-                    .then(function(resp) {
-                        if (currentTraceId !== traceId) return null;
-                        if (resp.ok) return resp.json();
-                        if (resp.status === 404 && totalDelay < maxTotalDelay) {
-                            totalDelay += retryDelay;
-                            setTimeout(fetchTrace, retryDelay);
-                            retryDelay *= 2;
-                            return null;
-                        }
-                        throw new Error('Not found');
-                    })
-                    .then(function(trace) {
-                        if (!trace || currentTraceId !== traceId) return;
-                        if (!isTraceComplete(trace) && totalDelay < maxTotalDelay) {
-                            totalDelay += retryDelay;
-                            setTimeout(fetchTrace, retryDelay);
-                            retryDelay *= 2;
-                            return;
-                        }
-                        updateToolbar(trace);
-                    })
-                    .catch(function() {
-                        if (currentTraceId === traceId) showPending();
-                    });
+            function isLastAttempt(index) {
+                return index === attemptDelays.length - 1;
+            }
+
+            // Nothing ever arrived: replace "loading" with the placeholder row rather than
+            // leaving a spinner up forever. A bar that did render keeps what it has.
+            function showPendingIfUnrendered() {
+                if (!rendered) showPending();
             }
 
             function updateToolbar(trace) {
@@ -170,6 +176,7 @@ function initToolbar(data) {
                 }
 
                 metricsEl.innerHTML = html;
+                rendered = true;
             }
 
             function showPending() {
@@ -177,7 +184,7 @@ function initToolbar(data) {
                 metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
             }
 
-            setTimeout(fetchTrace, 50);
+            attempt(0);
         }
     }
 
