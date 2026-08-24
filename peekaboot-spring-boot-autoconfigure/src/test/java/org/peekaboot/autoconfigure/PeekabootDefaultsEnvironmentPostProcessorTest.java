@@ -176,8 +176,14 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo("never");
     }
 
+    /**
+     * Not a precedence proof like {@code explicitShowValuesNeverWinsInLocalDevelopment} -
+     * outside local development the detection source never writes this key at all, so
+     * nothing competes with the explicit value here. This only pins that an application's
+     * own setting survives untouched.
+     */
     @Test
-    void explicitShowValuesAlwaysWinsOutsideLocalDevelopment() {
+    void explicitShowValuesAlwaysSurvivesOutsideLocalDevelopment() {
         MockEnvironment environment = new MockEnvironment();
         environment.setProperty("management.endpoint.env.show-values", "always");
 
