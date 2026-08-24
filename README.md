@@ -73,6 +73,11 @@ mvn test             # test suite only
 cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app
 ```
 
+`mvn verify` also enforces the static-analysis gates: Spotless (palantir-java-format,
+ratcheted to files changed since its introduction - run `mvn spotless:apply` to format),
+Error Prone (during compilation), SpotBugs, Checkstyle (complexity metrics from
+`config/checkstyle.xml`), and PMD (quickstart rules from `config/pmd-ruleset.xml`).
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
 [`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
 [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms,
