@@ -155,7 +155,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
      * Writes into the buffer until passthrough is enabled, then directly into
      * the real response's output stream.
      */
-    private class SwitchableServletOutputStream extends ServletOutputStream {
+    private final class SwitchableServletOutputStream extends ServletOutputStream {
 
         @Override
         public void write(int b) throws IOException {
@@ -198,7 +198,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
      * request (processResponse is skipped), so flush through on every write
      * to guarantee delivery; while buffering, writes stay cheap.
      */
-    private class SwitchableWriter extends java.io.Writer {
+    private final class SwitchableWriter extends java.io.Writer {
 
         private final OutputStreamWriter delegate;
 
