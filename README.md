@@ -83,6 +83,7 @@ Error Prone (during compilation), SpotBugs, Checkstyle (complexity metrics from
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
 [`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
 [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms,
+[`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md) for known gaps and open decisions,
 [`peekaboot-frontend/README.md`](peekaboot-frontend/README.md) for the frontend's design
 system, and [`peekaboot-testing-app/README.md`](peekaboot-testing-app/README.md) for the
 sample app's demo scenarios and the screenshot-capture command.
