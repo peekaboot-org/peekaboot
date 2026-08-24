@@ -8,7 +8,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
 
 import java.util.Optional;
-import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -16,13 +15,18 @@ import static org.mockito.Mockito.when;
 
 class ServerUrlResolverTest {
 
-    private static final BooleanSupplier SPRINGDOC_PRESENT = () -> true;
-    private static final BooleanSupplier SPRINGDOC_ABSENT = () -> false;
+    private static boolean springdocPresent() {
+        return true;
+    }
+
+    private static boolean springdocAbsent() {
+        return false;
+    }
 
     @Test
     void resolveServiceUrl_defaultsToHttpLocalhost() {
         var environment = new MockEnvironment();
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
 
@@ -33,7 +37,7 @@ class ServerUrlResolverTest {
     void resolveServiceUrl_usesHttpsWhenSslEnabled() {
         var environment = new MockEnvironment();
         environment.setProperty("server.ssl.enabled", "true");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveServiceUrl(webEvent(8443));
 
@@ -44,7 +48,7 @@ class ServerUrlResolverTest {
     void resolveServiceUrl_substitutesLocalhostForWildcardAddress() {
         var environment = new MockEnvironment();
         environment.setProperty("server.address", "0.0.0.0");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
 
@@ -55,7 +59,7 @@ class ServerUrlResolverTest {
     void resolveServiceUrl_usesConfiguredHostWhenNotWildcard() {
         var environment = new MockEnvironment();
         environment.setProperty("server.address", "api.example.com");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
 
@@ -66,7 +70,7 @@ class ServerUrlResolverTest {
     void resolveServiceUrl_appendsContextPathWithoutTrailingSlash() {
         var environment = new MockEnvironment();
         environment.setProperty("server.servlet.context-path", "/api/");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
 
@@ -76,7 +80,7 @@ class ServerUrlResolverTest {
     @Test
     void resolveServiceUrl_emptyOptionalForNonWebContext() {
         var environment = new MockEnvironment();
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         var event = mock(ApplicationReadyEvent.class);
         when(event.getApplicationContext()).thenReturn(mock(ConfigurableApplicationContext.class));
@@ -89,7 +93,7 @@ class ServerUrlResolverTest {
     @Test
     void resolveSwaggerUiUrl_emptyWhenSpringDocAbsent() {
         var environment = new MockEnvironment();
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_ABSENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
         Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8080));
 
@@ -99,7 +103,7 @@ class ServerUrlResolverTest {
     @Test
     void resolveSwaggerUiUrl_usesDefaultPathWhenSpringDocPresent() {
         var environment = new MockEnvironment();
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_PRESENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
         Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
 
@@ -110,7 +114,7 @@ class ServerUrlResolverTest {
     void resolveSwaggerUiUrl_usesConfiguredSwaggerPath() {
         var environment = new MockEnvironment();
         environment.setProperty("springdoc.swagger-ui.path", "/api-docs/swagger");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_PRESENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
         Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
 
@@ -121,7 +125,7 @@ class ServerUrlResolverTest {
     void resolveSwaggerUiUrl_includesContextPath() {
         var environment = new MockEnvironment();
         environment.setProperty("server.servlet.context-path", "/app");
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_PRESENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
         Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
 
@@ -131,7 +135,7 @@ class ServerUrlResolverTest {
     @Test
     void resolveSwaggerUiUrl_emptyForNonWebContext() {
         var environment = new MockEnvironment();
-        var resolver = new ServerUrlResolver(environment, SPRINGDOC_PRESENT);
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
         var event = mock(ApplicationReadyEvent.class);
         when(event.getApplicationContext()).thenReturn(mock(ConfigurableApplicationContext.class));
