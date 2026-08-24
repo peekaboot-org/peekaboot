@@ -1,8 +1,5 @@
 package org.peekaboot.backend.tracing.store;
 
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -11,6 +8,8 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /**
  * Bundle of all data collected for a single trace: spans, logs, and request info.
@@ -102,7 +101,9 @@ public class TraceDataBundle {
     private void store(SpanData span) {
         spansById.put(span.spanId(), span);
         if (span.parentId() != null) {
-            childrenByParentId.computeIfAbsent(span.parentId(), k -> new ArrayList<>()).add(span.spanId());
+            childrenByParentId
+                    .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
+                    .add(span.spanId());
         }
     }
 
@@ -135,6 +136,22 @@ public class TraceDataBundle {
     private void recordRedirect(String removedId, String survivorId) {
         parentRedirects.put(removedId, survivorId);
         redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).add(removedId);
+        retargetChainedRedirects(removedId, survivorId);
+    }
+
+    /** {@code removedId} may itself have been an earlier fold's survivor - i.e. other ids
+     * already redirect to it (triple-nested duplicates; does not occur in production, but
+     * the fold must stay correct if it ever did). {@code removedId} is now folded away too
+     * and, unlike a real span, will never itself be evicted, so those entries would never
+     * be pruned if left keyed on it. Re-point them directly at {@code survivorId} so they
+     * are pruned together with it once it is evicted. */
+    private void retargetChainedRedirects(String removedId, String survivorId) {
+        List<String> chained = redirectsPointingAt.remove(removedId);
+        if (chained == null || chained.isEmpty()) {
+            return;
+        }
+        chained.forEach(id -> parentRedirects.put(id, survivorId));
+        redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).addAll(chained);
     }
 
     /** Follows the redirect chain for a (possibly folded-away) span id to the span it
@@ -218,10 +235,11 @@ public class TraceDataBundle {
         synchronized (spansLock) {
             // copy under spansLock before sorting; streaming spansById directly would race
             // with a concurrent addSpan call mutating it
-            return new ArrayList<>(spansById.values()).stream()
-                    .map(this::withResolvedParent)
-                    .sorted(Comparator.comparingLong(SpanData::creationOrder))
-                    .toList();
+            return new ArrayList<>(spansById.values())
+                    .stream()
+                            .map(this::withResolvedParent)
+                            .sorted(Comparator.comparingLong(SpanData::creationOrder))
+                            .toList();
         }
     }
 

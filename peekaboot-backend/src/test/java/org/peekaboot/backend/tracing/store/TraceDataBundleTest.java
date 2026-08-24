@@ -1,9 +1,8 @@
 package org.peekaboot.backend.tracing.store;
 
-import io.micrometer.tracing.Span;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
@@ -13,8 +12,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class TraceDataBundleTest {
 
@@ -87,7 +86,11 @@ class TraceDataBundleTest {
 
         List<SpanData> spans = bundle.spans();
         assertThat(spans).extracting(SpanData::spanId).containsExactly("rs1", "parent1");
-        assertThat(spans.stream().filter(s -> "rs1".equals(s.spanId())).findFirst().orElseThrow().parentId())
+        assertThat(spans.stream()
+                        .filter(s -> "rs1".equals(s.spanId()))
+                        .findFirst()
+                        .orElseThrow()
+                        .parentId())
                 .as("the grandchild must resolve to the surviving real span, not the folded-away duplicate")
                 .isEqualTo("parent1");
     }
@@ -145,7 +148,40 @@ class TraceDataBundleTest {
         assertThat(bundle.truncated()).isTrue();
         assertThat(bundle.parentRedirectCountForTesting())
                 .as("the redirect table must be pruned as spans are evicted, not grow with "
-                  + "every duplicate ever folded over the trace's whole life")
+                        + "every duplicate ever folded over the trace's whole life")
+                .isLessThanOrEqualTo(cap * 2);
+    }
+
+    @Test
+    void addSpan_boundsTheRedirectTableAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
+        // Regression test for chained-redirect residue: when a duplicate (dup1) is itself
+        // later folded into a further survivor, an earlier fold that had targeted dup1
+        // (gc -> dup1) stays keyed on dup1 in the reverse index. dup1 was folded away and
+        // never itself stored as a real span, so it is never passed to
+        // pruneRedirectsPointingAt when the eventual survivor is evicted - the entry for gc
+        // leaks forever instead of being pruned with it. This needs triple instrumentation
+        // (three spans that pairwise match, nested three deep), which does not occur in
+        // production - but the class Javadoc promises the redirect table "stays bounded by
+        // the maxSpans cap" unconditionally, so this must hold even for that shape.
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        int cap = 10;
+        int triples = 500;
+        long order = 1;
+        for (int i = 0; i < triples; i++) {
+            String survivorId = "survivor" + i;
+            String dup1Id = "dup1-" + i;
+            String gcId = "gc-" + i;
+            // arrival order: innermost duplicate first, then the mid duplicate, then the
+            // real span - the expected child-before-parent export ordering, three deep
+            bundle.addSpan(jdbcSpan(gcId, dup1Id, "query", "SELECT " + i, "ds-inner", order++), cap);
+            bundle.addSpan(jdbcSpan(dup1Id, survivorId, "query", "SELECT " + i, "ds-mid", order++), cap);
+            bundle.addSpan(jdbcSpan(survivorId, null, "query", "SELECT " + i, "sample_app_db", order++), cap);
+        }
+
+        assertThat(bundle.spans()).hasSize(cap);
+        assertThat(bundle.parentRedirectCountForTesting())
+                .as("the redirect table must not leak an entry per chained fold whose "
+                        + "intermediate survivor was itself later folded away and evicted")
                 .isLessThanOrEqualTo(cap * 2);
     }
 
@@ -217,15 +253,27 @@ class TraceDataBundleTest {
         return jdbcSpan(spanId, parentId, name, "SELECT * FROM person", peerService, creationOrder);
     }
 
-    private SpanData jdbcSpan(String spanId, String parentId, String name, String query, String peerService,
-                               long creationOrder) {
+    private SpanData jdbcSpan(
+            String spanId, String parentId, String name, String query, String peerService, long creationOrder) {
         Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
         return new SpanData(
-                "trace1", spanId, parentId, name, Span.Kind.CLIENT,
-                start, start.plusMillis(50), Duration.ofMillis(50),
+                "trace1",
+                spanId,
+                parentId,
+                name,
+                Span.Kind.CLIENT,
+                start,
+                start.plusMillis(50),
+                Duration.ofMillis(50),
                 new HashMap<>(Map.of("jdbc.query[0]", query, "peer.service", peerService)),
-                List.of(), null, null, null, null, null, List.of(), creationOrder
-        );
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                creationOrder);
     }
 
     private SpanData createSpan(String spanId, long creationOrder) {
@@ -246,7 +294,6 @@ class TraceDataBundleTest {
                 null,
                 null,
                 List.of(),
-                creationOrder
-        );
+                creationOrder);
     }
 }
