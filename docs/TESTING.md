@@ -80,6 +80,13 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
   previously-failing method).
 
+  Three tests share this route-and-never-unroute shape, which is why the fix lives in
+  `PlaywrightTestBase` rather than per-test `unroute()` calls: `TraceOverlayTest:222`;
+  `ToolbarTest:207` (identical pattern, and it deliberately waits out all four fetch-ladder
+  attempts before teardown runs); and `ToolbarTest:257`, which routes `trace-detail.js` and must
+  *not* unroute — its Javadoc explains the browser's module map caches the failed dynamic import,
+  so a real reopen would require more than removing the route.
+
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
 that state first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert
@@ -88,7 +95,7 @@ exact counts, never defensive `contains`.
 ## Running
 - Full suite: `mvn test` (root). Single class: `mvn -pl <module> test -Dtest=<Class>`
   — never combine `-am` with `-Dtest`.
-- Full reactor with the five static-analysis gates: `mvn clean verify` (~951 tests).
+- Full reactor with the five static-analysis gates: `mvn clean verify` (942 tests).
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):

@@ -15,11 +15,11 @@ import org.springframework.context.annotation.Import;
  * anything ending after the response - an {@code @Async} continuation, a streamed body - never
  * appeared on it. Four fixed attempts out to 4.75s close that gap.
  *
- * <p>Real app, real spans, real browser: {@link LateSpanFixture} ends a genuine child span ~800ms
+ * <p>Real app, real spans, real browser: {@link LateSpanFixture} ends a genuine child span ~1.5s
  * after the response, and the assertions below check that it really is the same trace and really
  * did end after the response, rather than trusting the tracing wiring.
  *
- * <p>That 800ms is not incidental: it has to outlast the toolbar's first render, or the "duration
+ * <p>That 1.5s is not incidental: it has to outlast the toolbar's first render, or the "duration
  * changes" assertion below has nothing to change to and times out. See {@link
  * LateSpanFixture.LateSpanController#LATE_WORK} for the exact margin against the fetch ladder and
  * the test export delay.
@@ -30,7 +30,7 @@ class ToolbarLateSpanTest extends PlaywrightTestBase {
     /**
      * The bar exposes no span count, and adding one purely to make this observable would be
      * production code written for a test. The rendered {@code ⏱} duration moves instead: the
-     * trace's duration spans its earliest start to its latest end, so a child ending 800ms after
+     * trace's duration spans its earliest start to its latest end, so a child ending 1.5s after
      * the root stretches it from a handful of milliseconds to at least {@code LATE_WORK}. The
      * query and log counters cannot serve - this request issues neither.
      */

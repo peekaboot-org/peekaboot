@@ -419,12 +419,6 @@ trace is flagged `truncated: true` — exposed on both `GET /peekaboot/api/trace
 and `GET /peekaboot/api/traces/{traceId}/insights`, and shown as a `TRUNCATED` badge in the
 trace list and the trace-detail overlay.
 
-`SpanDeduplicator`, invoked from `TraceInsightsService` before spans are mapped to a
-`TraceTree`, runs the identical check again at read time, for both the trace list and
-single-trace views. Since dedup now happens on write, this second pass is belt-and-braces
-rather than load-bearing, and duplicated logic besides — whether to drop it or document it
-in its own Javadoc as a deliberate safety net is still undecided.
-
 ### Query Extraction
 
 Database queries aren't captured specially: a query shows up in a trace because the

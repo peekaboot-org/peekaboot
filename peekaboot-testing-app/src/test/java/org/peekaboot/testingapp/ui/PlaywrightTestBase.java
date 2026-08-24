@@ -13,6 +13,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.peekaboot.testingapp.TestingApp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
@@ -20,6 +22,8 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 abstract class PlaywrightTestBase {
+
+    private static final Logger log = LoggerFactory.getLogger(PlaywrightTestBase.class);
 
     private static Playwright playwright;
     protected static Browser browser;
@@ -65,12 +69,13 @@ abstract class PlaywrightTestBase {
         if (page != null) {
             try {
                 page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(2000));
-            } catch (TimeoutError ignored) {
+            } catch (TimeoutError e) {
                 // best-effort drain of in-flight requests; teardown must never fail a passing test
+                log.warn("swallowed TimeoutError waiting for network idle during teardown: {}", e.getMessage());
             }
             try {
                 page.context().close();
-            } catch (TargetClosedError ignored) {
+            } catch (TargetClosedError e) {
                 // The collapsed toolbar's own fetch ladder (toolbar.js) keeps polling
                 // /api/traces/{id}/insights for up to 4.75s after page load, regardless of
                 // whether the test that opened the page is still running. A test that routes
@@ -80,6 +85,7 @@ abstract class PlaywrightTestBase {
                 // against a target that is already gone. The context is closing either way -
                 // that is this call's whole goal - so a race in Playwright's own internal
                 // bookkeeping on the way there is not a real teardown failure.
+                log.warn("swallowed TargetClosedError closing browser context during teardown: {}", e.getMessage());
             }
         }
     }
