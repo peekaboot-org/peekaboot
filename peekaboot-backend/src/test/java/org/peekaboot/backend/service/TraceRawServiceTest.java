@@ -5,6 +5,7 @@ import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceRawData;
 import org.peekaboot.backend.domain.trace.TraceRawResponse;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
+import org.peekaboot.backend.mapper.trace.TraceRawMapper;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -31,7 +32,7 @@ class TraceRawServiceTest {
     @BeforeEach
     void setUp() {
         store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
-        service = new TraceRawService(store, new QueryExtractor());
+        service = new TraceRawService(store, new TraceRawMapper(new QueryExtractor()));
     }
 
     @Test
@@ -41,7 +42,7 @@ class TraceRawServiceTest {
 
     @Test
     void tracingUnavailableWithoutStore() {
-        TraceRawService noStore = new TraceRawService(null, new QueryExtractor());
+        TraceRawService noStore = new TraceRawService(null, new TraceRawMapper(new QueryExtractor()));
 
         assertThat(noStore.isTracingAvailable()).isFalse();
     }
@@ -117,7 +118,7 @@ class TraceRawServiceTest {
 
     @Test
     void getTracesWithoutStoreReturnsEmptyResponse() {
-        TraceRawService noStore = new TraceRawService(null, new QueryExtractor());
+        TraceRawService noStore = new TraceRawService(null, new TraceRawMapper(new QueryExtractor()));
 
         TraceRawResponse response = noStore.getTraces(10, TraceBucket.ALL);
 
@@ -143,7 +144,7 @@ class TraceRawServiceTest {
 
     @Test
     void getTraceWithoutStoreReturnsEmpty() {
-        TraceRawService noStore = new TraceRawService(null, new QueryExtractor());
+        TraceRawService noStore = new TraceRawService(null, new TraceRawMapper(new QueryExtractor()));
 
         assertThat(noStore.getTrace("t1")).isEmpty();
     }
@@ -183,7 +184,7 @@ class TraceRawServiceTest {
     @Test
     void getTraceCarriesTheTruncatedFlagFromTheBundle() {
         InMemoryTraceStore smallStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
-        TraceRawService smallService = new TraceRawService(smallStore, new QueryExtractor());
+        TraceRawService smallService = new TraceRawService(smallStore, new TraceRawMapper(new QueryExtractor()));
         smallStore.addSpan(span("t1", "root", null, "GET /persons", 100, Map.of(), null));
         smallStore.addSpan(span("t1", "child", "root", "SELECT", 10, Map.of(), null));
 
