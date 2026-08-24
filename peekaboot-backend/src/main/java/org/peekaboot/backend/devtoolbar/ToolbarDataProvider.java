@@ -5,8 +5,6 @@ public class ToolbarDataProvider {
     /** Peekaboot's UI/API prefix; also hardcoded in PeekabootController and FilterPathMatcher. */
     private static final String BASE_PATH = "/peekaboot";
 
-    private final String basePath = BASE_PATH;
-
     public String getToolbarSummaryJson(String method, String path, int status, String traceId) {
         return String.format(
                 "{\"method\":\"%s\",\"path\":\"%s\",\"status\":%d,\"traceId\":%s,\"basePath\":\"%s\"}",
@@ -14,12 +12,12 @@ public class ToolbarDataProvider {
                 escapeJson(path),
                 status,
                 traceId != null ? "\"" + escapeJson(traceId) + "\"" : "null",
-                escapeJson(basePath)
+                escapeJson(BASE_PATH)
         );
     }
 
     public String getIdleModeJson() {
-        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(basePath));
+        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(BASE_PATH));
     }
 
     /**
