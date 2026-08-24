@@ -96,6 +96,6 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public int getOrder() {
-        return Ordered.LOWEST_PRECEDENCE;
+        return LOWEST_PRECEDENCE;
     }
 }
