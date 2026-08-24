@@ -38,6 +38,15 @@ management:
   endpoint:
     health:
       show-details: always
+    env:
+      # Peekaboot no longer defaults this outside local development (see
+      # PeekabootDefaultsEnvironmentPostProcessor); the test profile is not a local-dev
+      # launch context, so it has to opt in explicitly, exactly like a real application
+      # would, for UnmaskingEnabledIntegrationTest to have real values to unmask.
+      show-values: always
+    configprops:
+      # Same reasoning as endpoint.env above, for the Config tab.
+      show-values: always
   tracing:
     sampling:
       probability: 1.0

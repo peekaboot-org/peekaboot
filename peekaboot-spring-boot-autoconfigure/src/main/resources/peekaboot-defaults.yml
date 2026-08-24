@@ -15,33 +15,11 @@ management:
       # Controls visibility of health check details (db, disk, etc.)
       # Spring default: never | We show always to expose component health in dashboard
       show-details: always
-    env:
-      # Whether property VALUES are readable at all. Left at Spring's default the
-      # Environment tab renders "******" for every entry - os.name and server.port
-      # included - which makes the tab useless.
-      # Spring default: never | We show values so Peekaboot's own masking engine (see
-      # org.peekaboot.backend.masking) has real values to decide over.
-      #
-      # Deliberately kept "always" rather than removed: Spring Boot 4.1 registers no
-      # default SanitizingFunction, so leaving this at Spring's own default ("never")
-      # would not hand masking to Spring - it would return "******" for every property
-      # unconditionally, starving Peekaboot's engine of the real values it needs to
-      # apply its own, more precise rules. The Environment/Config tabs would degrade to
-      # the useless-tab outcome described above, and controlled unmasking
-      # (peekaboot.enable-unmasking, see PeekabootController) would have nothing to
-      # unmask. Peekaboot's own masking is what keeps the default posture safe, not
-      # this setting - see MaskingEngine and the two-opt-in design in the known-defects
-      # spec.
-      #
-      # Accepted cost: this also widens the consuming application's own
-      # /actuator/env and /actuator/configprops if it exposes those endpoints itself,
-      # independently of Peekaboot. An application wanting the strict posture can set
-      # management.endpoint.env.show-values (and .configprops.show-values): never
-      # itself, which overrides this lowest-precedence default.
-      show-values: always
-    configprops:
-      # Same reasoning as endpoint.env above, for the Config tab.
-      show-values: always
+    # No env/configprops show-values default here, deliberately. Value visibility follows the
+    # launch context, not peekaboot.enabled - it is set in the detection property source (see
+    # PeekabootDefaultsEnvironmentPostProcessor) and only on a local run, so an application that
+    # switches Peekaboot on in a shared environment does not have its own /actuator/env widened
+    # as a side effect.
 
   info:
     env:

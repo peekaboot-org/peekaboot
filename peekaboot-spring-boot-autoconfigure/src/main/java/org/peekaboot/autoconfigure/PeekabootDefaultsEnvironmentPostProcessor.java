@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.commons.logging.Log;
@@ -37,6 +38,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
+    private static final String ENV_SHOW_VALUES_PROPERTY = "management.endpoint.env.show-values";
+    private static final String CONFIGPROPS_SHOW_VALUES_PROPERTY = "management.endpoint.configprops.show-values";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
@@ -55,15 +58,21 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         boolean localDevelopment = localDevelopment();
-        // lowest precedence: any explicit peekaboot.enabled / peekaboot.dev-toolbar setting
-        // wins over the detection. The toolbar follows the launch context rather than
-        // peekaboot.enabled, so switching Peekaboot on deliberately in a shared environment
-        // does not also start injecting the toolbar into every page.
-        environment
-                .getPropertySources()
-                .addLast(new MapPropertySource(
-                        DETECTION_PROPERTY_SOURCE_NAME,
-                        Map.of(ENABLED_PROPERTY, localDevelopment, DEV_TOOLBAR_PROPERTY, localDevelopment)));
+        // lowest precedence: any explicit setting in the application wins over the detection.
+        // Peekaboot's activation, the toolbar and actuator value visibility all follow the
+        // launch context rather than peekaboot.enabled, so switching Peekaboot on deliberately
+        // in a shared environment neither injects a toolbar into every page nor widens that
+        // application's own /actuator/env.
+        Map<String, Object> detected = new HashMap<>();
+        detected.put(ENABLED_PROPERTY, localDevelopment);
+        detected.put(DEV_TOOLBAR_PROPERTY, localDevelopment);
+        if (localDevelopment) {
+            // Absent rather than an explicit "never" off-local: Peekaboot must not pin Spring's
+            // own default into an application that is not using it.
+            detected.put(ENV_SHOW_VALUES_PROPERTY, "always");
+            detected.put(CONFIGPROPS_SHOW_VALUES_PROPERTY, "always");
+        }
+        environment.getPropertySources().addLast(new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot and the"
                 + " dev toolbar " + (localDevelopment ? "enabled" : "disabled") + " by default");
 

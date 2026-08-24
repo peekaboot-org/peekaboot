@@ -123,11 +123,67 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
-        // Spring's default is "never", which masks every value - not just secret ones -
-        // and leaves the dashboard's Environment and Config tabs showing only "******"
+        // Value visibility follows the launch context, not peekaboot.enabled: local
+        // development is exactly when the Environment and Config tabs should show real
+        // values rather than "******" for every entry.
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isEqualTo("always");
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isEqualTo("always");
+    }
+
+    /**
+     * The placement decision: an application that switches Peekaboot on deliberately outside a
+     * local run must not have its own /actuator/env widened as a side effect.
+     */
+    @Test
+    void doesNotShowActuatorValuesOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isNull();
+    }
+
+    /**
+     * Absent, not an explicit "never": Peekaboot must not pin Spring's default into an
+     * application that is not using it.
+     */
+    @Test
+    void setsNoActuatorValueVisibilityWhenPeekabootIsDisabled() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isNull();
+    }
+
+    @Test
+    void explicitShowValuesNeverWinsInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("management.endpoint.env.show-values", "never");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isEqualTo("never");
+    }
+
+    @Test
+    void explicitShowValuesAlwaysWinsOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("management.endpoint.env.show-values", "always");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isEqualTo("always");
     }
 
