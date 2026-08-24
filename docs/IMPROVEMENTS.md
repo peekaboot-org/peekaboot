@@ -13,7 +13,13 @@ Sections 1 and 2 need a person. Sections 3 onward are work someone can just pick
 
 ## 1. Decisions waiting on a call
 
-### 1.1 Should the dev toolbar capture request and response bodies?
+### 1.1 Request and response body capture — deferred, deliberately
+
+**Decided 2026-08-24: not now.** The unused domain fields and the `RequestCaptureFilter` call sites
+stay exactly as they are, as the seam for a future improvement. Do not remove them as dead code, and
+do not implement capture as a side effect of another task.
+
+The rest of this entry records why the seam exists and what building it would involve.
 
 `peekaboot-backend/src/main/java/org/peekaboot/backend/filter/RequestCaptureFilter.java:138,144`
 
@@ -33,8 +39,8 @@ about it. The open question is whether to build it.
 structure, a form post is pairs, a file upload is bytes. Sizing and truncation need a cap and a
 `TRUNCATED` signal the UI already knows how to render.
 
-**Do not implement this silently as a side effect of another task.** It changes what Peekaboot
-holds in memory and what the toolbar puts on screen.
+It changes what Peekaboot holds in memory and what the toolbar puts on screen, so it wants its own
+design pass rather than being folded into unrelated work.
 
 ### 1.2 Does the read-time `SpanDeduplicator` pass still earn its keep?
 
