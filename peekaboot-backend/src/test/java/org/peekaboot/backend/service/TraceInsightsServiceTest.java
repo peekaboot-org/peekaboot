@@ -1,6 +1,15 @@
 package org.peekaboot.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.micrometer.tracing.Span;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.IssueType;
@@ -17,16 +26,6 @@ import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class TraceInsightsServiceTest {
 
@@ -102,16 +101,59 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void isTracingAvailable_shouldBeTrueWhenTraceStoreIsPresent() {
+        assertThat(service.isTracingAvailable()).isTrue();
+    }
+
+    @Test
+    void isTracingAvailable_shouldBeFalseWithoutTraceStore() {
+        TraceInsightsService serviceWithNullStore = newService(null);
+
+        assertThat(serviceWithNullStore.isTracingAvailable()).isFalse();
+    }
+
+    @Test
     void getInsightsQueriesRequestedBucket() {
         InMemoryTraceStore bucketStore = new InMemoryTraceStore();
         // error trace
         Instant now = Instant.now();
-        bucketStore.addSpan(new SpanData("terr", "s1", null, "op", null, now, now, Duration.ZERO,
-                Map.of(), List.of(), "boom", "java.lang.RuntimeException",
-                null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        bucketStore.addSpan(new SpanData(
+                "terr",
+                "s1",
+                null,
+                "op",
+                null,
+                now,
+                now,
+                Duration.ZERO,
+                Map.of(),
+                List.of(),
+                "boom",
+                "java.lang.RuntimeException",
+                null,
+                null,
+                null,
+                List.of(),
+                bucketStore.nextCreationOrder()));
         // healthy trace
-        bucketStore.addSpan(new SpanData("tok", "s2", null, "op", null, now, now, Duration.ZERO,
-                Map.of(), List.of(), null, null, null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        bucketStore.addSpan(new SpanData(
+                "tok",
+                "s2",
+                null,
+                "op",
+                null,
+                now,
+                now,
+                Duration.ZERO,
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                bucketStore.nextCreationOrder()));
         TraceInsightsService bucketService = newService(bucketStore);
 
         TraceInsightsResponse errors = bucketService.getInsights(10, TraceBucket.ERRORS, null, null);
@@ -125,9 +167,24 @@ class TraceInsightsServiceTest {
     void responseCarriesBucketCounts() {
         InMemoryTraceStore bucketStore = new InMemoryTraceStore();
         Instant now = Instant.now();
-        bucketStore.addSpan(new SpanData("terr", "s1", null, "op", null, now, now, Duration.ZERO,
-                Map.of(), List.of(), "boom", "java.lang.RuntimeException",
-                null, null, null, List.of(), bucketStore.nextCreationOrder()));
+        bucketStore.addSpan(new SpanData(
+                "terr",
+                "s1",
+                null,
+                "op",
+                null,
+                now,
+                now,
+                Duration.ZERO,
+                Map.of(),
+                List.of(),
+                "boom",
+                "java.lang.RuntimeException",
+                null,
+                null,
+                null,
+                List.of(),
+                bucketStore.nextCreationOrder()));
         TraceInsightsService bucketService = newService(bucketStore);
 
         TraceInsightsResponse response = bucketService.getInsights(10, TraceBucket.ALL, null, null);
@@ -170,9 +227,7 @@ class TraceInsightsServiceTest {
         // Then
         assertThat(result).isPresent();
         assertThat(result.get().rootSpan().issues()).isNotEmpty();
-        assertThat(result.get().rootSpan().issues())
-                .extracting(SpanIssue::type)
-                .contains(IssueType.SLOW);
+        assertThat(result.get().rootSpan().issues()).extracting(SpanIssue::type).contains(IssueType.SLOW);
     }
 
     @Test
@@ -228,14 +283,7 @@ class TraceInsightsServiceTest {
         // Given: a trace with an attached log
         addTrace("trace1", 100, false);
         store.addLog(new LogCapturedEvent(
-                "trace1",
-                "span-trace1",
-                Instant.now(),
-                "INFO",
-                "TestLogger",
-                "Test log message from trace",
-                "main"
-        ));
+                "trace1", "span-trace1", Instant.now(), "INFO", "TestLogger", "Test log message from trace", "main"));
 
         // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
@@ -324,11 +372,12 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsights_shouldFilterByMultipleCommaSeparatedRootActionTypes() {
-        addTrace("trace1", 100, false);           // SERVER kind -> HTTP_REQUEST
-        addConsumerTrace("trace2", 100);           // CONSUMER kind -> MESSAGE_CONSUMER
-        addScheduledJobTrace("trace3", 100);       // scheduled-task tags -> SCHEDULED_JOB
+        addTrace("trace1", 100, false); // SERVER kind -> HTTP_REQUEST
+        addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
+        addScheduledJobTrace("trace3", 100); // scheduled-task tags -> SCHEDULED_JOB
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request,message_consumer", null);
+        TraceInsightsResponse response =
+                service.getInsights(10, TraceBucket.ALL, "http_request,message_consumer", null);
 
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactlyInAnyOrder("trace1", "trace2");
     }
@@ -345,8 +394,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsights_shouldReturnFilteredBucketCountsWhenTypeFilterActive() {
-        addTrace("trace1", 100, false);  // HTTP_REQUEST, ok
-        addTrace("trace2", 100, true);   // HTTP_REQUEST, error
+        addTrace("trace1", 100, false); // HTTP_REQUEST, ok
+        addTrace("trace2", 100, true); // HTTP_REQUEST, error
         addConsumerTrace("trace3", 100); // MESSAGE_CONSUMER, ok
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "http_request", null);
@@ -379,7 +428,8 @@ class TraceInsightsServiceTest {
         addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
         addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay");
+        TraceInsightsResponse response =
+                service.getInsights(10, TraceBucket.ALL, null, "org.peekaboot.example.Scheduler.fixedDelay");
 
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
     }
@@ -388,11 +438,21 @@ class TraceInsightsServiceTest {
     void getTraceInsights_shouldEnrichWithHttpExchange() {
         addTrace("trace1", 100, false);
         store.setRequest(new RequestCompletedEvent(
-                "trace1", "GET", "/users", null,
-                Map.of(), null, false,
-                "UserController", "list",
-                Map.of(), Map.of(), List.of(),
-                200, Map.of(), 100));
+                "trace1",
+                "GET",
+                "/users",
+                null,
+                Map.of(),
+                null,
+                false,
+                "UserController",
+                "list",
+                Map.of(),
+                Map.of(),
+                List.of(),
+                200,
+                Map.of(),
+                100));
 
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
@@ -427,10 +487,12 @@ class TraceInsightsServiceTest {
 
         // Then: folding the duplicate away on write must produce the exact tree the
         // never-duplicated trace produces
-        assertThat(withDup.summary().spans().count()).isEqualTo(withoutDup.summary().spans().count());
+        assertThat(withDup.summary().spans().count())
+                .isEqualTo(withoutDup.summary().spans().count());
         assertThat(withDup.rootSpan().children()).hasSize(1);
         assertThat(withDup.queries()).hasSize(1);
-        assertThat(withDup.queries().get(0).sql()).isEqualTo(withoutDup.queries().get(0).sql());
+        assertThat(withDup.queries().get(0).sql())
+                .isEqualTo(withoutDup.queries().get(0).sql());
     }
 
     @Test
@@ -461,8 +523,24 @@ class TraceInsightsServiceTest {
 
     private SpanData rootSpanWithoutTags(InMemoryTraceStore forStore, String traceId, String spanId, String name) {
         Instant now = Instant.now();
-        return new SpanData(traceId, spanId, null, name, null, now, now, Duration.ZERO,
-                Map.of(), List.of(), null, null, null, null, null, List.of(), forStore.nextCreationOrder());
+        return new SpanData(
+                traceId,
+                spanId,
+                null,
+                name,
+                null,
+                now,
+                now,
+                Duration.ZERO,
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                forStore.nextCreationOrder());
     }
 
     private TraceInsightsService newService(TraceStore store) {
@@ -490,8 +568,7 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                store.nextCreationOrder()
-        );
+                store.nextCreationOrder());
 
         store.addSpan(span);
     }
@@ -499,34 +576,69 @@ class TraceInsightsServiceTest {
     private void addConsumerTrace(String traceId, long durationMs) {
         Instant start = Instant.EPOCH;
         SpanData span = new SpanData(
-                traceId, "span-" + traceId, null, "receive message", Span.Kind.CONSUMER,
-                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
-                Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
-        );
+                traceId,
+                "span-" + traceId,
+                null,
+                "receive message",
+                Span.Kind.CONSUMER,
+                start,
+                start.plusMillis(durationMs),
+                Duration.ofMillis(durationMs),
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
         store.addSpan(span);
     }
 
     private void addScheduledJobTrace(String traceId, long durationMs) {
         Instant start = Instant.EPOCH;
         SpanData span = new SpanData(
-                traceId, "span-" + traceId, null, "task orderReconciler.reconcileOrders", null,
-                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
+                traceId,
+                "span-" + traceId,
+                null,
+                "task orderReconciler.reconcileOrders",
+                null,
+                start,
+                start.plusMillis(durationMs),
+                Duration.ofMillis(durationMs),
                 Map.of("code.function", "reconcileOrders", "code.namespace", "org.peekaboot.example.OrderReconciler"),
-                List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
-        );
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
         store.addSpan(span);
     }
 
     private void addTraceWithOperation(String traceId, String operationName, long durationMs) {
         Instant start = Instant.EPOCH;
         SpanData span = new SpanData(
-                traceId, "span-" + traceId, null, operationName, Span.Kind.SERVER,
-                start, start.plusMillis(durationMs), Duration.ofMillis(durationMs),
-                Map.of(), List.of(), null, null, null, null, null, List.of(),
-                store.nextCreationOrder()
-        );
+                traceId,
+                "span-" + traceId,
+                null,
+                operationName,
+                Span.Kind.SERVER,
+                start,
+                start.plusMillis(durationMs),
+                Duration.ofMillis(durationMs),
+                Map.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
         store.addSpan(span);
     }
 
@@ -552,8 +664,7 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                store.nextCreationOrder()
-        );
+                store.nextCreationOrder());
 
         // DB query span
         SpanData dbSpan = new SpanData(
@@ -573,8 +684,7 @@ class TraceInsightsServiceTest {
                 null,
                 null,
                 List.of(),
-                store.nextCreationOrder()
-        );
+                store.nextCreationOrder());
 
         store.addSpan(rootSpan);
         store.addSpan(dbSpan);
@@ -590,26 +700,67 @@ class TraceInsightsServiceTest {
         String dbSpanId = "span-db-" + traceId;
 
         SpanData rootSpan = new SpanData(
-                traceId, "span-root-" + traceId, null, "GET /users/{id}", Span.Kind.SERVER,
-                start, start.plusMillis(totalDurationMs), Duration.ofMillis(totalDurationMs),
-                Map.of("http.method", "GET", "http.url", "/users/123"), List.of(),
-                null, null, null, null, null, List.of(), store.nextCreationOrder()
-        );
+                traceId,
+                "span-root-" + traceId,
+                null,
+                "GET /users/{id}",
+                Span.Kind.SERVER,
+                start,
+                start.plusMillis(totalDurationMs),
+                Duration.ofMillis(totalDurationMs),
+                Map.of("http.method", "GET", "http.url", "/users/123"),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
 
         SpanData duplicate = new SpanData(
-                traceId, "span-db-dup-" + traceId, dbSpanId, "SELECT users", Span.Kind.CLIENT,
-                dbSpanStart, dbSpanStart.plusMillis(50), Duration.ofMillis(50),
-                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?",
-                        "peer.service", "dataSource"),
-                List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()
-        );
+                traceId,
+                "span-db-dup-" + traceId,
+                dbSpanId,
+                "SELECT users",
+                Span.Kind.CLIENT,
+                dbSpanStart,
+                dbSpanStart.plusMillis(50),
+                Duration.ofMillis(50),
+                Map.of(
+                        "db.system",
+                        "postgresql",
+                        "db.statement",
+                        "SELECT * FROM users WHERE id = ?",
+                        "peer.service",
+                        "dataSource"),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
 
         SpanData dbSpan = new SpanData(
-                traceId, dbSpanId, "span-root-" + traceId, "SELECT users", Span.Kind.CLIENT,
-                dbSpanStart, dbSpanStart.plusMillis(50), Duration.ofMillis(50),
+                traceId,
+                dbSpanId,
+                "span-root-" + traceId,
+                "SELECT users",
+                Span.Kind.CLIENT,
+                dbSpanStart,
+                dbSpanStart.plusMillis(50),
+                Duration.ofMillis(50),
                 Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"),
-                List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()
-        );
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
 
         store.addSpan(rootSpan);
         store.addSpan(duplicate);

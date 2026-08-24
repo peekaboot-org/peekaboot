@@ -15,15 +15,29 @@ import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
+import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest(classes = TestingApp.class, properties = "management.endpoints.web.exposure.include=*")
+@SpringBootTest(
+        classes = TestingApp.class,
+        properties = {
+            "management.endpoints.web.exposure.include=*",
+            // ThrowingLoggersEndpoint below stands in for the real "loggers" endpoint - both
+            // sharing the id would otherwise fail context startup ("Found two endpoints with
+            // the id 'loggers'").
+            "spring.autoconfigure.exclude="
+                    + "org.springframework.boot.actuate.autoconfigure.logging.LoggersEndpointAutoConfiguration"
+        })
 @ActiveProfiles("test")
-@Import(PeekabootActuatorServiceTest.DataSourceMetadataFixtureConfig.class)
+@Import({
+    PeekabootActuatorServiceTest.DataSourceMetadataFixtureConfig.class,
+    PeekabootActuatorServiceTest.ThrowingEndpointConfig.class
+})
 class PeekabootActuatorServiceTest {
 
     @Autowired
@@ -40,6 +54,13 @@ class PeekabootActuatorServiceTest {
         assertThat(data.keySet()).isSubsetOf(allowed);
         assertThat(data).containsKeys("health", "info", "env");
         assertThat(data).doesNotContainKeys("beans", "conditions", "mappings", "threaddump", "metrics");
+    }
+
+    @Test
+    void insightsDataCapturesEndpointInvocationExceptionAsErrorMessage() {
+        Map<String, Object> data = service.getInsightsData();
+
+        assertThat(data.get("loggers")).isEqualTo("Error: boom");
     }
 
     @Test
@@ -73,6 +94,29 @@ class PeekabootActuatorServiceTest {
         // and ActuatorMaskingIntegrationTest), not here.
         assertThat(((Map<String, Object>) connectionParams.get("password")).get("value"))
                 .isEqualTo("hunter2");
+    }
+
+    /**
+     * Overrides the real "loggers" actuator endpoint with a bean that always throws, to
+     * pin PeekabootActuatorService#collectData's exception-capture branch - the guarantee
+     * that one broken endpoint doesn't break the whole insights payload. Named after a
+     * real INSIGHTS_ENDPOINTS id (not a synthetic one) because getInsightsData() only
+     * invokes endpoints in that set; a fresh id would never reach the catch block.
+     */
+    @TestConfiguration
+    static class ThrowingEndpointConfig {
+        @Bean
+        ThrowingLoggersEndpoint throwingLoggersEndpoint() {
+            return new ThrowingLoggersEndpoint();
+        }
+    }
+
+    @Endpoint(id = "loggers")
+    static class ThrowingLoggersEndpoint {
+        @ReadOperation
+        public String read() {
+            throw new IllegalStateException("boom");
+        }
     }
 
     /**

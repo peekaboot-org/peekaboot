@@ -1,5 +1,6 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,20 @@ class RemovedRawEndpointsIntegrationTest {
 
     private RestClient restClient() {
         return RestClient.builder().baseUrl("http://localhost:" + port).build();
+    }
+
+    /**
+     * Without this, all three 404 assertions below would pass vacuously if the Peekaboot
+     * API were ever unmounted from the context entirely - this pins that the app is
+     * actually mounted and reachable, so a 404 on the /raw paths means the route is
+     * specifically gone, not that nothing responds.
+     */
+    @Test
+    void aSurvivingEndpointIsReachable() {
+        String body =
+                restClient().get().uri("/peekaboot/api/features").retrieve().body(String.class);
+
+        assertThat(body).isNotNull();
     }
 
     @Test

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -118,6 +119,22 @@ class PeekabootControllerTest {
             controller.getTracesInsights(100, "not-a-bucket", null, null);
 
             verify(traceInsightsService).getInsights(100, TraceBucket.ALL, null, null);
+        }
+
+        @Test
+        void shouldClampNegativeLimit() {
+            // a negative limit would throw from Stream.limit and produce a 500
+            controller.getTracesInsights(-5, null, null, null);
+
+            verify(traceInsightsService).getInsights(eq(0), any(), any(), any());
+        }
+
+        @Test
+        void shouldClampExcessiveLimit() {
+            // huge limits would overflow downstream multiplications
+            controller.getTracesInsights(Integer.MAX_VALUE, null, null, null);
+
+            verify(traceInsightsService).getInsights(eq(10_000), any(), any(), any());
         }
 
         private TraceInsightsResponse emptyInsightsResponse() {
