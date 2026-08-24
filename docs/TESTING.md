@@ -107,7 +107,8 @@ exact counts, never defensive `contains`.
 
   See `peekaboot-testing-app/README.md`'s screenshot section — `docs/images/dashboard.png`
   is a byte-identical copy of one of those images and is regenerated with them. What the
-  capture tool does *not* reach is listed in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
+  capture tool reaches &mdash; and what it deliberately does not &mdash; is described in
+  [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 
 ## Counting tests
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`, so

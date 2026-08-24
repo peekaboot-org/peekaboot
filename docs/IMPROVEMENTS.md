@@ -1,13 +1,14 @@
 # Improvements
 
-Known gaps, deferred findings and open decisions, as of the toolbar-defaults and API-trim work
-(branch `feat/toolbar-defaults-and-api-trim`, 2026-08-24).
+Known gaps, open decisions, and the things that look like defects but are not.
 
-Everything here was found deliberately — in review, in verification, or by tripping over it — and
-judged non-blocking at the time. Nothing here is a surprise waiting to happen; each item says what
-it costs to leave alone.
+Everything here was found deliberately — in review, in verification, or by tripping over it. Each
+item says what it costs to leave alone. When one is closed it either leaves this file or moves to
+§5 with the reasoning that closed it, so the record survives the work.
 
-Sections 1 and 2 need a person. Sections 3 onward are work someone can just pick up.
+The backlog this file opened with was worked through on 2026-08-24; §5 records what came of it.
+
+Sections 1 and 2 need a person. Section 3 is settled.
 
 ---
 
@@ -19,82 +20,71 @@ Sections 1 and 2 need a person. Sections 3 onward are work someone can just pick
 stay exactly as they are, as the seam for a future improvement. Do not remove them as dead code, and
 do not implement capture as a side effect of another task.
 
-The rest of this entry records why the seam exists and what building it would involve.
-
 `peekaboot-backend/src/main/java/org/peekaboot/backend/filter/RequestCaptureFilter.java:138,144`
-
-`captureRequest` passes `null` for `requestBody` and `List.of()` for `uploadedFiles`, both marked
-"not captured yet". `HttpRequest.Body` and `HttpRequest.UploadedFile` exist in the domain model and
-nothing ever populates them — someone intended this and stopped.
+passes `null` for `requestBody` and `List.of()` for `uploadedFiles`, both marked "not captured yet".
+`HttpRequest.Body` and `HttpRequest.UploadedFile` exist in the domain model; nothing populates them.
 
 What *is* captured: method, path, masked query string, masked request headers, query and form
 parameters, resolved controller class and method, response status, masked response headers,
-duration.
+duration. The documentation describes exactly that, so nothing currently overclaims.
 
-The documentation overclaimed this in six places and has been corrected, so nothing currently lies
-about it. The open question is whether to build it.
-
-**If you do**, masking is the hard part, not capture: bodies carry credentials in shapes
+**If you build it**, masking is the hard part, not capture: bodies carry credentials in shapes
 `MaskingEngine`'s key-name rules cannot see, because there are no key names — a JSON body is
-structure, a form post is pairs, a file upload is bytes. Sizing and truncation need a cap and a
-`TRUNCATED` signal the UI already knows how to render.
+structure, a form post is pairs, a file upload is bytes. Sizing and truncation need a cap and the
+`TRUNCATED` signal the UI already renders. It wants its own design pass.
 
-It changes what Peekaboot holds in memory and what the toolbar puts on screen, so it wants its own
-design pass rather than being folded into unrelated work.
+### 1.2 Branch protection on `dev` is not enforcing
 
-### 1.2 Does the read-time `SpanDeduplicator` pass still earn its keep?
+Pushes report `Bypassed rule violations … Required status check "build-on-push" is expected`.
 
-`peekaboot-backend/src/main/java/org/peekaboot/backend/service/TraceInsightsService.java:119-122,161`
-
-Deduplication moved to write time, so this read-time pass should be a no-op. It used to be
-described as an asymmetry between `/insights` and `/raw`; `/raw` is gone, so that framing no longer
-applies and there is only one read path.
-
-Two honest options: drop it, or keep it and document in its Javadoc that it is a safety net for the
-one span-arrival order write-time dedup does not collapse. What is not fine is leaving duplicated
-logic across two packages with no stated reason.
-
-*Small either way — the decision is the work.*
+This is a GitHub repository setting, not code — it cannot be changed from a working copy. Either
+make the required check block, in which case work goes via PR, or remove the rule as misleading.
+Leaving it advertises a gate the branch does not have.
 
 ---
 
-## 2. Coverage the tooling cannot currently reach
+## 2. Known gaps
 
-### 2.1 No screenshot demonstrates query extraction
+### 2.1 Latent duplicate-span residue in `TraceDataBundle`, currently unreachable
 
-`peekaboot-testing-app/src/test/java/org/peekaboot/testingapp/ui/ScreenshotCapture.java`
+Found while proving the read-time dedup pass removable (§5.1).
 
-The trace-detail overlay opens on the **Spans** tab and `ScreenshotCapture` never clicks across to
-**Queries**. Those are two independent rendering paths — Spans renders `span.name`, Queries renders
-the SQL `QueryExtractor` extracts (see `docs/ARCHITECTURE.md`, *Query Extraction*) — so no shipped
-image has ever shown `QueryExtractor`'s output, working or broken.
+On a **triple**-nested mutually-duplicate chain `R←D←X`, arrival orders `R,X,D` and `X,R,D` leave a
+duplicate: `isDuplicateOfStoredParent` (`TraceDataBundle.java:91-99`) returns early without running
+`absorbDuplicateChildrenOf`, so children of the folded span are never re-examined.
 
-This mattered: an earlier handover read `SELECT customer_order` in a span tree as evidence of a
-bug. It was not. That is OpenTelemetry's own span-name summary and is correct there.
+Unreachable today for two independent reasons — either alone closes it:
 
-**Remedy:** extend the capture tool to open the Queries tab and add that image to the website. Only
-needed if the site should illustrate query extraction specifically.
+1. **It needs a third nesting level.** Only two DataSource decorators exist
+   (`peekaboot-testing-app/pom.xml`), and `SERVICE_IDENTIFIER_KEYS`
+   (`SpanDuplicateMatcher.java:15`) carries exactly one key per decorator.
+2. **It needs a span to arrive after its own parent**, which `BatchSpanProcessor`'s FIFO end-order
+   forbids.
 
-### 2.2 Environment and Config screenshots do not demonstrate masking
+The genuine-grandchild case (`G,R,D`) is harmless: `isDuplicate` is an equivalence relation, so only
+a span duplicating the folded one can duplicate the survivor.
 
-Same file. The tool never expands property groups and never clicks the reveal control, so those
-images show collapsed groups — not masked values, not the "Show secrets" toggle. The two pages
-where masking matters most describe behaviour their pictures do not show.
+**Regression triggers — the reason this entry exists:** adding a third key to
+`SERVICE_IDENTIFIER_KEYS`, or making `isDuplicate` non-transitive. If either happens, the fix is a
+few lines in `TraceDataBundle` — **not** a second dedup implementation.
 
-*Medium: the capture tool needs to drive interactions, not just navigate.*
+### 2.2 `ToolbarLateSpanTest` depends on timing it does not own
 
-### 2.3 Surefire under-reports `@Nested` classes in its `.txt` summaries
+`LateSpanFixture.LateSpanController.LATE_WORK` is 1500ms, chosen against the toolbar's fetch ladder
+(`toolbar.js`, cumulative 250ms / 750ms / 1750ms / 4750ms) and the test profile's 50ms span export
+delay. The margins are in that field's Javadoc, including the point that the ladder's clock starts
+when the ES module graph *executes*, not when the response is sent.
 
-Not a product bug — a measurement trap that produced two wrong test counts during this work, in
-opposite directions.
+Not a defect — a dependency that cannot be expressed in code, because the ladder lives only in a
+static JS file with no Java-accessible source of truth. **Changing the ladder, the export delay, or
+`LATE_WORK` invalidates the arithmetic; redo it rather than assume it still holds.**
 
-For a class using `@Nested`, surefire's per-class `.txt` summary reports `Tests run: 0` while the
-XML carries the real total. In `peekaboot-backend`, `PeekabootControllerTest` (26) and
-`MaskingEngineTest` (107) both report 0 in `.txt`. Summing `.txt` gives 525; summing the XML gives
-the true 658.
+### 2.3 Counting tests: surefire under-reports `@Nested` classes
 
-Counting `@Test` annotations instead is also wrong: it misses `@ParameterizedTest` entirely —
-`MaskingEngineTest` alone has 7 that expand to 107 invocations.
+For a class using `@Nested`, surefire's per-class `.txt` summary reports `Tests run: 0` while the XML
+carries the real total. In `peekaboot-backend`, `PeekabootControllerTest` and `MaskingEngineTest`
+both report 0 in `.txt`. Counting `@Test` annotations instead is also wrong — it misses
+`@ParameterizedTest` entirely, and `MaskingEngineTest` alone has 7 that expand to 107 invocations.
 
 **Count from the XML, or from the reactor summary. Never from the `.txt` files.**
 
@@ -104,93 +94,109 @@ for f in <module>/target/surefire-reports/TEST-*.xml; do
 done | paste -sd+ | bc
 ```
 
-Current true counts: backend 658, autoconfigure 90, testing-app 203 — **951**.
-
-### 2.4 Two known flake windows in the browser tests
-
-- `TraceOverlayTest` — a Playwright `TargetClosedError` was observed once in an otherwise green
-  `mvn verify`. Pre-existing; this work never touched that test. Not yet characterised.
-- `ToolbarLateSpanTest` — depends implicitly on the toolbar's first render landing before the
-  fixture's 800 ms late span ends. With a 50 ms test export delay and a 250 ms first fetch there is
-  comfortable margin, but the dependency is not asserted. Under heavy CI load it could invert, and
-  the failure would look like a product bug rather than a timing one.
-
-*Small: state the assumption in the test, or make the fixture's delay derive from the ladder.*
+Current: backend 649, autoconfigure 90, testing-app 203 — **942**.
 
 ---
 
-## 3. Low-risk correctness nits
+## 3. Deliberately unfixed
 
-Each was reviewed and judged not worth blocking on. All still true.
-
-| Item | Where | Cost of leaving it |
+| Item | Where | Why it stands |
 |---|---|---|
-| Chained-redirect residue | `TraceDataBundle.pruneRedirectsPointingAt` | `redirectsPointingAt[evicted]` is dropped, but an entry keyed on a *folded-away* id is never removed, so `gc → dup → survivor` leaves residue once `survivor` is evicted. Needs triple instrumentation, which does not occur in this domain — but the class Javadoc's "stays bounded by the maxSpans cap" is slightly stronger than the code. |
-| `info.build` is not masked | `mapper/actuator/ApplicationMapper` | A free-form `Map<String,Object>` of consumer-supplied build info reaches the insights response unmasked. Low-risk carrier; noted for completeness, not because a leak is likely. |
-| Three env vars mask that arguably needn't | `masking/MaskingRules.java` | `XDG_SESSION_ID`, `SSH_AUTH_SOCK`, `CREDENTIALS_DIRECTORY` are caught by the `session-id`, `auth` and `credential` rules. Deliberate — those rules earn their keep elsewhere and these three are sensitive-adjacent. Revisit only if someone complains. |
+| Three env vars mask that arguably needn't | `masking/MaskingRules.java` | `XDG_SESSION_ID`, `SSH_AUTH_SOCK`, `CREDENTIALS_DIRECTORY` are caught by the `session-id`, `auth` and `credential` rules. Those rules earn their keep elsewhere and these three are sensitive-adjacent. Revisit only if someone complains. |
+| `concepts.md`'s root-action-type priority table stayed on the site | `peekaboot-org.github.io/docs/concepts.md` | Structurally similar to material relocated into `ARCHITECTURE.md`, but it explains an icon the reader is looking at. Revisit only if the page grows. |
+| `ApplicationMapper.maskBuild`'s `: Collections.emptyMap()` branch is unreachable | `mapper/actuator/ApplicationMapper` | `TreeMasker.mask` always returns a `LinkedHashMap` for `Map` input. Kept because it keeps the `@SuppressWarnings("unchecked")` honest. |
+| Test teardown tolerates `TargetClosedError` and `TimeoutError` | `ui/PlaywrightTestBase.closePage()` | Both log what they swallowed. See §5.6 before narrowing these to per-test `unroute` calls. |
 
 ---
 
-## 4. Code and doc hygiene
+## 4. Do not "fix" these
 
-Cosmetic. Fold into the next change that touches the file rather than making a pass of its own.
+Each looks like a defect and is not. All checked against source.
 
-- `ActuatorInsightsService` still names its collaborator field `rawService` after the
-  `ActuatorRawMapper` → `ActuatorResponseParser` rename.
-- `PeekabootDefaultsEnvironmentPostProcessor`'s `DEV_TOOLBAR_PROPERTY_SOURCE_NAME` sits between the
-  property constants and the resource constants rather than grouped with either.
-- `QueryExtractor.findDbSystem`'s new branch comment is terser than `findSql`'s equivalent, which
-  explains *why* the current convention is ordered ahead of the superseded one.
-- `peekaboot-backend/src/test/resources/.../sample_actuator_all_raw.json` kept its `_raw` name after
-  the package rename; it is the parser test's fixture.
-- `peekaboot-org.github.io/docs/concepts.md`'s root-action-type priority table is structurally
-  similar to material relocated into `ARCHITECTURE.md`, but it explains an icon the reader is
-  looking at, so it stayed. Revisit only if the page grows.
-- `peekaboot-org.github.io/docs/tracing.md` cross-references the dev-toolbar page twice inside one
-  two-sentence paragraph.
-
----
-
-## 5. Build and repository hygiene
-
-- **`peekaboot-testing-app` never got the Mockito static `-javaagent` surefire fix.**
-  `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure` both configure it via
-  `maven-dependency-plugin`; this module does not, so the inline-mock-maker self-attach WARN still
-  prints. One-line pom change. Recorded as accepted noise in `docs/TESTING.md`.
-- **SpringDoc enabled-by-default WARNs** print once per context start in `peekaboot-testing-app`
-  for `/v3/api-docs` and `/swagger-ui.html`. Never investigated; may just need a property.
-- **Branch protection on `dev` is not enforcing.** Pushes report
-  `Bypassed rule violations … Required status check "build-on-push" is expected`. Either make the
-  rule block — in which case work goes via PR — or remove it as misleading.
-
----
-
-## 6. Do not "fix" these
-
-Each looks like a defect and is not. All were checked against source.
-
-- **`SELECT customer_order` in a span tree is correct.** It is OpenTelemetry's own span-name
-  summary. The Spans tab renders `span.name` unconditionally and never consults `QueryExtractor`.
+- **`SELECT customer_order` in a span tree is correct.** It is OpenTelemetry's own span-name summary.
+  The Spans tab renders `span.name` unconditionally and never consults `QueryExtractor`; the Queries
+  tab renders extracted SQL. Two independent pipelines — `ARCHITECTURE.md`'s *Query Extraction*
+  section has the detail, and `trace-detail-queries-*.png` now shows the difference.
 - **Off-local, every property masks — `server.port` and `os.name` included.** Actuator value
-  visibility follows the launch context: `show-values: always` is emitted only on a local run, and
-  is *absent* otherwise so Spring's own default applies. Emitting an explicit `never` would pin
-  Spring's current default into applications that are not using Peekaboot at all.
+  visibility follows the launch context: `show-values: always` is emitted only on a local run, and is
+  *absent* otherwise so Spring's own default applies. Emitting an explicit `never` would pin Spring's
+  current default into applications not using Peekaboot at all.
 - **`peekaboot.enable-unmasking` gates the reveal step only.** It is not the visibility switch.
 - **The credential fixtures in `MaskingEngineTest` are split literals** (`"xoxb" + "-123…"`) because
   GitHub push protection blocks the contiguous form. There is a comment at each site. Do not tidy
-  them back together; write new provider fixtures the same way.
-- **SQL masking is value-patterns only.** A credential with no provider-recognisable shape sitting
-  in an ordinary column is not caught. The security page says so plainly and tells readers to assume
-  traces carry plaintext SQL. Do not upgrade that caveat into a promise.
+  them together; write new provider fixtures the same way.
+- **SQL masking is value-patterns only.** A credential with no provider-recognisable shape in an
+  ordinary column is not caught. The security page says so and tells readers to assume traces carry
+  plaintext SQL. Do not upgrade that caveat into a promise.
 - **No entropy-based secret detection.** Deliberately rejected: entropy suits a scanner that flags
-  candidates for a human, not a dashboard that would *destroy* the value on screen. Masking a git
-  SHA or a base64 asset makes the tool worse at its only job.
+  candidates for a human, not a dashboard that would *destroy* the value on screen. Masking a git SHA
+  or a base64 asset makes the tool worse at its only job.
 - **Bare `key` is not a masking rule.** It would mask `spring.jpa.key-generator` and
   `server.ssl.key-store`. Compound names (`api-key`, `private-key`, `secret-key`) cover the real
   cases, and `key-store-password` is caught by `password`.
 - **Scheduled-job detection is tags-only**, keyed on Spring's `code.function`/`code.namespace`.
   Quartz and raw threads are not recognised, and a *direct* call to a `@Scheduled` method that also
-  carries `@Observed` classifies `INTERNAL`. Both consequences are intentional and documented.
+  carries `@Observed` classifies `INTERNAL`. Both intentional and documented.
 - **A non-servlet application does not crash.** Reproduced twice, including with `spring-webmvc`
   absent entirely. The old behaviour was silently registering dead beans; the guard prevents that.
   Any crash claim you find is stale.
+- **`ScreenshotCapture` never clicks the reveal control.** The masked-value screenshots show `******`
+  beside visible values, with the "Show secrets" control present but unused. Photographing a revealed
+  state would publish fixture-shaped credentials into a public repository's history. If a
+  before/after contrast ever seems worth it, that is a human decision, not a tooling gap.
+
+---
+
+## 5. Closed, with the reasoning that closed it
+
+Kept because each conclusion cost real investigation and would otherwise be re-derived.
+
+**5.1 The read-time `SpanDeduplicator` pass was removed.** Dedup happens at write time
+(`SpanDuplicateMatcher` / `TraceDataBundle.addSpan`); the read-time pass duplicated it across two
+packages. Removability was established by driving the real `TraceDataBundle` through all 14 arrival
+permutations with a harness, not by inspection. The only orders that leak are unreachable — see §2.1,
+which exists precisely so this is not quietly reinstated.
+
+**5.2 Chained-redirect residue was fixed, not documented away.** `retargetChainedRedirects` re-points
+chained entries at the surviving id, so `pruneRedirectsPointingAt` drops them all at eviction. The
+class Javadoc's "stays bounded by the `maxSpans` cap" is now true of the code. A regression test runs
+500 triples against a cap of 10 and asserts the table stays within `cap * 2`.
+
+**5.3 `info.build` is masked.** It was the one actuator field on the read path skipping masking. Now
+routed through `TreeMasker(new MaskingEngine())` — the idiom `ConfigMapper` and `HealthMapper` use —
+with `unmask` threaded from `ActuatorInsightsService` like every other masking-aware mapper.
+
+**5.4 The Mockito self-attach WARN is gone.** `peekaboot-testing-app` configures the `-javaagent` via
+`maven-dependency-plugin`, matching the other two modules. The remaining `Sharing is only supported
+for boot loader classes` line is a *different*, unavoidable JVM CDS notice, documented in
+`TESTING.md`.
+
+**5.5 The SpringDoc startup WARN is gone.** `SpringDocAppInitializer` warns when
+`springdoc.api-docs.enabled` / `swagger-ui.enabled` are *unset*; both are
+`@ConditionalOnProperty(… matchIfMissing = true)` everywhere they gate anything, so `true` is
+indistinguishable from absent. Verified against 3.1.0 bytecode — exactly three callers of those flags
+exist, all constructing the warning initialiser. Behaviourally a no-op. It lives in the sample app's
+*main* resources because the WARN fires on every launch, not only under test.
+
+**5.6 The `TraceOverlayTest` flake was root-caused.** The toolbar's fetch ladder polls
+`/api/traces/{id}/insights` for up to 4.75s regardless of test lifetime. Three tests route that
+endpoint and never unroute — `TraceOverlayTest:222`, `ToolbarTest:207`, and `ToolbarTest:257`, the
+last with a Javadoc explaining it *must not* unroute because the browser's module map caches the
+failed import. So a scheduled poll can fire during `context().close()`. The tolerance lives in
+`PlaywrightTestBase` rather than per-test because the condition is structural, and because `unroute`
+is itself an interception update over the same wire and would not close the race. Reproduced once in
+7 runs before; 0 in 14 after.
+
+**5.7 Both screenshot gaps are closed.** `ScreenshotCapture` now clicks into the trace overlay's
+Queries tab and expands a masked property group on Environment and Config. `trace-detail-queries-*`
+shows real Hibernate SQL — column lists, aliases, lower-case — which no shipped image had ever shown.
+`dashboard-environment-*` and `dashboard-config-*` show `spring.datasource.password` masked beside
+visible values, demonstrating *selective* masking rather than the blanket kind. The screenshots
+profile needed `enable-unmasking` and `show-values: always` for that: a JUnit-launched process is
+never a local run, so without them Spring's own `Sanitizer` masks everything and the image would
+prove the wrong thing.
+
+**5.8 Hygiene.** `ActuatorInsightsService`'s field is no
+longer named `rawService`; the parser fixture is no longer `sample_actuator_all_raw.json`;
+`findDbSystem`'s comment matches `findSql`'s standard; `DEV_TOOLBAR_PROPERTY_SOURCE_NAME` is grouped
+with its peers; `tracing.md` no longer cross-references the dev-toolbar page twice in one paragraph.
