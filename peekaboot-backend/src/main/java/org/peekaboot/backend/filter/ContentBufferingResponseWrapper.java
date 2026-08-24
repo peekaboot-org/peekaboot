@@ -28,7 +28,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private ServletOutputStream outputStream;
     private PrintWriter writer;
-    private boolean committed = false;
+    private volatile boolean committed = false;
     private volatile boolean passthrough = false;
 
     public ContentBufferingResponseWrapper(HttpServletResponse response) {
