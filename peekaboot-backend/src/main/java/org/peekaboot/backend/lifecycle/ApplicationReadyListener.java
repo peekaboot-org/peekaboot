@@ -203,7 +203,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
             report.append(String.format(" DB Pool: minimumIdle=%d, maximumPoolSize=%d%n%n",
                 config.getMinimumIdle(),
-                config.getMaximumPoolSize()));;
+                config.getMaximumPoolSize()));
 
             try {
                 report.append(" Connection Timeout: ").append(config.getConnectionTimeout()).append(" ms\n");
