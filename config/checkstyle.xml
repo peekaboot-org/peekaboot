@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!-- Metrics-only profile: complexity and size limits at the Checkstyle defaults.
+     Formatting is owned by Spotless (palantir-java-format), bug patterns by
+     Error Prone and SpotBugs - none of that is duplicated here. -->
+<module name="Checker">
+    <module name="TreeWalker">
+        <module name="CyclomaticComplexity"/>
+        <module name="NPathComplexity"/>
+        <module name="BooleanExpressionComplexity"/>
+        <module name="JavaNCSS"/>
+        <module name="MethodLength"/>
+        <!-- Methods only: constructor arity mirrors structure (DI wiring, record
+             convenience constructors), not logic complexity. -->
+        <module name="ParameterNumber">
+            <property name="tokens" value="METHOD_DEF"/>
+        </module>
+        <module name="ClassFanOutComplexity"/>
+    </module>
+</module>
