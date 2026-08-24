@@ -84,3 +84,22 @@ exact counts, never defensive `contains`.
 ## Running
 - Full suite: `mvn test` (root). Single class: `mvn -pl <module> test -Dtest=<Class>`
   — never combine `-am` with `-Dtest`.
+- Full reactor with the five static-analysis gates: `mvn clean verify` (~951 tests).
+- Write-path benchmark, excluded from the default suite:
+  `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
+- Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):
+
+  ```bash
+  mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+      -Dpeekaboot.screenshots.out=/absolute/path/to/peekaboot-org.github.io/assets/img/screenshots
+  ```
+
+  See `peekaboot-testing-app/README.md`'s screenshot section — `docs/images/dashboard.png`
+  is a byte-identical copy of one of those images and is regenerated with them. What the
+  capture tool does *not* reach is listed in [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
+
+## Counting tests
+Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`, so
+summing them under-reports. Count from the XML instead — see
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2.3 for the command and why annotation-counting is also
+wrong.

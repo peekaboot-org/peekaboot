@@ -173,6 +173,9 @@ Each looks like a defect and is not. All were checked against source.
 - **The credential fixtures in `MaskingEngineTest` are split literals** (`"xoxb" + "-123…"`) because
   GitHub push protection blocks the contiguous form. There is a comment at each site. Do not tidy
   them back together; write new provider fixtures the same way.
+- **SQL masking is value-patterns only.** A credential with no provider-recognisable shape sitting
+  in an ordinary column is not caught. The security page says so plainly and tells readers to assume
+  traces carry plaintext SQL. Do not upgrade that caveat into a promise.
 - **No entropy-based secret detection.** Deliberately rejected: entropy suits a scanner that flags
   candidates for a human, not a dashboard that would *destroy* the value on screen. Masking a git
   SHA or a base64 asset makes the tool worse at its only job.
