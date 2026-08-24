@@ -101,7 +101,7 @@ class ScheduledTasksMapperTest {
                 0L,
                 1000L,
                 new ScheduledTasksResponse.TaskExecution(
-                    new ScheduledTasksResponse.TaskException("Task failed", "java.lang.NullPointerException"),
+                    new ScheduledTasksResponse.TaskExceptionInfo("Task failed", "java.lang.NullPointerException"),
                     "FAILED",
                     "2026-01-11T06:49:20Z"
                 ),
