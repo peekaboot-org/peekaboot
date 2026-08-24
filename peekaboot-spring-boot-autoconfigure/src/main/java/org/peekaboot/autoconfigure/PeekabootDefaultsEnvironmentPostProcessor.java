@@ -24,9 +24,11 @@ import org.springframework.core.io.Resource;
  * <p>
  * All defaults live in yml resources: {@code peekaboot-no-push-defaults.yml}
  * is applied unconditionally so the starter never pushes telemetry anywhere
- * unless the application explicitly opts in, while the observability defaults
- * in {@code peekaboot-defaults.yml} are skipped entirely when Peekaboot ends
- * up disabled.
+ * unless the application explicitly opts in, the observability defaults in
+ * {@code peekaboot-defaults.yml} are skipped entirely when Peekaboot ends up
+ * disabled, and {@code peekaboot-dev-toolbar-defaults.yml} is applied only
+ * when the dev toolbar resolves on, shortening the span export delay so a
+ * trace is readable while the developer is still looking at the page.
  */
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
@@ -35,8 +37,10 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
+    private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
+    private static final String DEV_TOOLBAR_DEFAULTS_RESOURCE = "peekaboot-dev-toolbar-defaults.yml";
 
     // ProperLogger: deliberately an instance field - post-processors run before the
     // logging system is initialized, so Spring Boot hands each instance a DeferredLog
@@ -71,6 +75,15 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         }
 
         applyDefaults(environment, PROPERTY_SOURCE_NAME, DEFAULTS_RESOURCE);
+
+        // Read back rather than reusing localDevelopment: an application that sets
+        // peekaboot.dev-toolbar explicitly, in either direction, decides this.
+        if (!environment.getProperty(DEV_TOOLBAR_PROPERTY, Boolean.class, false)) {
+            log.debug("Dev toolbar is off - skipping peekaboot dev toolbar defaults");
+            return;
+        }
+
+        applyDefaults(environment, DEV_TOOLBAR_PROPERTY_SOURCE_NAME, DEV_TOOLBAR_DEFAULTS_RESOURCE);
     }
 
     /** Overridable for tests: real detection reads the launch context of the current thread. */

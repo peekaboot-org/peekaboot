@@ -222,4 +222,48 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getProperty("peekaboot.dev-toolbar", Boolean.class))
                 .isTrue();
     }
+
+    @Test
+    void shortensTheSpanExportDelayWhenTheToolbarIsOn() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.opentelemetry.tracing.export.schedule-delay"))
+                .isEqualTo("200ms");
+    }
+
+    @Test
+    void leavesTheSpanExportDelayAloneWhenTheToolbarIsOff() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.dev-toolbar", "false");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.opentelemetry.tracing.export.schedule-delay"))
+                .isNull();
+        assertThat(environment.getPropertySources().contains("peekabootDevToolbarDefaults"))
+                .isFalse();
+    }
+
+    @Test
+    void leavesTheSpanExportDelayAloneWhenPeekabootIsDisabled() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.opentelemetry.tracing.export.schedule-delay"))
+                .isNull();
+    }
+
+    @Test
+    void appPropertiesOverrideTheShortenedSpanExportDelay() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("management.opentelemetry.tracing.export.schedule-delay", "1s");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.opentelemetry.tracing.export.schedule-delay"))
+                .isEqualTo("1s");
+    }
 }
