@@ -122,6 +122,9 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         log.trace("Stopped handler observation");
     }
 
+    // CloseResource: the scope is opened in preHandle and intentionally closed here,
+    // in a later interceptor callback - a lifecycle PMD cannot follow
+    @SuppressWarnings("PMD.CloseResource")
     private void closeScope(HttpServletRequest request, String scopeAttribute) {
         Observation.Scope scope = (Observation.Scope) request.getAttribute(scopeAttribute);
         if (scope != null) {

@@ -38,6 +38,9 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
 
+    // ProperLogger: deliberately an instance field - post-processors run before the
+    // logging system is initialized, so Spring Boot hands each instance a DeferredLog
+    @SuppressWarnings("PMD.ProperLogger")
     private final Log log;
 
     public PeekabootDefaultsEnvironmentPostProcessor(DeferredLogFactory logFactory) {

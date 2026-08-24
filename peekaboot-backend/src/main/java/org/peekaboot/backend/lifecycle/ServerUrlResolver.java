@@ -60,6 +60,9 @@ public class ServerUrlResolver {
     }
 
 
+    // AvoidUsingHardCodedIP: "0.0.0.0" is compared against, not connected to - it is
+    // the wildcard bind address that must be rewritten to something browsable
+    @SuppressWarnings("PMD.AvoidUsingHardCodedIP")
     private String resolveHost() {
         String host = environment.getProperty("server.address");
         if (host == null || host.isBlank() || "0.0.0.0".equals(host)) {
