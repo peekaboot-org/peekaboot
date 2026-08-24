@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights.web;
 
+import java.util.Map;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
@@ -11,8 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/peekaboot/api/insights")

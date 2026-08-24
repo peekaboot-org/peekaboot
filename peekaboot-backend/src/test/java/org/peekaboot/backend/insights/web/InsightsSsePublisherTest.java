@@ -1,9 +1,6 @@
 package org.peekaboot.backend.insights.web;
 
-import tools.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.testsupport.LogCapture;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -14,8 +11,10 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.LogCapture;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.ObjectMapper;
 
 class InsightsSsePublisherTest {
 
@@ -65,10 +64,12 @@ class InsightsSsePublisherTest {
         assertThat(elapsedMs).as("onTick must not block on the emitter send").isLessThan(500);
 
         assertThat(sendStarted.await(2, TimeUnit.SECONDS))
-                .as("dispatch thread picks up the queued event").isTrue();
+                .as("dispatch thread picks up the queued event")
+                .isTrue();
         releaseSend.countDown();
         assertThat(sendCompleted.await(2, TimeUnit.SECONDS))
-                .as("send eventually completes on the dispatch thread").isTrue();
+                .as("send eventually completes on the dispatch thread")
+                .isTrue();
     }
 
     @Test
@@ -97,7 +98,8 @@ class InsightsSsePublisherTest {
         publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
 
         assertThat(delivered.await(3, TimeUnit.SECONDS))
-                .as("dispatch thread keeps draining after a rapid disconnect/resubscribe").isTrue();
+                .as("dispatch thread keeps draining after a rapid disconnect/resubscribe")
+                .isTrue();
     }
 
     @Test
@@ -119,9 +121,12 @@ class InsightsSsePublisherTest {
         publisher.subscribe();
 
         assertThat(broadcasts.poll(500, TimeUnit.MILLISECONDS))
-                .as("no stale burst on the first subscribe").isNull();
+                .as("no stale burst on the first subscribe")
+                .isNull();
         publisher.onTick(9_000, Map.of("a", 1.0), Map.of());
-        assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("fresh events still flow").isEqualTo("tick");
+        assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                .as("fresh events still flow")
+                .isEqualTo("tick");
     }
 
     @Test
@@ -150,18 +155,23 @@ class InsightsSsePublisherTest {
 
         SseEmitter first = publisher.subscribe();
         publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
-        assertThat(broadcastStarted.await(3, TimeUnit.SECONDS)).as("dispatch wedged in broadcast").isTrue();
+        assertThat(broadcastStarted.await(3, TimeUnit.SECONDS))
+                .as("dispatch wedged in broadcast")
+                .isTrue();
         assertThat(broadcasts.take()).isEqualTo("tick");
 
         publisher.onTick(2_000, Map.of("a", 2.0), Map.of()); // queues up behind the wedge
-        first.complete();                                    // ... and its subscriber leaves
-        publisher.subscribe();                               // 0 -> 1: must start from an empty queue
+        first.complete(); // ... and its subscriber leaves
+        publisher.subscribe(); // 0 -> 1: must start from an empty queue
         releaseBroadcast.countDown();
 
         assertThat(broadcasts.poll(1, TimeUnit.SECONDS))
-                .as("the event queued for the departed subscriber is dropped").isNull();
+                .as("the event queued for the departed subscriber is dropped")
+                .isNull();
         publisher.onTick(3_000, Map.of("a", 3.0), Map.of());
-        assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("fresh events still flow").isEqualTo("tick");
+        assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                .as("fresh events still flow")
+                .isEqualTo("tick");
     }
 
     @Test
@@ -183,7 +193,8 @@ class InsightsSsePublisherTest {
         publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
 
         assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
-                .as("the loop keeps running after a step threw").isEqualTo("tick");
+                .as("the loop keeps running after a step threw")
+                .isEqualTo("tick");
     }
 
     @Test
@@ -209,18 +220,24 @@ class InsightsSsePublisherTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
             flood(publisher);
-            assertThat(overflowWarnings(logs)).as("the first overflow episode warns").isEqualTo(1);
+            assertThat(overflowWarnings(logs))
+                    .as("the first overflow episode warns")
+                    .isEqualTo(1);
 
             gate.get().countDown();
             // taking well over half the queue's capacity proves the backlog drained,
             // so the offers of the next flood start out succeeding again
             for (int i = 0; i < 200; i++) {
-                assertThat(broadcasts.poll(3, TimeUnit.SECONDS)).as("backlog drains").isEqualTo("tick");
+                assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                        .as("backlog drains")
+                        .isEqualTo("tick");
             }
 
             gate.set(new CountDownLatch(1));
             flood(publisher);
-            assertThat(overflowWarnings(logs)).as("a second episode is not silent").isEqualTo(2);
+            assertThat(overflowWarnings(logs))
+                    .as("a second episode is not silent")
+                    .isEqualTo(2);
         }
     }
 
@@ -245,7 +262,9 @@ class InsightsSsePublisherTest {
 
         publisher.stop();
 
-        assertThat(publisher.subscriberCount()).as("open emitters must not outlive the context").isZero();
+        assertThat(publisher.subscriberCount())
+                .as("open emitters must not outlive the context")
+                .isZero();
         assertThat(publisher.isRunning()).isFalse();
     }
 
@@ -272,7 +291,7 @@ class InsightsSsePublisherTest {
 
     @Test
     void rollupPayloadCarriesAllStats() {
-        var entry = org.peekaboot.backend.insights.AggregateStats.of(new double[]{2.0});
+        var entry = org.peekaboot.backend.insights.AggregateStats.of(new double[] {2.0});
         String json = publisher.rollupJson(1, 60_000, Map.of("a", entry));
         assertThat(json).contains("\"level\":1").contains("\"avg\":2.0").contains("\"p99\":2.0");
     }

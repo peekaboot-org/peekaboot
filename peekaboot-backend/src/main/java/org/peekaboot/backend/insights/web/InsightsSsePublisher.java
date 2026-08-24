@@ -1,13 +1,5 @@
 package org.peekaboot.backend.insights.web;
 
-import org.peekaboot.backend.insights.AggregateStats;
-import org.peekaboot.backend.insights.InsightsCollector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.SmartLifecycle;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import tools.jackson.databind.ObjectMapper;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -18,6 +10,13 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.peekaboot.backend.insights.AggregateStats;
+import org.peekaboot.backend.insights.InsightsCollector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Fans collector events out to all connected dashboard SSE clients.
@@ -37,12 +36,20 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private final ObjectMapper objectMapper;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
+
     /**
-     * Guarded by this publisher's monitor, like every other access to the queue:
+     * The single monitor for subscriber-list, queue, and loop lifecycle state. A
+     * dedicated private object rather than {@code this} so nothing outside this
+     * class can ever contend on (or deadlock against) the internal locking.
+     */
+    private final Object lock = new Object();
+    /**
+     * Guarded by the publisher's {@code lock}, like every other access to the queue:
      * set when an episode of overflow starts warning, cleared as soon as an offer
      * succeeds again, so a later episode is never swallowed as a duplicate.
      */
     private boolean queueOverflowWarned;
+
     private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
     private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
     /**
@@ -74,7 +81,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     @Override
     public void stop() {
         List<SseEmitter> open;
-        synchronized (this) {
+        synchronized (lock) {
             running = false;
             open = List.copyOf(emitters);
             emitters.clear();
@@ -99,7 +106,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     public SseEmitter subscribe() {
         SseEmitter emitter = newEmitter();
         boolean accepted;
-        synchronized (this) {
+        synchronized (lock) {
             accepted = running;
             if (accepted) {
                 // Anything still queued belongs to a subscriber that has since left;
@@ -216,7 +223,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      */
     private void enqueue(String eventName, Supplier<String> json) {
         SseEvent event = new SseEvent(eventName, json);
-        synchronized (this) {
+        synchronized (lock) {
             if (emitters.isEmpty()) {
                 return;
             }
@@ -225,7 +232,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 return;
             }
             queue.poll();
-            queue.offer(event);
+            if (!queue.offer(event)) {
+                // unreachable: this thread holds the lock and poll() just freed a slot
+                log.warn("Insights SSE dispatch queue rejected an event after freeing a slot");
+                return;
+            }
             if (!queueOverflowWarned) {
                 queueOverflowWarned = true;
                 log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
@@ -257,6 +268,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
     /** Test seam: invoked after each event successfully handed to an emitter's send(). No-op in production. */
     void onDelivered(String eventName) {
+        // production no-op; tests override to observe delivery
     }
 
     private void heartbeatStep() throws InterruptedException {
@@ -292,8 +304,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         return Double.isNaN(value) ? null : value;
     }
 
-    private record SseEvent(String name, Supplier<String> json) {
-    }
+    private record SseEvent(String name, Supplier<String> json) {}
 
     @FunctionalInterface
     private interface LoopStep {
@@ -303,7 +314,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     /**
      * Lazily starts a named virtual thread that repeats {@code step} while
      * subscribers remain, and stops itself once they don't. Starting and the
-     * exit decision both happen under {@code synchronized (InsightsSsePublisher.this)},
+     * exit decision both happen under the publisher's private {@code lock},
      * so a subscribe() racing the loop's own "should I stop?" check can never
      * observe a stale non-null thread handle for a loop that has already
      * committed to exiting without rechecking - the two are mutually exclusive
@@ -321,7 +332,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
 
         void startIfNeeded() {
-            synchronized (InsightsSsePublisher.this) {
+            synchronized (lock) {
                 if (thread != null) {
                     return;
                 }
@@ -338,7 +349,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
          */
         void stop() {
             Thread loopThread;
-            synchronized (InsightsSsePublisher.this) {
+            synchronized (lock) {
                 loopThread = thread;
                 thread = null;
             }
@@ -355,7 +366,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
         private void run() {
             while (true) {
-                synchronized (InsightsSsePublisher.this) {
+                synchronized (lock) {
                     if (emitters.isEmpty()) {
                         thread = null;
                         return;
@@ -365,7 +376,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                     step.run();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    synchronized (InsightsSsePublisher.this) {
+                    synchronized (lock) {
                         thread = null;
                     }
                     return;

@@ -1,19 +1,18 @@
 package org.peekaboot.backend.insights;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import org.peekaboot.backend.insights.config.InsightsProperties;
-import org.peekaboot.backend.insights.config.SeriesDef;
-import org.peekaboot.backend.insights.config.TileDef;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.SmartLifecycle;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLongArray;
+import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.TileDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.SmartLifecycle;
 
 /**
  * Samples every configured series into level 0 on each tick and rolls finer
@@ -31,10 +30,12 @@ public final class InsightsCollector implements SmartLifecycle {
         Listener NO_OP = new Listener() {
             @Override
             public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+                // NO_OP: collectors without an interested listener discard events
             }
 
             @Override
             public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
+                // NO_OP: collectors without an interested listener discard events
             }
         };
 
@@ -49,14 +50,19 @@ public final class InsightsCollector implements SmartLifecycle {
     private final Map<String, DoubleRing> level0Rings = new LinkedHashMap<>();
     /** Per series id, one StatsRing per level; index 0 (level 0) is unused. */
     private final Map<String, StatsRing[]> statsRings = new LinkedHashMap<>();
+
     private final AtomicLongArray levelEndEpochMs;
     private final Map<String, TileState> tiles = new LinkedHashMap<>();
     private final Listener listener;
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
 
-    public InsightsCollector(List<InsightsProperties.Level> levels, List<SeriesDef> series,
-                              List<TileDef> tiles, MeterRegistry registry, Listener listener) {
+    public InsightsCollector(
+            List<InsightsProperties.Level> levels,
+            List<SeriesDef> series,
+            List<TileDef> tiles,
+            MeterRegistry registry,
+            Listener listener) {
         this.listener = listener;
         this.intervalMillis = new long[levels.size()];
         this.levelSizes = new int[levels.size()];
@@ -223,11 +229,15 @@ public final class InsightsCollector implements SmartLifecycle {
         int count = (int) Math.min(Math.max(missed, 0), levelSizes[level]);
         if (level == 0) {
             for (DoubleRing ring : level0Rings.values()) {
-                for (int i = 0; i < count; i++) ring.add(Double.NaN);
+                for (int i = 0; i < count; i++) {
+                    ring.add(Double.NaN);
+                }
             }
         } else {
             for (StatsRing[] rings : statsRings.values()) {
-                for (int i = 0; i < count; i++) rings[level].add(AggregateStats.EMPTY);
+                for (int i = 0; i < count; i++) {
+                    rings[level].add(AggregateStats.EMPTY);
+                }
             }
         }
     }
@@ -263,7 +273,8 @@ public final class InsightsCollector implements SmartLifecycle {
         double[] mins = window.stream().mapToDouble(AggregateStats::min).toArray();
         double[] maxes = window.stream().mapToDouble(AggregateStats::max).toArray();
         double[] avgs = window.stream().mapToDouble(AggregateStats::avg).toArray();
-        double[] sampleCounts = window.stream().mapToDouble(AggregateStats::samples).toArray();
+        double[] sampleCounts =
+                window.stream().mapToDouble(AggregateStats::samples).toArray();
         return AggregateStats.ofAggregates(mins, maxes, avgs, sampleCounts);
     }
 

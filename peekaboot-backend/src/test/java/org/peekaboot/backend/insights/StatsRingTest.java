@@ -1,13 +1,13 @@
 package org.peekaboot.backend.insights;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 class StatsRingTest {
 
     private static AggregateStats entry(double value) {
-        return AggregateStats.of(new double[]{value});
+        return AggregateStats.of(new double[] {value});
     }
 
     @Test

@@ -1,10 +1,10 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ReducedMotion;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Accessibility regressions that no other test would notice: every assertion here is
@@ -59,12 +59,11 @@ class AccessibilityTest extends PlaywrightTestBase {
         page.click("#insights-tab-btn");
         page.waitForSelector("#insights-level");
 
-        assertThat(page.getAttribute("#insights-level", "aria-label"))
-                .isEqualTo("Aggregation level for all panels");
+        assertThat(page.getAttribute("#insights-level", "aria-label")).isEqualTo("Aggregation level for all panels");
         assertThat(page.getAttribute("#insights-panels .pk-insight-panel-level", "aria-label"))
                 .endsWith("aggregation level");
 
-        closeLiveStreams();   // the only test here that opens the Insights tab's SSE stream
+        closeLiveStreams(); // the only test here that opens the Insights tab's SSE stream
     }
 
     /** Decorative emoji would otherwise be announced: "package Build", "seedling Spring". */
@@ -73,8 +72,8 @@ class AccessibilityTest extends PlaywrightTestBase {
         openDashboard();
 
         int icons = (int) (Integer) page.evaluate("() => document.querySelectorAll('.pk-card__icon').length");
-        int hidden = (int) (Integer) page.evaluate(
-                "() => document.querySelectorAll('.pk-card__icon[aria-hidden=\"true\"]').length");
+        int hidden = (int) (Integer)
+                page.evaluate("() => document.querySelectorAll('.pk-card__icon[aria-hidden=\"true\"]').length");
         assertThat(icons).isGreaterThan(0);
         assertThat(hidden).isEqualTo(icons);
     }
@@ -87,7 +86,8 @@ class AccessibilityTest extends PlaywrightTestBase {
     void dashboardExposesAHeadingOutline() {
         openDashboard();
 
-        assertThat((Integer) page.evaluate("() => document.querySelectorAll('h1').length")).isEqualTo(1);
+        assertThat((Integer) page.evaluate("() => document.querySelectorAll('h1').length"))
+                .isEqualTo(1);
         assertThat((Integer) page.evaluate("() => document.querySelectorAll('h2').length"))
                 .isGreaterThanOrEqualTo(6);
     }
@@ -112,7 +112,7 @@ class AccessibilityTest extends PlaywrightTestBase {
         // Read the number rather than the string: the computed value of a 0.01ms duration
         // serialises as "1e-05s" in Chromium, so pinning any literal spelling is brittle.
         double seconds = ((Number) page.evaluate(
-                "() => parseFloat(getComputedStyle(document.querySelector('.pk-spinner')).animationDuration)"))
+                        "() => parseFloat(getComputedStyle(document.querySelector('.pk-spinner')).animationDuration)"))
                 .doubleValue();
 
         assertThat(seconds).as("spinner animation-duration, in seconds").isLessThan(0.001);
@@ -128,21 +128,19 @@ class AccessibilityTest extends PlaywrightTestBase {
     @Test
     void overlayMakesTheRestOfThePageInert() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')"
-              + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
+                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
 
-        boolean siblingsInert = (boolean) page.evaluate(
-                "() => Array.from(document.body.children)"
-              + ".filter(el => el.id !== 'peekaboot-trace-overlay').every(el => el.inert)");
+        boolean siblingsInert = (boolean) page.evaluate("() => Array.from(document.body.children)"
+                + ".filter(el => el.id !== 'peekaboot-trace-overlay').every(el => el.inert)");
         assertThat(siblingsInert).isTrue();
 
         page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                    + ".querySelector('.pk-overlay__error button').click()");
+                + ".querySelector('.pk-overlay__error button').click()");
         page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay')");
 
-        boolean anyStillInert = (boolean) page.evaluate(
-                "() => Array.from(document.body.children).some(el => el.inert)");
+        boolean anyStillInert =
+                (boolean) page.evaluate("() => Array.from(document.body.children).some(el => el.inert)");
         assertThat(anyStillInert).isFalse();
     }
 }

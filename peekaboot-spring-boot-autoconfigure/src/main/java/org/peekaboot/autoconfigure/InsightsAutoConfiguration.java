@@ -35,13 +35,17 @@ public class InsightsAutoConfiguration {
     }
 
     @Bean
-    public InsightsService insightsService(MeterRegistry meterRegistry, InsightsProperties properties,
-            ResourceLoader resourceLoader, InsightsSsePublisher insightsSsePublisher) {
+    public InsightsService insightsService(
+            MeterRegistry meterRegistry,
+            InsightsProperties properties,
+            ResourceLoader resourceLoader,
+            InsightsSsePublisher insightsSsePublisher) {
         return new InsightsService(meterRegistry, properties, resourceLoader, insightsSsePublisher);
     }
 
     @Bean
-    public InsightsController insightsController(InsightsService insightsService, InsightsSsePublisher insightsSsePublisher) {
+    public InsightsController insightsController(
+            InsightsService insightsService, InsightsSsePublisher insightsSsePublisher) {
         return new InsightsController(insightsService, insightsSsePublisher);
     }
 }

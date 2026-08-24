@@ -8,7 +8,10 @@ import java.util.Map;
  * {@code statValues} carries aggregated windows for levels &ge; 1
  * (seriesId -&gt; statName -&gt; values, oldest first).
  */
-public record LevelSnapshot(int level, long intervalMs, long endEpochMs, int count,
-                             Map<String, double[]> tickValues,
-                             Map<String, Map<String, double[]>> statValues) {
-}
+public record LevelSnapshot(
+        int level,
+        long intervalMs,
+        long endEpochMs,
+        int count,
+        Map<String, double[]> tickValues,
+        Map<String, Map<String, double[]>> statValues) {}

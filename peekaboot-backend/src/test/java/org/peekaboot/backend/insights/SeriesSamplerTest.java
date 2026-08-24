@@ -1,20 +1,18 @@
 package org.peekaboot.backend.insights;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
+
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.insights.config.SeriesDef;
-
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.within;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.insights.config.SeriesDef;
 
 class SeriesSamplerTest {
 
@@ -47,7 +45,8 @@ class SeriesSamplerTest {
     void sumsGaugesAcrossTagCombinations() {
         registry.gauge("mem", io.micrometer.core.instrument.Tags.of("area", "heap", "id", "eden"), new AtomicLong(100));
         registry.gauge("mem", io.micrometer.core.instrument.Tags.of("area", "heap", "id", "old"), new AtomicLong(200));
-        registry.gauge("mem", io.micrometer.core.instrument.Tags.of("area", "nonheap", "id", "meta"), new AtomicLong(999));
+        registry.gauge(
+                "mem", io.micrometer.core.instrument.Tags.of("area", "nonheap", "id", "meta"), new AtomicLong(999));
         SeriesSampler sampler = new SeriesSampler(def("mem", Map.of("area", "heap"), "value"), registry);
         assertThat(sampler.sample(10_000)).isEqualTo(300.0);
     }

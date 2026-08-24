@@ -10,10 +10,9 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.Timer;
-import org.peekaboot.backend.insights.config.SeriesDef;
-
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.peekaboot.backend.insights.config.SeriesDef;
 
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
@@ -52,13 +51,17 @@ public final class SeriesSampler {
 
     private double sampleValue(List<Meter> meters) {
         double value = currentValue(meters);
-        if (def.subtractMeter() == null) return value;
+        if (def.subtractMeter() == null) {
+            return value;
+        }
         double other = currentValue(matching(def.subtractMeter()));
         return value - other; // NaN propagates if either side is unresolved
     }
 
     private double currentValue(List<Meter> meters) {
-        if (meters.isEmpty()) return Double.NaN;
+        if (meters.isEmpty()) {
+            return Double.NaN;
+        }
         double sum = 0;
         for (Meter meter : meters) {
             sum += switch (meter) {
@@ -93,7 +96,9 @@ public final class SeriesSampler {
     }
 
     private double cumulativeCount(List<Meter> meters) {
-        if (meters.isEmpty()) return Double.NaN;
+        if (meters.isEmpty()) {
+            return Double.NaN;
+        }
         double sum = 0;
         for (Meter meter : meters) {
             sum += switch (meter) {
@@ -116,17 +121,25 @@ public final class SeriesSampler {
         previousCount = currentCount;
         previousTotal = currentTotal;
 
-        if (Double.isNaN(currentCount) || Double.isNaN(currentTotal)) return Double.NaN;
-        if (Double.isNaN(previousCountBaseline) || Double.isNaN(previousTotalBaseline)) return Double.NaN;
+        if (Double.isNaN(currentCount) || Double.isNaN(currentTotal)) {
+            return Double.NaN;
+        }
+        if (Double.isNaN(previousCountBaseline) || Double.isNaN(previousTotalBaseline)) {
+            return Double.NaN;
+        }
 
         double deltaCount = currentCount - previousCountBaseline;
-        if (deltaCount == 0) return Double.NaN;
+        if (deltaCount == 0) {
+            return Double.NaN;
+        }
         double deltaTotal = currentTotal - previousTotalBaseline;
         return deltaTotal / deltaCount;
     }
 
     private double totalTime(List<Meter> meters) {
-        if (meters.isEmpty()) return Double.NaN;
+        if (meters.isEmpty()) {
+            return Double.NaN;
+        }
         double sum = 0;
         for (Meter meter : meters) {
             sum += switch (meter) {
@@ -140,15 +153,20 @@ public final class SeriesSampler {
     }
 
     private double sampleMax(List<Meter> meters) {
-        if (meters.isEmpty()) return Double.NaN;
+        if (meters.isEmpty()) {
+            return Double.NaN;
+        }
         double max = Double.NaN;
         for (Meter meter : meters) {
-            double value = switch (meter) {
-                case Timer timer -> timer.max(TimeUnit.MILLISECONDS);
-                case DistributionSummary summary -> summary.max();
-                default -> Double.NaN;
-            };
-            if (Double.isNaN(value)) continue;
+            double value =
+                    switch (meter) {
+                        case Timer timer -> timer.max(TimeUnit.MILLISECONDS);
+                        case DistributionSummary summary -> summary.max();
+                        default -> Double.NaN;
+                    };
+            if (Double.isNaN(value)) {
+                continue;
+            }
             max = Double.isNaN(max) ? value : Math.max(max, value);
         }
         return max;

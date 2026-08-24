@@ -1,6 +1,11 @@
 package org.peekaboot.backend.insights;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.InsightsProperties;
@@ -15,12 +20,6 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Facade turning the {@link InsightsCollector} into API-ready DTOs: loads and
@@ -43,8 +42,11 @@ public final class InsightsService implements SmartLifecycle {
     private final List<TileDef> tiles;
     private final int seriesCount;
 
-    public InsightsService(MeterRegistry registry, InsightsProperties properties,
-                            ResourceLoader resourceLoader, InsightsCollector.Listener listener) {
+    public InsightsService(
+            MeterRegistry registry,
+            InsightsProperties properties,
+            ResourceLoader resourceLoader,
+            InsightsCollector.Listener listener) {
         properties.validate();
         this.properties = properties;
 
@@ -87,15 +89,25 @@ public final class InsightsService implements SmartLifecycle {
     }
 
     private static SeriesDef namespaced(String panelId, SeriesDef series) {
-        return new SeriesDef(panelId + "." + series.id(), series.label(), series.meter(),
-                series.tags(), series.stat(), series.subtractMeter(), series.unit());
+        return new SeriesDef(
+                panelId + "." + series.id(),
+                series.label(),
+                series.meter(),
+                series.tags(),
+                series.stat(),
+                series.subtractMeter(),
+                series.unit());
     }
 
     @Override
     public void start() {
         collector.start();
-        log.info("Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}",
-                seriesCount, panels.size(), levelsDescription(), humanBytes(estimatedMemoryBytes()));
+        log.info(
+                "Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}",
+                seriesCount,
+                panels.size(),
+                levelsDescription(),
+                humanBytes(estimatedMemoryBytes()));
     }
 
     @Override
@@ -113,15 +125,17 @@ public final class InsightsService implements SmartLifecycle {
         List<InsightsProperties.Level> propertyLevels = properties.getLevels();
         for (int index = 0; index < propertyLevels.size(); index++) {
             InsightsProperties.Level level = propertyLevels.get(index);
-            levels.add(new InsightsConfigResponse.Level(index, level.getInterval().toMillis(), level.getSize()));
+            levels.add(
+                    new InsightsConfigResponse.Level(index, level.getInterval().toMillis(), level.getSize()));
         }
 
-        List<InsightsConfigResponse.Panel> panelResponses = panels.stream().map(this::toPanel).toList();
+        List<InsightsConfigResponse.Panel> panelResponses =
+                panels.stream().map(this::toPanel).toList();
 
         Map<String, Double> tileValues = collector.tileValues();
         List<InsightsConfigResponse.Tile> tileResponses = tiles.stream()
-                .map(tile -> new InsightsConfigResponse.Tile(tile.id(), tile.label(), tile.format(), tile.live(),
-                        nanToNull(tileValues.get(tile.id()))))
+                .map(tile -> new InsightsConfigResponse.Tile(
+                        tile.id(), tile.label(), tile.format(), tile.live(), nanToNull(tileValues.get(tile.id()))))
                 .toList();
 
         return new InsightsConfigResponse(levels, panelResponses, tileResponses);
@@ -132,8 +146,8 @@ public final class InsightsService implements SmartLifecycle {
                 .map(series -> new InsightsConfigResponse.Series(
                         panel.id() + "." + series.id(), series.label(), series.unit()))
                 .toList();
-        return new InsightsConfigResponse.Panel(panel.id(), panel.title(), panel.chart(), panel.unit(),
-                panel.level(), seriesResponses);
+        return new InsightsConfigResponse.Panel(
+                panel.id(), panel.title(), panel.chart(), panel.unit(), panel.level(), seriesResponses);
     }
 
     public LevelDataResponse data(int level) {

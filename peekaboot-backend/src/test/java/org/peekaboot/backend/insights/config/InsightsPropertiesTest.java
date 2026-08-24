@@ -1,12 +1,11 @@
 package org.peekaboot.backend.insights.config;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.junit.jupiter.api.Test;
 
 class InsightsPropertiesTest {
 
@@ -34,9 +33,7 @@ class InsightsPropertiesTest {
     @Test
     void rejectsNonMultipleIntervals() {
         InsightsProperties properties = new InsightsProperties();
-        properties.setLevels(List.of(
-                level(Duration.ofSeconds(10), 90),
-                level(Duration.ofSeconds(25), 100)));
+        properties.setLevels(List.of(level(Duration.ofSeconds(10), 90), level(Duration.ofSeconds(25), 100)));
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("multiple");

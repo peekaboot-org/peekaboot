@@ -67,8 +67,8 @@ public final class StatsRing {
         double[] counts = samples.last(n);
         List<AggregateStats> result = new ArrayList<>(avgs.length);
         for (int i = 0; i < avgs.length; i++) {
-            result.add(new AggregateStats(mins[i], maxes[i], avgs[i], medians[i],
-                    p90s[i], p95s[i], p99s[i], (int) counts[i]));
+            result.add(new AggregateStats(
+                    mins[i], maxes[i], avgs[i], medians[i], p90s[i], p95s[i], p99s[i], (int) counts[i]));
         }
         return result;
     }

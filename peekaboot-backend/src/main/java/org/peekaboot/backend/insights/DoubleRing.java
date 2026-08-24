@@ -18,7 +18,9 @@ public final class DoubleRing {
     public synchronized void add(double value) {
         values[next] = value;
         next = (next + 1) % values.length;
-        if (size < values.length) size++;
+        if (size < values.length) {
+            size++;
+        }
     }
 
     public synchronized int size() {

@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.Page;
 import java.nio.file.Files;
 import java.nio.file.Path;

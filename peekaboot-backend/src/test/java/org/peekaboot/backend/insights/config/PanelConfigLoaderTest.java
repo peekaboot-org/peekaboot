@@ -1,9 +1,9 @@
 package org.peekaboot.backend.insights.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class PanelConfigLoaderTest {
 
@@ -51,8 +51,8 @@ class PanelConfigLoaderTest {
     @Test
     void rejectsInvalidStat() {
         // loader-invalid.yml: single panel whose series has stat: bogus
-        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                        PanelConfigLoader.load(new ClassPathResource("insights/loader-invalid.yml"), null))
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> PanelConfigLoader.load(new ClassPathResource("insights/loader-invalid.yml"), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bogus");
     }

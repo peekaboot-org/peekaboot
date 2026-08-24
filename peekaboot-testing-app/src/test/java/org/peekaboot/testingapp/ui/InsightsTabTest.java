@@ -1,16 +1,15 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 class InsightsTabTest extends PlaywrightTestBase {
 
@@ -23,8 +22,7 @@ class InsightsTabTest extends PlaywrightTestBase {
     void captureBrowserConsole() {
         page.onConsoleMessage(msg -> browserLog.add("console." + msg.type() + ": " + msg.text()));
         page.onPageError(error -> browserLog.add("pageerror: " + error));
-        page.onRequestFailed(request ->
-                browserLog.add("requestfailed: " + request.url() + " -> " + request.failure()));
+        page.onRequestFailed(request -> browserLog.add("requestfailed: " + request.url() + " -> " + request.failure()));
         page.onResponse(response -> {
             if (response.status() >= 400) {
                 browserLog.add("http" + response.status() + ": " + response.url());
@@ -51,9 +49,8 @@ class InsightsTabTest extends PlaywrightTestBase {
     void insightsTabIsAvailableAndOrdersPanelsByConfig() {
         openInsights();
 
-        Object panelIds = page.evaluate(
-                "() => [...document.querySelectorAll('#insights-panels .pk-insight-panel')]"
-              + ".map(el => el.dataset.panelId)");
+        Object panelIds = page.evaluate("() => [...document.querySelectorAll('#insights-panels .pk-insight-panel')]"
+                + ".map(el => el.dataset.panelId)");
         @SuppressWarnings("unchecked")
         List<String> ids = (List<String>) panelIds;
 
@@ -67,8 +64,8 @@ class InsightsTabTest extends PlaywrightTestBase {
         openInsights();
         page.waitForSelector("#insights-tiles .pk-insight-tile[data-tile-id='uptime']");
 
-        String uptime = page.textContent(
-                "#insights-tiles .pk-insight-tile[data-tile-id='uptime'] .pk-insight-tile-value");
+        String uptime =
+                page.textContent("#insights-tiles .pk-insight-tile[data-tile-id='uptime'] .pk-insight-tile-value");
 
         assertThat(uptime).isNotEqualTo("-"); // live tile resolves in a real app
     }
@@ -131,10 +128,10 @@ class InsightsTabTest extends PlaywrightTestBase {
         // gets it there.
         page.waitForFunction(
                 "([selector, previous]) => {"
-              + "  const element = document.querySelector(selector);"
-              + "  return !!element && element.textContent !== previous"
-              + "      && element.classList.contains('pk-blink');"
-              + "}",
+                        + "  const element = document.querySelector(selector);"
+                        + "  return !!element && element.textContent !== previous"
+                        + "      && element.classList.contains('pk-blink');"
+                        + "}",
                 List.of(value, before),
                 new Page.WaitForFunctionOptions().setTimeout(15000));
 
@@ -146,8 +143,8 @@ class InsightsTabTest extends PlaywrightTestBase {
         openInsights();
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
 
-        Request request = page.waitForRequest("**/api/insights/data?level=1",
-                () -> page.selectOption("#insights-level", "1"));
+        Request request =
+                page.waitForRequest("**/api/insights/data?level=1", () -> page.selectOption("#insights-level", "1"));
 
         assertThat(request.url()).contains("level=1");
         // the rebuilt chart (min/max bands + avg) must come back up on the new level

@@ -8,18 +8,13 @@ import java.util.List;
  */
 public record InsightsConfigResponse(List<Level> levels, List<Panel> panels, List<Tile> tiles) {
 
-    public record Level(int index, long intervalMs, int size) {
-    }
+    public record Level(int index, long intervalMs, int size) {}
 
-    public record Panel(String id, String title, String chart, String unit,
-                         Integer level, List<Series> series) {
-    }
+    public record Panel(String id, String title, String chart, String unit, Integer level, List<Series> series) {}
 
     /** {@code unit} null means inherit the panel's unit. */
-    public record Series(String id, String label, String unit) {
-    }
+    public record Series(String id, String label, String unit) {}
 
     /** {@code value} is null when the tile isn't (yet) resolvable. */
-    public record Tile(String id, String label, String format, Boolean live, Double value) {
-    }
+    public record Tile(String id, String label, String format, Boolean live, Double value) {}
 }

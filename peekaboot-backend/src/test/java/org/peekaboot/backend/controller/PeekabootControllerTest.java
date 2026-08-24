@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
-import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -28,6 +27,7 @@ import org.peekaboot.backend.domain.trace.TraceListSummary;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -53,7 +53,8 @@ class PeekabootControllerTest {
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = new PeekabootController(actuatorInsightsService, traceInsightsService, metricsService, properties, null);
+        controller = new PeekabootController(
+                actuatorInsightsService, traceInsightsService, metricsService, properties, null);
     }
 
     @Nested

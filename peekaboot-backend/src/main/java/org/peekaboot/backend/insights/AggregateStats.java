@@ -7,44 +7,62 @@ import java.util.Arrays;
  * ofAggregates() computes percentiles over the finer entries' avg values -
  * a deliberate approximation (Micrometer keeps no raw samples), see spec.
  */
-public record AggregateStats(double min, double max, double avg, double median,
-                             double p90, double p95, double p99, int samples) {
+public record AggregateStats(
+        double min, double max, double avg, double median, double p90, double p95, double p99, int samples) {
 
-    public static final AggregateStats EMPTY = new AggregateStats(
-            Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0);
+    public static final AggregateStats EMPTY =
+            new AggregateStats(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0);
 
     public static AggregateStats of(double[] values) {
         double[] usable = Arrays.stream(values).filter(v -> !Double.isNaN(v)).toArray();
-        if (usable.length == 0) return EMPTY;
+        if (usable.length == 0) {
+            return EMPTY;
+        }
         Arrays.sort(usable);
         double sum = Arrays.stream(usable).sum();
         return new AggregateStats(
-                usable[0], usable[usable.length - 1], sum / usable.length,
-                percentile(usable, 0.50), percentile(usable, 0.90),
-                percentile(usable, 0.95), percentile(usable, 0.99),
+                usable[0],
+                usable[usable.length - 1],
+                sum / usable.length,
+                percentile(usable, 0.50),
+                percentile(usable, 0.90),
+                percentile(usable, 0.95),
+                percentile(usable, 0.99),
                 usable.length);
     }
 
-    public static AggregateStats ofAggregates(double[] mins, double[] maxes,
-                                              double[] avgs, double[] sampleCounts) {
-        double min = Double.NaN, max = Double.NaN, weightedSum = 0;
-        int totalSamples = 0, usable = 0;
+    public static AggregateStats ofAggregates(double[] mins, double[] maxes, double[] avgs, double[] sampleCounts) {
+        double min = Double.NaN;
+        double max = Double.NaN;
+        double weightedSum = 0;
+        int totalSamples = 0;
+        int usable = 0;
         double[] usableAvgs = new double[avgs.length];
         for (int i = 0; i < avgs.length; i++) {
-            if (Double.isNaN(avgs[i])) continue;
-            usableAvgs[usable++] = avgs[i];
+            if (Double.isNaN(avgs[i])) {
+                continue;
+            }
+            usableAvgs[usable] = avgs[i];
+            usable++;
             min = Double.isNaN(min) ? mins[i] : Math.min(min, mins[i]);
             max = Double.isNaN(max) ? maxes[i] : Math.max(max, maxes[i]);
             weightedSum += avgs[i] * sampleCounts[i];
             totalSamples += (int) sampleCounts[i];
         }
-        if (usable == 0) return EMPTY;
+        if (usable == 0) {
+            return EMPTY;
+        }
         double[] sortedAvgs = Arrays.copyOf(usableAvgs, usable);
         Arrays.sort(sortedAvgs);
         double avg = totalSamples > 0 ? weightedSum / totalSamples : sortedAvgs[0];
-        return new AggregateStats(min, max, avg,
-                percentile(sortedAvgs, 0.50), percentile(sortedAvgs, 0.90),
-                percentile(sortedAvgs, 0.95), percentile(sortedAvgs, 0.99),
+        return new AggregateStats(
+                min,
+                max,
+                avg,
+                percentile(sortedAvgs, 0.50),
+                percentile(sortedAvgs, 0.90),
+                percentile(sortedAvgs, 0.95),
+                percentile(sortedAvgs, 0.99),
                 totalSamples);
     }
 

@@ -1,5 +1,8 @@
 package org.peekaboot.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.InsightsService;
@@ -12,9 +15,6 @@ import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-
 class InsightsAutoConfigurationTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
@@ -25,14 +25,12 @@ class InsightsAutoConfigurationTest {
 
     @Test
     void activatesWithMeterRegistryAndPeekabootEnabled() {
-        contextRunner
-                .withUserConfiguration(MeterRegistryConfig.class)
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(InsightsService.class);
-                    assertThat(context).hasSingleBean(InsightsSsePublisher.class);
-                    assertThat(context).hasSingleBean(InsightsController.class);
-                });
+        contextRunner.withUserConfiguration(MeterRegistryConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(InsightsService.class);
+            assertThat(context).hasSingleBean(InsightsSsePublisher.class);
+            assertThat(context).hasSingleBean(InsightsController.class);
+        });
     }
 
     @Test
@@ -58,7 +56,9 @@ class InsightsAutoConfigurationTest {
     void backsOffWhenPeekabootDisabled() {
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootAutoConfiguration.class, InsightsAutoConfiguration.class, JacksonAutoConfiguration.class))
+                        PeekabootAutoConfiguration.class,
+                        InsightsAutoConfiguration.class,
+                        JacksonAutoConfiguration.class))
                 .withUserConfiguration(MockActuatorConfig.class, MeterRegistryConfig.class)
                 .withPropertyValues("peekaboot.enabled=false")
                 .run(context -> {

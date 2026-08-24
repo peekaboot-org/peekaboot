@@ -1,20 +1,19 @@
 package org.peekaboot.backend.insights;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.insights.config.InsightsProperties;
-import org.peekaboot.backend.insights.config.SeriesDef;
-import org.peekaboot.backend.insights.config.TileDef;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.TileDef;
 
 class InsightsCollectorTest {
 
@@ -26,9 +25,7 @@ class InsightsCollectorTest {
     }
 
     private final List<InsightsProperties.Level> levels = List.of(
-            level(Duration.ofSeconds(10), 6),
-            level(Duration.ofMinutes(1), 10),
-            level(Duration.ofMinutes(2), 5));
+            level(Duration.ofSeconds(10), 6), level(Duration.ofMinutes(1), 10), level(Duration.ofMinutes(2), 5));
 
     private SimpleMeterRegistry registry;
     private AtomicLong gaugeValue;
@@ -54,8 +51,7 @@ class InsightsCollectorTest {
                 events.add("rollup:" + level + ":" + entries.get("g").avg());
             }
         };
-        collector = new InsightsCollector(levels, List.of(series),
-                List.of(staticTile, liveTile), registry, listener);
+        collector = new InsightsCollector(levels, List.of(series), List.of(staticTile, liveTile), registry, listener);
     }
 
     @Test
@@ -137,13 +133,13 @@ class InsightsCollectorTest {
     @Test
     void rateSampledAfterAGapSpansTheRealElapsedTime() {
         SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), "rate", null, null);
-        InsightsCollector rateCollector = new InsightsCollector(levels, List.of(rate), List.of(),
-                registry, InsightsCollector.Listener.NO_OP);
+        InsightsCollector rateCollector =
+                new InsightsCollector(levels, List.of(rate), List.of(), registry, InsightsCollector.Listener.NO_OP);
         Counter counter = registry.counter("test.counter");
 
-        rateCollector.tick(10_000);   // baseline
+        rateCollector.tick(10_000); // baseline
         counter.increment(30);
-        rateCollector.tick(40_000);   // 30 counts over the real 30s, not over one nominal interval
+        rateCollector.tick(40_000); // 30 counts over the real 30s, not over one nominal interval
 
         double[] values = rateCollector.snapshot(0).tickValues().get("r");
         assertThat(values[3]).isEqualTo(1.0);
@@ -192,10 +188,7 @@ class InsightsCollectorTest {
     void memoryEstimateMatchesFormula() {
         // 2 series x (90 + 1440*7 + 720*7) x 8 bytes
         List<InsightsProperties.Level> spec = List.of(
-                level(Duration.ofSeconds(10), 90),
-                level(Duration.ofMinutes(1), 1440),
-                level(Duration.ofHours(1), 720));
-        assertThat(InsightsCollector.estimateMemoryBytes(2, spec))
-                .isEqualTo(2L * (90 + 1440 * 7 + 720 * 7) * 8);
+                level(Duration.ofSeconds(10), 90), level(Duration.ofMinutes(1), 1440), level(Duration.ofHours(1), 720));
+        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 7 + 720 * 7) * 8);
     }
 }

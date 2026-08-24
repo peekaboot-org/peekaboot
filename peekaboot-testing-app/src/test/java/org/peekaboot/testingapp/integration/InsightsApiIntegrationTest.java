@@ -1,18 +1,6 @@
 package org.peekaboot.testingapp.integration;
 
-import org.peekaboot.testingapp.TestingApp;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
-
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -25,8 +13,18 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.TestingApp;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
@@ -50,9 +48,7 @@ class InsightsApiIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        restClient = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build();
+        restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
     }
 
     @Test
@@ -81,7 +77,8 @@ class InsightsApiIntegrationTest {
 
     @Test
     void invalidLevelIsBadRequest() {
-        HttpStatusCode status = restClient.get()
+        HttpStatusCode status = restClient
+                .get()
                 .uri("/peekaboot/api/insights/data?level=9")
                 .accept(MediaType.APPLICATION_JSON)
                 .exchange((req, res) -> res.getStatusCode());
@@ -101,13 +98,12 @@ class InsightsApiIntegrationTest {
                     .timeout(Duration.ofSeconds(5))
                     .header("Accept", "text/event-stream")
                     .build();
-            HttpResponse<InputStream> response =
-                    client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 
             assertThat(response.statusCode()).isEqualTo(200);
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
                 long deadline = System.currentTimeMillis() + 5000;
                 boolean sawTick = false;
                 String line;
@@ -123,7 +119,8 @@ class InsightsApiIntegrationTest {
     }
 
     private JsonNode getJson(String path) {
-        String json = restClient.get()
+        String json = restClient
+                .get()
                 .uri(path)
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
