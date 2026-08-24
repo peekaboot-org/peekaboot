@@ -89,7 +89,7 @@ public class ActuatorRawMapper {
 
     /**
      * Masks the raw actuator response tree for {@code /peekaboot/api/actuator/all/raw} -
-     * the one caller ({@link org.peekaboot.backend.service.PeekabootActuatorService#getData()})
+     * the one caller ({@link org.peekaboot.backend.service.PeekabootActuatorService#getData(boolean)})
      * that bypasses every typed mapper's masking by returning the raw payload as-is.
      * Unlike {@link #map(Map)}, whose target shape is known upfront (the fixed set of
      * actuator endpoints the insights mappers consume), the raw endpoint reaches every
