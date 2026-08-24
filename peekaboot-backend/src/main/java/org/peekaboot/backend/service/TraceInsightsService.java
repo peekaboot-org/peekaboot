@@ -31,6 +31,7 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -115,12 +116,16 @@ public class TraceInsightsService {
     }
 
     private Stream<TraceTree> mapBucket(TraceBucket bucket, int limit) {
+        if (traceStore == null) {
+            return Stream.empty();
+        }
         return traceStore.getTraces(bucket, limit).stream()
                 .map(bundle -> {
                     TraceData traceData = spanDeduplicator.deduplicate(
                             TraceData.fromSpans(bundle.traceId(), bundle.spans()));
                     return traceTreeMapper.map(traceData, bundle.truncated());
-                });
+                })
+                .filter(Objects::nonNull);
     }
 
     private boolean matchesFilters(TraceTree tree, Set<RootActionType> actionTypes, String rootOperation) {
