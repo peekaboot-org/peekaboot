@@ -74,7 +74,9 @@ public class DataSourceMapper {
 
     private DatabaseProduct detectDatabaseProduct(DataSourceMetadata metadata) {
         String productName = metadata.getDatabaseProductName();
-        if (productName == null) return DatabaseProduct.UNKNOWN;
+        if (productName == null) {
+            return DatabaseProduct.UNKNOWN;
+        }
 
         String lower = productName.toLowerCase(Locale.ROOT);
         for (Map.Entry<String, DatabaseProduct> keyword : PRODUCT_KEYWORDS) {
@@ -86,7 +88,9 @@ public class DataSourceMapper {
     }
 
     private Map<String, String> maskSensitiveProperties(Map<String, JdbcProperty> properties, boolean unmask) {
-        if (properties == null) return Map.of();
+        if (properties == null) {
+            return Map.of();
+        }
 
         Map<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, JdbcProperty> entry : properties.entrySet()) {
@@ -104,7 +108,9 @@ public class DataSourceMapper {
         }
 
         HealthResponse.HealthComponent db = health.body().components().get("db");
-        if (db == null) return HealthStatus.UNKNOWN;
+        if (db == null) {
+            return HealthStatus.UNKNOWN;
+        }
 
         return HealthStatus.fromString(db.status());
     }

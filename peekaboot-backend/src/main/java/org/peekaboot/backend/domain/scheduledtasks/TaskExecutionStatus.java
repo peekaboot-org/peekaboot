@@ -10,7 +10,9 @@ public enum TaskExecutionStatus {
     UNKNOWN;
 
     public static TaskExecutionStatus fromString(String status) {
-        if (status == null) return UNKNOWN;
+        if (status == null) {
+            return UNKNOWN;
+        }
         return switch (status.toUpperCase(Locale.ROOT)) {
             case "SUCCESS" -> SUCCESS;
             case "FAILED", "ERROR" -> FAILED;

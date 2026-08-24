@@ -158,7 +158,9 @@ public final class PeekabootActuatorService {
         List<Map<String, Object>> dataSources = new ArrayList<>();
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            if (metadata == null) continue;
+            if (metadata == null) {
+                continue;
+            }
 
             Map<String, Object> ds = new LinkedHashMap<>();
             ds.put("name", metadata.getDataSourceName());

@@ -27,7 +27,9 @@ public class ToolbarDataProvider {
      * characters become \\uXXXX sequences to keep the JSON valid.
      */
     private String escapeJson(String value) {
-        if (value == null) return "";
+        if (value == null) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder(value.length());
         for (int i = 0; i < value.length(); i++) {
             appendEscaped(sb, value.charAt(i));

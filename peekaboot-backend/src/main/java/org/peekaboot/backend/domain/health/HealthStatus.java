@@ -9,7 +9,9 @@ public enum HealthStatus {
     UNKNOWN;
 
     public static HealthStatus fromString(String status) {
-        if (status == null) return UNKNOWN;
+        if (status == null) {
+            return UNKNOWN;
+        }
         return switch (status.toUpperCase(Locale.ROOT)) {
             case "UP" -> UP;
             case "DOWN" -> DOWN;

@@ -26,10 +26,14 @@ public class FlywayMapper {
         List<MigrationInfo> migrations = new ArrayList<>();
 
         for (FlywayResponse.FlywayContext context : flywayData.contexts().values()) {
-            if (context.flywayBeans() == null) continue;
+            if (context.flywayBeans() == null) {
+                continue;
+            }
 
             for (FlywayResponse.FlywayBean bean : context.flywayBeans().values()) {
-                if (bean.migrations() == null) continue;
+                if (bean.migrations() == null) {
+                    continue;
+                }
 
                 for (FlywayResponse.Migration migration : bean.migrations()) {
                     migrations.add(mapMigration(migration));
@@ -65,9 +69,15 @@ public class FlywayMapper {
     }
 
     private int compareVersions(String v1, String v2) {
-        if (v1 == null && v2 == null) return 0;
-        if (v1 == null) return -1;
-        if (v2 == null) return 1;
+        if (v1 == null && v2 == null) {
+            return 0;
+        }
+        if (v1 == null) {
+            return -1;
+        }
+        if (v2 == null) {
+            return 1;
+        }
 
         String[] parts1 = v1.split("\\.", -1);
         String[] parts2 = v2.split("\\.", -1);
@@ -76,7 +86,9 @@ public class FlywayMapper {
         for (int i = 0; i < maxLen; i++) {
             int p1 = i < parts1.length ? parseIntSafe(parts1[i]) : 0;
             int p2 = i < parts2.length ? parseIntSafe(parts2[i]) : 0;
-            if (p1 != p2) return Integer.compare(p1, p2);
+            if (p1 != p2) {
+                return Integer.compare(p1, p2);
+            }
         }
         return 0;
     }

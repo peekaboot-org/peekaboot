@@ -25,15 +25,21 @@ public class RuntimeMapper {
     }
 
     private OsInfo extractOsInfo(InfoResponse info) {
-        if (info == null || info.os() == null) return null;
+        if (info == null || info.os() == null) {
+            return null;
+        }
 
         InfoResponse.OsInfo os = info.os();
-        if (os.name() == null && os.version() == null && os.arch() == null) return null;
+        if (os.name() == null && os.version() == null && os.arch() == null) {
+            return null;
+        }
         return new OsInfo(os.name(), os.version(), os.arch());
     }
 
     private MemoryInfo extractMemoryInfo(InfoResponse info) {
-        if (info == null || info.process() == null || info.process().memory() == null) return null;
+        if (info == null || info.process() == null || info.process().memory() == null) {
+            return null;
+        }
 
         InfoResponse.ProcessInfo.MemoryInfo memory = info.process().memory();
 
@@ -41,7 +47,9 @@ public class RuntimeMapper {
         long heapMax = memory.heap() != null ? zeroIfNull(memory.heap().max()) : 0;
         long nonHeapUsed = memory.nonHeap() != null ? zeroIfNull(memory.nonHeap().used()) : 0;
 
-        if (heapUsed == 0 && heapMax == 0) return null;
+        if (heapUsed == 0 && heapMax == 0) {
+            return null;
+        }
         return MemoryInfo.of(heapUsed, heapMax, nonHeapUsed);
     }
 
@@ -71,7 +79,9 @@ public class RuntimeMapper {
 
     private long getLongValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value instanceof Number n) return n.longValue();
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
         return 0;
     }
 }

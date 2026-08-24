@@ -10,7 +10,9 @@ public enum MigrationState {
     UNKNOWN;
 
     public static MigrationState fromString(String state) {
-        if (state == null) return UNKNOWN;
+        if (state == null) {
+            return UNKNOWN;
+        }
         // Flyway MigrationState names collapsed onto the dashboard's states
         return switch (state.toUpperCase(Locale.ROOT)) {
             case "SUCCESS", "FUTURE_SUCCESS", "MISSING_SUCCESS", "OUT_OF_ORDER", "BASELINE" -> SUCCESS;

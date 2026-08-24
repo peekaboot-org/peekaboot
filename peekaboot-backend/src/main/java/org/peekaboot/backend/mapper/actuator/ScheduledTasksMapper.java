@@ -84,7 +84,9 @@ public class ScheduledTasksMapper {
     }
 
     private Instant parseTime(ScheduledTasksResponse.TaskExecution execution) {
-        if (execution == null || execution.time() == null) return null;
+        if (execution == null || execution.time() == null) {
+            return null;
+        }
         try {
             return Instant.parse(execution.time());
         } catch (Exception e) {
@@ -93,7 +95,9 @@ public class ScheduledTasksMapper {
     }
 
     private TaskExecutionStatus parseStatus(ScheduledTasksResponse.TaskExecution execution) {
-        if (execution == null) return TaskExecutionStatus.PENDING;
+        if (execution == null) {
+            return TaskExecutionStatus.PENDING;
+        }
         return TaskExecutionStatus.fromString(execution.status());
     }
 
@@ -109,10 +113,18 @@ public class ScheduledTasksMapper {
     }
 
     private String formatInterval(Long intervalMs) {
-        if (intervalMs == null) return "-";
-        if (intervalMs < 1000) return intervalMs + "ms";
-        if (intervalMs < 60000) return (intervalMs / 1000) + "s";
-        if (intervalMs < 3600000) return (intervalMs / 60000) + "m";
+        if (intervalMs == null) {
+            return "-";
+        }
+        if (intervalMs < 1000) {
+            return intervalMs + "ms";
+        }
+        if (intervalMs < 60000) {
+            return (intervalMs / 1000) + "s";
+        }
+        if (intervalMs < 3600000) {
+            return (intervalMs / 60000) + "m";
+        }
         return (intervalMs / 3600000) + "h";
     }
 }

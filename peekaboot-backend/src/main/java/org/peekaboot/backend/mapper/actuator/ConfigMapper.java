@@ -35,7 +35,9 @@ public class ConfigMapper {
         Map<String, List<ConfigProperty>> byPrefix = new LinkedHashMap<>();
 
         for (ConfigPropsResponse.ConfigContext context : configprops.contexts().values()) {
-            if (context.beans() == null) continue;
+            if (context.beans() == null) {
+                continue;
+            }
 
             for (ConfigPropsResponse.ConfigBean bean : context.beans().values()) {
                 collectBeanProperties(bean, byPrefix, unmask);
