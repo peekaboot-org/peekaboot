@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.Page;
 import java.nio.file.Files;
@@ -9,8 +11,6 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.ActiveProfiles;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Captures the screenshots the peekaboot.org website ships. A tool, not a test: it asserts
@@ -39,9 +39,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final int VIEWPORT_WIDTH = 1440;
     private static final int VIEWPORT_HEIGHT = 900;
 
-    private static final List<String> DASHBOARD_TABS = List.of(
-            "dashboard", "environment", "flyway", "loggers", "config",
-            "scheduled-tasks", "metrics", "traces");
+    private static final List<String> DASHBOARD_TABS =
+            List.of("dashboard", "environment", "flyway", "loggers", "config", "scheduled-tasks", "metrics", "traces");
 
     /**
      * The selector each tab waits for beyond "panel active" before it counts as rendered
@@ -60,6 +59,27 @@ class ScreenshotCapture extends PlaywrightTestBase {
             "traces", "#traces-list .pk-trace-item");
 
     /**
+     * The header of one property group per tab that carries a masked value, keyed the
+     * same way as {@link #TAB_READY_SELECTOR}. Both tabs render every group collapsed by
+     * default (see {@code docs/IMPROVEMENTS.md} §2.2), so without this, neither image ever
+     * shows a masked value or the reveal control next to one - only collapsed headers.
+     *
+     * <p>Environment: the {@code application-screenshots.yml} property source, identified
+     * by its Spring-assigned name rather than position - property source ordering is not
+     * a contract this tool should depend on. Config: the {@code spring.datasource} group,
+     * keyed by its {@code @ConfigurationProperties} prefix the same way. Both groups carry
+     * the {@code spring.datasource.password} fixture set in that profile (see its own
+     * comment) purely so there is a masked value to expand - deliberately not the
+     * {@code systemProperties}/{@code systemEnvironment} groups, which on a developer's own
+     * machine can carry masked entries whose key names alone (not values) are specific to
+     * that machine or shell session and have no business in a published screenshot.
+     */
+    private static final Map<String, String> MASKED_GROUP_HEADER_SELECTOR = Map.of(
+            "environment",
+                    "#property-sources .pk-group[data-group-key*=\"application-screenshots.yml\"] .pk-group__header",
+            "config", "#config-groups .pk-group[data-group-key=\"spring.datasource\"] .pk-group__header");
+
+    /**
      * The traceId of the flagship /orders N+1 request, captured straight from that
      * response's own toolbar payload in {@link #generateTraffic()} - see the field's use
      * in {@link #captureDashboardTabs} for why this is not simply "click the first item
@@ -69,8 +89,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     @Override
     protected Page browserContextPage() {
-        return browser.newContext(new Browser.NewContextOptions()
-                .setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT)).newPage();
+        return browser.newContext(new Browser.NewContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+                .newPage();
     }
 
     @Test
@@ -88,9 +108,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private Path resolveOutputDir() throws Exception {
         String configured = System.getProperty(OUTPUT_PROPERTY);
         if (configured == null || configured.isBlank()) {
-            throw new IllegalStateException(
-                    "-D" + OUTPUT_PROPERTY + "=<absolute-dir> is required; refusing to guess "
-                  + "where to write screenshots");
+            throw new IllegalStateException("-D" + OUTPUT_PROPERTY + "=<absolute-dir> is required; refusing to guess "
+                    + "where to write screenshots");
         }
         Path dir = Path.of(configured);
         Files.createDirectories(dir);
@@ -107,6 +126,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
             page.click(".pk-tab[data-tab=\"" + tabId + "\"]");
             page.waitForSelector("#" + tabId + "-tab.active");
             page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
+            expandMaskedGroupIfPresent(tabId);
             shoot(outputDir, "dashboard-" + tabId + "-" + theme);
         }
 
@@ -125,9 +145,20 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // actually be gone, or the screenshot just shows "Loading trace data...".
         page.waitForFunction(
                 "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-              + ".querySelector('.pk-overlay__loading')",
-                null, new Page.WaitForFunctionOptions().setTimeout(15000));
+                        + ".querySelector('.pk-overlay__loading')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
         shoot(outputDir, "trace-detail-" + theme);
+
+        // Spans and Queries are independent rendering paths - Spans shows span.name
+        // (OpenTelemetry's own summary), Queries shows the SQL QueryExtractor extracts
+        // (see docs/IMPROVEMENTS.md §2.1). The overlay opens on Spans, so without this
+        // click no shipped image has ever shown QueryExtractor's output. The flagship
+        // /orders trace deep-linked above is deliberately the N+1 example, so it is
+        // guaranteed to carry real queries to click across to.
+        page.click("#peekaboot-trace-overlay .pk-tabs .pk-tab[data-tab=\"queries\"]");
+        page.waitForSelector("#peekaboot-trace-overlay .pk-query-item");
+        shoot(outputDir, "trace-detail-queries-" + theme);
     }
 
     /**
@@ -144,9 +175,22 @@ class ScreenshotCapture extends PlaywrightTestBase {
             }
         }
         if (!missing.isEmpty()) {
-            throw new IllegalStateException(
-                    "dashboard tab button(s) missing or hidden, cannot capture: " + missing);
+            throw new IllegalStateException("dashboard tab button(s) missing or hidden, cannot capture: " + missing);
         }
+    }
+
+    /**
+     * Expands {@code tabId}'s masked-value group (see {@link #MASKED_GROUP_HEADER_SELECTOR})
+     * before its screenshot, if that tab has one. A no-op for every tab but Environment
+     * and Config.
+     */
+    private void expandMaskedGroupIfPresent(String tabId) {
+        String headerSelector = MASKED_GROUP_HEADER_SELECTOR.get(tabId);
+        if (headerSelector == null) {
+            return;
+        }
+        page.click(headerSelector);
+        page.waitForSelector(headerSelector + "[aria-expanded=\"true\"]");
     }
 
     private void captureToolbar(Path outputDir, String theme) {
@@ -156,9 +200,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // The bar shows a "loading" placeholder in its metrics area while it fetches the
         // request's own trace insights; wait for that to resolve so the screenshot shows
         // the real duration/query/log metrics instead of a spinner.
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-toolbar-host').shadowRoot"
-              + ".querySelector('.pk-toolbar__loading')");
+        page.waitForFunction("() => !document.getElementById('peekaboot-toolbar-host').shadowRoot"
+                + ".querySelector('.pk-toolbar__loading')");
         shoot(outputDir, "toolbar-collapsed-" + theme);
     }
 
@@ -193,7 +236,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
                 "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
         if (flagshipTraceId == null || flagshipTraceId.isBlank()) {
             throw new IllegalStateException("no traceId on the /orders toolbar payload - "
-                  + "cannot deep-link the flagship trace-detail screenshot");
+                    + "cannot deep-link the flagship trace-detail screenshot");
         }
         // The toolbar payload above is read the instant the response committed; the
         // /orders trace's ~80+ spans arrive at the store asynchronously afterward via

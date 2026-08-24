@@ -16,6 +16,15 @@ spring:
       # would otherwise leave this profile silently falling back to an embedded H2 database.
       skip:
         in-tests: false
+  # Docker Compose's connection-details support wires the real DataSource straight from
+  # the running container, bypassing spring.datasource.* entirely - so without this,
+  # neither the Environment nor the Config tab has a single masked property to
+  # photograph. This mirrors application-test.yml's own fixture (see
+  # UnmaskingControlEnabledTest's doc comment): a real, secret-looking value that binds
+  # into DataSourceProperties and gets masked like any other password, matching
+  # compose.yml's own POSTGRES_PASSWORD so it stays honest about what it is.
+  datasource:
+    password: sample_app_db_pwd
   task:
     scheduling:
       pool:
@@ -24,11 +33,28 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
+  # Off by default (see PeekabootProperties); on here so the capture tool can photograph
+  # the reveal control itself, not just its absence. This only gates the reveal *step* -
+  # values still render masked unless the control is actually clicked, which the capture
+  # tool must never do (see docs/IMPROVEMENTS.md §2.2).
+  enable-unmasking: true
 
 management:
   endpoint:
     health:
       show-details: always
+    # Outside local development (which a JUnit-launched process, this one included, can
+    # never be detected as - see PeekabootDefaultsEnvironmentPostProcessor's LocalDevDetector
+    # and ActuatorValuesMaskedOutsideLocalDevelopmentIntegrationTest), value visibility is
+    # absent and resolves to Spring's own default of never - which blanket-masks every
+    # property, not just sensitive-looking ones, before MaskingEngine's selective masking
+    # ever runs. Without this, the fixture password below would be indistinguishable from
+    # server.port or any other harmless value, all rendering "******" alike. Mirrors
+    # application-test.yml's own opt-in, for the same reason.
+    env:
+      show-values: always
+    configprops:
+      show-values: always
   tracing:
     sampling:
       probability: 1.0
