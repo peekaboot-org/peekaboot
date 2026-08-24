@@ -28,7 +28,17 @@ public class SpanDeduplicator {
             spanById.put(span.spanId(), span);
         }
 
-        // Identify duplicate children
+        Set<String> removedIds = findDuplicateSpanIds(spans, spanById);
+        if (removedIds.isEmpty()) {
+            return traceData;
+        }
+
+        Map<String, String> survivingParents = resolveSurvivingAncestors(removedIds, spanById);
+        List<SpanData> filtered = removeAndReparent(spans, removedIds, survivingParents);
+        return TraceData.fromSpans(traceData.traceId(), filtered);
+    }
+
+    private static Set<String> findDuplicateSpanIds(List<SpanData> spans, Map<String, SpanData> spanById) {
         Set<String> removedIds = new HashSet<>();
         for (SpanData span : spans) {
             if (span.parentId() == null || removedIds.contains(span.spanId())) {
@@ -42,35 +52,35 @@ public class SpanDeduplicator {
                 removedIds.add(span.spanId());
             }
         }
+        return removedIds;
+    }
 
-        if (removedIds.isEmpty()) {
-            return traceData;
-        }
-
-        // Build parent lookup for removed spans (for re-parenting)
-        Map<String, String> removedParentMap = new HashMap<>();
+    /**
+     * Maps each removed span to its nearest non-removed ancestor (for re-parenting).
+     */
+    private static Map<String, String> resolveSurvivingAncestors(Set<String> removedIds, Map<String, SpanData> spanById) {
+        Map<String, String> survivingParents = new HashMap<>();
         for (String removedId : removedIds) {
             SpanData removed = spanById.get(removedId);
-            // Walk up to find a non-removed ancestor
             String newParentId = removed.parentId();
             while (newParentId != null && removedIds.contains(newParentId)) {
                 newParentId = spanById.get(newParentId).parentId();
             }
-            removedParentMap.put(removedId, newParentId);
+            survivingParents.put(removedId, newParentId);
         }
+        return survivingParents;
+    }
 
-        // Filter and re-parent
-        List<SpanData> filtered = spans.stream()
+    private static List<SpanData> removeAndReparent(
+            List<SpanData> spans, Set<String> removedIds, Map<String, String> survivingParents) {
+        return spans.stream()
                 .filter(s -> !removedIds.contains(s.spanId()))
                 .map(s -> {
                     if (s.parentId() != null && removedIds.contains(s.parentId())) {
-                        String newParentId = removedParentMap.get(s.parentId());
-                        return s.withParentId(newParentId);
+                        return s.withParentId(survivingParents.get(s.parentId()));
                     }
                     return s;
                 })
                 .toList();
-
-        return TraceData.fromSpans(traceData.traceId(), filtered);
     }
 }
