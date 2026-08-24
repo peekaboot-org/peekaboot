@@ -60,20 +60,28 @@ public class DataSourceMapper {
         );
     }
 
+    private static final List<Map.Entry<String, DatabaseProduct>> PRODUCT_KEYWORDS = List.of(
+        Map.entry("postgresql", DatabaseProduct.POSTGRESQL),
+        Map.entry("mysql", DatabaseProduct.MYSQL),
+        Map.entry("mariadb", DatabaseProduct.MARIADB),
+        Map.entry("h2", DatabaseProduct.H2),
+        Map.entry("oracle", DatabaseProduct.ORACLE),
+        Map.entry("sql server", DatabaseProduct.SQLSERVER),
+        Map.entry("sqlite", DatabaseProduct.SQLITE),
+        Map.entry("derby", DatabaseProduct.DERBY),
+        Map.entry("hsql", DatabaseProduct.HSQLDB)
+    );
+
     private DatabaseProduct detectDatabaseProduct(DataSourceMetadata metadata) {
         String productName = metadata.getDatabaseProductName();
         if (productName == null) return DatabaseProduct.UNKNOWN;
 
         String lower = productName.toLowerCase(Locale.ROOT);
-        if (lower.contains("postgresql")) return DatabaseProduct.POSTGRESQL;
-        if (lower.contains("mysql")) return DatabaseProduct.MYSQL;
-        if (lower.contains("mariadb")) return DatabaseProduct.MARIADB;
-        if (lower.contains("h2")) return DatabaseProduct.H2;
-        if (lower.contains("oracle")) return DatabaseProduct.ORACLE;
-        if (lower.contains("sql server")) return DatabaseProduct.SQLSERVER;
-        if (lower.contains("sqlite")) return DatabaseProduct.SQLITE;
-        if (lower.contains("derby")) return DatabaseProduct.DERBY;
-        if (lower.contains("hsql")) return DatabaseProduct.HSQLDB;
+        for (Map.Entry<String, DatabaseProduct> keyword : PRODUCT_KEYWORDS) {
+            if (lower.contains(keyword.getKey())) {
+                return keyword.getValue();
+            }
+        }
         return DatabaseProduct.UNKNOWN;
     }
 
