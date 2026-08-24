@@ -105,16 +105,14 @@ class RequestAndQueryMaskingIntegrationTest {
 
     /**
      * The captured span is written straight to the real TraceStore bean rather than
-     * triggered through an actual JDBC call: this app's real JDBC instrumentation
-     * (datasource-proxy + the OTel bridge) tags queries as "db.query.text" with bind
-     * placeholders already substituted for literal values, which QueryExtractor.findSql
-     * does not recognise at all (it looks for "db.statement" or "jdbc.query[...]") - a
-     * pre-existing, unrelated gap, not something this fix round's C2 scope covers, noted
-     * in the task report rather than silently fixed here. Using a directly-added SpanData
-     * with a "db.statement" tag (the shape QueryExtractor does recognise, and the one
-     * DashboardTraceViewTest already uses) isolates that from what this test is actually
-     * proving: that the trace insights endpoint's real HTTP-facing response masks the SQL
-     * it serves, not just the QueryExtractor unit in isolation.
+     * triggered through an actual JDBC call, so this test can isolate what it's actually
+     * proving - that the trace insights endpoint's real HTTP-facing response masks the SQL
+     * it serves, not just the QueryExtractor unit in isolation - from the separate question
+     * of which tag a real driver populates. Using a directly-added SpanData with a
+     * "db.statement" tag (the shape QueryExtractorTest already covers in isolation, and the
+     * one DashboardTraceViewTest already uses) keeps this test about the HTTP-surface
+     * masking behaviour regardless of which of QueryExtractor.findSql's recognised tags
+     * ("db.query.text", "db.statement" or "jdbc.query[...]") produced the SQL.
      */
     @Test
     void sqlCarryingACredentialShapedValueComesBackMaskedFromTheTraceInsightsApi() {

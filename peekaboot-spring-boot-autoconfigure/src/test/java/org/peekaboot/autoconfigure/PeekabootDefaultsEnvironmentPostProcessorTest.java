@@ -318,6 +318,26 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isNull();
     }
 
+    /**
+     * Peekaboot's own defaults are skipped entirely once {@code peekaboot.enabled} resolves
+     * false, before the dev-toolbar branch is ever reached - so an explicit
+     * {@code peekaboot.dev-toolbar=true} does not decide this "regardless of
+     * peekaboot.enabled"; it never gets read at all here.
+     */
+    @Test
+    void leavesTheSpanExportDelayAloneWhenPeekabootIsDisabledEvenWithDevToolbarExplicitlyOn() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "false");
+        environment.setProperty("peekaboot.dev-toolbar", "true");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.opentelemetry.tracing.export.schedule-delay"))
+                .isNull();
+        assertThat(environment.getPropertySources().contains("peekabootDevToolbarDefaults"))
+                .isFalse();
+    }
+
     @Test
     void appPropertiesOverrideTheShortenedSpanExportDelay() {
         MockEnvironment environment = new MockEnvironment();

@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,17 +25,13 @@ import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
  * The demo endpoints exist to make Peekaboot's trace view worth looking at. These tests
  * assert what Peekaboot <em>captured</em> from them, not what the endpoints returned - a
  * green run here is evidence the Traces tab, the buckets and the query counters work end
  * to end.
  */
-@SpringBootTest(
-        classes = TestingApp.class,
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class OrderTraceCaptureIntegrationTest {
 
@@ -89,9 +87,66 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(trace.path("summary").path("queries").path("count").asInt())
                 .as("the deliberate N+1 on /orders must exceed the default "
-                  + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
-                  + "Traces tab has no high-query-count warning to show")
+                        + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
+                        + "Traces tab has no high-query-count warning to show")
                 .isGreaterThan(20);
+    }
+
+    /**
+     * The other assertions against {@code /orders} check {@code summary.queries.count},
+     * which passes whether {@code QueryExtractor.findSql} reads {@code db.query.text} or
+     * merely falls back to a SQL-shaped span name - both produce a non-zero count. This
+     * test is the one that actually exercises the fix: it runs against
+     * {@code peekaboot-testing-app}'s real JDBC instrumentation
+     * (datasource-micrometer-opentelemetry over the H2 datasource, the same library
+     * {@code db.query.text} priority in {@code QueryExtractor.findSql} targets - see
+     * {@code docs/ARCHITECTURE.md}'s <em>Query Extraction</em> section), not a hand-built
+     * {@link org.peekaboot.backend.tracing.store.SpanData}.
+     *
+     * <p>Hibernate's real generated statement is lower-case ({@code "select
+     * co1_0.id,co1_0.customer_id,...,co1_0.status from customer_order co1_0"} for the
+     * orders page's primary query, confirmed by printing the live response), with a
+     * comma-separated column list and table alias. OpenTelemetry's span-name summary -
+     * what {@code findSql} falls back to only when no {@code db.*}/{@code jdbc.query[N]}
+     * tag is present - is upper-case and bare, e.g. {@code "SELECT customer_order"}: no
+     * column list, no alias, no lower-case {@code "from"}. Asserting the lower-case
+     * {@code "select "}/{@code " from "} shape below is what a summary like that would
+     * fail, so a regression back to the fallback (or a stack that stops emitting
+     * {@code db.query.text}) breaks this test rather than passing it silently.
+     */
+    @Test
+    void ordersPageQueriesCarryRealSqlNotASpanNameSummary() {
+        String traceId = traces.triggerAndCaptureTraceId("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId);
+
+        List<String> sqlTexts = new ArrayList<>();
+        trace.path("queries").forEach(query -> sqlTexts.add(query.path("sql").asString("")));
+
+        assertThat(sqlTexts)
+                .as("QueryExtractor must find at least one query on a page that trips real "
+                        + "Hibernate/JDBC traffic, or there is nothing here to assert against")
+                .isNotEmpty();
+
+        assertThat(sqlTexts)
+                .as(
+                        "every query on /orders must carry Hibernate's real, lower-case SQL text "
+                                + "from db.query.text, not OpenTelemetry's upper-case span-name summary "
+                                + "(e.g. \"SELECT customer_order\") - queries seen: %s",
+                        sqlTexts)
+                .allSatisfy(sql ->
+                        assertThat(sql).as("sql: %s", sql).startsWith("select ").contains(" from "));
+
+        String customerOrderQuery = sqlTexts.stream()
+                .filter(sql -> sql.contains("from customer_order"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no query against customer_order among: " + sqlTexts));
+
+        assertThat(customerOrderQuery)
+                .as("the customer_order query must be the real generated statement, with its "
+                        + "column list and alias, not the bare span-name summary")
+                .isNotEqualTo("SELECT customer_order")
+                .contains(",");
     }
 
     @Test
@@ -104,16 +159,18 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(trace.path("durationMs").asLong())
                 .as("the report endpoint must exceed the default "
-                  + "peekaboot.tracing.slow-trace-threshold-ms of 1000, or the Slow bucket "
-                  + "has nothing to show")
+                        + "peekaboot.tracing.slow-trace-threshold-ms of 1000, or the Slow bucket "
+                        + "has nothing to show")
                 .isGreaterThanOrEqualTo(1000L);
 
         List<String> spanNames = new ArrayList<>();
         collectSpanNames(trace.path("rootSpan"), spanNames);
 
         assertThat(spanNames)
-                .as("the report's three stages must each show up as their own span, or the "
-                  + "Slow bucket trace is just one opaque span again - spans seen: %s", spanNames)
+                .as(
+                        "the report's three stages must each show up as their own span, or the "
+                                + "Slow bucket trace is just one opaque span again - spans seen: %s",
+                        spanNames)
                 .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
     }
 
@@ -125,7 +182,7 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(trace.path("status").asString(""))
                 .as("a trace in the Errors bucket must be classified as having errors, "
-                  + "otherwise the bucket filter and the status badge disagree")
+                        + "otherwise the bucket filter and the status badge disagree")
                 .isEqualTo("HAS_ERRORS");
     }
 
@@ -137,13 +194,14 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(spanNames(trace))
                 .as("the outbound customer lookup must appear as its own span, or the demo "
-                  + "trace shows only in-process work and the span tree looks flat")
+                        + "trace shows only in-process work and the span tree looks flat")
                 .anySatisfy(name -> assertThat(name).contains("/api/person/"));
     }
 
     @Test
     void placingAnOrderIsCapturedAsItsOwnTrace() {
-        traces.restClient().post()
+        traces.restClient()
+                .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new NewOrder(1L, "WIDGET-NEW", 2))
@@ -177,8 +235,8 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a direct call carries none of Spring's scheduled-task tags, so its "
-                  + "root span must not be misclassified as SCHEDULED_JOB just because "
-                  + "its name contains \"job\"")
+                        + "root span must not be misclassified as SCHEDULED_JOB just because "
+                        + "its name contains \"job\"")
                 .isEqualTo("INTERNAL");
     }
 
@@ -202,8 +260,8 @@ class OrderTraceCaptureIntegrationTest {
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("Spring's scheduled-task observation wraps the call and becomes the "
-                  + "trace root when the scheduler fires it; that root span's "
-                  + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
+                        + "trace root when the scheduler fires it; that root span's "
+                        + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
     }
 
@@ -217,8 +275,8 @@ class OrderTraceCaptureIntegrationTest {
                 .map(ScheduledTask::getTask)
                 .filter(task -> taskDescription.equals(task.toString()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError(
-                        "OrderReconciler#reconcileOrders is not registered as a scheduled task"))
+                .orElseThrow(() ->
+                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
                 .getRunnable()
                 .run();
     }

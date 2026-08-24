@@ -52,7 +52,7 @@ at **[peekaboot.org](https://peekaboot.org)**.
 
 | Page | |
 | --- | --- |
-| [Quick start](https://peekaboot.org/docs/quick-start/) | One dependency, no configuration, a dashboard on your next run |
+| [Quick start](https://peekaboot.org/docs/quick-start/) | One dependency, no configuration, the toolbar on your next run |
 | [Configuration](https://peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
 | [Security](https://peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
 | [The dashboard](https://peekaboot.org/docs/dashboard/) | A tour of every tab |
