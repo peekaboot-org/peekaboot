@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
+
+    <!-- The domain records and DTOs deliberately hold the List/Map instances they are
+         given: they are JSON (de)serialization carriers for actuator payloads, not a
+         mutable-state API. Defensive copies (List.copyOf/Map.copyOf) would throw on the
+         null collections and null map values that real actuator data contains, so the
+         exposure warnings are noise here. -->
+    <Match>
+        <Or>
+            <Bug pattern="EI_EXPOSE_REP"/>
+            <Bug pattern="EI_EXPOSE_REP2"/>
+        </Or>
+    </Match>
+
+</FindBugsFilter>
