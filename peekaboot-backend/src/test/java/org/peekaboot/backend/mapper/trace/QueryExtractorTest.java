@@ -1,17 +1,16 @@
 package org.peekaboot.backend.mapper.trace;
 
-import io.micrometer.tracing.Span;
-import org.peekaboot.backend.domain.trace.QueryInfo;
-import org.peekaboot.backend.tracing.store.SpanData;
-import org.peekaboot.backend.tracing.store.TraceData;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.trace.QueryInfo;
+import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.store.TraceData;
 
 class QueryExtractorTest {
 
@@ -19,7 +18,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {
-        var querySpan = createSpan("span1", "SELECT users", 100,
+        var querySpan = createSpan(
+                "span1",
+                "SELECT users",
+                100,
                 Map.of("db.statement", "SELECT * FROM users WHERE id = ?", "db.system", "postgresql"),
                 10);
 
@@ -35,7 +37,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindQueryWithJdbcQueryTag() {
-        var querySpan = createSpan("span1", "query", 50,
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                50,
                 Map.of("jdbc.query[0]", "INSERT INTO orders (user_id) VALUES (?)", "peer.service", "orders_db"),
                 20);
 
@@ -51,8 +56,7 @@ class QueryExtractorTest {
     @Test
     void extract_shouldDetectSqlFromSpanName() {
         // Note: span must have at least one tag for the extractor to process it
-        var querySpan = createSpan("span1", "SELECT * FROM products", 30,
-                Map.of("peer.service", "db"), 30);
+        var querySpan = createSpan("span1", "SELECT * FROM products", 30, Map.of("peer.service", "db"), 30);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
 
@@ -65,14 +69,12 @@ class QueryExtractorTest {
     @Test
     void extract_shouldMatchResultSetToQuery() {
         // Query span created first (creationOrder=10)
-        var querySpan = createSpan("query1", "query", 50,
-                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "mydb"),
-                10);
+        var querySpan = createSpan(
+                "query1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "mydb"), 10);
 
         // Result-set span created after query (creationOrder=11)
-        var resultSetSpan = createSpan("rs1", "result-set", 5,
-                Map.of("jdbc.row-count", "42", "peer.service", "mydb"),
-                11);
+        var resultSetSpan =
+                createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "42", "peer.service", "mydb"), 11);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan, resultSetSpan));
 
@@ -87,15 +89,11 @@ class QueryExtractorTest {
     void extract_shouldNotAttributeRowCountToEarlierQueryWithoutResultSet() {
         // An UPDATE produces no result-set span; the following SELECT's
         // result set must not be attributed to it.
-        var update = createSpan("q1", "query", 10,
-                Map.of("jdbc.query[0]", "UPDATE users SET active = true", "peer.service", "db"),
-                10);
-        var select = createSpan("q2", "query", 20,
-                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
-                20);
-        var rs = createSpan("rs1", "result-set", 5,
-                Map.of("jdbc.row-count", "42", "peer.service", "db"),
-                21);
+        var update = createSpan(
+                "q1", "query", 10, Map.of("jdbc.query[0]", "UPDATE users SET active = true", "peer.service", "db"), 10);
+        var select =
+                createSpan("q2", "query", 20, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 20);
+        var rs = createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "42", "peer.service", "db"), 21);
 
         var traceData = TraceData.fromSpans("trace1", List.of(update, select, rs));
 
@@ -110,20 +108,14 @@ class QueryExtractorTest {
     @Test
     void extract_shouldMatchMultipleResultSetsToQueries() {
         // First query + result set
-        var query1 = createSpan("q1", "query", 50,
-                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
-                10);
-        var rs1 = createSpan("rs1", "result-set", 5,
-                Map.of("jdbc.row-count", "10", "peer.service", "db"),
-                11);
+        var query1 =
+                createSpan("q1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 10);
+        var rs1 = createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "10", "peer.service", "db"), 11);
 
         // Second query + result set
-        var query2 = createSpan("q2", "query", 30,
-                Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"),
-                20);
-        var rs2 = createSpan("rs2", "result-set", 5,
-                Map.of("jdbc.row-count", "25", "peer.service", "db"),
-                21);
+        var query2 = createSpan(
+                "q2", "query", 30, Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"), 20);
+        var rs2 = createSpan("rs2", "result-set", 5, Map.of("jdbc.row-count", "25", "peer.service", "db"), 21);
 
         var traceData = TraceData.fromSpans("trace1", List.of(query1, rs1, query2, rs2));
 
@@ -139,12 +131,9 @@ class QueryExtractorTest {
     @Test
     void extract_shouldNotMatchResultSetToQueryIfCreationOrderIsLower() {
         // Result-set created before query (shouldn't match)
-        var resultSetSpan = createSpan("rs1", "result-set", 5,
-                Map.of("jdbc.row-count", "99", "peer.service", "db"),
-                5);
-        var querySpan = createSpan("q1", "query", 50,
-                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
-                10);
+        var resultSetSpan = createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "99", "peer.service", "db"), 5);
+        var querySpan =
+                createSpan("q1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 10);
 
         var traceData = TraceData.fromSpans("trace1", List.of(resultSetSpan, querySpan));
 
@@ -156,7 +145,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldReturnNullRowCountWhenNoResultSet() {
-        var querySpan = createSpan("span1", "query", 50,
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                50,
                 Map.of("db.statement", "UPDATE users SET active = true", "db.system", "postgresql"),
                 10);
 
@@ -170,12 +162,9 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldIgnoreNonQuerySpans() {
-        var httpSpan = createSpan("span1", "GET /api/users", 200,
-                Map.of("http.method", "GET", "http.url", "/api/users"),
-                10);
-        var internalSpan = createSpan("span2", "processUser", 50,
-                Map.of("custom.tag", "value"),
-                20);
+        var httpSpan =
+                createSpan("span1", "GET /api/users", 200, Map.of("http.method", "GET", "http.url", "/api/users"), 10);
+        var internalSpan = createSpan("span2", "processUser", 50, Map.of("custom.tag", "value"), 20);
 
         var traceData = TraceData.fromSpans("trace1", List.of(httpSpan, internalSpan));
 
@@ -187,15 +176,9 @@ class QueryExtractorTest {
     @Test
     void extract_shouldReturnQueriesSortedByCreationOrder() {
         // Add spans in reverse creation order
-        var query3 = createSpan("q3", "query", 10,
-                Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"),
-                30);
-        var query1 = createSpan("q1", "query", 10,
-                Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "db"),
-                10);
-        var query2 = createSpan("q2", "query", 10,
-                Map.of("jdbc.query[0]", "SELECT 2", "peer.service", "db"),
-                20);
+        var query3 = createSpan("q3", "query", 10, Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"), 30);
+        var query1 = createSpan("q1", "query", 10, Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "db"), 10);
+        var query2 = createSpan("q2", "query", 10, Map.of("jdbc.query[0]", "SELECT 2", "peer.service", "db"), 20);
 
         var traceData = TraceData.fromSpans("trace1", List.of(query3, query1, query2));
 
@@ -209,9 +192,8 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindDbSystemFromDatasourceName() {
-        var querySpan = createSpan("span1", "query", 50,
-                Map.of("jdbc.query[0]", "SELECT 1", "jdbc.datasource.name", "primary_db"),
-                10);
+        var querySpan = createSpan(
+                "span1", "query", 50, Map.of("jdbc.query[0]", "SELECT 1", "jdbc.datasource.name", "primary_db"), 10);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
 
@@ -243,7 +225,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldPreferDbStatementOverSpanName() {
-        var querySpan = createSpan("span1", "SELECT abbreviated...", 50,
+        var querySpan = createSpan(
+                "span1",
+                "SELECT abbreviated...",
+                50,
                 Map.of("db.statement", "SELECT * FROM users WHERE id = ? AND active = true", "db.system", "mysql"),
                 10);
 
@@ -257,12 +242,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
-        var querySpan = createSpan("q1", "query", 50,
-                Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"),
-                10);
-        var resultSetSpan = createSpan("rs1", "result-set", 5,
-                Map.of("jdbc.row-count", "not-a-number", "peer.service", "db"),
-                11);
+        var querySpan =
+                createSpan("q1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 10);
+        var resultSetSpan =
+                createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "not-a-number", "peer.service", "db"), 11);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan, resultSetSpan));
 
@@ -280,10 +263,15 @@ class QueryExtractorTest {
      */
     @Test
     void extract_shouldMaskACredentialBearingUrlEmbeddedInSql() {
-        var querySpan = createSpan("span1", "query", 20,
-                Map.of("db.statement",
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                20,
+                Map.of(
+                        "db.statement",
                         "INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook')",
-                        "db.system", "postgresql"),
+                        "db.system",
+                        "postgresql"),
                 10);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
@@ -297,7 +285,10 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldLeaveOrdinarySqlWithNoEmbeddedCredentialUntouched() {
-        var querySpan = createSpan("span1", "query", 20,
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                20,
                 Map.of("db.statement", "SELECT * FROM users WHERE email = ?", "db.system", "postgresql"),
                 10);
 
@@ -308,14 +299,114 @@ class QueryExtractorTest {
         assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE email = ?");
     }
 
-    private SpanData createSpan(String spanId, String name, long durationMs,
-                                Map<String, String> tags, long creationOrder) {
+    /**
+     * The tag set datasource-micrometer-opentelemetry actually emits. Its span name is an
+     * abbreviated summary ("SELECT person"), so a fallback to the name silently under-shows
+     * the statement - which is exactly the defect this covers.
+     */
+    @Test
+    void extract_shouldPreferDbQueryTextOverASqlShapedSpanName() {
+        var querySpan = createSpan(
+                "span1",
+                "SELECT person",
+                100,
+                Map.of(
+                        "db.query.text", "select p1_0.id,p1_0.name from person p1_0",
+                        "db.system.name", "postgresql"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).sql()).isEqualTo("select p1_0.id,p1_0.name from person p1_0");
+        assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
+    }
+
+    @Test
+    void extract_shouldPreferDbQueryTextOverDbStatementWhenBothArePresent() {
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                40,
+                Map.of(
+                        "db.query.text", "SELECT * FROM current",
+                        "db.statement", "SELECT * FROM legacy",
+                        "db.system.name", "postgresql"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM current");
+    }
+
+    @Test
+    void extract_shouldPreferDbSystemNameOverDbSystem() {
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                40,
+                Map.of(
+                        "db.query.text", "SELECT 1",
+                        "db.system.name", "postgresql",
+                        "db.system", "other"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
+    }
+
+    @Test
+    void extract_shouldMaskACredentialEmbeddedInDbQueryText() {
+        var querySpan = createSpan(
+                "span1",
+                "query",
+                20,
+                Map.of(
+                        "db.query.text",
+                        "INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook')",
+                        "db.system.name",
+                        "postgresql"),
+                10);
+
+        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+
+        List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).sql())
+                .isEqualTo("INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')");
+    }
+
+    private SpanData createSpan(
+            String spanId, String name, long durationMs, Map<String, String> tags, long creationOrder) {
         Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
         Instant end = start.plusMillis(durationMs);
         return new SpanData(
-                "trace1", spanId, null, name, Span.Kind.CLIENT,
-                start, end, Duration.ofMillis(durationMs),
-                tags, List.of(), null, null, null, null, null, List.of(), creationOrder
-        );
+                "trace1",
+                spanId,
+                null,
+                name,
+                Span.Kind.CLIENT,
+                start,
+                end,
+                Duration.ofMillis(durationMs),
+                tags,
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                creationOrder);
     }
 }

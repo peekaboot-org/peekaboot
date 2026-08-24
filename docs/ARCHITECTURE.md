@@ -453,15 +453,4 @@ Recorded here so a maintainer sees them without having to rediscover them. Each 
 names the class at fault, the remedy, and the site page that carries the user-visible
 symptom.
 
-1. **`QueryExtractor.findSql` doesn't recognise `db.query.text`.** It reads
-   `db.statement` (standard OpenTelemetry semantic convention), then falls back to any
-   `jdbc.query[N]` tag (the older `datasource-proxy`/Micrometer convention), then to the
-   span's own name if it looks like SQL. `datasource-micrometer-opentelemetry` &mdash;
-   the library `peekaboot-testing-app` actually uses for JDBC spans, and the newer
-   OpenTelemetry-native alternative to the two conventions above &mdash; tags query spans
-   with `db.query.text` instead, which `findSql` doesn't check. Confirmed against a real
-   captured trace (`GET /persons`, a real Hibernate query): `findSql` falls through to its
-   third branch and returns the span's own abbreviated name (e.g. `"SELECT person"`)
-   rather than the actual statement text. Remedy: add `db.query.text` as a fourth,
-   highest- or equal-priority branch in `findSql`. Symptom documented at
-   [peekaboot.org/docs/dev-toolbar](https://peekaboot.org/docs/dev-toolbar/#expanded-overlay).
+None are currently open.

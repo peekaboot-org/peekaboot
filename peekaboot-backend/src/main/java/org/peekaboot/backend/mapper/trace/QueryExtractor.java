@@ -115,20 +115,29 @@ public class QueryExtractor {
     }
 
     private String findSql(Map<String, String> tags, String spanName) {
-        // 1. Standard OpenTelemetry: db.statement
-        String sql = tags.get("db.statement");
+        // 1. Current OpenTelemetry semantic convention, emitted by
+        // datasource-micrometer-opentelemetry - the default stack. Ahead of db.statement,
+        // which is the same convention's superseded spelling: when a library emits both,
+        // the current one is authoritative.
+        String sql = tags.get("db.query.text");
         if (sql != null) {
             return sql;
         }
 
-        // 2. datasource-proxy/micrometer: jdbc.query[0], jdbc.query[1], etc.
+        // 2. Superseded OpenTelemetry convention
+        sql = tags.get("db.statement");
+        if (sql != null) {
+            return sql;
+        }
+
+        // 3. datasource-proxy/micrometer: jdbc.query[0], jdbc.query[1], etc.
         for (Map.Entry<String, String> entry : tags.entrySet()) {
             if (entry.getKey().startsWith("jdbc.query[")) {
                 return entry.getValue();
             }
         }
 
-        // 3. Span name if it looks like SQL
+        // 4. Span name if it looks like SQL
         if (spanName != null) {
             String upper = spanName.toUpperCase(Locale.ROOT);
             if (upper.startsWith("SELECT ")
@@ -143,13 +152,19 @@ public class QueryExtractor {
     }
 
     private String findDbSystem(Map<String, String> tags) {
-        // 1. Standard OpenTelemetry: db.system
-        String system = tags.get("db.system");
+        // 1. Current OpenTelemetry semantic convention
+        String system = tags.get("db.system.name");
         if (system != null) {
             return system;
         }
 
-        // 2. datasource-proxy: jdbc.datasource.name or peer.service
+        // 2. Superseded OpenTelemetry convention
+        system = tags.get("db.system");
+        if (system != null) {
+            return system;
+        }
+
+        // 3. datasource-proxy: jdbc.datasource.name or peer.service
         system = tags.get("jdbc.datasource.name");
         if (system != null) {
             return system;
