@@ -37,21 +37,16 @@ public class RuntimeMapper {
 
         InfoResponse.ProcessInfo.MemoryInfo memory = info.process().memory();
 
-        long heapUsed = 0;
-        long heapMax = 0;
-        long nonHeapUsed = 0;
-
-        if (memory.heap() != null) {
-            heapUsed = memory.heap().used() != null ? memory.heap().used() : 0;
-            heapMax = memory.heap().max() != null ? memory.heap().max() : 0;
-        }
-
-        if (memory.nonHeap() != null) {
-            nonHeapUsed = memory.nonHeap().used() != null ? memory.nonHeap().used() : 0;
-        }
+        long heapUsed = memory.heap() != null ? zeroIfNull(memory.heap().used()) : 0;
+        long heapMax = memory.heap() != null ? zeroIfNull(memory.heap().max()) : 0;
+        long nonHeapUsed = memory.nonHeap() != null ? zeroIfNull(memory.nonHeap().used()) : 0;
 
         if (heapUsed == 0 && heapMax == 0) return null;
         return MemoryInfo.of(heapUsed, heapMax, nonHeapUsed);
+    }
+
+    private static long zeroIfNull(Long value) {
+        return value != null ? value : 0;
     }
 
     private List<StorageInfo> extractStorageInfo(HealthResponse health) {
