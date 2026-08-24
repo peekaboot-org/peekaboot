@@ -99,8 +99,12 @@ mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
 ```
 
 The output directory is required (the tool refuses to guess) and is created if missing. A
-successful run writes 20 PNGs: one per dashboard tab (8) plus the trace-detail overlay and the
-collapsed toolbar, each in light and dark.
+successful run writes 26 PNGs, each in light and dark: one per dashboard tab (8), the
+trace-detail overlay's Spans and Queries views (2), the collapsed toolbar (1), and a revealed
+counterpart of the Environment and Config tab shots (2) showing the `spring.datasource.password`
+fixture after the "Show secrets" control is clicked - see
+`ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly which group that is
+and isn't, and why.
 
 `docs/images/dashboard.png` at the product repo root is a byte-identical copy of this tool's
 `dashboard-dashboard-light.png` output, checked into the website repo's

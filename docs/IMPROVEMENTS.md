@@ -142,10 +142,16 @@ Each looks like a defect and is not. All checked against source.
 - **A non-servlet application does not crash.** Reproduced twice, including with `spring-webmvc`
   absent entirely. The old behaviour was silently registering dead beans; the guard prevents that.
   Any crash claim you find is stale.
-- **`ScreenshotCapture` never clicks the reveal control.** The masked-value screenshots show `******`
-  beside visible values, with the "Show secrets" control present but unused. Photographing a revealed
-  state would publish fixture-shaped credentials into a public repository's history. If a
-  before/after contrast ever seems worth it, that is a human decision, not a tooling gap.
+- **`ScreenshotCapture` clicking the reveal control is safe only under a narrow, deliberate scope -
+  do not widen it.** It photographs a revealed `spring.datasource.password` on the Environment and
+  Config tabs because that value is a placeholder already plaintext in the repository (`compose.yml`,
+  `application-screenshots.yml`), so revealing it discloses nothing. That reasoning does not extend to
+  any other group on those tabs, and never to `systemEnvironment` or `systemProperties`: those are
+  read from whatever machine runs the capture and can carry real usernames, paths, hostnames or
+  credentials that have no business in a public repository's history. If you extend this tool to
+  reveal another group, first confirm every value in it - not just the one you're adding - originates
+  in a file already committed to this repository, the same test `MASKED_GROUP_HEADER_SELECTOR` and
+  `REVEAL_BUTTON_SELECTOR` already apply. When in doubt, don't click it.
 
 ---
 

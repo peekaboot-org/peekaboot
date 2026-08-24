@@ -61,8 +61,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     /**
      * The header of one property group per tab that carries a masked value, keyed the
      * same way as {@link #TAB_READY_SELECTOR}. Both tabs render every group collapsed by
-     * default (see {@code docs/IMPROVEMENTS.md} §2.2), so without this, neither image ever
-     * shows a masked value or the reveal control next to one - only collapsed headers.
+     * default, so without this, neither image ever shows a masked value or the reveal
+     * control next to one - only collapsed headers.
      *
      * <p>Environment: the {@code application-screenshots.yml} property source, identified
      * by its Spring-assigned name rather than position - property source ordering is not
@@ -78,6 +78,42 @@ class ScreenshotCapture extends PlaywrightTestBase {
             "environment",
                     "#property-sources .pk-group[data-group-key*=\"application-screenshots.yml\"] .pk-group__header",
             "config", "#config-groups .pk-group[data-group-key=\"spring.datasource\"] .pk-group__header");
+
+    /**
+     * The "Show secrets" control for each tab in {@link #MASKED_GROUP_HEADER_SELECTOR},
+     * scoped to that tab's own slot ({@code #env-unmask-slot}/{@code #config-unmask-slot})
+     * even though the underlying reveal flag is one shared boolean page-wide (see
+     * {@code shared/unmask-control.js}'s doc comment) - only the currently active tab's
+     * copy of the button is visible for Playwright to click.
+     */
+    private static final Map<String, String> REVEAL_BUTTON_SELECTOR = Map.of(
+            "environment", "#env-unmask-slot .pk-unmask-toggle", "config", "#config-unmask-slot .pk-unmask-toggle");
+
+    /**
+     * Where {@link #REVEAL_BUTTON_SELECTOR} and {@link #waitForRevealedRowValue} look for
+     * the row that flips from masked to revealed - the container all of a tab's key/value
+     * rows render into regardless of which group is expanded (rows exist in the DOM even
+     * inside a collapsed group; see {@code UnmaskingControlEnabledTest}'s own doc comment),
+     * and the property key each tab renders that row under. Config renders the key relative
+     * to its group prefix ({@code password}); Environment renders the full property key
+     * ({@code spring.datasource.password}) since a property source has no prefix to strip.
+     */
+    private static final Map<String, String> REVEALED_ROW_CONTAINER_SELECTOR =
+            Map.of("environment", "#property-sources", "config", "#config-groups");
+
+    private static final Map<String, String> REVEALED_ROW_KEY =
+            Map.of("environment", "spring.datasource.password", "config", "password");
+
+    /**
+     * What {@code spring.datasource.password} reveals to - {@code compose.yml}'s own
+     * {@code POSTGRES_PASSWORD}, already plaintext in this repository (see
+     * {@code application-screenshots.yml}'s fixture comment). Waiting for this literal
+     * value, rather than merely "not {@code ******} any more", pins the revealed shot to
+     * exactly the one property this tool is permitted to reveal.
+     */
+    private static final String REVEALED_FIXTURE_VALUE = "sample_app_db_pwd";
+
+    private static final String MASKED_VALUE = "******";
 
     /**
      * The traceId of the flagship /orders N+1 request, captured straight from that
@@ -128,6 +164,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
             page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
             expandMaskedGroupIfPresent(tabId);
             shoot(outputDir, "dashboard-" + tabId + "-" + theme);
+            captureRevealedGroupIfPresent(outputDir, tabId, theme);
         }
 
         // Traces is already the active tab (last of DASHBOARD_TABS). Deep-link to the
@@ -191,6 +228,54 @@ class ScreenshotCapture extends PlaywrightTestBase {
         }
         page.click(headerSelector);
         page.waitForSelector(headerSelector + "[aria-expanded=\"true\"]");
+    }
+
+    /**
+     * Captures the revealed counterpart of {@link #expandMaskedGroupIfPresent}'s masked
+     * shot for Environment and Config - a no-op for every other tab. Clicks the "Show
+     * secrets" control, waits for the one property this tool is permitted to reveal (see
+     * {@link #REVEALED_FIXTURE_VALUE}) to actually render unmasked, shoots, then clicks
+     * the control again and waits for the mask to return before this method returns - the
+     * reveal flag is shared page-wide (see {@link #REVEAL_BUTTON_SELECTOR}'s doc comment),
+     * so leaving it on would reveal Config's fixture too early if this tab is Environment,
+     * or bleed into a later theme's masked screenshots otherwise.
+     *
+     * <p>This only ever reveals the {@code spring.datasource.password} fixture inside the
+     * one group {@link #MASKED_GROUP_HEADER_SELECTOR} already scoped to - never
+     * {@code systemProperties}/{@code systemEnvironment}, which that selector deliberately
+     * excludes. See its doc comment, and {@code docs/IMPROVEMENTS.md} §4, for why.
+     */
+    private void captureRevealedGroupIfPresent(Path outputDir, String tabId, String theme) {
+        String buttonSelector = REVEAL_BUTTON_SELECTOR.get(tabId);
+        if (buttonSelector == null) {
+            return;
+        }
+
+        page.click(buttonSelector);
+        waitForRevealedRowValue(tabId, REVEALED_FIXTURE_VALUE);
+        shoot(outputDir, "dashboard-" + tabId + "-revealed-" + theme);
+
+        page.click(buttonSelector);
+        waitForRevealedRowValue(tabId, MASKED_VALUE);
+    }
+
+    /**
+     * Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR}
+     * to render {@code expected} as its value. Mirrors
+     * {@code UnmaskingControlEnabledTest.waitForConfigPasswordValue}'s own lookup-by-key
+     * approach rather than a CSS value selector, since {@code kvRow} renders both the key
+     * and the value as plain text nodes with nothing to select the value by other than its
+     * sibling key.
+     */
+    private void waitForRevealedRowValue(String tabId, String expected) {
+        page.waitForFunction(
+                """
+                ([container, key, expected]) => {
+                    const row = Array.from(document.querySelectorAll(container + ' .pk-kv'))
+                        .find(r => r.querySelector('.pk-kv__key').textContent === key);
+                    return row && row.querySelector('.pk-kv__value').textContent === expected;
+                }
+                """, List.of(REVEALED_ROW_CONTAINER_SELECTOR.get(tabId), REVEALED_ROW_KEY.get(tabId), expected));
     }
 
     private void captureToolbar(Path outputDir, String theme) {

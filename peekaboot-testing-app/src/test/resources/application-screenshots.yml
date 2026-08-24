@@ -34,9 +34,10 @@ peekaboot:
   enabled: true
   dev-toolbar: true
   # Off by default (see PeekabootProperties); on here so the capture tool can photograph
-  # the reveal control itself, not just its absence. This only gates the reveal *step* -
-  # values still render masked unless the control is actually clicked, which the capture
-  # tool must never do (see docs/IMPROVEMENTS.md §2.2).
+  # both the reveal control and, deliberately, one revealed value behind it - see
+  # ScreenshotCapture.captureRevealedGroupIfPresent and its scoping rule (never
+  # systemProperties/systemEnvironment, see MASKED_GROUP_HEADER_SELECTOR's doc comment)
+  # for what makes that safe to publish.
   enable-unmasking: true
 
 management:
