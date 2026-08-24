@@ -1,13 +1,13 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Exercises the real toolbar.js served by the running app in a real browser. Supersedes the
@@ -24,13 +24,15 @@ class ToolbarTest extends PlaywrightTestBase {
     private String shadowVar(String property) {
         return (String) page.evaluate(
                 "prop => getComputedStyle(document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('.pk-toolbar')).getPropertyValue(prop).trim()", property);
+                        + ".shadowRoot.querySelector('.pk-toolbar')).getPropertyValue(prop).trim()",
+                property);
     }
 
     private String shadowText(String id) {
         return (String) page.evaluate(
                 "id => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.getElementById(id).textContent", id);
+                        + ".shadowRoot.getElementById(id).textContent",
+                id);
     }
 
     /**
@@ -66,16 +68,13 @@ class ToolbarTest extends PlaywrightTestBase {
     @Test
     void toolbarShowsMethodPathAndStatusForTheRequest() {
         openPersonsPage();
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-status').textContent.trim() !== ''");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-status').textContent.trim() !== ''");
 
-        String status = (String) page.evaluate(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-status').textContent");
-        String path = (String) page.evaluate(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-path').textContent");
+        String status = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-status').textContent");
+        String path = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-path').textContent");
 
         assertThat(status).isEqualTo("200");
         assertThat(path).isEqualTo("/persons");
@@ -84,12 +83,11 @@ class ToolbarTest extends PlaywrightTestBase {
     @Test
     void clickingTheBarOpensTheTraceOverlay() {
         openPersonsPage();
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
 
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('.pk-toolbar').click()");
+                + ".shadowRoot.querySelector('.pk-toolbar').click()");
 
         page.waitForSelector("#peekaboot-trace-overlay");
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
@@ -110,12 +108,11 @@ class ToolbarTest extends PlaywrightTestBase {
     @Test
     void theBarIsKeyboardOperableAndOpensTheOverlayOnEnter() {
         openPersonsPage();
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
 
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
+                + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
 
         page.waitForSelector("#peekaboot-trace-overlay");
@@ -135,28 +132,28 @@ class ToolbarTest extends PlaywrightTestBase {
     void theDashboardLinkDoesNotTriggerTheBarsOwnAction() {
         openPersonsPage();
 
-        boolean linkIsFocusable = (Boolean) page.evaluate(
-                "() => { const a = document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('.pk-toolbar a'); a.focus();"
-              + " return document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.activeElement === a; }");
+        boolean linkIsFocusable =
+                (Boolean) page.evaluate("() => { const a = document.getElementById('peekaboot-toolbar-host')"
+                        + ".shadowRoot.querySelector('.pk-toolbar a'); a.focus();"
+                        + " return document.getElementById('peekaboot-toolbar-host')"
+                        + ".shadowRoot.activeElement === a; }");
         assertThat(linkIsFocusable).isTrue();
 
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('.pk-toolbar a').click()");
+                + ".shadowRoot.querySelector('.pk-toolbar a').click()");
 
-        assertThatThrownBy(() -> page.waitForSelector("#peekaboot-trace-overlay",
-                new Page.WaitForSelectorOptions()
-                        .setState(WaitForSelectorState.ATTACHED)
-                        .setTimeout(1000)))
+        assertThatThrownBy(() -> page.waitForSelector(
+                        "#peekaboot-trace-overlay",
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.ATTACHED)
+                                .setTimeout(1000)))
                 .isInstanceOf(TimeoutError.class);
 
         // Not vacuous: the bar's own action still works on this same page.
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('.pk-toolbar').click()");
+                + ".shadowRoot.querySelector('.pk-toolbar').click()");
         page.waitForSelector("#peekaboot-trace-overlay");
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
@@ -174,8 +171,9 @@ class ToolbarTest extends PlaywrightTestBase {
         openPersonsPage();
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('quer')",
-                null, new Page.WaitForFunctionOptions().setTimeout(15000));
+                        + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('quer')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
 
         assertThat(shadowText("pk-metrics")).contains("queries");
         assertThat(shadowText("pk-controller")).contains("PersonController.persons");
@@ -191,8 +189,9 @@ class ToolbarTest extends PlaywrightTestBase {
         page.waitForSelector("#peekaboot-toolbar-host");
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('err')",
-                null, new Page.WaitForFunctionOptions().setTimeout(15000));
+                        + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('err')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
 
         assertThat(shadowText("pk-metrics")).contains("1 err");
     }
@@ -210,12 +209,12 @@ class ToolbarTest extends PlaywrightTestBase {
 
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending') !== null",
-                null, new Page.WaitForFunctionOptions().setTimeout(5000));
+                        + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending') !== null",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(5000));
 
-        boolean hasPendingElement = (Boolean) page.evaluate(
-                "() => !!document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending')");
+        boolean hasPendingElement = (Boolean) page.evaluate("() => !!document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending')");
         assertThat(hasPendingElement).isTrue();
         assertThat(shadowText("pk-metrics")).contains("?");
     }
@@ -230,7 +229,8 @@ class ToolbarTest extends PlaywrightTestBase {
         page.addInitScript("window.__pkOriginalFetch = window.fetch;");
         openPersonsPage();
 
-        assertThat(page.evaluate("() => window.fetch === window.__pkOriginalFetch")).isEqualTo(true);
+        assertThat(page.evaluate("() => window.fetch === window.__pkOriginalFetch"))
+                .isEqualTo(true);
     }
 
     /**
@@ -256,16 +256,16 @@ class ToolbarTest extends PlaywrightTestBase {
         page.route("**/trace-detail/trace-detail.js", route -> route.abort());
 
         openPersonsPage();
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
 
         // waitForConsoleMessage blocks until the warning fires (or times out), giving
         // positive proof the rejection was handled rather than merely not-yet-observed.
-        page.waitForConsoleMessage(new Page.WaitForConsoleMessageOptions()
+        page.waitForConsoleMessage(
+                new Page.WaitForConsoleMessageOptions()
                         .setPredicate(msg -> msg.type().equals("warning")),
                 () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                            + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+                        + ".shadowRoot.querySelector('.pk-toolbar').click()"));
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
@@ -273,10 +273,11 @@ class ToolbarTest extends PlaywrightTestBase {
         // Not stuck: a second click (still blocked) must still reach the handler and
         // produce its own warning, rather than the listener having wedged or detached
         // itself after the first rejection.
-        page.waitForConsoleMessage(new Page.WaitForConsoleMessageOptions()
+        page.waitForConsoleMessage(
+                new Page.WaitForConsoleMessageOptions()
                         .setPredicate(msg -> msg.type().equals("warning")),
                 () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                            + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+                        + ".shadowRoot.querySelector('.pk-toolbar').click()"));
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
@@ -293,13 +294,15 @@ class ToolbarTest extends PlaywrightTestBase {
         page.navigate(baseUrl + "/swagger-ui/index.html");
         page.waitForSelector("#peekaboot-toolbar-host");
 
-        assertThat(page.evaluate("() => window.fetch === window.__pkOriginalFetch")).isEqualTo(false);
+        assertThat(page.evaluate("() => window.fetch === window.__pkOriginalFetch"))
+                .isEqualTo(false);
 
         page.evaluate("() => fetch('/api/person/all')");
 
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'",
-                null, new Page.WaitForFunctionOptions().setTimeout(10000));
+                        + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(10000));
     }
 }
