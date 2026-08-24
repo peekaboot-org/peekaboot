@@ -141,51 +141,60 @@ public class TraceTreeMapper {
         Span.Kind kind = rootSpan.kind();
         Map<String, String> tags = rootSpan.tags() != null ? rootSpan.tags() : Map.of();
 
-        boolean hasHttpTags = tags.keySet().stream().anyMatch(k -> k.startsWith("http."));
-        boolean hasDbTags = tags.keySet().stream().anyMatch(k -> k.startsWith("db."));
-        boolean hasMessagingTags = tags.keySet().stream().anyMatch(k -> k.startsWith("messaging."));
-        boolean hasRpcTags = tags.keySet().stream().anyMatch(k -> k.startsWith("rpc."));
-        // Spring's DefaultScheduledTaskObservationConvention is the only convention that sets
-        // this exact pair of low-cardinality keys (ScheduledTaskObservationDocumentation.
-        // LowCardinalityKeyNames), so their presence together identifies a @Scheduled task
-        // span reliably, unlike testing the span's name for "schedule"/"cron"/"timer"/"job".
-        boolean hasScheduledTaskTags = tags.containsKey("code.function") && tags.containsKey("code.namespace");
-
-        // 1. CONSUMER kind OR messaging.* tags -> MESSAGE_CONSUMER
-        if (kind == Span.Kind.CONSUMER || hasMessagingTags) {
+        if (kind == Span.Kind.CONSUMER || hasTagPrefix(tags, "messaging.")) {
             return RootActionType.MESSAGE_CONSUMER;
         }
-        // 2. SERVER kind + http.* tags -> HTTP_REQUEST
-        if (kind == Span.Kind.SERVER && hasHttpTags) {
-            return RootActionType.HTTP_REQUEST;
+        if (kind == Span.Kind.SERVER) {
+            return detectServerActionType(tags);
         }
-        // 3. SERVER kind + rpc.* tags -> RPC_CALL
-        if (kind == Span.Kind.SERVER && hasRpcTags) {
-            return RootActionType.RPC_CALL;
-        }
-        // 4. Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
-        //    @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
-        //    Sender/Receiver-style contexts), so this can't be pre-empted by the SERVER/
-        //    CLIENT-kind branches above and below it; it must still run before the null-kind
-        //    catch-all (7), which is exactly where an unrecognised scheduled span used to fall.
-        if (hasScheduledTaskTags) {
+        return detectNonServerActionType(kind, tags);
+    }
+
+    private static RootActionType detectNonServerActionType(Span.Kind kind, Map<String, String> tags) {
+        // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
+        // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
+        // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind
+        // branch below it; it must still run before the null-kind catch-all, which is
+        // exactly where an unrecognised scheduled span used to fall.
+        if (hasScheduledTaskTags(tags)) {
             return RootActionType.SCHEDULED_JOB;
         }
-        // 5. CLIENT kind + db.* tags as root -> DATABASE
-        if (kind == Span.Kind.CLIENT && hasDbTags) {
+        if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
             return RootActionType.DATABASE;
         }
-        // 6. SERVER kind (default) -> HTTP_REQUEST
-        if (kind == Span.Kind.SERVER) {
-            return RootActionType.HTTP_REQUEST;
-        }
-        // 7. null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
-        //    internal spans are represented by null kind)
+        // null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
+        // internal spans are represented by null kind)
         if (kind == null) {
             return RootActionType.INTERNAL;
         }
-        // 8. Fallback
         return RootActionType.UNKNOWN;
+    }
+
+    private static RootActionType detectServerActionType(Map<String, String> tags) {
+        if (hasTagPrefix(tags, "http.")) {
+            return RootActionType.HTTP_REQUEST;
+        }
+        if (hasTagPrefix(tags, "rpc.")) {
+            return RootActionType.RPC_CALL;
+        }
+        if (hasScheduledTaskTags(tags)) {
+            return RootActionType.SCHEDULED_JOB;
+        }
+        return RootActionType.HTTP_REQUEST;
+    }
+
+    private static boolean hasTagPrefix(Map<String, String> tags, String prefix) {
+        return tags.keySet().stream().anyMatch(k -> k.startsWith(prefix));
+    }
+
+    /**
+     * Spring's DefaultScheduledTaskObservationConvention is the only convention that sets
+     * this exact pair of low-cardinality keys (ScheduledTaskObservationDocumentation.
+     * LowCardinalityKeyNames), so their presence together identifies a @Scheduled task
+     * span reliably, unlike testing the span's name for "schedule"/"cron"/"timer"/"job".
+     */
+    private static boolean hasScheduledTaskTags(Map<String, String> tags) {
+        return tags.containsKey("code.function") && tags.containsKey("code.namespace");
     }
 
     private SpanNode buildSpanTree(SpanData spanData, Map<String, List<SpanData>> childrenByParentId) {
@@ -240,7 +249,6 @@ public class TraceTreeMapper {
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
-        int totalSpans = spans.size();
         int dbQueryCount = 0;
         long dbTotalDurationMs = 0L;
         int errorCount = 0;
@@ -250,64 +258,63 @@ public class TraceTreeMapper {
             if (span.hasError()) {
                 errorCount++;
             }
-            if (span.duration() != null) {
-                totalDurationMs += span.duration().toMillis();
-            }
-
-            boolean isClient = span.kind() == Span.Kind.CLIENT;
-            Map<String, String> tags = span.tags();
-
-            if (tags != null) {
-                // Check for actual DB queries:
-                // - Standard OpenTelemetry: db.* tags
-                // - datasource-proxy/Micrometer: jdbc.query* tags (not just jdbc.* to avoid counting connection/result-set spans)
-                boolean hasDbTag = tags.keySet().stream().anyMatch(k ->
-                        k.startsWith("db.") || k.startsWith("jdbc.query"));
-
-                if (isClient && hasDbTag) {
-                    dbQueryCount++;
-                    if (span.duration() != null) {
-                        dbTotalDurationMs += span.duration().toMillis();
-                    }
-                }
-            }
-        }
-
-        // Extract request summary from root span tags
-        TraceTabSummary.RequestSummary requestSummary = null;
-        if (rootSpanData != null && rootSpanData.tags() != null) {
-            Map<String, String> tags = rootSpanData.tags();
-            String method = tags.get("http.method");
-            if (method == null) {
-                method = tags.get("http.request.method");
-            }
-            String path = tags.get("http.target");
-            if (path == null) {
-                path = tags.get("url.path");
-            }
-            String statusStr = tags.get("http.status_code");
-            if (statusStr == null) {
-                statusStr = tags.get("http.response.status_code");
-            }
-            Integer statusCode = null;
-            if (statusStr != null) {
-                try {
-                    statusCode = Integer.parseInt(statusStr);
-                } catch (NumberFormatException e) {
-                    // ignore
-                }
-            }
-            if (method != null || path != null || statusCode != null) {
-                requestSummary = new TraceTabSummary.RequestSummary(method, path, statusCode);
+            long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
+            totalDurationMs += durationMs;
+            if (isDbQuery(span)) {
+                dbQueryCount++;
+                dbTotalDurationMs += durationMs;
             }
         }
 
         return new TraceTabSummary(
-                requestSummary,
-                new TraceTabSummary.SpansSummary(totalSpans, totalDurationMs, errorCount),
+                extractRequestSummary(rootSpanData),
+                new TraceTabSummary.SpansSummary(spans.size(), totalDurationMs, errorCount),
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
                 new TraceTabSummary.LogsSummary(0, 0, 0)  // Logs populated later by TraceInsightsService
         );
+    }
+
+    /**
+     * An actual DB query is a CLIENT span carrying db.* tags (standard OpenTelemetry) or
+     * jdbc.query* tags (datasource-proxy/Micrometer - not just jdbc.* to avoid counting
+     * connection/result-set spans).
+     */
+    private static boolean isDbQuery(SpanData span) {
+        if (span.kind() != Span.Kind.CLIENT || span.tags() == null) {
+            return false;
+        }
+        return span.tags().keySet().stream().anyMatch(k ->
+                k.startsWith("db.") || k.startsWith("jdbc.query"));
+    }
+
+    private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {
+        if (rootSpanData == null || rootSpanData.tags() == null) {
+            return null;
+        }
+        Map<String, String> tags = rootSpanData.tags();
+        String method = firstTag(tags, "http.method", "http.request.method");
+        String path = firstTag(tags, "http.target", "url.path");
+        Integer statusCode = parseStatusCode(firstTag(tags, "http.status_code", "http.response.status_code"));
+        if (method == null && path == null && statusCode == null) {
+            return null;
+        }
+        return new TraceTabSummary.RequestSummary(method, path, statusCode);
+    }
+
+    private static String firstTag(Map<String, String> tags, String key, String fallbackKey) {
+        String value = tags.get(key);
+        return value != null ? value : tags.get(fallbackKey);
+    }
+
+    private static Integer parseStatusCode(String statusValue) {
+        if (statusValue == null) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(statusValue);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private TraceStatus determineStatus(List<SpanData> spans) {
