@@ -77,7 +77,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         String appName = buildInfoProvider.getName();
         String profiles = environmentInfo.getActiveProfilesAsString();
-        report.append(String.format(" Application [%s] ready with active profiles [%s]\n", appName, profiles));
+        report.append(String.format(" Application [%s] ready with active profiles [%s]", appName, profiles)).append("\n");
         report.append(LINE).append("\n");
     }
 
@@ -125,12 +125,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         String osName = System.getProperty("os.name");
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
-        report.append(String.format(" Operating System: %s %s (%s)\n", osName, osVersion, osArch));
+        report.append(String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch)).append("\n");
         report.append(LINE).append("\n");
 
         ProcessInfo processInfo = ProcessInfo.current();
-        report.append(String.format(" Process User: %s (uid=%s, gid=%s, pid=%d)\n",
-            processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid()));
+        report.append(String.format(" Process User: %s (uid=%s, gid=%s, pid=%d)",
+            processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid())).append("\n");
         if (!processInfo.parentProcesses().isEmpty()) {
             String tree = processInfo.parentProcesses().stream()
                 .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
