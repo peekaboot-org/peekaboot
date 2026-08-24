@@ -19,6 +19,7 @@ import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -142,7 +143,7 @@ class DashboardTraceViewTest {
                 return Map.of(
                     "status", res.getStatusCode(),
                     "body", res.getStatusCode().is2xxSuccessful()
-                        ? new String(res.getBody().readAllBytes())
+                        ? new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8)
                         : ""
                 );
             });
