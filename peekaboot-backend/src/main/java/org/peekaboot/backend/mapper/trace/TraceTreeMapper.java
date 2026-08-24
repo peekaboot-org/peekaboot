@@ -31,6 +31,8 @@ public class TraceTreeMapper {
     }
 
     /**
+     * Builds the {@link TraceTree} for a captured trace.
+     *
      * @param truncated whether the {@code max-spans-per-trace} cap dropped real spans for
      *                  this trace before it reached here - a property of how the trace was
      *                  captured, not of its (already-deduplicated) span list, so it must be

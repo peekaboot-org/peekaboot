@@ -33,6 +33,8 @@ public final class LogCapture implements AutoCloseable {
     }
 
     /**
+     * Attaches a capturing appender to the given class's logger.
+     *
      * @param level if non-null, raised on the logger before attaching (e.g. to capture DEBUG
      *              events); the logger's original level is restored on {@link #close()}.
      */
