@@ -13,6 +13,16 @@ spring:
 # peekaboot needs no configuration here: a local run (IDE or spring-boot:run) enables both
 # the dashboard and the dev toolbar by default.
 
+# Both endpoints are already enabled by default (springdoc's own conditionals treat an
+# absent property as enabled) - setting them explicitly only stops SpringDocAppInitializer's
+# startup WARN, which fires whenever the property was left unset. Behaviour is unchanged;
+# the toolbar's Swagger UI integration (docs: dev-toolbar.md) still needs both live.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
 # observability settings (health details, info contributors, trace sampling,
 # observation annotations, OTLP export off) come from peekaboot's defaults;
 # actuator endpoints are invoked in-process, so no web exposure is needed
