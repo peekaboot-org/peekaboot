@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.web.server.WebServer;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.env.Environment;
@@ -35,8 +36,11 @@ public class ServerUrlResolver {
         if (!(context instanceof WebServerApplicationContext webContext)) {
             return Optional.empty();
         }
-        int port = webContext.getWebServer().getPort();
-        return Optional.of(buildBaseUrl(port));
+        WebServer webServer = webContext.getWebServer();
+        if (webServer == null) {
+            return Optional.empty();
+        }
+        return Optional.of(buildBaseUrl(webServer.getPort()));
     }
 
 
