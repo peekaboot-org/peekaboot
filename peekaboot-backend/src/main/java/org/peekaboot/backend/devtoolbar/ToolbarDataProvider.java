@@ -30,24 +30,27 @@ public class ToolbarDataProvider {
         if (value == null) return "";
         StringBuilder sb = new StringBuilder(value.length());
         for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            switch (c) {
-                case '\\' -> sb.append("\\\\");
-                case '"' -> sb.append("\\\"");
-                case '\n' -> sb.append("\\n");
-                case '\r' -> sb.append("\\r");
-                case '\t' -> sb.append("\\t");
-                case '<' -> sb.append("\\u003c");
-                case '>' -> sb.append("\\u003e");
-                default -> {
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
+            appendEscaped(sb, value.charAt(i));
+        }
+        return sb.toString();
+    }
+
+    private static void appendEscaped(StringBuilder sb, char c) {
+        switch (c) {
+            case '\\' -> sb.append("\\\\");
+            case '"' -> sb.append("\\\"");
+            case '\n' -> sb.append("\\n");
+            case '\r' -> sb.append("\\r");
+            case '\t' -> sb.append("\\t");
+            case '<' -> sb.append("\\u003c");
+            case '>' -> sb.append("\\u003e");
+            default -> {
+                if (c < 0x20) {
+                    sb.append(String.format("\\u%04x", (int) c));
+                } else {
+                    sb.append(c);
                 }
             }
         }
-        return sb.toString();
     }
 }
