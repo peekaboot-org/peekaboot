@@ -114,35 +114,12 @@ public class RequestCaptureFilter implements Filter {
 
         long durationMs = System.currentTimeMillis() - startTime;
 
-        Map<String, String> requestHeaders = new HashMap<>();
-        Collections.list(request.getHeaderNames()).forEach(name ->
-                requestHeaders.put(name, maskingEngine.mask(name, request.getHeader(name))));
+        Map<String, String> requestHeaders = maskedRequestHeaders(request);
+        Map<String, String> responseHeaders = maskedResponseHeaders(response);
 
-        Map<String, String> responseHeaders = new HashMap<>();
-        response.getHeaderNames().forEach(name ->
-                responseHeaders.put(name, maskingEngine.mask(name, response.getHeader(name))));
-
-        // getParameterMap() merges query-string and form-body parameters;
-        // split them using the actual query string
         Map<String, List<String>> queryParams = new HashMap<>();
         Map<String, List<String>> formParams = new HashMap<>();
-        Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
-        String contentType = request.getContentType();
-        boolean formRequest = contentType != null && contentType.contains("application/x-www-form-urlencoded")
-                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
-        request.getParameterMap().forEach((key, values) -> {
-            if (values == null || values.length == 0) {
-                return;
-            }
-            List<String> maskedValues = Arrays.stream(values)
-                    .map(v -> maskingEngine.mask(key, v))
-                    .toList();
-            if (queryStringKeys.contains(key) || !formRequest) {
-                queryParams.put(key, maskedValues);
-            } else {
-                formParams.put(key, maskedValues);
-            }
-        });
+        splitParameters(request, queryParams, formParams);
 
         String controllerClass = null;
         String controllerMethod = null;
@@ -175,6 +152,49 @@ public class RequestCaptureFilter implements Filter {
 
         eventPublisher.publishEvent(event);
         log.trace("Published RequestCompletedEvent for trace {}", traceId);
+    }
+
+    private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
+        Map<String, String> headers = new HashMap<>();
+        Collections.list(request.getHeaderNames()).forEach(name ->
+                headers.put(name, maskingEngine.mask(name, request.getHeader(name))));
+        return headers;
+    }
+
+    private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
+        Map<String, String> headers = new HashMap<>();
+        response.getHeaderNames().forEach(name ->
+                headers.put(name, maskingEngine.mask(name, response.getHeader(name))));
+        return headers;
+    }
+
+    /**
+     * getParameterMap() merges query-string and form-body parameters; splits them
+     * using the actual query string.
+     */
+    private void splitParameters(HttpServletRequest request,
+            Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
+        Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
+        boolean formRequest = isFormRequest(request);
+        request.getParameterMap().forEach((key, values) -> {
+            if (values == null || values.length == 0) {
+                return;
+            }
+            List<String> maskedValues = Arrays.stream(values)
+                    .map(v -> maskingEngine.mask(key, v))
+                    .toList();
+            if (queryStringKeys.contains(key) || !formRequest) {
+                queryParams.put(key, maskedValues);
+            } else {
+                formParams.put(key, maskedValues);
+            }
+        });
+    }
+
+    private static boolean isFormRequest(HttpServletRequest request) {
+        String contentType = request.getContentType();
+        return contentType != null && contentType.contains("application/x-www-form-urlencoded")
+                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
     }
 
     private Set<String> parseQueryStringKeys(String queryString) {
