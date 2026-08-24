@@ -70,7 +70,7 @@ vocabulary.
 ### Raw Data
 The unprocessed trace data as captured from OpenTelemetry. Contains all spans with their full attributes.
 
-**Usage:** `TraceData`, `SpanData`, `/api/traces/raw` endpoints
+**Usage:** `TraceData`, `SpanData` — the internal domain model insights are built from
 
 ### Insights Data
 Enriched and analyzed trace data suitable for UI display. Includes detected issues, hierarchical structure, and correlated logs.
@@ -170,7 +170,7 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 | `status` | HTTP status code |
 | `headers` | HTTP response headers |
 
-**Usage:** `HttpExchange` record, `httpExchange` field on `TraceTree` and `TraceRawData`
+**Usage:** `HttpExchange` record, `httpExchange` field on `TraceTree`
 
 ## UI Components
 

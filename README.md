@@ -35,12 +35,13 @@ on — open the dashboard at `http://localhost:8080/peekaboot/`.
 
 ## What you get
 
+- A dev toolbar, on by default in local development, docked to every page: request status,
+  duration, query count, and a click-through to the full trace — plus correlated logs and
+  full request/response detail, neither of which is captured without it
 - App-insights dashboard: health, environment, config, Flyway, loggers and scheduled tasks,
   read from Actuator in-process, plus metrics read directly from Micrometer's
   `MeterRegistry` — nothing exposed under `/actuator/**`
 - In-memory request tracing via Micrometer/OpenTelemetry, no collector to run
-- A dev toolbar (`peekaboot.dev-toolbar: true`) that also correlates logs to each trace and
-  captures full request/response detail — neither is captured without it
 - Zero configuration: on automatically in local development, off everywhere else
 
 ## Documentation

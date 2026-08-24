@@ -244,14 +244,28 @@ first.
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
 
+## The collapsed bar's trace fetch schedule
+
+`toolbar.js` doesn't poll until the trace looks complete; it makes four fixed attempts —
+at 250ms, 500ms, 1s and 3s after the previous one — and always runs all four, fetching
+`/api/traces/{traceId}/insights` each time. Every attempt runs (rather than stopping the
+first time a trace looks finished) so a span that ends after the root — an `@Async`
+continuation, a streamed body — still reaches the bar. The last attempt lands at 4.75s
+after the response finished; with `peekaboot-dev-toolbar-defaults.yml`'s 200ms span export
+delay (see `docs/ARCHITECTURE.md` — *Default Properties*), a trace still absent by then
+isn't coming, and the bar falls back to a pending placeholder rather than leaving a
+spinner up forever. A response that arrived but was empty (a 404, or `rootSpan` missing)
+leaves whatever the previous render already showed standing.
+
 ## `application-test.yml`: the export delay
 
 `peekaboot-testing-app/src/test/resources/application-test.yml` sets
-`management.opentelemetry.tracing.export.schedule-delay: 50ms`. The OpenTelemetry SDK's
-default `BatchSpanProcessor` delay is 5s; Playwright tests open the trace overlay
-immediately after page load, well inside that window, so without this override the
-overlay's spans/queries/logs tabs would assert against an empty trace that hadn't
-reached the `TraceStore` yet.
+`management.opentelemetry.tracing.export.schedule-delay: 50ms` — lower even than
+`peekaboot-dev-toolbar-defaults.yml`'s own 200ms default, which would otherwise apply here
+since this profile sets `peekaboot.dev-toolbar: true` explicitly. Playwright tests open the
+trace overlay immediately after page load, well inside either window, so without the 50ms
+override the overlay's spans/queries/logs tabs would assert against an empty trace that
+hadn't reached the `TraceStore` yet.
 
 ## How to add a dashboard tab
 

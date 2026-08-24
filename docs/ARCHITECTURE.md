@@ -72,7 +72,7 @@ Core module containing all business logic.
 
 ```
 org.peekaboot.backend/
-├── actuator/raw/           # Typed beans for actuator responses
+├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
 ├── api/insights/           # API response DTOs
 ├── config/                 # Configuration properties
 ├── controller/             # REST endpoints
@@ -102,7 +102,7 @@ org.peekaboot.backend/
 3. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), which stores in a Caffeine cache (All bucket) plus bounded maps for the Errors and Slow buckets
 4. **Log Correlation**: `PeekabootLogbackAppender` captures logs using Micrometer's `Tracer.currentSpan()` for trace ID
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
-6. **Query**: `TraceInsightsService` and `TraceRawService` query `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
+6. **Query**: `TraceInsightsService` queries `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
 
 ### Servlet Filters
 
@@ -111,27 +111,38 @@ org.peekaboot.backend/
 | `DevToolbarFilter` | Injects toolbar HTML/JS into responses |
 | `RequestCaptureFilter` | Captures request/response metadata for traces |
 
-Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints.
+Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints. Both
+are also registered only inside `DevToolbarAutoConfiguration`, conditional on
+`peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
+toolbar on, a trace still carries a basic method/path/status summary read directly off the
+root span's own HTTP tags, but not headers, query/form parameters, or the resolved
+controller class/method; correlated logs are likewise unavailable (see *Log Capture*
+below). Request/response body content and uploaded file names have fields reserved for
+them on `HttpExchange` but aren't populated by `RequestCaptureFilter` yet — not captured,
+regardless of dev-toolbar.
 
 ### Server-Timing Header
 
-`RequestCaptureFilter` sets a `Server-Timing` response header carrying the current
-trace context in W3C `traceparent` form, before invoking the filter chain:
+`RequestCaptureFilter`, dev-toolbar-only per above, sets a `Server-Timing` response header
+carrying the current trace context in W3C `traceparent` form, before invoking the filter
+chain:
 
 ```
 Server-Timing: trace;desc="00-<traceId>-<spanId>-<traceFlags>"
 ```
 
 Setting it before the chain runs ensures the header is present even when downstream
-handling commits the response early. Clients and tooling (e.g. the Swagger UI
-toolbar) read it to correlate a response with its captured trace.
+handling commits the response early. The toolbar's own idle-mode script — used on pages
+like Swagger UI that have no request of their own to report — reads this header off
+`fetch()` responses to pick up a trace id for a call it didn't otherwise see; nothing stops
+any other tool that can read response headers from doing the same.
 
 ### BFF Pattern
 
 The backend implements a Backend-for-Frontend pattern:
 
 1. **Raw Actuator Data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
-2. **Typed Parsing**: `ActuatorRawMapper` converts raw JSON to typed beans
+2. **Typed Parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed beans
 3. **Domain Mapping**: Individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
 
@@ -163,6 +174,12 @@ regular HTTP mapping under `/actuator` still applies the
 `management.endpoints.web.exposure` property, so this does **not** expose any
 endpoint over the web — with Spring defaults only `/actuator/health` is
 reachable via HTTP while the dashboard has full data.
+
+Whether the `env` and `configprops` beans' own values are visible to this in-process
+invocation, rather than masked, is a separate question from whether the beans exist at
+all: see *Default Properties* below — value visibility now comes from the
+`peekabootDetection` property source and applies only on a local run, not from a blanket
+default in `peekaboot-defaults.yml`.
 
 See [peekaboot.org/docs/security](https://peekaboot.org/docs/security/) for what this
 exposure model means in practice for securing a deployment.
@@ -242,7 +259,7 @@ Auto-configuration classes that wire everything together.
 | `PeekabootTracingAutoConfiguration` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | Tracing handler interceptor |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `peekaboot.enabled` local-dev detection + default property values (via `spring.factories`) |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `peekaboot.enabled`/`peekaboot.dev-toolbar` local-dev detection + default property values (via `spring.factories`) |
 | `PeekabootEndpointExposureOutcomeContributor` | Makes actuator endpoint beans available without web/JMX exposure (via `spring.factories`) |
 
 ### Conditional Loading
@@ -271,19 +288,64 @@ even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootTracingAutoConfigura
 `OtelTracingAutoConfiguration` still carry no such guard, since none of them touch anything
 servlet-specific.
 
-There is no `matchIfMissing` fallback for `peekaboot.enabled` — the default
-comes from `PeekabootDefaultsEnvironmentPostProcessor`, which detects local
-development and adds the property with lowest precedence.
+There is no `matchIfMissing` fallback for `peekaboot.enabled` or
+`peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
+which adds them (and, on a local run, actuator value visibility — see *Default
+Properties*) to a `peekabootDetection` property source at lowest precedence, so any
+explicit application setting always wins, in either direction. The toolbar deliberately
+keys on the same local-development detection as `peekaboot.enabled`, not on
+`peekaboot.enabled`'s own resolved value: an application that turns Peekaboot on
+explicitly in a shared environment does not get the toolbar injected into every page, or
+its own `/actuator/env` widened, as a side effect.
+
+`LocalDevDetector` mirrors the heuristics Spring Boot DevTools itself uses, checked in
+order:
+
+1. Running as a native image always resolves to `false`, before anything else is checked.
+2. Otherwise, if the current thread's context class loader is DevTools' `RestartClassLoader`
+   (the `restartedMain` thread DevTools relaunches the app on), the result is `true`
+   immediately — DevTools only relaunches like that for a local launch in the first place,
+   so the class loader alone is proof.
+3. Otherwise, the result is `true` only when *all* of the following hold: the thread is
+   named `main`; its context class loader is the JDK's own `AppClassLoader` — not Spring
+   Boot's `LaunchedClassLoader` (a packaged, executable jar) and not a servlet container's
+   webapp loader (a deployed war); and the call stack carries no `org.junit.runners.`,
+   `org.junit.platform.`, `org.springframework.boot.test.`, Spring Boot's AOT processor, or
+   `cucumber.runtime.` frames. This is also why a `@SpringBootTest` run resolves `false`
+   despite sharing the same thread name and class loader as a genuine local launch — the
+   stack-trace check tells the two apart.
+
+In practice: an IDE run, `mvn spring-boot:run`, and `gradle bootRun` all default to on. A
+`java -jar` of the packaged artifact, a container, a native image, an AOT-processed build,
+and a test all default to off.
+
+`peekaboot.lifecycle.enabled` (`PeekabootLifecycleAutoConfiguration`'s own switch) is a
+real `@ConditionalOnProperty`, but there is no `@ConfigurationProperties` class behind it
+— it will not show up on the dashboard's own Config tab, even though it controls real
+behaviour.
 
 ### Default Properties
 
-`PeekabootDefaultsEnvironmentPostProcessor` loads two yml resources with lowest
-precedence, both overridable by an app's own `application.yml`:
+`PeekabootDefaultsEnvironmentPostProcessor` loads three yml resources with lowest
+precedence, all overridable by an app's own `application.yml`:
 
 - `peekaboot-defaults.yml` &mdash; enables full observability, but only when Peekaboot is
   enabled; skipped entirely otherwise.
 - `peekaboot-no-push-defaults.yml` &mdash; applies unconditionally, even when Peekaboot
   itself is disabled, to keep telemetry from leaving the process by default.
+- `peekaboot-dev-toolbar-defaults.yml` &mdash; applied only when the dev toolbar resolves
+  on. Sets `management.opentelemetry.tracing.export.schedule-delay` to `200ms` (Spring
+  default `5s`), trading export throughput for latency so a trace is readable in the
+  toolbar while the developer is still looking at the page.
+
+`management.endpoint.env.show-values` and the `configprops` equivalent are deliberately
+not in `peekaboot-defaults.yml`: they're set by the `peekabootDetection` property source
+instead (the same one that resolves `peekaboot.enabled` and `peekaboot.dev-toolbar` — see
+*Conditional Loading*), and only when that source detects a local run, never as an
+explicit `never` off-local. An application that switches Peekaboot on in a shared
+environment therefore doesn't have its own `/actuator/env` widened as a side effect:
+off-local, Spring's own default (`never`) applies and every property masks, exactly as it
+would without Peekaboot at all.
 
 ## Tracing Integration
 
@@ -300,6 +362,11 @@ public OtelSpanExporter otelSpanExporter(TraceStore storage, ApplicationEventPub
 ```
 
 The exporter:
+- Is one more `SpanExporter` bean alongside whatever Spring Boot's own OpenTelemetry
+  auto-configuration already registered — it doesn't stand up its own tracing stack, it
+  just copies every span it sees into `TraceStore` as well. Turning
+  `peekaboot.tracing.enabled` off leaves the rest of the app's OpenTelemetry setup
+  (sampling, other exporters — Zipkin, Jaeger, an OTLP backend) untouched.
 - Receives finished spans from OTel SDK
 - Filters out peekaboot's own requests (`/peekaboot/**`, `/actuator/**`)
 - Converts to `SpanData` and publishes `SpanDataEvent` via Spring's
@@ -330,15 +397,58 @@ This ensures compatibility with Spring Boot's tracing auto-configuration and wor
 3. `TraceStoreEventListener` receives events via `@EventListener` and forwards them to `TraceStore`, which stores by traceId
 4. Logs are associated with spans and included in trace detail views
 
+Because `LogbackAppenderRegistrar` is registered only inside `DevToolbarAutoConfiguration`,
+correlated logs require `peekaboot.dev-toolbar=true` — a trace's Logs tab stays empty
+without it, independent of `peekaboot.tracing.enabled`.
+
 ### Span Deduplication
 
-`SpanDeduplicator` runs in `TraceInsightsService` before spans are mapped to a
-`TraceTree`, for both the trace list and single-trace views. It removes child
-spans that duplicate their parent — same span name and identical tags, ignoring
-service-identifier keys (`peer.service`, `jdbc.datasource.name`) — which occur
-when a single operation is instrumented by more than one layer. Children of a
-removed span are re-parented to the nearest surviving ancestor so the tree stays
-connected.
+Deduplication runs primarily **on write**, in `TraceDataBundle.addSpan`: as each span
+arrives at the trace store, `SpanDuplicateMatcher.isDuplicate` collapses a child span into
+its parent when they share a name and their tags match once `peer.service` and
+`jdbc.datasource.name` are ignored — the shape produced when a single operation is
+instrumented by more than one layer, e.g. a JDBC driver-level span and a
+`datasource-proxy` span for the same query. The removed span's own children are
+re-parented onto the nearest surviving ancestor so the tree stays connected.
+
+`peekaboot.tracing.max-spans-per-trace` (default **500**) then caps the
+already-deduplicated span count, so the cap counts real, distinct work rather than a
+double-instrumented call as two spans against it. Once a trace's deduplicated span count
+still exceeds the cap, its **oldest** spans are dropped to make room for new ones, and the
+trace is flagged `truncated: true` — exposed on both `GET /peekaboot/api/traces/insights`
+and `GET /peekaboot/api/traces/{traceId}/insights`, and shown as a `TRUNCATED` badge in the
+trace list and the trace-detail overlay.
+
+`SpanDeduplicator`, invoked from `TraceInsightsService` before spans are mapped to a
+`TraceTree`, runs the identical check again at read time, for both the trace list and
+single-trace views. Since dedup now happens on write, this second pass is belt-and-braces
+rather than load-bearing — an open question is whether to drop it or document it as a
+deliberate safety net.
+
+### Query Extraction
+
+Database queries aren't captured specially: a query shows up in a trace because the
+JDBC/datasource instrumentation on the classpath already emits a span for it, tagged with
+`db.*` or `jdbc.query*` attributes. `QueryExtractor` builds each trace's `queries` list
+(and their `query.sql` text) from those tags, independently of the span tree's own names.
+Its `findSql` checks tags in priority order: `db.query.text` (the current OpenTelemetry
+semantic convention, emitted by `datasource-micrometer-opentelemetry` — the default stack
+`peekaboot-testing-app` itself uses) ahead of `db.statement` (that convention's superseded
+spelling, so when a library emits both, the current one is authoritative); then
+`jdbc.query[N]` (datasource-proxy/Micrometer); then, only if nothing tagged the span, the
+span's own name if it looks like SQL. `findDbSystem` mirrors this priority for
+`db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Matching is
+value-patterns only, not column-aware literal masking — see the class Javadoc for why.
+
+**Two separate pipelines render a query, and only one of them depends on
+`QueryExtractor`.** The Spans tab (`trace-detail/tabs/spans.js`) renders `span.name`
+directly — OpenTelemetry's own span-name summary, e.g. `SELECT customer_order` — which is
+correct and expected for a span tree. The Queries tab (`trace-detail/tabs/queries.js`)
+renders `query.sql`, which is what `QueryExtractor` populates; this is where the tag
+`findSql` picks actually shows up. `ScreenshotCapture` only ever photographs the Spans tab
+— the overlay opens there by default (`trace-detail.js`'s `initial: 'spans'`) and the tool
+never clicks Queries — so no shipped screenshot demonstrates `QueryExtractor`'s behaviour
+at all.
 
 ## Data Models
 
@@ -423,7 +533,7 @@ class DevToolbarAutoConfigurationIntegrationTest {
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). Errors and Slow are independently capped and evicted oldest-first once full, not tied to All's 30-minute TTL — once a trace qualifies it's copied into its bucket and can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application
