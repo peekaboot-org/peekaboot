@@ -304,10 +304,6 @@ public class TraceInsightsService {
         boolean hasSlowIssue = span.issues().stream()
                 .anyMatch(issue -> issue.type() == IssueType.SLOW || issue.type() == IssueType.VERY_SLOW);
 
-        if (hasSlowIssue) {
-            return true;
-        }
-
-        return span.children().stream().anyMatch(this::hasSlowIssues);
+        return hasSlowIssue || span.children().stream().anyMatch(this::hasSlowIssues);
     }
 }

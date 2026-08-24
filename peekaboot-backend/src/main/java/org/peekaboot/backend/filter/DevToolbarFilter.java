@@ -95,11 +95,7 @@ public class DevToolbarFilter implements Filter {
 
         // Skip AJAX requests
         String xRequestedWith = request.getHeader("X-Requested-With");
-        if ("XMLHttpRequest".equalsIgnoreCase(xRequestedWith)) {
-            return true;
-        }
-
-        return false;
+        return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
     }
 
     private void processResponse(HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse,

@@ -136,11 +136,9 @@ public class IssueDetector {
      * result-set spans (same definition as TraceTreeMapper's query summary).
      */
     private boolean isDbQuerySpan(SpanNode span) {
-        if (span.tags() == null) {
-            return false;
-        }
-        return span.tags().keySet().stream()
-                .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
+        return span.tags() != null
+                && span.tags().keySet().stream()
+                        .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     private String getErrorMessage(SpanNode span) {

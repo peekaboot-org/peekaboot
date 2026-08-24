@@ -57,10 +57,7 @@ public class OtelSpanExporter implements SpanExporter {
             return true;
         }
         String name = span.getName();
-        if (name != null && name.contains("/peekaboot/")) {
-            return true;
-        }
-        return false;
+        return name != null && name.contains("/peekaboot/");
     }
 
     private String extractPath(SpanData span) {
