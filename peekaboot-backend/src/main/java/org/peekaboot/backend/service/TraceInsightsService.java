@@ -106,7 +106,7 @@ public class TraceInsightsService {
         for (String token : rootActionType.split(",", -1)) {
             try {
                 types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException ignored) {
                 // Ignore invalid values
             }
         }
