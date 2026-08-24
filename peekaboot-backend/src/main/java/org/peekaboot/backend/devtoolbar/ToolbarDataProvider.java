@@ -12,8 +12,7 @@ public class ToolbarDataProvider {
                 escapeJson(path),
                 status,
                 traceId != null ? "\"" + escapeJson(traceId) + "\"" : "null",
-                escapeJson(BASE_PATH)
-        );
+                escapeJson(BASE_PATH));
     }
 
     public String getIdleModeJson() {

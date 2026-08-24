@@ -1,6 +1,12 @@
 package org.peekaboot.backend.mapper.trace;
 
 import io.micrometer.tracing.Span;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -12,13 +18,6 @@ import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 public class TraceTreeMapper {
@@ -42,27 +41,30 @@ public class TraceTreeMapper {
         if (traceData == null || traceData.spans() == null || traceData.spans().isEmpty()) {
             return new TraceTree(
                     traceData != null ? traceData.traceId() : null,
-                    0L, 0L,
+                    0L,
+                    0L,
                     TraceStatus.OK,
                     RootActionType.UNKNOWN,
-                    null, null,
-                    new TraceTabSummary(null, new TraceTabSummary.SpansSummary(0, 0L, 0),
+                    null,
+                    null,
+                    new TraceTabSummary(
+                            null,
+                            new TraceTabSummary.SpansSummary(0, 0L, 0),
                             new TraceTabSummary.QueriesSummary(0, 0L),
                             new TraceTabSummary.LogsSummary(0, 0, 0)),
                     Map.of(),
-                    null, null, null,
-                    truncated
-            );
+                    null,
+                    null,
+                    null,
+                    truncated);
         }
 
         List<SpanData> spans = traceData.spans();
 
         // Build lookup maps
-        Map<String, SpanData> spanById = spans.stream()
-                .collect(Collectors.toMap(SpanData::spanId, s -> s));
-        Map<String, List<SpanData>> childrenByParentId = spans.stream()
-                .filter(s -> s.parentId() != null)
-                .collect(Collectors.groupingBy(SpanData::parentId));
+        Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
+        Map<String, List<SpanData>> childrenByParentId =
+                spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
 
         // Find root span
         SpanData rootSpanData = findRootSpan(spans, spanById);
@@ -94,14 +96,18 @@ public class TraceTreeMapper {
                 rootOperation,
                 rootSpan,
                 summary,
-                Map.of(),  // No inherited attributes - all tags stay on spans
-                null, null, null,
-                truncated
-        );
+                Map.of(), // No inherited attributes - all tags stay on spans
+                null,
+                null,
+                null,
+                truncated);
     }
 
-    private void attachOrphansToRoot(List<SpanData> spans, Map<String, SpanData> spanById,
-                                     Map<String, List<SpanData>> childrenByParentId, SpanData rootSpanData) {
+    private void attachOrphansToRoot(
+            List<SpanData> spans,
+            Map<String, SpanData> spanById,
+            Map<String, List<SpanData>> childrenByParentId,
+            SpanData rootSpanData) {
         if (rootSpanData == null) {
             return;
         }
@@ -118,7 +124,9 @@ public class TraceTreeMapper {
             }
         }
         if (!orphans.isEmpty()) {
-            childrenByParentId.computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>()).addAll(orphans);
+            childrenByParentId
+                    .computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>())
+                    .addAll(orphans);
         }
     }
 
@@ -240,12 +248,11 @@ public class TraceTreeMapper {
                 children,
                 Map.copyOf(tags),
                 events,
-                List.of(),  // issues added by IssueDetector
+                List.of(), // issues added by IssueDetector
                 spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
-                spanData.remoteServiceName()
-        );
+                spanData.remoteServiceName());
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
@@ -270,8 +277,8 @@ public class TraceTreeMapper {
                 extractRequestSummary(rootSpanData),
                 new TraceTabSummary.SpansSummary(spans.size(), totalDurationMs, errorCount),
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
-                new TraceTabSummary.LogsSummary(0, 0, 0)  // Logs populated later by TraceInsightsService
-        );
+                new TraceTabSummary.LogsSummary(0, 0, 0) // Logs populated later by TraceInsightsService
+                );
     }
 
     /**
@@ -283,8 +290,7 @@ public class TraceTreeMapper {
         if (span.kind() != Span.Kind.CLIENT || span.tags() == null) {
             return false;
         }
-        return span.tags().keySet().stream().anyMatch(k ->
-                k.startsWith("db.") || k.startsWith("jdbc.query"));
+        return span.tags().keySet().stream().anyMatch(k -> k.startsWith("db.") || k.startsWith("jdbc.query"));
     }
 
     private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {

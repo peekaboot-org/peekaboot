@@ -10,14 +10,6 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.peekaboot.backend.masking.MaskingEngine;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.servlet.HandlerMapping;
-
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -29,6 +21,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.HandlerMapping;
 
 /**
  * Filter that captures HTTP request/response details and publishes them via Spring events.
@@ -52,8 +51,8 @@ public class RequestCaptureFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
 
-        if (!(request instanceof HttpServletRequest httpRequest) ||
-            !(response instanceof HttpServletResponse httpResponse)) {
+        if (!(request instanceof HttpServletRequest httpRequest)
+                || !(response instanceof HttpServletResponse httpResponse)) {
             chain.doFilter(request, response);
             return;
         }
@@ -136,19 +135,18 @@ public class RequestCaptureFilter implements Filter {
                 request.getRequestURI(),
                 maskQueryString(request.getQueryString()),
                 requestHeaders,
-                null,  // requestBody - not captured yet
+                null, // requestBody - not captured yet
                 false, // requestBodyTruncated
                 controllerClass,
                 controllerMethod,
                 queryParams,
                 formParams,
-                List.of(),  // uploadedFiles - not captured yet
+                List.of(), // uploadedFiles - not captured yet
                 // Response
                 response.getStatus(),
                 responseHeaders,
                 // Timing
-                durationMs
-        );
+                durationMs);
 
         eventPublisher.publishEvent(event);
         log.trace("Published RequestCompletedEvent for trace {}", traceId);
@@ -156,15 +154,15 @@ public class RequestCaptureFilter implements Filter {
 
     private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
-        Collections.list(request.getHeaderNames()).forEach(name ->
-                headers.put(name, maskingEngine.mask(name, request.getHeader(name))));
+        Collections.list(request.getHeaderNames())
+                .forEach(name -> headers.put(name, maskingEngine.mask(name, request.getHeader(name))));
         return headers;
     }
 
     private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
-        response.getHeaderNames().forEach(name ->
-                headers.put(name, maskingEngine.mask(name, response.getHeader(name))));
+        response.getHeaderNames()
+                .forEach(name -> headers.put(name, maskingEngine.mask(name, response.getHeader(name))));
         return headers;
     }
 
@@ -172,17 +170,16 @@ public class RequestCaptureFilter implements Filter {
      * getParameterMap() merges query-string and form-body parameters; splits them
      * using the actual query string.
      */
-    private void splitParameters(HttpServletRequest request,
-            Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
+    private void splitParameters(
+            HttpServletRequest request, Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
         Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
         boolean formRequest = isFormRequest(request);
         request.getParameterMap().forEach((key, values) -> {
             if (values == null || values.length == 0) {
                 return;
             }
-            List<String> maskedValues = Arrays.stream(values)
-                    .map(v -> maskingEngine.mask(key, v))
-                    .toList();
+            List<String> maskedValues =
+                    Arrays.stream(values).map(v -> maskingEngine.mask(key, v)).toList();
             if (queryStringKeys.contains(key) || !formRequest) {
                 queryParams.put(key, maskedValues);
             } else {
@@ -193,7 +190,8 @@ public class RequestCaptureFilter implements Filter {
 
     private static boolean isFormRequest(HttpServletRequest request) {
         String contentType = request.getContentType();
-        return contentType != null && contentType.contains("application/x-www-form-urlencoded")
+        return contentType != null
+                && contentType.contains("application/x-www-form-urlencoded")
                 && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
     }
 
@@ -240,8 +238,8 @@ public class RequestCaptureFilter implements Filter {
             String value = URLDecoder.decode(pair.substring(equalsIndex + 1), StandardCharsets.UTF_8);
             String maskedValue = maskingEngine.mask(key, value);
             result.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
-                  .append('=')
-                  .append(URLEncoder.encode(maskedValue, StandardCharsets.UTF_8));
+                    .append('=')
+                    .append(URLEncoder.encode(maskedValue, StandardCharsets.UTF_8));
         }
         return result.toString();
     }

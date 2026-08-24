@@ -1,5 +1,8 @@
 package org.peekaboot.backend.mapper.actuator;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.peekaboot.backend.actuator.raw.HealthResponse;
 import org.peekaboot.backend.actuator.raw.InfoResponse;
 import org.peekaboot.backend.domain.runtime.MemoryInfo;
@@ -8,10 +11,6 @@ import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 import org.peekaboot.backend.domain.runtime.StorageInfo;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class RuntimeMapper {
@@ -45,7 +44,8 @@ public class RuntimeMapper {
 
         long heapUsed = memory.heap() != null ? zeroIfNull(memory.heap().used()) : 0;
         long heapMax = memory.heap() != null ? zeroIfNull(memory.heap().max()) : 0;
-        long nonHeapUsed = memory.nonHeap() != null ? zeroIfNull(memory.nonHeap().used()) : 0;
+        long nonHeapUsed =
+                memory.nonHeap() != null ? zeroIfNull(memory.nonHeap().used()) : 0;
 
         if (heapUsed == 0 && heapMax == 0) {
             return null;

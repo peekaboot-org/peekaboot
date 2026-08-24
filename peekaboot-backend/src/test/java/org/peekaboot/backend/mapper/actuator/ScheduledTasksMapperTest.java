@@ -1,15 +1,14 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
-import org.peekaboot.backend.domain.scheduledtasks.*;
-import org.peekaboot.backend.service.CronDescriptionService;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
+import org.peekaboot.backend.domain.scheduledtasks.*;
+import org.peekaboot.backend.service.CronDescriptionService;
 
 class ScheduledTasksMapperTest {
 
@@ -18,16 +17,14 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldExtractCronTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(new ScheduledTasksResponse.CronTask(
-                "0 0 * * * *",
-                null,
-                new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:00:00Z"),
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask")
-            )),
-            List.of(),
-            List.of(),
-            List.of()
-        );
+                List.of(new ScheduledTasksResponse.CronTask(
+                        "0 0 * * * *",
+                        null,
+                        new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:00:00Z"),
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
+                List.of(),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -41,17 +38,15 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldExtractFixedDelayTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                5000L,
-                new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:25Z"),
-                new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T06:49:30Z"),
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay")
-            )),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        5000L,
+                        new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:25Z"),
+                        new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T06:49:30Z"),
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -66,17 +61,15 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldExtractFixedRateTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                3600000L,
-                new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:20Z"),
-                new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:49:20Z"),
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRate")
-            )),
-            List.of()
-        );
+                List.of(),
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        3600000L,
+                        new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:20Z"),
+                        new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:49:20Z"),
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRate"))),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -96,21 +89,19 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldHandleFailedStatus() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                1000L,
-                new ScheduledTasksResponse.TaskExecution(
-                    new ScheduledTasksResponse.TaskExceptionInfo("Task failed", "java.lang.NullPointerException"),
-                    "FAILED",
-                    "2026-01-11T06:49:20Z"
-                ),
-                null,
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask")
-            )),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        1000L,
+                        new ScheduledTasksResponse.TaskExecution(
+                                new ScheduledTasksResponse.TaskExceptionInfo(
+                                        "Task failed", "java.lang.NullPointerException"),
+                                "FAILED",
+                                "2026-01-11T06:49:20Z"),
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask"))),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -121,14 +112,12 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldSortByTypeAndTarget() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(
-                createCronTask("0 0 * * * *", "b.Scheduler.cronB"),
-                createCronTask("0 0 * * * *", "a.Scheduler.cronA")
-            ),
-            List.of(createFixedTask(1000L, "c.Scheduler.fixed")),
-            List.of(),
-            List.of()
-        );
+                List.of(
+                        createCronTask("0 0 * * * *", "b.Scheduler.cronB"),
+                        createCronTask("0 0 * * * *", "a.Scheduler.cronA")),
+                List.of(createFixedTask(1000L, "c.Scheduler.fixed")),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -141,15 +130,10 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldFormatIntervalsCorrectly() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(
-                createFixedTask(500L, "a"),
-                createFixedTask(30000L, "b"),
-                createFixedTask(120000L, "c")
-            ),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b"), createFixedTask(120000L, "c")),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -161,27 +145,26 @@ class ScheduledTasksMapperTest {
     @Test
     void map_cronTask_shouldPopulateScheduleDescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")),
-            List.of(),
-            List.of(),
-            List.of()
-        );
+                List.of(createCronTask("0 0 * * * *", "com.example.Scheduler.hourlyTask")),
+                List.of(),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.tasks().get(0).scheduleDescription()).isNotNull();
-        assertThat(result.tasks().get(0).scheduleDescription().toLowerCase(Locale.ROOT)).contains("hour");
+        assertThat(result.tasks().get(0).scheduleDescription().toLowerCase(Locale.ROOT))
+                .contains("hour");
     }
 
     @Test
     void map_fixedDelayTask_shouldHaveNullScheduleDescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(createFixedTask(5000L, "com.example.Scheduler.fixedDelayTask")),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(createFixedTask(5000L, "com.example.Scheduler.fixedDelayTask")),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -192,17 +175,15 @@ class ScheduledTasksMapperTest {
     @Test
     void map_fixedRateTask_shouldHaveNullScheduleDescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                10000L,
-                null,
-                null,
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRateTask")
-            )),
-            List.of()
-        );
+                List.of(),
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        10000L,
+                        null,
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRateTask"))),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -213,16 +194,14 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldParseLastAndNextExecutionTimesForCronTask() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(new ScheduledTasksResponse.CronTask(
-                "0 0 * * * *",
-                new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:00:00Z"),
-                new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:00:00Z"),
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask")
-            )),
-            List.of(),
-            List.of(),
-            List.of()
-        );
+                List.of(new ScheduledTasksResponse.CronTask(
+                        "0 0 * * * *",
+                        new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:00:00Z"),
+                        new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T07:00:00Z"),
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
+                List.of(),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -233,17 +212,15 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldParseLastAndNextExecutionTimesForFixedTask() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                5000L,
-                new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:25Z"),
-                new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T06:49:30Z"),
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay")
-            )),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        5000L,
+                        new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "2026-01-11T06:49:25Z"),
+                        new ScheduledTasksResponse.TaskExecution(null, null, "2026-01-11T06:49:30Z"),
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -254,17 +231,15 @@ class ScheduledTasksMapperTest {
     @Test
     void map_shouldReturnNullExecutionTimeForMalformedTimestamp() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-            List.of(),
-            List.of(new ScheduledTasksResponse.FixedTask(
-                0L,
-                5000L,
-                new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "not-a-timestamp"),
-                null,
-                new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay")
-            )),
-            List.of(),
-            List.of()
-        );
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        0L,
+                        5000L,
+                        new ScheduledTasksResponse.TaskExecution(null, "SUCCESS", "not-a-timestamp"),
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
+                List.of(),
+                List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
@@ -272,12 +247,11 @@ class ScheduledTasksMapperTest {
     }
 
     private ScheduledTasksResponse.CronTask createCronTask(String expr, String target) {
-        return new ScheduledTasksResponse.CronTask(expr, null, null,
-            new ScheduledTasksResponse.RunnableTarget(target));
+        return new ScheduledTasksResponse.CronTask(expr, null, null, new ScheduledTasksResponse.RunnableTarget(target));
     }
 
     private ScheduledTasksResponse.FixedTask createFixedTask(long interval, String target) {
-        return new ScheduledTasksResponse.FixedTask(0L, interval, null, null,
-            new ScheduledTasksResponse.RunnableTarget(target));
+        return new ScheduledTasksResponse.FixedTask(
+                0L, interval, null, null, new ScheduledTasksResponse.RunnableTarget(target));
     }
 }

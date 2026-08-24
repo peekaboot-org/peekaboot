@@ -1,17 +1,16 @@
 package org.peekaboot.backend.mapper.trace;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Locale;
 
 @Component
 public class QueryExtractor {
@@ -44,9 +43,8 @@ public class QueryExtractor {
 
         List<QueryInfo> queries = new ArrayList<>();
         for (int i = 0; i < querySpans.size(); i++) {
-            long nextQueryOrder = i + 1 < querySpans.size()
-                    ? querySpans.get(i + 1).creationOrder()
-                    : Long.MAX_VALUE;
+            long nextQueryOrder =
+                    i + 1 < querySpans.size() ? querySpans.get(i + 1).creationOrder() : Long.MAX_VALUE;
             QueryInfo query = extractQuery(querySpans.get(i), resultSets, nextQueryOrder);
             if (query != null) {
                 queries.add(query);
@@ -85,21 +83,13 @@ public class QueryExtractor {
         // query but before the next one
         Long rowCount = findRowCount(creationOrder, nextQueryOrder, resultSets);
 
-        return new QueryInfo(
-                span.spanId(),
-                sql,
-                dbSystem,
-                durationMs,
-                timestamp,
-                rowCount,
-                creationOrder
-        );
+        return new QueryInfo(span.spanId(), sql, dbSystem, durationMs, timestamp, rowCount, creationOrder);
     }
 
     private boolean isResultSetSpan(SpanData span) {
-        return "result-set".equals(span.name()) &&
-               span.tags() != null &&
-               span.tags().containsKey("jdbc.row-count");
+        return "result-set".equals(span.name())
+                && span.tags() != null
+                && span.tags().containsKey("jdbc.row-count");
     }
 
     private Long extractRowCount(SpanData span) {
@@ -141,8 +131,10 @@ public class QueryExtractor {
         // 3. Span name if it looks like SQL
         if (spanName != null) {
             String upper = spanName.toUpperCase(Locale.ROOT);
-            if (upper.startsWith("SELECT ") || upper.startsWith("INSERT ") ||
-                upper.startsWith("UPDATE ") || upper.startsWith("DELETE ")) {
+            if (upper.startsWith("SELECT ")
+                    || upper.startsWith("INSERT ")
+                    || upper.startsWith("UPDATE ")
+                    || upper.startsWith("DELETE ")) {
                 return spanName;
             }
         }

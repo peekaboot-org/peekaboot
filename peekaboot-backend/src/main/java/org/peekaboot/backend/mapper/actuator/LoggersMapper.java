@@ -1,15 +1,14 @@
 package org.peekaboot.backend.mapper.actuator;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.peekaboot.backend.actuator.raw.LoggersResponse;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.domain.loggers.LoggerInfo;
 import org.peekaboot.backend.domain.loggers.LoggersInfo;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class LoggersMapper {
@@ -23,15 +22,12 @@ public class LoggersMapper {
         int totalCount = 0;
         int configuredCount = 0;
 
-        for (Map.Entry<String, LoggersResponse.LoggerInfo> entry : loggersData.loggers().entrySet()) {
+        for (Map.Entry<String, LoggersResponse.LoggerInfo> entry :
+                loggersData.loggers().entrySet()) {
             String name = entry.getKey();
             LoggersResponse.LoggerInfo loggerData = entry.getValue();
 
-            LoggerInfo loggerInfo = new LoggerInfo(
-                name,
-                loggerData.configuredLevel(),
-                loggerData.effectiveLevel()
-            );
+            LoggerInfo loggerInfo = new LoggerInfo(name, loggerData.configuredLevel(), loggerData.effectiveLevel());
             String packageName = extractPackageName(name);
             byPackage.computeIfAbsent(packageName, k -> new ArrayList<>()).add(loggerInfo);
 
@@ -42,8 +38,8 @@ public class LoggersMapper {
         }
 
         List<LoggerGroup> groups = byPackage.entrySet().stream()
-            .map(e -> new LoggerGroup(e.getKey(), e.getValue()))
-            .toList();
+                .map(e -> new LoggerGroup(e.getKey(), e.getValue()))
+                .toList();
 
         return new LoggersInfo(groups, totalCount, configuredCount);
     }

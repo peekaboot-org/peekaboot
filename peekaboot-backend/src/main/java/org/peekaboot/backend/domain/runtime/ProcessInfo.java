@@ -9,13 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-public record ProcessInfo(
-    String username,
-    String uid,
-    String gid,
-    long pid,
-    List<ParentProcess> parentProcesses
-) {
+public record ProcessInfo(String username, String uid, String gid, long pid, List<ParentProcess> parentProcesses) {
 
     public record ParentProcess(long pid, String command) {}
 
@@ -40,7 +34,8 @@ public record ProcessInfo(
         return new ProcessInfo(username, uid, gid, pid, parents);
     }
 
-    public static ProcessInfo of(String username, String uid, String gid, long pid, List<ParentProcess> parentProcesses) {
+    public static ProcessInfo of(
+            String username, String uid, String gid, long pid, List<ParentProcess> parentProcesses) {
         return new ProcessInfo(username, uid, gid, pid, parentProcesses != null ? parentProcesses : List.of());
     }
 
@@ -49,9 +44,8 @@ public record ProcessInfo(
         Optional<ProcessHandle> current = ProcessHandle.current().parent();
         while (current.isPresent()) {
             ProcessHandle handle = current.get();
-            String command = handle.info().command()
-                .map(ProcessInfo::extractCommandName)
-                .orElse("");
+            String command =
+                    handle.info().command().map(ProcessInfo::extractCommandName).orElse("");
             parents.add(new ParentProcess(handle.pid(), command));
             current = handle.parent();
         }
@@ -69,10 +63,9 @@ public record ProcessInfo(
     private static String execCommand(String... command) {
         Process process = null;
         try {
-            process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            try (BufferedReader reader =
+                    new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String result = reader.readLine();
                 if (!process.waitFor(2, TimeUnit.SECONDS)) {
                     return null;

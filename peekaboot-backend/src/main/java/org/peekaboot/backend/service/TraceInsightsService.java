@@ -1,5 +1,15 @@
 package org.peekaboot.backend.service;
 
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.IssueType;
@@ -24,28 +34,15 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Stream;
-import java.util.Locale;
-
 @Service
 public class TraceInsightsService {
 
-    private static final TraceInsightsResponse EMPTY_RESPONSE = new TraceInsightsResponse(
-            List.of(),
-            new TraceListSummary(0, 0, 0, 0.0),
-            BucketCounts.empty()
-    );
+    private static final TraceInsightsResponse EMPTY_RESPONSE =
+            new TraceInsightsResponse(List.of(), new TraceListSummary(0, 0, 0, 0.0), BucketCounts.empty());
 
     @Nullable
     private final TraceStore traceStore;
+
     private final SpanDeduplicator spanDeduplicator;
     private final TraceTreeMapper traceTreeMapper;
     private final IssueDetector issueDetector;
@@ -64,7 +61,8 @@ public class TraceInsightsService {
         this.queryExtractor = queryExtractor;
     }
 
-    public TraceInsightsResponse getInsights(int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
+    public TraceInsightsResponse getInsights(
+            int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
         if (traceStore == null) {
             return EMPTY_RESPONSE;
         }
@@ -72,7 +70,7 @@ public class TraceInsightsService {
         Set<RootActionType> actionTypeFilter = parseRootActionTypes(rootActionType);
         final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
-        List<TraceTree> traceTrees = mapBucket(bucket, limit * 10)  // overfetch to survive filtering
+        List<TraceTree> traceTrees = mapBucket(bucket, limit * 10) // overfetch to survive filtering
                 .filter(tree -> matchesFilters(tree, actionTypeFilter, operationFilter))
                 .map(issueDetector::detectIssues)
                 .limit(limit)
@@ -91,7 +89,8 @@ public class TraceInsightsService {
                     countMatching(TraceBucket.SLOW, actionTypeFilter, operationFilter));
         }
 
-        return new TraceInsightsResponse(traceTrees, calculateListSummary(traceTrees), bucketCounts, filteredBucketCounts);
+        return new TraceInsightsResponse(
+                traceTrees, calculateListSummary(traceTrees), bucketCounts, filteredBucketCounts);
     }
 
     /**
@@ -119,8 +118,8 @@ public class TraceInsightsService {
         }
         return traceStore.getTraces(bucket, limit).stream()
                 .map(bundle -> {
-                    TraceData traceData = spanDeduplicator.deduplicate(
-                            TraceData.fromSpans(bundle.traceId(), bundle.spans()));
+                    TraceData traceData =
+                            spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
                     return traceTreeMapper.map(traceData, bundle.truncated());
                 })
                 .filter(Objects::nonNull);
@@ -159,26 +158,19 @@ public class TraceInsightsService {
             return Optional.empty();
         }
 
-        return traceStore.getTrace(traceId)
-                .map(bundle -> {
-                    TraceData traceData = spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
-                    List<QueryInfo> queries = queryExtractor.extract(traceData);
-                    TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
-                    tree = issueDetector.detectIssues(tree);
-                    return enrichWithDetails(tree, bundle, queries);
-                });
+        return traceStore.getTrace(traceId).map(bundle -> {
+            TraceData traceData = spanDeduplicator.deduplicate(TraceData.fromSpans(bundle.traceId(), bundle.spans()));
+            List<QueryInfo> queries = queryExtractor.extract(traceData);
+            TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
+            tree = issueDetector.detectIssues(tree);
+            return enrichWithDetails(tree, bundle, queries);
+        });
     }
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
         List<TraceLog> logs = bundle.logs().stream()
-                .map(e -> new TraceLog(
-                        e.spanId(),
-                        e.timestamp(),
-                        e.level(),
-                        e.loggerName(),
-                        e.message(),
-                        e.threadName()
-                ))
+                .map(e ->
+                        new TraceLog(e.spanId(), e.timestamp(), e.level(), e.loggerName(), e.message(), e.threadName()))
                 .toList();
 
         HttpExchange httpExchange = null;
@@ -201,14 +193,17 @@ public class TraceInsightsService {
         // Update logs summary
         TraceTabSummary updatedSummary = tree.summary();
         if (!logs.isEmpty()) {
-            int errorLogCount = (int) logs.stream().filter(l -> "ERROR".equalsIgnoreCase(l.level())).count();
-            int warnLogCount = (int) logs.stream().filter(l -> "WARN".equalsIgnoreCase(l.level())).count();
+            int errorLogCount = (int) logs.stream()
+                    .filter(l -> "ERROR".equalsIgnoreCase(l.level()))
+                    .count();
+            int warnLogCount = (int) logs.stream()
+                    .filter(l -> "WARN".equalsIgnoreCase(l.level()))
+                    .count();
             updatedSummary = new TraceTabSummary(
                     tree.summary().request(),
                     tree.summary().spans(),
                     tree.summary().queries(),
-                    new TraceTabSummary.LogsSummary(logs.size(), errorLogCount, warnLogCount)
-            );
+                    new TraceTabSummary.LogsSummary(logs.size(), errorLogCount, warnLogCount));
         }
 
         return new TraceTree(
@@ -224,8 +219,7 @@ public class TraceInsightsService {
                 httpExchange,
                 logs.isEmpty() ? null : logs,
                 queries.isEmpty() ? null : queries,
-                tree.truncated()
-        );
+                tree.truncated());
     }
 
     private Map<String, List<TraceLog>> groupLogsBySpan(List<TraceLog> logs) {

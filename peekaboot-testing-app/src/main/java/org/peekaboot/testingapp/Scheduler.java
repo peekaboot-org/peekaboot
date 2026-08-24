@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-
 @Component
 public class Scheduler {
 
@@ -15,7 +14,6 @@ public class Scheduler {
 
     @Autowired
     private PersonQueryService personQueryService;
-
 
     @Scheduled(fixedRate = 1, timeUnit = TimeUnit.HOURS)
     public void fixedRate() {
@@ -26,7 +24,6 @@ public class Scheduler {
         log.error("fixedRate failed");
     }
 
-
     @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.MINUTES)
     public void fixedDelay() {
 
@@ -34,18 +31,15 @@ public class Scheduler {
         throw new IllegalStateException("fixedDelay failed");
     }
 
-
     @Scheduled(cron = "0 0 * * * *")
     public void cron1() {
         // intentionally empty - exists so the dashboard has a cron schedule to render
     }
 
-
     @Scheduled(cron = "0 0/30 9-17 * * MON-FRI")
     public void cron2() {
         // intentionally empty - exists so the dashboard has a cron schedule to render
     }
-
 
     @Scheduled(cron = "0 15 10 ? * 6#3")
     public void cron3() {

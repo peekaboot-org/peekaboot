@@ -17,15 +17,16 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 
-
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class ApplicationReadyListener implements ApplicationListener<ApplicationReadyEvent> {
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
-    private static final String SEPARATOR = "===========================================================================================";
+    private static final String SEPARATOR =
+            "===========================================================================================";
 
-    private static final String LINE = " ------------------------------------------------------------------------------------------";
+    private static final String LINE =
+            " ------------------------------------------------------------------------------------------";
 
     private final EnvironmentInfo environmentInfo;
 
@@ -37,12 +38,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final Map<String, DataSource> dataSources;
 
-
-    public ApplicationReadyListener(EnvironmentInfo environmentInfo,
-        BuildInfoProvider buildInfoProvider,
-        ServerUrlResolver serverUrlResolver,
-        List<DataSourceMetadata> dataSourceMetadataList,
-        Map<String, DataSource> dataSources) {
+    public ApplicationReadyListener(
+            EnvironmentInfo environmentInfo,
+            BuildInfoProvider buildInfoProvider,
+            ServerUrlResolver serverUrlResolver,
+            List<DataSourceMetadata> dataSourceMetadataList,
+            Map<String, DataSource> dataSources) {
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
@@ -50,7 +51,6 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         this.dataSourceMetadataList = dataSourceMetadataList != null ? dataSourceMetadataList : List.of();
         this.dataSources = dataSources;
     }
-
 
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
@@ -72,46 +72,45 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         logger.info(report.toString());
     }
 
-
     private void appendApplicationInfo(StringBuilder report) {
 
         String appName = buildInfoProvider.getName();
         String profiles = environmentInfo.getActiveProfilesAsString();
-        report.append(String.format(" Application [%s] ready with active profiles [%s]", appName, profiles)).append("\n");
+        report.append(String.format(" Application [%s] ready with active profiles [%s]", appName, profiles))
+                .append("\n");
         report.append(LINE).append("\n");
     }
 
-
     private void appendServiceUrl(StringBuilder report, ApplicationReadyEvent event) {
 
-        serverUrlResolver.resolveServiceUrl(event)
-            .ifPresent(url -> {
-                report.append(" Service URL: ").append(url).append("\n");
-                report.append(LINE).append("\n");
-            });
+        serverUrlResolver.resolveServiceUrl(event).ifPresent(url -> {
+            report.append(" Service URL: ").append(url).append("\n");
+            report.append(LINE).append("\n");
+        });
 
-        serverUrlResolver.resolveSwaggerUiUrl(event)
-            .ifPresent(url -> {
-                report.append(" Swagger UI: ").append(url).append("\n");
-                report.append(LINE).append("\n");
-            });
+        serverUrlResolver.resolveSwaggerUiUrl(event).ifPresent(url -> {
+            report.append(" Swagger UI: ").append(url).append("\n");
+            report.append(LINE).append("\n");
+        });
     }
-
 
     private void appendBuildInfo(StringBuilder report) {
 
         if (buildInfoProvider.isBuildInfoAvailable()) {
-            report.append(" Application Info: ").append(buildInfoProvider.getFormattedInfo()).append("\n");
+            report.append(" Application Info: ")
+                    .append(buildInfoProvider.getFormattedInfo())
+                    .append("\n");
         } else {
             report.append(" Application Info: Build information not available\n");
         }
         report.append(LINE).append("\n");
     }
 
-
     private void appendSystemInfo(StringBuilder report) {
 
-        report.append(" Default Timezone: ").append(TimeZone.getDefault().getID()).append("\n");
+        report.append(" Default Timezone: ")
+                .append(TimeZone.getDefault().getID())
+                .append("\n");
         report.append(LINE).append("\n");
 
         String vmName = System.getProperty("java.vm.name");
@@ -125,22 +124,24 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         String osName = System.getProperty("os.name");
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
-        report.append(String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch)).append("\n");
+        report.append(String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch))
+                .append("\n");
         report.append(LINE).append("\n");
 
         ProcessInfo processInfo = ProcessInfo.current();
-        report.append(String.format(" Process User: %s (uid=%s, gid=%s, pid=%d)",
-            processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid())).append("\n");
+        report.append(String.format(
+                        " Process User: %s (uid=%s, gid=%s, pid=%d)",
+                        processInfo.username(), processInfo.uid(), processInfo.gid(), processInfo.pid()))
+                .append("\n");
         if (!processInfo.parentProcesses().isEmpty()) {
             String tree = processInfo.parentProcesses().stream()
-                .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
-                .reduce((a, b) -> a + " -> " + b)
-                .orElse("");
+                    .map(p -> p.command().isEmpty() ? String.valueOf(p.pid()) : p.command() + "(" + p.pid() + ")")
+                    .reduce((a, b) -> a + " -> " + b)
+                    .orElse("");
             report.append(" Process Tree: ").append(tree).append("\n");
         }
         report.append(LINE).append("\n");
     }
-
 
     private void appendMemoryInfo(StringBuilder report) {
 
@@ -148,15 +149,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage heapMemory = memoryMXBean.getHeapMemoryUsage();
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
-        report.append(String.format("Heap Memory: used=%s, max=%s%n",
-            formatBytes(heapMemory.getUsed()),
-            formatBytes(heapMemory.getMax())));
-        report.append(String.format("Non-Heap Memory: used=%s, max=%s%n",
-            formatBytes(nonHeapMemory.getUsed()),
-            formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)));
+        report.append(String.format(
+                "Heap Memory: used=%s, max=%s%n", formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())));
+        report.append(String.format(
+                "Non-Heap Memory: used=%s, max=%s%n",
+                formatBytes(nonHeapMemory.getUsed()),
+                formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)));
         report.append(LINE).append("\n");
     }
-
 
     private void appendDatabaseInfo(StringBuilder report) {
 
@@ -167,30 +167,29 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         }
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            report.append(String.format(" DB Connection [%s]: %s on %s (user: %s)%n%n",
-                metadata.getDataSourceName(),
-                metadata.getDatabaseName(),
-                metadata.getHosts(),
-                metadata.getUsername()));
+            report.append(String.format(
+                    " DB Connection [%s]: %s on %s (user: %s)%n%n",
+                    metadata.getDataSourceName(),
+                    metadata.getDatabaseName(),
+                    metadata.getHosts(),
+                    metadata.getUsername()));
 
             if (!metadata.getConnectionParams().isEmpty()) {
                 String params = metadata.getConnectionParams().entrySet().stream()
-                    .map(e -> e.getKey() + "=" + e.getValue())
-                    .reduce((a, b) -> a + ", " + b)
-                    .orElse("");
+                        .map(e -> e.getKey() + "=" + e.getValue())
+                        .reduce((a, b) -> a + ", " + b)
+                        .orElse("");
                 report.append(" DB Connection Params: ").append(params).append("\n");
                 report.append(LINE).append("\n");
             }
 
-            report.append(String.format(" DB Version: %s %s%n",
-                metadata.getDatabaseProductName(),
-                metadata.getDatabaseProductVersion()));
+            report.append(String.format(
+                    " DB Version: %s %s%n", metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
             report.append(LINE).append("\n");
 
             appendPoolInfo(report, metadata.getDataSourceName());
         }
     }
-
 
     // CloseResource: the DataSource is the application's own Spring bean, merely
     // borrowed here to report pool settings - closing it would break the app
@@ -204,19 +203,20 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         DataSource dataSource = dataSources.get(dataSourceName);
         if (dataSource instanceof HikariDataSource hikariDataSource) {
             HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
-            report.append(String.format(" DB Pool: minimumIdle=%d, maximumPoolSize=%d%n%n",
-                config.getMinimumIdle(),
-                config.getMaximumPoolSize()));
+            report.append(String.format(
+                    " DB Pool: minimumIdle=%d, maximumPoolSize=%d%n%n",
+                    config.getMinimumIdle(), config.getMaximumPoolSize()));
 
             try {
-                report.append(" Connection Timeout: ").append(config.getConnectionTimeout()).append(" ms\n");
+                report.append(" Connection Timeout: ")
+                        .append(config.getConnectionTimeout())
+                        .append(" ms\n");
                 report.append(LINE).append("\n");
             } catch (Exception e) {
                 logger.debug("Could not retrieve connection timeout", e);
             }
         }
     }
-
 
     private String formatBytes(long bytes) {
 

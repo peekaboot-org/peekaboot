@@ -1,14 +1,13 @@
 package org.peekaboot.backend.mapper.trace;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @Component
 public class IssueDetector {
@@ -25,7 +24,8 @@ public class IssueDetector {
         }
 
         int traceDbQueryCount = trace.summary() != null && trace.summary().queries() != null
-                ? trace.summary().queries().count() : 0;
+                ? trace.summary().queries().count()
+                : 0;
         SpanNode processedRoot = processSpan(trace.rootSpan(), true, traceDbQueryCount);
 
         return new TraceTree(
@@ -41,8 +41,7 @@ public class IssueDetector {
                 trace.httpExchange(),
                 trace.logs(),
                 trace.queries(),
-                trace.truncated()
-        );
+                trace.truncated());
     }
 
     private SpanNode processSpan(SpanNode span, boolean isRoot, int traceDbQueryCount) {
@@ -52,59 +51,55 @@ public class IssueDetector {
         if (span.durationMs() >= properties.getVerySlowSpanThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.VERY_SLOW,
-                    String.format("Span took %dms (threshold: %dms)",
+                    String.format(
+                            "Span took %dms (threshold: %dms)",
                             span.durationMs(), properties.getVerySlowSpanThresholdMs()),
-                    "error"
-            ));
+                    "error"));
         } else if (span.durationMs() >= properties.getSlowSpanThresholdMs()) {
             // Check for SLOW (only if not VERY_SLOW)
             issues.add(new SpanIssue(
                     IssueType.SLOW,
-                    String.format("Span took %dms (threshold: %dms)",
-                            span.durationMs(), properties.getSlowSpanThresholdMs()),
-                    "warning"
-            ));
+                    String.format(
+                            "Span took %dms (threshold: %dms)", span.durationMs(), properties.getSlowSpanThresholdMs()),
+                    "warning"));
         }
 
         // Check for ERROR
         if ("ERROR".equalsIgnoreCase(span.status())) {
             String errorMessage = getErrorMessage(span);
-            issues.add(new SpanIssue(
-                    IssueType.ERROR,
-                    errorMessage,
-                    "error"
-            ));
+            issues.add(new SpanIssue(IssueType.ERROR, errorMessage, "error"));
         }
 
         // Check for SLOW_QUERY (if DB query span)
         if (isDbQuerySpan(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.SLOW_QUERY,
-                    String.format("Query took %dms (threshold: %dms)",
+                    String.format(
+                            "Query took %dms (threshold: %dms)",
                             span.durationMs(), properties.getSlowQueryThresholdMs()),
-                    "warning"
-            ));
+                    "warning"));
         }
 
         // Check for HIGH_QUERY_COUNT on trace level (only on root span)
         if (isRoot && traceDbQueryCount > properties.getHighTraceQueryCountThreshold()) {
             issues.add(new SpanIssue(
                     IssueType.HIGH_QUERY_COUNT,
-                    String.format("Trace has %d database queries (threshold: %d)",
+                    String.format(
+                            "Trace has %d database queries (threshold: %d)",
                             traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
-                    "warning"
-            ));
+                    "warning"));
         }
 
         // Check for HIGH_QUERY_COUNT per span (many direct query children)
-        long directQueryChildren = span.children().stream().filter(this::isDbQuerySpan).count();
+        long directQueryChildren =
+                span.children().stream().filter(this::isDbQuerySpan).count();
         if (directQueryChildren > properties.getHighQueryCountThreshold()) {
             issues.add(new SpanIssue(
                     IssueType.HIGH_QUERY_COUNT,
-                    String.format("Span has %d direct database queries (threshold: %d)",
+                    String.format(
+                            "Span has %d direct database queries (threshold: %d)",
                             directQueryChildren, properties.getHighQueryCountThreshold()),
-                    "warning"
-            ));
+                    "warning"));
         }
 
         // Recursively process children
@@ -127,8 +122,7 @@ public class IssueDetector {
                 span.errorMessage(),
                 span.errorClass(),
                 span.remoteServiceName(),
-                span.logs()
-        );
+                span.logs());
     }
 
     /**
@@ -137,8 +131,7 @@ public class IssueDetector {
      */
     private boolean isDbQuerySpan(SpanNode span) {
         return span.tags() != null
-                && span.tags().keySet().stream()
-                        .anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
+                && span.tags().keySet().stream().anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     private String getErrorMessage(SpanNode span) {

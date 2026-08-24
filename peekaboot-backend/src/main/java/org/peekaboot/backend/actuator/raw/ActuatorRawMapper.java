@@ -1,14 +1,13 @@
 package org.peekaboot.backend.actuator.raw;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Maps the raw Map response from PeekabootActuatorService to typed actuator beans.
@@ -24,8 +23,8 @@ public class ActuatorRawMapper {
 
     public ActuatorRawMapper() {
         this.objectMapper = JsonMapper.builder()
-            .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-            .build();
+                .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .build();
     }
 
     public ActuatorParsedData map(Map<String, Object> rawData) {

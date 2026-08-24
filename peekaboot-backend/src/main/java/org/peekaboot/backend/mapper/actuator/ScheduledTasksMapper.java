@@ -1,15 +1,14 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
-import org.peekaboot.backend.domain.scheduledtasks.*;
-import org.peekaboot.backend.service.CronDescriptionService;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import org.peekaboot.backend.actuator.raw.ScheduledTasksResponse;
+import org.peekaboot.backend.domain.scheduledtasks.*;
+import org.peekaboot.backend.service.CronDescriptionService;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ScheduledTasksMapper {
@@ -40,9 +39,7 @@ public class ScheduledTasksMapper {
             tasks.add(mapFixedTask(fixed, TaskType.FIXED_RATE));
         }
 
-        tasks.sort(Comparator
-            .comparing(ScheduledTaskInfo::type)
-            .thenComparing(ScheduledTaskInfo::target));
+        tasks.sort(Comparator.comparing(ScheduledTaskInfo::type).thenComparing(ScheduledTaskInfo::target));
 
         return new ScheduledTasksInfo(tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size());
     }
@@ -53,30 +50,28 @@ public class ScheduledTasksMapper {
 
     private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
         return new ScheduledTaskInfo(
-            extractTarget(cron.runnable()),
-            TaskType.CRON,
-            cron.expression(),
-            cronDescriptionService.describe(cron.expression(), locale),
-            null,
-            parseTime(cron.lastExecution()),
-            parseStatus(cron.lastExecution()),
-            parseException(cron.lastExecution()),
-            parseTime(cron.nextExecution())
-        );
+                extractTarget(cron.runnable()),
+                TaskType.CRON,
+                cron.expression(),
+                cronDescriptionService.describe(cron.expression(), locale),
+                null,
+                parseTime(cron.lastExecution()),
+                parseStatus(cron.lastExecution()),
+                parseException(cron.lastExecution()),
+                parseTime(cron.nextExecution()));
     }
 
     private ScheduledTaskInfo mapFixedTask(ScheduledTasksResponse.FixedTask fixed, TaskType type) {
         return new ScheduledTaskInfo(
-            extractTarget(fixed.runnable()),
-            type,
-            formatInterval(fixed.interval()),
-            null,
-            fixed.interval(),
-            parseTime(fixed.lastExecution()),
-            parseStatus(fixed.lastExecution()),
-            parseException(fixed.lastExecution()),
-            parseTime(fixed.nextExecution())
-        );
+                extractTarget(fixed.runnable()),
+                type,
+                formatInterval(fixed.interval()),
+                null,
+                fixed.interval(),
+                parseTime(fixed.lastExecution()),
+                parseStatus(fixed.lastExecution()),
+                parseException(fixed.lastExecution()),
+                parseTime(fixed.nextExecution()));
     }
 
     private String extractTarget(ScheduledTasksResponse.RunnableTarget runnable) {

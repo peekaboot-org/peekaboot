@@ -19,17 +19,14 @@ public class ServerUrlResolver {
 
     private final BooleanSupplier swaggerUiOnClasspath;
 
-
     public ServerUrlResolver(Environment environment) {
         this(environment, () -> ClassUtils.isPresent(SPRINGDOC_MARKER_CLASS, ServerUrlResolver.class.getClassLoader()));
     }
-
 
     ServerUrlResolver(Environment environment, BooleanSupplier swaggerUiOnClasspath) {
         this.environment = environment;
         this.swaggerUiOnClasspath = swaggerUiOnClasspath;
     }
-
 
     public Optional<String> resolveServiceUrl(ApplicationReadyEvent event) {
         ApplicationContext context = event.getApplicationContext();
@@ -43,7 +40,6 @@ public class ServerUrlResolver {
         return Optional.of(buildBaseUrl(webServer.getPort()));
     }
 
-
     public Optional<String> resolveSwaggerUiUrl(ApplicationReadyEvent event) {
         if (!swaggerUiOnClasspath.getAsBoolean()) {
             return Optional.empty();
@@ -51,14 +47,12 @@ public class ServerUrlResolver {
         return resolveServiceUrl(event).map(base -> base + swaggerUiPath());
     }
 
-
     private String buildBaseUrl(int port) {
         String scheme = environment.getProperty("server.ssl.enabled", Boolean.class, false) ? "https" : "http";
         String host = resolveHost();
         String contextPath = normalizeContextPath(environment.getProperty("server.servlet.context-path", ""));
         return scheme + "://" + host + ":" + port + contextPath;
     }
-
 
     // AvoidUsingHardCodedIP: "0.0.0.0" is compared against, not connected to - it is
     // the wildcard bind address that must be rewritten to something browsable
@@ -71,7 +65,6 @@ public class ServerUrlResolver {
         return host;
     }
 
-
     private static String normalizeContextPath(String contextPath) {
         if (contextPath == null || contextPath.isBlank() || "/".equals(contextPath)) {
             return "";
@@ -82,7 +75,6 @@ public class ServerUrlResolver {
         }
         return normalized;
     }
-
 
     private String swaggerUiPath() {
         String configured = environment.getProperty("springdoc.swagger-ui.path");

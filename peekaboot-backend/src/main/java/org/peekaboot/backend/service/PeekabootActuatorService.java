@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
-
 import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
 import org.peekaboot.backend.actuator.raw.ActuatorRawResponse;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
@@ -29,7 +28,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.core.SpringVersion;
 import org.springframework.stereotype.Service;
 
-
 @Service
 public final class PeekabootActuatorService {
 
@@ -43,7 +41,7 @@ public final class PeekabootActuatorService {
      * The only actuator endpoints the insights mappers consume.
      */
     private static final Set<String> INSIGHTS_ENDPOINTS =
-        Set.of("health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
+            Set.of("health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
 
     private final WebEndpointDiscoverer discoverer;
 
@@ -51,31 +49,29 @@ public final class PeekabootActuatorService {
 
     private final ActuatorRawMapper rawMapper;
 
-
     public PeekabootActuatorService(
-        ApplicationContext context,
-        ParameterValueMapper parameterMapper,
-        EndpointMediaTypes mediaTypes,
-        ObjectProvider<PathMapper> pathMappers,
-        ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
-        ObjectProvider<OperationInvokerAdvisor> advisors,
-        ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider,
-        ActuatorRawMapper rawMapper) {
+            ApplicationContext context,
+            ParameterValueMapper parameterMapper,
+            EndpointMediaTypes mediaTypes,
+            ObjectProvider<PathMapper> pathMappers,
+            ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
+            ObjectProvider<OperationInvokerAdvisor> advisors,
+            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider,
+            ActuatorRawMapper rawMapper) {
 
         this.rawMapper = rawMapper;
         this.discoverer = new WebEndpointDiscoverer(
-            context,
-            parameterMapper,
-            mediaTypes,
-            pathMappers.orderedStream().toList(),
-            additionalPathsMappers.orderedStream().toList(),
-            advisors.orderedStream().toList(),
-            List.of(),  // Empty endpoint filters = no exposure filtering
-            List.of()   // Empty operation filters
-        );
+                context,
+                parameterMapper,
+                mediaTypes,
+                pathMappers.orderedStream().toList(),
+                additionalPathsMappers.orderedStream().toList(),
+                advisors.orderedStream().toList(),
+                List.of(), // Empty endpoint filters = no exposure filtering
+                List.of() // Empty operation filters
+                );
         this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
-
 
     public Map<String, Object> getRawData() {
         return collectData(key -> !EXPENSIVE_ENDPOINTS.contains(key));
@@ -98,32 +94,29 @@ public final class PeekabootActuatorService {
         // Add DataSource metadata
         results.put("dataSources", buildDataSourcesInfo());
 
-        OperationArgumentResolver namespaceResolver = OperationArgumentResolver.of(
-            WebServerNamespace.class,
-            () -> WebServerNamespace.SERVER
-        );
+        OperationArgumentResolver namespaceResolver =
+                OperationArgumentResolver.of(WebServerNamespace.class, () -> WebServerNamespace.SERVER);
 
-        OperationArgumentResolver apiVersionResolver = OperationArgumentResolver.of(
-            ApiVersion.class,
-            () -> ApiVersion.LATEST
-        );
+        OperationArgumentResolver apiVersionResolver =
+                OperationArgumentResolver.of(ApiVersion.class, () -> ApiVersion.LATEST);
         for (ExposableWebEndpoint endpoint : discoverer.getEndpoints()) {
             String key = endpoint.getEndpointId().toLowerCaseString();
             if (!endpointKeyFilter.test(key)) {
                 continue;
             }
             endpoint.getOperations().stream()
-                .filter(op -> op.getType() == OperationType.READ)
-                .filter(op -> op.getRequestPredicate().getPath().equals(endpoint.getRootPath()))
-                .findFirst()
-                .ifPresent(op -> {
-                    try {
-                        Object result = op.invoke(new InvocationContext(SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver));
-                        results.put(key, result);
-                    } catch (Exception e) {
-                        results.put(key, "Error: " + e.getMessage());
-                    }
-                });
+                    .filter(op -> op.getType() == OperationType.READ)
+                    .filter(op -> op.getRequestPredicate().getPath().equals(endpoint.getRootPath()))
+                    .findFirst()
+                    .ifPresent(op -> {
+                        try {
+                            Object result = op.invoke(new InvocationContext(
+                                    SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver));
+                            results.put(key, result);
+                        } catch (Exception e) {
+                            results.put(key, "Error: " + e.getMessage());
+                        }
+                    });
         }
 
         return results;
@@ -143,7 +136,6 @@ public final class PeekabootActuatorService {
         return ActuatorRawResponse.wrap(rawMapper.maskRawData(getRawData(), unmask));
     }
 
-
     private Map<String, String> buildSpringInfo() {
 
         Map<String, String> springInfo = new LinkedHashMap<>();
@@ -151,7 +143,6 @@ public final class PeekabootActuatorService {
         springInfo.put("frameworkVersion", SpringVersion.getVersion());
         return springInfo;
     }
-
 
     private List<Map<String, Object>> buildDataSourcesInfo() {
 
@@ -188,7 +179,8 @@ public final class PeekabootActuatorService {
                 metadata.getConnectionParams().forEach((key, prop) -> {
                     Map<String, Object> paramInfo = new LinkedHashMap<>();
                     paramInfo.put("value", prop.value());
-                    paramInfo.put("source", prop.source() != null ? prop.source().name() : null);
+                    paramInfo.put(
+                            "source", prop.source() != null ? prop.source().name() : null);
                     params.put(key, paramInfo);
                 });
             }

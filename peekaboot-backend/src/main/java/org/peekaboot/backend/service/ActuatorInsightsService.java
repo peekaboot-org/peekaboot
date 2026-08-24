@@ -1,17 +1,16 @@
 package org.peekaboot.backend.service;
 
-import org.peekaboot.backend.actuator.raw.ActuatorParsedData;
-import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
-import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.peekaboot.backend.domain.server.ServerInfo;
-import org.peekaboot.backend.mapper.actuator.*;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
-
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.peekaboot.backend.actuator.raw.ActuatorParsedData;
+import org.peekaboot.backend.actuator.raw.ActuatorRawMapper;
+import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
+import org.peekaboot.backend.domain.server.ServerInfo;
+import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.mapper.actuator.*;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Service;
 
 @Service
 public final class ActuatorInsightsService {
@@ -67,16 +66,15 @@ public final class ActuatorInsightsService {
         ActuatorParsedData typed = rawMapper.map(rawData);
 
         return new ActuatorInsightsResponse(
-            applicationMapper.map(typed.info(), typed.spring()),
-            runtimeMapper.map(typed.info(), typed.health()),
-            dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
-            healthMapper.map(typed.health(), unmask),
-            environmentMapper.map(typed.env(), unmask),
-            loggersMapper.map(typed.loggers()),
-            flywayMapper.map(typed.flyway()),
-            configMapper.map(typed.configprops(), unmask),
-            scheduledTasksMapper.map(typed.scheduledtasks(), locale),
-            ServerInfo.current(locale)
-        );
+                applicationMapper.map(typed.info(), typed.spring()),
+                runtimeMapper.map(typed.info(), typed.health()),
+                dataSourceMapper.map(dataSourceMetadataList, typed.health(), unmask),
+                healthMapper.map(typed.health(), unmask),
+                environmentMapper.map(typed.env(), unmask),
+                loggersMapper.map(typed.loggers()),
+                flywayMapper.map(typed.flyway()),
+                configMapper.map(typed.configprops(), unmask),
+                scheduledTasksMapper.map(typed.scheduledtasks(), locale),
+                ServerInfo.current(locale));
     }
 }

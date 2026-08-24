@@ -9,15 +9,14 @@ import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Set;
 import java.util.Locale;
+import java.util.Set;
+import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DevToolbarFilter implements Filter {
 
@@ -26,9 +25,8 @@ public class DevToolbarFilter implements Filter {
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
     private static final String SWAGGER_UI_PREFIX = "/swagger-ui/";
-    private static final Set<String> EXCLUDED_EXTENSIONS = Set.of(
-            ".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
-    );
+    private static final Set<String> EXCLUDED_EXTENSIONS =
+            Set.of(".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot");
 
     private final ToolbarDataProvider toolbarDataProvider;
     private final Tracer tracer;
@@ -42,8 +40,8 @@ public class DevToolbarFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
 
-        if (!(request instanceof HttpServletRequest httpRequest) ||
-            !(response instanceof HttpServletResponse httpResponse)) {
+        if (!(request instanceof HttpServletRequest httpRequest)
+                || !(response instanceof HttpServletResponse httpResponse)) {
             log.trace("Skipping non-HTTP request");
             chain.doFilter(request, response);
             return;
@@ -98,8 +96,11 @@ public class DevToolbarFilter implements Filter {
         return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
     }
 
-    private void processResponse(HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse,
-                                  HttpServletResponse originalResponse) throws IOException {
+    private void processResponse(
+            HttpServletRequest request,
+            ContentBufferingResponseWrapper wrappedResponse,
+            HttpServletResponse originalResponse)
+            throws IOException {
 
         wrappedResponse.flushBuffer();
 
@@ -143,9 +144,7 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
-        String modifiedContent = content.substring(0, bodyEndIndex)
-                + toolbarHtml
-                + content.substring(bodyEndIndex);
+        String modifiedContent = content.substring(0, bodyEndIndex) + toolbarHtml + content.substring(bodyEndIndex);
 
         // encode with the response's declared charset, not blindly UTF-8
         String encoding = wrappedResponse.getCharacterEncoding();
@@ -170,14 +169,10 @@ public class DevToolbarFilter implements Filter {
         return -1;
     }
 
-    private String generateToolbarHtml(HttpServletRequest request, ContentBufferingResponseWrapper response,
-                                        String traceId) {
+    private String generateToolbarHtml(
+            HttpServletRequest request, ContentBufferingResponseWrapper response, String traceId) {
         String summaryJson = toolbarDataProvider.getToolbarSummaryJson(
-                request.getMethod(),
-                request.getRequestURI(),
-                response.getStatus(),
-                traceId
-        );
+                request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
         return toolbarBootstrapHtml(summaryJson);
     }
 
@@ -192,7 +187,6 @@ public class DevToolbarFilter implements Filter {
             <script src="/peekaboot/ui/toolbar/toolbar.js" type="module"></script>
             """.replace("{{SUMMARY_JSON}}", dataJson);
     }
-
 
     private boolean isSwaggerUi(String path) {
         return path.startsWith(SWAGGER_UI_PREFIX);

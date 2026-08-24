@@ -1,5 +1,9 @@
 package org.peekaboot.backend.mapper.actuator;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.peekaboot.backend.actuator.raw.ConfigPropsResponse;
 import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
@@ -7,11 +11,6 @@ import org.peekaboot.backend.domain.config.ConfigProperty;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
 import org.springframework.stereotype.Component;
-
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 @Component
 public class ConfigMapper {
@@ -45,8 +44,8 @@ public class ConfigMapper {
         }
 
         List<ConfigGroup> groups = byPrefix.entrySet().stream()
-            .map(e -> new ConfigGroup(e.getKey(), e.getValue()))
-            .toList();
+                .map(e -> new ConfigGroup(e.getKey(), e.getValue()))
+                .toList();
 
         return new ConfigInfo(groups);
     }

@@ -1,5 +1,9 @@
 package org.peekaboot.backend.mapper.actuator;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import org.peekaboot.backend.actuator.raw.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
 import org.peekaboot.backend.domain.flyway.MigrationInfo;
@@ -7,11 +11,6 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
 
 @Component
 public class FlywayMapper {
@@ -58,14 +57,13 @@ public class FlywayMapper {
         }
 
         return new MigrationInfo(
-            migration.version(),
-            migration.description(),
-            migration.type(),
-            state,
-            installedOn,
-            migration.executionTime(),
-            migration.script()
-        );
+                migration.version(),
+                migration.description(),
+                migration.type(),
+                state,
+                installedOn,
+                migration.executionTime(),
+                migration.script());
     }
 
     private int compareVersions(String v1, String v2) {

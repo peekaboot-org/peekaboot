@@ -1,15 +1,14 @@
 package org.peekaboot.backend.tracing.store;
 
-import io.micrometer.tracing.Span;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * Write-path benchmark harness for defect 3 (the span cap used to truncate before
@@ -85,11 +84,12 @@ class TraceWritePathBenchmark {
 
         System.out.println("=== TraceWritePathBenchmark (" + rawSpans.size() + " raw spans/trace, "
                 + MEASURED_ITERATIONS + " measured iterations, cap=" + CAP + ") ===");
-        System.out.printf("old path (append + trim, no dedup):        %.3f ms/trace, %.1f ns/span%n",
-                oldAvgMs, oldNsPerSpan);
-        System.out.printf("new path (fold-on-insertion dedup):        %.3f ms/trace, %.1f ns/span%n",
-                newAvgMs, newNsPerSpan);
-        System.out.printf("overhead added by write-time dedup:        %.3f ms/trace (%.2fx)%n",
+        System.out.printf(
+                "old path (append + trim, no dedup):        %.3f ms/trace, %.1f ns/span%n", oldAvgMs, oldNsPerSpan);
+        System.out.printf(
+                "new path (fold-on-insertion dedup):        %.3f ms/trace, %.1f ns/span%n", newAvgMs, newNsPerSpan);
+        System.out.printf(
+                "overhead added by write-time dedup:        %.3f ms/trace (%.2fx)%n",
                 newAvgMs - oldAvgMs, newAvgMs / oldAvgMs);
     }
 
@@ -133,28 +133,52 @@ class TraceWritePathBenchmark {
         long order = 1;
         for (int i = 0; i < realQueryCount; i++) {
             String realId = "q" + i;
-            spans.add(jdbcSpan("dup" + i, realId, "SELECT * FROM order_line WHERE order_id = " + i,
-                    "dataSource", order++));
-            spans.add(jdbcSpan(realId, rootId, "SELECT * FROM order_line WHERE order_id = " + i,
-                    "sample_app_db", order++));
+            spans.add(jdbcSpan(
+                    "dup" + i, realId, "SELECT * FROM order_line WHERE order_id = " + i, "dataSource", order++));
+            spans.add(jdbcSpan(
+                    realId, rootId, "SELECT * FROM order_line WHERE order_id = " + i, "sample_app_db", order++));
         }
         spans.add(new SpanData(
-                "bench-trace", rootId, null, "GET /orders", Span.Kind.SERVER,
-                Instant.EPOCH, Instant.EPOCH.plusMillis(realQueryCount), Duration.ofMillis(realQueryCount),
-                Map.of("http.method", "GET", "http.target", "/orders"), List.of(),
-                null, null, null, null, null, List.of(), order
-        ));
+                "bench-trace",
+                rootId,
+                null,
+                "GET /orders",
+                Span.Kind.SERVER,
+                Instant.EPOCH,
+                Instant.EPOCH.plusMillis(realQueryCount),
+                Duration.ofMillis(realQueryCount),
+                Map.of("http.method", "GET", "http.target", "/orders"),
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                order));
         return spans;
     }
 
-    private static SpanData jdbcSpan(String spanId, String parentId, String query, String peerService,
-                                      long creationOrder) {
+    private static SpanData jdbcSpan(
+            String spanId, String parentId, String query, String peerService, long creationOrder) {
         Instant start = Instant.EPOCH.plusMillis(creationOrder);
         return new SpanData(
-                "bench-trace", spanId, parentId, "query", Span.Kind.CLIENT,
-                start, start.plusMillis(1), Duration.ofMillis(1),
+                "bench-trace",
+                spanId,
+                parentId,
+                "query",
+                Span.Kind.CLIENT,
+                start,
+                start.plusMillis(1),
+                Duration.ofMillis(1),
                 Map.of("jdbc.query[0]", query, "peer.service", peerService),
-                List.of(), null, null, null, null, null, List.of(), creationOrder
-        );
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                creationOrder);
     }
 }

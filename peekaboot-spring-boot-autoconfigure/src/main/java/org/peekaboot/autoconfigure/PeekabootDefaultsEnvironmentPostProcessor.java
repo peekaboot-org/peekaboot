@@ -1,5 +1,8 @@
 package org.peekaboot.autoconfigure;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
@@ -11,10 +14,6 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
-
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Derives the default for {@code peekaboot.enabled} from the launch context
@@ -52,10 +51,12 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         boolean localDevelopment = localDevelopment();
         // lowest precedence: any explicit peekaboot.enabled setting wins over the detection
-        environment.getPropertySources().addLast(new MapPropertySource(
-                DETECTION_PROPERTY_SOURCE_NAME, Map.of(ENABLED_PROPERTY, localDevelopment)));
-        log.debug("Local development " + (localDevelopment ? "detected" : "not detected")
-                + " - peekaboot " + (localDevelopment ? "enabled" : "disabled") + " by default");
+        environment
+                .getPropertySources()
+                .addLast(new MapPropertySource(
+                        DETECTION_PROPERTY_SOURCE_NAME, Map.of(ENABLED_PROPERTY, localDevelopment)));
+        log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot "
+                + (localDevelopment ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 
@@ -88,7 +89,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         }
     }
 
-    private PropertySource<?> loadYaml(String propertySourceName, Resource resource, String resourceName) throws IOException {
+    private PropertySource<?> loadYaml(String propertySourceName, Resource resource, String resourceName)
+            throws IOException {
         YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
         List<PropertySource<?>> propertySources = loader.load(propertySourceName, resource);
         if (propertySources.isEmpty()) {

@@ -1,5 +1,6 @@
 package org.peekaboot.backend.mapper.trace;
 
+import java.util.List;
 import org.peekaboot.backend.domain.trace.CollectionFramework;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
@@ -13,8 +14,6 @@ import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 @Component
 public class TraceRawMapper {
@@ -34,19 +33,12 @@ public class TraceRawMapper {
         // The raw endpoint embeds SpanData directly - unlike the insights endpoints, it
         // never passes through TraceTreeMapper, so tag/errorMessage masking has to
         // happen here.
-        List<SpanData> maskedSpans = traceData.spans().stream()
-                .map(this::maskSpan)
-                .toList();
+        List<SpanData> maskedSpans =
+                traceData.spans().stream().map(this::maskSpan).toList();
 
         List<TraceLog> logs = bundle.logs().stream()
-                .map(e -> new TraceLog(
-                        e.spanId(),
-                        e.timestamp(),
-                        e.level(),
-                        e.loggerName(),
-                        e.message(),
-                        e.threadName()
-                ))
+                .map(e ->
+                        new TraceLog(e.spanId(), e.timestamp(), e.level(), e.loggerName(), e.message(), e.threadName()))
                 .toList();
 
         HttpExchange httpExchange = null;
@@ -55,21 +47,19 @@ public class TraceRawMapper {
             httpExchange = HttpExchange.from(reqEvent);
         }
 
-        int errorCount = (int) traceData.spans().stream().filter(SpanData::hasError).count();
+        int errorCount =
+                (int) traceData.spans().stream().filter(SpanData::hasError).count();
         long spansDurationMs = traceData.spans().stream()
                 .filter(s -> s.duration() != null)
                 .mapToLong(s -> s.duration().toMillis())
                 .sum();
-        long queryDurationMs = queries.stream()
-                .mapToLong(QueryInfo::durationMs)
-                .sum();
+        long queryDurationMs = queries.stream().mapToLong(QueryInfo::durationMs).sum();
 
         TraceRawData.PerTraceSummary perTraceSummary = new TraceRawData.PerTraceSummary(
                 new TraceRawSummary.CountDuration(traceData.spanCount(), spansDurationMs),
                 new TraceRawSummary.CountDuration(queries.size(), queryDurationMs),
                 new TraceRawSummary.Count(logs.size()),
-                new TraceRawSummary.Count(errorCount)
-        );
+                new TraceRawSummary.Count(errorCount));
 
         return new TraceRawData(
                 collectionFramework,
@@ -82,8 +72,7 @@ public class TraceRawMapper {
                 logs,
                 queries,
                 httpExchange,
-                bundle.truncated()
-        );
+                bundle.truncated());
     }
 
     public TraceRawSummary calculateSummary(List<TraceRawData> traces) {
@@ -113,17 +102,27 @@ public class TraceRawMapper {
                 new TraceRawSummary.CountDuration(totalSpans, totalSpanDurationMs),
                 new TraceRawSummary.CountDuration(totalQueries, totalQueryDurationMs),
                 new TraceRawSummary.Count(totalLogs),
-                new TraceRawSummary.Count(totalErrors)
-        );
+                new TraceRawSummary.Count(totalErrors));
     }
 
     private SpanData maskSpan(SpanData span) {
         return new SpanData(
-                span.traceId(), span.spanId(), span.parentId(), span.name(), span.kind(),
-                span.startTime(), span.endTime(), span.duration(),
+                span.traceId(),
+                span.spanId(),
+                span.parentId(),
+                span.name(),
+                span.kind(),
+                span.startTime(),
+                span.endTime(),
+                span.duration(),
                 tagMasker.mask(span.tags()),
-                span.events(), maskingEngine.maskValue(span.errorMessage()), span.errorClass(), span.remoteServiceName(),
-                span.remoteIp(), span.remotePort(), span.links(), span.creationOrder()
-        );
+                span.events(),
+                maskingEngine.maskValue(span.errorMessage()),
+                span.errorClass(),
+                span.remoteServiceName(),
+                span.remoteIp(),
+                span.remotePort(),
+                span.links(),
+                span.creationOrder());
     }
 }

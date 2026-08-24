@@ -13,7 +13,6 @@ import net.osslabz.jdbc.JdbcUrlParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public final class DataSourceMetadata {
 
     private static final Logger logger = LoggerFactory.getLogger(DataSourceMetadata.class);
@@ -24,12 +23,10 @@ public final class DataSourceMetadata {
 
     private final String username;
 
-
     public List<Host> getHosts() {
 
         return hosts;
     }
-
 
     private final List<Host> hosts;
 
@@ -45,11 +42,17 @@ public final class DataSourceMetadata {
 
     private final String driverVersion;
 
-
-    private DataSourceMetadata(String dataSourceName, String url, String username, List<Host> hosts,
-        String databaseName, Map<String, JdbcProperty> connectionParams,
-        String databaseProductName, String databaseProductVersion,
-        String driverName, String driverVersion) {
+    private DataSourceMetadata(
+            String dataSourceName,
+            String url,
+            String username,
+            List<Host> hosts,
+            String databaseName,
+            Map<String, JdbcProperty> connectionParams,
+            String databaseProductName,
+            String databaseProductVersion,
+            String driverName,
+            String driverVersion) {
 
         this.dataSourceName = dataSourceName;
         this.url = url;
@@ -63,7 +66,6 @@ public final class DataSourceMetadata {
         this.driverVersion = driverVersion;
     }
 
-
     public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
 
         try (Connection connection = dataSource.getConnection()) {
@@ -73,17 +75,16 @@ public final class DataSourceMetadata {
             JdbcUrl jdbcUrl = JdbcUrlParser.parse(url);
 
             return Optional.of(new DataSourceMetadata(
-                dataSourceName,
-                url,
-                username,
-                jdbcUrl.hosts(),
-                jdbcUrl.databaseName(),
-                jdbcUrl.properties(),
-                metaData.getDatabaseProductName(),
-                metaData.getDatabaseProductVersion(),
-                metaData.getDriverName(),
-                metaData.getDriverVersion()
-            ));
+                    dataSourceName,
+                    url,
+                    username,
+                    jdbcUrl.hosts(),
+                    jdbcUrl.databaseName(),
+                    jdbcUrl.properties(),
+                    metaData.getDatabaseProductName(),
+                    metaData.getDatabaseProductVersion(),
+                    metaData.getDriverName(),
+                    metaData.getDriverVersion()));
         } catch (Exception e) {
             logger.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
         }
@@ -91,54 +92,45 @@ public final class DataSourceMetadata {
         return Optional.empty();
     }
 
-
     public String getDataSourceName() {
 
         return dataSourceName;
     }
-
 
     public String getUrl() {
 
         return url;
     }
 
-
     public String getUsername() {
 
         return username;
     }
-
 
     public String getDatabaseName() {
 
         return databaseName;
     }
 
-
     public Map<String, JdbcProperty> getConnectionParams() {
 
         return connectionParams;
     }
-
 
     public String getDatabaseProductName() {
 
         return databaseProductName;
     }
 
-
     public String getDatabaseProductVersion() {
 
         return databaseProductVersion;
     }
 
-
     public String getDriverName() {
 
         return driverName;
     }
-
 
     public String getDriverVersion() {
 

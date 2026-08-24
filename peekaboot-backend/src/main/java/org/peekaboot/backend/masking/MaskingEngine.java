@@ -32,16 +32,16 @@ import java.util.regex.Pattern;
 public final class MaskingEngine {
 
     private static final List<List<String>> KEY_NAME_TOKEN_RULES = MaskingRules.KEY_NAME_RULES.stream()
-        .map(rule -> tokenize(rule, true))
-        .toList();
+            .map(rule -> tokenize(rule, true))
+            .toList();
 
     private static final List<List<String>> WHOLE_KEY_NAME_TOKEN_RULES = MaskingRules.WHOLE_KEY_NAME_RULES.stream()
-        .map(rule -> tokenize(rule, true))
-        .toList();
+            .map(rule -> tokenize(rule, true))
+            .toList();
 
     private static final List<List<String>> KEY_NAME_EXCEPTION_TOKENS = MaskingRules.KEY_NAME_EXCEPTIONS.stream()
-        .map(rule -> tokenize(rule, true))
-        .toList();
+            .map(rule -> tokenize(rule, true))
+            .toList();
 
     /**
      * True if {@code key} names something structurally sensitive - matched
@@ -161,9 +161,9 @@ public final class MaskingEngine {
             while (matcher.find()) {
                 int group = rule.maskGroup();
                 if (group > 0 && matcher.start(group) >= 0) {
-                    spans.add(new int[]{matcher.start(group), matcher.end(group)});
+                    spans.add(new int[] {matcher.start(group), matcher.end(group)});
                 } else {
-                    spans.add(new int[]{matcher.start(), matcher.end()});
+                    spans.add(new int[] {matcher.start(), matcher.end()});
                 }
             }
         }
@@ -196,9 +196,7 @@ public final class MaskingEngine {
      * - stays one token, "password", instead of being mis-split into ["pass", "word"].
      */
     private static List<String> tokenize(String text, boolean splitCamelCaseBoundaries) {
-        String normalized = splitCamelCaseBoundaries
-            ? text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-")
-            : text;
+        String normalized = splitCamelCaseBoundaries ? text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-") : text;
         String[] parts = normalized.toLowerCase(Locale.ROOT).split("[^a-z0-9]+", -1);
         List<String> tokens = new ArrayList<>(parts.length);
         for (String part : parts) {

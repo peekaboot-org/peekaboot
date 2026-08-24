@@ -1,15 +1,14 @@
 package org.peekaboot.backend.mapper.trace;
 
-import org.peekaboot.backend.tracing.store.SpanData;
-import org.peekaboot.backend.tracing.store.SpanDuplicateMatcher;
-import org.peekaboot.backend.tracing.store.TraceData;
-import org.springframework.stereotype.Component;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.peekaboot.backend.tracing.store.SpanData;
+import org.peekaboot.backend.tracing.store.SpanDuplicateMatcher;
+import org.peekaboot.backend.tracing.store.TraceData;
+import org.springframework.stereotype.Component;
 
 @Component
 public class SpanDeduplicator {
@@ -58,7 +57,8 @@ public class SpanDeduplicator {
     /**
      * Maps each removed span to its nearest non-removed ancestor (for re-parenting).
      */
-    private static Map<String, String> resolveSurvivingAncestors(Set<String> removedIds, Map<String, SpanData> spanById) {
+    private static Map<String, String> resolveSurvivingAncestors(
+            Set<String> removedIds, Map<String, SpanData> spanById) {
         Map<String, String> survivingParents = new HashMap<>();
         for (String removedId : removedIds) {
             SpanData removed = spanById.get(removedId);

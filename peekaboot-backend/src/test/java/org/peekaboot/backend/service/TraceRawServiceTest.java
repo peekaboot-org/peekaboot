@@ -1,5 +1,14 @@
 package org.peekaboot.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceRawData;
@@ -11,16 +20,6 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class TraceRawServiceTest {
 
@@ -50,15 +49,31 @@ class TraceRawServiceTest {
     @Test
     void getTracesMapsSpansLogsQueriesAndHttpExchange() {
         store.addSpan(span("t1", "root", null, "GET /persons", 100, Map.of(), null));
-        store.addSpan(span("t1", "db", "root", "SELECT * FROM person", 40,
-                Map.of("db.system", "h2", "db.statement", "SELECT * FROM person"), null));
+        store.addSpan(span(
+                "t1",
+                "db",
+                "root",
+                "SELECT * FROM person",
+                40,
+                Map.of("db.system", "h2", "db.statement", "SELECT * FROM person"),
+                null));
         store.addLog(new LogCapturedEvent("t1", "root", START, "INFO", "PersonService", "loaded", "main"));
         store.setRequest(new RequestCompletedEvent(
-                "t1", "GET", "/persons", null,
-                Map.of(), null, false,
-                "PersonController", "list",
-                Map.of(), Map.of(), List.of(),
-                200, Map.of(), 120));
+                "t1",
+                "GET",
+                "/persons",
+                null,
+                Map.of(),
+                null,
+                false,
+                "PersonController",
+                "list",
+                Map.of(),
+                Map.of(),
+                List.of(),
+                200,
+                Map.of(),
+                120));
 
         TraceRawResponse response = service.getTraces(10, TraceBucket.ALL);
 
@@ -67,8 +82,8 @@ class TraceRawServiceTest {
         assertThat(trace.traceId()).isEqualTo("t1");
         assertThat(trace.durationMs()).isEqualTo(100);
         assertThat(trace.spans()).hasSize(2);
-        assertThat(trace.logs()).containsExactly(
-                new TraceLog("root", START, "INFO", "PersonService", "loaded", "main"));
+        assertThat(trace.logs())
+                .containsExactly(new TraceLog("root", START, "INFO", "PersonService", "loaded", "main"));
         assertThat(trace.queries())
                 .extracting(QueryInfo::sql, QueryInfo::dbSystem, QueryInfo::durationMs)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("SELECT * FROM person", "h2", 40L));
@@ -102,9 +117,7 @@ class TraceRawServiceTest {
 
         TraceRawResponse errors = service.getTraces(10, TraceBucket.ERRORS);
 
-        assertThat(errors.traces())
-                .extracting(TraceRawData::traceId)
-                .containsExactly("broken");
+        assertThat(errors.traces()).extracting(TraceRawData::traceId).containsExactly("broken");
     }
 
     @Test
@@ -155,26 +168,38 @@ class TraceRawServiceTest {
      */
     @Test
     void getTracesMasksSensitiveShapedSpanTags() {
-        store.addSpan(span("t1", "root", null, "GET /persons", 100,
-                Map.of("http.request.header.authorization", "Bearer abc123", "http.method", "GET"), null));
+        store.addSpan(span(
+                "t1",
+                "root",
+                null,
+                "GET /persons",
+                100,
+                Map.of("http.request.header.authorization", "Bearer abc123", "http.method", "GET"),
+                null));
 
         TraceRawResponse response = service.getTraces(10, TraceBucket.ALL);
 
-        Map<String, String> tags = response.traces().getFirst().spans().getFirst().tags();
+        Map<String, String> tags =
+                response.traces().getFirst().spans().getFirst().tags();
         assertThat(tags).containsEntry("http.request.header.authorization", "******");
         assertThat(tags).containsEntry("http.method", "GET");
     }
 
     @Test
     void getTraceMasksSensitiveShapedSpanTags() {
-        store.addSpan(span("t1", "root", null, "GET /persons", 100,
-                Map.of("http.url", "https://admin:hunter2@example.com/api"), null));
+        store.addSpan(span(
+                "t1",
+                "root",
+                null,
+                "GET /persons",
+                100,
+                Map.of("http.url", "https://admin:hunter2@example.com/api"),
+                null));
 
         Optional<TraceRawData> trace = service.getTrace("t1");
 
         assertThat(trace).isPresent();
-        assertThat(trace.get().spans().getFirst().tags().get("http.url"))
-                .isEqualTo("https://******@example.com/api");
+        assertThat(trace.get().spans().getFirst().tags().get("http.url")).isEqualTo("https://******@example.com/api");
     }
 
     // TraceTree already carries a truncated flag (Known Defect: max-spans-per-trace
@@ -210,12 +235,24 @@ class TraceRawServiceTest {
     // request's URL back with a query-string API key attached.
     @Test
     void getTraceMasksACredentialEmbeddedInTheSpanErrorMessage() {
-        SpanData errorSpan = new SpanData("t1", "root", null, "GET /persons", null,
-                START, START.plusMillis(100), Duration.ofMillis(100),
-                Map.of(), List.of(),
+        SpanData errorSpan = new SpanData(
+                "t1",
+                "root",
+                null,
+                "GET /persons",
+                null,
+                START,
+                START.plusMillis(100),
+                Duration.ofMillis(100),
+                Map.of(),
+                List.of(),
                 "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
                 "org.springframework.web.client.HttpClientErrorException",
-                null, null, null, List.of(), store.nextCreationOrder());
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
         store.addSpan(errorSpan);
 
         Optional<TraceRawData> trace = service.getTrace("t1");
@@ -225,12 +262,31 @@ class TraceRawServiceTest {
         assertThat(errorMessage).doesNotContain("SECRET").contains("api_key=******");
     }
 
-    private SpanData span(String traceId, String spanId, String parentId, String name,
-            long durationMs, Map<String, String> tags, String errorClass) {
-        return new SpanData(traceId, spanId, parentId, name, null,
-                START, START.plusMillis(durationMs), Duration.ofMillis(durationMs),
-                tags, List.of(),
-                errorClass != null ? "boom" : null, errorClass,
-                null, null, null, List.of(), store.nextCreationOrder());
+    private SpanData span(
+            String traceId,
+            String spanId,
+            String parentId,
+            String name,
+            long durationMs,
+            Map<String, String> tags,
+            String errorClass) {
+        return new SpanData(
+                traceId,
+                spanId,
+                parentId,
+                name,
+                null,
+                START,
+                START.plusMillis(durationMs),
+                Duration.ofMillis(durationMs),
+                tags,
+                List.of(),
+                errorClass != null ? "boom" : null,
+                errorClass,
+                null,
+                null,
+                null,
+                List.of(),
+                store.nextCreationOrder());
     }
 }

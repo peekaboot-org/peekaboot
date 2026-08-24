@@ -1,5 +1,7 @@
 package org.peekaboot.backend.service;
 
+import java.util.List;
+import java.util.Optional;
 import org.peekaboot.backend.domain.trace.CollectionFramework;
 import org.peekaboot.backend.domain.trace.TraceRawData;
 import org.peekaboot.backend.domain.trace.TraceRawResponse;
@@ -10,20 +12,16 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
-
 @Service
 public class TraceRawService {
 
     @Nullable
     private final TraceStore traceStore;
+
     private final TraceRawMapper traceRawMapper;
     private final CollectionFramework collectionFramework;
 
-    public TraceRawService(
-            @Nullable TraceStore traceStore,
-            TraceRawMapper traceRawMapper) {
+    public TraceRawService(@Nullable TraceStore traceStore, TraceRawMapper traceRawMapper) {
         this.traceStore = traceStore;
         this.traceRawMapper = traceRawMapper;
         this.collectionFramework = detectCollectionFramework();
@@ -65,7 +63,6 @@ public class TraceRawService {
             return Optional.empty();
         }
 
-        return traceStore.getTrace(traceId)
-                .map(bundle -> traceRawMapper.map(bundle, collectionFramework));
+        return traceStore.getTrace(traceId).map(bundle -> traceRawMapper.map(bundle, collectionFramework));
     }
 }

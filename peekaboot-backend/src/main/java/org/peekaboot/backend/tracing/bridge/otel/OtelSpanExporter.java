@@ -8,18 +8,16 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
-import org.peekaboot.backend.tracing.event.SpanDataEvent;
-import org.peekaboot.backend.tracing.store.TraceStore;
-
-import org.peekaboot.backend.filter.FilterPathMatcher;
-import org.springframework.context.ApplicationEventPublisher;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.filter.FilterPathMatcher;
+import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.store.TraceStore;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * OpenTelemetry SpanExporter that captures spans and publishes them via Spring events.
@@ -128,8 +126,7 @@ public class OtelSpanExporter implements SpanExporter {
                 null,
                 null,
                 List.of(),
-                storage.nextCreationOrder()
-        );
+                storage.nextCreationOrder());
     }
 
     private Instant nanosToInstant(long nanos) {
@@ -147,16 +144,12 @@ public class OtelSpanExporter implements SpanExporter {
     }
 
     private List<org.peekaboot.backend.tracing.store.SpanData.Event> extractEvents(SpanData otelSpan) {
-        return otelSpan.getEvents().stream()
-                .map(this::convertEvent)
-                .toList();
+        return otelSpan.getEvents().stream().map(this::convertEvent).toList();
     }
 
     private org.peekaboot.backend.tracing.store.SpanData.Event convertEvent(EventData event) {
         return new org.peekaboot.backend.tracing.store.SpanData.Event(
-                event.getName(),
-                nanosToInstant(event.getEpochNanos())
-        );
+                event.getName(), nanosToInstant(event.getEpochNanos()));
     }
 
     private String extractServiceName(SpanData otelSpan) {

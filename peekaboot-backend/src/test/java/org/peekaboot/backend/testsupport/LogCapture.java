@@ -20,8 +20,8 @@ public final class LogCapture implements AutoCloseable {
     private final boolean previousAdditive;
     private final Level previousLevel;
 
-    private LogCapture(Logger logger, ListAppender<ILoggingEvent> appender,
-                        boolean previousAdditive, Level previousLevel) {
+    private LogCapture(
+            Logger logger, ListAppender<ILoggingEvent> appender, boolean previousAdditive, Level previousLevel) {
         this.logger = logger;
         this.appender = appender;
         this.previousAdditive = previousAdditive;

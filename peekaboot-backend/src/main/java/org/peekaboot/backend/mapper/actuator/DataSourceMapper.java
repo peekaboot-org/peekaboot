@@ -1,5 +1,9 @@
 package org.peekaboot.backend.mapper.actuator;
 
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import org.peekaboot.backend.actuator.raw.HealthResponse;
@@ -8,11 +12,6 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
-
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Locale;
 
 @Component
 public class DataSourceMapper {
@@ -36,9 +35,9 @@ public class DataSourceMapper {
         HealthStatus dbHealth = extractDbHealth(health);
 
         return metadataList.stream()
-            .filter(m -> m != null)
-            .map(m -> mapSingle(m, dbHealth, unmask))
-            .toList();
+                .filter(m -> m != null)
+                .map(m -> mapSingle(m, dbHealth, unmask))
+                .toList();
     }
 
     private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthStatus dbHealth, boolean unmask) {
@@ -47,30 +46,28 @@ public class DataSourceMapper {
         DatabaseProduct product = detectDatabaseProduct(metadata);
 
         return new DataSourceInfo(
-            metadata.getDataSourceName(),
-            product,
-            metadata.getDriverName(),
-            hosts,
-            metadata.getDatabaseName(),
-            null,
-            metadata.getUsername(),
-            null,
-            dbHealth,
-            maskedProperties
-        );
+                metadata.getDataSourceName(),
+                product,
+                metadata.getDriverName(),
+                hosts,
+                metadata.getDatabaseName(),
+                null,
+                metadata.getUsername(),
+                null,
+                dbHealth,
+                maskedProperties);
     }
 
     private static final List<Map.Entry<String, DatabaseProduct>> PRODUCT_KEYWORDS = List.of(
-        Map.entry("postgresql", DatabaseProduct.POSTGRESQL),
-        Map.entry("mysql", DatabaseProduct.MYSQL),
-        Map.entry("mariadb", DatabaseProduct.MARIADB),
-        Map.entry("h2", DatabaseProduct.H2),
-        Map.entry("oracle", DatabaseProduct.ORACLE),
-        Map.entry("sql server", DatabaseProduct.SQLSERVER),
-        Map.entry("sqlite", DatabaseProduct.SQLITE),
-        Map.entry("derby", DatabaseProduct.DERBY),
-        Map.entry("hsql", DatabaseProduct.HSQLDB)
-    );
+            Map.entry("postgresql", DatabaseProduct.POSTGRESQL),
+            Map.entry("mysql", DatabaseProduct.MYSQL),
+            Map.entry("mariadb", DatabaseProduct.MARIADB),
+            Map.entry("h2", DatabaseProduct.H2),
+            Map.entry("oracle", DatabaseProduct.ORACLE),
+            Map.entry("sql server", DatabaseProduct.SQLSERVER),
+            Map.entry("sqlite", DatabaseProduct.SQLITE),
+            Map.entry("derby", DatabaseProduct.DERBY),
+            Map.entry("hsql", DatabaseProduct.HSQLDB));
 
     private DatabaseProduct detectDatabaseProduct(DataSourceMetadata metadata) {
         String productName = metadata.getDatabaseProductName();

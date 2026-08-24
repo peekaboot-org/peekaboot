@@ -1,10 +1,10 @@
 package org.peekaboot.backend.domain.runtime;
 
-import java.util.List;
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
 import java.util.Locale;
+import org.junit.jupiter.api.Test;
 
 class ProcessInfoTest {
 
@@ -61,9 +61,8 @@ class ProcessInfoTest {
     @Test
     void current_firstParentShouldBeDirectParent() {
         ProcessInfo info = ProcessInfo.current();
-        long expectedParentPid = ProcessHandle.current().parent()
-            .map(ProcessHandle::pid)
-            .orElse(-1L);
+        long expectedParentPid =
+                ProcessHandle.current().parent().map(ProcessHandle::pid).orElse(-1L);
         if (expectedParentPid > 0) {
             assertThat(info.parentProcesses().get(0).pid()).isEqualTo(expectedParentPid);
         }
@@ -71,10 +70,8 @@ class ProcessInfoTest {
 
     @Test
     void of_shouldCreateWithExplicitValues() {
-        List<ProcessInfo.ParentProcess> parents = List.of(
-            new ProcessInfo.ParentProcess(100L, "bash"),
-            new ProcessInfo.ParentProcess(1L, "init")
-        );
+        List<ProcessInfo.ParentProcess> parents =
+                List.of(new ProcessInfo.ParentProcess(100L, "bash"), new ProcessInfo.ParentProcess(1L, "init"));
         ProcessInfo info = ProcessInfo.of("testuser", "1000", "1000", 42L, parents);
         assertThat(info.username()).isEqualTo("testuser");
         assertThat(info.uid()).isEqualTo("1000");

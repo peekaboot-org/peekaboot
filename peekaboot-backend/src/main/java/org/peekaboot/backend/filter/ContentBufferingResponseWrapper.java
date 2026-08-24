@@ -4,7 +4,6 @@ import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -88,7 +87,8 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         if (writer == null) {
             String encoding = getCharacterEncoding();
             Charset charset = encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
-            writer = new PrintWriter(new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset)));
+            writer = new PrintWriter(
+                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset)));
         }
         return writer;
     }

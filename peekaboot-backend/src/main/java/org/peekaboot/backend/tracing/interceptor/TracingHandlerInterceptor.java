@@ -21,7 +21,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(TracingHandlerInterceptor.class);
 
-    private static final String HANDLER_OBSERVATION_ATTR = TracingHandlerInterceptor.class.getName() + ".handlerObservation";
+    private static final String HANDLER_OBSERVATION_ATTR =
+            TracingHandlerInterceptor.class.getName() + ".handlerObservation";
     private static final String HANDLER_SCOPE_ATTR = TracingHandlerInterceptor.class.getName() + ".handlerScope";
     private static final String VIEW_OBSERVATION_ATTR = TracingHandlerInterceptor.class.getName() + ".viewObservation";
     private static final String VIEW_SCOPE_ATTR = TracingHandlerInterceptor.class.getName() + ".viewScope";
@@ -58,7 +59,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     }
 
     @Override
-    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
+    public void postHandle(
+            HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
         if (FilterPathMatcher.shouldSkip(request.getRequestURI())) {
             return;
         }
@@ -80,14 +82,16 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     }
 
     @Override
-    public void afterConcurrentHandlingStarted(HttpServletRequest request, HttpServletResponse response, Object handler) {
+    public void afterConcurrentHandlingStarted(
+            HttpServletRequest request, HttpServletResponse response, Object handler) {
         // the handler returned but processing continues on another thread;
         // close the scope on this thread and end the handler span here
         stopHandlerObservation(request, null);
     }
 
     @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+    public void afterCompletion(
+            HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
         if (FilterPathMatcher.shouldSkip(request.getRequestURI())) {
             return;
         }
@@ -135,7 +139,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
     private String resolveHandlerName(Object handler) {
         if (handler instanceof HandlerMethod handlerMethod) {
-            return handlerMethod.getBeanType().getSimpleName() + "." + handlerMethod.getMethod().getName();
+            return handlerMethod.getBeanType().getSimpleName() + "."
+                    + handlerMethod.getMethod().getName();
         }
         return handler.getClass().getSimpleName();
     }
