@@ -284,7 +284,7 @@ hadn't reached the `TraceStore` yet.
      `{client, locale, timeZone, navigate, features}`, built by `main.js`'s
      `currentContext()`.
    - optionally `export function isAvailable(data, features) { ... }` — gates whether the
-     tab's strip button is shown at all (see `metrics.js`/`traces.js` for real examples
+     tab's strip button is shown at all (see `meters.js`/`traces.js` for real examples
      gating on a feature flag).
    - optionally `export function applyFilter(payload) { ... }` — lets another tab jump
      here with a pre-selected filter via `context.navigate(id, detail, payload)` (see
@@ -307,5 +307,5 @@ hadn't reached the `TraceStore` yet.
    never rendered or shown, whatever `TABS` says.
 
 (Verified against `overview.js` — `id`/`label`/`render(container, data, {locale,
-timeZone})` — and `traces.js`/`metrics.js`, which additionally export `isAvailable`;
+timeZone})` — and `traces.js`/`meters.js`, which additionally export `isAvailable`;
 `traces.js` also exports `applyFilter`.)

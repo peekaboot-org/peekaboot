@@ -107,5 +107,5 @@ fixture after the "Show secrets" control is clicked - see
 and isn't, and why.
 
 `docs/images/dashboard.png` at the product repo root is a byte-identical copy of this tool's
-`dashboard-dashboard-light.png` output, checked into the website repo's
+`dashboard-overview-light.png` output, checked into the website repo's
 `assets/img/screenshots/`. Regenerate both together when re-running this capture.

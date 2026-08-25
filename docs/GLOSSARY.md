@@ -178,7 +178,13 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 Development-time toolbar injected into HTML responses, showing trace data inline with the rendered page.
 
 ### Dashboard
-Standalone web UI at `/peekaboot/` showing application health, traces, and diagnostics.
+Standalone web UI at `/peekaboot/` showing application health, traces, and diagnostics, organized into tabs (Overview, Insights, Traces, Meters, Environment, Flyway, Loggers, Config, Scheduled Tasks). "Dashboard" always names the whole UI, never one tab.
+
+### Overview Tab
+The dashboard's landing tab: build/git/Spring/Java/OS/JVM info, the insights stat tiles, the DataSources grid, memory/storage usage meters, and the health banner. Not to be confused with the Insights tab below.
+
+### Insights
+Ambiguous outside context, so used narrowly here: as a tab name, "Insights" is the aggregated-metric-charts feature (`dashboard/tabs/insights.js`, backed by `/api/insights/*`). "Insights API"/"Insights Data" (see above) is the unrelated BFF pattern used throughout the backend to enrich raw trace data before it reaches the frontend.
 
 ### Trace Detail
 Detailed view of a single trace showing the full span tree with timing visualization.
