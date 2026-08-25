@@ -201,14 +201,25 @@ class InsightsSsePublisherTest {
     void queueOverflowWarnsOncePerEpisode() throws Exception {
         BlockingQueue<String> broadcasts = new LinkedBlockingQueue<>();
         AtomicReference<CountDownLatch> gate = new AtomicReference<>(new CountDownLatch(1));
+        AtomicReference<CountDownLatch> wedged = new AtomicReference<>(new CountDownLatch(1));
 
         // Wedging the dispatch loop at a gate we open and close is what makes an
-        // overflow episode reproducible: while the gate is shut nothing drains.
+        // overflow episode reproducible: while the gate is shut nothing drains. The
+        // `wedged` latch is the rendezvous that makes it DETERMINISTIC: flooding may
+        // only start once the dispatcher is provably parked at the gate - otherwise a
+        // poll landing mid-flood frees a slot, that offer succeeds, and the episode
+        // legitimately splits in two (observed as a flaky double warn on CI). The
+        // wedge signal reads the same gate instance it then awaits, so a broadcast
+        // slipping through a just-opened gate can never count down a fresh latch.
         InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
             @Override
             void broadcast(String eventName, String json) {
                 try {
-                    gate.get().await();
+                    CountDownLatch currentGate = gate.get();
+                    if (currentGate.getCount() > 0) {
+                        wedged.get().countDown();
+                    }
+                    currentGate.await();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return;
@@ -219,6 +230,10 @@ class InsightsSsePublisherTest {
         publisher.subscribe();
 
         try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
+            publisher.onTick(0, Map.of("a", 0.0), Map.of());
+            assertThat(wedged.get().await(5, TimeUnit.SECONDS))
+                    .as("dispatcher parked at the gate before the flood")
+                    .isTrue();
             flood(publisher);
             assertThat(overflowWarnings(logs))
                     .as("the first overflow episode warns")
@@ -233,7 +248,16 @@ class InsightsSsePublisherTest {
                         .isEqualTo("tick");
             }
 
+            // fresh wedge latch BEFORE the gate closes: any broadcast reading the new
+            // (closed) gate signals the new latch; one reading the old (open) gate
+            // sails through without touching it - no hang, no false rendezvous. The
+            // remaining ~56 undrained backlog events guarantee something arrives to
+            // park at the closed gate without another tick.
+            wedged.set(new CountDownLatch(1));
             gate.set(new CountDownLatch(1));
+            assertThat(wedged.get().await(5, TimeUnit.SECONDS))
+                    .as("dispatcher parked again before the second flood")
+                    .isTrue();
             flood(publisher);
             assertThat(overflowWarnings(logs))
                     .as("a second episode is not silent")
