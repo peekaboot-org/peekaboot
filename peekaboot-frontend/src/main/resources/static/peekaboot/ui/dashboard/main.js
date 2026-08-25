@@ -12,18 +12,18 @@ import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.
 import {formatDateTime} from '../shared/format.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
+import * as insights from './tabs/insights.js';
+import * as traces from './tabs/traces.js';
+import * as meters from './tabs/meters.js';
 import * as environment from './tabs/environment.js';
 import * as flyway from './tabs/flyway.js';
 import * as loggers from './tabs/loggers.js';
 import * as config from './tabs/config.js';
 import * as scheduledTasks from './tabs/scheduled-tasks.js';
-import * as metrics from './tabs/metrics.js';
-import * as insights from './tabs/insights.js';
-import * as traces from './tabs/traces.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview, environment, flyway, loggers, config, scheduledTasks, metrics, insights, traces];
+const TABS = [overview, insights, traces, meters, environment, flyway, loggers, config, scheduledTasks];
 const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
@@ -66,9 +66,9 @@ let unmaskRequested = false;
 
 function parseHash() {
     const hash = window.location.hash.slice(1);
-    if (!hash) return {tab: 'dashboard', detail: null};
+    if (!hash) return {tab: 'overview', detail: null};
     const parts = hash.split('/');
-    return {tab: parts[0] || 'dashboard', detail: parts[1] || null};
+    return {tab: parts[0] || 'overview', detail: parts[1] || null};
 }
 
 function setHash(tab, detail = null) {
@@ -141,11 +141,11 @@ function navigate(tabId, detail = null, payload = null) {
 /**
  * tabId comes straight from the URL hash (see handleHashChange) or from another tab
  * module's navigate() call - never trusted outright, so an unknown id (e.g. a stale
- * or hand-edited hash) falls back to the dashboard tab instead of leaving every panel
+ * or hand-edited hash) falls back to the overview tab instead of leaving every panel
  * hidden or the tab strip's selection pointing at nothing.
  */
 function resolveTabId(tabId) {
-    return TAB_IDS.includes(tabId) ? tabId : 'dashboard';
+    return TAB_IDS.includes(tabId) ? tabId : 'overview';
 }
 
 /** Toggles which `.pk-tab-panel` is visible - independent of the tab strip's own
@@ -167,7 +167,7 @@ function initTabs() {
         initial: initialTabId
     });
     // tabStrip's own initial select() is silent (button-only), so on a deep-linked
-    // boot (e.g. "#environment") the panel would otherwise stay on Dashboard until
+    // boot (e.g. "#environment") the panel would otherwise stay on Overview until
     // the deferred handleHashChange() below runs - a one-macrotask window where the
     // accessibility tree (aria-selected) and the visible panel disagree. Setting the
     // panel synchronously here keeps them atomic; handleHashChange() still runs to
@@ -178,7 +178,7 @@ function initTabs() {
 
     // Handle initial hash on page load
     const {tab} = parseHash();
-    if (tab !== 'dashboard') {
+    if (tab !== 'overview') {
         // Defer to allow the DOM (and the initial fetchData() call) to settle first
         setTimeout(() => handleHashChange(), 0);
     }
@@ -212,8 +212,8 @@ function toggleUnmask() {
 
 /**
  * Fetched once at boot, before the first fetchData() - feeds every registered tab's
- * (optional) isAvailable(data, features) check, which drives the traces/metrics tab
- * buttons (see traces.js/metrics.js's own isAvailable) once the first fetchData() ->
+ * (optional) isAvailable(data, features) check, which drives the traces/meters tab
+ * buttons (see traces.js/meters.js's own isAvailable) once the first fetchData() ->
  * renderData() cycle runs.
  */
 async function fetchFeatures() {
@@ -248,7 +248,7 @@ function renderData() {
 
 /**
  * Renders a single tab by id - used wherever a tab becomes newly active (tab-strip
- * click, hash-driven navigation) so that metrics.js/traces.js, which fetch their own
+ * click, hash-driven navigation) so that meters.js/traces.js, which fetch their own
  * data and skip that fetch while their container isn't visible (see their own doc
  * comments), get a render the moment they're switched to instead of waiting for the
  * next 30s auto-refresh cycle.

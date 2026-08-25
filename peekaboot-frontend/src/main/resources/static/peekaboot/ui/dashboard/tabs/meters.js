@@ -1,5 +1,5 @@
 /**
- * The "Metrics" tab: Micrometer meters, filterable by name or tag, each expandable to
+ * The "Meters" tab: Micrometer meters, filterable by name or tag, each expandable to
  * its measurements. Fetched from its own endpoint (not part of the main dashboard
  * payload). render() is called on every 30s auto-refresh cycle for every available tab
  * regardless of which is visible (see main.js's renderData()), so the actual network
@@ -11,8 +11,8 @@ import {groupList, expandedKeys, badge} from '../../shared/components.js';
 import {escapeHtml, highlightText} from '../../shared/markup.js';
 import {formatBytes} from '../../shared/format.js';
 
-export const id = 'metrics';
-export const label = 'Metrics';
+export const id = 'meters';
+export const label = 'Meters';
 
 let latestMetrics = null;
 
@@ -35,14 +35,14 @@ export function render(container, data, context) {
 }
 
 function wireFilter(container) {
-    const input = container.querySelector('#metrics-filter');
+    const input = container.querySelector('#meters-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
     input.addEventListener('input', () => renderList(input.value.trim()));
 }
 
 function currentFilterValue(container) {
-    return container.querySelector('#metrics-filter')?.value.trim() || '';
+    return container.querySelector('#meters-filter')?.value.trim() || '';
 }
 
 async function fetchAndRender() {
@@ -52,7 +52,7 @@ async function fetchAndRender() {
     // render() (and so this) again the instant this tab is switched to.
     if (!container.classList.contains('active')) return;
 
-    const listEl = container.querySelector('#metrics-list');
+    const listEl = container.querySelector('#meters-list');
     // Only show the loading state on the very first fetch - a background refresh of an
     // already-populated, currently visible list must not blank it for the round trip's
     // duration (renderList replaces the content once the response is in hand).
@@ -76,8 +76,8 @@ async function fetchAndRender() {
 function renderList(filterQuery) {
     const container = currentContainer;
     const context = currentContext;
-    const listEl = container.querySelector('#metrics-list');
-    const countEl = container.querySelector('#metrics-count');
+    const listEl = container.querySelector('#meters-list');
+    const countEl = container.querySelector('#meters-count');
     // Must run before the container is cleared below - see environment.js.
     const expanded = expandedKeys(listEl);
     listEl.innerHTML = '';

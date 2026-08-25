@@ -36,13 +36,13 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
-     * The insights stat tiles sit on the Dashboard tab, filled from /api/insights/config
+     * The insights stat tiles sit on the Overview tab, filled from /api/insights/config
      * on the dashboard's own 30s cycle - no SSE and no visit to the Insights tab. The
      * heap/disk/pool tiles were dropped rather than moved: the Memory & Storage meters
      * and the DataSources grid on this very page already carry those numbers.
      */
     @Test
-    void dashboardShowsTheInsightStatTiles() {
+    void overviewShowsTheInsightStatTiles() {
         openDashboard();
         page.waitForSelector("#insights-tiles .pk-insight-tile[data-tile-id='uptime']");
 
@@ -66,7 +66,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
 
         String selected =
                 (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
-        assertThat(selected).isEqualTo("dashboard");
+        assertThat(selected).isEqualTo("overview");
     }
 
     @Test
@@ -89,19 +89,22 @@ class DashboardTabsTest extends PlaywrightTestBase {
     @Test
     void arrowKeysMoveBetweenTabs() {
         openDashboard();
-        page.focus(".pk-tab[data-tab='dashboard']");
+        page.focus(".pk-tab[data-tab='overview']");
 
         page.keyboard().press("ArrowRight");
 
-        assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("environment");
+        // Insights is the very next tab button after Overview (see index.html's tab
+        // order), and is unhidden here since the test profile configures the insights
+        // feature (see dashboardShowsTheInsightStatTiles's own comment for the pattern).
+        assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("insights");
         assertThat(page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
-                .isEqualTo("environment");
+                .isEqualTo("insights");
     }
 
     @Test
     void arrowKeysWrapAtTheEnds() {
         openDashboard();
-        page.focus(".pk-tab[data-tab='dashboard']");
+        page.focus(".pk-tab[data-tab='overview']");
 
         page.keyboard().press("ArrowLeft");
 
@@ -113,7 +116,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
     @Test
     void homeAndEndJumpToTheFirstAndLastVisibleTab() {
         openDashboard();
-        page.focus(".pk-tab[data-tab='dashboard']");
+        page.focus(".pk-tab[data-tab='overview']");
 
         page.keyboard().press("End");
         Object lastVisible = page.evaluate(
@@ -121,7 +124,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo(lastVisible);
 
         page.keyboard().press("Home");
-        assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("dashboard");
+        assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("overview");
     }
 
     @Test
@@ -138,7 +141,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
-     * The dashboard hides the traces/metrics tabs (and others) until /api/features
+     * The dashboard hides the traces/meters tabs (and others) until /api/features
      * says they're available - arrow navigation must skip anything not currently
      * visible, not just walk DOM order. Hides Environment directly (rather than
      * depending on which tabs the test profile's real data happens to unhide) so
@@ -148,7 +151,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
     void hiddenTabsAreSkippedByArrowNavigation() {
         openDashboard();
         page.evaluate("() => document.querySelector('.pk-tab[data-tab=\"environment\"]').classList.add('hidden')");
-        page.focus(".pk-tab[data-tab='dashboard']");
+        page.focus(".pk-tab[data-tab='overview']");
 
         page.keyboard().press("ArrowRight");
 
@@ -156,7 +159,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
                 (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
         Object expectedNext = page.evaluate(
                 "() => { const visible = [...document.querySelectorAll('.pk-tab')].filter(t => t.offsetParent !== null);"
-                        + " const idx = visible.findIndex(t => t.dataset.tab === 'dashboard');"
+                        + " const idx = visible.findIndex(t => t.dataset.tab === 'overview');"
                         + " return visible[(idx + 1) % visible.length].dataset.tab; }");
 
         assertThat(selected).isNotEqualTo("environment");
@@ -177,7 +180,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         String snapshot = tablist.ariaSnapshot();
 
         assertThat(snapshot).contains("tablist");
-        assertThat(snapshot).contains("\"Dashboard\" [selected]");
+        assertThat(snapshot).contains("\"Overview\" [selected]");
         assertThat(snapshot).contains("\"Environment\"");
     }
 
@@ -232,7 +235,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
-     * main.js fetches /api/features once at boot and unhides the traces/metrics tab
+     * main.js fetches /api/features once at boot and unhides the traces/meters tab
      * buttons directly from the result - the only place those two buttons are ever
      * unhidden, since neither has a tab module registered yet (Task 15). Tracing is
      * enabled in the test profile (see TraceOverlayTest/ToolbarTest, which depend on
@@ -353,15 +356,15 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     @Test
-    void metricsTabFiltersAndCounts() {
+    void metersTabFiltersAndCounts() {
         openDashboard();
-        page.click(".pk-tab[data-tab='metrics']");
-        page.waitForSelector("#metrics-list .pk-group");
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForSelector("#meters-list .pk-group");
 
-        page.fill("#metrics-filter", "jvm.memory");
-        page.waitForFunction("() => document.querySelector('#metrics-count').textContent.includes('/')");
+        page.fill("#meters-filter", "jvm.memory");
+        page.waitForFunction("() => document.querySelector('#meters-count').textContent.includes('/')");
 
-        assertThat(page.textContent("#metrics-count")).contains("/");
+        assertThat(page.textContent("#meters-count")).contains("/");
     }
 
     /**
