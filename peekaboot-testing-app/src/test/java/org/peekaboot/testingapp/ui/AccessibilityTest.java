@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ReducedMotion;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -49,19 +50,31 @@ class AccessibilityTest extends PlaywrightTestBase {
     }
 
     /**
-     * The Insights toolbar's level selector is a bare {@code <select>}: with no label of
-     * its own a screen reader announces it as its current value and nothing more. The
-     * per-panel selectors next to it are labelled by their panel title.
+     * The Insights toolbar's global interval switch is a radio-like button group: the
+     * group carries the name ("Aggregation level"), each segment's own name is its
+     * interval, and aria-pressed - not just a background colour - says which one is on.
+     * The per-panel selectors next to it are labelled by their panel title, and the
+     * reset button beside those is icon-only, so it needs a label of its own.
      */
     @Test
-    void insightsLevelSelectorsAreLabelled() {
+    void insightsLevelControlsAreLabelled() {
         openDashboard();
         page.click("#insights-tab-btn");
-        page.waitForSelector("#insights-level");
+        page.waitForSelector("#insights-level .pk-insight-level");
 
-        assertThat(page.getAttribute("#insights-level", "aria-label")).isEqualTo("Aggregation level for all panels");
+        assertThat(page.getAttribute("#insights-level", "role")).isEqualTo("group");
+        assertThat(page.getAttribute("#insights-level", "aria-label")).isEqualTo("Aggregation level");
+        assertThat(page.locator("#insights-level .pk-insight-level[aria-pressed]")
+                        .count())
+                .isEqualTo(3);
+        Object names = page.evaluate("() => [...document.querySelectorAll('#insights-level .pk-insight-level')]"
+                + ".map(el => el.textContent.trim()).filter(Boolean)");
+        assertThat((List<?>) names).hasSize(3);
+
         assertThat(page.getAttribute("#insights-panels .pk-insight-panel-level", "aria-label"))
                 .endsWith("aggregation level");
+        assertThat(page.getAttribute("#insights-panels .pk-insight-panel-reset", "aria-label"))
+                .endsWith("to global interval");
 
         closeLiveStreams(); // the only test here that opens the Insights tab's SSE stream
     }

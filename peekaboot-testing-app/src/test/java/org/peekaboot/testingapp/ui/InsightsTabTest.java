@@ -60,15 +60,22 @@ class InsightsTabTest extends PlaywrightTestBase {
     }
 
     @Test
-    void levelSelectorListsConfiguredLevels() {
+    void levelSwitchOffersOneButtonPerConfiguredLevel() {
         openInsights();
 
-        Object options = page.evaluate(
-                "() => [...document.querySelectorAll('#insights-level option')].map(el => el.textContent)");
+        Object labels = page.evaluate("() => [...document.querySelectorAll('#insights-level .pk-insight-level')]"
+                + ".map(el => el.textContent.trim())");
         @SuppressWarnings("unchecked")
-        List<String> labels = (List<String>) options;
+        List<String> intervals = (List<String>) labels;
 
-        assertThat(labels).hasSize(3);
+        // the test profile's own levels (application-test.yml): 250ms / 1500ms / 9s
+        assertThat(intervals).containsExactly("250ms", "1.5s", "9s");
+        // radio-like: exactly one segment is pressed, and it is the first configured level
+        assertThat(page.locator("#insights-level .pk-insight-level[aria-pressed='true']")
+                        .count())
+                .isEqualTo(1);
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
     }
 
     @Test
@@ -133,12 +140,46 @@ class InsightsTabTest extends PlaywrightTestBase {
         openInsights();
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
 
-        Request request =
-                page.waitForRequest("**/api/insights/data?level=1", () -> page.selectOption("#insights-level", "1"));
+        Request request = page.waitForRequest(
+                "**/api/insights/data?level=1", () -> page.click("#insights-level .pk-insight-level[data-level='1']"));
 
         assertThat(request.url()).contains("level=1");
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='1']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("false");
         // the rebuilt chart (min/max bands + avg) must come back up on the new level
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+    }
+
+    /**
+     * A panel charting something other than the global interval is marked as such and
+     * offers a way back; resetting must actually re-fetch the global level and drop the
+     * marking, not just relabel the select.
+     */
+    @Test
+    void perPanelOverrideIsMarkedAndResettable() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        page.waitForSelector(cpu + " canvas");
+        assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isZero();
+        assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isFalse();
+
+        page.waitForRequest(
+                "**/api/insights/data?level=1", () -> page.selectOption(cpu + " .pk-insight-panel-level", "1"));
+
+        assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isEqualTo(1);
+        assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isTrue();
+        // a per-panel override leaves the global switch where it was
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
+
+        page.click(cpu + " .pk-insight-panel-reset");
+
+        page.waitForSelector(cpu + " canvas");
+        assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isZero();
+        assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isFalse();
+        assertThat(page.inputValue(cpu + " .pk-insight-panel-level")).isEqualTo("0");
     }
 
     @Test
@@ -147,13 +188,11 @@ class InsightsTabTest extends PlaywrightTestBase {
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
 
         // both switches must land inside the first rebuild's data fetch - dispatched in
-        // one task, since two selectOption round trips can straddle it instead
-        page.evaluate("() => {"
-                + "const select = document.querySelector('#insights-level');"
-                + "for (const level of ['1', '0']) {"
-                + "  select.value = level;"
-                + "  select.dispatchEvent(new Event('change'));"
-                + "}}");
+        // one task, since two real clicks can straddle it instead
+        page.evaluate("() => [...document.querySelectorAll('#insights-level .pk-insight-level')]"
+                + ".filter(button => ['1', '0'].includes(button.dataset.level))"
+                + ".sort((a, b) => b.dataset.level - a.dataset.level)"
+                + ".forEach(button => button.click())");
 
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
     }

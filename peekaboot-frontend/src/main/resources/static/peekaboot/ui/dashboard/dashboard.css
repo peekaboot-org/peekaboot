@@ -487,11 +487,23 @@
    library); only the legend is re-tuned here to sit in the card's type scale.
    .pk-blink is retriggered on every panel readout an SSE tick actually changed. */
 #insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
+/* The global interval switch: one button per configured level, active state from the
+   shared .pk-btn[aria-pressed="true"] rule. Segments touch, so only the outer corners
+   are rounded and shared borders are collapsed. */
+.pk-insight-levels { display: flex; flex-wrap: wrap; }
+.pk-insight-level { border-radius: 0; }
+.pk-insight-level + .pk-insight-level { border-left-width: 0; }
+.pk-insight-level:first-child { border-top-left-radius: var(--pk-radius); border-bottom-left-radius: var(--pk-radius); }
+.pk-insight-level:last-child { border-top-right-radius: var(--pk-radius); border-bottom-right-radius: var(--pk-radius); }
 #insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--pk-space-md); }
 .pk-insight-panel { border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); padding: var(--pk-space-md); background: var(--pk-bg); }
 .pk-insight-panel__header { display: flex; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
 .pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
 .pk-insight-current { margin-left: auto; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
+/* A panel charting something other than the global interval says so: its select picks up
+   the accent ink used for text/borders on --pk-bg, and a reset button appears beside it. */
+.pk-insight-panel--overridden .pk-insight-panel-level { border-color: var(--pk-primary-text); box-shadow: inset 0 0 0 1px var(--pk-primary-text); }
+.pk-insight-panel-reset { width: 24px; height: 24px; color: var(--pk-primary-text); }
 .pk-insight-chart { min-height: 180px; }
 /* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */
 .pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }

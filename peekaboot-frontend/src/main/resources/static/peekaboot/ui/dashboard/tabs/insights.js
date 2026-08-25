@@ -1,6 +1,6 @@
 /**
  * The "Insights" tab: aggregated metric charts (uPlot) with a global
- * aggregation-level selector and SSE-driven live updates. All grouping and
+ * aggregation-level switch and SSE-driven live updates. All grouping and
  * ordering comes from /api/insights/config - this module renders it verbatim.
  * The config's stat tiles are rendered by the Dashboard tab (see overview.js),
  * so the `tiles` payload the tick events carry is ignored here.
@@ -23,6 +23,12 @@ export const label = 'Insights';
 
 const STAT_NAMES = ['min', 'max', 'avg', 'median', 'p90', 'p95', 'p99'];
 const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
+const OVERRIDDEN_PANEL_CLASS = 'pk-insight-panel--overridden';
+/** "Reset to global interval" - a counter-clockwise arrow, drawn in the button's own ink. */
+const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
+</svg>`;
 
 let initialized = false;
 let config = null;          // /config response
@@ -39,6 +45,9 @@ let sizeObserver = null;
 let themeObserver = null;
 let frame = null;
 let showPercentiles = false;
+// the level every panel charts at unless pinned to one of its own (see isOverridden)
+let globalLevel = 0;
+let levelGroup = null;
 
 export function isAvailable(data, features) {
     return Boolean(features?.insights);
@@ -59,6 +68,7 @@ async function init(container, context) {
         // de-duplicates per path - a superseded call resolves to null here, and
         // the next refresh cycle retries from scratch
         if (!config) throw new Error('insights config request was superseded');
+        globalLevel = config.levels[0].index;
         renderToolbar(container);
         renderPanels(container);
         initPanels(container);
@@ -87,7 +97,7 @@ function teardown() {
     chartObserver?.disconnect();
     sizeObserver?.disconnect();
     themeObserver?.disconnect();
-    chartObserver = sizeObserver = themeObserver = null;
+    chartObserver = sizeObserver = themeObserver = levelGroup = null;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     panels.forEach(destroyChart);
@@ -115,25 +125,53 @@ function levelOptionsHtml() {
 
 // --- Toolbar ----------------------------------------------------------------------------
 
+/**
+ * The global switch is a radio-like button group rather than a <select>: there are
+ * only ever a handful of levels and every one of them is one click away, instead of
+ * two plus a scan of a dropdown.
+ */
+function levelButtonsHtml() {
+    return config.levels.map(level => `
+        <button type="button" class="pk-btn pk-btn--bucket pk-insight-level" data-level="${level.index}"
+                aria-pressed="${level.index === globalLevel}"
+        >${escapeHtml(formatInterval(level.intervalMs))}</button>
+    `).join('');
+}
+
 function renderToolbar(container) {
     const toolbar = container.querySelector('#insights-toolbar');
     toolbar.innerHTML = `
-        <select id="insights-level" aria-label="Aggregation level for all panels">${levelOptionsHtml()}</select>
+        <div id="insights-level" class="pk-insight-levels" role="group"
+             aria-label="Aggregation level">${levelButtonsHtml()}</div>
         <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
     `;
 
-    toolbar.querySelector('#insights-level').addEventListener('change', event => {
-        const level = Number(event.target.value);
-        panels.forEach(panel => {
-            if (panel.overridden) return;
-            panel.levelSelect.value = String(level);
-            setPanelLevel(panel, level);
-        });
+    levelGroup = toolbar.querySelector('#insights-level');
+    levelGroup.addEventListener('click', event => {
+        const button = event.target.closest('.pk-insight-level');
+        if (button) setGlobalLevel(Number(button.dataset.level));
     });
 
     toolbar.querySelector('#insights-percentiles').addEventListener('change', event => {
         showPercentiles = event.target.checked;
         panels.forEach(panel => panel.chart?.setPercentiles(showPercentiles));
+    });
+}
+
+/**
+ * Switches every panel that was still following the global level, and leaves the
+ * pinned ones (see isOverridden) alone. The previous global level is what identifies
+ * a follower, so it has to be read before the new one is stored.
+ */
+function setGlobalLevel(level) {
+    if (globalLevel === level) return;
+    const previous = globalLevel;
+    globalLevel = level;
+    levelGroup.querySelectorAll('.pk-insight-level').forEach(button =>
+            button.setAttribute('aria-pressed', String(Number(button.dataset.level) === level)));
+    panels.forEach(panel => {
+        if (panel.level === previous) selectPanelLevel(panel, level);
+        markOverride(panel);
     });
 }
 
@@ -161,6 +199,9 @@ function renderPanels(container) {
                 <span class="pk-insight-current"></span>
                 <select class="pk-insight-panel-level"
                         aria-label="${escapeHtml(panel.title)} aggregation level">${levelOptionsHtml()}</select>
+                <button type="button" class="pk-btn pk-btn--icon pk-insight-panel-reset hidden"
+                        title="Reset to global interval"
+                        aria-label="Reset ${escapeHtml(panel.title)} to global interval">${RESET_ICON}</button>
             </div>
             <div class="pk-insight-chart"></div>
         </div>
@@ -174,9 +215,15 @@ function initPanels(container) {
         panels.set(definition.id, panel);
 
         panel.levelSelect.value = String(panel.level);
+        markOverride(panel);
+
         panel.levelSelect.addEventListener('change', event => {
-            panel.overridden = true;
             setPanelLevel(panel, Number(event.target.value));
+            markOverride(panel);
+        });
+        panel.resetButton.addEventListener('click', () => {
+            selectPanelLevel(panel, globalLevel);
+            markOverride(panel);
         });
     });
 }
@@ -188,10 +235,10 @@ function createPanelState(definition, element) {
         mount: element.querySelector('.pk-insight-chart'),
         readout: element.querySelector('.pk-insight-current'),
         levelSelect: element.querySelector('.pk-insight-panel-level'),
-        // a panel-level in the config is an initial override: the global selector
-        // leaves it alone until its own selector has been touched
-        level: definition.level ?? config.levels[0].index,
-        overridden: definition.level != null,
+        resetButton: element.querySelector('.pk-insight-panel-reset'),
+        // a panel-level in the config is an initial override: it already differs
+        // from the global level, so the global switch leaves it alone from the start
+        level: definition.level ?? globalLevel,
         chart: null,
         creating: false,
         // set while the card shows "no data" instead of a chart (see hasData)
@@ -507,6 +554,28 @@ function setPanelLevel(panel, level) {
     if (panel.level === level) return;
     panel.level = level;
     rebuildChart(panel);
+}
+
+/** setPanelLevel plus the select that has to show it - the panel did not do the asking. */
+function selectPanelLevel(panel, level) {
+    panel.levelSelect.value = String(level);
+    setPanelLevel(panel, level);
+}
+
+/**
+ * A panel is pinned exactly while its level differs from the global one - there is no
+ * separate flag, so a pinned panel that the global switch catches up with simply falls
+ * back in line rather than staying silently pinned to a level it already shows.
+ */
+function isOverridden(panel) {
+    return panel.level !== globalLevel;
+}
+
+/** Tints the panel's level select and reveals its reset button while the panel is pinned. */
+function markOverride(panel) {
+    const overridden = isOverridden(panel);
+    panel.element.classList.toggle(OVERRIDDEN_PANEL_CLASS, overridden);
+    panel.resetButton.classList.toggle('hidden', !overridden);
 }
 
 // --- Live updates ---------------------------------------------------------------------------
