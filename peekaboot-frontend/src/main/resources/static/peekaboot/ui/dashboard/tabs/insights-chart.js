@@ -122,8 +122,17 @@ function valueAxis(scale, unit, side, colors) {
  * with the average on top, plus p90/p95/p99 hairlines the caller toggles as a
  * group. Bars are a level-0 shape only - a bar cannot carry a min/max band, so an
  * aggregated bars/bars-line panel falls back to lines.
+ *
+ * A drag-selection on the x-axis calls back into {@code onZoom(min, max)} with the
+ * selected window in uPlot's time scale (epoch seconds, the same unit on every
+ * chart regardless of level - see toData/timestamps below) instead of zooming this
+ * chart alone: the caller is the one that knows about every other panel and pins
+ * them all to the same window. Native zoom-on-drag is therefore switched off
+ * (cursor.drag.setScale: false) so this hook is the only thing that ever moves the
+ * x scale. A double-click - uPlot's own built-in gesture for undoing a zoom -
+ * likewise calls back into {@code onZoomReset()} rather than resetting just itself.
  */
-export function createChart({panel, mount, level, snapshot, showPercentiles}) {
+export function createChart({panel, mount, level, snapshot, showPercentiles, onZoom, onZoomReset}) {
     const colors = themeColors();
     const columns = [];                        // data column i feeds uPlot series i + 1
     const series = [{}];                       // [0] is the x series
@@ -193,20 +202,44 @@ export function createChart({panel, mount, level, snapshot, showPercentiles}) {
         // values live in the panel header readout and the axis labels; a live legend
         // would repeat them per series and, at level >= 1, dwarf the card
         legend: {show: true, live: false},
-        cursor: {points: {show: false}}
+        cursor: {
+            points: {show: false},
+            // x-only drag, and uPlot must not zoom this chart on its own - the
+            // setSelect hook below reports the selection to the caller instead, which
+            // applies it to every chart (including this one)
+            drag: {x: true, y: false, setScale: false}
+        },
+        hooks: {
+            setSelect: [u => {
+                if (u.select.width === 0) return;
+                const min = u.posToVal(u.select.left, 'x');
+                const max = u.posToVal(u.select.left + u.select.width, 'x');
+                // clears the drag rectangle without re-firing this hook (fireHook=false)
+                u.setSelect({left: 0, top: 0, width: 0, height: 0}, false);
+                onZoom(min, max);
+            }]
+        }
     };
 
     const plot = new window.uPlot(options, toData(columns, snapshot), mount);
+    // uPlot's own reset-on-double-click gesture, redirected to reset every chart
+    plot.over.ondblclick = () => onZoomReset();
 
     return {
-        setData(next) {
-            plot.setData(toData(columns, next));
+        setData(next, resetScales = true) {
+            plot.setData(toData(columns, next), resetScales);
         },
         setSize(width) {
             plot.setSize({width: Math.max(width, MIN_CHART_WIDTH), height: CHART_HEIGHT});
         },
         setPercentiles(show) {
             percentileIndices.forEach(index => plot.setSeries(index, {show}));
+        },
+        setXScale(min, max) {
+            plot.setScale('x', {min, max});
+        },
+        resetXScale() {
+            plot.setScale('x', {min: null, max: null});
         },
         destroy() {
             plot.destroy();

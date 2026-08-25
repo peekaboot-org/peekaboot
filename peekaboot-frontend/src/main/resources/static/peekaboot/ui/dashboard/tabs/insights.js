@@ -48,6 +48,13 @@ let showPercentiles = false;
 // the level every panel charts at unless pinned to one of its own (see isOverridden)
 let globalLevel = 0;
 let levelGroup = null;
+// the x-axis window a drag-select zoom pinned every chart to, in uPlot's time scale
+// (epoch seconds) - null while every chart is auto-fitting its own data as usual
+let zoomWindow = null;
+let zoomResetButton = null;
+// re-entrancy guard: applying a zoom/reset to every other chart must not itself be
+// treated as a new zoom to broadcast (see handleZoom/handleZoomReset)
+let applyingZoom = false;
 
 export function isAvailable(data, features) {
     return Boolean(features?.insights);
@@ -97,7 +104,9 @@ function teardown() {
     chartObserver?.disconnect();
     sizeObserver?.disconnect();
     themeObserver?.disconnect();
-    chartObserver = sizeObserver = themeObserver = levelGroup = null;
+    chartObserver = sizeObserver = themeObserver = levelGroup = zoomResetButton = null;
+    zoomWindow = null;
+    applyingZoom = false;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     panels.forEach(destroyChart);
@@ -117,32 +126,35 @@ function formatInterval(ms) {
     return `${short(ms / 3600000)}h`;
 }
 
-function levelOptionsHtml() {
-    return config.levels
-        .map(level => `<option value="${level.index}">${escapeHtml(formatInterval(level.intervalMs))}</option>`)
-        .join('');
-}
-
 // --- Toolbar ----------------------------------------------------------------------------
 
 /**
- * The global switch is a radio-like button group rather than a <select>: there are
- * only ever a handful of levels and every one of them is one click away, instead of
- * two plus a scan of a dropdown.
+ * A radio-like button group rather than a <select>: there are only ever a handful of
+ * levels and every one of them is one click away, instead of two plus a scan of a
+ * dropdown. Shared by the toolbar's own switch and every panel's - `buttonClass` is
+ * what tells them apart visually (the toolbar's carries more weight; a panel's sits in
+ * a card header and stays subtler).
  */
-function levelButtonsHtml() {
+function levelButtonsHtml(activeLevel, buttonClass) {
     return config.levels.map(level => `
-        <button type="button" class="pk-btn pk-btn--bucket pk-insight-level" data-level="${level.index}"
-                aria-pressed="${level.index === globalLevel}"
+        <button type="button" class="pk-btn ${buttonClass} pk-insight-level" data-level="${level.index}"
+                aria-pressed="${level.index === activeLevel}"
         >${escapeHtml(formatInterval(level.intervalMs))}</button>
     `).join('');
+}
+
+function updateLevelButtons(group, activeLevel) {
+    group.querySelectorAll('.pk-insight-level').forEach(button =>
+            button.setAttribute('aria-pressed', String(Number(button.dataset.level) === activeLevel)));
 }
 
 function renderToolbar(container) {
     const toolbar = container.querySelector('#insights-toolbar');
     toolbar.innerHTML = `
         <div id="insights-level" class="pk-insight-levels" role="group"
-             aria-label="Aggregation level">${levelButtonsHtml()}</div>
+             aria-label="Aggregation level">${levelButtonsHtml(globalLevel, 'pk-btn--bucket')}</div>
+        <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
+                title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
         <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
     `;
 
@@ -151,6 +163,9 @@ function renderToolbar(container) {
         const button = event.target.closest('.pk-insight-level');
         if (button) setGlobalLevel(Number(button.dataset.level));
     });
+
+    zoomResetButton = toolbar.querySelector('#insights-zoom-reset');
+    zoomResetButton.addEventListener('click', handleZoomReset);
 
     toolbar.querySelector('#insights-percentiles').addEventListener('change', event => {
         showPercentiles = event.target.checked;
@@ -167,8 +182,7 @@ function setGlobalLevel(level) {
     if (globalLevel === level) return;
     const previous = globalLevel;
     globalLevel = level;
-    levelGroup.querySelectorAll('.pk-insight-level').forEach(button =>
-            button.setAttribute('aria-pressed', String(Number(button.dataset.level) === level)));
+    updateLevelButtons(levelGroup, level);
     panels.forEach(panel => {
         if (panel.level === previous) selectPanelLevel(panel, level);
         markOverride(panel);
@@ -197,8 +211,9 @@ function renderPanels(container) {
             <div class="pk-insight-panel__header">
                 <h3 class="pk-insight-panel__title">${escapeHtml(panel.title)}</h3>
                 <span class="pk-insight-current"></span>
-                <select class="pk-insight-panel-level"
-                        aria-label="${escapeHtml(panel.title)} aggregation level">${levelOptionsHtml()}</select>
+                <div class="pk-insight-levels pk-insight-panel-levels" role="group"
+                     aria-label="${escapeHtml(panel.title)} aggregation level"
+                >${levelButtonsHtml(panel.level ?? globalLevel, 'pk-btn--small')}</div>
                 <button type="button" class="pk-btn pk-btn--icon pk-insight-panel-reset hidden"
                         title="Reset to global interval"
                         aria-label="Reset ${escapeHtml(panel.title)} to global interval">${RESET_ICON}</button>
@@ -214,11 +229,13 @@ function initPanels(container) {
         const panel = createPanelState(definition, element);
         panels.set(definition.id, panel);
 
-        panel.levelSelect.value = String(panel.level);
+        updateLevelButtons(panel.levelGroup, panel.level);
         markOverride(panel);
 
-        panel.levelSelect.addEventListener('change', event => {
-            setPanelLevel(panel, Number(event.target.value));
+        panel.levelGroup.addEventListener('click', event => {
+            const button = event.target.closest('.pk-insight-level');
+            if (!button) return;
+            selectPanelLevel(panel, Number(button.dataset.level));
             markOverride(panel);
         });
         panel.resetButton.addEventListener('click', () => {
@@ -234,7 +251,7 @@ function createPanelState(definition, element) {
         element,
         mount: element.querySelector('.pk-insight-chart'),
         readout: element.querySelector('.pk-insight-current'),
-        levelSelect: element.querySelector('.pk-insight-panel-level'),
+        levelGroup: element.querySelector('.pk-insight-panel-levels'),
         resetButton: element.querySelector('.pk-insight-panel-reset'),
         // a panel-level in the config is an initial override: it already differs
         // from the global level, so the global switch leaves it alone from the start
@@ -487,8 +504,13 @@ async function createPanelChart(panel) {
 
     try {
         panel.chart = createChart({
-            panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles
+            panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles,
+            onZoom: handleZoom, onZoomReset: handleZoomReset
         });
+        // a chart built while a zoom is already active (first scroll into view, or a
+        // level/theme rebuild) starts life as a brand-new uPlot instance and has to be
+        // brought back in line with what every other chart is already showing
+        if (zoomWindow) panel.chart.setXScale(zoomWindow.min, zoomWindow.max);
         panel.dirty = false;
     } catch (error) {
         console.warn(`Insights panel "${panel.definition.id}" could not be charted:`, error);
@@ -538,7 +560,9 @@ function destroyChart(panel) {
 
 function redraw(panel) {
     const snapshot = levels.get(panel.level);
-    if (snapshot) panel.chart.setData(snapshot);
+    // a live tick/rollup must not snap a manually zoomed chart back to auto-fit; uPlot
+    // only re-ranges the x scale on setData when resetScales is left at its default
+    if (snapshot) panel.chart.setData(snapshot, !zoomWindow);
     panel.dirty = false;
 }
 
@@ -556,9 +580,9 @@ function setPanelLevel(panel, level) {
     rebuildChart(panel);
 }
 
-/** setPanelLevel plus the select that has to show it - the panel did not do the asking. */
+/** setPanelLevel plus the button group that has to show it - the panel did not do the asking. */
 function selectPanelLevel(panel, level) {
-    panel.levelSelect.value = String(level);
+    updateLevelButtons(panel.levelGroup, level);
     setPanelLevel(panel, level);
 }
 
@@ -571,11 +595,59 @@ function isOverridden(panel) {
     return panel.level !== globalLevel;
 }
 
-/** Tints the panel's level select and reveals its reset button while the panel is pinned. */
+/** Highlights the panel's own level group and reveals its reset button while the panel is pinned. */
 function markOverride(panel) {
     const overridden = isOverridden(panel);
     panel.element.classList.toggle(OVERRIDDEN_PANEL_CLASS, overridden);
     panel.resetButton.classList.toggle('hidden', !overridden);
+}
+
+// --- Zoom -------------------------------------------------------------------------------
+
+/**
+ * A drag-select on any one chart's x-axis (see insights-chart.js's setSelect hook)
+ * pins every chart - whatever level it charts at - to the same absolute epoch window;
+ * uPlot's x scale is seconds-since-epoch on every chart regardless of level, so the
+ * same {min, max} pair applies unchanged everywhere.
+ *
+ * The window is also stamped onto each panel's own element as data-zoom-min/-max: the
+ * charts themselves are canvases with no DOM state to inspect, and this is the cheap,
+ * deterministic hook the Playwright suite reads to assert every panel really landed on
+ * the same window without reaching into uPlot internals.
+ */
+function handleZoom(min, max) {
+    if (applyingZoom) return;
+    applyingZoom = true;
+    zoomWindow = {min, max};
+    panels.forEach(panel => {
+        panel.chart?.setXScale(min, max);
+        panel.element.dataset.zoomMin = String(min);
+        panel.element.dataset.zoomMax = String(max);
+    });
+    applyingZoom = false;
+    updateZoomResetVisibility();
+}
+
+/**
+ * Restores every chart to auto-fitting its own data, live-following new ticks again.
+ * Wired to the toolbar's reset control and to every chart's own double-click (see
+ * insights-chart.js) - either one un-zooms all of them, not just the chart clicked.
+ */
+function handleZoomReset() {
+    if (applyingZoom) return;
+    applyingZoom = true;
+    zoomWindow = null;
+    panels.forEach(panel => {
+        panel.chart?.resetXScale();
+        delete panel.element.dataset.zoomMin;
+        delete panel.element.dataset.zoomMax;
+    });
+    applyingZoom = false;
+    updateZoomResetVisibility();
+}
+
+function updateZoomResetVisibility() {
+    zoomResetButton.classList.toggle('hidden', !zoomWindow);
 }
 
 // --- Live updates ---------------------------------------------------------------------------

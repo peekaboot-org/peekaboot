@@ -2,8 +2,10 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
+import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,6 +46,22 @@ class InsightsTabTest extends PlaywrightTestBase {
         openDashboard();
         page.click("#insights-tab-btn");
         page.waitForSelector("#insights-panels .pk-insight-panel");
+    }
+
+    /**
+     * A left-to-right drag across the middle of a chart's canvas - uPlot's drag-select
+     * gesture. {@code dist} on cursor.drag defaults to 0, so any non-zero width selects.
+     */
+    private void dragZoomOnChart(String canvasSelector) {
+        BoundingBox box = page.locator(canvasSelector).boundingBox();
+        double y = box.y + box.height / 2.0;
+        double left = box.x + box.width * 0.25;
+        double right = box.x + box.width * 0.75;
+        Mouse mouse = page.mouse();
+        mouse.move(left, y);
+        mouse.down();
+        mouse.move(right, y, new Mouse.MoveOptions().setSteps(10));
+        mouse.up();
     }
 
     @Test
@@ -190,23 +208,35 @@ class InsightsTabTest extends PlaywrightTestBase {
     /**
      * A panel charting something other than the global interval is marked as such and
      * offers a way back; resetting must actually re-fetch the global level and drop the
-     * marking, not just relabel the select.
+     * marking, not just relabel the button group. Clicking a level inside one panel's own
+     * group is purely local - it must not touch the toolbar or any other panel, unlike a
+     * toolbar click (see switchingGlobalLevelRefetchesDataAndRebuildsCharts).
      */
     @Test
-    void perPanelOverrideIsMarkedAndResettable() {
+    void perPanelOverrideIsMarkedAndResettableAndDoesNotAffectOtherPanels() {
         openInsights();
         String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        String load = "#insights-panels .pk-insight-panel[data-panel-id='load']";
         page.waitForSelector(cpu + " canvas");
+        page.waitForSelector(load + " canvas");
         assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isZero();
         assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isFalse();
 
         page.waitForRequest(
-                "**/api/insights/data?level=1", () -> page.selectOption(cpu + " .pk-insight-panel-level", "1"));
+                "**/api/insights/data?level=1",
+                () -> page.click(cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']"));
 
         assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isEqualTo(1);
         assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isTrue();
-        // a per-panel override leaves the global switch where it was
+        assertThat(page.getAttribute(
+                        cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']", "aria-pressed"))
+                .isEqualTo("true");
+        // a per-panel override leaves the toolbar, and every other panel, exactly where they were
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.locator(load + ".pk-insight-panel--overridden").count()).isZero();
+        assertThat(page.getAttribute(
+                        load + " .pk-insight-panel-levels .pk-insight-level[data-level='0']", "aria-pressed"))
                 .isEqualTo("true");
 
         page.click(cpu + " .pk-insight-panel-reset");
@@ -214,7 +244,100 @@ class InsightsTabTest extends PlaywrightTestBase {
         page.waitForSelector(cpu + " canvas");
         assertThat(page.locator(cpu + ".pk-insight-panel--overridden").count()).isZero();
         assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isFalse();
-        assertThat(page.inputValue(cpu + " .pk-insight-panel-level")).isEqualTo("0");
+        assertThat(page.getAttribute(
+                        cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
+    }
+
+    /**
+     * A drag-selection on any one chart's x-axis applies the same absolute epoch window to
+     * every chart, whatever level each one charts at - not just the one dragged on. Each
+     * panel stamps its current window onto its own element (data-zoom-min/-max, see
+     * insights.js's handleZoom) purely so this assertion has something deterministic to
+     * read; the two panels are never expected to compute their own numbers independently,
+     * they are the same broadcast pair.
+     */
+    @Test
+    void dragZoomOnOneChartSyncsTheSameWindowToEveryOtherChart() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        String load = "#insights-panels .pk-insight-panel[data-panel-id='load']";
+        page.waitForSelector(cpu + " canvas");
+        page.waitForSelector(load + " canvas");
+        assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
+
+        dragZoomOnChart(cpu + " canvas");
+
+        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", cpu);
+
+        String cpuMin = page.getAttribute(cpu, "data-zoom-min");
+        String cpuMax = page.getAttribute(cpu, "data-zoom-max");
+        assertThat(cpuMin).isNotNull();
+        assertThat(cpuMax).isNotNull();
+        assertThat(page.getAttribute(load, "data-zoom-min")).isEqualTo(cpuMin);
+        assertThat(page.getAttribute(load, "data-zoom-max")).isEqualTo(cpuMax);
+        assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
+    }
+
+    /**
+     * The toolbar's zoom reset restores every chart to auto-fit/live-following, not just
+     * the one it happened to be clicked from - and the readouts, which never stopped
+     * moving even while zoomed, keep moving after.
+     */
+    @Test
+    void resettingZoomRestoresLiveAutoFitOnEveryChart() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        page.waitForSelector(cpu + " canvas");
+
+        dragZoomOnChart(cpu + " canvas");
+        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", cpu);
+        assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
+
+        page.click("#insights-zoom-reset");
+
+        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin === undefined", cpu);
+        assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
+
+        // live updates still reach the readout after a zoom/reset cycle, exactly as before
+        String value = cpu + " .pk-insight-current";
+        page.waitForFunction("(selector) => document.querySelector(selector)?.textContent.trim()", value);
+        String before = page.textContent(value);
+        page.waitForFunction(
+                "([selector, previous]) => {"
+                        + "  const element = document.querySelector(selector);"
+                        + "  return !!element && element.textContent !== previous"
+                        + "      && element.classList.contains('pk-blink');"
+                        + "}",
+                List.of(value, before),
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        assertThat(page.textContent(value))
+                .as("a live CPU reading moves after a zoom reset")
+                .isNotEqualTo(before);
+    }
+
+    /**
+     * uPlot's own double-click-to-reset gesture is redirected (see insights-chart.js) to
+     * reset every chart, not just the one double-clicked - proven here by zooming from one
+     * chart and double-clicking a different one.
+     */
+    @Test
+    void doubleClickingAnyChartResetsZoomOnEveryChart() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        String load = "#insights-panels .pk-insight-panel[data-panel-id='load']";
+        page.waitForSelector(cpu + " canvas");
+        page.waitForSelector(load + " canvas");
+
+        dragZoomOnChart(cpu + " canvas");
+        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", load);
+
+        // uPlot's cursor overlay (.u-over) sits above the canvas and is what actually
+        // receives pointer events - the element Playwright must click, not the canvas itself
+        page.locator(load + " .u-over").dblclick();
+
+        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin === undefined", cpu);
+        assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
     }
 
     @Test

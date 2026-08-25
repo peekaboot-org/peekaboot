@@ -53,8 +53,9 @@ class AccessibilityTest extends PlaywrightTestBase {
      * The Insights toolbar's global interval switch is a radio-like button group: the
      * group carries the name ("Aggregation level"), each segment's own name is its
      * interval, and aria-pressed - not just a background colour - says which one is on.
-     * The per-panel selectors next to it are labelled by their panel title, and the
-     * reset button beside those is icon-only, so it needs a label of its own.
+     * Every panel carries the same kind of group for its own (locally overridable)
+     * level, labelled by the panel title, and the reset button beside it is icon-only,
+     * so it needs a label of its own.
      */
     @Test
     void insightsLevelControlsAreLabelled() {
@@ -71,8 +72,15 @@ class AccessibilityTest extends PlaywrightTestBase {
                 + ".map(el => el.textContent.trim()).filter(Boolean)");
         assertThat((List<?>) names).hasSize(3);
 
-        assertThat(page.getAttribute("#insights-panels .pk-insight-panel-level", "aria-label"))
+        assertThat(page.getAttribute("#insights-panels .pk-insight-panel-levels", "role"))
+                .isEqualTo("group");
+        assertThat(page.getAttribute("#insights-panels .pk-insight-panel-levels", "aria-label"))
                 .endsWith("aggregation level");
+        assertThat(page.locator("#insights-panels .pk-insight-panel:first-child"
+                                + " .pk-insight-panel-levels .pk-insight-level[aria-pressed='true']")
+                        .count())
+                .as("exactly one segment in a panel's own group is pressed")
+                .isEqualTo(1);
         assertThat(page.getAttribute("#insights-panels .pk-insight-panel-reset", "aria-label"))
                 .endsWith("to global interval");
 
