@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -76,6 +77,40 @@ class InsightsTabTest extends PlaywrightTestBase {
                 .isEqualTo(1);
         assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
                 .isEqualTo("true");
+    }
+
+    /**
+     * Deep-linking straight to "#insights" makes both readers of /api/insights/config
+     * fire inside one render cycle: this tab's init() and the Dashboard tab's stat-tile
+     * row. They de-duplicate independently (each passes its own dedupeKey, see
+     * shared/api.js), so neither may be left holding the null - the tab renders *and*
+     * the tile row fills, on the first cycle.
+     *
+     * <p>Every wait is deliberately shorter than the 30s auto-refresh: something that
+     * only appears once the next refresh cycle rebuilds it has still failed this. The
+     * tile row is asserted ATTACHED rather than visible - it lives in the Dashboard
+     * panel, which this deep link leaves hidden.
+     */
+    @Test
+    void deepLinkingStraightToInsightsRendersTheTabAndTheDashboardTiles() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights");
+        page.waitForSelector("#insights-tab.active");
+
+        page.waitForSelector("#insights-level .pk-insight-level", new Page.WaitForSelectorOptions().setTimeout(10000));
+        page.waitForSelector(
+                "#insights-panels .pk-insight-panel[data-panel-id='cpu']",
+                new Page.WaitForSelectorOptions().setTimeout(10000));
+        assertThat(page.locator("#insights-level .pk-insight-level").count()).isEqualTo(3);
+
+        page.waitForSelector(
+                "#insights-tiles .pk-insight-tile[data-tile-id='uptime']",
+                new Page.WaitForSelectorOptions()
+                        .setState(WaitForSelectorState.ATTACHED)
+                        .setTimeout(10000));
+        assertThat(page.locator("#insights-tiles .pk-insight-tile").count()).isEqualTo(5);
+        assertThat(page.locator("#insights-tiles.hidden").count())
+                .as("the tile row is populated, not left hidden")
+                .isZero();
     }
 
     @Test

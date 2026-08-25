@@ -66,14 +66,18 @@ async function renderInsightTiles(container, {client, features, locale, timeZone
 
     let config;
     try {
-        config = await client.get('/api/insights/config');
+        // own dedupe key: the Insights tab loads this same path on its own schedule,
+        // and on a "#insights" deep link both fire in the same cycle - sharing the
+        // default per-path counter left whichever called first with a null and this
+        // row hidden until the next refresh (see shared/api.js)
+        config = await client.get('/api/insights/config', {dedupeKey: 'insight-tiles'});
     } catch (error) {
         console.warn('Insight tiles unavailable:', error);
         row.classList.add('hidden');
         return;
     }
-    // null means a concurrent call for the same path superseded this one (see
-    // shared/api.js) - that newer response is about to render the very same row
+    // null now only means this row's own previous call is still in flight and a newer
+    // one has taken over - that newer response is about to render the very same row
     if (!config) return;
 
     row.innerHTML = config.tiles.map(tile => `

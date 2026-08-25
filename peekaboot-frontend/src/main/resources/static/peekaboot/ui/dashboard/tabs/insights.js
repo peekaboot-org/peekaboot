@@ -64,9 +64,9 @@ export function render(container, data, context) {
 async function init(container, context) {
     try {
         config = await context.client.get('/api/insights/config');
-        // the Dashboard tab's tile row loads the same path, and client.get()
-        // de-duplicates per path - a superseded call resolves to null here, and
-        // the next refresh cycle retries from scratch
+        // only a second init of this same tab can supersede this call now that the
+        // Dashboard tab's tile row carries its own dedupe key; the next refresh
+        // cycle retries from scratch
         if (!config) throw new Error('insights config request was superseded');
         globalLevel = config.levels[0].index;
         renderToolbar(container);
