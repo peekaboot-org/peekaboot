@@ -79,6 +79,10 @@
 
         <!-- Dashboard Tab -->
         <section class="pk-tab-panel active" id="dashboard-tab" role="tabpanel" aria-labelledby="dashboard-tab-btn">
+            <!-- Insights stat tiles - filled by overview.js from /api/insights/config,
+                 and left hidden when the insights feature is off (see its renderInsightTiles). -->
+            <div id="insights-tiles" class="pk-insight-tiles hidden"></div>
+
             <div class="pk-grid">
                 <div class="pk-card" id="build-card">
                     <div class="pk-card__header">
@@ -251,7 +255,6 @@
 
         <section class="pk-tab-panel" id="insights-tab" role="tabpanel" aria-labelledby="insights-tab-btn">
             <div id="insights-toolbar"></div>
-            <div id="insights-tiles"></div>
             <div id="insights-panels"></div>
         </section>
     </main>

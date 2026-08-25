@@ -66,6 +66,19 @@ class AccessibilityTest extends PlaywrightTestBase {
         closeLiveStreams(); // the only test here that opens the Insights tab's SSE stream
     }
 
+    /** The stat tiles' icons are decorative - the label beside them already names the value. */
+    @Test
+    void insightTileIconsAreHiddenFromAssistiveTech() {
+        openDashboard();
+        page.waitForSelector("#insights-tiles .pk-insight-tile");
+
+        int icons = (int) (Integer) page.evaluate("() => document.querySelectorAll('.pk-insight-tile__icon').length");
+        int hidden = (int) (Integer)
+                page.evaluate("() => document.querySelectorAll('.pk-insight-tile__icon[aria-hidden=\"true\"]').length");
+        assertThat(icons).isGreaterThan(0);
+        assertThat(hidden).isEqualTo(icons);
+    }
+
     /** Decorative emoji would otherwise be announced: "package Build", "seedling Spring". */
     @Test
     void decorativeCardIconsAreHiddenFromAssistiveTech() {

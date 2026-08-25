@@ -466,16 +466,27 @@
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
 .pk-metric__stat-value { font-family: var(--pk-font-mono); font-weight: 600; color: var(--pk-text-strong); }
 
-/* Insights tab: toolbar, tiles row and panel cards. uPlot mounts into
-   .pk-insight-chart and brings its own stylesheet (vendor/uplot/uplot.min.css,
-   lazy-loaded with the library); only the legend is re-tuned here to sit in the
-   card's type scale. .pk-blink is retriggered on every tile/readout value that
-   an SSE tick actually changed. */
-#insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
-#insights-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--pk-space-md); margin: var(--pk-space-md) 0; }
-.pk-insight-tile { padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
+/* Insights stat tiles - rendered on the Dashboard tab (overview.js), not the Insights
+   tab. A wrapping flex row rather than equal grid columns: the tiles hold values of very
+   different widths (a formatted date next to a core count), and equal columns make the
+   date wrap to two lines while the rest of the row sits half empty. Growing from the
+   content width instead keeps all five on one line, and they wrap once they cannot. */
+.pk-insight-tiles { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-lg); }
+.pk-insight-tile { flex: 1 1 auto; min-width: 150px; display: flex; align-items: center; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
+/* Muted rather than accented: five accented glyphs in a row would outweigh the values
+   they annotate, which are what the row is actually for. */
+.pk-insight-tile__icon { flex: none; color: var(--pk-text-muted); }
+.pk-insight-tile__text { min-width: 0; }
 .pk-insight-tile-label { font-size: var(--pk-text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pk-text-muted); }
-.pk-insight-tile-value { font-size: 1.2em; font-weight: 600; color: var(--pk-text-strong); }
+/* --pk-text-base, not --pk-text-lg: the longest value in the row is a formatted
+   date, and at the larger size it wraps and leaves the row visibly ragged. */
+.pk-insight-tile-value { font-size: var(--pk-text-base); font-weight: 600; color: var(--pk-text-strong); }
+
+/* Insights tab: toolbar and panel cards. uPlot mounts into .pk-insight-chart and
+   brings its own stylesheet (vendor/uplot/uplot.min.css, lazy-loaded with the
+   library); only the legend is re-tuned here to sit in the card's type scale.
+   .pk-blink is retriggered on every panel readout an SSE tick actually changed. */
+#insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
 #insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--pk-space-md); }
 .pk-insight-panel { border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); padding: var(--pk-space-md); background: var(--pk-bg); }
 .pk-insight-panel__header { display: flex; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }

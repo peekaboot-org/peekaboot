@@ -52,16 +52,7 @@ class DefaultPanelsTest {
     void tilesPresent() {
         assertThat(defaults.tiles())
                 .extracting(TileDef::id)
-                .containsExactly(
-                        "started-at",
-                        "startup-time",
-                        "ready-time",
-                        "uptime",
-                        "cpu-cores",
-                        "heap-max",
-                        "disk-total",
-                        "pool-min",
-                        "pool-max");
+                .containsExactly("started-at", "startup-time", "ready-time", "uptime", "cpu-cores");
     }
 
     @Test

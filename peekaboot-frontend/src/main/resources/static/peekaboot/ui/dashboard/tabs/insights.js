@@ -1,7 +1,9 @@
 /**
- * The "Insights" tab: aggregated metric charts (uPlot) with tiles, a global
+ * The "Insights" tab: aggregated metric charts (uPlot) with a global
  * aggregation-level selector and SSE-driven live updates. All grouping and
  * ordering comes from /api/insights/config - this module renders it verbatim.
+ * The config's stat tiles are rendered by the Dashboard tab (see overview.js),
+ * so the `tiles` payload the tick events carry is ignored here.
  *
  * The tab owns three things beyond its markup:
  *   - a client-side mirror of the server's ring buffers, one entry per loaded
@@ -13,7 +15,7 @@
  *     every 30s dashboard refresh and must not rebuild any of this.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatMetricValue, formatTileValue} from '../../shared/format.js';
+import {formatMetricValue} from '../../shared/format.js';
 import {createChart, ensureUplot} from './insights-chart.js';
 
 export const id = 'insights';
@@ -29,7 +31,6 @@ let currentContext = null;
 const levels = new Map();       // level index -> snapshot (see normalizeLevel)
 const levelLoads = new Map();   // level index -> in-flight load promise
 const panels = new Map();       // panel id -> panel state (see createPanelState)
-const tileValues = new Map();   // tile id -> its value element
 
 let source = null;
 let resyncPending = false;
@@ -37,7 +38,6 @@ let chartObserver = null;
 let sizeObserver = null;
 let themeObserver = null;
 let frame = null;
-let pendingTiles = null;
 let showPercentiles = false;
 
 export function isAvailable(data, features) {
@@ -55,11 +55,14 @@ export function render(container, data, context) {
 async function init(container, context) {
     try {
         config = await context.client.get('/api/insights/config');
+        // the Dashboard tab's tile row loads the same path, and client.get()
+        // de-duplicates per path - a superseded call resolves to null here, and
+        // the next refresh cycle retries from scratch
+        if (!config) throw new Error('insights config request was superseded');
         renderToolbar(container);
-        renderTiles(container);
         renderPanels(container);
         initPanels(container);
-        // the stream is opened before the first snapshot is fetched: tiles and
+        // the stream is opened before the first snapshot is fetched: the panel
         // readouts then go live with the next tick instead of waiting on a
         // request that carries every series' whole ring. A tick arriving before
         // the snapshot lands has nowhere to go and is dropped - the snapshot it
@@ -89,7 +92,6 @@ function teardown() {
     frame = null;
     panels.forEach(destroyChart);
     panels.clear();
-    tileValues.clear();
     levels.clear();
     levelLoads.clear();
 }
@@ -135,21 +137,6 @@ function renderToolbar(container) {
     });
 }
 
-// --- Tiles ------------------------------------------------------------------------------
-
-function renderTiles(container) {
-    const tiles = container.querySelector('#insights-tiles');
-    tiles.innerHTML = config.tiles.map(tile => `
-        <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
-            <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
-            <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, currentContext))}</div>
-        </div>
-    `).join('');
-
-    tiles.querySelectorAll('.pk-insight-tile').forEach(tile =>
-            tileValues.set(tile.dataset.tileId, tile.querySelector('.pk-insight-tile-value')));
-}
-
 /** Restarts the CSS blink animation, which only replays if the class is re-added. */
 function blink(element) {
     element.classList.remove('pk-blink');
@@ -161,13 +148,6 @@ function updateText(element, text) {
     if (!element || element.textContent === text) return;
     element.textContent = text;
     blink(element);
-}
-
-function updateTiles(values) {
-    config.tiles.forEach(tile => {
-        if (!(tile.id in values)) return;
-        updateText(tileValues.get(tile.id), formatTileValue(values[tile.id], tile.format, currentContext));
-    });
 }
 
 // --- Panels -----------------------------------------------------------------------------
@@ -541,10 +521,6 @@ function scheduleFlush() {
 }
 
 function flush() {
-    if (pendingTiles) {
-        updateTiles(pendingTiles);
-        pendingTiles = null;
-    }
     updateReadouts();
     panels.forEach(panel => {
         if (panel.chart) {
@@ -559,10 +535,11 @@ function flush() {
 function connectStream() {
     source = new EventSource(currentContext.client.basePath + '/api/insights/stream');
 
+    // the event's `tiles` payload is the Dashboard tab's business (overview.js),
+    // which reads them off /api/insights/config on the 30s cycle instead
     source.addEventListener('tick', event => {
         const tick = JSON.parse(event.data);
         appendTick(tick);
-        pendingTiles = tick.tiles ?? {};
         markDirty(0);
         scheduleFlush();
     });

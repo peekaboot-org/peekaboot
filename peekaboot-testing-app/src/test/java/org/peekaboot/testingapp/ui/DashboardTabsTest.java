@@ -1,11 +1,12 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.List;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class DashboardTabsTest extends PlaywrightTestBase {
 
@@ -34,12 +35,37 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.isVisible("#memory-info .pk-meter")).isTrue();
     }
 
+    /**
+     * The insights stat tiles sit on the Dashboard tab, filled from /api/insights/config
+     * on the dashboard's own 30s cycle - no SSE and no visit to the Insights tab. The
+     * heap/disk/pool tiles were dropped rather than moved: the Memory & Storage meters
+     * and the DataSources grid on this very page already carry those numbers.
+     */
+    @Test
+    void dashboardShowsTheInsightStatTiles() {
+        openDashboard();
+        page.waitForSelector("#insights-tiles .pk-insight-tile[data-tile-id='uptime']");
+
+        Object rendered = page.evaluate("() => [...document.querySelectorAll('#insights-tiles .pk-insight-tile')]"
+                + ".map(el => el.dataset.tileId)");
+        @SuppressWarnings("unchecked")
+        List<String> tileIds = (List<String>) rendered;
+
+        assertThat(tileIds).containsExactly("started-at", "startup-time", "ready-time", "uptime", "cpu-cores");
+        assertThat(tileIds).doesNotContain("heap-max", "disk-total", "pool-min", "pool-max");
+        assertThat(page.locator("#insights-tiles .pk-insight-tile__icon").count())
+                .isEqualTo(tileIds.size());
+        assertThat(page.textContent("#insights-tiles [data-tile-id='uptime'] .pk-insight-tile-value"))
+                .as("a live tile resolves in a real app")
+                .isNotEqualTo("-");
+    }
+
     @Test
     void tabStripUsesAriaSelection() {
         openDashboard();
 
-        String selected = (String) page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String selected =
+                (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
         assertThat(selected).isEqualTo("dashboard");
     }
 
@@ -50,8 +76,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#environment-tab.active");
 
         assertThat(page.url()).endsWith("#environment");
-        assertThat(page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
+        assertThat(page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
                 .isEqualTo("environment");
     }
 
@@ -69,8 +94,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.keyboard().press("ArrowRight");
 
         assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("environment");
-        assertThat(page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
+        assertThat(page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
                 .isEqualTo("environment");
     }
 
@@ -104,10 +128,10 @@ class DashboardTabsTest extends PlaywrightTestBase {
     void onlyTheSelectedTabIsInTheTabOrder() {
         openDashboard();
 
-        Object selectedTabIndex = page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
-        Object otherTabIndex = page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
+        Object selectedTabIndex =
+                page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
+        Object otherTabIndex =
+                page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
 
         assertThat(selectedTabIndex).isEqualTo(0);
         assertThat(otherTabIndex).isEqualTo(-1);
@@ -128,12 +152,12 @@ class DashboardTabsTest extends PlaywrightTestBase {
 
         page.keyboard().press("ArrowRight");
 
-        String selected = (String) page.evaluate(
-                "() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String selected =
+                (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
         Object expectedNext = page.evaluate(
                 "() => { const visible = [...document.querySelectorAll('.pk-tab')].filter(t => t.offsetParent !== null);"
-              + " const idx = visible.findIndex(t => t.dataset.tab === 'dashboard');"
-              + " return visible[(idx + 1) % visible.length].dataset.tab; }");
+                        + " const idx = visible.findIndex(t => t.dataset.tab === 'dashboard');"
+                        + " return visible[(idx + 1) % visible.length].dataset.tab; }");
 
         assertThat(selected).isNotEqualTo("environment");
         assertThat(selected).isEqualTo(expectedNext);
@@ -180,9 +204,8 @@ class DashboardTabsTest extends PlaywrightTestBase {
     @Test
     void deepLinkingDirectlyToATraceDetailPreservesTheDetailSegment() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')"
-              + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
+                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
 
         assertThat(page.url()).endsWith("#traces/deadbeef");
     }
@@ -250,7 +273,8 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForSelector("#property-sources .pk-group");
 
         page.fill("#env-filter", "server.port");
-        page.waitForSelector("#property-sources mark", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
+        page.waitForSelector(
+                "#property-sources mark", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
         page.click("#property-sources .pk-group__header");
 
         page.waitForSelector("#property-sources mark");
@@ -303,7 +327,9 @@ class DashboardTabsTest extends PlaywrightTestBase {
         // Rows render into the DOM regardless of the group's expand/collapse state -
         // only the group's [hidden] wrapper controls visibility - so this waits for
         // attachment, not visibility.
-        page.waitForSelector("#config-groups .pk-kv__key", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
+        page.waitForSelector(
+                "#config-groups .pk-kv__key",
+                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
 
         String maskedValue = (String) page.evaluate("""
             () => {
@@ -367,7 +393,8 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");
 
-        assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']")).contains("All (");
+        assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
+                .contains("All (");
         int allCount = page.querySelectorAll("#traces-list .pk-trace-item").size();
 
         String errorsButtonText = page.textContent("#traces-bucket .pk-btn[data-bucket='errors']");
@@ -431,6 +458,7 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForFunction("() => !document.getElementById('traces-active-filter').classList.contains('hidden')");
 
         assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target:");
-        assertThat(page.isChecked("#traces-filter input[value='SCHEDULED_JOB']")).isTrue();
+        assertThat(page.isChecked("#traces-filter input[value='SCHEDULED_JOB']"))
+                .isTrue();
     }
 }

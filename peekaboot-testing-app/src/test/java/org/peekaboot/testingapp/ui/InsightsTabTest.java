@@ -60,17 +60,6 @@ class InsightsTabTest extends PlaywrightTestBase {
     }
 
     @Test
-    void tilesRenderWithFormattedValues() {
-        openInsights();
-        page.waitForSelector("#insights-tiles .pk-insight-tile[data-tile-id='uptime']");
-
-        String uptime =
-                page.textContent("#insights-tiles .pk-insight-tile[data-tile-id='uptime'] .pk-insight-tile-value");
-
-        assertThat(uptime).isNotEqualTo("-"); // live tile resolves in a real app
-    }
-
-    @Test
     void levelSelectorListsConfiguredLevels() {
         openInsights();
 
@@ -115,9 +104,10 @@ class InsightsTabTest extends PlaywrightTestBase {
     }
 
     @Test
-    void tickPushBlinksTileValue() {
+    void tickPushBlinksPanelReadout() {
         openInsights();
-        String value = "#insights-tiles [data-tile-id='uptime'] .pk-insight-tile-value";
+        String value = "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .pk-insight-current";
+        page.waitForFunction("(selector) => document.querySelector(selector)?.textContent.trim()", value);
         String before = page.textContent(value);
 
         // The changed value and the blink have to be observed together: .pk-blink is only
@@ -125,7 +115,7 @@ class InsightsTabTest extends PlaywrightTestBase {
         // finding it on its own says nothing about any tick after this read. The test
         // profile ticks every 250ms; the budget is deliberately generous, since what is
         // under test is that a pushed tick reaches the DOM, not how fast a loaded CI host
-        // gets it there.
+        // gets it there. CPU usage is re-sampled on every tick, so the readout does move.
         page.waitForFunction(
                 "([selector, previous]) => {"
                         + "  const element = document.querySelector(selector);"
@@ -135,7 +125,7 @@ class InsightsTabTest extends PlaywrightTestBase {
                 List.of(value, before),
                 new Page.WaitForFunctionOptions().setTimeout(15000));
 
-        assertThat(page.textContent(value)).as("uptime only ever grows").isNotEqualTo(before);
+        assertThat(page.textContent(value)).as("a live CPU reading moves").isNotEqualTo(before);
     }
 
     @Test

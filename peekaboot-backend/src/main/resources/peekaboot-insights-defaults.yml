@@ -24,23 +24,6 @@ tiles:
     label: CPU cores
     meter: system.cpu.count
     format: count
-  - id: heap-max
-    label: Heap max
-    meter: jvm.memory.max
-    tags: { area: heap }
-    format: bytes
-  - id: disk-total
-    label: Disk total
-    meter: disk.total
-    format: bytes
-  - id: pool-min
-    label: Pool min
-    meter: hikaricp.connections.min
-    format: count
-  - id: pool-max
-    label: Pool max
-    meter: hikaricp.connections.max
-    format: count
 
 panels:
   - id: cpu

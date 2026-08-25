@@ -43,7 +43,7 @@ class InsightsServiceTest {
         assertThat(config.panels())
                 .extracting(InsightsConfigResponse.Panel::id)
                 .doesNotContain("thread-states"); // disabled by default
-        assertThat(config.tiles()).hasSize(9);
+        assertThat(config.tiles()).hasSize(5);
     }
 
     @Test
