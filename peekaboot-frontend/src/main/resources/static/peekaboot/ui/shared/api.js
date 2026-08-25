@@ -7,7 +7,7 @@
  *
  * That counter is keyed by path by default, which assumes one owner per endpoint.
  * Where two independent views read the same endpoint on their own schedules -- the
- * Insights tab and the Dashboard tab's stat tiles both load
+ * Insights tab and the Overview tab's stat tiles both load
  * /api/insights/config -- they would supersede each other's calls and each see a
  * null it never asked for, so such a caller passes its own `dedupeKey` and gets a
  * counter of its own. It still de-duplicates against its own repeat calls, which is

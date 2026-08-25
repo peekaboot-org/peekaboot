@@ -103,7 +103,7 @@ abstract class PlaywrightTestBase {
 
     protected void openDashboard() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        page.waitForSelector("#dashboard-tab.active");
+        page.waitForSelector("#overview-tab.active");
         // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         // ...but #loading also hides on the failure path, so require positive proof of a render

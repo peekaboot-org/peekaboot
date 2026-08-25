@@ -81,18 +81,18 @@ class InsightsTabTest extends PlaywrightTestBase {
 
     /**
      * Deep-linking straight to "#insights" makes both readers of /api/insights/config
-     * fire inside one render cycle: this tab's init() and the Dashboard tab's stat-tile
+     * fire inside one render cycle: this tab's init() and the Overview tab's stat-tile
      * row. They de-duplicate independently (each passes its own dedupeKey, see
      * shared/api.js), so neither may be left holding the null - the tab renders *and*
      * the tile row fills, on the first cycle.
      *
      * <p>Every wait is deliberately shorter than the 30s auto-refresh: something that
      * only appears once the next refresh cycle rebuilds it has still failed this. The
-     * tile row is asserted ATTACHED rather than visible - it lives in the Dashboard
+     * tile row is asserted ATTACHED rather than visible - it lives in the Overview
      * panel, which this deep link leaves hidden.
      */
     @Test
-    void deepLinkingStraightToInsightsRendersTheTabAndTheDashboardTiles() {
+    void deepLinkingStraightToInsightsRendersTheTabAndTheOverviewTiles() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights");
         page.waitForSelector("#insights-tab.active");
 

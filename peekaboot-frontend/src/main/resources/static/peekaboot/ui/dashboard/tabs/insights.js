@@ -2,7 +2,7 @@
  * The "Insights" tab: aggregated metric charts (uPlot) with a global
  * aggregation-level switch and SSE-driven live updates. All grouping and
  * ordering comes from /api/insights/config - this module renders it verbatim.
- * The config's stat tiles are rendered by the Dashboard tab (see overview.js),
+ * The config's stat tiles are rendered by the Overview tab (see overview.js),
  * so the `tiles` payload the tick events carry is ignored here.
  *
  * The tab owns three things beyond its markup:
@@ -65,7 +65,7 @@ async function init(container, context) {
     try {
         config = await context.client.get('/api/insights/config');
         // only a second init of this same tab can supersede this call now that the
-        // Dashboard tab's tile row carries its own dedupe key; the next refresh
+        // Overview tab's tile row carries its own dedupe key; the next refresh
         // cycle retries from scratch
         if (!config) throw new Error('insights config request was superseded');
         globalLevel = config.levels[0].index;
@@ -604,7 +604,7 @@ function flush() {
 function connectStream() {
     source = new EventSource(currentContext.client.basePath + '/api/insights/stream');
 
-    // the event's `tiles` payload is the Dashboard tab's business (overview.js),
+    // the event's `tiles` payload is the Overview tab's business (overview.js),
     // which reads them off /api/insights/config on the 30s cycle instead
     source.addEventListener('tick', event => {
         const tick = JSON.parse(event.data);

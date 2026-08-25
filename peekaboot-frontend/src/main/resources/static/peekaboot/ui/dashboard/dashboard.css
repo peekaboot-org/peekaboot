@@ -185,7 +185,7 @@
     line-height: 1;
 }
 
-/* Filter (search box used by the environment/loggers/config/metrics tabs) */
+/* Filter (search box used by the environment/loggers/config/meters tabs) */
 /* A row, not a block: the count sits beside the input, and the icon is centred
    against the row. The row owns the trailing space - when the input carried it as
    margin, the row grew taller than the input and the absolutely centred icon
@@ -466,7 +466,7 @@
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
 .pk-metric__stat-value { font-family: var(--pk-font-mono); font-weight: 600; color: var(--pk-text-strong); }
 
-/* Insights stat tiles - rendered on the Dashboard tab (overview.js), not the Insights
+/* Insights stat tiles - rendered on the Overview tab (overview.js), not the Insights
    tab. A wrapping flex row rather than equal grid columns: the tiles hold values of very
    different widths (a formatted date next to a core count), and equal columns make the
    date wrap to two lines while the rest of the row sits half empty. Growing from the

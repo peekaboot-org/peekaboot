@@ -1,5 +1,5 @@
 /**
- * The "Dashboard" tab: the insights stat-tile row, build/git/Spring/Java/OS/JVM info
+ * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/JVM info
  * cards, the DataSources grid, the memory/storage usage meters and the health banner +
  * component grid.
  */
@@ -8,8 +8,8 @@ import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
 
-export const id = 'dashboard';
-export const label = 'Dashboard';
+export const id = 'overview';
+export const label = 'Overview';
 
 export function render(container, data, context = {}) {
     const {locale, timeZone} = context;
