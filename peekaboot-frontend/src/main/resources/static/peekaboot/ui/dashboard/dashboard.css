@@ -504,8 +504,10 @@
 .pk-insight-current { margin-left: auto; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
 /* A panel charting something other than the global interval says so: its level group
    picks up the accent ink used for text/borders on --pk-bg, and a reset button appears
-   beside it. */
-.pk-insight-panel--overridden .pk-insight-panel-levels { border-radius: var(--pk-radius); box-shadow: inset 0 0 0 1px var(--pk-primary-text); }
+   beside it. An outline, not a box-shadow: the group's own buttons are opaque
+   (.pk-btn has its own background), so an inset shadow paints underneath them and
+   never actually shows - an outline paints outside the border box instead. */
+.pk-insight-panel--overridden .pk-insight-panel-levels { border-radius: var(--pk-radius); outline: 1px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-insight-panel-reset { width: 24px; height: 24px; color: var(--pk-primary-text); }
 .pk-insight-chart { min-height: 180px; }
 /* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */

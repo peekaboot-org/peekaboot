@@ -131,6 +131,11 @@ function valueAxis(scale, unit, side, colors) {
  * (cursor.drag.setScale: false) so this hook is the only thing that ever moves the
  * x scale. A double-click - uPlot's own built-in gesture for undoing a zoom -
  * likewise calls back into {@code onZoomReset()} rather than resetting just itself.
+ *
+ * Every actual x-scale change (zoom or reset, on this chart or broadcast in from
+ * another one) is read back from uPlot's own setScale hook onto the panel's own
+ * element as data-zoom-min/-max - the readback proves the scale really changed,
+ * rather than just that the caller intended it to (see insights.js).
  */
 export function createChart({panel, mount, level, snapshot, showPercentiles, onZoom, onZoomReset}) {
     const colors = themeColors();
@@ -217,6 +222,15 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
                 // clears the drag rectangle without re-firing this hook (fireHook=false)
                 u.setSelect({left: 0, top: 0, width: 0, height: 0}, false);
                 onZoom(min, max);
+            }],
+            // the readback the panel's own element carries as data-zoom-min/-max (see
+            // insights.js) - fires for every x-scale change, whatever caused it
+            setScale: [(u, key) => {
+                if (key !== 'x') return;
+                const panel = mount.closest('.pk-insight-panel');
+                if (!panel) return;
+                panel.dataset.zoomMin = String(u.scales.x.min);
+                panel.dataset.zoomMax = String(u.scales.x.max);
             }]
         }
     };
@@ -227,6 +241,10 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
 
     return {
         setData(next, resetScales = true) {
+            // resetScales=false (a live tick/rollup while zoomed, see insights.js's
+            // redraw()) holds the current window and skips uPlot's repaint entirely -
+            // the canvas freezes on whatever it last drew, catching up in one repaint
+            // once the zoom is lifted (see resetXScale)
             plot.setData(toData(columns, next), resetScales);
         },
         setSize(width) {
@@ -238,8 +256,15 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
         setXScale(min, max) {
             plot.setScale('x', {min, max});
         },
+        /**
+         * uPlot's x scale (a time scale) does not auto-range on {min: null, max: null}
+         * the way a linear y scale does - that leaves it exactly where it was. The
+         * actual full extent is read straight off the chart's own current data instead,
+         * which setData keeps current even while frozen (resetScales=false, above).
+         */
         resetXScale() {
-            plot.setScale('x', {min: null, max: null});
+            const xs = plot.data[0];
+            plot.setScale('x', {min: xs[0], max: xs[xs.length - 1]});
         },
         destroy() {
             plot.destroy();

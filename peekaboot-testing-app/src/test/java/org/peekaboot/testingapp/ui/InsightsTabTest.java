@@ -49,11 +49,14 @@ class InsightsTabTest extends PlaywrightTestBase {
     }
 
     /**
-     * A left-to-right drag across the middle of a chart's canvas - uPlot's drag-select
-     * gesture. {@code dist} on cursor.drag defaults to 0, so any non-zero width selects.
+     * A left-to-right drag across the middle of a chart's plotting area - uPlot's
+     * drag-select gesture. Targets .u-over (uPlot's own pointer-event-receiving overlay),
+     * not the canvas: the canvas's left edge sits under the y-axis label gutter
+     * (~60px), which would skew the selected window if used as the drag's origin.
+     * {@code dist} on cursor.drag defaults to 0, so any non-zero width selects.
      */
-    private void dragZoomOnChart(String canvasSelector) {
-        BoundingBox box = page.locator(canvasSelector).boundingBox();
+    private void dragZoomOnChart(String panelSelector) {
+        BoundingBox box = page.locator(panelSelector + " .u-over").boundingBox();
         double y = box.y + box.height / 2.0;
         double left = box.x + box.width * 0.25;
         double right = box.x + box.width * 0.75;
@@ -62,6 +65,26 @@ class InsightsTabTest extends PlaywrightTestBase {
         mouse.down();
         mouse.move(right, y, new Mouse.MoveOptions().setSteps(10));
         mouse.up();
+    }
+
+    /**
+     * Every chart auto-ranges its x scale on construction, so data-zoom-min/-max (see
+     * insights-chart.js's setScale hook) is never absent once a chart exists - only ever
+     * different. A zoom/reset is proven by that value actually changing, not by being set.
+     */
+    private void waitForZoomMinChange(String panelSelector, String previousValue) {
+        waitForZoomMinChange(panelSelector, previousValue, 30000);
+    }
+
+    private void waitForZoomMinChange(String panelSelector, String previousValue, int timeoutMs) {
+        page.waitForFunction(
+                "([sel, prev]) => document.querySelector(sel)?.getAttribute('data-zoom-min') !== prev",
+                List.of(panelSelector, previousValue),
+                new Page.WaitForFunctionOptions().setTimeout(timeoutMs));
+    }
+
+    private String outlineWidth(String selector) {
+        return (String) page.evaluate("(sel) => getComputedStyle(document.querySelector(sel)).outlineWidth", selector);
     }
 
     @Test
@@ -252,10 +275,10 @@ class InsightsTabTest extends PlaywrightTestBase {
     /**
      * A drag-selection on any one chart's x-axis applies the same absolute epoch window to
      * every chart, whatever level each one charts at - not just the one dragged on. Each
-     * panel stamps its current window onto its own element (data-zoom-min/-max, see
-     * insights.js's handleZoom) purely so this assertion has something deterministic to
-     * read; the two panels are never expected to compute their own numbers independently,
-     * they are the same broadcast pair.
+     * panel reads its own window back off its own uPlot instance's setScale hook onto its
+     * own element (data-zoom-min/-max, see insights-chart.js) - the two panels landing on
+     * the exact same numbers is what proves the broadcast, not just the click handler
+     * having fired.
      */
     @Test
     void dragZoomOnOneChartSyncsTheSameWindowToEveryOtherChart() {
@@ -266,14 +289,13 @@ class InsightsTabTest extends PlaywrightTestBase {
         page.waitForSelector(load + " canvas");
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
 
-        dragZoomOnChart(cpu + " canvas");
-
-        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", cpu);
+        String cpuBefore = page.getAttribute(cpu, "data-zoom-min");
+        dragZoomOnChart(cpu);
+        waitForZoomMinChange(cpu, cpuBefore);
 
         String cpuMin = page.getAttribute(cpu, "data-zoom-min");
         String cpuMax = page.getAttribute(cpu, "data-zoom-max");
-        assertThat(cpuMin).isNotNull();
-        assertThat(cpuMax).isNotNull();
+        assertThat(cpuMin).isNotEqualTo(cpuBefore);
         assertThat(page.getAttribute(load, "data-zoom-min")).isEqualTo(cpuMin);
         assertThat(page.getAttribute(load, "data-zoom-max")).isEqualTo(cpuMax);
         assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
@@ -281,25 +303,47 @@ class InsightsTabTest extends PlaywrightTestBase {
 
     /**
      * The toolbar's zoom reset restores every chart to auto-fit/live-following, not just
-     * the one it happened to be clicked from - and the readouts, which never stopped
-     * moving even while zoomed, keep moving after.
+     * the one it happened to be clicked from: the window has to actually widen back out to
+     * the full data extent (uPlot's x scale does not auto-range itself back on a bare
+     * {min:null, max:null} - see insights-chart.js's resetXScale), and the readouts, which
+     * never stopped moving even while zoomed, keep moving after.
+     *
+     * <p>The stream is blocked for the zoom/reset portion on purpose: an ordinary live
+     * tick's own redraw (resetScales=true, since it is not zoomed by then) auto-ranges the
+     * x scale on its own within a couple hundred ms at this profile's level-0 tick rate,
+     * which would mask a broken resetXScale behind a coincidental, unrelated redraw. Only
+     * once the explicit reset is proven does the stream get let back in, to prove the tail
+     * end - that everything is still live afterward, not wedged by having been zoomed.
      */
     @Test
     void resettingZoomRestoresLiveAutoFitOnEveryChart() {
+        page.route("**/api/insights/stream", route -> route.abort());
+
         openInsights();
         String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
         page.waitForSelector(cpu + " canvas");
 
-        dragZoomOnChart(cpu + " canvas");
-        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", cpu);
+        String initialMin = page.getAttribute(cpu, "data-zoom-min");
+        dragZoomOnChart(cpu);
+        waitForZoomMinChange(cpu, initialMin);
         assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
 
-        page.click("#insights-zoom-reset");
+        String zoomedMin = page.getAttribute(cpu, "data-zoom-min");
+        double zoomedSpan = Double.parseDouble(page.getAttribute(cpu, "data-zoom-max")) - Double.parseDouble(zoomedMin);
 
-        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin === undefined", cpu);
+        page.click("#insights-zoom-reset");
+        waitForZoomMinChange(cpu, zoomedMin, 5000);
+
+        double resetSpan = Double.parseDouble(page.getAttribute(cpu, "data-zoom-max"))
+                - Double.parseDouble(page.getAttribute(cpu, "data-zoom-min"));
+        assertThat(resetSpan)
+                .as("the window widens back out to the full data extent on reset")
+                .isGreaterThan(zoomedSpan);
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
 
-        // live updates still reach the readout after a zoom/reset cycle, exactly as before
+        // live updates reach the readout again once the stream is let back in, exactly as
+        // before a zoom/reset cycle - proves the reset did not leave anything wedged
+        page.unroute("**/api/insights/stream");
         String value = cpu + " .pk-insight-current";
         page.waitForFunction("(selector) => document.querySelector(selector)?.textContent.trim()", value);
         String before = page.textContent(value);
@@ -329,15 +373,45 @@ class InsightsTabTest extends PlaywrightTestBase {
         page.waitForSelector(cpu + " canvas");
         page.waitForSelector(load + " canvas");
 
-        dragZoomOnChart(cpu + " canvas");
-        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin !== undefined", load);
+        String cpuInitial = page.getAttribute(cpu, "data-zoom-min");
+        dragZoomOnChart(cpu);
+        waitForZoomMinChange(cpu, cpuInitial);
+        String cpuZoomed = page.getAttribute(cpu, "data-zoom-min");
 
         // uPlot's cursor overlay (.u-over) sits above the canvas and is what actually
         // receives pointer events - the element Playwright must click, not the canvas itself
         page.locator(load + " .u-over").dblclick();
 
-        page.waitForFunction("(sel) => document.querySelector(sel)?.dataset.zoomMin === undefined", cpu);
+        waitForZoomMinChange(cpu, cpuZoomed);
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
+    }
+
+    /**
+     * A panel charting something other than the global interval is marked as such (see
+     * dashboard.css); an inset box-shadow on the button group paints underneath the
+     * buttons' own opaque backgrounds and never actually shows on screen, which a pure CSS
+     * read would not catch - checked here as a real computed style, in both themes.
+     */
+    @Test
+    void overriddenPanelHighlightIsActuallyVisibleInBothThemes() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        String cpuLevels = cpu + " .pk-insight-panel-levels";
+        page.waitForSelector(cpu + " canvas");
+
+        page.waitForRequest(
+                "**/api/insights/data?level=1", () -> page.click(cpuLevels + " .pk-insight-level[data-level='1']"));
+        page.waitForSelector(cpu + ".pk-insight-panel--overridden");
+
+        assertThat(outlineWidth(cpuLevels))
+                .as("override outline visible in light theme")
+                .isNotEqualTo("0px");
+
+        page.click("#theme-toggle");
+        assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+        assertThat(outlineWidth(cpuLevels))
+                .as("override outline visible in dark theme")
+                .isNotEqualTo("0px");
     }
 
     @Test

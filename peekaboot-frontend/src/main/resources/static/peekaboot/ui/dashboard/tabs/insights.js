@@ -24,7 +24,7 @@ export const label = 'Insights';
 const STAT_NAMES = ['min', 'max', 'avg', 'median', 'p90', 'p95', 'p99'];
 const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
 const OVERRIDDEN_PANEL_CLASS = 'pk-insight-panel--overridden';
-/** "Reset to global interval" - a counter-clockwise arrow, drawn in the button's own ink. */
+/** A counter-clockwise arrow, drawn in the button's own ink - every "undo this" reset control. */
 const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
@@ -52,9 +52,6 @@ let levelGroup = null;
 // (epoch seconds) - null while every chart is auto-fitting its own data as usual
 let zoomWindow = null;
 let zoomResetButton = null;
-// re-entrancy guard: applying a zoom/reset to every other chart must not itself be
-// treated as a new zoom to broadcast (see handleZoom/handleZoomReset)
-let applyingZoom = false;
 
 export function isAvailable(data, features) {
     return Boolean(features?.insights);
@@ -106,7 +103,6 @@ function teardown() {
     themeObserver?.disconnect();
     chartObserver = sizeObserver = themeObserver = levelGroup = zoomResetButton = null;
     zoomWindow = null;
-    applyingZoom = false;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
     panels.forEach(destroyChart);
@@ -150,12 +146,14 @@ function updateLevelButtons(group, activeLevel) {
 
 function renderToolbar(container) {
     const toolbar = container.querySelector('#insights-toolbar');
+    // the zoom-reset button sits last: it is the only toolbar control that toggles
+    // hidden/shown at runtime, and trailing keeps that from shifting anything else
     toolbar.innerHTML = `
         <div id="insights-level" class="pk-insight-levels" role="group"
              aria-label="Aggregation level">${levelButtonsHtml(globalLevel, 'pk-btn--bucket')}</div>
+        <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
         <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
                 title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
-        <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
     `;
 
     levelGroup = toolbar.querySelector('#insights-level');
@@ -560,8 +558,10 @@ function destroyChart(panel) {
 
 function redraw(panel) {
     const snapshot = levels.get(panel.level);
-    // a live tick/rollup must not snap a manually zoomed chart back to auto-fit; uPlot
-    // only re-ranges the x scale on setData when resetScales is left at its default
+    // resetScales=false while zoomed holds the current window and skips uPlot's
+    // repaint entirely (see insights-chart.js's setData) rather than snapping a
+    // manually zoomed chart back to auto-fit on every live tick/rollup - the canvas
+    // catches up in one repaint once the zoom is reset (see handleZoomReset)
     if (snapshot) panel.chart.setData(snapshot, !zoomWindow);
     panel.dirty = false;
 }
@@ -608,23 +608,13 @@ function markOverride(panel) {
  * A drag-select on any one chart's x-axis (see insights-chart.js's setSelect hook)
  * pins every chart - whatever level it charts at - to the same absolute epoch window;
  * uPlot's x scale is seconds-since-epoch on every chart regardless of level, so the
- * same {min, max} pair applies unchanged everywhere.
- *
- * The window is also stamped onto each panel's own element as data-zoom-min/-max: the
- * charts themselves are canvases with no DOM state to inspect, and this is the cheap,
- * deterministic hook the Playwright suite reads to assert every panel really landed on
- * the same window without reaching into uPlot internals.
+ * same {min, max} pair applies unchanged everywhere. What each chart actually landed
+ * on is read back independently via its own setScale hook (data-zoom-min/-max on the
+ * panel's element, see insights-chart.js) rather than trusted from the call here.
  */
 function handleZoom(min, max) {
-    if (applyingZoom) return;
-    applyingZoom = true;
     zoomWindow = {min, max};
-    panels.forEach(panel => {
-        panel.chart?.setXScale(min, max);
-        panel.element.dataset.zoomMin = String(min);
-        panel.element.dataset.zoomMax = String(max);
-    });
-    applyingZoom = false;
+    panels.forEach(panel => panel.chart?.setXScale(min, max));
     updateZoomResetVisibility();
 }
 
@@ -634,15 +624,9 @@ function handleZoom(min, max) {
  * insights-chart.js) - either one un-zooms all of them, not just the chart clicked.
  */
 function handleZoomReset() {
-    if (applyingZoom) return;
-    applyingZoom = true;
+    if (!zoomWindow) return;
     zoomWindow = null;
-    panels.forEach(panel => {
-        panel.chart?.resetXScale();
-        delete panel.element.dataset.zoomMin;
-        delete panel.element.dataset.zoomMax;
-    });
-    applyingZoom = false;
+    panels.forEach(panel => panel.chart?.resetXScale());
     updateZoomResetVisibility();
 }
 
