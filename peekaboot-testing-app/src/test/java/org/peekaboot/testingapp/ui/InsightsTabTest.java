@@ -155,6 +155,19 @@ class InsightsTabTest extends PlaywrightTestBase {
     }
 
     @Test
+    void legendMarkersAreSolidSwatchesNotOutlines() {
+        openInsights();
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] .u-legend .u-marker");
+
+        String background = (String) page.locator(
+                        "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .u-legend .u-marker")
+                .first()
+                .evaluate("el => getComputedStyle(el).backgroundColor");
+        // an outline-only marker computes to fully transparent; a solid swatch must not
+        assertThat(background).isNotEqualTo("rgba(0, 0, 0, 0)").isNotEqualTo("transparent");
+    }
+
+    @Test
     void chartsRenderOnlyInViewportAndLazilyBelowFold() {
         page.setViewportSize(1000, 600);
         openInsights();

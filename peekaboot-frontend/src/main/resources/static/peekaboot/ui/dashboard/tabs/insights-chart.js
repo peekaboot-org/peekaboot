@@ -205,8 +205,21 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
         bands,
         axes,
         // values live in the panel header readout and the axis labels; a live legend
-        // would repeat them per series and, at level >= 1, dwarf the card
-        legend: {show: true, live: false},
+        // would repeat them per series and, at level >= 1, dwarf the card.
+        // Solid swatches instead of uPlot's default outline boxes - the 1em outline
+        // square reads poorly at the legend's small font size. series.stroke is
+        // wrapped into an accessor by uPlot, hence the function-or-value unwrap.
+        legend: {
+            show: true,
+            live: false,
+            markers: {
+                width: 0,
+                fill: (u, seriesIndex) => {
+                    const stroke = u.series[seriesIndex].stroke;
+                    return typeof stroke === 'function' ? stroke(u, seriesIndex) : stroke;
+                }
+            }
+        },
         cursor: {
             points: {show: false},
             // x-only drag, and uPlot must not zoom this chart on its own - the
