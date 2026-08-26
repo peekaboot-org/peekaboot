@@ -19,6 +19,7 @@ import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
+import {parseAppHash} from '../../shared/url-state.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -413,8 +414,13 @@ async function openTrace(traceId, context) {
         urlState: context.traceUrlState(traceId),
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace - mirrors main.js's expandTraceById.
+        // Parses the hash and compares only tab/detail (not the exact string) since a tab
+        // switch after opening rewrites the hash to "#traces/<id>/<subview>" via
+        // replaceAppHash - an exact-string match against the bare "#traces/<id>" open-time
+        // hash would stop matching the moment the overlay's own tab strip is touched.
         onClose: () => {
-            if (window.location.hash === `#traces/${traceId}`) context.navigate('traces');
+            const {tab, detail} = parseAppHash();
+            if (tab === 'traces' && detail === traceId) context.navigate('traces');
         }
     });
 }

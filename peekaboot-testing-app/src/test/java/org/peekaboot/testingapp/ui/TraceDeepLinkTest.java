@@ -200,6 +200,15 @@ class TraceDeepLinkTest extends PlaywrightTestBase {
      * hash-driven paths (deep link, Back/Forward) did. main.js now exposes the same
      * urlState factory expandTraceById uses (context.traceUrlState) and traces.js passes
      * it through.
+     * <p>
+     * Also covers the follow-up regression that wiring urlState in activated: openTrace's
+     * onClose compared window.location.hash against the exact string
+     * "#traces/{traceId}" - true only while the overlay was still on its opening subview.
+     * Once a tab switch rewrites the hash to "#traces/{traceId}/{subview}" (replaceAppHash,
+     * same as any hash-driven open), that exact-string check stops matching, onClose's
+     * cleanup never fires, and closing the overlay leaves the detail segment in the URL -
+     * a reload would silently reopen the trace on that subview. Fixed to parse the hash and
+     * compare tab/detail only, mirroring main.js's expandTraceById onClose.
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
@@ -222,6 +231,11 @@ class TraceDeepLinkTest extends PlaywrightTestBase {
                 + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
 
         assertThat(page.url()).endsWith("#traces/" + traceId + "/request");
+
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+
+        assertThat(page.url()).endsWith("#traces");
     }
 
     /**
