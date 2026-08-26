@@ -322,7 +322,9 @@ class TraceOverlayTest extends PlaywrightTestBase {
      * would very likely have passed before this change too. The actual proof is
      * that render() no longer has that duplicate template text at all - a
      * code-level fact (see the task report's TDD section for the discriminating
-     * evidence).
+     * evidence). Also pins the spans tab's own count badge, computed from the same
+     * endpoint TABS.count(trace) reads (trace.summary.spans.count) rather than a
+     * hardcoded literal, so a real change to the trace's span count still passes.
      */
     @Test
     void overlayTabStripExposesAsARealTablistInTheAccessibilityTree() {
@@ -337,17 +339,34 @@ class TraceOverlayTest extends PlaywrightTestBase {
         openPersonsPage();
         page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
                 + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.waitForFunction(
-                "async () => {"
-                        + "const id = document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-trace').textContent.trim();"
-                        + "const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
-                        + "if (!response.ok) return false;"
-                        + "const trace = await response.json();"
-                        + "return (trace.queries || []).length > 0;"
-                        + "}",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        // Polls (inside one evaluate(), not a separate waitForFunction + a later re-fetch)
+        // until the query span lands, then returns the span count from that very same
+        // response - both to dodge the ingestion race documented above, and to read the
+        // count from the exact same JSON payload the "queries present" check just parsed,
+        // rather than a second independent fetch that could race the trace being evicted
+        // from the store (a bounded ring buffer under constant pressure from this app's
+        // own background scheduler). Reads the id from the copy button's data-pk-copy
+        // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon baked
+        // in by copyableIdHtml), not the bare id a URL path segment needs.
+        int spanCount = ((Number) page.evaluate("async () => {"
+                        + "for (let i = 0; i < 150; i++) {"
+                        + "  const copyEl = document.getElementById('peekaboot-toolbar-host')"
+                        + ".shadowRoot.querySelector('#pk-trace .pk-copy');"
+                        + "  const id = copyEl ? copyEl.dataset.pkCopy : null;"
+                        + "  if (id) {"
+                        + "    const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
+                        + "    if (response.ok) {"
+                        + "      const trace = await response.json();"
+                        + "      if ((trace.queries || []).length > 0) {"
+                        + "        return trace.summary?.spans?.count ?? 0;"
+                        + "      }"
+                        + "    }"
+                        + "  }"
+                        + "  await new Promise(r => setTimeout(r, 100));"
+                        + "}"
+                        + "throw new Error('query span never arrived within 15s');"
+                        + "}"))
+                .intValue();
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
@@ -366,7 +385,7 @@ class TraceOverlayTest extends PlaywrightTestBase {
         String snapshot = tablist.ariaSnapshot();
 
         assertThat(snapshot).contains("tablist");
-        assertThat(snapshot).contains("\"Spans\"");
+        assertThat(snapshot).contains("\"Spans " + spanCount + "\"");
         // The " 1" is the queries count TABS.count(trace) computes for this real trace -
         // pins that count is actually rendered into the tab, not just present in TABS.
         assertThat(snapshot).contains("\"Queries 1\" [selected]");
@@ -425,6 +444,75 @@ class TraceOverlayTest extends PlaywrightTestBase {
         String sql = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-query__sql')?.textContent ?? ''");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
+    }
+
+    /**
+     * Every span row's id is shown short (8 hex chars - readable, fits the fixed-width
+     * name column) but copies the full 16-hex-char id (copyable.js's displayValue option),
+     * and the old "unknown" placeholder for a nameless span is gone - an unnamed span now
+     * renders only its (still labelled, still copyable) span id.
+     */
+    @Test
+    void spansTabShowsShortenedCopyableSpanIdsAndNoUnknownFallback() {
+        openOverlayFromToolbar();
+
+        Object visibleLength = page.evaluate("() => {"
+                + "const el = document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-gantt-spanid .pk-copy__value');"
+                + "return el ? el.textContent.trim().length : -1;"
+                + "}");
+        Object copiedId = page.evaluate("() => {"
+                + "const el = document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-gantt-spanid [data-pk-copy]');"
+                + "return el ? el.dataset.pkCopy : null;"
+                + "}");
+        Object unknownFallbackCount =
+                page.evaluate("() => Array.from(document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelectorAll('.pk-gantt-name-text'))"
+                        + ".filter(el => el.textContent.trim() === 'unknown').length");
+
+        assertThat(visibleLength)
+                .as("the visible span id is shortened to 8 chars")
+                .isEqualTo(8);
+        assertThat((String) copiedId)
+                .as("the copy payload is the real, full 16-hex-char span id")
+                .matches("^[0-9a-f]{16}$");
+        assertThat(unknownFallbackCount)
+                .as("the 'unknown' name placeholder is gone")
+                .isEqualTo(0);
+    }
+
+    /**
+     * Each span's duration cell also shows its share of the whole trace's duration, and
+     * the gantt header's tick marks line up with the row tracks below them - both track
+     * and header timeline carry the same 8px side margin, so the 0%/100% ticks sit right
+     * above the start/end of the bars they describe rather than 8px further out.
+     */
+    @Test
+    void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
+        openOverlayFromToolbar();
+
+        Object allDurationsMatchPattern =
+                page.evaluate("() => Array.from(document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelectorAll('.pk-gantt-duration'))"
+                        + ".every(el => /^\\d+ms \u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+        assertThat((Boolean) allDurationsMatchPattern)
+                .as("every duration cell reads '<ms>ms \u00B7 <pct>%'")
+                .isTrue();
+
+        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header-timeline")
+                .boundingBox();
+        BoundingBox trackBox = page.locator("#peekaboot-trace-overlay .pk-gantt-row")
+                .first()
+                .locator(".pk-gantt-track")
+                .boundingBox();
+
+        assertThat(headerBox.x)
+                .as("header timeline's left edge lines up with the first row's track")
+                .isCloseTo(trackBox.x, org.assertj.core.data.Offset.offset(1.0));
+        assertThat(headerBox.x + headerBox.width)
+                .as("header timeline's right edge lines up with the first row's track")
+                .isCloseTo(trackBox.x + trackBox.width, org.assertj.core.data.Offset.offset(1.0));
     }
 
     /**

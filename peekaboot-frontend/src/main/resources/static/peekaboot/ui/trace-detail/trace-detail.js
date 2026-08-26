@@ -27,7 +27,7 @@ import * as logs from './tabs/logs.js';
 // button's text, count (when present) the small badge next to it.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
-    {id: 'spans',   label: 'Spans',   render: spans.render},
+    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary?.spans?.count ?? countSpans(t.rootSpan)},
     {id: 'queries', label: 'Queries', render: queries.render, count: t => (t.queries || []).length},
     {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => (t.logs || []).length}
 ];

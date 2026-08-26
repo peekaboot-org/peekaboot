@@ -1,13 +1,12 @@
 package org.peekaboot.testingapp.ui;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.microsoft.playwright.Page;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Trace and span ids are the one thing on these surfaces a developer needs to move into
@@ -29,13 +28,28 @@ class CopyableIdTest extends PlaywrightTestBase {
         page.context().grantPermissions(List.of("clipboard-read", "clipboard-write"));
     }
 
+    /**
+     * Imports copyable.js directly (SharedModuleTest's pk-blank.html pattern) rather than
+     * driving a real page - copyableIdHtml's displayValue option is pure markup generation,
+     * with nothing about it that needs a real DOM surface to exercise.
+     */
+    private Object evalModule(String expression) {
+        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
+            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+        }
+        return page.evaluate(
+                "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
+                List.of("/peekaboot/ui/shared/copyable.js", expression));
+    }
+
     private void openPageWithToolbar() {
         page.navigate(baseUrl + "/");
         page.waitForSelector("#peekaboot-toolbar-host");
         page.waitForFunction(
                 "() => document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'",
-                null, new Page.WaitForFunctionOptions().setTimeout(15000));
+                        + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
     }
 
     @Test
@@ -47,7 +61,8 @@ class CopyableIdTest extends PlaywrightTestBase {
                 + ".shadowRoot.querySelector('#pk-trace').textContent");
         String copied = (String) page.evaluate("() => " + TOOLBAR_COPY + ".dataset.pkCopy");
 
-        assertThat(text).as("the id is prefixed so it reads as a trace id, not a bare hex string")
+        assertThat(text)
+                .as("the id is prefixed so it reads as a trace id, not a bare hex string")
                 .contains("traceId");
         assertThat(text).as("no ellipsis - the id is shown in full").doesNotContain("...");
         assertThat(copied).hasSize(TRACE_ID_LENGTH);
@@ -68,7 +83,7 @@ class CopyableIdTest extends PlaywrightTestBase {
                 .isEqualTo(traceId);
         assertThat(page.querySelector("#peekaboot-trace-overlay"))
                 .as("the whole toolbar bar opens the overlay on click; copying an id must not "
-                  + "also trigger it, which needs the copy handler to run in the capture phase")
+                        + "also trigger it, which needs the copy handler to run in the capture phase")
                 .isNull();
     }
 
@@ -77,13 +92,12 @@ class CopyableIdTest extends PlaywrightTestBase {
     void copyControlIsNotNestedInsideTheOpenButton() {
         openPageWithToolbar();
 
-        boolean nested = (boolean) page.evaluate(
-                "() => !!document.getElementById('peekaboot-toolbar-host')"
-              + ".shadowRoot.querySelector('.pk-toolbar__open .pk-copy')");
+        boolean nested = (boolean) page.evaluate("() => !!document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('.pk-toolbar__open .pk-copy')");
 
         assertThat(nested)
                 .as("a button inside a button is invalid, and ARIA treats a button's children as "
-                  + "presentational - the copy control would be pruned from the accessibility tree")
+                        + "presentational - the copy control would be pruned from the accessibility tree")
                 .isFalse();
     }
 
@@ -99,6 +113,47 @@ class CopyableIdTest extends PlaywrightTestBase {
     }
 
     @Test
+    @DisplayName("displayValue swaps the visible value for a short one but the copy payload stays the full id")
+    void copyableIdRendersAShortDisplayValueButCopiesTheFullId() {
+        String fullId = "abcdef1234567890";
+
+        Object result = evalModule("(() => {"
+                + " const d = document.createElement('div');"
+                + " d.innerHTML = m.copyableIdHtml('" + fullId + "', {label: 'spanId', displayValue: 'abcdef12'});"
+                + " const btn = d.querySelector('[data-pk-copy]');"
+                + " return [btn.querySelector('.pk-copy__value').textContent, btn.dataset.pkCopy,"
+                + "         btn.getAttribute('aria-label'), btn.getAttribute('title')];"
+                + "})()");
+
+        @SuppressWarnings("unchecked")
+        List<String> parts = (List<String>) result;
+        assertThat(parts.get(0))
+                .as("the visible text is the short display value")
+                .isEqualTo("abcdef12");
+        assertThat(parts.get(1)).as("the copy payload is the full id").isEqualTo(fullId);
+        assertThat(parts.get(2))
+                .as("the accessible name still names the full id")
+                .contains(fullId);
+        assertThat(parts.get(3))
+                .as("the title still names the label, not the id")
+                .isEqualTo("Copy spanId");
+    }
+
+    @Test
+    @DisplayName("a call without displayValue renders the full value, exactly as before")
+    void copyableIdWithoutDisplayValueRendersTheFullValueUnchanged() {
+        String fullId = "abcdef1234567890";
+
+        Object visibleValue = evalModule("(() => {"
+                + " const d = document.createElement('div');"
+                + " d.innerHTML = m.copyableIdHtml('" + fullId + "', {label: 'spanId'});"
+                + " return d.querySelector('.pk-copy__value').textContent;"
+                + "})()");
+
+        assertThat(visibleValue).isEqualTo(fullId);
+    }
+
+    @Test
     @DisplayName("trace ids in the dashboard list are copy controls too")
     void traceListRendersCopyableIds() {
         page.navigate(baseUrl + "/");
@@ -110,7 +165,7 @@ class CopyableIdTest extends PlaywrightTestBase {
                 .as("every listed trace exposes its id for copying")
                 .isNotEmpty();
         assertThat((String) page.evaluate(
-                "() => document.querySelector('#traces-list .pk-trace-item .pk-copy').dataset.pkCopy"))
+                        "() => document.querySelector('#traces-list .pk-trace-item .pk-copy').dataset.pkCopy"))
                 .as("the row shows a shortened id but copies the whole one")
                 .hasSize(TRACE_ID_LENGTH);
     }
