@@ -43,25 +43,31 @@ function wireFilter(container) {
 }
 
 /**
- * Reconciles the filter input with the URL - two directions, picked by whether the URL
- * currently carries this tab's own "q" param:
- *  - URL has "q" -> the URL is authoritative (a deep link, Back/Forward, or a
- *    hand-edited hash): restores the input from it. A no-op once the input already
- *    matches, which is the common case - every keystroke writes straight back via
- *    setUrlParams, so an ordinary auto-refresh render finds nothing to seed here.
- *  - URL is bare -> this tab's own current input value is authoritative instead. A bare
- *    hash here almost always just means the tab strip switched tabs (main.js's onSelect
- *    pushes a plain "#<tab>" hash with no params), not that the user asked to clear the
- *    filter, and whatever they typed before switching away is still sitting right here
- *    in the DOM. Writing it back is what makes the filter survive switching away and
- *    back to this tab, and makes the URL truthful again instead of silently drifting
- *    out of sync with what's actually filtered.
+ * Reconciles the filter input with the URL - two directions, picked by whether this
+ * render is URL-authoritative (context.urlIsAuthoritative - a genuine hash change:
+ * a deep link, Back/Forward, or a hand-edited hash, as opposed to a programmatic tab
+ * switch - see main.js's urlChangeInProgress) or the URL already carries this tab's own
+ * "q" param either way:
+ *  - URL-authoritative, or the URL has "q" -> the URL wins, including a bare one: a
+ *    hand-edited hash with "q" removed means the user asked to clear the filter, and
+ *    that has to actually clear it, not just leave the input untouched. A no-op once
+ *    the input already matches, which is the common case - every keystroke writes
+ *    straight back via setUrlParams, so an ordinary auto-refresh render (never
+ *    URL-authoritative) finds nothing to seed here.
+ *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
+ *    own current input value wins instead. A bare hash here almost always just means the
+ *    tab strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with no
+ *    params), not that the user asked to clear the filter, and whatever they typed
+ *    before switching away is still sitting right here in the DOM. Writing it back is
+ *    what makes the filter survive switching away and back to this tab, and makes the
+ *    URL truthful again instead of silently drifting out of sync with what's actually
+ *    filtered.
  */
 function reconcileFilterWithUrl(container) {
     const input = container.querySelector('#env-filter');
     if (!input) return;
 
-    if ('q' in currentContext.urlParams) {
+    if ('q' in currentContext.urlParams || currentContext.urlIsAuthoritative) {
         const urlQuery = currentContext.urlParams.q || '';
         if (urlQuery !== input.value.trim()) input.value = urlQuery;
     } else if (input.value.trim()) {

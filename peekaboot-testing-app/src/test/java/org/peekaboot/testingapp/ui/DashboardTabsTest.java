@@ -425,6 +425,37 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * Regression test for a review finding on the fix above: the reconcile logic
+     * couldn't tell "the tab strip switched tabs" (a bare hash this tab's own filter
+     * should survive - see metersFilterSurvivesSwitchingTabsAwayAndBack) apart from "the
+     * user hand-edited the address bar to remove the q param" (a bare hash that should
+     * actually clear the filter) - both looked identical, so it always favored the
+     * surviving-filter behavior, silently reverting a real edit. Fixed by having
+     * main.js flag a render as URL-authoritative only when it's the direct result of a
+     * genuine hashchange event (handleHashChange()'s urlChangeInProgress) - a
+     * programmatic tab switch never sets it, so its own bare hash still lets the filter
+     * survive, while a real hash edit now actually clears it.
+     */
+    @Test
+    void handEditingTheHashToRemoveTheFilterClearsIt() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForSelector("#meters-list .pk-group");
+
+        page.fill("#meters-filter", "jvm");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm')");
+
+        // Direct hash assignment fires a real 'hashchange' event - what a user editing
+        // the address bar (or following a bookmark without the param) would produce -
+        // unlike main.js's own pushAppHash/replaceAppHash writes, which never do.
+        page.evaluate("() => { window.location.hash = '#meters'; }");
+        page.waitForFunction("() => document.querySelector('#meters-filter').value === ''");
+
+        assertThat(page.inputValue("#meters-filter")).isEmpty();
+        assertThat(page.url()).endsWith("#meters");
+    }
+
+    /**
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct

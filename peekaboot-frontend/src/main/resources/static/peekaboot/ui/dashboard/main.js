@@ -65,12 +65,30 @@ let unmaskRequested = false;
 
 // --- Hash routing -----------------------------------------------------------------
 
+// True only while a render is happening as the direct result of handleHashChange() -
+// a genuine hash change (address-bar edit, Back/Forward), or the deferred boot-time
+// call for a deep link - as opposed to a programmatic tab switch or navigate() call.
+// pushAppHash/replaceAppHash never fire 'hashchange' (see url-state.js's own doc
+// comment), so every other render path (tab-strip clicks, cross-tab navigate()) leaves
+// this false. Read by currentContext() below and exposed on the context as
+// `urlIsAuthoritative`, so a tab's reconcile logic can tell "the user asked for exactly
+// this URL, including a bare one" apart from "the URL just doesn't happen to carry this
+// tab's params right now" (e.g. the tab strip's own bare hash push on every switch,
+// where the tab's current filter state should survive instead of being cleared - see
+// each tab's reconcileWithUrl/reconcileFilterWithUrl doc comment).
+let urlChangeInProgress = false;
+
 function handleHashChange() {
     const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
     mainTabs.select(tabId, {silent: true});
     showTab(tabId);
-    renderTabById(tabId);
+    urlChangeInProgress = true;
+    try {
+        renderTabById(tabId);
+    } finally {
+        urlChangeInProgress = false;
+    }
     if (tabId === 'traces' && detail) {
         expandTraceById(detail, subview, params);
     } else {
@@ -212,6 +230,10 @@ function currentContext() {
         // The active tab's own query params, and how it writes them back - see
         // url-state.js's push/replace rule: a filter change replaces, it never pushes.
         urlParams,
+        // True only for a render triggered by handleHashChange() - a genuine hash
+        // change or the boot-time deep-link kick - as opposed to a programmatic tab
+        // switch/navigate() call. See urlChangeInProgress's own doc comment above.
+        urlIsAuthoritative: urlChangeInProgress,
         // Deliberately re-parses the hash instead of closing over this call's own
         // tab/detail/subview above: a tab module can hold this context object (and so
         // this closure) far longer than the hash stays put underneath it - e.g. traces.js

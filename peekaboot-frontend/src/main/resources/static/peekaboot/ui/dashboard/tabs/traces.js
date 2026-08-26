@@ -88,23 +88,30 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
 
 /**
  * Reconciles bucket/type/op state with the URL - called only while this tab's container
- * is the active one (see render()). Two directions, picked by whether the URL currently
- * carries any of this tab's own filter keys:
- *  - URL has bucket/type/op -> the URL is authoritative (a deep link, Back/Forward, or a
- *    hand-edited hash): seedFromUrl() restores state from it.
- *  - URL is bare -> this tab's *current* state is authoritative instead. A bare hash
- *    here almost always just means the tab strip switched tabs (main.js's onSelect
- *    pushes a plain "#<tab>" hash with no params - see navigate()), not that the user
- *    asked to clear the filter, and the DOM/module state the user set before switching
- *    away is still sitting right here. Writing it back (writeUrlParams()) is what makes
- *    a filter survive switching away and back to this tab, and makes the URL truthful
- *    again instead of silently drifting out of sync with what's actually filtered.
+ * is the active one (see render()). Two directions, picked by whether this render is
+ * URL-authoritative (context.urlIsAuthoritative - a genuine hash change: a deep link,
+ * Back/Forward, or a hand-edited hash, as opposed to a programmatic tab switch - see
+ * main.js's urlChangeInProgress) or the URL already carries any of this tab's own
+ * filter keys either way:
+ *  - URL-authoritative, or the URL has bucket/type/op -> the URL wins, including a bare
+ *    one: seedFromUrl() restores state from it, resetting to defaults when the URL
+ *    carries none of the keys but this render is URL-authoritative (a hand-edited hash
+ *    with the filter keys removed means the user asked to clear the filter, and that
+ *    has to actually clear it, not just leave the state untouched).
+ *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
+ *    *current* state wins instead. A bare hash here almost always just means the tab
+ *    strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with no
+ *    params - see navigate()), not that the user asked to clear the filter, and the
+ *    DOM/module state the user set before switching away is still sitting right here.
+ *    Writing it back (writeUrlParams()) is what makes a filter survive switching away
+ *    and back to this tab, and makes the URL truthful again instead of silently
+ *    drifting out of sync with what's actually filtered.
  */
 function reconcileWithUrl(container) {
     const params = currentContext.urlParams || {};
     const urlHasFilterParams = 'bucket' in params || 'type' in params || 'op' in params;
 
-    if (urlHasFilterParams) {
+    if (urlHasFilterParams || currentContext.urlIsAuthoritative) {
         seedFromUrl(container, params);
     } else if (currentBucket !== 'all' || selectedRootActionTypes.size > 0 || currentRootOperationFilter) {
         writeUrlParams();
