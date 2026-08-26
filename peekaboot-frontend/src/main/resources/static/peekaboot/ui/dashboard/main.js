@@ -65,13 +65,6 @@ let unmaskRequested = false;
 
 // --- Hash routing -----------------------------------------------------------------
 
-// The trace currently shown in the overlay, if any. handleHashChange fires on every
-// Back/Forward step - including ones that only touched subview/params, since those are
-// written via replaceAppHash but can still resurface on Back/Forward (see url-state.js's
-// push/replace rule) - so this guards against tearing down and rebuilding an overlay
-// that's already open for the same trace.
-let currentOverlayTraceId = null;
-
 function handleHashChange() {
     const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
@@ -93,9 +86,17 @@ function expandTraceById(traceId, subview = null, params = {}) {
         console.warn('Invalid trace ID:', traceId);
         return;
     }
-    if (currentOverlayTraceId === traceId) return;
 
-    currentOverlayTraceId = traceId;
+    // handleHashChange fires on every Back/Forward step - including ones that only
+    // replaced subview/params (see url-state.js's push/replace rule) - and the overlay can
+    // also already be open for this trace via traces.js's own click-to-open path, which
+    // calls openTraceDetail directly and never runs this function at all. Querying the
+    // DOM (the overlay host's data-trace-id, set by trace-detail.js) instead of tracking
+    // an "is it open" flag in this module stays correct regardless of which path opened
+    // it; re-running openTraceDetail would otherwise tear down and rebuild the whole
+    // overlay for a trace that's already open, flickering it.
+    if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === traceId) return;
+
     openTraceDetail(traceId, {
         // Consumed by trace-detail.js (a later task) to seed and report the overlay's own
         // subview/query-param state - main.js only routes it through, unused here.
@@ -106,7 +107,6 @@ function expandTraceById(traceId, subview = null, params = {}) {
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace.
         onClose: () => {
-            currentOverlayTraceId = null;
             const {tab, detail} = parseAppHash();
             if (tab === 'traces' && detail === traceId) pushAppHash({tab: 'traces'});
         }
@@ -191,7 +191,7 @@ function initTabs() {
 // --- Data fetching --------------------------------------------------------------------
 
 function currentContext() {
-    const {tab, params: urlParams} = parseAppHash();
+    const {tab, detail, subview, params: urlParams} = parseAppHash();
     const activeTabId = resolveTabId(tab);
     return {
         client,
@@ -203,8 +203,10 @@ function currentContext() {
         toggleUnmask,
         // The active tab's own query params, and how it writes them back - see
         // url-state.js's push/replace rule: a filter change replaces, it never pushes.
+        // detail/subview are carried through unchanged so this can't strip an open trace
+        // overlay's hash segments out from under it.
         urlParams,
-        setUrlParams: params => replaceAppHash({tab: activeTabId, params})
+        setUrlParams: params => replaceAppHash({tab: activeTabId, detail, subview, params})
     };
 }
 

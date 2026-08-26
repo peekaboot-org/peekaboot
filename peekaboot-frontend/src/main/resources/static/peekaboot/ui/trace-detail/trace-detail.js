@@ -87,6 +87,10 @@ export function openTraceDetail(traceId, options = {}) {
 
     const overlayHost = document.createElement('div');
     overlayHost.id = 'peekaboot-trace-overlay';
+    // Exposes which trace (if any) is open as plain DOM state, so callers on either of
+    // this module's two entry points (main.js's hash routing, traces.js's click-to-open)
+    // can check "is this trace already open?" without either of them having to track it.
+    overlayHost.dataset.traceId = traceId;
     // Decision: size the host with an inline style set synchronously here (matching
     // toolbar.js's host), not a `:host{position:fixed;inset:0}` rule in trace-detail.css.
     // attachSharedStyles() links that stylesheet asynchronously, so a CSS-only :host rule

@@ -443,6 +443,67 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * Regression test for a review finding on the trace-detail re-open guard: two
+     * hash-driven opens in a row - e.g. deep-linking from one trace straight into another,
+     * or a Back/Forward step that lands on a different trace - used to desync main.js's
+     * bookkeeping of "which trace is open" (a private module variable at the time).
+     * openTraceDetail's synchronous closeTraceDetail() call fires the *first* trace's
+     * still-registered onClose callback - which unconditionally cleared that bookkeeping -
+     * before the *second* traceId was even recorded, clobbering it back to unset. The next
+     * hashchange landing back on the (already open) second trace then failed the
+     * "already open" check and tore the overlay down to rebuild it for no reason - the
+     * exact flicker the guard exists to prevent. Fixed by deriving "is trace X open" from
+     * the overlay host's own data-trace-id (stamped by trace-detail.js) instead of a
+     * private flag, so it can't desync regardless of which of the app's two entry points
+     * (main.js's hash routing, or traces.js's own click-to-open, which bypasses main.js's
+     * bookkeeping entirely) opened the overlay.
+     * <p>
+     * Marks the host with a throwaway attribute right after switching traces, then
+     * re-fires the very hashchange event Back/Forward (or a redundant navigation) would
+     * produce for the trace already showing: a rebuilt overlay is a fresh DOM node and
+     * loses the marker, while a guard that correctly recognizes the trace is already open
+     * leaves the marked node untouched.
+     */
+    @Test
+    void revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        Object idsRaw = page.evaluate(
+                "() => [...document.querySelectorAll('#traces-list .pk-trace-item')].map(el => el.dataset.traceId)");
+        @SuppressWarnings("unchecked")
+        List<String> traceIds = (List<String>) idsRaw;
+        assertThat(traceIds.size())
+                .as("need at least two distinct traces for this test")
+                .isGreaterThanOrEqualTo(2);
+        String firstTraceId = traceIds.get(0);
+        String secondTraceId = traceIds.get(1);
+
+        // Deep-link straight to the first trace - main.js's own hash-driven
+        // expandTraceById path, which is what registers the onClose callback that the
+        // switch below fires early.
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", firstTraceId);
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", firstTraceId);
+
+        // Straight to a *different* trace by hash, without closing the first - the exact
+        // sequence that used to clobber the guard's bookkeeping (see the javadoc above).
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", secondTraceId);
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", secondTraceId);
+
+        page.evaluate("() => { document.getElementById('peekaboot-trace-overlay').dataset.testMarker = 'stable'; }");
+
+        // Re-fire the hashchange for the trace that's already open, without changing the
+        // hash itself - what Back/Forward landing back on it produces.
+        page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
+
+        assertThat(page.getAttribute("#peekaboot-trace-overlay", "data-test-marker"))
+                .isEqualTo("stable");
+    }
+
+    /**
      * The scheduled-tasks "view traces" link pre-filters the Traces tab to that
      * scheduler's own SCHEDULED_JOB traces (rootActionType + rootOperation), via
      * context.navigate's payload argument routed to traces.js's applyFilter(). Proves
