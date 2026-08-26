@@ -52,6 +52,11 @@ export function render(container, data, context) {
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
     wireControls(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so seeding here during a background
+    // auto-refresh render of a hidden traces tab would read another tab's params (or
+    // none) and clobber this tab's own filter state. See seedFromUrl's own doc comment.
+    if (container.classList.contains('active')) seedFromUrl(container);
     fetchAndRender();
 }
 
@@ -73,7 +78,52 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
         cb.checked = cb.value === rootActionType;
     });
 
+    // main.js's navigate() already pushed the plain "#traces" hash before calling this -
+    // this replaces it with the filter's own params so the cross-tab link lands on a
+    // shareable URL, without adding a second history entry for one navigation.
+    writeUrlParams();
     fetchAndRender();
+}
+
+/**
+ * Seeds bucket/type/op state from the URL - called only while this tab's container is
+ * the active one (see render()). Compares against the current state rather than
+ * unconditionally overwriting it: every control below writes its own change straight
+ * back to the URL via writeUrlParams(), so on an ordinary auto-refresh render the URL
+ * already matches the current state and this is a no-op - it only actually seeds on a
+ * genuine hash-driven navigation (deep link, Back/Forward, or a hand-edited hash).
+ */
+function seedFromUrl(container) {
+    const params = currentContext.urlParams || {};
+    const urlBucket = params.bucket || 'all';
+    const urlTypes = params.type ? params.type.split(',').filter(Boolean) : [];
+    const urlOp = params.op || null;
+
+    const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
+    const urlTypesJoined = [...urlTypes].sort().join(',');
+    if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter) {
+        return;
+    }
+
+    currentBucket = urlBucket;
+    selectedRootActionTypes = new Set(urlTypes);
+    currentRootOperationFilter = urlOp;
+
+    container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
+        btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
+    container.querySelectorAll('#traces-filter input').forEach(cb => {
+        cb.checked = selectedRootActionTypes.has(cb.value);
+    });
+}
+
+/** Writes the current bucket/type/op filter state back to the URL, omitting each key
+    that's at its default so a clean filter yields a clean "#traces" hash. */
+function writeUrlParams() {
+    const params = {};
+    if (currentBucket !== 'all') params.bucket = currentBucket;
+    if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
+    if (currentRootOperationFilter) params.op = currentRootOperationFilter;
+    currentContext.setUrlParams(params);
 }
 
 function wireControls(container) {
@@ -87,6 +137,7 @@ function wireControls(container) {
             currentBucket = btn.dataset.bucket;
             container.querySelectorAll('#traces-bucket .pk-btn').forEach(b =>
                 b.setAttribute('aria-pressed', String(b === btn)));
+            writeUrlParams();
             fetchAndRender();
         });
     });
@@ -114,6 +165,7 @@ function renderTypeFilterCheckboxes(container) {
         checkbox.addEventListener('change', () => {
             if (checkbox.checked) selectedRootActionTypes.add(type);
             else selectedRootActionTypes.delete(type);
+            writeUrlParams();
             fetchAndRender();
         });
 
@@ -126,6 +178,7 @@ function resetFilter() {
     selectedRootActionTypes.clear();
     currentRootOperationFilter = null;
     currentContainer.querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
+    writeUrlParams();
     fetchAndRender();
 }
 

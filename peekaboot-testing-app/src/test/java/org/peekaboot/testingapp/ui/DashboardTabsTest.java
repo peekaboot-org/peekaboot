@@ -368,6 +368,33 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * A deep link into the meters tab must restore the text filter from the URL, and
+     * typing further into it must keep writing the URL back (via replaceState - see
+     * url-state.js's push/replace rule) without growing browser history, so every
+     * keystroke doesn't add its own Back stop.
+     */
+    @Test
+    void metersFilterIsRestoredFromTheUrlAndWritesBackOnInput() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#meters?q=jvm");
+        page.waitForFunction("() => document.querySelector('#meters-filter')?.value === 'jvm'");
+
+        assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm");
+
+        int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        Locator input = page.locator("#meters-filter");
+        input.click();
+        input.press("End");
+        input.press("m");
+
+        page.waitForFunction("() => window.location.hash.includes('q=jvmm')");
+        int historyLengthAfter = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        assertThat(page.url()).contains("q=jvmm");
+        assertThat(historyLengthAfter).isEqualTo(historyLengthBefore);
+    }
+
+    /**
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct
@@ -414,6 +441,28 @@ class DashboardTabsTest extends PlaywrightTestBase {
                 expectedErrorsCount);
 
         assertThat(page.querySelectorAll("#traces-list .pk-trace-item")).hasSize(expectedErrorsCount);
+    }
+
+    /**
+     * A deep link into the traces tab must restore the bucket and type filter controls
+     * from the URL, not just land on the traces tab - the whole point of Task 5 is that
+     * a filtered traces URL is shareable/bookmarkable.
+     */
+    @Test
+    void deepLinkRestoresTheTracesBucketAndTypeFilter() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors&type=SCHEDULED_JOB");
+        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
+                .isEqualTo("false");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='errors']", "aria-pressed"))
+                .isEqualTo("true");
+
+        Object checkedTypesRaw = page.evaluate(
+                "() => [...document.querySelectorAll('#traces-filter input:checked')].map(cb => cb.value)");
+        @SuppressWarnings("unchecked")
+        List<String> checkedTypes = (List<String>) checkedTypesRaw;
+        assertThat(checkedTypes).containsExactly("SCHEDULED_JOB");
     }
 
     @Test

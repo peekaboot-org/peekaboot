@@ -31,6 +31,11 @@ export function render(container, data, context) {
     currentContainer = container;
     currentContext = context;
     wireFilter(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so seeding during a background
+    // auto-refresh render of a hidden meters tab would read another tab's params (or
+    // none) and clobber whatever the user already typed here.
+    if (container.classList.contains('active')) seedFilterFromUrl(container);
     fetchAndRender();
 }
 
@@ -38,7 +43,23 @@ function wireFilter(container) {
     const input = container.querySelector('#meters-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
-    input.addEventListener('input', () => renderList(input.value.trim()));
+    input.addEventListener('input', () => {
+        const value = input.value.trim();
+        currentContext.setUrlParams(value ? {q: value} : {});
+        renderList(value);
+    });
+}
+
+/** Seeds the filter input from the URL - a no-op once the input already matches it,
+    which is the common case: every keystroke above writes straight back via
+    setUrlParams, so an ordinary auto-refresh render finds nothing to seed. Only a
+    genuine hash-driven navigation (deep link, Back/Forward) actually changes the
+    input's value here. */
+function seedFilterFromUrl(container) {
+    const input = container.querySelector('#meters-filter');
+    if (!input) return;
+    const urlQuery = currentContext.urlParams.q || '';
+    if (urlQuery !== input.value.trim()) input.value = urlQuery;
 }
 
 function currentFilterValue(container) {

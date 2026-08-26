@@ -11,9 +11,22 @@ export const label = 'Environment';
 
 let currentData = null;
 
+// The most recent render() call's context - read by the persistent filter input
+// listener below (wired once, see wireFilter) so a later render's context (its
+// setUrlParams closes over the URL's tab/detail/subview at *that* call - see main.js's
+// currentContext()) is always what a later keystroke writes through, not whatever was
+// current the first time this tab was rendered.
+let currentContext = null;
+
 export function render(container, data, context) {
     currentData = data;
+    currentContext = context;
     wireFilter(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so seeding during a background
+    // auto-refresh render of a hidden environment tab would read another tab's params
+    // (or none) and clobber whatever the user already typed here.
+    if (container.classList.contains('active')) seedFilterFromUrl(container);
     renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
     renderGroups(container, currentFilterValue(container));
 }
@@ -22,7 +35,23 @@ function wireFilter(container) {
     const input = container.querySelector('#env-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
-    input.addEventListener('input', () => renderGroups(container, input.value.trim()));
+    input.addEventListener('input', () => {
+        const value = input.value.trim();
+        currentContext.setUrlParams(value ? {q: value} : {});
+        renderGroups(container, value);
+    });
+}
+
+/** Seeds the filter input from the URL - a no-op once the input already matches it,
+    which is the common case: every keystroke above writes straight back via
+    setUrlParams, so an ordinary auto-refresh render finds nothing to seed. Only a
+    genuine hash-driven navigation (deep link, Back/Forward) actually changes the
+    input's value here. */
+function seedFilterFromUrl(container) {
+    const input = container.querySelector('#env-filter');
+    if (!input) return;
+    const urlQuery = currentContext.urlParams.q || '';
+    if (urlQuery !== input.value.trim()) input.value = urlQuery;
 }
 
 function currentFilterValue(container) {
