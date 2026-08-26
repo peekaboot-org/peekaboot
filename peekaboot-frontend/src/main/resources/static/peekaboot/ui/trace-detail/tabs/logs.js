@@ -6,6 +6,8 @@ import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {buildSpanNames} from '../../shared/span-names.js';
 
+const LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+
 /**
  * Renders log rows. Pass showSpanColumn when rows come from more than one span,
  * so the span id is worth a column of its own.
@@ -26,7 +28,13 @@ export function renderLogRows(logs, {showSpanColumn = false, spanNames} = {}) {
     }).join('');
 }
 
-export function render(container, trace) {
+/**
+ * `view.filters` (`{q, level, span}`, see url-state.js) seeds this tab's state when it is
+ * the one restored from the URL at overlay-open time; `view.setFilters(next)` reports every
+ * change back so it round-trips into the hash. Both are optional - the dev toolbar's open
+ * path (no urlState at all) leaves filtering purely local, as before.
+ */
+export function render(container, trace, view = {}) {
     const spanNames = buildSpanNames(trace.rootSpan);
     const logs = trace.logs || [];
 
@@ -35,14 +43,35 @@ export function render(container, trace) {
         return;
     }
 
-    let currentSpanFilter = null;
+    // Single source of truth for the three filters - renderView() below renders the
+    // controls FROM this, instead of the controls' own DOM values, so a re-render (the
+    // span filter changing) can no longer wipe out the text/level filters. See logs.js's
+    // task brief for the bug this replaced.
+    const state = {
+        q: view.filters?.q || '',
+        level: view.filters?.level || '',
+        span: view.filters?.span || null
+    };
+
+    function publishFilters() {
+        const next = {};
+        if (state.q) next.q = state.q;
+        if (state.level) next.level = state.level;
+        if (state.span) next.span = state.span;
+        view.setFilters?.(next);
+    }
 
     function renderView() {
         let html = '<div class="pk-logs-filter">';
-        html += '<input type="text" placeholder="Filter logs..." id="pk-log-filter">';
-        html += '<select id="pk-log-level"><option value="">All Levels</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option></select>';
-        if (currentSpanFilter) {
-            const spanName = spanNames.get(currentSpanFilter) || currentSpanFilter;
+        html += `<input type="text" placeholder="Filter logs..." id="pk-log-filter" value="${escapeHtml(state.q)}">`;
+        html += '<select id="pk-log-level">';
+        html += `<option value=""${state.level === '' ? ' selected' : ''}>All Levels</option>`;
+        LEVELS.forEach(level => {
+            html += `<option${state.level === level ? ' selected' : ''}>${level}</option>`;
+        });
+        html += '</select>';
+        if (state.span) {
+            const spanName = spanNames.get(state.span) || state.span;
             const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
             html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
@@ -56,29 +85,39 @@ export function render(container, trace) {
         const clearSpanFilter = container.querySelector('#pk-clear-span-filter');
 
         function applyFilters() {
-            const text = filterInput.value.toLowerCase();
-            const level = levelSelect.value;
+            const text = state.q.toLowerCase();
+            const level = state.level;
             container.querySelectorAll('.pk-log').forEach(item => {
                 const message = item.querySelector('.pk-log__message').textContent.toLowerCase();
                 const itemLevel = item.dataset.level;
                 const itemSpanId = item.dataset.spanId;
                 const matchText = !text || message.includes(text);
                 const matchLevel = !level || itemLevel === level;
-                const matchSpan = !currentSpanFilter || itemSpanId === currentSpanFilter;
+                const matchSpan = !state.span || itemSpanId === state.span;
                 item.classList.toggle('pk-log--hidden', !(matchText && matchLevel && matchSpan));
             });
         }
 
-        // Establishes the initial visibility (a span filter set before this render, if any)
+        // Establishes the initial visibility (filters restored from the URL, or a span
+        // filter set before this render) before any control has fired an event.
         applyFilters();
 
-        filterInput.addEventListener('input', applyFilters);
-        levelSelect.addEventListener('change', applyFilters);
+        filterInput.addEventListener('input', () => {
+            state.q = filterInput.value;
+            applyFilters();
+            publishFilters();
+        });
+        levelSelect.addEventListener('change', () => {
+            state.level = levelSelect.value;
+            applyFilters();
+            publishFilters();
+        });
 
         // Clear span filter
         if (clearSpanFilter) {
             clearSpanFilter.addEventListener('click', () => {
-                currentSpanFilter = null;
+                state.span = null;
+                publishFilters();
                 renderView();
             });
         }
@@ -88,7 +127,8 @@ export function render(container, trace) {
             el.addEventListener('click', () => {
                 const spanId = el.dataset.spanId;
                 if (spanId) {
-                    currentSpanFilter = spanId;
+                    state.span = spanId;
+                    publishFilters();
                     renderView();
                 }
             });

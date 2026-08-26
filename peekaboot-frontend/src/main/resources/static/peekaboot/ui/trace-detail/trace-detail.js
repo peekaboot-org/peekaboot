@@ -114,7 +114,7 @@ export function openTraceDetail(traceId, options = {}) {
     shadow.appendChild(content);
     content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
 
-    fetchAndRender(content, traceId, {basePath, session, styleReady});
+    fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState});
 }
 
 export function closeTraceDetail() {
@@ -147,13 +147,13 @@ export function closeTraceDetail() {
     }
 }
 
-async function fetchAndRender(content, traceId, {basePath, session, styleReady}) {
+async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState}) {
     const client = createClient({basePath});
     try {
         const [trace] = await Promise.all([client.get(`/api/traces/${traceId}/insights`), styleReady]);
         // A newer open() superseded this one while the request was in flight.
         if (session !== currentSession) return;
-        render(content, trace);
+        render(content, trace, urlState);
     } catch (error) {
         if (session !== currentSession) return;
         // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
@@ -176,7 +176,7 @@ function statusBadgeVariant(statusNum) {
     return 'error';
 }
 
-function render(content, trace) {
+function render(content, trace, urlState) {
     // delegated once on the container, which outlives every innerHTML swap below
     bindCopyables(content);
 
@@ -235,16 +235,30 @@ function render(content, trace) {
 
     const tabContent = container.querySelector('#pk-tab-content');
 
+    // Deep-linked into a specific subview (e.g. "#traces/<id>/logs?level=WARN") when the
+    // hash names one of this overlay's own tabs; falls back to Spans for a bare
+    // "#traces/<id>" link and for callers with no urlState at all (the dev toolbar).
+    const initialTab = TABS.some(t => t.id === urlState?.initial?.subview) ? urlState.initial.subview : 'spans';
+
+    // Params are scoped to the deepest view (this tab), so a tab switch always starts
+    // that tab's filters empty - see url-state.js's push/replace rule and the plan's
+    // recorded ruling on this. Only the tab restored from the URL at open time seeds
+    // its filters from urlState.initial.params.
+    const tabView = (tabId, filters) => ({filters, setFilters: next => urlState?.update(tabId, next)});
+
     tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
         id: tab.id,
         label: tab.label,
         count: tab.count ? tab.count(trace) : undefined
     })), {
-        onSelect: tabId => renderTabContent(tabContent, tabId, trace),
-        initial: 'spans'
+        onSelect: tabId => {
+            urlState?.update(tabId, {});
+            renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+        },
+        initial: initialTab
     });
 
-    renderTabContent(tabContent, 'spans', trace);
+    renderTabContent(tabContent, initialTab, trace, tabView(initialTab, urlState?.initial?.params || {}));
 
     // ESC key to close; closeTraceDetail removes the listener however
     // the overlay is dismissed (buttons, overlay click, ESC)
@@ -264,9 +278,9 @@ function render(content, trace) {
     container.focus();
 }
 
-function renderTabContent(container, tabId, trace) {
+function renderTabContent(container, tabId, trace, view) {
     const tab = TABS.find(t => t.id === tabId);
-    if (tab) tab.render(container, trace);
+    if (tab) tab.render(container, trace, view);
 }
 
 function countSpans(span) {
