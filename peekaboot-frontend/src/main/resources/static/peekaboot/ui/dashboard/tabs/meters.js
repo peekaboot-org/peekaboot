@@ -10,6 +10,7 @@
 import {groupList, expandedKeys, badge} from '../../shared/components.js';
 import {escapeHtml, highlightText} from '../../shared/markup.js';
 import {formatBytes} from '../../shared/format.js';
+import {reconcileTextFilter, writeTextFilter} from '../../shared/url-filter.js';
 
 export const id = 'meters';
 export const label = 'Meters';
@@ -35,7 +36,7 @@ export function render(container, data, context) {
     // reflects whatever tab is active in the URL, so reconciling during a background
     // auto-refresh render of a hidden meters tab would read another tab's params (or
     // none) and clobber whatever the user already typed here.
-    if (container.classList.contains('active')) reconcileFilterWithUrl(container);
+    if (container.classList.contains('active')) reconcileTextFilter(container.querySelector('#meters-filter'), context);
     fetchAndRender();
 }
 
@@ -44,43 +45,9 @@ function wireFilter(container) {
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
     input.addEventListener('input', () => {
-        const value = input.value.trim();
-        currentContext.setUrlParams(value ? {q: value} : {});
-        renderList(value);
+        writeTextFilter(input, currentContext);
+        renderList(input.value.trim());
     });
-}
-
-/**
- * Reconciles the filter input with the URL - two directions, picked by whether this
- * render is URL-authoritative (context.urlIsAuthoritative - a genuine hash change:
- * a deep link, Back/Forward, or a hand-edited hash, as opposed to a programmatic tab
- * switch - see main.js's urlChangeInProgress) or the URL already carries this tab's own
- * "q" param either way:
- *  - URL-authoritative, or the URL has "q" -> the URL wins, including a bare one: a
- *    hand-edited hash with "q" removed means the user asked to clear the filter, and
- *    that has to actually clear it, not just leave the input untouched. A no-op once
- *    the input already matches, which is the common case - every keystroke writes
- *    straight back via setUrlParams, so an ordinary auto-refresh render (never
- *    URL-authoritative) finds nothing to seed here.
- *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
- *    own current input value wins instead. A bare hash here almost always just means the
- *    tab strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with no
- *    params), not that the user asked to clear the filter, and whatever they typed
- *    before switching away is still sitting right here in the DOM. Writing it back is
- *    what makes the filter survive switching away and back to this tab, and makes the
- *    URL truthful again instead of silently drifting out of sync with what's actually
- *    filtered.
- */
-function reconcileFilterWithUrl(container) {
-    const input = container.querySelector('#meters-filter');
-    if (!input) return;
-
-    if ('q' in currentContext.urlParams || currentContext.urlIsAuthoritative) {
-        const urlQuery = currentContext.urlParams.q || '';
-        if (urlQuery !== input.value.trim()) input.value = urlQuery;
-    } else if (input.value.trim()) {
-        currentContext.setUrlParams({q: input.value.trim()});
-    }
 }
 
 function currentFilterValue(container) {

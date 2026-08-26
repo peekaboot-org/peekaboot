@@ -4,6 +4,7 @@
  */
 import {groupList, expandedKeys, badge} from '../../shared/components.js';
 import {highlightText} from '../../shared/markup.js';
+import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
 export const id = 'loggers';
 export const label = 'Loggers';
@@ -58,44 +59,28 @@ function currentFilterValue(container) {
 }
 
 /**
- * Reconciles the filter input and configured-only checkbox with the URL - two
- * directions, picked by whether this render is URL-authoritative
- * (context.urlIsAuthoritative - a genuine hash change: a deep link, Back/Forward, or a
- * hand-edited hash, as opposed to a programmatic tab switch - see main.js's
- * urlChangeInProgress) or the URL already carries either of this tab's own
- * "q"/"configured" params either way:
- *  - URL-authoritative, or the URL has "q" or "configured" -> the URL wins, including a
- *    bare one: a hand-edited hash with both params removed means the user asked to
- *    clear the filter, and that has to actually clear both controls, not just leave
- *    them untouched (a param that's absent from an otherwise non-bare URL means "at its
- *    default" - writeUrlParams always decides both keys together, so their
- *    presence/absence is never ambiguous). A no-op once both controls already match,
- *    which is the common case - every change writes straight back via setUrlParams, so
- *    an ordinary auto-refresh render (never URL-authoritative) finds nothing to seed
- *    here.
- *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
- *    own current control state wins instead. A bare hash here almost always just means
- *    the tab strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with
- *    no params), not that the user asked to clear the filter, and whatever they set
- *    before switching away is still sitting right here. Writing it back is what makes
- *    the filter survive switching away and back to this tab, and makes the URL truthful
- *    again instead of silently drifting out of sync with what's actually filtered.
+ * Reconciles the filter input and configured-only checkbox with the URL - composes
+ * shared/url-filter.js's reconcileFilterWithUrl (see its own doc comment for the
+ * URL-authoritative / bare-hash direction logic every tab like this one shares) with this
+ * tab's own two-field seed/write, since a single flat "q" wouldn't capture the checkbox.
+ * A param that's absent from an otherwise non-bare URL means "at its default" -
+ * writeUrlParams always decides both keys together, so their presence/absence is never
+ * ambiguous.
  */
 function reconcileWithUrl(container) {
-    const params = currentContext.urlParams;
-    const urlHasFilterParams = 'q' in params || 'configured' in params;
-
     const input = container.querySelector('#loggers-filter');
     const checkbox = container.querySelector('#loggers-configured-only');
 
-    if (urlHasFilterParams || currentContext.urlIsAuthoritative) {
-        const urlQuery = params.q || '';
-        const urlConfiguredOnly = params.configured === '1';
-        if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
-        if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
-    } else if (currentFilterValue(container) || checkbox?.checked) {
-        writeUrlParams(container);
-    }
+    reconcileFilterWithUrl(currentContext, ['q', 'configured'], {
+        seed: params => {
+            const urlQuery = params.q || '';
+            const urlConfiguredOnly = params.configured === '1';
+            if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
+            if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
+        },
+        hasNonDefaultState: () => Boolean(currentFilterValue(container) || checkbox?.checked),
+        writeBack: () => writeUrlParams(container)
+    });
 }
 
 /** Writes the current filter/configured-only state back to the URL, omitting each key
