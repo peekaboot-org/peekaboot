@@ -53,10 +53,11 @@ export function render(container, data, context) {
     bindCopyables(container);
     wireControls(container);
     // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so seeding here during a background
+    // reflects whatever tab is active in the URL, so reconciling here during a background
     // auto-refresh render of a hidden traces tab would read another tab's params (or
-    // none) and clobber this tab's own filter state. See seedFromUrl's own doc comment.
-    if (container.classList.contains('active')) seedFromUrl(container);
+    // none) and clobber this tab's own filter state. See reconcileWithUrl's own doc
+    // comment.
+    if (container.classList.contains('active')) reconcileWithUrl(container);
     fetchAndRender();
 }
 
@@ -86,15 +87,34 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
 }
 
 /**
- * Seeds bucket/type/op state from the URL - called only while this tab's container is
- * the active one (see render()). Compares against the current state rather than
- * unconditionally overwriting it: every control below writes its own change straight
- * back to the URL via writeUrlParams(), so on an ordinary auto-refresh render the URL
- * already matches the current state and this is a no-op - it only actually seeds on a
- * genuine hash-driven navigation (deep link, Back/Forward, or a hand-edited hash).
+ * Reconciles bucket/type/op state with the URL - called only while this tab's container
+ * is the active one (see render()). Two directions, picked by whether the URL currently
+ * carries any of this tab's own filter keys:
+ *  - URL has bucket/type/op -> the URL is authoritative (a deep link, Back/Forward, or a
+ *    hand-edited hash): seedFromUrl() restores state from it.
+ *  - URL is bare -> this tab's *current* state is authoritative instead. A bare hash
+ *    here almost always just means the tab strip switched tabs (main.js's onSelect
+ *    pushes a plain "#<tab>" hash with no params - see navigate()), not that the user
+ *    asked to clear the filter, and the DOM/module state the user set before switching
+ *    away is still sitting right here. Writing it back (writeUrlParams()) is what makes
+ *    a filter survive switching away and back to this tab, and makes the URL truthful
+ *    again instead of silently drifting out of sync with what's actually filtered.
  */
-function seedFromUrl(container) {
+function reconcileWithUrl(container) {
     const params = currentContext.urlParams || {};
+    const urlHasFilterParams = 'bucket' in params || 'type' in params || 'op' in params;
+
+    if (urlHasFilterParams) {
+        seedFromUrl(container, params);
+    } else if (currentBucket !== 'all' || selectedRootActionTypes.size > 0 || currentRootOperationFilter) {
+        writeUrlParams();
+    }
+}
+
+/** Restores bucket/type/op state from the URL. Compares against the current state
+    rather than unconditionally overwriting it, so this is a no-op once the URL already
+    matches (the steady state on every render while this tab's own filter is active). */
+function seedFromUrl(container, params) {
     const urlBucket = params.bucket || 'all';
     const urlTypes = params.type ? params.type.split(',').filter(Boolean) : [];
     const urlOp = params.op || null;

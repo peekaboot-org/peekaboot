@@ -26,10 +26,10 @@ export function render(container, data, context) {
     currentContext = context;
     wireControls(container);
     // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so seeding during a background
+    // reflects whatever tab is active in the URL, so reconciling during a background
     // auto-refresh render of a hidden loggers tab would read another tab's params (or
     // none) and clobber whatever the user already set here.
-    if (container.classList.contains('active')) seedFromUrl(container);
+    if (container.classList.contains('active')) reconcileWithUrl(container);
     renderGroups(container, currentFilterValue(container));
 }
 
@@ -57,21 +57,40 @@ function currentFilterValue(container) {
     return container.querySelector('#loggers-filter')?.value.trim() || '';
 }
 
-/** Seeds the filter input and configured-only checkbox from the URL - a no-op once
-    both already match it, which is the common case: every change above writes straight
-    back via setUrlParams, so an ordinary auto-refresh render finds nothing to seed.
-    Only a genuine hash-driven navigation (deep link, Back/Forward) actually changes
-    either control here. */
-function seedFromUrl(container) {
+/**
+ * Reconciles the filter input and configured-only checkbox with the URL - two
+ * directions, picked by whether the URL currently carries either of this tab's own
+ * "q"/"configured" params:
+ *  - URL has "q" or "configured" -> the URL is authoritative (a deep link,
+ *    Back/Forward, or a hand-edited hash): restores both controls from it (a param
+ *    that's absent from an otherwise non-bare URL means "at its default" - writeUrlParams
+ *    always decides both keys together, so their presence/absence is never ambiguous).
+ *    A no-op once both controls already match, which is the common case - every change
+ *    writes straight back via setUrlParams, so an ordinary auto-refresh render finds
+ *    nothing to seed here.
+ *  - URL is bare -> this tab's own current control state is authoritative instead. A
+ *    bare hash here almost always just means the tab strip switched tabs (main.js's
+ *    onSelect pushes a plain "#<tab>" hash with no params), not that the user asked to
+ *    clear the filter, and whatever they set before switching away is still sitting
+ *    right here. Writing it back is what makes the filter survive switching away and
+ *    back to this tab, and makes the URL truthful again instead of silently drifting
+ *    out of sync with what's actually filtered.
+ */
+function reconcileWithUrl(container) {
     const params = currentContext.urlParams;
-    const urlQuery = params.q || '';
-    const urlConfiguredOnly = params.configured === '1';
+    const urlHasFilterParams = 'q' in params || 'configured' in params;
 
     const input = container.querySelector('#loggers-filter');
-    if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
-
     const checkbox = container.querySelector('#loggers-configured-only');
-    if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
+
+    if (urlHasFilterParams) {
+        const urlQuery = params.q || '';
+        const urlConfiguredOnly = params.configured === '1';
+        if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
+        if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
+    } else if (currentFilterValue(container) || checkbox?.checked) {
+        writeUrlParams(container);
+    }
 }
 
 /** Writes the current filter/configured-only state back to the URL, omitting each key

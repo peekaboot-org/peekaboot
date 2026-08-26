@@ -201,7 +201,6 @@ function initTabs() {
 
 function currentContext() {
     const {tab, detail, subview, params: urlParams} = parseAppHash();
-    const activeTabId = resolveTabId(tab);
     return {
         client,
         locale,
@@ -212,10 +211,22 @@ function currentContext() {
         toggleUnmask,
         // The active tab's own query params, and how it writes them back - see
         // url-state.js's push/replace rule: a filter change replaces, it never pushes.
-        // detail/subview are carried through unchanged so this can't strip an open trace
-        // overlay's hash segments out from under it.
         urlParams,
-        setUrlParams: params => replaceAppHash({tab: activeTabId, detail, subview, params}),
+        // Deliberately re-parses the hash instead of closing over this call's own
+        // tab/detail/subview above: a tab module can hold this context object (and so
+        // this closure) far longer than the hash stays put underneath it - e.g. traces.js
+        // opening/closing the trace overlay via context.navigate(), which skips a fresh
+        // render (and so a fresh currentContext()) whenever the traces tab was already
+        // active (see navigate()'s wasAlreadyActive guard). A stale capture here would let
+        // a filter change made after such a close replace the hash with the closed
+        // trace's own now-stale detail/subview, silently reopening it. Re-parsing at call
+        // time makes this correct regardless of how long the closure has been sitting
+        // around - detail/subview always come from whatever the hash actually says right
+        // now, not whatever it said when this context object was built.
+        setUrlParams: params => {
+            const {tab: currentTab, detail: currentDetail, subview: currentSubview} = parseAppHash();
+            replaceAppHash({tab: resolveTabId(currentTab), detail: currentDetail, subview: currentSubview, params});
+        },
         // traces.js's own click-to-open path passes this straight into openTraceDetail's
         // urlState option, so a trace opened by clicking it gets the exact same live
         // tab/filter -> URL sync as one opened via a deep link - see buildTraceUrlState.

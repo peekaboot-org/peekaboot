@@ -23,10 +23,10 @@ export function render(container, data, context) {
     currentContext = context;
     wireFilter(container);
     // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so seeding during a background
+    // reflects whatever tab is active in the URL, so reconciling during a background
     // auto-refresh render of a hidden environment tab would read another tab's params
     // (or none) and clobber whatever the user already typed here.
-    if (container.classList.contains('active')) seedFilterFromUrl(container);
+    if (container.classList.contains('active')) reconcileFilterWithUrl(container);
     renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
     renderGroups(container, currentFilterValue(container));
 }
@@ -42,16 +42,31 @@ function wireFilter(container) {
     });
 }
 
-/** Seeds the filter input from the URL - a no-op once the input already matches it,
-    which is the common case: every keystroke above writes straight back via
-    setUrlParams, so an ordinary auto-refresh render finds nothing to seed. Only a
-    genuine hash-driven navigation (deep link, Back/Forward) actually changes the
-    input's value here. */
-function seedFilterFromUrl(container) {
+/**
+ * Reconciles the filter input with the URL - two directions, picked by whether the URL
+ * currently carries this tab's own "q" param:
+ *  - URL has "q" -> the URL is authoritative (a deep link, Back/Forward, or a
+ *    hand-edited hash): restores the input from it. A no-op once the input already
+ *    matches, which is the common case - every keystroke writes straight back via
+ *    setUrlParams, so an ordinary auto-refresh render finds nothing to seed here.
+ *  - URL is bare -> this tab's own current input value is authoritative instead. A bare
+ *    hash here almost always just means the tab strip switched tabs (main.js's onSelect
+ *    pushes a plain "#<tab>" hash with no params), not that the user asked to clear the
+ *    filter, and whatever they typed before switching away is still sitting right here
+ *    in the DOM. Writing it back is what makes the filter survive switching away and
+ *    back to this tab, and makes the URL truthful again instead of silently drifting
+ *    out of sync with what's actually filtered.
+ */
+function reconcileFilterWithUrl(container) {
     const input = container.querySelector('#env-filter');
     if (!input) return;
-    const urlQuery = currentContext.urlParams.q || '';
-    if (urlQuery !== input.value.trim()) input.value = urlQuery;
+
+    if ('q' in currentContext.urlParams) {
+        const urlQuery = currentContext.urlParams.q || '';
+        if (urlQuery !== input.value.trim()) input.value = urlQuery;
+    } else if (input.value.trim()) {
+        currentContext.setUrlParams({q: input.value.trim()});
+    }
 }
 
 function currentFilterValue(container) {

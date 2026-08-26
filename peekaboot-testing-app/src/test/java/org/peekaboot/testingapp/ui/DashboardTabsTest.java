@@ -395,6 +395,36 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * Regression test for a review finding: the tab strip's own onSelect handler
+     * (main.js) pushes a plain "#<tab>" hash with no params on every tab switch, so
+     * switching away from meters and back used to hand this tab a bare URL - and the
+     * seed logic treated that bare URL as authoritative, actively clearing the filter
+     * the user had just typed even though nothing about it had ever been undone. Fixed
+     * by only treating the URL as authoritative when it actually carries this tab's own
+     * "q" param; when it's bare but the tab still has non-default state, that state is
+     * written back to the URL instead, so the filter survives the round trip and the URL
+     * becomes truthful again.
+     */
+    @Test
+    void metersFilterSurvivesSwitchingTabsAwayAndBack() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForSelector("#meters-list .pk-group");
+
+        page.fill("#meters-filter", "jvm.memory");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
+
+        page.click(".pk-tab[data-tab='environment']");
+        page.waitForSelector("#environment-tab.active");
+
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
+
+        assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm.memory");
+        assertThat(page.url()).contains("q=jvm.memory");
+    }
+
+    /**
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct
@@ -489,6 +519,49 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
 
         assertThat(page.url()).endsWith("#traces");
+    }
+
+    /**
+     * Regression test for a review finding: context.setUrlParams's closure (main.js's
+     * currentContext()) used to capture detail/subview once, at the last render() of a
+     * tab - but opening a trace (traces.js's click-to-open path) and closing it (its
+     * onClose callback, both via context.navigate()) each skip a fresh render whenever
+     * the traces tab was already active (navigate()'s wasAlreadyActive guard), so the
+     * closure only ever picked up "detail = the open trace's id" if some *other* render
+     * happened while the overlay was open - in real use, the 30s auto-refresh cycle;
+     * here, a manual refresh click makes it deterministic. Once that was baked in,
+     * closing the overlay cleared the real hash back to plain "#traces" but left the
+     * closure stale - so the very next filter change replaced the hash with the
+     * just-closed trace's id still attached, silently reopening it on reload/share.
+     * Fixed by having setUrlParams re-parse the hash at call time instead of closing
+     * over a snapshot.
+     */
+    @Test
+    void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        page.click("#traces-list .pk-trace-item__open");
+        page.waitForSelector("#peekaboot-trace-overlay");
+
+        // Forces a full renderData() cycle while the overlay is open, so traces.js's
+        // setUrlParams closure (pre-fix) would pick up the open trace's id as "detail" -
+        // the same thing a real 30s auto-refresh cycle would eventually do on its own.
+        // A real pointer click on the button is unusable here: the full-screen overlay
+        // intercepts it, so this invokes the button's own click handler directly instead.
+        page.evaluate("() => document.getElementById('refresh-btn').click()");
+        page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
+
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        assertThat(page.url()).endsWith("#traces");
+
+        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        page.waitForFunction("() => document.querySelector(\"#traces-bucket .pk-btn[data-bucket='errors']\")"
+                + ".getAttribute('aria-pressed') === 'true'");
+
+        assertThat(page.url()).endsWith("#traces?bucket=errors");
     }
 
     /**
