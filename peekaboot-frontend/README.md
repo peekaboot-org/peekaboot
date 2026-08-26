@@ -117,6 +117,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, shared by the overlay's Spans and Logs tabs. |
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
+| `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
 
 ## How the embedded surfaces consume the shared sheets
 

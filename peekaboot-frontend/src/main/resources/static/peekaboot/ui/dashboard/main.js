@@ -10,6 +10,7 @@ import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
 import {formatDateTime} from '../shared/format.js';
+import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
@@ -64,28 +65,21 @@ let unmaskRequested = false;
 
 // --- Hash routing -----------------------------------------------------------------
 
-function parseHash() {
-    const hash = window.location.hash.slice(1);
-    if (!hash) return {tab: 'overview', detail: null};
-    const parts = hash.split('/');
-    return {tab: parts[0] || 'overview', detail: parts[1] || null};
-}
-
-function setHash(tab, detail = null) {
-    const hash = detail ? `#${tab}/${detail}` : `#${tab}`;
-    if (window.location.hash !== hash) {
-        history.pushState(null, '', hash);
-    }
-}
+// The trace currently shown in the overlay, if any. handleHashChange fires on every
+// Back/Forward step - including ones that only touched subview/params, since those are
+// written via replaceAppHash but can still resurface on Back/Forward (see url-state.js's
+// push/replace rule) - so this guards against tearing down and rebuilding an overlay
+// that's already open for the same trace.
+let currentOverlayTraceId = null;
 
 function handleHashChange() {
-    const {tab, detail} = parseHash();
+    const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
     mainTabs.select(tabId, {silent: true});
     showTab(tabId);
     renderTabById(tabId);
     if (tabId === 'traces' && detail) {
-        expandTraceById(detail);
+        expandTraceById(detail, subview, params);
     } else {
         // Browser Back removed the detail segment, or landed on a different tab -
         // close.js is idempotent when nothing is open, so no guard is needed here.
@@ -93,18 +87,28 @@ function handleHashChange() {
     }
 }
 
-function expandTraceById(traceId) {
+function expandTraceById(traceId, subview = null, params = {}) {
     // Validate traceId to prevent selector injection
     if (!traceId || !/^[a-zA-Z0-9_-]+$/.test(traceId)) {
         console.warn('Invalid trace ID:', traceId);
         return;
     }
+    if (currentOverlayTraceId === traceId) return;
+
+    currentOverlayTraceId = traceId;
     openTraceDetail(traceId, {
+        // Consumed by trace-detail.js (a later task) to seed and report the overlay's own
+        // subview/query-param state - main.js only routes it through, unused here.
+        urlState: {
+            initial: {subview, params},
+            update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
+        },
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace.
         onClose: () => {
-            const {tab, detail} = parseHash();
-            if (tab === 'traces' && detail === traceId) setHash('traces');
+            currentOverlayTraceId = null;
+            const {tab, detail} = parseAppHash();
+            if (tab === 'traces' && detail === traceId) pushAppHash({tab: 'traces'});
         }
     });
 }
@@ -128,7 +132,7 @@ function navigate(tabId, detail = null, payload = null) {
     const wasAlreadyActive = document.getElementById(`${resolvedId}-tab`)?.classList.contains('active') ?? false;
     mainTabs.select(resolvedId, {silent: true});
     showTab(resolvedId);
-    setHash(resolvedId, detail);
+    pushAppHash({tab: resolvedId, detail});
     if (payload) {
         TABS.find(tab => tab.id === resolvedId)?.applyFilter?.(payload);
     } else if (!wasAlreadyActive) {
@@ -157,11 +161,11 @@ function showTab(tabId) {
 }
 
 function initTabs() {
-    const initialTabId = resolveTabId(parseHash().tab);
+    const initialTabId = resolveTabId(parseAppHash().tab);
     mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
         onSelect: tabId => {
             showTab(tabId);
-            setHash(tabId);
+            pushAppHash({tab: tabId});
             renderTabById(tabId);
         },
         initial: initialTabId
@@ -177,7 +181,7 @@ function initTabs() {
     window.addEventListener('hashchange', handleHashChange);
 
     // Handle initial hash on page load
-    const {tab} = parseHash();
+    const {tab} = parseAppHash();
     if (tab !== 'overview') {
         // Defer to allow the DOM (and the initial fetchData() call) to settle first
         setTimeout(() => handleHashChange(), 0);
@@ -187,6 +191,8 @@ function initTabs() {
 // --- Data fetching --------------------------------------------------------------------
 
 function currentContext() {
+    const {tab, params: urlParams} = parseAppHash();
+    const activeTabId = resolveTabId(tab);
     return {
         client,
         locale,
@@ -194,7 +200,11 @@ function currentContext() {
         navigate,
         features,
         unmaskRequested,
-        toggleUnmask
+        toggleUnmask,
+        // The active tab's own query params, and how it writes them back - see
+        // url-state.js's push/replace rule: a filter change replaces, it never pushes.
+        urlParams,
+        setUrlParams: params => replaceAppHash({tab: activeTabId, params})
     };
 }
 
