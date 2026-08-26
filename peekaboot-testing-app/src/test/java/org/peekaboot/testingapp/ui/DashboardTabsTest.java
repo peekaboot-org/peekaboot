@@ -526,6 +526,28 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(checkedTypes).containsExactly("SCHEDULED_JOB");
     }
 
+    /**
+     * Regression test for a review finding: "bucket" was the only URL-sourced filter value
+     * traces.js never validated - "#traces?bucket=bogus" used to seed currentBucket='bogus'
+     * verbatim, hit the backend with it, and (on an empty result) render BUCKET_EMPTY_MESSAGES's
+     * literal "undefined" as the empty-state text since no such key exists. seedFromUrl now
+     * falls back to 'all' for anything not in BUCKET_EMPTY_MESSAGES's own key set - proven here
+     * by the bucket strip itself: an unvalidated 'bogus' would match none of the three real
+     * bucket buttons, leaving all three unpressed, where the fallback leaves "All" pressed.
+     */
+    @Test
+    void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='errors']", "aria-pressed"))
+                .isEqualTo("false");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='slow']", "aria-pressed"))
+                .isEqualTo("false");
+    }
+
     @Test
     void clickingATraceOpensTheOverlayAndDeepLinks() {
         openDashboard();
@@ -593,6 +615,52 @@ class DashboardTabsTest extends PlaywrightTestBase {
                 + ".getAttribute('aria-pressed') === 'true'");
 
         assertThat(page.url()).endsWith("#traces?bucket=errors");
+    }
+
+    /**
+     * Regression test for a review finding: the traces tab's own filter write-back used to
+     * ignore an open overlay entirely. With "#traces?bucket=errors" active and a trace open
+     * on top of it, switching the overlay to Logs and setting a level filter puts
+     * "#traces/<id>/logs?level=ERROR" in the address bar - but the traces tab's panel is
+     * still ".active" underneath, so the 30s auto-refresh (forced here via the refresh
+     * button, same pattern as closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace
+     * above) re-renders it. Its reconcileWithUrl saw no bucket/type/op keys in the URL
+     * (level/q are the overlay's own), decided the URL was stale, and wrote its own
+     * {bucket: 'errors'} back over the whole params slot - silently discarding the overlay's
+     * level filter from the shareable URL. Fixed by having both the seed direction
+     * (traces.js's reconcileWithUrl) and the write direction (main.js's setUrlParams) treat
+     * a detail segment in the hash as "the params slot belongs to the overlay - no-op".
+     */
+    @Test
+    void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
+        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        page.click("#traces-list .pk-trace-item__open");
+        page.waitForSelector("#peekaboot-trace-overlay");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        page.waitForFunction("() => window.location.hash.includes('/logs')");
+
+        page.evaluate("() => { const sel = document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('#pk-log-level'); sel.value = 'ERROR';"
+                + " sel.dispatchEvent(new Event('change')); }");
+        page.waitForFunction("() => window.location.hash.includes('level=ERROR')");
+
+        // Forces a full renderData() cycle - the traces tab panel is still .active behind
+        // the overlay, so this re-runs its reconcileWithUrl exactly as a real 30s
+        // auto-refresh tick would while the overlay sits open on top of it.
+        page.evaluate("() => document.getElementById('refresh-btn').click()");
+        page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
+
+        assertThat(page.url()).contains("level=ERROR");
+        assertThat(page.url()).doesNotContain("bucket=errors");
     }
 
     /**

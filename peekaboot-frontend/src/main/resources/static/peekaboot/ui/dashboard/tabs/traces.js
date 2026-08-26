@@ -106,8 +106,17 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
  *    Writing it back (writeUrlParams()) is what makes a filter survive switching away
  *    and back to this tab, and makes the URL truthful again instead of silently
  *    drifting out of sync with what's actually filtered.
+ *
+ * A detail segment in the hash (the trace overlay open on top of this tab's still-.active
+ * panel - e.g. a background auto-refresh while "#traces/<id>/logs?level=ERROR" is showing)
+ * is an outright no-op instead: the params slot belongs to the overlay while it's open (see
+ * main.js's setUrlParams, which drops the write side of this same rule), and the overlay's
+ * own params (level/q, ...) are not this tab's bucket/type/op - seeding from them would
+ * wrongly reset the filter to its defaults, and writing back would clobber the overlay's URL.
  */
 function reconcileWithUrl(container) {
+    if (parseAppHash().detail) return;
+
     const params = currentContext.urlParams || {};
     const urlHasFilterParams = 'bucket' in params || 'type' in params || 'op' in params;
 
@@ -122,7 +131,10 @@ function reconcileWithUrl(container) {
     rather than unconditionally overwriting it, so this is a no-op once the URL already
     matches (the steady state on every render while this tab's own filter is active). */
 function seedFromUrl(container, params) {
-    const urlBucket = params.bucket || 'all';
+    // Validated against the canonical bucket list - an unrecognized value (a typo, a stale
+    // link) would otherwise sail straight through to the backend and back as a literal
+    // "undefined" in the empty-state message (BUCKET_EMPTY_MESSAGES has no such key).
+    const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
     const urlTypes = params.type ? params.type.split(',').filter(Boolean) : [];
     const urlOp = params.op || null;
 

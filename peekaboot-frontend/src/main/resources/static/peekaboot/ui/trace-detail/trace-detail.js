@@ -196,7 +196,7 @@ function render(content, trace, urlState) {
 
     const queryCount = (trace.queries || []).length;
     const logCount = (trace.logs || []).length;
-    const spanCount = trace.summary?.spans?.count || countSpans(trace.rootSpan);
+    const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
 
     content.innerHTML = `
         <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">

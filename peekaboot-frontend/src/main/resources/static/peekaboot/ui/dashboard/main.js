@@ -247,6 +247,14 @@ function currentContext() {
         // now, not whatever it said when this context object was built.
         setUrlParams: params => {
             const {tab: currentTab, detail: currentDetail, subview: currentSubview} = parseAppHash();
+            // The params slot belongs to the deepest view - while a detail segment is open
+            // (the trace overlay, on top of this tab's own now-background panel - see
+            // traces.js's own reconcileWithUrl guard for the seed-direction half of this
+            // same rule), the overlay owns it via its own urlState.update (buildTraceUrlState
+            // above). A background tab's filter write here would otherwise replace the
+            // overlay's own params (e.g. the Logs tab's level/q) wholesale on every
+            // auto-refresh - see the regression test this fixes.
+            if (currentDetail) return;
             replaceAppHash({tab: resolveTabId(currentTab), detail: currentDetail, subview: currentSubview, params});
         },
         // traces.js's own click-to-open path passes this straight into openTraceDetail's
