@@ -172,7 +172,7 @@ class TraceOverlayTest extends PlaywrightTestBase {
         String chipText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-logs-filter-span').textContent");
 
-        assertThat(chipText.trim()).matches(".*\\([0-9a-f]{8}\\)\\s*×?$");
+        assertThat(chipText.trim()).matches("^Span: .+\\([0-9a-f]{8}\\)\\s*×?$");
     }
 
     @Test

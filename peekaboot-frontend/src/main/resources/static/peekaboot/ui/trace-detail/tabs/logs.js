@@ -84,9 +84,9 @@ export function render(container, trace, view = {}) {
             let title = '';
             if (spanName) {
                 const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
-                label = `${escapeHtml(shortName)} (${shortId})`;
+                label = `${escapeHtml(shortName)} (${escapeHtml(shortId)})`;
             } else {
-                label = shortId;
+                label = escapeHtml(shortId);
                 title = ` title="${escapeHtml(state.span)}"`;
             }
             html += `<span class="pk-logs-filter-span"${title}>Span: ${label} `
