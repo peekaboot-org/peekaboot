@@ -646,6 +646,17 @@ class DashboardTabsTest extends PlaywrightTestBase {
                 new Page.WaitForFunctionOptions().setTimeout(15000));
         page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        // The tab switch itself is synchronous (tabStrip's click listener calls onSelect,
+        // which renders the Logs tab content, in the same call stack) - but waiting on the
+        // element rather than assuming it's already there the instant the click evaluate()
+        // resolves is the same defensive idiom TraceOverlayTest's own Logs-tab tests use
+        // (see logsFilterChipUsesTheContrastTunedForeground's wait for '.pk-log__span'
+        // right after this exact click), and is what actually observed a real flake here.
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('#pk-log-level')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
         page.waitForFunction("() => window.location.hash.includes('/logs')");
 
         page.evaluate("() => { const sel = document.getElementById('peekaboot-trace-overlay').shadowRoot"
