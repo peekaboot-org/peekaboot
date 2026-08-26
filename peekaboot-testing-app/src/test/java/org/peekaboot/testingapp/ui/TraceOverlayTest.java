@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route;
+import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
@@ -456,5 +458,105 @@ class TraceOverlayTest extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         java.util.List<String> durationLabels = (java.util.List<String>) labels;
         assertThat(durationLabels).containsExactly("99ms", "100ms", "101ms SLOW", "501ms SLOW");
+    }
+
+    /**
+     * Root-cause pin for the misaligned back button: .pk-overlay__back and .pk-overlay__close
+     * used to be position:absolute against .pk-overlay__container, with the title carrying a
+     * hand-rolled margin-left hack to fake reserving space for the button - two independent
+     * layouts that only looked aligned by coincidence, and drifted the moment the title's UA
+     * margin-top pushed it down without moving the absolutely-positioned button. Both buttons
+     * now sit in the header's own flex flow next to a .pk-overlay__header-main wrapper, so
+     * they cannot drift from the title's first line.
+     */
+    @Test
+    void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
+        openOverlayFromToolbar();
+
+        assertThat((String) page.evaluate(
+                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                                + ".querySelector('.pk-overlay__back')).position"))
+                .isEqualTo("static");
+        assertThat((String) page.evaluate(
+                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                                + ".querySelector('.pk-overlay__close')).position"))
+                .isEqualTo("static");
+
+        BoundingBox backBox =
+                page.locator("#peekaboot-trace-overlay .pk-overlay__back").boundingBox();
+        BoundingBox closeBox =
+                page.locator("#peekaboot-trace-overlay .pk-overlay__close").boundingBox();
+        BoundingBox titleBox =
+                page.locator("#peekaboot-trace-overlay .pk-overlay__title").boundingBox();
+
+        assertThat(backBox.y)
+                .as("back button top should be within the title's vertical span")
+                .isLessThan(titleBox.y + titleBox.height);
+        assertThat(backBox.y + backBox.height)
+                .as("back button bottom should overlap the title's vertical span")
+                .isGreaterThan(titleBox.y);
+
+        assertThat(closeBox.y)
+                .as("close button top should be within the title's vertical span")
+                .isLessThan(titleBox.y + titleBox.height);
+        assertThat(closeBox.y + closeBox.height)
+                .as("close button bottom should overlap the title's vertical span")
+                .isGreaterThan(titleBox.y);
+    }
+
+    /**
+     * Regression guard for the fake "UNKNOWN" HTTP method rendered on non-HTTP traces (a
+     * scheduled job here): trace-detail.js used to hardcode 'UNKNOWN' as the method fallback,
+     * even though httpExchange/http.* tags are only ever populated for real HTTP requests.
+     * The method now falls back to null, which the header renders as the trace's root-action
+     * label instead (root-actions.js) - precedent for stubbing the insights endpoint with a
+     * canned response is closeButtonDismissesTheOverlayOnTheErrorPath, above. Also covers the
+     * "1 queries" pluralisation defect on the same header (formatCount() in format.js).
+     */
+    @Test
+    void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
+        String cannedScheduledJobTrace = """
+                {
+                  "traceId": "scheduled-canned-trace",
+                  "startTimeMs": 1000,
+                  "durationMs": 42,
+                  "status": "OK",
+                  "rootActionType": "SCHEDULED_JOB",
+                  "rootOperation": "task orderReconciler.reconcileOrders",
+                  "rootSpan": {
+                    "spanId": "span-1",
+                    "name": "task orderReconciler.reconcileOrders",
+                    "kind": "INTERNAL",
+                    "startTimeMs": 1000,
+                    "durationMs": 42,
+                    "status": "OK",
+                    "children": [],
+                    "tags": {},
+                    "events": [],
+                    "issues": []
+                  },
+                  "summary": {"spans": {"count": 1}},
+                  "inheritedAttributes": {},
+                  "httpExchange": null,
+                  "logs": [],
+                  "queries": [{"sql": "SELECT 1", "durationMs": 5, "dbSystem": "h2", "rowCount": 1}],
+                  "truncated": false
+                }
+                """;
+        page.route(
+                "**/api/traces/*/insights",
+                route -> route.fulfill(new Route.FulfillOptions()
+                        .setStatus(200)
+                        .setContentType("application/json")
+                        .setBody(cannedScheduledJobTrace)));
+        openOverlayFromToolbar();
+
+        String methodText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
+                + ".shadowRoot.querySelector('.pk-overlay__title-method').textContent");
+        assertThat(methodText).isEqualTo("Scheduled Job");
+
+        String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
+                + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
+        assertThat(metaText).contains("1 query").doesNotContain("1 queries");
     }
 }

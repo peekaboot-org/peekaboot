@@ -11,7 +11,8 @@
  */
 import {escapeHtml} from '../shared/markup.js';
 import {durationSeverity} from '../shared/severity.js';
-import {rootActionIcon} from '../shared/root-actions.js';
+import {formatCount} from '../shared/format.js';
+import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient} from '../shared/api.js';
@@ -185,8 +186,9 @@ function render(content, trace, urlState) {
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
     const res = httpExchange.response || {};
-    // Prefer httpExchange data, fall back to span tags
-    const method = req.method || tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
+    // Prefer httpExchange data, fall back to span tags; null (not a placeholder string) for
+    // a trace with no HTTP request at all, so the title falls back to the root-action label.
+    const method = req.method || tags['http.method'] || tags['http.request.method'] || null;
     const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
     const status = res.status || tags['http.status_code'] || tags['http.response.status_code'] || '-';
     const statusNum = parseInt(status);
@@ -201,19 +203,21 @@ function render(content, trace, urlState) {
             <div class="pk-overlay__container">
                 <div class="pk-overlay__header">
                     <button type="button" class="pk-overlay__back" title="Back" aria-label="Back">&#8592;</button>
-                    <h2 class="pk-overlay__title" id="pk-overlay-title">
-                        <span class="pk-overlay__title-icon" aria-hidden="true"></span>
-                        <span class="pk-overlay__title-method">${escapeHtml(method)}</span>
-                        <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                        <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                    </h2>
-                    <div class="pk-overlay__meta">
-                        <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
-                        <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
-                        <span>${spanCount} spans</span>
-                        <span>${queryCount} queries</span>
-                        <span>${logCount} logs</span>
-                        ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
+                    <div class="pk-overlay__header-main">
+                        <h2 class="pk-overlay__title" id="pk-overlay-title">
+                            <span class="pk-overlay__title-icon" aria-hidden="true"></span>
+                            <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
+                            <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+                            <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
+                        </h2>
+                        <div class="pk-overlay__meta">
+                            <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
+                            <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
+                            <span>${formatCount(spanCount, 'span')}</span>
+                            <span>${formatCount(queryCount, 'query', 'queries')}</span>
+                            <span>${formatCount(logCount, 'log')}</span>
+                            ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
+                        </div>
                     </div>
                     <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
                 </div>

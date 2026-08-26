@@ -26,15 +26,20 @@
 }
 
 .pk-overlay__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     padding: 16px 20px;
     background: var(--pk-bg-alt);
     border-bottom: 1px solid var(--pk-border);
 }
 
+.pk-overlay__header-main {
+    flex: 1;
+    min-width: 0;
+}
+
 .pk-overlay__back {
-    position: absolute;
-    top: 12px;
-    left: 16px;
     background: transparent;
     border: none;
     color: var(--pk-text-muted);
@@ -49,8 +54,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 8px;
-    margin-left: 32px;
+    margin: 0 0 8px;
 }
 
 .pk-overlay__title-icon { font-size: 24px; }
@@ -70,9 +74,6 @@
 .pk-overlay__duration--very-slow { color: var(--pk-danger); }
 
 .pk-overlay__close {
-    position: absolute;
-    top: 12px;
-    right: 16px;
     background: transparent;
     border: none;
     color: var(--pk-text-muted);
