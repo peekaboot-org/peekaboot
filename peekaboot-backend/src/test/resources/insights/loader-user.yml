@@ -1,0 +1,23 @@
+panels:
+  - id: heap
+    title: My heap
+    chart: line
+    unit: bytes
+    order: 5
+    series:
+      - id: used
+        label: Heap used
+        meter: jvm.memory.used
+        tags:
+          area: heap
+  - id: custom
+    title: Custom things
+    chart: bars
+    unit: count
+    order: 20
+    enabled: false
+    series:
+      - id: things
+        label: Things
+        meter: my.things
+        stat: rate

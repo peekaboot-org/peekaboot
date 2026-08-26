@@ -61,7 +61,18 @@ abstract class PlaywrightTestBase {
 
     /** Overridable so a subclass can fix the viewport without changing every test's context. */
     protected Page browserContextPage() {
-        return browser.newContext().newPage();
+        return browser.newContext(newContextOptions()).newPage();
+    }
+
+    /**
+     * Base options every context needs; overriders of {@link #browserContextPage()} should
+     * chain onto this. Pins the browser locale: on a POSIX-locale host (CI runners, LANG=C)
+     * headless Chromium reports navigator.language as the invalid BCP-47 tag "en-US@posix",
+     * which blows up any Intl constructor - uPlot's module-scope
+     * Intl.NumberFormat(navigator.language) then kills the whole chart library.
+     */
+    protected static Browser.NewContextOptions newContextOptions() {
+        return new Browser.NewContextOptions().setLocale("en-US");
     }
 
     @AfterEach
@@ -92,7 +103,7 @@ abstract class PlaywrightTestBase {
 
     protected void openDashboard() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        page.waitForSelector("#dashboard-tab.active");
+        page.waitForSelector("#overview-tab.active");
         // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
         // ...but #loading also hides on the failure path, so require positive proof of a render
@@ -100,6 +111,15 @@ abstract class PlaywrightTestBase {
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
+    }
+
+    /**
+     * Closes whatever the page is holding open - the Insights tab's EventSource above all.
+     * A live SSE stream keeps the teardown's NETWORKIDLE drain from ever settling, so a
+     * test that opens one pays the drain's full timeout unless it navigates away first.
+     */
+    protected void closeLiveStreams() {
+        page.navigate("about:blank");
     }
 
     protected void openPersonsPage() {

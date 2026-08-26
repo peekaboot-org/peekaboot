@@ -285,7 +285,39 @@ class TraceOverlayTest extends PlaywrightTestBase {
      */
     @Test
     void overlayTabStripExposesAsARealTablistInTheAccessibilityTree() {
-        openOverlayFromToolbar();
+        // This is the one test that asserts the QUERIES COUNT rendered into the tab
+        // strip, and that count races span ingestion: the toolbar shows the trace id
+        // as soon as the response arrives, but the SQL query span reaches the trace
+        // store asynchronously after the response is written. On a fast machine the
+        // store wins; on slower ones (observed on macOS) the overlay fetch can read
+        // the trace before its query landed and render "Queries 0". Wait for the
+        // backend to actually serve the query before opening the overlay - the same
+        // endpoint and field the overlay's TABS.count reads (trace.queries).
+        openPersonsPage();
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.waitForFunction(
+                "async () => {"
+                        + "const id = document.getElementById('peekaboot-toolbar-host')"
+                        + ".shadowRoot.querySelector('#pk-trace').textContent.trim();"
+                        + "const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
+                        + "if (!response.ok) return false;"
+                        + "const trace = await response.json();"
+                        + "return (trace.queries || []).length > 0;"
+                        + "}",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
+        // fresh trace and reopen the very race waited out above. Open the overlay for
+        // the already-verified trace directly.
+        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('.pk-toolbar').click()");
+        page.waitForSelector("#peekaboot-trace-overlay");
+        page.waitForFunction(
+                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-overlay__loading')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
         page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
 

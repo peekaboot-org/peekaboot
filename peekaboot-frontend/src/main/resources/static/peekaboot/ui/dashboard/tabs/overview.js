@@ -1,18 +1,21 @@
 /**
- * The "Dashboard" tab: build/git/Spring/Java/OS/JVM info cards, the DataSources grid,
- * the memory/storage usage meters and the health banner + component grid.
+ * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/JVM info
+ * cards, the DataSources grid, the memory/storage usage meters and the health banner +
+ * component grid.
  */
 import {kvRow, badge, meter} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatHosts} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
 
-export const id = 'dashboard';
-export const label = 'Dashboard';
+export const id = 'overview';
+export const label = 'Overview';
 
-export function render(container, data, {locale, timeZone} = {}) {
+export function render(container, data, context = {}) {
+    const {locale, timeZone} = context;
     const {application, runtime, dataSources, health} = data;
 
+    renderInsightTiles(container, context);
     renderBuildInfo(container, application?.build, {locale, timeZone});
     renderGitInfo(container, application?.git, {locale, timeZone});
     renderSpringInfo(container, application);
@@ -23,6 +26,70 @@ export function render(container, data, {locale, timeZone} = {}) {
     renderMemoryInfo(container, runtime);
     renderHealthBanner(container, health);
     renderHealthComponents(container, health?.components);
+}
+
+/**
+ * The insights stat tiles (started at / startup / ready / uptime / cores). They are
+ * config-driven server-side, so the icons are keyed by tile id with a neutral fallback
+ * for any tile an application adds in its own peekaboot-insights.yml. 24x24 viewBox,
+ * drawn in the surrounding text colour so they follow the theme with no extra tokens.
+ */
+const TILE_ICONS = new Map([
+    ['started-at', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'],
+    ['startup-time', '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>'],
+    ['ready-time', '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'],
+    ['uptime', '<path d="M10 2h4M12 14v-4"/><circle cx="12" cy="14" r="8"/>'],
+    ['cpu-cores', '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>'
+        + '<path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/>']
+]);
+const FALLBACK_TILE_ICON = '<path d="M3 12h4l3 8 4-16 3 8h4"/>';
+
+function tileIcon(tileId) {
+    return `<svg class="pk-insight-tile__icon" viewBox="0 0 24 24" width="18" height="18" fill="none"
+            stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true">${TILE_ICONS.get(tileId) ?? FALLBACK_TILE_ICON}</svg>`;
+}
+
+/**
+ * Fills the tile row from /api/insights/config, whose tiles carry their current value
+ * alongside their definition - so the dashboard's own 30s cycle keeps them current and
+ * this tab needs none of the Insights tab's SSE machinery. The row is hidden outright,
+ * rather than left as an empty box, whenever insights are switched off or unreachable.
+ */
+async function renderInsightTiles(container, {client, features, locale, timeZone} = {}) {
+    const row = container.querySelector('#insights-tiles');
+    if (!row) return;
+    if (!features?.insights || !client) {
+        row.classList.add('hidden');
+        return;
+    }
+
+    let config;
+    try {
+        // own dedupe key: the Insights tab loads this same path on its own schedule,
+        // and on a "#insights" deep link both fire in the same cycle - sharing the
+        // default per-path counter left whichever called first with a null and this
+        // row hidden until the next refresh (see shared/api.js)
+        config = await client.get('/api/insights/config', {dedupeKey: 'insight-tiles'});
+    } catch (error) {
+        console.warn('Insight tiles unavailable:', error);
+        row.classList.add('hidden');
+        return;
+    }
+    // null now only means this row's own previous call is still in flight and a newer
+    // one has taken over - that newer response is about to render the very same row
+    if (!config) return;
+
+    row.innerHTML = config.tiles.map(tile => `
+        <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
+            ${tileIcon(tile.id)}
+            <div class="pk-insight-tile__text">
+                <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
+                <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+            </div>
+        </div>
+    `).join('');
+    row.classList.toggle('hidden', config.tiles.length === 0);
 }
 
 function renderBuildInfo(container, build, dateOptions) {

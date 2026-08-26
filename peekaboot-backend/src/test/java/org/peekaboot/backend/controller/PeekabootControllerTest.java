@@ -27,6 +27,7 @@ import org.peekaboot.backend.domain.trace.TraceListSummary;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -52,7 +53,8 @@ class PeekabootControllerTest {
 
         when(metricsService.isAvailable()).thenReturn(true);
 
-        controller = new PeekabootController(actuatorInsightsService, traceInsightsService, metricsService, properties);
+        controller = new PeekabootController(
+                actuatorInsightsService, traceInsightsService, metricsService, properties, null);
     }
 
     @Nested
@@ -228,6 +230,27 @@ class PeekabootControllerTest {
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features.get("unmaskingEnabled")).isEqualTo(true);
+        }
+
+        @Test
+        void shouldIncludeInsightsFeatureAsFalseWhenInsightsServiceAbsent() {
+            Map<String, Object> features = controller.getFeatures();
+
+            assertThat(features.get("insights")).isEqualTo(false);
+        }
+
+        @Test
+        void shouldIncludeInsightsFeatureAsTrueWhenInsightsServicePresent() {
+            PeekabootController controllerWithInsights = new PeekabootController(
+                    actuatorInsightsService,
+                    traceInsightsService,
+                    metricsService,
+                    properties,
+                    mock(InsightsService.class));
+
+            Map<String, Object> features = controllerWithInsights.getFeatures();
+
+            assertThat(features.get("insights")).isEqualTo(true);
         }
     }
 

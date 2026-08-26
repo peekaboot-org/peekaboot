@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.Page;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -39,8 +38,13 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final int VIEWPORT_WIDTH = 1440;
     private static final int VIEWPORT_HEIGHT = 900;
 
+    // Insights is deliberately not in this list: its SSE-driven charts are a separate
+    // capture concern from this tool's simple "render() has produced real data" wait,
+    // and it was never part of this tool's captured surface even before the Overview/
+    // Meters rename - out of scope here. The remaining tabs are ordered to match the
+    // tab strip's own order (see dashboard/main.js's TABS array).
     private static final List<String> DASHBOARD_TABS =
-            List.of("dashboard", "environment", "flyway", "loggers", "config", "scheduled-tasks", "metrics", "traces");
+            List.of("overview", "traces", "meters", "environment", "flyway", "loggers", "config", "scheduled-tasks");
 
     /**
      * The selector each tab waits for beyond "panel active" before it counts as rendered
@@ -49,13 +53,13 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * render() call has finished populating it.
      */
     private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
-            "dashboard", "#memory-info .pk-meter__fill",
+            "overview", "#memory-info .pk-meter__fill",
             "environment", "#property-sources .pk-group__header",
             "flyway", "#flyway-timeline .pk-table tbody tr",
             "loggers", "#loggers-list .pk-group",
             "config", "#config-groups .pk-group__header",
             "scheduled-tasks", "#scheduled-tasks-groups .pk-group",
-            "metrics", "#metrics-list .pk-group",
+            "meters", "#meters-list .pk-group",
             "traces", "#traces-list .pk-trace-item");
 
     /**
@@ -125,7 +129,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     @Override
     protected Page browserContextPage() {
-        return browser.newContext(new Browser.NewContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
+        return browser.newContext(newContextOptions().setViewportSize(VIEWPORT_WIDTH, VIEWPORT_HEIGHT))
                 .newPage();
     }
 
@@ -167,14 +171,15 @@ class ScreenshotCapture extends PlaywrightTestBase {
             captureRevealedGroupIfPresent(outputDir, tabId, theme);
         }
 
-        // Traces is already the active tab (last of DASHBOARD_TABS). Deep-link to the
-        // flagship /orders trace by id rather than clicking the list's first (most recent)
-        // entry: the Flyway tab's own migration-info lookup opens a JDBC connection outside
-        // any request context, which Peekaboot captures as its own root-level "connection"
-        // trace - created after generateTraffic() finishes and clicking through the Flyway
-        // tab above, so it consistently sorts above /orders by the time this runs. Confirmed
-        // by inspection of a first attempt at this that screenshotted that connection trace
-        // instead of the intended N+1 example.
+        // Deep-link to the flagship /orders trace by id, via the hash (which re-navigates
+        // regardless of which tab the loop above left active), rather than clicking the
+        // list's first (most recent) entry: the Flyway tab's own migration-info lookup
+        // opens a JDBC connection outside any request context, which Peekaboot captures
+        // as its own root-level "connection" trace - created after generateTraffic()
+        // finishes and clicking through the Flyway tab above, so it consistently sorts
+        // above /orders by the time this runs. Confirmed by inspection of a first attempt
+        // at this that screenshotted that connection trace instead of the intended N+1
+        // example.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", flagshipTraceId);
         page.waitForSelector("#peekaboot-trace-overlay");
         // The host element exists as soon as openTraceDetail() creates it, well before
@@ -200,7 +205,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     /**
      * Fails loudly, naming every missing/hidden tab, rather than letting a later
-     * page.click() time out on a selector that quietly never existed. metrics and traces
+     * page.click() time out on a selector that quietly never existed. meters and traces
      * are gated on GET /api/features; a silently absent button would otherwise look like an
      * ordinary Playwright timeout with no clue which tab caused it.
      */

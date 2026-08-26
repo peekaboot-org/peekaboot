@@ -24,6 +24,15 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
+  insights:
+    config-location: classpath:insights-test-panels.yml
+    levels:
+      - interval: 250ms
+        size: 90
+      - interval: 1500ms
+        size: 100
+      - interval: 9s
+        size: 50
 
 # Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIntegrationTest can prove
 # ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree (Known
