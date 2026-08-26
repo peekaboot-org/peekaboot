@@ -158,6 +158,73 @@ class TraceDeepLinkTest extends PlaywrightTestBase {
     }
 
     /**
+     * Regression guard for a review finding: logs.js used to seed {@code state.level}
+     * straight from the URL's {@code level} param with no validation against the real
+     * {@code LEVELS} list. A typo'd, wrong-case, or stale value (a malformed hand-edited
+     * link, or a level value from an older build) then matched no {@code <option>}, so the
+     * browser fell back to showing "All Levels" selected while applyFilters() kept
+     * filtering by the bogus value underneath - a dropdown that visually claims "no
+     * filter" while silently hiding every row. logs.js now falls back to '' (matching how
+     * an unrecognized subview falls back to 'spans' in trace-detail.js) so the dropdown and
+     * the actual filtering agree.
+     */
+    @Test
+    void deepLinkWithAnUnrecognizedLevelFallsBackToAllLevelsAndShowsEveryRow() {
+        String traceId = findFixedRateSchedulerTraceId();
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=BOGUS");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
+                        + "?.querySelector('#pk-log-level')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+
+        String levelValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
+                + ".shadowRoot.querySelector('#pk-log-level').value");
+        assertThat(levelValue).isEqualTo("");
+
+        Boolean anyRowHidden = (Boolean) page.evaluate("""
+                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+                    .some(row => row.classList.contains('pk-log--hidden'))
+                """);
+        assertThat(anyRowHidden)
+                .as("an unrecognized level should fall back to no filter at all, not hide every row")
+                .isFalse();
+    }
+
+    /**
+     * Regression guard for a controller ruling: traces.js's own click-to-open path
+     * (openTrace(), the trace list's "open" button) used to call overlay.open() with no
+     * urlState at all, so a trace opened by clicking it - the primary way anyone opens a
+     * trace - never got its tab switches or filter changes synced to the URL; only the
+     * hash-driven paths (deep link, Back/Forward) did. main.js now exposes the same
+     * urlState factory expandTraceById uses (context.traceUrlState) and traces.js passes
+     * it through.
+     */
+    @Test
+    void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+        String traceId =
+                (String) page.evaluate("() => document.querySelector('#traces-list .pk-trace-item').dataset.traceId");
+
+        page.click("#traces-list .pk-trace-item__open");
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-tab[data-tab=\"request\"]')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
+
+        assertThat(page.url()).endsWith("#traces/" + traceId + "/request");
+    }
+
+    /**
      * Regression guard for the DOM-only-state bug this task's logs.js refactor fixes: the
      * span filter chip used to force a full re-render off container.innerHTML, and the text/
      * level inputs' values lived only in the DOM - so that re-render silently wiped whatever

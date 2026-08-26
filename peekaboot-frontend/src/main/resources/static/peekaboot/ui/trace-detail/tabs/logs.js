@@ -47,9 +47,16 @@ export function render(container, trace, view = {}) {
     // controls FROM this, instead of the controls' own DOM values, so a re-render (the
     // span filter changing) can no longer wipe out the text/level filters. See logs.js's
     // task brief for the bug this replaced.
+    //
+    // state.level is validated against LEVELS (mirroring how trace-detail.js falls an
+    // unrecognized subview back to 'spans'): an unvalidated value from the URL (a typo, a
+    // stale link, a different case) would match none of the rendered <option>s, so the
+    // browser would default the <select> to "All Levels" while applyFilters() kept
+    // filtering by that bogus value underneath - a dropdown that visually claims no filter
+    // is applied while silently hiding every row.
     const state = {
         q: view.filters?.q || '',
-        level: view.filters?.level || '',
+        level: LEVELS.includes(view.filters?.level) ? view.filters.level : '',
         span: view.filters?.span || null
     };
 

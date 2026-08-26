@@ -246,12 +246,19 @@ function render(content, trace, urlState) {
     // its filters from urlState.initial.params.
     const tabView = (tabId, filters) => ({filters, setFilters: next => urlState?.update(tabId, next)});
 
+    // tabStrip's click listener re-fires onSelect even when the clicked tab is already
+    // selected (it only tracks aria-selected, not "did the tab actually change") - without
+    // this guard, re-clicking the active tab would wipe its own filters/URL for nothing.
+    let activeTabId = initialTab;
+
     tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
         id: tab.id,
         label: tab.label,
         count: tab.count ? tab.count(trace) : undefined
     })), {
         onSelect: tabId => {
+            if (tabId === activeTabId) return;
+            activeTabId = tabId;
             urlState?.update(tabId, {});
             renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
         },

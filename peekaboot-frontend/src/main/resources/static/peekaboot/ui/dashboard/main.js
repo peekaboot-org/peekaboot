@@ -80,6 +80,20 @@ function handleHashChange() {
     }
 }
 
+/**
+ * Builds the {initial, update} urlState object openTraceDetail expects - shared by
+ * expandTraceById below (restoring subview/params from a hash-driven open) and
+ * traces.js's own click-to-open path (via context.traceUrlState, always a fresh open with
+ * nothing to restore) so the two entry points can't drift into two different update()
+ * implementations.
+ */
+function buildTraceUrlState(traceId, subview = null, params = {}) {
+    return {
+        initial: {subview, params},
+        update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
+    };
+}
+
 function expandTraceById(traceId, subview = null, params = {}) {
     // Validate traceId to prevent selector injection
     if (!traceId || !/^[a-zA-Z0-9_-]+$/.test(traceId)) {
@@ -98,12 +112,7 @@ function expandTraceById(traceId, subview = null, params = {}) {
     if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === traceId) return;
 
     openTraceDetail(traceId, {
-        // Consumed by trace-detail.js (a later task) to seed and report the overlay's own
-        // subview/query-param state - main.js only routes it through, unused here.
-        urlState: {
-            initial: {subview, params},
-            update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
-        },
+        urlState: buildTraceUrlState(traceId, subview, params),
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace.
         onClose: () => {
@@ -206,7 +215,11 @@ function currentContext() {
         // detail/subview are carried through unchanged so this can't strip an open trace
         // overlay's hash segments out from under it.
         urlParams,
-        setUrlParams: params => replaceAppHash({tab: activeTabId, detail, subview, params})
+        setUrlParams: params => replaceAppHash({tab: activeTabId, detail, subview, params}),
+        // traces.js's own click-to-open path passes this straight into openTraceDetail's
+        // urlState option, so a trace opened by clicking it gets the exact same live
+        // tab/filter -> URL sync as one opened via a deep link - see buildTraceUrlState.
+        traceUrlState: traceId => buildTraceUrlState(traceId)
     };
 }
 

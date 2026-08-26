@@ -406,6 +406,11 @@ async function openTrace(traceId, context) {
     context.navigate('traces', traceId);
     const overlay = await import('../../trace-detail/trace-detail.js');
     overlay.open(traceId, {
+        // Threads the same urlState factory main.js's own hash-driven open uses (see
+        // buildTraceUrlState), so a trace opened by clicking it here - the primary way
+        // anyone opens one - gets its tab switches and filter changes synced to the URL
+        // too, not just a trace reached via a deep link or Back/Forward.
+        urlState: context.traceUrlState(traceId),
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace - mirrors main.js's expandTraceById.
         onClose: () => {
