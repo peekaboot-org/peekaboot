@@ -78,9 +78,19 @@ export function render(container, trace, view = {}) {
         });
         html += '</select>';
         if (state.span) {
-            const spanName = spanNames.get(state.span) || state.span;
-            const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
-            html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
+            const shortId = state.span.slice(0, 8);
+            const spanName = spanNames.get(state.span);
+            let label;
+            let title = '';
+            if (spanName) {
+                const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
+                label = `${escapeHtml(shortName)} (${shortId})`;
+            } else {
+                label = shortId;
+                title = ` title="${escapeHtml(state.span)}"`;
+            }
+            html += `<span class="pk-logs-filter-span"${title}>Span: ${label} `
+                + `<button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
         html += `<div id="pk-logs-list">${renderLogRows(logs, {showSpanColumn: true, spanNames})}</div>`;

@@ -136,6 +136,45 @@ class TraceOverlayTest extends PlaywrightTestBase {
         assertThat(color).isEqualTo("rgb(13, 17, 23)");
     }
 
+    /**
+     * The testing app's spans are always named, so clicking any .pk-log__span chip
+     * deterministically produces the "name (shortId)" form - see logs.js's task brief for
+     * the unnamed/unresolvable fallback ("shortId" alone, full id in the title attribute),
+     * which isn't reachable through this app's real trace data.
+     */
+    @Test
+    void logsFilterChipShowsTheSpanNameWithItsShortenedId() {
+        setStoredTheme("light");
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('.pk-toolbar').click()");
+        page.waitForSelector("#peekaboot-trace-overlay");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-log__span')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-log__span').click()");
+        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-logs-filter-span')");
+
+        String chipText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-logs-filter-span').textContent");
+
+        assertThat(chipText.trim()).matches(".*\\([0-9a-f]{8}\\)\\s*×?$");
+    }
+
     @Test
     void overlayShowsSpansTabByDefault() {
         openOverlayFromToolbar();
