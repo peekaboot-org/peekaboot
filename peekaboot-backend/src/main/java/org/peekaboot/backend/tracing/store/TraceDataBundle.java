@@ -164,6 +164,19 @@ public class TraceDataBundle {
         return current;
     }
 
+    /**
+     * Resolves a log's MDC spanId to the span it ultimately survived as, following
+     * {@link #parentRedirects} the same way {@link #withResolvedParent} does for spans. Logs
+     * arrive synchronously via MDC while the span that folds them (and the resulting redirect)
+     * arrives later via the OTel {@code BatchSpanProcessor}, so this must be resolved at read
+     * time rather than when the log is stored.
+     */
+    public String resolveSpanId(String spanId) {
+        synchronized (spansLock) {
+            return resolve(spanId);
+        }
+    }
+
     private void evictOldest(int count) {
         Iterator<Map.Entry<String, SpanData>> it = spansById.entrySet().iterator();
         for (int i = 0; i < count && it.hasNext(); i++) {

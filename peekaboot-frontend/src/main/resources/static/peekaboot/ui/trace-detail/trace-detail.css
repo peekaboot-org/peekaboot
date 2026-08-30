@@ -26,15 +26,20 @@
 }
 
 .pk-overlay__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
     padding: 16px 20px;
     background: var(--pk-bg-alt);
     border-bottom: 1px solid var(--pk-border);
 }
 
+.pk-overlay__header-main {
+    flex: 1;
+    min-width: 0;
+}
+
 .pk-overlay__back {
-    position: absolute;
-    top: 12px;
-    left: 16px;
     background: transparent;
     border: none;
     color: var(--pk-text-muted);
@@ -49,8 +54,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 8px;
-    margin-left: 32px;
+    margin: 0 0 8px;
 }
 
 .pk-overlay__title-icon { font-size: 24px; }
@@ -70,9 +74,6 @@
 .pk-overlay__duration--very-slow { color: var(--pk-danger); }
 
 .pk-overlay__close {
-    position: absolute;
-    top: 12px;
-    right: 16px;
     background: transparent;
     border: none;
     color: var(--pk-text-muted);
@@ -100,10 +101,13 @@
 .pk-overlay__error { color: var(--pk-danger); }
 
 /* Gantt view styles */
-.pk-gantt { display: flex; flex-direction: column; gap: 2px; }
+.pk-gantt { display: flex; flex-direction: column; gap: 2px; --pk-gantt-duration-width: 90px; }
 .pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: 8px; margin-bottom: 8px; }
 .pk-gantt-header-name { width: 350px; color: var(--pk-text-muted); font-size: 11px; text-transform: uppercase; }
-.pk-gantt-header-timeline { flex: 1; display: flex; justify-content: space-between; font-size: 11px; color: var(--pk-text-muted); font-family: var(--pk-font-mono); }
+/* Same 8px side margin as .pk-gantt-track below, so the ticks land right above the
+   start/end of the bars they describe instead of 8px further out. */
+.pk-gantt-header-timeline { flex: 1; display: flex; justify-content: space-between; font-size: 11px; color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 8px; }
+.pk-gantt-header-spacer { width: var(--pk-gantt-duration-width); }
 
 .pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
 .pk-gantt-row:hover { background: var(--pk-bg-alt); }
@@ -130,7 +134,7 @@
 .pk-gantt-bar.kind-internal, .pk-gantt-bar.kind-unknown { background: var(--pk-text-muted); }
 .pk-gantt-bar.has-error { background: var(--pk-danger); }
 
-.pk-gantt-duration { width: 60px; font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
+.pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
 
 .pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; cursor: pointer;
     border: none; padding: 0; }

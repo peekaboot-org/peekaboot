@@ -10,6 +10,7 @@
 import {groupList, expandedKeys, badge} from '../../shared/components.js';
 import {escapeHtml, highlightText} from '../../shared/markup.js';
 import {formatBytes} from '../../shared/format.js';
+import {reconcileTextFilter, writeTextFilter} from '../../shared/url-filter.js';
 
 export const id = 'meters';
 export const label = 'Meters';
@@ -31,6 +32,11 @@ export function render(container, data, context) {
     currentContainer = container;
     currentContext = context;
     wireFilter(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so reconciling during a background
+    // auto-refresh render of a hidden meters tab would read another tab's params (or
+    // none) and clobber whatever the user already typed here.
+    if (container.classList.contains('active')) reconcileTextFilter(container.querySelector('#meters-filter'), context);
     fetchAndRender();
 }
 
@@ -38,7 +44,10 @@ function wireFilter(container) {
     const input = container.querySelector('#meters-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
-    input.addEventListener('input', () => renderList(input.value.trim()));
+    input.addEventListener('input', () => {
+        writeTextFilter(input, currentContext);
+        renderList(input.value.trim());
+    });
 }
 
 function currentFilterValue(container) {

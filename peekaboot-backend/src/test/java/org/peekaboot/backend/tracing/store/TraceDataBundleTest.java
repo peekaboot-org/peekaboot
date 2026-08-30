@@ -96,6 +96,20 @@ class TraceDataBundleTest {
     }
 
     @Test
+    void resolveSpanId_followsTheRedirectChainToTheSurvivingSpan() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
+        SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
+
+        bundle.addSpan(duplicate, 100);
+        bundle.addSpan(real, 100);
+
+        assertThat(bundle.resolveSpanId("dup1")).isEqualTo("parent1");
+        assertThat(bundle.resolveSpanId("unrelated")).isEqualTo("unrelated");
+        assertThat(bundle.resolveSpanId(null)).isNull();
+    }
+
+    @Test
     void addSpan_doesNotCollapseAChildWithDifferentTagsFromItsParent() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData parent = jdbcSpan("parent1", null, "query", "SELECT * FROM person", "sample_app_db", 1);

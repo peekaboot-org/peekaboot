@@ -28,6 +28,20 @@ class CopyableIdTest extends PlaywrightTestBase {
         page.context().grantPermissions(List.of("clipboard-read", "clipboard-write"));
     }
 
+    /**
+     * Imports copyable.js directly (SharedModuleTest's pk-blank.html pattern) rather than
+     * driving a real page - copyableIdHtml's displayValue option is pure markup generation,
+     * with nothing about it that needs a real DOM surface to exercise.
+     */
+    private Object evalModule(String expression) {
+        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
+            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+        }
+        return page.evaluate(
+                "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
+                List.of("/peekaboot/ui/shared/copyable.js", expression));
+    }
+
     private void openPageWithToolbar() {
         page.navigate(baseUrl + "/");
         page.waitForSelector("#peekaboot-toolbar-host");
@@ -96,6 +110,47 @@ class CopyableIdTest extends PlaywrightTestBase {
         String traceId = (String) page.evaluate("() => " + TOOLBAR_COPY + ".dataset.pkCopy");
 
         assertThat(label).isEqualTo("Copy traceId " + traceId);
+    }
+
+    @Test
+    @DisplayName("displayValue swaps the visible value for a short one but the copy payload stays the full id")
+    void copyableIdRendersAShortDisplayValueButCopiesTheFullId() {
+        String fullId = "abcdef1234567890";
+
+        Object result = evalModule("(() => {"
+                + " const d = document.createElement('div');"
+                + " d.innerHTML = m.copyableIdHtml('" + fullId + "', {label: 'spanId', displayValue: 'abcdef12'});"
+                + " const btn = d.querySelector('[data-pk-copy]');"
+                + " return [btn.querySelector('.pk-copy__value').textContent, btn.dataset.pkCopy,"
+                + "         btn.getAttribute('aria-label'), btn.getAttribute('title')];"
+                + "})()");
+
+        @SuppressWarnings("unchecked")
+        List<String> parts = (List<String>) result;
+        assertThat(parts.get(0))
+                .as("the visible text is the short display value")
+                .isEqualTo("abcdef12");
+        assertThat(parts.get(1)).as("the copy payload is the full id").isEqualTo(fullId);
+        assertThat(parts.get(2))
+                .as("the accessible name still names the full id")
+                .contains(fullId);
+        assertThat(parts.get(3))
+                .as("the title still names the label, not the id")
+                .isEqualTo("Copy spanId");
+    }
+
+    @Test
+    @DisplayName("a call without displayValue renders the full value, exactly as before")
+    void copyableIdWithoutDisplayValueRendersTheFullValueUnchanged() {
+        String fullId = "abcdef1234567890";
+
+        Object visibleValue = evalModule("(() => {"
+                + " const d = document.createElement('div');"
+                + " d.innerHTML = m.copyableIdHtml('" + fullId + "', {label: 'spanId'});"
+                + " return d.querySelector('.pk-copy__value').textContent;"
+                + "})()");
+
+        assertThat(visibleValue).isEqualTo(fullId);
     }
 
     @Test

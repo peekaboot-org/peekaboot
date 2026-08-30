@@ -15,7 +15,7 @@ export function render(container, trace, context = {}) {
     html += '<div class="pk-gantt-header">';
     html += '<div class="pk-gantt-header-name">Span</div>';
     html += '<div class="pk-gantt-header-timeline">' + markers.map(m => `<span>${m}</span>`).join('') + '</div>';
-    html += '<div style="width:60px"></div>';
+    html += '<div class="pk-gantt-header-spacer"></div>';
     html += '</div>';
     html += '<div id="pk-gantt-rows"></div>';
     html += '</div>';
@@ -89,6 +89,10 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     const spanStart = span.startTimeMs || traceStart;
     const spanDuration = span.durationMs || 0;
     const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
+    // Percent of total trace time, from the raw ratio - computed before the 0.5%-min
+    // clamp below, which exists only to keep the bar itself visible, not to inflate
+    // what a genuinely tiny span reports as its share of the trace.
+    const pct = Math.min(100, Math.round((spanDuration / totalDuration) * 100));
     const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
     const kindRaw = span.kind || 'internal';
     const kind = kindRaw.toLowerCase();
@@ -160,7 +164,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     });
     trackHtml += `</div>`;
 
-    row.innerHTML = nameHtml + trackHtml + `<span class="pk-gantt-duration">${spanDuration}ms</span>`;
+    row.innerHTML = nameHtml + trackHtml + `<span class="pk-gantt-duration">${spanDuration}ms · ${pct}%</span>`;
 
     container.appendChild(row);
 

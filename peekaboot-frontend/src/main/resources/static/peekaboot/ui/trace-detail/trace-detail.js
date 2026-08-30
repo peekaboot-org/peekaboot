@@ -11,7 +11,8 @@
  */
 import {escapeHtml} from '../shared/markup.js';
 import {durationSeverity} from '../shared/severity.js';
-import {rootActionIcon} from '../shared/root-actions.js';
+import {formatCount} from '../shared/format.js';
+import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient} from '../shared/api.js';
@@ -26,7 +27,7 @@ import * as logs from './tabs/logs.js';
 // button's text, count (when present) the small badge next to it.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
-    {id: 'spans',   label: 'Spans',   render: spans.render},
+    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary?.spans?.count ?? countSpans(t.rootSpan)},
     {id: 'queries', label: 'Queries', render: queries.render, count: t => (t.queries || []).length},
     {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => (t.logs || []).length}
 ];
@@ -87,6 +88,10 @@ export function openTraceDetail(traceId, options = {}) {
 
     const overlayHost = document.createElement('div');
     overlayHost.id = 'peekaboot-trace-overlay';
+    // Exposes which trace (if any) is open as plain DOM state, so callers on either of
+    // this module's two entry points (main.js's hash routing, traces.js's click-to-open)
+    // can check "is this trace already open?" without either of them having to track it.
+    overlayHost.dataset.traceId = traceId;
     // Decision: size the host with an inline style set synchronously here (matching
     // toolbar.js's host), not a `:host{position:fixed;inset:0}` rule in trace-detail.css.
     // attachSharedStyles() links that stylesheet asynchronously, so a CSS-only :host rule
@@ -110,7 +115,7 @@ export function openTraceDetail(traceId, options = {}) {
     shadow.appendChild(content);
     content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
 
-    fetchAndRender(content, traceId, {basePath, session, styleReady});
+    fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState});
 }
 
 export function closeTraceDetail() {
@@ -143,13 +148,13 @@ export function closeTraceDetail() {
     }
 }
 
-async function fetchAndRender(content, traceId, {basePath, session, styleReady}) {
+async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState}) {
     const client = createClient({basePath});
     try {
         const [trace] = await Promise.all([client.get(`/api/traces/${traceId}/insights`), styleReady]);
         // A newer open() superseded this one while the request was in flight.
         if (session !== currentSession) return;
-        render(content, trace);
+        render(content, trace, urlState);
     } catch (error) {
         if (session !== currentSession) return;
         // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
@@ -172,7 +177,7 @@ function statusBadgeVariant(statusNum) {
     return 'error';
 }
 
-function render(content, trace) {
+function render(content, trace, urlState) {
     // delegated once on the container, which outlives every innerHTML swap below
     bindCopyables(content);
 
@@ -181,8 +186,9 @@ function render(content, trace) {
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
     const res = httpExchange.response || {};
-    // Prefer httpExchange data, fall back to span tags
-    const method = req.method || tags['http.method'] || tags['http.request.method'] || 'UNKNOWN';
+    // Prefer httpExchange data, fall back to span tags; null (not a placeholder string) for
+    // a trace with no HTTP request at all, so the title falls back to the root-action label.
+    const method = req.method || tags['http.method'] || tags['http.request.method'] || null;
     const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
     const status = res.status || tags['http.status_code'] || tags['http.response.status_code'] || '-';
     const statusNum = parseInt(status);
@@ -190,26 +196,28 @@ function render(content, trace) {
 
     const queryCount = (trace.queries || []).length;
     const logCount = (trace.logs || []).length;
-    const spanCount = trace.summary?.spans?.count || countSpans(trace.rootSpan);
+    const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
 
     content.innerHTML = `
         <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
             <div class="pk-overlay__container">
                 <div class="pk-overlay__header">
                     <button type="button" class="pk-overlay__back" title="Back" aria-label="Back">&#8592;</button>
-                    <h2 class="pk-overlay__title" id="pk-overlay-title">
-                        <span class="pk-overlay__title-icon" aria-hidden="true"></span>
-                        <span class="pk-overlay__title-method">${escapeHtml(method)}</span>
-                        <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                        <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                    </h2>
-                    <div class="pk-overlay__meta">
-                        <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
-                        <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
-                        <span>${spanCount} spans</span>
-                        <span>${queryCount} queries</span>
-                        <span>${logCount} logs</span>
-                        ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
+                    <div class="pk-overlay__header-main">
+                        <h2 class="pk-overlay__title" id="pk-overlay-title">
+                            <span class="pk-overlay__title-icon" aria-hidden="true"></span>
+                            <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
+                            <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+                            <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
+                        </h2>
+                        <div class="pk-overlay__meta">
+                            <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
+                            <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
+                            <span>${formatCount(spanCount, 'span')}</span>
+                            <span>${formatCount(queryCount, 'query', 'queries')}</span>
+                            <span>${formatCount(logCount, 'log')}</span>
+                            ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
+                        </div>
                     </div>
                     <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
                 </div>
@@ -230,16 +238,41 @@ function render(content, trace) {
 
     const tabContent = container.querySelector('#pk-tab-content');
 
-    // The Spans tab's "N logs" toggle has nowhere of its own to show a span's logs -
-    // it asks to switch to the Logs tab instead, pre-filtered to that span. `select`
+    // Deep-linked into a specific subview (e.g. "#traces/<id>/logs?level=WARN") when the
+    // hash names one of this overlay's own tabs; falls back to Spans for a bare
+    // "#traces/<id>" link and for callers with no urlState at all (the dev toolbar).
+    const initialTab = TABS.some(t => t.id === urlState?.initial?.subview) ? urlState.initial.subview : 'spans';
+
+    // Params are scoped to the deepest view (this tab), so a tab switch always starts
+    // that tab's filters empty - see url-state.js's push/replace rule and the plan's
+    // recorded ruling on this. Only the tab restored from the URL at open time seeds
+    // its filters from urlState.initial.params.
+    //
+    // goToSpanLogs rides along on the same object every tab already receives, so the
+    // Spans tab can reach it without a hand-off channel of its own beside this one.
+    const tabView = (tabId, filters) => ({
+        filters,
+        setFilters: next => urlState?.update(tabId, next),
+        goToSpanLogs
+    });
+
+    // tabStrip's click listener re-fires onSelect even when the clicked tab is already
+    // selected (it only tracks aria-selected, not "did the tab actually change") - without
+    // this guard, re-clicking the active tab would wipe its own filters/URL for nothing.
+    let activeTabId = initialTab;
+
+    // The Spans tab's "N logs" toggle has nowhere of its own to show a span's logs, so it
+    // asks to switch to the Logs tab with that span already applied. It seeds the very
+    // same `span` filter a "?span=..." deep link would, so the resulting view is as
+    // linkable as any other - hence the urlState.update alongside the render. `select`
     // with silent:true only moves the tab strip's own selection state; the render call
-    // right after is what actually seeds logs.js's filter, mirroring how the dashboard's
-    // navigate() in main.js routes a payload to a tab's own filter hook instead of
-    // letting the tab strip's default (unfiltered) render run.
+    // is what seeds logs.js, since onSelect's default render deliberately starts empty.
     let tabApi;
     function goToSpanLogs(spanId) {
+        activeTabId = 'logs';
         tabApi.select('logs', {silent: true});
-        renderTabContent(tabContent, 'logs', trace, {spanFilter: spanId});
+        urlState?.update('logs', {span: spanId});
+        renderTabContent(tabContent, 'logs', trace, tabView('logs', {span: spanId}));
     }
 
     tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
@@ -247,11 +280,16 @@ function render(content, trace) {
         label: tab.label,
         count: tab.count ? tab.count(trace) : undefined
     })), {
-        onSelect: tabId => renderTabContent(tabContent, tabId, trace, {goToSpanLogs}),
-        initial: 'spans'
+        onSelect: tabId => {
+            if (tabId === activeTabId) return;
+            activeTabId = tabId;
+            urlState?.update(tabId, {});
+            renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+        },
+        initial: initialTab
     });
 
-    renderTabContent(tabContent, 'spans', trace, {goToSpanLogs});
+    renderTabContent(tabContent, initialTab, trace, tabView(initialTab, urlState?.initial?.params || {}));
 
     // ESC key to close; closeTraceDetail removes the listener however
     // the overlay is dismissed (buttons, overlay click, ESC)
@@ -271,9 +309,9 @@ function render(content, trace) {
     container.focus();
 }
 
-function renderTabContent(container, tabId, trace, context = {}) {
+function renderTabContent(container, tabId, trace, view) {
     const tab = TABS.find(t => t.id === tabId);
-    if (tab) tab.render(container, trace, context);
+    if (tab) tab.render(container, trace, view);
 }
 
 function countSpans(span) {

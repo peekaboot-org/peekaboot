@@ -2,13 +2,15 @@
  * Trace-detail overlay - Logs tab: the filterable log list. Every row names its span
  * (a click filters to it) and carries that span's full id as a copyable control - the
  * one place a span's id lives now that the Spans tab tree dropped it (too crowded with
- * a full id on every row); see spans.js's "N logs" toggle, which lands here pre-filtered
- * via context.spanFilter below rather than opening its own popup.
+ * a full id on every row); see spans.js's "N logs" toggle, which lands here with this
+ * tab's own span filter already seeded rather than opening a popup of its own.
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {buildSpanNames} from '../../shared/span-names.js';
 import {copyableIdHtml} from '../../shared/copyable.js';
+
+const LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
 
 function renderLogRows(logs, spanNames) {
     return logs.map(log => {
@@ -28,11 +30,15 @@ function renderLogRows(logs, spanNames) {
 }
 
 /**
- * context.spanFilter seeds the filter spans.js's "N logs" toggle asked for - trace-detail.js
- * switches this tab in and re-renders it with that span already applied, on top of the
- * clear/back affordance below that this tab already had for a filter set from within itself.
+ * `view.filters` (`{q, level, span}`, see url-state.js) seeds this tab's state: from the URL
+ * when this is the tab restored at overlay-open time, or from spans.js's "N logs" toggle,
+ * which routes through the very same seam (trace-detail.js's goToSpanLogs re-renders this
+ * tab with `{span}`) instead of needing a hand-off channel of its own.
+ * `view.setFilters(next)` reports every change back so it round-trips into the hash. Both
+ * are optional - the dev toolbar's open path (no urlState at all) leaves filtering purely
+ * local, as before.
  */
-export function render(container, trace, context = {}) {
+export function render(container, trace, view = {}) {
     const spanNames = buildSpanNames(trace.rootSpan);
     const logs = trace.logs || [];
 
@@ -41,16 +47,54 @@ export function render(container, trace, context = {}) {
         return;
     }
 
-    let currentSpanFilter = context.spanFilter || null;
+    // Single source of truth for the three filters - renderView() below renders the
+    // controls FROM this, instead of the controls' own DOM values, so a re-render (the
+    // span filter changing) can no longer wipe out the text/level filters. See logs.js's
+    // task brief for the bug this replaced.
+    //
+    // state.level is validated against LEVELS (mirroring how trace-detail.js falls an
+    // unrecognized subview back to 'spans'): an unvalidated value from the URL (a typo, a
+    // stale link, a different case) would match none of the rendered <option>s, so the
+    // browser would default the <select> to "All Levels" while applyFilters() kept
+    // filtering by that bogus value underneath - a dropdown that visually claims no filter
+    // is applied while silently hiding every row.
+    const state = {
+        q: view.filters?.q || '',
+        level: LEVELS.includes(view.filters?.level) ? view.filters.level : '',
+        span: view.filters?.span || null
+    };
+
+    function publishFilters() {
+        const next = {};
+        if (state.q) next.q = state.q;
+        if (state.level) next.level = state.level;
+        if (state.span) next.span = state.span;
+        view.setFilters?.(next);
+    }
 
     function renderView() {
         let html = '<div class="pk-logs-filter">';
-        html += '<input type="text" placeholder="Filter logs..." id="pk-log-filter">';
-        html += '<select id="pk-log-level"><option value="">All Levels</option><option>ERROR</option><option>WARN</option><option>INFO</option><option>DEBUG</option></select>';
-        if (currentSpanFilter) {
-            const spanName = spanNames.get(currentSpanFilter) || currentSpanFilter;
-            const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
-            html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
+        html += `<input type="text" placeholder="Filter logs..." id="pk-log-filter" value="${escapeHtml(state.q)}">`;
+        html += '<select id="pk-log-level">';
+        html += `<option value=""${state.level === '' ? ' selected' : ''}>All Levels</option>`;
+        LEVELS.forEach(level => {
+            html += `<option${state.level === level ? ' selected' : ''}>${level}</option>`;
+        });
+        html += '</select>';
+        if (state.span) {
+            const shortId = state.span.slice(0, 8);
+            const spanName = spanNames.get(state.span);
+            let label;
+            let title = '';
+            if (spanName) {
+                const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
+                label = `${escapeHtml(shortName)} (${escapeHtml(shortId)})`;
+            } else {
+                label = escapeHtml(shortId);
+                title = ` title="${escapeHtml(state.span)}"`;
+            }
+            html += `<span class="pk-logs-filter-span"${title}>Span: ${label} `
+                + `<button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
         html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames)}</div>`;
@@ -62,29 +106,39 @@ export function render(container, trace, context = {}) {
         const clearSpanFilter = container.querySelector('#pk-clear-span-filter');
 
         function applyFilters() {
-            const text = filterInput.value.toLowerCase();
-            const level = levelSelect.value;
+            const text = state.q.toLowerCase();
+            const level = state.level;
             container.querySelectorAll('.pk-log').forEach(item => {
                 const message = item.querySelector('.pk-log__message').textContent.toLowerCase();
                 const itemLevel = item.dataset.level;
                 const itemSpanId = item.dataset.spanId;
                 const matchText = !text || message.includes(text);
                 const matchLevel = !level || itemLevel === level;
-                const matchSpan = !currentSpanFilter || itemSpanId === currentSpanFilter;
+                const matchSpan = !state.span || itemSpanId === state.span;
                 item.classList.toggle('pk-log--hidden', !(matchText && matchLevel && matchSpan));
             });
         }
 
-        // Establishes the initial visibility (a span filter set before this render, if any)
+        // Establishes the initial visibility (filters restored from the URL, or a span
+        // filter set before this render) before any control has fired an event.
         applyFilters();
 
-        filterInput.addEventListener('input', applyFilters);
-        levelSelect.addEventListener('change', applyFilters);
+        filterInput.addEventListener('input', () => {
+            state.q = filterInput.value;
+            applyFilters();
+            publishFilters();
+        });
+        levelSelect.addEventListener('change', () => {
+            state.level = levelSelect.value;
+            applyFilters();
+            publishFilters();
+        });
 
         // Clear span filter
         if (clearSpanFilter) {
             clearSpanFilter.addEventListener('click', () => {
-                currentSpanFilter = null;
+                state.span = null;
+                publishFilters();
                 renderView();
             });
         }
@@ -94,7 +148,8 @@ export function render(container, trace, context = {}) {
             el.addEventListener('click', () => {
                 const spanId = el.dataset.spanId;
                 if (spanId) {
-                    currentSpanFilter = spanId;
+                    state.span = spanId;
+                    publishFilters();
                     renderView();
                 }
             });

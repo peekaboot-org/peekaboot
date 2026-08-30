@@ -1,8 +1,8 @@
 package org.peekaboot.testingapp.ui;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 /**
  * Exercises the shared ES modules in a real browser, imported from the running
@@ -84,13 +84,13 @@ class SharedModuleTest extends PlaywrightTestBase {
     @Test
     void formatHostsRendersHostnamePortAndFallbacks() {
         // API host objects carry "hostname" (net.osslabz.jdbc.Host), not "host"
-        assertThat(evalModule("format.js",
-                "m.formatHosts([{hostname: '127.0.0.1', port: 5432, instanceName: null}])"))
+        assertThat(evalModule("format.js", "m.formatHosts([{hostname: '127.0.0.1', port: 5432, instanceName: null}])"))
                 .isEqualTo("127.0.0.1:5432");
-        assertThat(evalModule("format.js",
-                "m.formatHosts([{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}])"))
+        assertThat(evalModule(
+                        "format.js", "m.formatHosts([{hostname: 'db1', port: 5432}, {hostname: 'db2', port: 5433}])"))
                 .isEqualTo("db1:5432, db2:5433");
-        assertThat(evalModule("format.js", "m.formatHosts([{hostname: 'db.local'}])")).isEqualTo("db.local");
+        assertThat(evalModule("format.js", "m.formatHosts([{hostname: 'db.local'}])"))
+                .isEqualTo("db.local");
         assertThat(evalModule("format.js", "m.formatHosts(null)")).isEqualTo("unknown");
         assertThat(evalModule("format.js", "m.formatHosts([])")).isEqualTo("unknown");
     }
@@ -132,13 +132,20 @@ class SharedModuleTest extends PlaywrightTestBase {
     void rootActionIconsMatchTheExpectedLiteralCharacters() {
         // Pins every icon explicitly so a mapping swap (e.g. DATABASE <-> RPC_CALL)
         // fails here instead of slipping through on the "not an entity" check alone.
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST') === '\\u{1F310}'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('SCHEDULED_JOB') === '\\u{1F551}'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('MESSAGE_CONSUMER') === '\\u{1F4E9}'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'")).isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('UNKNOWN') === '❓'")).isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST') === '\\u{1F310}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('SCHEDULED_JOB') === '\\u{1F551}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('MESSAGE_CONSUMER') === '\\u{1F4E9}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('UNKNOWN') === '❓'"))
+                .isEqualTo(true);
     }
 
     @Test
@@ -165,5 +172,21 @@ class SharedModuleTest extends PlaywrightTestBase {
     void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
                 .isNotEqualTo("-");
+    }
+
+    /**
+     * Regression guard for the overlay header meta line always reading "1 queries" - a
+     * bare "+ 's'" pluralisation with no singular/plural distinction. formatCount()'s
+     * plural defaults to singular + 's' (covers "span"/"spans", "log"/"logs") but takes an
+     * explicit override for irregular nouns like "query"/"queries".
+     */
+    @Test
+    void formatCountPluralisesIrregularNouns() {
+        assertThat(evalModule("format.js", "m.formatCount(1, 'query', 'queries')"))
+                .isEqualTo("1 query");
+        assertThat(evalModule("format.js", "m.formatCount(2, 'query', 'queries')"))
+                .isEqualTo("2 queries");
+        assertThat(evalModule("format.js", "m.formatCount(1, 'span')")).isEqualTo("1 span");
+        assertThat(evalModule("format.js", "m.formatCount(0, 'span')")).isEqualTo("0 spans");
     }
 }

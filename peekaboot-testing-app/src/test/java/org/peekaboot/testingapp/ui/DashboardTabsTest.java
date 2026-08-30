@@ -368,6 +368,94 @@ class DashboardTabsTest extends PlaywrightTestBase {
     }
 
     /**
+     * A deep link into the meters tab must restore the text filter from the URL, and
+     * typing further into it must keep writing the URL back (via replaceState - see
+     * url-state.js's push/replace rule) without growing browser history, so every
+     * keystroke doesn't add its own Back stop.
+     */
+    @Test
+    void metersFilterIsRestoredFromTheUrlAndWritesBackOnInput() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#meters?q=jvm");
+        page.waitForFunction("() => document.querySelector('#meters-filter')?.value === 'jvm'");
+
+        assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm");
+
+        int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        Locator input = page.locator("#meters-filter");
+        input.click();
+        input.press("End");
+        input.press("m");
+
+        page.waitForFunction("() => window.location.hash.includes('q=jvmm')");
+        int historyLengthAfter = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        assertThat(page.url()).contains("q=jvmm");
+        assertThat(historyLengthAfter).isEqualTo(historyLengthBefore);
+    }
+
+    /**
+     * Regression test for a review finding: the tab strip's own onSelect handler
+     * (main.js) pushes a plain "#<tab>" hash with no params on every tab switch, so
+     * switching away from meters and back used to hand this tab a bare URL - and the
+     * seed logic treated that bare URL as authoritative, actively clearing the filter
+     * the user had just typed even though nothing about it had ever been undone. Fixed
+     * by only treating the URL as authoritative when it actually carries this tab's own
+     * "q" param; when it's bare but the tab still has non-default state, that state is
+     * written back to the URL instead, so the filter survives the round trip and the URL
+     * becomes truthful again.
+     */
+    @Test
+    void metersFilterSurvivesSwitchingTabsAwayAndBack() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForSelector("#meters-list .pk-group");
+
+        page.fill("#meters-filter", "jvm.memory");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
+
+        page.click(".pk-tab[data-tab='environment']");
+        page.waitForSelector("#environment-tab.active");
+
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
+
+        assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm.memory");
+        assertThat(page.url()).contains("q=jvm.memory");
+    }
+
+    /**
+     * Regression test for a review finding on the fix above: the reconcile logic
+     * couldn't tell "the tab strip switched tabs" (a bare hash this tab's own filter
+     * should survive - see metersFilterSurvivesSwitchingTabsAwayAndBack) apart from "the
+     * user hand-edited the address bar to remove the q param" (a bare hash that should
+     * actually clear the filter) - both looked identical, so it always favored the
+     * surviving-filter behavior, silently reverting a real edit. Fixed by having
+     * main.js flag a render as URL-authoritative only when it's the direct result of a
+     * genuine hashchange event (handleHashChange()'s urlChangeInProgress) - a
+     * programmatic tab switch never sets it, so its own bare hash still lets the filter
+     * survive, while a real hash edit now actually clears it.
+     */
+    @Test
+    void handEditingTheHashToRemoveTheFilterClearsIt() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='meters']");
+        page.waitForSelector("#meters-list .pk-group");
+
+        page.fill("#meters-filter", "jvm");
+        page.waitForFunction("() => window.location.hash.includes('q=jvm')");
+
+        // Direct hash assignment fires a real 'hashchange' event - what a user editing
+        // the address bar (or following a bookmark without the param) would produce -
+        // unlike main.js's own pushAppHash/replaceAppHash writes, which never do.
+        page.evaluate("() => { window.location.hash = '#meters'; }");
+        page.waitForFunction("() => document.querySelector('#meters-filter').value === ''");
+
+        assertThat(page.inputValue("#meters-filter")).isEmpty();
+        assertThat(page.url()).endsWith("#meters");
+    }
+
+    /**
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct
@@ -416,6 +504,50 @@ class DashboardTabsTest extends PlaywrightTestBase {
         assertThat(page.querySelectorAll("#traces-list .pk-trace-item")).hasSize(expectedErrorsCount);
     }
 
+    /**
+     * A deep link into the traces tab must restore the bucket and type filter controls
+     * from the URL, not just land on the traces tab - the whole point of Task 5 is that
+     * a filtered traces URL is shareable/bookmarkable.
+     */
+    @Test
+    void deepLinkRestoresTheTracesBucketAndTypeFilter() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors&type=SCHEDULED_JOB");
+        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
+                .isEqualTo("false");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='errors']", "aria-pressed"))
+                .isEqualTo("true");
+
+        Object checkedTypesRaw = page.evaluate(
+                "() => [...document.querySelectorAll('#traces-filter input:checked')].map(cb => cb.value)");
+        @SuppressWarnings("unchecked")
+        List<String> checkedTypes = (List<String>) checkedTypesRaw;
+        assertThat(checkedTypes).containsExactly("SCHEDULED_JOB");
+    }
+
+    /**
+     * Regression test for a review finding: "bucket" was the only URL-sourced filter value
+     * traces.js never validated - "#traces?bucket=bogus" used to seed currentBucket='bogus'
+     * verbatim, hit the backend with it, and (on an empty result) render BUCKET_EMPTY_MESSAGES's
+     * literal "undefined" as the empty-state text since no such key exists. seedFromUrl now
+     * falls back to 'all' for anything not in BUCKET_EMPTY_MESSAGES's own key set - proven here
+     * by the bucket strip itself: an unvalidated 'bogus' would match none of the three real
+     * bucket buttons, leaving all three unpressed, where the fallback leaves "All" pressed.
+     */
+    @Test
+    void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='errors']", "aria-pressed"))
+                .isEqualTo("false");
+        assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='slow']", "aria-pressed"))
+                .isEqualTo("false");
+    }
+
     @Test
     void clickingATraceOpensTheOverlayAndDeepLinks() {
         openDashboard();
@@ -440,6 +572,167 @@ class DashboardTabsTest extends PlaywrightTestBase {
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
 
         assertThat(page.url()).endsWith("#traces");
+    }
+
+    /**
+     * Regression test for a review finding: context.setUrlParams's closure (main.js's
+     * currentContext()) used to capture detail/subview once, at the last render() of a
+     * tab - but opening a trace (traces.js's click-to-open path) and closing it (its
+     * onClose callback, both via context.navigate()) each skip a fresh render whenever
+     * the traces tab was already active (navigate()'s wasAlreadyActive guard), so the
+     * closure only ever picked up "detail = the open trace's id" if some *other* render
+     * happened while the overlay was open - in real use, the 30s auto-refresh cycle;
+     * here, a manual refresh click makes it deterministic. Once that was baked in,
+     * closing the overlay cleared the real hash back to plain "#traces" but left the
+     * closure stale - so the very next filter change replaced the hash with the
+     * just-closed trace's id still attached, silently reopening it on reload/share.
+     * Fixed by having setUrlParams re-parse the hash at call time instead of closing
+     * over a snapshot.
+     */
+    @Test
+    void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        page.click("#traces-list .pk-trace-item__open");
+        page.waitForSelector("#peekaboot-trace-overlay");
+
+        // Forces a full renderData() cycle while the overlay is open, so traces.js's
+        // setUrlParams closure (pre-fix) would pick up the open trace's id as "detail" -
+        // the same thing a real 30s auto-refresh cycle would eventually do on its own.
+        // A real pointer click on the button is unusable here: the full-screen overlay
+        // intercepts it, so this invokes the button's own click handler directly instead.
+        page.evaluate("() => document.getElementById('refresh-btn').click()");
+        page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
+
+        page.keyboard().press("Escape");
+        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        assertThat(page.url()).endsWith("#traces");
+
+        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        page.waitForFunction("() => document.querySelector(\"#traces-bucket .pk-btn[data-bucket='errors']\")"
+                + ".getAttribute('aria-pressed') === 'true'");
+
+        assertThat(page.url()).endsWith("#traces?bucket=errors");
+    }
+
+    /**
+     * Regression test for a review finding: the traces tab's own filter write-back used to
+     * ignore an open overlay entirely. With "#traces?bucket=errors" active and a trace open
+     * on top of it, switching the overlay to Logs and setting a level filter puts
+     * "#traces/<id>/logs?level=ERROR" in the address bar - but the traces tab's panel is
+     * still ".active" underneath, so the 30s auto-refresh (forced here via the refresh
+     * button, same pattern as closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace
+     * above) re-renders it. Its reconcileWithUrl saw no bucket/type/op keys in the URL
+     * (level/q are the overlay's own), decided the URL was stale, and wrote its own
+     * {bucket: 'errors'} back over the whole params slot - silently discarding the overlay's
+     * level filter from the shareable URL. Fixed by having both the seed direction
+     * (traces.js's reconcileWithUrl) and the write direction (main.js's setUrlParams) treat
+     * a detail segment in the hash as "the params slot belongs to the overlay - no-op".
+     */
+    @Test
+    void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
+        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        page.click("#traces-list .pk-trace-item__open");
+        page.waitForSelector("#peekaboot-trace-overlay");
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        // The tab switch itself is synchronous (tabStrip's click listener calls onSelect,
+        // which renders the Logs tab content, in the same call stack) - but waiting on the
+        // element rather than assuming it's already there the instant the click evaluate()
+        // resolves is the same defensive idiom TraceOverlayTest's own Logs-tab tests use
+        // (see logsFilterChipUsesTheContrastTunedForeground's wait for '.pk-log__span'
+        // right after this exact click), and is what actually observed a real flake here.
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('#pk-log-level')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        page.waitForFunction("() => window.location.hash.includes('/logs')");
+
+        page.evaluate("() => { const sel = document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('#pk-log-level'); sel.value = 'ERROR';"
+                + " sel.dispatchEvent(new Event('change')); }");
+        page.waitForFunction("() => window.location.hash.includes('level=ERROR')");
+
+        // Forces a full renderData() cycle - the traces tab panel is still .active behind
+        // the overlay, so this re-runs its reconcileWithUrl exactly as a real 30s
+        // auto-refresh tick would while the overlay sits open on top of it.
+        page.evaluate("() => document.getElementById('refresh-btn').click()");
+        page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
+
+        assertThat(page.url()).contains("level=ERROR");
+        assertThat(page.url()).doesNotContain("bucket=errors");
+    }
+
+    /**
+     * Regression test for a review finding on the trace-detail re-open guard: two
+     * hash-driven opens in a row - e.g. deep-linking from one trace straight into another,
+     * or a Back/Forward step that lands on a different trace - used to desync main.js's
+     * bookkeeping of "which trace is open" (a private module variable at the time).
+     * openTraceDetail's synchronous closeTraceDetail() call fires the *first* trace's
+     * still-registered onClose callback - which unconditionally cleared that bookkeeping -
+     * before the *second* traceId was even recorded, clobbering it back to unset. The next
+     * hashchange landing back on the (already open) second trace then failed the
+     * "already open" check and tore the overlay down to rebuild it for no reason - the
+     * exact flicker the guard exists to prevent. Fixed by deriving "is trace X open" from
+     * the overlay host's own data-trace-id (stamped by trace-detail.js) instead of a
+     * private flag, so it can't desync regardless of which of the app's two entry points
+     * (main.js's hash routing, or traces.js's own click-to-open, which bypasses main.js's
+     * bookkeeping entirely) opened the overlay.
+     * <p>
+     * Marks the host with a throwaway attribute right after switching traces, then
+     * re-fires the very hashchange event Back/Forward (or a redundant navigation) would
+     * produce for the trace already showing: a rebuilt overlay is a fresh DOM node and
+     * loses the marker, while a guard that correctly recognizes the trace is already open
+     * leaves the marked node untouched.
+     */
+    @Test
+    void revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay() {
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+
+        Object idsRaw = page.evaluate(
+                "() => [...document.querySelectorAll('#traces-list .pk-trace-item')].map(el => el.dataset.traceId)");
+        @SuppressWarnings("unchecked")
+        List<String> traceIds = (List<String>) idsRaw;
+        assertThat(traceIds.size())
+                .as("need at least two distinct traces for this test")
+                .isGreaterThanOrEqualTo(2);
+        String firstTraceId = traceIds.get(0);
+        String secondTraceId = traceIds.get(1);
+
+        // Deep-link straight to the first trace - main.js's own hash-driven
+        // expandTraceById path, which is what registers the onClose callback that the
+        // switch below fires early.
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", firstTraceId);
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", firstTraceId);
+
+        // Straight to a *different* trace by hash, without closing the first - the exact
+        // sequence that used to clobber the guard's bookkeeping (see the javadoc above).
+        page.evaluate("id => { window.location.hash = '#traces/' + id; }", secondTraceId);
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", secondTraceId);
+
+        page.evaluate("() => { document.getElementById('peekaboot-trace-overlay').dataset.testMarker = 'stable'; }");
+
+        // Re-fire the hashchange for the trace that's already open, without changing the
+        // hash itself - what Back/Forward landing back on it produces.
+        page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
+
+        assertThat(page.getAttribute("#peekaboot-trace-overlay", "data-test-marker"))
+                .isEqualTo("stable");
     }
 
     /**
