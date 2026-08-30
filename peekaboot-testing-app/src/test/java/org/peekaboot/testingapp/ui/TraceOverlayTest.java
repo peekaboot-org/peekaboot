@@ -28,15 +28,62 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
-     * Opens the overlay for the index page's error-path trace, the one trace this app
+     * Opens the overlay for the index page's error-path trace - the one trace this app
      * produces whose logs are spread over more than one span: the request handler's own
-     * error log, and the INFO line PersonQueryService.findAll() writes inside its own
-     * observed span.
+     * ERROR log, and the INFO line PersonQueryService.findAll() writes inside its own
+     * observed span. Returns that trace's id.
+     *
+     * <p>Two things this deliberately does not do the short way. It polls the insights
+     * endpoint until the second logging span has actually landed, because the toolbar
+     * publishes the trace id as soon as the response is written while spans reach the
+     * store asynchronously afterwards - the same ingestion race
+     * overlayTabStripExposesAsARealTablistInTheAccessibilityTree documents (observed on
+     * macOS). The poll lives in a single evaluate() for that test's reason too: a second,
+     * separate fetch could race the trace's eviction from a bounded store. It counts spans
+     * carrying logs the way spans.js itself derives them (span.logs, walked down
+     * span.children), so the precondition is measured against the very shape the Spans tab
+     * renders its "N logs" toggles from.
+     *
+     * <p>And it opens through the dashboard's hash route rather than the toolbar, because
+     * only that path supplies an urlState (main.js's expandTraceById -> buildTraceUrlState).
+     * The toolbar calls openTraceDetail with none, so there every urlState write is a silent
+     * no-op and the URL assertions below could not fail even if the wiring were deleted.
      */
-    private void openOverlayForTheMultiSpanLogTrace() {
+    private String openOverlayForTheMultiSpanLogTrace() {
         page.navigate(baseUrl + "/?error=true");
         page.waitForSelector("#peekaboot-toolbar-host");
-        openOverlayFromLoadedToolbar();
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+
+        String traceId = (String) page.evaluate("""
+                async () => {
+                    const spansWithLogs = span => !span ? 0
+                        : ((span.logs || []).length > 0 ? 1 : 0)
+                          + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
+                    for (let attempt = 0; attempt < 150; attempt++) {
+                        const copyEl = document.getElementById('peekaboot-toolbar-host')
+                            .shadowRoot.querySelector('#pk-trace .pk-copy');
+                        const id = copyEl ? copyEl.dataset.pkCopy : null;
+                        if (id) {
+                            const response = await fetch('/peekaboot/api/traces/' + id + '/insights');
+                            if (response.ok) {
+                                const trace = await response.json();
+                                if (spansWithLogs(trace.rootSpan) > 1) return id;
+                            }
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error('no trace with logs on more than one span arrived within 15s');
+                }
+                """);
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
+                        + "?.querySelector('#pk-gantt-rows')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+        return traceId;
     }
 
     private void openOverlayFromLoadedToolbar() {
@@ -488,18 +535,24 @@ class TraceOverlayTest extends PlaywrightTestBase {
      * both halves of this test from holding vacuously - filtering to one span has to
      * actually hide something, and clearing has to actually bring something back - so the
      * premise is asserted before it is relied on rather than assumed.
+     *
+     * <p>Also pins that the hand-off is a real, shareable location and not just a DOM
+     * mutation: goToSpanLogs writes the span into the hash through the very same urlState
+     * seam a "?span=..." deep link is restored from, so the filtered view can be linked to
+     * and Back-navigated like any other, and clearing the filter takes the param back out.
      */
     @Test
     @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span, and the filter is clearable")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
-        openOverlayForTheMultiSpanLogTrace();
+        String traceId = openOverlayForTheMultiSpanLogTrace();
 
         @SuppressWarnings("unchecked")
         List<String> spansOfferingLogs = (List<String>)
                 page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
         assertThat(spansOfferingLogs)
-                .as("the trace must spread its logs over more than one span, or neither half of "
-                        + "this test could fail - see openOverlayForTheMultiSpanLogTrace")
+                .as("the Spans tab must offer a logs toggle per logging span - the helper already "
+                        + "waited for the backend to serve more than one, so a shortfall here is the "
+                        + "tree failing to render them, not ingestion still catching up")
                 .hasSizeGreaterThan(1);
         String spanId = spansOfferingLogs.getFirst();
 
@@ -507,6 +560,10 @@ class TraceOverlayTest extends PlaywrightTestBase {
 
         page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        assertThat(page.url())
+                .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
+                        + "deep link into this filtered view would use")
+                .contains("#traces/" + traceId + "/logs?span=" + spanId);
         String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('#pk-tab-content').innerHTML");
         assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
@@ -533,6 +590,10 @@ class TraceOverlayTest extends PlaywrightTestBase {
         assertThat(Set.copyOf(visibleAfterClear))
                 .as("clearing the filter is reversible - the other spans' logs are back too")
                 .hasSizeGreaterThan(1);
+        assertThat(page.url())
+                .as("clearing takes the param back out, so the URL never claims a filter that is "
+                        + "no longer applied")
+                .doesNotContain("span=");
     }
 
     @Test

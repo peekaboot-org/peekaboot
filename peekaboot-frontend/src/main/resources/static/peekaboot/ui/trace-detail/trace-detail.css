@@ -210,9 +210,11 @@
     background: none; border: none; padding: 0; text-align: left; flex: none; }
 .pk-log__span:hover { text-decoration: underline; }
 .pk-log__span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
-/* Trimmed down from the default .pk-copy chrome (components.css) - a 24px-tall button
-   would double this row's height; a log row is dense by design. */
-.pk-log__span-cell .pk-copy { min-height: auto; padding: 0; gap: 3px; max-width: 100%; }
+/* Trimmed down from the default .pk-copy chrome (components.css), but only as far as the
+   horizontal padding and the gap: components.css's 24px min-height is a deliberate hit-target
+   floor from the 2026-08-22 audit, not chrome, so it stays even though it costs this row a
+   dozen pixels of height. Density loses to a click target a person can actually hit. */
+.pk-log__span-cell .pk-copy { padding: 0 2px; gap: 3px; max-width: 100%; }
 .pk-log__span-cell .pk-copy__label, .pk-log__span-cell .pk-copy__value { font-size: 9px; }
 .pk-log__level { width: 50px; font-weight: 600; }
 .pk-log__level--debug { color: var(--pk-text-muted); }
