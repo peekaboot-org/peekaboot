@@ -19,6 +19,7 @@ import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
+import {parseAppHash} from '../../shared/url-state.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -51,6 +52,12 @@ export function render(container, data, context) {
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
     wireControls(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so reconciling here during a background
+    // auto-refresh render of a hidden traces tab would read another tab's params (or
+    // none) and clobber this tab's own filter state. See reconcileWithUrl's own doc
+    // comment.
+    if (container.classList.contains('active')) reconcileWithUrl(container);
     fetchAndRender();
 }
 
@@ -72,7 +79,90 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
         cb.checked = cb.value === rootActionType;
     });
 
+    // main.js's navigate() already pushed the plain "#traces" hash before calling this -
+    // this replaces it with the filter's own params so the cross-tab link lands on a
+    // shareable URL, without adding a second history entry for one navigation.
+    writeUrlParams();
     fetchAndRender();
+}
+
+/**
+ * Reconciles bucket/type/op state with the URL - called only while this tab's container
+ * is the active one (see render()). Two directions, picked by whether this render is
+ * URL-authoritative (context.urlIsAuthoritative - a genuine hash change: a deep link,
+ * Back/Forward, or a hand-edited hash, as opposed to a programmatic tab switch - see
+ * main.js's urlChangeInProgress) or the URL already carries any of this tab's own
+ * filter keys either way:
+ *  - URL-authoritative, or the URL has bucket/type/op -> the URL wins, including a bare
+ *    one: seedFromUrl() restores state from it, resetting to defaults when the URL
+ *    carries none of the keys but this render is URL-authoritative (a hand-edited hash
+ *    with the filter keys removed means the user asked to clear the filter, and that
+ *    has to actually clear it, not just leave the state untouched).
+ *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
+ *    *current* state wins instead. A bare hash here almost always just means the tab
+ *    strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with no
+ *    params - see navigate()), not that the user asked to clear the filter, and the
+ *    DOM/module state the user set before switching away is still sitting right here.
+ *    Writing it back (writeUrlParams()) is what makes a filter survive switching away
+ *    and back to this tab, and makes the URL truthful again instead of silently
+ *    drifting out of sync with what's actually filtered.
+ *
+ * A detail segment in the hash (the trace overlay open on top of this tab's still-.active
+ * panel - e.g. a background auto-refresh while "#traces/<id>/logs?level=ERROR" is showing)
+ * is an outright no-op instead: the params slot belongs to the overlay while it's open (see
+ * main.js's setUrlParams, which drops the write side of this same rule), and the overlay's
+ * own params (level/q, ...) are not this tab's bucket/type/op - seeding from them would
+ * wrongly reset the filter to its defaults, and writing back would clobber the overlay's URL.
+ */
+function reconcileWithUrl(container) {
+    if (parseAppHash().detail) return;
+
+    const params = currentContext.urlParams || {};
+    const urlHasFilterParams = 'bucket' in params || 'type' in params || 'op' in params;
+
+    if (urlHasFilterParams || currentContext.urlIsAuthoritative) {
+        seedFromUrl(container, params);
+    } else if (currentBucket !== 'all' || selectedRootActionTypes.size > 0 || currentRootOperationFilter) {
+        writeUrlParams();
+    }
+}
+
+/** Restores bucket/type/op state from the URL. Compares against the current state
+    rather than unconditionally overwriting it, so this is a no-op once the URL already
+    matches (the steady state on every render while this tab's own filter is active). */
+function seedFromUrl(container, params) {
+    // Validated against the canonical bucket list - an unrecognized value (a typo, a stale
+    // link) would otherwise sail straight through to the backend and back as a literal
+    // "undefined" in the empty-state message (BUCKET_EMPTY_MESSAGES has no such key).
+    const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
+    const urlTypes = params.type ? params.type.split(',').filter(Boolean) : [];
+    const urlOp = params.op || null;
+
+    const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
+    const urlTypesJoined = [...urlTypes].sort().join(',');
+    if (urlBucket === currentBucket && urlTypesJoined === currentTypesJoined && urlOp === currentRootOperationFilter) {
+        return;
+    }
+
+    currentBucket = urlBucket;
+    selectedRootActionTypes = new Set(urlTypes);
+    currentRootOperationFilter = urlOp;
+
+    container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn =>
+        btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket)));
+    container.querySelectorAll('#traces-filter input').forEach(cb => {
+        cb.checked = selectedRootActionTypes.has(cb.value);
+    });
+}
+
+/** Writes the current bucket/type/op filter state back to the URL, omitting each key
+    that's at its default so a clean filter yields a clean "#traces" hash. */
+function writeUrlParams() {
+    const params = {};
+    if (currentBucket !== 'all') params.bucket = currentBucket;
+    if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
+    if (currentRootOperationFilter) params.op = currentRootOperationFilter;
+    currentContext.setUrlParams(params);
 }
 
 function wireControls(container) {
@@ -86,6 +176,7 @@ function wireControls(container) {
             currentBucket = btn.dataset.bucket;
             container.querySelectorAll('#traces-bucket .pk-btn').forEach(b =>
                 b.setAttribute('aria-pressed', String(b === btn)));
+            writeUrlParams();
             fetchAndRender();
         });
     });
@@ -113,6 +204,7 @@ function renderTypeFilterCheckboxes(container) {
         checkbox.addEventListener('change', () => {
             if (checkbox.checked) selectedRootActionTypes.add(type);
             else selectedRootActionTypes.delete(type);
+            writeUrlParams();
             fetchAndRender();
         });
 
@@ -125,6 +217,7 @@ function resetFilter() {
     selectedRootActionTypes.clear();
     currentRootOperationFilter = null;
     currentContainer.querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
+    writeUrlParams();
     fetchAndRender();
 }
 
@@ -406,10 +499,20 @@ async function openTrace(traceId, context) {
     context.navigate('traces', traceId);
     const overlay = await import('../../trace-detail/trace-detail.js');
     overlay.open(traceId, {
+        // Threads the same urlState factory main.js's own hash-driven open uses (see
+        // buildTraceUrlState), so a trace opened by clicking it here - the primary way
+        // anyone opens one - gets its tab switches and filter changes synced to the URL
+        // too, not just a trace reached via a deep link or Back/Forward.
+        urlState: context.traceUrlState(traceId),
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace - mirrors main.js's expandTraceById.
+        // Parses the hash and compares only tab/detail (not the exact string) since a tab
+        // switch after opening rewrites the hash to "#traces/<id>/<subview>" via
+        // replaceAppHash - an exact-string match against the bare "#traces/<id>" open-time
+        // hash would stop matching the moment the overlay's own tab strip is touched.
         onClose: () => {
-            if (window.location.hash === `#traces/${traceId}`) context.navigate('traces');
+            const {tab, detail} = parseAppHash();
+            if (tab === 'traces' && detail === traceId) context.navigate('traces');
         }
     });
 }

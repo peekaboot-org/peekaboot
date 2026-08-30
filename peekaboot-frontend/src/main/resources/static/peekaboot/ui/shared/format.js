@@ -60,15 +60,20 @@ function toSignificant(value, digits) {
     return Number(value.toPrecision(digits)).toString();
 }
 
-function formatCount(value) {
+function formatMetricCount(value) {
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+/** Formats "n noun(s)" - plural defaults to singular + 's', override it for irregular nouns (e.g. 'query'/'queries'). */
+export function formatCount(n, singular, plural = singular + 's') {
+    return `${n} ${n === 1 ? singular : plural}`;
 }
 
 /**
  * Formats one insights series/measurement value per its configured unit (see
  * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
  * byte/duration formatters, percent is raw 0..1 and scaled for display, persec/
- * bytes-persec append a rate suffix, count falls back to formatCount().
+ * bytes-persec append a rate suffix, count falls back to formatMetricCount().
  */
 export function formatMetricValue(value, unit) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
@@ -80,7 +85,7 @@ export function formatMetricValue(value, unit) {
         case 'persec': return toSignificant(value, 2) + '/s';
         case 'bytes-persec': return formatBytes(value) + '/s';
         case 'count':
-        default: return formatCount(value);
+        default: return formatMetricCount(value);
     }
 }
 
@@ -98,7 +103,7 @@ export function formatTileValue(value, format, {locale, timeZone} = {}) {
         case 'datetime': return formatDateTime(value * 1000, {locale, timeZone});
         case 'bytes': return formatBytes(value);
         case 'count':
-        default: return formatCount(value);
+        default: return formatMetricCount(value);
     }
 }
 

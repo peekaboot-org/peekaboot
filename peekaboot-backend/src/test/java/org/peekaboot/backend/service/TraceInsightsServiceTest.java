@@ -14,7 +14,9 @@ import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
+import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
+import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
@@ -471,6 +473,32 @@ class TraceInsightsServiceTest {
         // has no read-time dedup pass of its own to fall back on
         assertThat(store.getTrace("trace1")).isPresent();
         assertThat(store.getTrace("trace1").get().spans()).hasSize(2); // root span + the real query span
+    }
+
+    @Test
+    void getTraceInsights_attachesALogEmittedInAFoldedDuplicateSpanToTheSurvivingSpan() {
+        // Given: a DB span whose duplicate is folded away on write, and a log emitted
+        // while inside the folded-away duplicate's MDC scope - i.e. carrying the
+        // duplicate's spanId, not the surviving span's
+        addTraceWithDuplicatedDbSpan("trace1", 100);
+        store.addLog(new LogCapturedEvent(
+                "trace1", "span-db-dup-trace1", Instant.now(), "TRACE", "TestLogger", "Datasource log", "main"));
+
+        // When
+        Optional<TraceTree> result = service.getTraceInsights("trace1");
+
+        // Then: the log attaches to the surviving span in the tree rather than being
+        // silently dropped as an orphan
+        assertThat(result).isPresent();
+        SpanNode dbSpanNode = result.get().rootSpan().children().stream()
+                .filter(s -> "span-db-trace1".equals(s.spanId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(dbSpanNode.logs()).extracting(TraceLog::message).containsExactly("Datasource log");
+
+        // And: the flat logs list also carries the resolved (surviving) spanId
+        assertThat(result.get().logs()).hasSize(1);
+        assertThat(result.get().logs().get(0).spanId()).isEqualTo("span-db-trace1");
     }
 
     @Test

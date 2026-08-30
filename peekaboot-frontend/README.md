@@ -115,8 +115,10 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
 | `severity.js` | `SLOW_MS`, `VERY_SLOW_MS`, `durationSeverity`, `healthSeverity` — the one place duration and health thresholds are decided. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
-| `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, shared by the overlay's Spans and Logs tabs. |
+| `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
+| `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
+| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair). |
 
 ## How the embedded surfaces consume the shared sheets
 
@@ -281,8 +283,20 @@ hadn't reached the `TraceStore` yet.
    - `export const id = '<id>';`
    - `export const label = 'Display Name';`
    - `export function render(container, data, context) { ... }` — `context` is
-     `{client, locale, timeZone, navigate, features}`, built by `main.js`'s
-     `currentContext()`.
+     `{client, locale, timeZone, navigate, features, urlParams, urlIsAuthoritative,
+     setUrlParams, traceUrlState}`, built by `main.js`'s `currentContext()`:
+     - `urlParams` — the active tab's own query params, freshly re-parsed from the hash.
+     - `urlIsAuthoritative` — true only for a render triggered by a genuine hash change
+       (deep link, Back/Forward, a hand-edited hash), as opposed to a programmatic tab
+       switch; a tab's reconcile logic uses this to tell "the user asked for exactly this
+       URL, including a bare one" apart from a tab-strip click's own bare hash push.
+     - `setUrlParams(params)` — replaces the active tab's own query params; a no-op while
+       a detail segment (the trace overlay) is open, since the params slot then belongs to
+       the overlay instead (see `shared/url-filter.js` and `traces.js`'s `reconcileWithUrl`
+       for the two halves of that rule).
+     - `traceUrlState(traceId)` — builds the `{initial, update}` urlState object
+       `openTraceDetail` expects, so a trace opened via a tab's own click-to-open path gets
+       the same URL sync as one opened through a deep link.
    - optionally `export function isAvailable(data, features) { ... }` — gates whether the
      tab's strip button is shown at all (see `meters.js`/`traces.js` for real examples
      gating on a feature flag).

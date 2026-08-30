@@ -10,6 +10,7 @@ import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
 import {formatDateTime} from '../shared/format.js';
+import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
@@ -64,28 +65,32 @@ let unmaskRequested = false;
 
 // --- Hash routing -----------------------------------------------------------------
 
-function parseHash() {
-    const hash = window.location.hash.slice(1);
-    if (!hash) return {tab: 'overview', detail: null};
-    const parts = hash.split('/');
-    return {tab: parts[0] || 'overview', detail: parts[1] || null};
-}
-
-function setHash(tab, detail = null) {
-    const hash = detail ? `#${tab}/${detail}` : `#${tab}`;
-    if (window.location.hash !== hash) {
-        history.pushState(null, '', hash);
-    }
-}
+// True only while a render is happening as the direct result of handleHashChange() -
+// a genuine hash change (address-bar edit, Back/Forward), or the deferred boot-time
+// call for a deep link - as opposed to a programmatic tab switch or navigate() call.
+// pushAppHash/replaceAppHash never fire 'hashchange' (see url-state.js's own doc
+// comment), so every other render path (tab-strip clicks, cross-tab navigate()) leaves
+// this false. Read by currentContext() below and exposed on the context as
+// `urlIsAuthoritative`, so a tab's reconcile logic can tell "the user asked for exactly
+// this URL, including a bare one" apart from "the URL just doesn't happen to carry this
+// tab's params right now" (e.g. the tab strip's own bare hash push on every switch,
+// where the tab's current filter state should survive instead of being cleared - see
+// each tab's reconcileWithUrl/reconcileFilterWithUrl doc comment).
+let urlChangeInProgress = false;
 
 function handleHashChange() {
-    const {tab, detail} = parseHash();
+    const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
     mainTabs.select(tabId, {silent: true});
     showTab(tabId);
-    renderTabById(tabId);
+    urlChangeInProgress = true;
+    try {
+        renderTabById(tabId);
+    } finally {
+        urlChangeInProgress = false;
+    }
     if (tabId === 'traces' && detail) {
-        expandTraceById(detail);
+        expandTraceById(detail, subview, params);
     } else {
         // Browser Back removed the detail segment, or landed on a different tab -
         // close.js is idempotent when nothing is open, so no guard is needed here.
@@ -93,18 +98,44 @@ function handleHashChange() {
     }
 }
 
-function expandTraceById(traceId) {
+/**
+ * Builds the {initial, update} urlState object openTraceDetail expects - shared by
+ * expandTraceById below (restoring subview/params from a hash-driven open) and
+ * traces.js's own click-to-open path (via context.traceUrlState, always a fresh open with
+ * nothing to restore) so the two entry points can't drift into two different update()
+ * implementations.
+ */
+function buildTraceUrlState(traceId, subview = null, params = {}) {
+    return {
+        initial: {subview, params},
+        update: (subview, params) => replaceAppHash({tab: 'traces', detail: traceId, subview, params})
+    };
+}
+
+function expandTraceById(traceId, subview = null, params = {}) {
     // Validate traceId to prevent selector injection
     if (!traceId || !/^[a-zA-Z0-9_-]+$/.test(traceId)) {
         console.warn('Invalid trace ID:', traceId);
         return;
     }
+
+    // handleHashChange fires on every Back/Forward step - including ones that only
+    // replaced subview/params (see url-state.js's push/replace rule) - and the overlay can
+    // also already be open for this trace via traces.js's own click-to-open path, which
+    // calls openTraceDetail directly and never runs this function at all. Querying the
+    // DOM (the overlay host's data-trace-id, set by trace-detail.js) instead of tracking
+    // an "is it open" flag in this module stays correct regardless of which path opened
+    // it; re-running openTraceDetail would otherwise tear down and rebuild the whole
+    // overlay for a trace that's already open, flickering it.
+    if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === traceId) return;
+
     openTraceDetail(traceId, {
+        urlState: buildTraceUrlState(traceId, subview, params),
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace.
         onClose: () => {
-            const {tab, detail} = parseHash();
-            if (tab === 'traces' && detail === traceId) setHash('traces');
+            const {tab, detail} = parseAppHash();
+            if (tab === 'traces' && detail === traceId) pushAppHash({tab: 'traces'});
         }
     });
 }
@@ -128,7 +159,7 @@ function navigate(tabId, detail = null, payload = null) {
     const wasAlreadyActive = document.getElementById(`${resolvedId}-tab`)?.classList.contains('active') ?? false;
     mainTabs.select(resolvedId, {silent: true});
     showTab(resolvedId);
-    setHash(resolvedId, detail);
+    pushAppHash({tab: resolvedId, detail});
     if (payload) {
         TABS.find(tab => tab.id === resolvedId)?.applyFilter?.(payload);
     } else if (!wasAlreadyActive) {
@@ -157,11 +188,11 @@ function showTab(tabId) {
 }
 
 function initTabs() {
-    const initialTabId = resolveTabId(parseHash().tab);
+    const initialTabId = resolveTabId(parseAppHash().tab);
     mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
         onSelect: tabId => {
             showTab(tabId);
-            setHash(tabId);
+            pushAppHash({tab: tabId});
             renderTabById(tabId);
         },
         initial: initialTabId
@@ -177,7 +208,7 @@ function initTabs() {
     window.addEventListener('hashchange', handleHashChange);
 
     // Handle initial hash on page load
-    const {tab} = parseHash();
+    const {tab} = parseAppHash();
     if (tab !== 'overview') {
         // Defer to allow the DOM (and the initial fetchData() call) to settle first
         setTimeout(() => handleHashChange(), 0);
@@ -187,6 +218,7 @@ function initTabs() {
 // --- Data fetching --------------------------------------------------------------------
 
 function currentContext() {
+    const {tab, detail, subview, params: urlParams} = parseAppHash();
     return {
         client,
         locale,
@@ -194,7 +226,41 @@ function currentContext() {
         navigate,
         features,
         unmaskRequested,
-        toggleUnmask
+        toggleUnmask,
+        // The active tab's own query params, and how it writes them back - see
+        // url-state.js's push/replace rule: a filter change replaces, it never pushes.
+        urlParams,
+        // True only for a render triggered by handleHashChange() - a genuine hash
+        // change or the boot-time deep-link kick - as opposed to a programmatic tab
+        // switch/navigate() call. See urlChangeInProgress's own doc comment above.
+        urlIsAuthoritative: urlChangeInProgress,
+        // Deliberately re-parses the hash instead of closing over this call's own
+        // tab/detail/subview above: a tab module can hold this context object (and so
+        // this closure) far longer than the hash stays put underneath it - e.g. traces.js
+        // opening/closing the trace overlay via context.navigate(), which skips a fresh
+        // render (and so a fresh currentContext()) whenever the traces tab was already
+        // active (see navigate()'s wasAlreadyActive guard). A stale capture here would let
+        // a filter change made after such a close replace the hash with the closed
+        // trace's own now-stale detail/subview, silently reopening it. Re-parsing at call
+        // time makes this correct regardless of how long the closure has been sitting
+        // around - detail/subview always come from whatever the hash actually says right
+        // now, not whatever it said when this context object was built.
+        setUrlParams: params => {
+            const {tab: currentTab, detail: currentDetail, subview: currentSubview} = parseAppHash();
+            // The params slot belongs to the deepest view - while a detail segment is open
+            // (the trace overlay, on top of this tab's own now-background panel - see
+            // traces.js's own reconcileWithUrl guard for the seed-direction half of this
+            // same rule), the overlay owns it via its own urlState.update (buildTraceUrlState
+            // above). A background tab's filter write here would otherwise replace the
+            // overlay's own params (e.g. the Logs tab's level/q) wholesale on every
+            // auto-refresh - see the regression test this fixes.
+            if (currentDetail) return;
+            replaceAppHash({tab: resolveTabId(currentTab), detail: currentDetail, subview: currentSubview, params});
+        },
+        // traces.js's own click-to-open path passes this straight into openTraceDetail's
+        // urlState option, so a trace opened by clicking it gets the exact same live
+        // tab/filter -> URL sync as one opened via a deep link - see buildTraceUrlState.
+        traceUrlState: traceId => buildTraceUrlState(traceId)
     };
 }
 

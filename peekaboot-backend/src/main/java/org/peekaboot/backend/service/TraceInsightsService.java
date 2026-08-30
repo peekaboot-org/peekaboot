@@ -172,8 +172,13 @@ public class TraceInsightsService {
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
         List<TraceLog> logs = bundle.logs().stream()
-                .map(e ->
-                        new TraceLog(e.spanId(), e.timestamp(), e.level(), e.loggerName(), e.message(), e.threadName()))
+                .map(e -> new TraceLog(
+                        bundle.resolveSpanId(e.spanId()),
+                        e.timestamp(),
+                        e.level(),
+                        e.loggerName(),
+                        e.message(),
+                        e.threadName()))
                 .toList();
 
         HttpExchange httpExchange = null;

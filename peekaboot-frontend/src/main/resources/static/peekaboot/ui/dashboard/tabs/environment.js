@@ -5,15 +5,29 @@
 import {groupList, expandedKeys, kvRow, badge} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {renderUnmaskControl} from '../../shared/unmask-control.js';
+import {reconcileTextFilter, writeTextFilter} from '../../shared/url-filter.js';
 
 export const id = 'environment';
 export const label = 'Environment';
 
 let currentData = null;
 
+// The most recent render() call's context - read by the persistent filter input
+// listener below (wired once, see wireFilter) so a later render's context (its
+// setUrlParams closes over the URL's tab/detail/subview at *that* call - see main.js's
+// currentContext()) is always what a later keystroke writes through, not whatever was
+// current the first time this tab was rendered.
+let currentContext = null;
+
 export function render(container, data, context) {
     currentData = data;
+    currentContext = context;
     wireFilter(container);
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL, so reconciling during a background
+    // auto-refresh render of a hidden environment tab would read another tab's params
+    // (or none) and clobber whatever the user already typed here.
+    if (container.classList.contains('active')) reconcileTextFilter(container.querySelector('#env-filter'), context);
     renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
     renderGroups(container, currentFilterValue(container));
 }
@@ -22,7 +36,10 @@ function wireFilter(container) {
     const input = container.querySelector('#env-filter');
     if (!input || input.dataset.wired) return;
     input.dataset.wired = 'true';
-    input.addEventListener('input', () => renderGroups(container, input.value.trim()));
+    input.addEventListener('input', () => {
+        writeTextFilter(input, currentContext);
+        renderGroups(container, input.value.trim());
+    });
 }
 
 function currentFilterValue(container) {
