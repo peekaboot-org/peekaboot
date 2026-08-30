@@ -2,21 +2,16 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
-import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ArrayNode;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -27,11 +22,24 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class TraceOverlayTest extends PlaywrightTestBase {
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     private void openOverlayFromToolbar() {
         openPersonsPage();
+        openOverlayFromLoadedToolbar();
+    }
+
+    /**
+     * Opens the overlay for the index page's error-path trace, the one trace this app
+     * produces whose logs are spread over more than one span: the request handler's own
+     * error log, and the INFO line PersonQueryService.findAll() writes inside its own
+     * observed span.
+     */
+    private void openOverlayForTheMultiSpanLogTrace() {
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        openOverlayFromLoadedToolbar();
+    }
+
+    private void openOverlayFromLoadedToolbar() {
         page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
                 + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
         page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
@@ -473,78 +481,29 @@ class TraceOverlayTest extends PlaywrightTestBase {
      * tab, seed its span filter, and rely on the filter chip's own clear button for a
      * reversible "back to all logs".
      *
-     * A real /persons trace only reliably attaches its own log to the root span, so this
-     * stubs the trace response (route.fetch() + a JSON edit, same technique
-     * closeButtonDismissesTheOverlayOnTheErrorPath already uses to force a network
-     * outcome) to add one more span with its own log - real frontend code, real DOM, a
-     * fixture only for the one HTTP response that would otherwise need backend-level
-     * span nesting this test has no reason to depend on.
+     * <p>Runs against a real captured trace with nothing stubbed. The index page's error
+     * path writes its ERROR log inside the request handler's span while
+     * PersonQueryService.findAll() writes an INFO line inside its own observed span, so
+     * the trace's logs genuinely sit on two different spans. That spread is what keeps
+     * both halves of this test from holding vacuously - filtering to one span has to
+     * actually hide something, and clearing has to actually bring something back - so the
+     * premise is asserted before it is relied on rather than assumed.
      */
     @Test
     @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span, and the filter is clearable")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
-        String syntheticSpanId = "synthetic0000000000000000000001";
-        page.route("**/api/traces/*/insights", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode trace = (ObjectNode) objectMapper.readTree(response.text());
-            ObjectNode rootSpan = (ObjectNode) trace.get("rootSpan");
+        openOverlayForTheMultiSpanLogTrace();
 
-            ObjectNode childLog = objectMapper.createObjectNode();
-            childLog.put("spanId", syntheticSpanId);
-            childLog.put("timestamp", Instant.now().toString());
-            childLog.put("level", "INFO");
-            childLog.put("message", "synthetic child span log");
+        @SuppressWarnings("unchecked")
+        List<String> spansOfferingLogs = (List<String>)
+                page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
+        assertThat(spansOfferingLogs)
+                .as("the trace must spread its logs over more than one span, or neither half of "
+                        + "this test could fail - see openOverlayForTheMultiSpanLogTrace")
+                .hasSizeGreaterThan(1);
+        String spanId = spansOfferingLogs.getFirst();
 
-            ObjectNode childSpan = objectMapper.createObjectNode();
-            childSpan.put("spanId", syntheticSpanId);
-            childSpan.put("name", "synthetic-child-span");
-            childSpan.put("kind", "INTERNAL");
-            childSpan.put("startTimeMs", rootSpan.get("startTimeMs").asLong());
-            childSpan.put("durationMs", 1L);
-            ArrayNode childLogs = objectMapper.createArrayNode();
-            childLogs.add(childLog);
-            childSpan.set("logs", childLogs);
-
-            ArrayNode children =
-                    rootSpan.has("children") && rootSpan.get("children").isArray()
-                            ? (ArrayNode) rootSpan.get("children")
-                            : objectMapper.createArrayNode();
-            children.add(childSpan);
-            rootSpan.set("children", children);
-
-            // A real /persons visit never logs anything of its own (only /?error=true does,
-            // and that log lands on a different endpoint's trace) - so the root span also
-            // gets a synthetic log, guaranteeing at least two spans' worth of logs. Without
-            // that, "clearing brings every span's logs back" could not actually distinguish
-            // itself from "clearing did nothing".
-            ObjectNode rootLog = objectMapper.createObjectNode();
-            rootLog.put("spanId", rootSpan.get("spanId").asText());
-            rootLog.put("timestamp", Instant.now().toString());
-            rootLog.put("level", "INFO");
-            rootLog.put("message", "synthetic root span log");
-            ArrayNode rootLogs = rootSpan.has("logs") && rootSpan.get("logs").isArray()
-                    ? (ArrayNode) rootSpan.get("logs")
-                    : objectMapper.createArrayNode();
-            rootLogs.add(rootLog);
-            rootSpan.set("logs", rootLogs);
-
-            ArrayNode traceLogs = trace.has("logs") && trace.get("logs").isArray()
-                    ? (ArrayNode) trace.get("logs")
-                    : objectMapper.createArrayNode();
-            traceLogs.add(childLog);
-            traceLogs.add(rootLog);
-            trace.set("logs", traceLogs);
-
-            route.fulfill(new Route.FulfillOptions()
-                    .setResponse(response)
-                    .setContentType("application/json")
-                    .setBody(objectMapper.writeValueAsString(trace)));
-        });
-
-        openOverlayFromToolbar();
-
-        page.waitForSelector(".pk-span-logs-toggle[data-span-id='" + syntheticSpanId + "']");
-        page.click(".pk-span-logs-toggle[data-span-id='" + syntheticSpanId + "']");
+        page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
 
         page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
@@ -558,7 +517,7 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
         assertThat(visibleSpanIds)
                 .as("only the span the toggle was clicked for stays visible")
-                .containsOnly(syntheticSpanId);
+                .containsOnly(spanId);
         assertThat(page.isVisible(".pk-logs-filter-span"))
                 .as("the filtered state is obvious, not just an invisible internal flag")
                 .isTrue();
@@ -570,9 +529,9 @@ class TraceOverlayTest extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<String> visibleAfterClear = (List<String>)
                 page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
-        assertThat(visibleAfterClear)
-                .as("clearing the filter is reversible - every span's logs are back")
-                .contains(syntheticSpanId)
+        assertThat(visibleAfterClear).contains(spanId);
+        assertThat(Set.copyOf(visibleAfterClear))
+                .as("clearing the filter is reversible - the other spans' logs are back too")
                 .hasSizeGreaterThan(1);
     }
 
