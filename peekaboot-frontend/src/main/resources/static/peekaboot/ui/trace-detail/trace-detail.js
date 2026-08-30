@@ -215,7 +215,6 @@ function render(content, trace) {
                 </div>
                 <div class="pk-tabs"></div>
                 <div class="pk-overlay__content" id="pk-tab-content"></div>
-                <div id="pk-logs-popup" class="pk-logs-popup hidden"></div>
             </div>
         </div>
     `;
@@ -231,16 +230,28 @@ function render(content, trace) {
 
     const tabContent = container.querySelector('#pk-tab-content');
 
-    tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
+    // The Spans tab's "N logs" toggle has nowhere of its own to show a span's logs -
+    // it asks to switch to the Logs tab instead, pre-filtered to that span. `select`
+    // with silent:true only moves the tab strip's own selection state; the render call
+    // right after is what actually seeds logs.js's filter, mirroring how the dashboard's
+    // navigate() in main.js routes a payload to a tab's own filter hook instead of
+    // letting the tab strip's default (unfiltered) render run.
+    let tabApi;
+    function goToSpanLogs(spanId) {
+        tabApi.select('logs', {silent: true});
+        renderTabContent(tabContent, 'logs', trace, {spanFilter: spanId});
+    }
+
+    tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
         id: tab.id,
         label: tab.label,
         count: tab.count ? tab.count(trace) : undefined
     })), {
-        onSelect: tabId => renderTabContent(tabContent, tabId, trace),
+        onSelect: tabId => renderTabContent(tabContent, tabId, trace, {goToSpanLogs}),
         initial: 'spans'
     });
 
-    renderTabContent(tabContent, 'spans', trace);
+    renderTabContent(tabContent, 'spans', trace, {goToSpanLogs});
 
     // ESC key to close; closeTraceDetail removes the listener however
     // the overlay is dismissed (buttons, overlay click, ESC)
@@ -260,9 +271,9 @@ function render(content, trace) {
     container.focus();
 }
 
-function renderTabContent(container, tabId, trace) {
+function renderTabContent(container, tabId, trace, context = {}) {
     const tab = TABS.find(t => t.id === tabId);
-    if (tab) tab.render(container, trace);
+    if (tab) tab.render(container, trace, context);
 }
 
 function countSpans(span) {

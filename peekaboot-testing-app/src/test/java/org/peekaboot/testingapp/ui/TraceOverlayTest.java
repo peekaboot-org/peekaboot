@@ -2,11 +2,20 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.ColorScheme;
+import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -16,6 +25,9 @@ import org.junit.jupiter.api.Test;
  * overlayIsLightWhenTheStoredPreferenceIsLight proves fixed.
  */
 class TraceOverlayTest extends PlaywrightTestBase {
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private void openOverlayFromToolbar() {
         openPersonsPage();
@@ -373,6 +385,136 @@ class TraceOverlayTest extends PlaywrightTestBase {
                             + ".querySelector('#pk-tab-content').innerHTML");
             assertThat(content).as("tab %s renders something", tab).isNotEmpty();
         }
+    }
+
+    /**
+     * The span tree used to carry a copyable full-length span id on every row, which made
+     * the tree too crowded (see logsTableRendersCopyableSpanIds and
+     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdTest for its new home).
+     * A row still keeps its span name, duration, badges and the logs/SQL toggles - just
+     * not a copy control.
+     */
+    @Test
+    @DisplayName("the Spans tab's tree rows no longer carry a copyable span id")
+    void spanTreeRowsDoNotRenderACopyableSpanId() {
+        openOverlayFromToolbar();
+
+        boolean anyRowHasACopyControl =
+                (boolean) page.evaluate("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                        + ".querySelector('#pk-gantt-rows .pk-copy')");
+
+        assertThat(anyRowHasACopyControl).isFalse();
+    }
+
+    /**
+     * The Spans tab's per-span "N logs" toggle used to open a bespoke fullscreen popup
+     * that reused the Logs tab's own row renderer verbatim - fully redundant once the
+     * Logs tab grew its own span filter (99345f81, which the popup - af1fa88a - predates).
+     * It now hands off to that existing filter instead: switch the overlay to the Logs
+     * tab, seed its span filter, and rely on the filter chip's own clear button for a
+     * reversible "back to all logs".
+     *
+     * A real /persons trace only reliably attaches its own log to the root span, so this
+     * stubs the trace response (route.fetch() + a JSON edit, same technique
+     * closeButtonDismissesTheOverlayOnTheErrorPath already uses to force a network
+     * outcome) to add one more span with its own log - real frontend code, real DOM, a
+     * fixture only for the one HTTP response that would otherwise need backend-level
+     * span nesting this test has no reason to depend on.
+     */
+    @Test
+    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span, and the filter is clearable")
+    void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
+        String syntheticSpanId = "synthetic0000000000000000000001";
+        page.route("**/api/traces/*/insights", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode trace = (ObjectNode) objectMapper.readTree(response.text());
+            ObjectNode rootSpan = (ObjectNode) trace.get("rootSpan");
+
+            ObjectNode childLog = objectMapper.createObjectNode();
+            childLog.put("spanId", syntheticSpanId);
+            childLog.put("timestamp", Instant.now().toString());
+            childLog.put("level", "INFO");
+            childLog.put("message", "synthetic child span log");
+
+            ObjectNode childSpan = objectMapper.createObjectNode();
+            childSpan.put("spanId", syntheticSpanId);
+            childSpan.put("name", "synthetic-child-span");
+            childSpan.put("kind", "INTERNAL");
+            childSpan.put("startTimeMs", rootSpan.get("startTimeMs").asLong());
+            childSpan.put("durationMs", 1L);
+            ArrayNode childLogs = objectMapper.createArrayNode();
+            childLogs.add(childLog);
+            childSpan.set("logs", childLogs);
+
+            ArrayNode children =
+                    rootSpan.has("children") && rootSpan.get("children").isArray()
+                            ? (ArrayNode) rootSpan.get("children")
+                            : objectMapper.createArrayNode();
+            children.add(childSpan);
+            rootSpan.set("children", children);
+
+            // A real /persons visit never logs anything of its own (only /?error=true does,
+            // and that log lands on a different endpoint's trace) - so the root span also
+            // gets a synthetic log, guaranteeing at least two spans' worth of logs. Without
+            // that, "clearing brings every span's logs back" could not actually distinguish
+            // itself from "clearing did nothing".
+            ObjectNode rootLog = objectMapper.createObjectNode();
+            rootLog.put("spanId", rootSpan.get("spanId").asText());
+            rootLog.put("timestamp", Instant.now().toString());
+            rootLog.put("level", "INFO");
+            rootLog.put("message", "synthetic root span log");
+            ArrayNode rootLogs = rootSpan.has("logs") && rootSpan.get("logs").isArray()
+                    ? (ArrayNode) rootSpan.get("logs")
+                    : objectMapper.createArrayNode();
+            rootLogs.add(rootLog);
+            rootSpan.set("logs", rootLogs);
+
+            ArrayNode traceLogs = trace.has("logs") && trace.get("logs").isArray()
+                    ? (ArrayNode) trace.get("logs")
+                    : objectMapper.createArrayNode();
+            traceLogs.add(childLog);
+            traceLogs.add(rootLog);
+            trace.set("logs", traceLogs);
+
+            route.fulfill(new Route.FulfillOptions()
+                    .setResponse(response)
+                    .setContentType("application/json")
+                    .setBody(objectMapper.writeValueAsString(trace)));
+        });
+
+        openOverlayFromToolbar();
+
+        page.waitForSelector(".pk-span-logs-toggle[data-span-id='" + syntheticSpanId + "']");
+        page.click(".pk-span-logs-toggle[data-span-id='" + syntheticSpanId + "']");
+
+        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('#pk-tab-content').innerHTML");
+        assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
+
+        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
+        @SuppressWarnings("unchecked")
+        List<String> visibleSpanIds = (List<String>)
+                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
+        assertThat(visibleSpanIds)
+                .as("only the span the toggle was clicked for stays visible")
+                .containsOnly(syntheticSpanId);
+        assertThat(page.isVisible(".pk-logs-filter-span"))
+                .as("the filtered state is obvious, not just an invisible internal flag")
+                .isTrue();
+
+        page.click("#pk-clear-span-filter");
+
+        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-logs-filter-span')");
+        @SuppressWarnings("unchecked")
+        List<String> visibleAfterClear = (List<String>)
+                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
+        assertThat(visibleAfterClear)
+                .as("clearing the filter is reversible - every span's logs are back")
+                .contains(syntheticSpanId)
+                .hasSizeGreaterThan(1);
     }
 
     @Test

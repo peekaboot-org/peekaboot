@@ -1,22 +1,23 @@
 /**
- * Trace-detail overlay - Logs tab: the filterable log list. renderLogRows is exported
- * because the Spans tab's span-logs popup (tabs/spans.js) reuses it verbatim.
+ * Trace-detail overlay - Logs tab: the filterable log list. Every row names its span
+ * (a click filters to it) and carries that span's full id as a copyable control - the
+ * one place a span's id lives now that the Spans tab tree dropped it (too crowded with
+ * a full id on every row); see spans.js's "N logs" toggle, which lands here pre-filtered
+ * via context.spanFilter below rather than opening its own popup.
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {buildSpanNames} from '../../shared/span-names.js';
+import {copyableIdHtml} from '../../shared/copyable.js';
 
-/**
- * Renders log rows. Pass showSpanColumn when rows come from more than one span,
- * so the span id is worth a column of its own.
- */
-export function renderLogRows(logs, {showSpanColumn = false, spanNames} = {}) {
+function renderLogRows(logs, spanNames) {
     return logs.map(log => {
         const spanId = log.spanId || '';
-        const spanCell = showSpanColumn
-            ? `<button type="button" class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}" aria-label="Filter logs to span ${escapeHtml(spanId)}">`
-              + `${escapeHtml(spanNames?.get(spanId) || spanId)}</button>`
-            : '';
+        const spanCell = `<span class="pk-log__span-cell">`
+            + `<button type="button" class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}" aria-label="Filter logs to span ${escapeHtml(spanId)}">`
+            + `${escapeHtml(spanNames?.get(spanId) || spanId)}</button>`
+            + copyableIdHtml(spanId, {label: 'spanId', truncate: true})
+            + `</span>`;
         return `<div class="pk-log" data-level="${escapeHtml(log.level)}" data-span-id="${escapeHtml(spanId)}">`
              + `<span class="pk-log__time">${escapeHtml(formatTimeOfDay(log.timestamp))}</span>`
              + spanCell
@@ -26,7 +27,12 @@ export function renderLogRows(logs, {showSpanColumn = false, spanNames} = {}) {
     }).join('');
 }
 
-export function render(container, trace) {
+/**
+ * context.spanFilter seeds the filter spans.js's "N logs" toggle asked for - trace-detail.js
+ * switches this tab in and re-renders it with that span already applied, on top of the
+ * clear/back affordance below that this tab already had for a filter set from within itself.
+ */
+export function render(container, trace, context = {}) {
     const spanNames = buildSpanNames(trace.rootSpan);
     const logs = trace.logs || [];
 
@@ -35,7 +41,7 @@ export function render(container, trace) {
         return;
     }
 
-    let currentSpanFilter = null;
+    let currentSpanFilter = context.spanFilter || null;
 
     function renderView() {
         let html = '<div class="pk-logs-filter">';
@@ -47,7 +53,7 @@ export function render(container, trace) {
             html += `<span class="pk-logs-filter-span">Span: ${escapeHtml(shortName)} <button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
-        html += `<div id="pk-logs-list">${renderLogRows(logs, {showSpanColumn: true, spanNames})}</div>`;
+        html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames)}</div>`;
         container.innerHTML = html;
 
         // Filter controls

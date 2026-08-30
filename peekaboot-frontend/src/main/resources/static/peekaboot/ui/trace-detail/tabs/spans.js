@@ -1,18 +1,14 @@
 /**
- * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour,
- * and the span-logs popup reachable from a span's logs badge.
+ * Trace-detail overlay - Spans tab: the gantt chart and its expand/collapse behaviour.
+ * A span's "N logs" toggle does not render anything of its own - it asks trace-detail.js
+ * (via context.goToSpanLogs) to switch the overlay to the Logs tab pre-filtered to that
+ * span, which is where a span's logs and its full id both live now.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {copyableIdHtml} from '../../shared/copyable.js';
-import {buildSpanNames} from '../../shared/span-names.js';
-import {renderLogRows} from './logs.js';
 
-export function render(container, trace) {
-    const spanNames = buildSpanNames(trace.rootSpan);
+export function render(container, trace, context = {}) {
     const totalDuration = trace.durationMs || 1;
     const traceStart = trace.startTimeMs || 0;
-    const traceId = trace.traceId || '';
-    const allTraceLogs = trace.logs || [];
     const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
 
     let html = '<div class="pk-gantt">';
@@ -30,14 +26,11 @@ export function render(container, trace) {
 
     // Add click handlers for expand/collapse
     rowsContainer.addEventListener('click', (e) => {
-        // Handle logs toggle clicks
+        // Handle logs toggle clicks - hands off to the Logs tab rather than rendering
+        // anything here itself.
         const logsToggle = e.target.closest('.pk-span-logs-toggle');
         if (logsToggle) {
-            const spanId = logsToggle.dataset.spanId;
-            const logsBase64 = logsToggle.dataset.logs;
-            // Decode base64 JSON (handles UTF-8 properly)
-            const spanLogs = logsBase64 ? JSON.parse(decodeURIComponent(escape(atob(logsBase64)))) : [];
-            showSpanLogsPopup(container, traceId, spanId, spanLogs, allTraceLogs, spanNames);
+            context.goToSpanLogs?.(logsToggle.dataset.spanId);
             return;
         }
 
@@ -87,75 +80,6 @@ export function render(container, trace) {
             sibling = sibling.nextElementSibling;
         }
     });
-}
-
-function showSpanLogsPopup(container, traceId, initialSpanId, initialSpanLogs, allTraceLogs, spanNames) {
-    // Find popup in the trace container (parent of tab content)
-    const traceContainer = container.closest('.pk-overlay__container');
-    const popup = traceContainer ? traceContainer.querySelector('#pk-logs-popup') : null;
-    if (!popup) return;
-
-    // Renders either a single span's logs (with a "show all" link) or every log in the
-    // trace (with a span column, each cell re-entering this function filtered to that span).
-    function renderPopupView(showAllLogs, spanId, logs) {
-        if (logs.length === 0) {
-            popup.classList.add('hidden');
-            return;
-        }
-
-        const titleHtml = showAllLogs
-            ? `Logs for Trace ${copyableIdHtml(traceId, {label: 'traceId'})}`
-            : `Logs for Span ${copyableIdHtml(spanId, {label: 'spanId'})} `
-              + `(Part of trace ${copyableIdHtml(traceId, {label: 'traceId'})}). `
-              + `<button type="button" class="pk-logs-popup-link" id="pk-show-all-logs">Show logs for all spans.</button>`;
-
-        popup.innerHTML = `
-            <div class="pk-logs-popup-header">
-                <button type="button" class="pk-logs-popup-back" title="Back" aria-label="Back to spans">&#8592;</button>
-                <span class="pk-logs-popup-title">${titleHtml}</span>
-                <button type="button" class="pk-logs-popup-close" title="Close" aria-label="Close logs">&times;</button>
-            </div>
-            <div class="pk-logs-popup-content">${renderLogRows(logs, {showSpanColumn: showAllLogs, spanNames})}</div>
-        `;
-        popup.classList.remove('hidden');
-
-        // Close handlers (both back and close buttons)
-        const closePopup = () => popup.classList.add('hidden');
-        popup.querySelector('.pk-logs-popup-back').addEventListener('click', closePopup);
-        popup.querySelector('.pk-logs-popup-close').addEventListener('click', closePopup);
-
-        // "Show logs for all spans" link handler
-        const showAllLink = popup.querySelector('#pk-show-all-logs');
-        if (showAllLink) {
-            showAllLink.addEventListener('click', () => renderPopupView(true, null, allTraceLogs));
-        }
-
-        // SpanId click handler to filter to that span's logs
-        if (showAllLogs) {
-            popup.querySelectorAll('.pk-log__span').forEach(el => {
-                el.addEventListener('click', () => {
-                    const clickedSpanId = el.dataset.spanId;
-                    if (clickedSpanId) {
-                        renderPopupView(false, clickedSpanId, allTraceLogs.filter(l => l.spanId === clickedSpanId));
-                    }
-                });
-            });
-        }
-    }
-
-    // Click outside to close - bound once; the popup element persists
-    // across re-renders while its children are replaced
-    if (!popup.dataset.dismissBound) {
-        popup.dataset.dismissBound = 'true';
-        popup.addEventListener('click', (e) => {
-            if (e.target === popup) {
-                popup.classList.add('hidden');
-            }
-        });
-    }
-
-    // Initial render showing span-specific logs
-    renderPopupView(false, initialSpanId, initialSpanLogs);
 }
 
 function renderSpanRows(container, span, depth, traceStart, totalDuration, parentId) {
@@ -211,11 +135,12 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
         nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
     }
 
-    // Add logs toggle for spans with logs
+    // Add logs toggle for spans with logs - switches the overlay to the Logs tab,
+    // pre-filtered to this span (see context.goToSpanLogs above).
     if (hasLogs) {
-        // Store logs as base64-encoded JSON to avoid HTML attribute escaping issues
-        const logsBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(spanLogs))));
-        nameHtml += `<button type="button" class="pk-span-logs-toggle" data-span-id="${span.spanId}" data-logs="${logsBase64}">${spanLogs.length} logs</button>`;
+        nameHtml += `<button type="button" class="pk-span-logs-toggle" data-span-id="${escapeHtml(span.spanId)}"`
+            + ` title="View logs for this span" aria-label="View ${spanLogs.length} logs for this span in the Logs tab">`
+            + `${spanLogs.length} logs</button>`;
     }
 
     nameHtml += `</div>`;
