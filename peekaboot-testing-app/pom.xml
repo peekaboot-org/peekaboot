@@ -318,7 +318,7 @@
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
-                <version>3.10.0</version>
+                <version>3.10.1</version>
                 <configuration>
                     <ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</ratchetFrom>
                     <java>
