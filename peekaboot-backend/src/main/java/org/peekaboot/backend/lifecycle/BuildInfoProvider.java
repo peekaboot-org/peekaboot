@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.util.Map;
 import org.springframework.boot.info.BuildProperties;
 
 public class BuildInfoProvider {
@@ -35,5 +36,10 @@ public class BuildInfoProvider {
 
     public boolean isBuildInfoAvailable() {
         return buildProperties != null;
+    }
+
+    /** Every build-info entry, including the ones no view reads today. */
+    public Map<String, String> getAll() {
+        return InfoEntries.of(buildProperties);
     }
 }
