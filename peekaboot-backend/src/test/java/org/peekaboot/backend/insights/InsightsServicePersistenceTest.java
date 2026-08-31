@@ -1,7 +1,9 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -10,11 +12,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
-import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -56,21 +56,32 @@ class InsightsServicePersistenceTest {
     /**
      * {@code heap.used} reads {@code jvm.memory.used} tagged {@code area=heap} - the
      * bundled {@code heap} panel's first series - so a gauge registered under that name
-     * and tag is what the collector actually samples.
+     * and tag is what the collector actually samples. Built from a supplier rather than
+     * {@code MeterRegistry.gauge(name, tags, stateObject)}, whose state object is held
+     * only weakly: nothing else in this test keeps it alive, so a GC between ticks would
+     * silently turn every later sample into NaN.
      */
     private static MeterRegistry registryReading(long heapUsed) {
         MeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("jvm.memory.used", Tags.of("area", "heap"), new AtomicLong(heapUsed));
+        Gauge.builder("jvm.memory.used", () -> heapUsed)
+                .tags(Tags.of("area", "heap"))
+                .register(registry);
         return registry;
     }
 
     @Test
-    void historyOutlivesTheRunThatCollectedIt() throws Exception {
+    void historyOutlivesTheRunThatCollectedIt() {
         InsightsService first = service(true, registryReading(7));
         first.start();
-        Thread.sleep(500);
+        // A few real ticks, not a fixed sleep and a hope: this is what the first run
+        // actually has to persist. Polling heap.used itself, rather than the level's
+        // count, sidesteps snapshot() reporting count from whichever series its own
+        // iteration lands on last.
+        await().atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(20))
+                .until(() -> heapUsedValues(first).size() >= 3);
         first.stop();
-        int collected = first.data(0).count();
+        int collected = heapUsedValues(first).size();
 
         assertThat(collected).isPositive();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).exists();
@@ -78,21 +89,34 @@ class InsightsServicePersistenceTest {
         InsightsService second = service(true, registryReading(1));
         second.start();
         try {
-            Thread.sleep(500);
-            LevelDataResponse data = second.data(0);
-            assertThat(data.count()).isGreaterThanOrEqualTo(collected);
+            // Restore lands before the second run's first tick; wait for heap.used's own
+            // newest sample to become this run's value - proof that live sampling has
+            // actually resumed on top of the restored history, not just that a tick
+            // landed somewhere.
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(20))
+                    .until(() -> Double.valueOf(1.0).equals(lastNonNull(heapUsedValues(second))));
 
-            List<Double> heapUsed = data.series().get("heap.used").values();
+            List<Double> heapUsed = heapUsedValues(second);
+            assertThat(heapUsed.size()).isGreaterThanOrEqualTo(collected);
             // 7.0 can only be here if the restored file supplied it - this run's own
             // registry reads 1.
             assertThat(heapUsed).contains(7.0);
-            List<Double> sampled = heapUsed.stream().filter(Objects::nonNull).toList();
-            assertThat(sampled.get(sampled.size() - 1))
+            assertThat(lastNonNull(heapUsed))
                     .as("live sampling continues on top of the restored history")
                     .isEqualTo(1.0);
         } finally {
             second.stop();
         }
+    }
+
+    private static List<Double> heapUsedValues(InsightsService service) {
+        return service.data(0).series().get("heap.used").values();
+    }
+
+    private static Double lastNonNull(List<Double> values) {
+        List<Double> nonNull = values.stream().filter(Objects::nonNull).toList();
+        return nonNull.isEmpty() ? null : nonNull.get(nonNull.size() - 1);
     }
 
     @Test
