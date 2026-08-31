@@ -108,7 +108,12 @@ export function createMarkerLayer({intervalMs}) {
             return;
         }
         const colors = ink();
-        const ratio = u.pxRatio || 1;
+        // pxRatio is a static on the uPlot class (window.uPlot.pxRatio), not a
+        // property of a chart instance - u.pxRatio is always undefined, and reading
+        // it would silently draw every stroke at half its intended device-pixel
+        // width on a HiDPI screen. devicePixelRatio is the fallback if uPlot is
+        // somehow not the global that set it.
+        const ratio = window.uPlot?.pxRatio || window.devicePixelRatio || 1;
         const {left, top, width, height} = u.bbox;
         const ctx = u.ctx;
 
