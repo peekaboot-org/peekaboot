@@ -65,7 +65,7 @@ public final class InsightsCollector implements SmartLifecycle {
     private final Map<String, StatsRing[]> statsRings = new LinkedHashMap<>();
 
     private final AtomicLongArray levelEndEpochMs;
-    private final Map<String, TileState> tiles = new LinkedHashMap<>();
+    private final TileTracker tiles;
     private final Listener listener;
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
@@ -107,11 +107,7 @@ public final class InsightsCollector implements SmartLifecycle {
             statsRings.put(def.id(), rings);
         }
 
-        for (TileDef def : tiles) {
-            SeriesDef tileSeries = new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), "value", null, null);
-            boolean live = Boolean.TRUE.equals(def.live());
-            this.tiles.put(def.id(), new TileState(new SeriesSampler(tileSeries, registry), live));
-        }
+        this.tiles = new TileTracker(tiles, registry);
     }
 
     /** Starts one virtual thread per level, each ticking/rolling up on its own boundary-aligned schedule. */
@@ -138,11 +134,9 @@ public final class InsightsCollector implements SmartLifecycle {
             thread.interrupt();
         }
         for (Thread thread : threads) {
-            // A bounded join only ever throws the interrupt; caught broadly so shutdown
-            // never hangs on an unexpected failure from a single thread.
             try {
                 thread.join(2_000);
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -190,12 +184,9 @@ public final class InsightsCollector implements SmartLifecycle {
         while (!Thread.currentThread().isInterrupted()) {
             long now = System.currentTimeMillis();
             long boundary = ((now / intervalMs) + 1) * intervalMs;
-            // boundary is always past now, so this sleep duration is always positive and
-            // the interrupt is the only exception it can throw; caught broadly so this
-            // loop never dies quietly of anything else either.
             try {
                 Thread.sleep(boundary + offsetMs - now);
-            } catch (Exception e) {
+            } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
@@ -225,9 +216,7 @@ public final class InsightsCollector implements SmartLifecycle {
         }
         levelEndEpochMs.set(0, epochMs);
 
-        for (TileState tile : tiles.values()) {
-            tile.sample(elapsedMs);
-        }
+        tiles.sample(elapsedMs);
 
         listener.onTick(epochMs, values, tileValues());
     }
@@ -401,11 +390,7 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */
     Map<String, Double> tileValues() {
-        Map<String, Double> values = new LinkedHashMap<>();
-        for (Map.Entry<String, TileState> entry : tiles.entrySet()) {
-            values.put(entry.getKey(), entry.getValue().value);
-        }
-        return values;
+        return tiles.values();
     }
 
     /** seriesCount x (level0Size + sum of higher-level sizes x 7) x 8 bytes. */
@@ -415,33 +400,5 @@ public final class InsightsCollector implements SmartLifecycle {
             doublesPerSeries += levels.get(i).getSize() * 7L;
         }
         return seriesCount * doublesPerSeries * 8L;
-    }
-
-    /** A tile's sampler plus its freeze state (static tiles stop sampling once resolved). */
-    private static final class TileState {
-        private final SeriesSampler sampler;
-        private final boolean live;
-        private volatile double value = Double.NaN;
-        private volatile boolean frozen;
-
-        private TileState(SeriesSampler sampler, boolean live) {
-            this.sampler = sampler;
-            this.live = live;
-        }
-
-        private void sample(long intervalMillis) {
-            if (live) {
-                value = sampler.sample(intervalMillis);
-                return;
-            }
-            if (frozen) {
-                return;
-            }
-            double sampled = sampler.sample(intervalMillis);
-            if (!Double.isNaN(sampled)) {
-                value = sampled;
-                frozen = true;
-            }
-        }
     }
 }
