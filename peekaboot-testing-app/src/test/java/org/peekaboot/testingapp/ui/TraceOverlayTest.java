@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import java.util.List;
@@ -12,6 +11,10 @@ import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.order.OrderReconciler;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -21,6 +24,9 @@ import org.junit.jupiter.api.Test;
  * overlayIsLightWhenTheStoredPreferenceIsLight proves fixed.
  */
 class TraceOverlayTest extends PlaywrightTestBase {
+
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
 
     private void openOverlayFromToolbar() {
         openPersonsPage();
@@ -769,58 +775,103 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
+     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes for
+     * {@link OrderReconciler#reconcileOrders()}, rather than waiting on its own
+     * {@code fixedDelay} (2 minutes - far past what this test should block on, and
+     * Scheduler's own jobs are hourly/multi-minute on top of that). Same technique, same
+     * reasoning as OrderTraceCaptureIntegrationTest's runScheduledReconciliation(): the
+     * {@link ScheduledTaskHolder} bean exposes the {@link ScheduledTask} Spring registered
+     * for the method, and running its {@code Runnable} here is the real production code
+     * path - it builds the same {@code ScheduledTaskObservationContext} and sets the same
+     * {@code code.function}/{@code code.namespace} tags that classify the trace root
+     * SCHEDULED_JOB, not a hand-built stand-in for that classification.
+     */
+    private void runScheduledReconciliation() {
+        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
+        scheduledTaskHolder.getScheduledTasks().stream()
+                .map(ScheduledTask::getTask)
+                .filter(task -> taskDescription.equals(task.toString()))
+                .findFirst()
+                .orElseThrow(() ->
+                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
+                .getRunnable()
+                .run();
+    }
+
+    /**
+     * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
+     * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
+     * anything this test constructed. Whichever trace turns up first is fair game: the
+     * assertions below hold for any correctly-captured scheduled-job trace, not
+     * specifically the one runScheduledReconciliation() just fired, so a trace left behind
+     * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
+     */
+    private String waitForScheduledJobTraceId() {
+        page.navigate(baseUrl + "/persons");
+        return (String) page.evaluate("""
+                async () => {
+                    for (let attempt = 0; attempt < 150; attempt++) {
+                        const response = await fetch(
+                            '/peekaboot/api/traces/insights?bucket=all&rootActionType=SCHEDULED_JOB');
+                        if (response.ok) {
+                            const body = await response.json();
+                            const trace = (body.traces || [])[0];
+                            if (trace) return trace.traceId;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error('no SCHEDULED_JOB trace arrived within 15s');
+                }
+                """);
+    }
+
+    /**
      * Regression guard for the fake "UNKNOWN" HTTP method rendered on non-HTTP traces (a
      * scheduled job here): trace-detail.js used to hardcode 'UNKNOWN' as the method fallback,
      * even though httpExchange/http.* tags are only ever populated for real HTTP requests.
      * The method now falls back to null, which the header renders as the trace's root-action
-     * label instead (root-actions.js) - precedent for stubbing the insights endpoint with a
-     * canned response is closeButtonDismissesTheOverlayOnTheErrorPath, above. Also covers the
-     * "1 queries" pluralisation defect on the same header (formatCount() in format.js).
+     * label instead (root-actions.js).
+     *
+     * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
+     * scheduled-task observation (see runScheduledReconciliation()) rather than stubbing
+     * the insights endpoint with a canned response - the fix is about what real
+     * classification data the header renders, so a hand-built trace object would only
+     * prove the header can read JSON, not that the classification it depends on ever
+     * happens. Also covers the "1 queries" pluralisation defect on the same header
+     * (formatCount() in format.js) against the real query count reconcileOrders()
+     * produces, whatever that count happens to be.
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        String cannedScheduledJobTrace = """
-                {
-                  "traceId": "scheduled-canned-trace",
-                  "startTimeMs": 1000,
-                  "durationMs": 42,
-                  "status": "OK",
-                  "rootActionType": "SCHEDULED_JOB",
-                  "rootOperation": "task orderReconciler.reconcileOrders",
-                  "rootSpan": {
-                    "spanId": "span-1",
-                    "name": "task orderReconciler.reconcileOrders",
-                    "kind": "INTERNAL",
-                    "startTimeMs": 1000,
-                    "durationMs": 42,
-                    "status": "OK",
-                    "children": [],
-                    "tags": {},
-                    "events": [],
-                    "issues": []
-                  },
-                  "summary": {"spans": {"count": 1}},
-                  "inheritedAttributes": {},
-                  "httpExchange": null,
-                  "logs": [],
-                  "queries": [{"sql": "SELECT 1", "durationMs": 5, "dbSystem": "h2", "rowCount": 1}],
-                  "truncated": false
-                }
-                """;
-        page.route(
-                "**/api/traces/*/insights",
-                route -> route.fulfill(new Route.FulfillOptions()
-                        .setStatus(200)
-                        .setContentType("application/json")
-                        .setBody(cannedScheduledJobTrace)));
-        openOverlayFromToolbar();
+        runScheduledReconciliation();
+        String traceId = waitForScheduledJobTraceId();
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
+                        + "?.querySelector('.pk-overlay__title-method')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
 
         String methodText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
                 + ".shadowRoot.querySelector('.pk-overlay__title-method').textContent");
-        assertThat(methodText).isEqualTo("Scheduled Job");
+        assertThat(methodText)
+                .as("no HTTP method exists for a scheduled job, so the header must fall back to "
+                        + "the root-action label rather than a fake method")
+                .isEqualTo("Scheduled Job");
+
+        int queryCount = ((Number) page.evaluate(
+                        "id => fetch('/peekaboot/api/traces/' + id + '/insights').then(r => r.json())"
+                                + ".then(t => t.summary?.queries?.count ?? (t.queries || []).length)",
+                        traceId))
+                .intValue();
+        String expectedQueryFragment = queryCount == 1 ? "1 query" : queryCount + " queries";
 
         String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
                 + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
-        assertThat(metaText).contains("1 query").doesNotContain("1 queries");
+        assertThat(metaText).contains(expectedQueryFragment);
+        if (queryCount == 1) {
+            assertThat(metaText).doesNotContain("1 queries");
+        }
     }
 }
