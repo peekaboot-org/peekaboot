@@ -80,6 +80,9 @@ ratcheted to files changed since its introduction - run `mvn spotless:apply` to 
 Error Prone (during compilation), SpotBugs, Checkstyle (complexity metrics from
 `config/checkstyle.xml`), and PMD (quickstart rules from `config/pmd-ruleset.xml`).
 
+See [`BUILD.md`](BUILD.md) for the full build: reactor layout, compiler and gate
+configuration, CI and the release pipeline.
+
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
 [`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
 [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms,
