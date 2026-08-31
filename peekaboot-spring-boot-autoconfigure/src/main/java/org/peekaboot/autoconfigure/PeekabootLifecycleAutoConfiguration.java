@@ -3,18 +3,23 @@ package org.peekaboot.autoconfigure;
 import java.util.*;
 import javax.sql.DataSource;
 import org.peekaboot.backend.lifecycle.*;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.info.BuildProperties;
+import org.springframework.boot.info.GitProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 @AutoConfiguration(
-        after = org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
+        after = {
+            org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
+            PeekabootStorageAutoConfiguration.class
+        },
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -77,6 +82,35 @@ public class PeekabootLifecycleAutoConfiguration {
             dataSources.forEach((name, dataSource) ->
                     DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
             return metadataList;
+        }
+    }
+
+    /**
+     * Kept apart from the rest of this auto-configuration: the banner listeners above
+     * must keep working in a context that has no storage bean at all.
+     */
+    @Configuration
+    @ConditionalOnBean(StorageDirectory.class)
+    static class LifecycleEventLogConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEventLog lifecycleEventLog(StorageDirectory storageDirectory) {
+            LifecycleEventLog log = new LifecycleEventLog(storageDirectory
+                    .file(LifecycleEventFile.FILE_NAME)
+                    .map(LifecycleEventFile::new)
+                    .orElse(null));
+            log.beginLoad();
+            return log;
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEventRecorder lifecycleEventRecorder(
+                LifecycleEventLog lifecycleEventLog,
+                BuildInfoProvider buildInfoProvider,
+                ObjectProvider<GitProperties> gitProperties) {
+            return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable());
         }
     }
 }

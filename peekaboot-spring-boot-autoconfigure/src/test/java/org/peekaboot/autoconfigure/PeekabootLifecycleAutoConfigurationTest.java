@@ -16,6 +16,8 @@ import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.LifecycleEventLog;
+import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
@@ -35,6 +37,7 @@ class PeekabootLifecycleAutoConfigurationTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     PeekabootLifecycleAutoConfiguration.class,
+                    PeekabootStorageAutoConfiguration.class,
                     ProjectInfoAutoConfiguration.class,
                     org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
@@ -74,6 +77,15 @@ class PeekabootLifecycleAutoConfigurationTest {
     @Test
     void theStoppedBannerIsRegisteredAlongsideTheReadyOne() {
         contextRunner.run(context -> assertThat(context).hasSingleBean(ApplicationStoppedListener.class));
+    }
+
+    @Test
+    void theEventLogIsWiredAndRunsInMemoryUntilStorageIsEnabled() {
+        contextRunner.run(context -> {
+            assertThat(context).hasSingleBean(LifecycleEventLog.class);
+            assertThat(context).hasSingleBean(LifecycleEventRecorder.class);
+            assertThat(context.getBean(LifecycleEventLog.class).events()).isEmpty();
+        });
     }
 
     @Test
