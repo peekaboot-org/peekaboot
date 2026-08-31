@@ -48,11 +48,19 @@ public final class StorageDirectory {
         return enabled ? Optional.of(root.resolve(name)) : Optional.empty();
     }
 
-    /** An application name is free-form; a folder name is not, and must not escape the parent. */
+    /**
+     * An application name is free-form; a folder name is not. Anything that isn't a
+     * letter, digit, dot, underscore or dash becomes a dash - collapsing a path
+     * separator instead of dropping it, so {@code "../orders svc"} still can't smuggle
+     * a directory boundary through. That alone doesn't stop a name of exactly "."
+     * or ".." surviving intact, so those two are caught explicitly and sent to the
+     * same fixed folder as no name at all.
+     */
     private static String folderName(String applicationName) {
         if (applicationName == null || applicationName.isBlank()) {
             return UNNAMED_APPLICATION;
         }
-        return applicationName.trim().replaceAll("[^A-Za-z0-9]", "-");
+        String sanitized = applicationName.trim().replaceAll("[^A-Za-z0-9._-]", "-");
+        return sanitized.equals(".") || sanitized.equals("..") ? UNNAMED_APPLICATION : sanitized;
     }
 }

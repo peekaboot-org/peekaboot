@@ -49,6 +49,20 @@ class StorageDirectoryTest {
     void aNameThatCouldEscapeTheDirectoryIsSanitized() {
         StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "../orders svc");
 
-        assertThat(directory.root().getFileName()).isEqualTo(Path.of("---orders-svc"));
+        assertThat(directory.root().getFileName()).isEqualTo(Path.of("..-orders-svc"));
+    }
+
+    @Test
+    void aNameThatIsNothingButParentDirectoryFallsBackToTheFixedFolder() {
+        StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "..");
+
+        assertThat(directory.root().getFileName()).isEqualTo(Path.of("application"));
+    }
+
+    @Test
+    void aDottedNameSurvivesIntact() {
+        StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "order.service");
+
+        assertThat(directory.root().getFileName()).isEqualTo(Path.of("order.service"));
     }
 }
