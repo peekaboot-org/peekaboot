@@ -5,6 +5,7 @@
  * span, which is where a span's logs and its full id both live now.
  */
 import {escapeHtml} from '../../shared/markup.js';
+import {formatCount} from '../../shared/format.js';
 
 export function render(container, trace, context = {}) {
     const totalDuration = trace.durationMs || 1;
@@ -131,7 +132,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
 
     // Add row count badge for result-set spans
     if (isResultSetSpan && rowCount !== undefined) {
-        nameHtml += `<span class="pk-span-row-count">${escapeHtml(String(rowCount))} rows</span>`;
+        nameHtml += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
     }
 
     // Add query toggle for query spans with SQL
@@ -143,8 +144,8 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     // pre-filtered to this span (see context.goToSpanLogs above).
     if (hasLogs) {
         nameHtml += `<button type="button" class="pk-span-logs-toggle" data-span-id="${escapeHtml(span.spanId)}"`
-            + ` title="View logs for this span" aria-label="View ${spanLogs.length} logs for this span in the Logs tab">`
-            + `${spanLogs.length} logs</button>`;
+            + ` title="View logs for this span" aria-label="View ${formatCount(spanLogs.length, 'log')} for this span in the Logs tab">`
+            + `${formatCount(spanLogs.length, 'log')}</button>`;
     }
 
     nameHtml += `</div>`;
