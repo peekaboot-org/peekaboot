@@ -22,9 +22,11 @@ collaborators being asked to compute something, not this pass-through shape.
 
 ## Pristine output
 Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN.
-- HtmlUnit tests install `CollectingJavaScriptErrorListener` (copies in
-  `peekaboot-frontend` and `peekaboot-backend` test trees): known engine
-  incompatibilities are allow-listed, anything else fails the test.
+- Browser-side errors are asserted where a test's subject is the JavaScript itself:
+  `page.onPageError` (and, in `InsightsTabTest`, `onConsoleMessage`/`onRequestFailed`/
+  `onResponse`) collects into a list the test then asserts on. There is no shared
+  listener and no allow-list — the Chromium engine, unlike the HtmlUnit setup this
+  replaced, has no incompatibilities of its own to excuse.
 - Tests that trigger error paths capture the log event (logback `ListAppender`, via
   the shared `org.peekaboot.backend.testsupport.LogCapture` helper in
   `peekaboot-backend`) and assert it instead of letting it print.
@@ -95,7 +97,7 @@ exact counts, never defensive `contains`.
 ## Running
 - Full suite: `mvn test` (root). Single class: `mvn -pl <module> test -Dtest=<Class>`
   — never combine `-am` with `-Dtest`.
-- Full reactor with the five static-analysis gates: `mvn clean verify` (942 tests).
+- Full reactor with the five static-analysis gates: `mvn clean verify` (1,099 tests).
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):
