@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLongArray;
-import java.util.concurrent.atomic.AtomicReference;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -58,15 +57,6 @@ public final class InsightsCollector implements SmartLifecycle {
         Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
     }
 
-    private enum RestoreState {
-        PENDING,
-        APPLIED,
-        ABANDONED
-    }
-
-    /** How long a level thread holds its first write waiting for the persisted rings. */
-    private static final Duration RESTORE_WAIT = Duration.ofSeconds(5);
-
     private final long[] intervalMillis;
     private final int[] levelSizes;
     private final Map<String, SeriesSampler> samplers = new LinkedHashMap<>();
@@ -79,9 +69,7 @@ public final class InsightsCollector implements SmartLifecycle {
     private final Listener listener;
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
-    private final SnapshotSource snapshotSource;
-    private final AtomicReference<RestoreState> restoreState = new AtomicReference<>(RestoreState.PENDING);
-    private final Object restoreLock = new Object();
+    private final SnapshotRestoreBarrier restoreBarrier;
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
@@ -100,7 +88,7 @@ public final class InsightsCollector implements SmartLifecycle {
             Listener listener,
             SnapshotSource snapshotSource) {
         this.listener = listener;
-        this.snapshotSource = snapshotSource;
+        this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
         this.intervalMillis = new long[levels.size()];
         this.levelSizes = new int[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
@@ -150,9 +138,11 @@ public final class InsightsCollector implements SmartLifecycle {
             thread.interrupt();
         }
         for (Thread thread : threads) {
+            // A bounded join only ever throws the interrupt; caught broadly so shutdown
+            // never hangs on an unexpected failure from a single thread.
             try {
                 thread.join(2_000);
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 Thread.currentThread().interrupt();
             }
         }
@@ -200,14 +190,17 @@ public final class InsightsCollector implements SmartLifecycle {
         while (!Thread.currentThread().isInterrupted()) {
             long now = System.currentTimeMillis();
             long boundary = ((now / intervalMs) + 1) * intervalMs;
+            // boundary is always past now, so this sleep duration is always positive and
+            // the interrupt is the only exception it can throw; caught broadly so this
+            // loop never dies quietly of anything else either.
             try {
                 Thread.sleep(boundary + offsetMs - now);
-            } catch (InterruptedException e) {
+            } catch (Exception e) {
                 Thread.currentThread().interrupt();
                 return;
             }
             try {
-                restoreOnce();
+                restoreBarrier.arriveBefore(this::restore);
                 if (level == 0) {
                     tick(boundary);
                 } else {
@@ -215,40 +208,6 @@ public final class InsightsCollector implements SmartLifecycle {
                 }
             } catch (RuntimeException e) {
                 log.warn("Insights {} failed for level {}", level == 0 ? "tick" : "roll-up", level, e);
-            }
-        }
-    }
-
-    /**
-     * Applies the persisted rings before this collector's first write, whichever level
-     * thread gets there first - a level-1 roll-up must never land in front of the
-     * history it belongs to. Waiting happens here rather than in {@code start()} so the
-     * application's own startup never pays for it; the boundary this tick was scheduled
-     * for is already fixed, so a short wait does not shift any timestamp. A source that
-     * times out on {@link #RESTORE_WAIT} or throws is abandoned for good - the state
-     * leaves {@code PENDING} no matter how the attempt ends, so a failed or partial
-     * restore is never retried on top of a collector that has since started ticking.
-     * A propagating exception is left to {@code runLevel}'s own handler; losing the
-     * one tick or roll-up it was guarding is harmless, since {@link #fillMissed} pads
-     * the gap.
-     */
-    private void restoreOnce() {
-        if (restoreState.get() != RestoreState.PENDING) {
-            return;
-        }
-        synchronized (restoreLock) {
-            if (restoreState.get() != RestoreState.PENDING) {
-                return;
-            }
-            RestoreState outcome = RestoreState.ABANDONED;
-            try {
-                Optional<InsightsSnapshot> snapshot = snapshotSource.awaitSnapshot(RESTORE_WAIT);
-                if (snapshot.isPresent()) {
-                    restore(snapshot.get());
-                    outcome = RestoreState.APPLIED;
-                }
-            } finally {
-                restoreState.set(outcome);
             }
         }
     }

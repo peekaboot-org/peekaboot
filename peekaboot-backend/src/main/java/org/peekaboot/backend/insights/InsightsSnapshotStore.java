@@ -13,10 +13,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,6 +56,27 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         this.maxAge = maxAge;
     }
 
+    /** The store for {@code properties}' persistence settings, or null while storage is off. */
+    public static InsightsSnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
+        if (storage == null) {
+            return null;
+        }
+        return storage.file(FILE_NAME)
+                .map(path -> new InsightsSnapshotStore(
+                        path,
+                        geometry(properties),
+                        properties.resolvePersistenceInterval(),
+                        properties.resolvePersistenceMaxAge()))
+                .orElse(null);
+    }
+
+    /** The ring shape a persisted snapshot has to match; endEpochMs and count play no part. */
+    private static List<InsightsSnapshot.Level> geometry(InsightsProperties properties) {
+        return properties.getLevels().stream()
+                .map(level -> new InsightsSnapshot.Level(level.getInterval().toMillis(), level.getSize(), 0, 0))
+                .toList();
+    }
+
     /** Submits the parse; returns immediately, so no context refresh ever waits on a file. */
     public void beginLoad() {
         Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> loaded.complete(load()));
@@ -75,7 +96,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Optional.empty();
-        } catch (TimeoutException | ExecutionException | RuntimeException e) {
+        } catch (Exception e) {
             log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
             return Optional.empty();
         }

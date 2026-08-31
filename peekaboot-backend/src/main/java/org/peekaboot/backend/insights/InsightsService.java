@@ -18,7 +18,6 @@ import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 
@@ -56,7 +55,7 @@ public final class InsightsService implements SmartLifecycle {
         Resource defaults = resourceLoader.getResource(CLASSPATH_PREFIX + DEFAULTS_LOCATION);
         Resource userOverride = properties.getConfigLocation() != null
                 ? resourceLoader.getResource(properties.getConfigLocation())
-                : new ClassPathResource(USER_LOCATION);
+                : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
         PanelsFile file = load(defaults, userOverride);
 
         this.panels = file.panels().stream()
@@ -69,15 +68,7 @@ public final class InsightsService implements SmartLifecycle {
                 .toList();
         this.seriesCount = namespacedSeries.size();
 
-        this.store = storage == null
-                ? null
-                : storage.file(InsightsSnapshotStore.FILE_NAME)
-                        .map(path -> new InsightsSnapshotStore(
-                                path,
-                                geometry(properties),
-                                properties.resolvePersistenceInterval(),
-                                properties.resolvePersistenceMaxAge()))
-                        .orElse(null);
+        this.store = InsightsSnapshotStore.create(storage, properties);
         this.collector = new InsightsCollector(
                 properties.getLevels(),
                 namespacedSeries,
@@ -85,13 +76,6 @@ public final class InsightsService implements SmartLifecycle {
                 registry,
                 listener,
                 store != null ? store : InsightsCollector.SnapshotSource.NONE);
-    }
-
-    /** The ring shape a persisted snapshot has to match; endEpochMs and count play no part. */
-    private static List<InsightsSnapshot.Level> geometry(InsightsProperties properties) {
-        return properties.getLevels().stream()
-                .map(level -> new InsightsSnapshot.Level(level.getInterval().toMillis(), level.getSize(), 0, 0))
-                .toList();
     }
 
     /**

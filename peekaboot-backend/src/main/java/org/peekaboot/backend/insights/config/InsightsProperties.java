@@ -22,6 +22,11 @@ public class InsightsProperties {
     }
 
     public void validate() {
+        validateLevels();
+        validatePersistence();
+    }
+
+    private void validateLevels() {
         if (levels == null || levels.isEmpty()) {
             throw new IllegalStateException("peekaboot.insights.levels must contain at least one level");
         }
@@ -39,6 +44,9 @@ public class InsightsProperties {
             }
             previous = level.interval;
         }
+    }
+
+    private void validatePersistence() {
         if (persistence.interval != null && (persistence.interval.isZero() || persistence.interval.isNegative())) {
             throw new IllegalStateException("peekaboot.insights.persistence.interval must be positive");
         }
