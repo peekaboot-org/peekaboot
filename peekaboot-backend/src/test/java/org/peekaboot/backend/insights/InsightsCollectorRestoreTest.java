@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
@@ -101,5 +103,66 @@ class InsightsCollectorRestoreTest {
 
         assertThat(restored.snapshot(0).tickValues().get("cpu.process"))
                 .containsExactly(7.0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 7.0);
+    }
+
+    private static InsightsCollector collector(InsightsCollector.SnapshotSource source) {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        registry.gauge("g", new AtomicLong(7));
+        return new InsightsCollector(
+                List.of(level(Duration.ofMillis(100), 20)),
+                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(),
+                registry,
+                InsightsCollector.Listener.NO_OP,
+                source);
+    }
+
+    @Test
+    void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
+        InsightsCollector source = collector("cpu.process");
+        source.tick(10_000);
+        InsightsSnapshot persisted = source.capture();
+
+        InsightsCollector collector = collector(timeout -> Optional.of(persisted));
+        collector.start();
+        try {
+            Thread.sleep(500);
+        } finally {
+            collector.stop();
+        }
+
+        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
+    }
+
+    @Test
+    void aSnapshotThatMissesTheBarrierIsNeverAppliedOverLiveSamples() throws Exception {
+        InsightsCollector collector = collector(timeout -> Optional.empty());
+        collector.start();
+        try {
+            Thread.sleep(500);
+        } finally {
+            collector.stop();
+        }
+
+        // only its own ticks, none of them restored
+        assertThat(collector.snapshot(0).endEpochMs()).isGreaterThan(0);
+        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).isNotEmpty();
+    }
+
+    @Test
+    void theSourceIsAskedOnlyOnceHoweverManyTicksFollow() throws Exception {
+        AtomicInteger asked = new AtomicInteger();
+        InsightsCollector collector = collector(timeout -> {
+            asked.incrementAndGet();
+            return Optional.empty();
+        });
+        collector.start();
+        try {
+            Thread.sleep(500);
+        } finally {
+            collector.stop();
+        }
+
+        assertThat(asked).hasValue(1);
     }
 }

@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.AtomicReference;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -44,6 +46,27 @@ public final class InsightsCollector implements SmartLifecycle {
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
     }
 
+    /**
+     * The collector's read side of persistence. Awaited by the first level thread to
+     * reach a write - never on the startup path, which is why loading a snapshot cannot
+     * slow an application's boot.
+     */
+    public interface SnapshotSource {
+        SnapshotSource NONE = timeout -> Optional.empty();
+
+        /** The persisted rings, or empty if there are none or they did not arrive in time. */
+        Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
+    }
+
+    private enum RestoreState {
+        PENDING,
+        APPLIED,
+        ABANDONED
+    }
+
+    /** How long a level thread holds its first write waiting for the persisted rings. */
+    private static final Duration RESTORE_WAIT = Duration.ofSeconds(5);
+
     private final long[] intervalMillis;
     private final int[] levelSizes;
     private final Map<String, SeriesSampler> samplers = new LinkedHashMap<>();
@@ -56,6 +79,9 @@ public final class InsightsCollector implements SmartLifecycle {
     private final Listener listener;
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
+    private final SnapshotSource snapshotSource;
+    private final AtomicReference<RestoreState> restoreState = new AtomicReference<>(RestoreState.PENDING);
+    private final Object restoreLock = new Object();
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
@@ -63,7 +89,18 @@ public final class InsightsCollector implements SmartLifecycle {
             List<TileDef> tiles,
             MeterRegistry registry,
             Listener listener) {
+        this(levels, series, tiles, registry, listener, SnapshotSource.NONE);
+    }
+
+    public InsightsCollector(
+            List<InsightsProperties.Level> levels,
+            List<SeriesDef> series,
+            List<TileDef> tiles,
+            MeterRegistry registry,
+            Listener listener,
+            SnapshotSource snapshotSource) {
         this.listener = listener;
+        this.snapshotSource = snapshotSource;
         this.intervalMillis = new long[levels.size()];
         this.levelSizes = new int[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
@@ -170,6 +207,7 @@ public final class InsightsCollector implements SmartLifecycle {
                 return;
             }
             try {
+                restoreOnce();
                 if (level == 0) {
                     tick(boundary);
                 } else {
@@ -178,6 +216,29 @@ public final class InsightsCollector implements SmartLifecycle {
             } catch (RuntimeException e) {
                 log.warn("Insights {} failed for level {}", level == 0 ? "tick" : "roll-up", level, e);
             }
+        }
+    }
+
+    /**
+     * Applies the persisted rings before this collector's first write, whichever level
+     * thread gets there first - a level-1 roll-up must never land in front of the
+     * history it belongs to. Waiting happens here rather than in {@code start()} so the
+     * application's own startup never pays for it; the boundary this tick was scheduled
+     * for is already fixed, so a short wait does not shift any timestamp. A source that
+     * does not answer within {@link #RESTORE_WAIT} is abandoned for good and its result,
+     * whenever it lands, is never asked for again.
+     */
+    private void restoreOnce() {
+        if (restoreState.get() != RestoreState.PENDING) {
+            return;
+        }
+        synchronized (restoreLock) {
+            if (restoreState.get() != RestoreState.PENDING) {
+                return;
+            }
+            Optional<InsightsSnapshot> snapshot = snapshotSource.awaitSnapshot(RESTORE_WAIT);
+            snapshot.ifPresent(this::restore);
+            restoreState.set(snapshot.isPresent() ? RestoreState.APPLIED : RestoreState.ABANDONED);
         }
     }
 
