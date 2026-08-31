@@ -16,10 +16,11 @@ import org.springframework.test.context.ActiveProfiles;
 
 /**
  * What {@link PeekabootSecurityConfig} looks like from a real browser, which is where its
- * one non-obvious consequence lives: the dev toolbar is injected into the application's own
- * pages, but it loads from {@code /peekaboot/ui/toolbar/toolbar.js} - a path the chain
- * gates. A reader who secures the dashboard also turns the toolbar off for everyone outside
- * the role, on every page of their application, and these tests pin both halves of that.
+ * one non-obvious consequence lives: the dev toolbar is rendered into the application's own
+ * pages by DevToolbarFilter, but the module that fills it lives at
+ * {@code /peekaboot/ui/toolbar/toolbar.js} - a path the chain gates. So a reader outside the
+ * role gets the bar with the sign-in notice on it rather than the request's numbers, and
+ * these tests pin both halves of that.
  *
  * <p>{@code SecuredPeekabootIntegrationTest} covers the HTTP contract itself; this covers
  * only what a browser additionally shows.
@@ -75,14 +76,14 @@ class SecuredDashboardTest extends PlaywrightTestBase {
     }
 
     /**
-     * The consequence worth documenting. The application's page is untouched - the Peekaboot
-     * chain matches only its own paths - and the filter still injects the toolbar's bootstrap
-     * markup, because that happens server-side with no idea who is asking. But the browser's
-     * follow-up request for the toolbar module is a {@code /peekaboot/**} request like any
-     * other, so it is refused and the toolbar never mounts: no shadow host, no bar.
+     * The case the server-rendered shell exists for. The toolbar's module is a
+     * {@code /peekaboot/**} request like any other, so it is refused - and before the bar was
+     * rendered by DevToolbarFilter that meant no bar at all, on every page of the
+     * application, with nothing to tell the reader why. Now the bar arrives with the page and
+     * says so.
      */
     @Test
-    void theInjectedToolbarDoesNotLoadForAnAnonymousBrowser() {
+    void theToolbarExplainsItselfToAnAnonymousBrowser() {
         try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
             List<Integer> toolbarScriptStatuses = new ArrayList<>();
@@ -97,13 +98,66 @@ class SecuredDashboardTest extends PlaywrightTestBase {
 
             assertThat(response.status()).isEqualTo(200);
             assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons List");
-            assertThat(anonymousPage.content())
-                    .as("the filter injects the toolbar bootstrap regardless of who is asking")
-                    .contains("peekaboot-toolbar-data");
             assertThat(toolbarScriptStatuses)
                     .as("the toolbar module is a /peekaboot/** request like any other")
                     .containsExactly(401);
-            assertThat(anonymousPage.locator("#peekaboot-toolbar-host").count()).isZero();
+            assertThat(anonymousPage.locator("#peekaboot-toolbar-host").count())
+                    .as("the bar is rendered by the filter, so it survives the refused script")
+                    .isEqualTo(1);
+            assertThat(authNoticeText(anonymousPage)).isEqualTo("Sign in to see this request");
         }
+    }
+
+    /**
+     * The notice is a real link rather than something a click handler opens, because in the
+     * case it exists for no handler was ever bound - the script that binds them was refused.
+     */
+    @Test
+    void theNoticeLinksAnAnonymousBrowserToTheDashboard() {
+        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+            Page anonymousPage = anonymous.newPage();
+            anonymousPage.navigate(baseUrl + "/persons");
+            anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
+
+            String href = (String) anonymousPage.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                    + ".shadowRoot.querySelector('#pk-auth a').getAttribute('href')");
+
+            assertThat(href).isEqualTo("/peekaboot/");
+        }
+    }
+
+    /**
+     * The notice is revealed by a delayed animation rather than by a script, so that a page
+     * blocking inline script still gets it. This pins the reveal actually happening - an
+     * always-transparent notice would satisfy every other assertion here.
+     */
+    @Test
+    void theNoticeBecomesVisibleForAnAnonymousBrowser() {
+        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+            Page anonymousPage = anonymous.newPage();
+            anonymousPage.navigate(baseUrl + "/persons");
+
+            anonymousPage.waitForFunction("() => getComputedStyle("
+                    + "document.getElementById('peekaboot-toolbar-host').shadowRoot"
+                    + ".getElementById('pk-auth')).opacity === '1'");
+        }
+    }
+
+    /**
+     * The complement: reaching the script at all proves the reader may read Peekaboot's data,
+     * so the notice is removed outright. Removed rather than hidden, so it leaves the
+     * accessibility tree too.
+     */
+    @Test
+    void theNoticeIsGoneOnceTheScriptHasRunForAnAdmin() {
+        openPersonsPage();
+
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.getElementById('pk-auth') === null");
+    }
+
+    private static String authNoticeText(Page page) {
+        return (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.getElementById('pk-auth').textContent.trim()");
     }
 }

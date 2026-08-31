@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.devtoolbar.ToolbarShell;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +31,9 @@ public class DevToolbarFilter implements Filter {
 
     private final ToolbarDataProvider toolbarDataProvider;
     private final Tracer tracer;
+    // Reads the bar's stylesheets off the classpath once, at construction, and caches the
+    // rendered fragment's CSS; there is one filter instance per application.
+    private final ToolbarShell toolbarShell = new ToolbarShell();
 
     public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
         this.toolbarDataProvider = toolbarDataProvider;
@@ -177,15 +181,12 @@ public class DevToolbarFilter implements Filter {
     }
 
     /**
-     * Injects the toolbar data plus a loader for the external toolbar script;
-     * all toolbar logic lives in /peekaboot/ui/toolbar/toolbar.js.
+     * Injects the bar itself - markup, styles and the data blob - plus the script that
+     * enhances it. See {@link ToolbarShell} for why the bar is rendered here rather than
+     * built by /peekaboot/ui/toolbar/toolbar.js, which still owns every behaviour.
      */
     private String toolbarBootstrapHtml(String dataJson) {
-        return """
-            <!-- Peekaboot Dev Toolbar -->
-            <script id="peekaboot-toolbar-data" type="application/json">{{SUMMARY_JSON}}</script>
-            <script src="/peekaboot/ui/toolbar/toolbar.js" type="module"></script>
-            """.replace("{{SUMMARY_JSON}}", dataJson);
+        return toolbarShell.render(dataJson);
     }
 
     private boolean isSwaggerUi(String path) {

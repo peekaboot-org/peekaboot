@@ -3,7 +3,7 @@ package org.peekaboot.backend.devtoolbar;
 public class ToolbarDataProvider {
 
     /** Peekaboot's UI/API prefix; also hardcoded in PeekabootController and FilterPathMatcher. */
-    private static final String BASE_PATH = "/peekaboot";
+    static final String BASE_PATH = "/peekaboot";
 
     public String getToolbarSummaryJson(String method, String path, int status, String traceId) {
         return String.format(

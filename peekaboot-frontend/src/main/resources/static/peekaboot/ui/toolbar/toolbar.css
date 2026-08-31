@@ -1,6 +1,18 @@
 /* Dev toolbar (collapsed bar). Tokens come from ../assets/tokens.css; the
    status pill and log counts reuse .pk-badge from ../assets/components.css. */
 
+/* Positioning lives here rather than in an inline style attribute on the host element:
+   DevToolbarFilter renders that element server-side now, and a page whose CSP omits
+   style-src 'unsafe-inline' drops inline style attributes - which would leave the bar
+   sitting unpositioned at the end of the document. */
+:host {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2147483647;
+}
+
 .pk-toolbar {
     display: flex;
     align-items: center;
@@ -82,3 +94,12 @@
     40%       { content: '..'; }
     60%, 100% { content: '...'; }
 }
+
+/* Shown only when nothing enhanced the bar. The notice is rendered into every page, and
+   toolbar.js removes it the moment it runs - well inside the delay below - so a reader who
+   can load the script never sees it. A reader whose authorization gate refused the script
+   gets it instead, and it is a real link precisely because no click handler was ever bound.
+   Revealed by a delayed animation rather than a script, so a page that blocks inline script
+   still gets it. */
+.pk-toolbar__auth { opacity: 0; animation: pk-auth-reveal 0s linear 400ms forwards; }
+@keyframes pk-auth-reveal { to { opacity: 1; } }
