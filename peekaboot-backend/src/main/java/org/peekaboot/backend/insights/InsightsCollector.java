@@ -225,8 +225,12 @@ public final class InsightsCollector implements SmartLifecycle {
      * history it belongs to. Waiting happens here rather than in {@code start()} so the
      * application's own startup never pays for it; the boundary this tick was scheduled
      * for is already fixed, so a short wait does not shift any timestamp. A source that
-     * does not answer within {@link #RESTORE_WAIT} is abandoned for good and its result,
-     * whenever it lands, is never asked for again.
+     * times out on {@link #RESTORE_WAIT} or throws is abandoned for good - the state
+     * leaves {@code PENDING} no matter how the attempt ends, so a failed or partial
+     * restore is never retried on top of a collector that has since started ticking.
+     * A propagating exception is left to {@code runLevel}'s own handler; losing the
+     * one tick or roll-up it was guarding is harmless, since {@link #fillMissed} pads
+     * the gap.
      */
     private void restoreOnce() {
         if (restoreState.get() != RestoreState.PENDING) {
@@ -236,9 +240,16 @@ public final class InsightsCollector implements SmartLifecycle {
             if (restoreState.get() != RestoreState.PENDING) {
                 return;
             }
-            Optional<InsightsSnapshot> snapshot = snapshotSource.awaitSnapshot(RESTORE_WAIT);
-            snapshot.ifPresent(this::restore);
-            restoreState.set(snapshot.isPresent() ? RestoreState.APPLIED : RestoreState.ABANDONED);
+            RestoreState outcome = RestoreState.ABANDONED;
+            try {
+                Optional<InsightsSnapshot> snapshot = snapshotSource.awaitSnapshot(RESTORE_WAIT);
+                if (snapshot.isPresent()) {
+                    restore(snapshot.get());
+                    outcome = RestoreState.APPLIED;
+                }
+            } finally {
+                restoreState.set(outcome);
+            }
         }
     }
 

@@ -105,9 +105,10 @@ class InsightsCollectorRestoreTest {
                 .containsExactly(7.0, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 7.0);
     }
 
-    private static InsightsCollector collector(InsightsCollector.SnapshotSource source) {
+    /** One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading. */
+    private static InsightsCollector collector(long gaugeValue, InsightsCollector.SnapshotSource source) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("g", new AtomicLong(7));
+        registry.gauge("g", new AtomicLong(gaugeValue));
         return new InsightsCollector(
                 List.of(level(Duration.ofMillis(100), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
@@ -119,11 +120,14 @@ class InsightsCollectorRestoreTest {
 
     @Test
     void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
-        InsightsCollector source = collector("cpu.process");
-        source.tick(10_000);
+        InsightsCollector source = collector(7, InsightsCollector.SnapshotSource.NONE);
+        // real wall-clock epoch: restore() also restores endEpochMs, and the live collector's
+        // own first tick fills any gap between it and "now" - keep that gap tiny so it stays a
+        // no-op rather than flooding the restored ring with NaNs.
+        source.tick(System.currentTimeMillis());
         InsightsSnapshot persisted = source.capture();
 
-        InsightsCollector collector = collector(timeout -> Optional.of(persisted));
+        InsightsCollector collector = collector(1, timeout -> Optional.of(persisted));
         collector.start();
         try {
             Thread.sleep(500);
@@ -131,12 +135,16 @@ class InsightsCollectorRestoreTest {
             collector.stop();
         }
 
-        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
+        // oldest entry is the persisted 7, everything ticked live afterwards is the gauge's 1
+        double[] ticks = collector.snapshot(0).tickValues().get("cpu.process");
+        assertThat(ticks).hasSizeGreaterThan(1);
+        assertThat(ticks[0]).isEqualTo(7.0);
+        assertThat(ticks[ticks.length - 1]).isEqualTo(1.0);
     }
 
     @Test
     void aSnapshotThatMissesTheBarrierIsNeverAppliedOverLiveSamples() throws Exception {
-        InsightsCollector collector = collector(timeout -> Optional.empty());
+        InsightsCollector collector = collector(1, timeout -> Optional.empty());
         collector.start();
         try {
             Thread.sleep(500);
@@ -144,17 +152,49 @@ class InsightsCollectorRestoreTest {
             collector.stop();
         }
 
-        // only its own ticks, none of them restored
+        // only its own ticks; the persisted 7 that a wrongly-applied restore would carry never shows up
+        double[] ticks = collector.snapshot(0).tickValues().get("cpu.process");
         assertThat(collector.snapshot(0).endEpochMs()).isGreaterThan(0);
-        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).isNotEmpty();
+        assertThat(ticks).isNotEmpty();
+        assertThat(ticks).containsOnly(1.0);
     }
 
     @Test
     void theSourceIsAskedOnlyOnceHoweverManyTicksFollow() throws Exception {
         AtomicInteger asked = new AtomicInteger();
-        InsightsCollector collector = collector(timeout -> {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        registry.gauge("g", new AtomicLong(1));
+        InsightsCollector collector = new InsightsCollector(
+                List.of(level(Duration.ofMillis(100), 20), level(Duration.ofMillis(500), 20)),
+                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(),
+                registry,
+                InsightsCollector.Listener.NO_OP,
+                timeout -> {
+                    asked.incrementAndGet();
+                    try {
+                        Thread.sleep(80); // widens the window the other level thread can race into
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return Optional.empty();
+                });
+        collector.start();
+        try {
+            Thread.sleep(700); // long enough for both the 100ms and the 500ms level thread to arrive
+        } finally {
+            collector.stop();
+        }
+
+        assertThat(asked).hasValue(1);
+    }
+
+    @Test
+    void aSourceThatThrowsIsAbandonedForGoodAndAskedOnlyOnce() throws Exception {
+        AtomicInteger asked = new AtomicInteger();
+        InsightsCollector collector = collector(1, timeout -> {
             asked.incrementAndGet();
-            return Optional.empty();
+            throw new RuntimeException("boom");
         });
         collector.start();
         try {
@@ -164,5 +204,7 @@ class InsightsCollectorRestoreTest {
         }
 
         assertThat(asked).hasValue(1);
+        // the failed attempt cost one tick, not the collector's ability to keep ticking
+        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
     }
 }
