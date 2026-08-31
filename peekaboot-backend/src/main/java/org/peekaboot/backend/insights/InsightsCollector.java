@@ -302,6 +302,72 @@ public final class InsightsCollector implements SmartLifecycle {
         return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
     }
 
+    int levelCount() {
+        return intervalMillis.length;
+    }
+
+    /**
+     * Everything persistence needs: every level of every series, including the
+     * {@code samples} column the API's {@link #snapshot(int)} deliberately omits.
+     * Ring contents and {@code endEpochMs} are read without a common lock, exactly as
+     * the API reads them - a tick landing mid-capture can date the newest sample one
+     * interval early, once, in a cache.
+     */
+    InsightsSnapshot capture() {
+        List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
+        for (int level = 0; level < intervalMillis.length; level++) {
+            levels.add(new InsightsSnapshot.Level(
+                    intervalMillis[level], levelSizes[level], levelEndEpochMs.get(level), filled(level)));
+        }
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+            List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
+            byLevel.add(new double[][] {entry.getValue().toArray()});
+            StatsRing[] rings = statsRings.get(entry.getKey());
+            for (int level = 1; level < intervalMillis.length; level++) {
+                byLevel.add(rings[level].toColumns());
+            }
+            series.put(entry.getKey(), byLevel);
+        }
+        return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
+    }
+
+    /**
+     * Refills the rings from a snapshot whose geometry the store has already matched
+     * against the live config. Series the config no longer declares are skipped, and
+     * series the file never carried simply stay empty. Restoring each level's
+     * {@code endEpochMs} is what makes the outage visible: {@link #fillMissed} pads the
+     * gap on this level's first tick or roll-up, with no separate replay to maintain.
+     */
+    void restore(InsightsSnapshot snapshot) {
+        for (Map.Entry<String, List<double[][]>> entry : snapshot.series().entrySet()) {
+            DoubleRing level0 = level0Rings.get(entry.getKey());
+            if (level0 == null || entry.getValue().size() != intervalMillis.length) {
+                continue;
+            }
+            level0.restore(entry.getValue().get(0)[0]);
+            StatsRing[] rings = statsRings.get(entry.getKey());
+            for (int level = 1; level < intervalMillis.length; level++) {
+                rings[level].restore(entry.getValue().get(level));
+            }
+        }
+        for (int level = 0; level < intervalMillis.length; level++) {
+            levelEndEpochMs.set(level, snapshot.levels().get(level).endEpochMs());
+        }
+    }
+
+    /** How much of a level's ring is filled; 0 when no series is configured at all. */
+    private int filled(int level) {
+        if (level == 0) {
+            return level0Rings.isEmpty()
+                    ? 0
+                    : level0Rings.values().iterator().next().size();
+        }
+        return statsRings.isEmpty()
+                ? 0
+                : statsRings.values().iterator().next()[level].size();
+    }
+
     /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */
     Map<String, Double> tileValues() {
         Map<String, Double> values = new LinkedHashMap<>();
