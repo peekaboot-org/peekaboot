@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import java.util.List;
@@ -12,6 +11,10 @@ import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.order.OrderReconciler;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -22,40 +25,26 @@ import org.junit.jupiter.api.Test;
  */
 class TraceOverlayTest extends PlaywrightTestBase {
 
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
+
     private void openOverlayFromToolbar() {
         openPersonsPage();
         openOverlayFromLoadedToolbar();
     }
 
     /**
-     * Opens the overlay for the index page's error-path trace - the one trace this app
-     * produces whose logs are spread over more than one span: the request handler's own
-     * ERROR log, and the INFO line PersonQueryService.findAll() writes inside its own
-     * observed span. Returns that trace's id.
-     *
-     * <p>Two things this deliberately does not do the short way. It polls the insights
-     * endpoint until the second logging span has actually landed, because the toolbar
-     * publishes the trace id as soon as the response is written while spans reach the
-     * store asynchronously afterwards - the same ingestion race
-     * overlayTabStripExposesAsARealTablistInTheAccessibilityTree documents (observed on
-     * macOS). The poll lives in a single evaluate() for that test's reason too: a second,
-     * separate fetch could race the trace's eviction from a bounded store. It counts spans
-     * carrying logs the way spans.js itself derives them (span.logs, walked down
-     * span.children), so the precondition is measured against the very shape the Spans tab
-     * renders its "N logs" toggles from.
-     *
-     * <p>And it opens through the dashboard's hash route rather than the toolbar, because
-     * only that path supplies an urlState (main.js's expandTraceById -> buildTraceUrlState).
-     * The toolbar calls openTraceDetail with none, so there every urlState write is a silent
-     * no-op and the URL assertions below could not fail even if the wiring were deleted.
+     * Polls the insights endpoint for the trace the toolbar currently tracks until its
+     * spans carry logs on more than one span - shared by both the hash-route and
+     * toolbar-path variants of the span-logs filter test below, since both need the
+     * same real, non-vacuous precondition. It counts spans carrying logs the way spans.js
+     * itself derives them (span.logs, walked down span.children), so the precondition is
+     * measured against the very shape the Spans tab renders its "N logs" toggles from. The
+     * poll lives in a single evaluate() rather than separate Java-side calls: a second,
+     * separate fetch could race the trace's eviction from a bounded store.
      */
-    private String openOverlayForTheMultiSpanLogTrace() {
-        page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-
-        String traceId = (String) page.evaluate("""
+    private String waitForMultiSpanLogTraceId() {
+        return (String) page.evaluate("""
                 async () => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
@@ -76,6 +65,28 @@ class TraceOverlayTest extends PlaywrightTestBase {
                     throw new Error('no trace with logs on more than one span arrived within 15s');
                 }
                 """);
+    }
+
+    /**
+     * Opens the overlay for the index page's error-path trace - the one trace this app
+     * produces whose logs are spread over more than one span: the request handler's own
+     * ERROR log, and the INFO line PersonQueryService.findAll() writes inside its own
+     * observed span. Returns that trace's id.
+     *
+     * <p>It opens through the dashboard's hash route rather than the toolbar, because
+     * only that path supplies an urlState (main.js's expandTraceById -> buildTraceUrlState).
+     * The toolbar calls openTraceDetail with none, so there every urlState write is a silent
+     * no-op and the URL assertions below could not fail even if the wiring were deleted -
+     * see spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar below for the
+     * toolbar-path counterpart, which asserts only the DOM hand-off for that reason.
+     */
+    private String openOverlayForTheMultiSpanLogTrace() {
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+
+        String traceId = waitForMultiSpanLogTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         page.waitForFunction(
@@ -564,6 +575,13 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
                         + "deep link into this filtered view would use")
                 .contains("#traces/" + traceId + "/logs?span=" + spanId);
+        String focusedTab = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".activeElement?.dataset.tab");
+        assertThat(focusedTab)
+                .as("the clicked toggle belonged to the Spans tab's markup, which the tab switch just "
+                        + "replaced, destroying it - focus must move deliberately to the Logs tab's own "
+                        + "button rather than falling back to the shadow host")
+                .isEqualTo("logs");
         String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('#pk-tab-content').innerHTML");
         assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
@@ -594,6 +612,45 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 .as("clearing takes the param back out, so the URL never claims a filter that is "
                         + "no longer applied")
                 .doesNotContain("span=");
+    }
+
+    /**
+     * The cheap DOM-only counterpart to spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable
+     * above, covering the toolbar-open path rather than the hash route. The toolbar calls
+     * openTraceDetail with no urlState at all (see openOverlayForTheMultiSpanLogTrace's own
+     * javadoc), so goToSpanLogs's urlState?.update is a silent no-op there and the URL never
+     * changes by design - there is nothing to assert about it on this path, only the DOM
+     * hand-off itself.
+     */
+    @Test
+    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span when opened from the toolbar")
+    void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        waitForMultiSpanLogTraceId();
+
+        openOverlayFromLoadedToolbar();
+
+        @SuppressWarnings("unchecked")
+        List<String> spansOfferingLogs = (List<String>)
+                page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
+        assertThat(spansOfferingLogs).hasSizeGreaterThan(1);
+        String spanId = spansOfferingLogs.getFirst();
+
+        page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
+
+        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+
+        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
+        @SuppressWarnings("unchecked")
+        List<String> visibleSpanIds = (List<String>)
+                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
+        assertThat(visibleSpanIds)
+                .as("only the span the toggle was clicked for stays visible")
+                .containsOnly(spanId);
     }
 
     @Test
@@ -718,58 +775,100 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
+     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes for
+     * {@link OrderReconciler#reconcileOrders()}, rather than waiting on its own
+     * {@code fixedDelay} (2 minutes - far past what this test should block on, and
+     * Scheduler's own jobs are hourly/multi-minute on top of that). Same technique, same
+     * reasoning as OrderTraceCaptureIntegrationTest's runScheduledReconciliation(): the
+     * {@link ScheduledTaskHolder} bean exposes the {@link ScheduledTask} Spring registered
+     * for the method, and running its {@code Runnable} here is the real production code
+     * path - it builds the same {@code ScheduledTaskObservationContext} and sets the same
+     * {@code code.function}/{@code code.namespace} tags that classify the trace root
+     * SCHEDULED_JOB, not a hand-built stand-in for that classification.
+     */
+    private void runScheduledReconciliation() {
+        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
+        scheduledTaskHolder.getScheduledTasks().stream()
+                .map(ScheduledTask::getTask)
+                .filter(task -> taskDescription.equals(task.toString()))
+                .findFirst()
+                .orElseThrow(() ->
+                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
+                .getRunnable()
+                .run();
+    }
+
+    /**
+     * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
+     * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
+     * anything this test constructed. Whichever trace turns up first is fair game: the
+     * assertions below hold for any correctly-captured scheduled-job trace, not
+     * specifically the one runScheduledReconciliation() just fired, so a trace left behind
+     * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
+     */
+    private String waitForScheduledJobTraceId() {
+        page.navigate(baseUrl + "/persons");
+        return (String) page.evaluate("""
+                async () => {
+                    for (let attempt = 0; attempt < 150; attempt++) {
+                        const response = await fetch(
+                            '/peekaboot/api/traces/insights?bucket=all&rootActionType=SCHEDULED_JOB');
+                        if (response.ok) {
+                            const body = await response.json();
+                            const trace = (body.traces || [])[0];
+                            if (trace) return trace.traceId;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error('no SCHEDULED_JOB trace arrived within 15s');
+                }
+                """);
+    }
+
+    /**
      * Regression guard for the fake "UNKNOWN" HTTP method rendered on non-HTTP traces (a
      * scheduled job here): trace-detail.js used to hardcode 'UNKNOWN' as the method fallback,
      * even though httpExchange/http.* tags are only ever populated for real HTTP requests.
      * The method now falls back to null, which the header renders as the trace's root-action
-     * label instead (root-actions.js) - precedent for stubbing the insights endpoint with a
-     * canned response is closeButtonDismissesTheOverlayOnTheErrorPath, above. Also covers the
-     * "1 queries" pluralisation defect on the same header (formatCount() in format.js).
+     * label instead (root-actions.js).
+     *
+     * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
+     * scheduled-task observation (see runScheduledReconciliation()) rather than stubbing
+     * the insights endpoint with a canned response - the fix is about what real
+     * classification data the header renders, so a hand-built trace object would only
+     * prove the header can read JSON, not that the classification it depends on ever
+     * happens. Also covers the "1 queries" pluralisation defect on the same header
+     * (formatCount() in format.js): reconcileOrders() calls orderRepository.findAll()
+     * exactly once, and CustomerOrder is a flat entity with no lazy associations to
+     * trigger further queries, so the trace's query count is deterministically 1
+     * regardless of how many orders exist when the test runs.
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        String cannedScheduledJobTrace = """
-                {
-                  "traceId": "scheduled-canned-trace",
-                  "startTimeMs": 1000,
-                  "durationMs": 42,
-                  "status": "OK",
-                  "rootActionType": "SCHEDULED_JOB",
-                  "rootOperation": "task orderReconciler.reconcileOrders",
-                  "rootSpan": {
-                    "spanId": "span-1",
-                    "name": "task orderReconciler.reconcileOrders",
-                    "kind": "INTERNAL",
-                    "startTimeMs": 1000,
-                    "durationMs": 42,
-                    "status": "OK",
-                    "children": [],
-                    "tags": {},
-                    "events": [],
-                    "issues": []
-                  },
-                  "summary": {"spans": {"count": 1}},
-                  "inheritedAttributes": {},
-                  "httpExchange": null,
-                  "logs": [],
-                  "queries": [{"sql": "SELECT 1", "durationMs": 5, "dbSystem": "h2", "rowCount": 1}],
-                  "truncated": false
-                }
-                """;
-        page.route(
-                "**/api/traces/*/insights",
-                route -> route.fulfill(new Route.FulfillOptions()
-                        .setStatus(200)
-                        .setContentType("application/json")
-                        .setBody(cannedScheduledJobTrace)));
-        openOverlayFromToolbar();
+        runScheduledReconciliation();
+        String traceId = waitForScheduledJobTraceId();
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.waitForFunction(
+                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
+                        + "?.querySelector('.pk-overlay__title-method')",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
 
         String methodText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
                 + ".shadowRoot.querySelector('.pk-overlay__title-method').textContent");
-        assertThat(methodText).isEqualTo("Scheduled Job");
+        assertThat(methodText)
+                .as("no HTTP method exists for a scheduled job, so the header must fall back to "
+                        + "the root-action label rather than a fake method")
+                .isEqualTo("Scheduled Job");
 
         String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
                 + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
-        assertThat(metaText).contains("1 query").doesNotContain("1 queries");
+        assertThat(metaText)
+                .as("reconcileOrders() issues exactly one query (CustomerOrder is a flat entity, so "
+                        + "findAll() is a single SELECT regardless of row count) - the count is "
+                        + "deterministic, not just usually 1")
+                .contains("1 query")
+                .doesNotContain("1 queries");
     }
 }

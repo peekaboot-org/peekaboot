@@ -3,6 +3,7 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {durationSeverity} from '../../shared/severity.js';
+import {formatCount} from '../../shared/format.js';
 
 export function render(container, trace) {
     const queries = trace.queries || [];
@@ -26,7 +27,7 @@ export function render(container, trace) {
         html += '<span class="pk-query-meta">';
         html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${duration}ms${durationClass ? ' SLOW' : ''}</span>`;
         if (rowCount !== null && rowCount !== undefined) {
-            html += `<span class="pk-query-rows">${escapeHtml(String(rowCount))} rows</span>`;
+            html += `<span class="pk-query-rows">${formatCount(Number(rowCount), 'row')}</span>`;
         }
         html += '</span>';
         html += '</div>';

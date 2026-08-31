@@ -19,23 +19,18 @@ const boundRoots = new WeakSet();
 /**
  * Markup for a copyable id. `label` names the kind of id ("traceId", "spanId") and is
  * shown as a prefix, so the value is never a bare hex string with no explanation.
- *
- * `displayValue`, when given, replaces only the visible `.pk-copy__value` text (e.g. a
- * shortened id) - the copy payload, accessible name and title all still name the full
- * `value`, so what gets copied and announced is never the truncated form.
  */
-export function copyableIdHtml(value, {label, truncate = false, displayValue} = {}) {
+export function copyableIdHtml(value, {label, truncate = false} = {}) {
     if (!value) {
         return `<span class="pk-copy pk-copy--empty">${escapeHtml(label || '')} -</span>`;
     }
     const safeValue = escapeHtml(String(value));
-    const safeDisplayValue = displayValue != null ? escapeHtml(String(displayValue)) : safeValue;
     const safeLabel = label ? escapeHtml(label) : '';
     return `<button type="button" class="pk-copy${truncate ? ' pk-copy--truncate' : ''}"`
          + ` data-pk-copy="${safeValue}"`
          + ` aria-label="Copy ${safeLabel} ${safeValue}" title="Copy ${safeLabel}">`
          + (safeLabel ? `<span class="pk-copy__label">${safeLabel}</span>` : '')
-         + `<span class="pk-copy__value">${safeDisplayValue}</span>`
+         + `<span class="pk-copy__value">${safeValue}</span>`
          + `<span class="pk-copy__icon" aria-hidden="true">${COPY_ICON}</span>`
          + `<span class="pk-copy__status" role="status"></span>`
          + `</button>`;
