@@ -57,7 +57,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     }
 
     /** The store for {@code properties}' persistence settings, or null while storage is off. */
-    public static InsightsSnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
+    static InsightsSnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
         if (storage == null) {
             return null;
         }

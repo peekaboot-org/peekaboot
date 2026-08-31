@@ -30,6 +30,10 @@ class InsightsServicePersistenceTest {
         level.setInterval(Duration.ofMillis(100));
         level.setSize(50);
         properties.setLevels(List.of(level));
+        // The default max-age is derived from this geometry (5s) and would discard the
+        // file as stale on any real pause between the two runs; this test exercises
+        // restoration, not the staleness cutoff.
+        properties.getPersistence().setMaxAge(Duration.ofHours(1));
         return properties;
     }
 

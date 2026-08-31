@@ -2,13 +2,13 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
@@ -24,7 +24,7 @@ class InsightsCollectorRestoreTest {
 
     private static InsightsCollector collector(String... seriesIds) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("g", new AtomicLong(7));
+        Gauge.builder("g", () -> 7).register(registry);
         List<SeriesDef> series = List.of(seriesIds).stream()
                 .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), "value", null, null))
                 .toList();
@@ -108,7 +108,7 @@ class InsightsCollectorRestoreTest {
     /** One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading. */
     private static InsightsCollector collector(long gaugeValue, InsightsCollector.SnapshotSource source) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("g", new AtomicLong(gaugeValue));
+        Gauge.builder("g", () -> gaugeValue).register(registry);
         return new InsightsCollector(
                 List.of(level(Duration.ofMillis(100), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
@@ -163,7 +163,7 @@ class InsightsCollectorRestoreTest {
     void theSourceIsAskedOnlyOnceHoweverManyTicksFollow() throws Exception {
         AtomicInteger asked = new AtomicInteger();
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("g", new AtomicLong(1));
+        Gauge.builder("g", () -> 1).register(registry);
         InsightsCollector collector = new InsightsCollector(
                 List.of(level(Duration.ofMillis(100), 20), level(Duration.ofMillis(500), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),

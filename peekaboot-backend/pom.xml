@@ -110,6 +110,13 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- otherwise resolves only transitively through spring-boot-starter-test, so a
+             starter change could remove it silently -->
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- full servlet stack for unit tests (main deps are optional) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
