@@ -245,16 +245,6 @@
                         <artifactId>pmd-java</artifactId>
                         <version>7.26.0</version>
                     </dependency>
-                    <dependency>
-                        <groupId>net.sourceforge.pmd</groupId>
-                        <artifactId>pmd-javascript</artifactId>
-                        <version>7.26.0</version>
-                    </dependency>
-                    <dependency>
-                        <groupId>net.sourceforge.pmd</groupId>
-                        <artifactId>pmd-jsp</artifactId>
-                        <version>7.26.0</version>
-                    </dependency>
                 </dependencies>
                 <configuration>
                     <targetJdk>${java.version}</targetJdk>
