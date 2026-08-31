@@ -7,7 +7,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceStatus;
@@ -405,6 +409,8 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan()).isNull();
         assertThat(result.summary().spans().count()).isEqualTo(0);
         assertThat(result.status()).isEqualTo(TraceStatus.OK);
+        // No root span means nothing to classify from - not a guess at the commonest type.
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
     @Test
@@ -513,72 +519,63 @@ class TraceTreeMapperTest {
 
     // --- Root Action Type Detection Tests ---
 
-    @Test
-    void map_shouldDetectHttpRequestRootActionType() {
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "GET /api/users",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.method", "GET", "http.url", "/api/users"));
+    /**
+     * The full classification grid: every {@link Span.Kind}, plus the null kind Micrometer uses
+     * for internal spans, against every tag family {@code detectRootActionType()} inspects.
+     * Scheduled-job detection keys on a tag <em>pair</em> rather than a prefix, so it sits
+     * outside this grid and is covered by the named tests below.
+     *
+     * <p>Three rows look like misses and are not. CLIENT or null kind carrying {@code http.}/
+     * {@code rpc.} tags is an outbound call that became the root only because its caller's span
+     * hasn't arrived, so what started the trace is genuinely unknown. SERVER carrying {@code db.}
+     * tags falls to the inbound default. PRODUCER carrying {@code messaging.} tags is a send, not
+     * a receive.
+     */
+    @ParameterizedTest(name = "{0} kind with tags {1} -> {2}")
+    @MethodSource("rootActionTypeGrid")
+    void map_shouldClassifyRootActionTypeFromKindAndTags(
+            Span.Kind kind, Map<String, String> tags, RootActionType expected) {
+        var rootSpan = createSpan("trace1", "root", null, "root-op", kind, 0, 100, tags);
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
         TraceTree result = mapper.map(traceData);
 
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
+        assertThat(result.rootActionType()).isEqualTo(expected);
     }
 
-    @Test
-    void map_shouldDetectMessageConsumerRootActionTypeFromConsumerKind() {
-        var rootSpan = createSpan("trace1", "root", null, "receive message", Span.Kind.CONSUMER, 0, 100, Map.of());
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.MESSAGE_CONSUMER);
-    }
-
-    @Test
-    void map_shouldDetectMessageConsumerRootActionTypeFromMessagingTags() {
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "process message",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("messaging.system", "kafka", "messaging.destination", "orders"));
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.MESSAGE_CONSUMER);
-    }
-
-    @Test
-    void map_shouldDetectRpcCallRootActionType() {
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "grpc.UserService/GetUser",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("rpc.system", "grpc", "rpc.service", "UserService"));
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.RPC_CALL);
+    private static Stream<Arguments> rootActionTypeGrid() {
+        Map<String, String> none = Map.of();
+        Map<String, String> http = Map.of("http.method", "GET");
+        Map<String, String> rpc = Map.of("rpc.system", "grpc");
+        Map<String, String> messaging = Map.of("messaging.system", "kafka");
+        Map<String, String> db = Map.of("db.system", "postgresql");
+        return Stream.of(
+                Arguments.of(Span.Kind.SERVER, none, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.SERVER, http, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.SERVER, rpc, RootActionType.RPC_CALL),
+                Arguments.of(Span.Kind.SERVER, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.SERVER, db, RootActionType.HTTP_REQUEST),
+                Arguments.of(Span.Kind.CLIENT, none, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, http, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, rpc, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CLIENT, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CLIENT, db, RootActionType.DATABASE),
+                Arguments.of(Span.Kind.PRODUCER, none, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, http, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, rpc, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, messaging, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.PRODUCER, db, RootActionType.UNKNOWN),
+                Arguments.of(Span.Kind.CONSUMER, none, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, http, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, rpc, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(Span.Kind.CONSUMER, db, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(null, none, RootActionType.INTERNAL),
+                Arguments.of(null, http, RootActionType.INTERNAL),
+                Arguments.of(null, rpc, RootActionType.INTERNAL),
+                Arguments.of(null, messaging, RootActionType.MESSAGE_CONSUMER),
+                Arguments.of(null, db, RootActionType.INTERNAL));
     }
 
     @Test
@@ -634,49 +631,23 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldDetectDatabaseRootActionType() {
+    void map_shouldNotDetectScheduledJobFromCodeTagsOnAServerKindRoot() {
+        // Scheduled-task detection is deliberately confined to the kind-less path, because
+        // that is the only shape Spring's convention produces. code.function/code.namespace
+        // are ordinary OTel source-code attributes any instrumentation may set, so on a
+        // SERVER-kind span they say nothing about scheduling and must not outrank the
+        // server default.
         var rootSpan = createSpan(
                 "trace1",
                 "root",
                 null,
-                "SELECT * FROM users",
-                Span.Kind.CLIENT,
+                "handle-request",
+                Span.Kind.SERVER,
                 0,
                 100,
-                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"));
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
-    }
-
-    @Test
-    void map_shouldDetectInternalRootActionType() {
-        var rootSpan = createSpan("trace1", "root", null, "internal-processing", null, 0, 100, Map.of());
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
-    }
-
-    @Test
-    void map_shouldDetectUnknownRootActionTypeAsFallback() {
-        var rootSpan = createSpan("trace1", "root", null, "produce-event", Span.Kind.PRODUCER, 0, 100, Map.of());
-
-        var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
-    }
-
-    @Test
-    void map_shouldDetectHttpRequestForServerKindWithoutSpecificTags() {
-        var rootSpan = createSpan("trace1", "root", null, "handle-request", Span.Kind.SERVER, 0, 100, Map.of());
+                Map.of(
+                        "code.function", "handleRequest",
+                        "code.namespace", "org.peekaboot.testingapp.web.OrderController"));
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 

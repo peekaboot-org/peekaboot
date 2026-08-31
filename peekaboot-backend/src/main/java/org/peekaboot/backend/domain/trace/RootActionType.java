@@ -1,27 +1,16 @@
 package org.peekaboot.backend.domain.trace;
 
+/**
+ * The category of work a trace's root span represents. Serialized to the UI as the
+ * constant name; the label and icon shown for each constant live with the rest of the
+ * presentation layer, in the frontend's {@code shared/root-actions.js}.
+ */
 public enum RootActionType {
-    HTTP_REQUEST("HTTP Request", "globe"),
-    SCHEDULED_JOB("Scheduled Job", "clock"),
-    MESSAGE_CONSUMER("Message Consumer", "envelope"),
-    RPC_CALL("RPC Call", "network"),
-    DATABASE("Database", "database"),
-    INTERNAL("Internal", "cog"),
-    UNKNOWN("Unknown", "question");
-
-    private final String label;
-    private final String icon;
-
-    RootActionType(String label, String icon) {
-        this.label = label;
-        this.icon = icon;
-    }
-
-    public String getLabel() {
-        return label;
-    }
-
-    public String getIcon() {
-        return icon;
-    }
+    HTTP_REQUEST,
+    SCHEDULED_JOB,
+    MESSAGE_CONSUMER,
+    RPC_CALL,
+    DATABASE,
+    INTERNAL,
+    UNKNOWN
 }

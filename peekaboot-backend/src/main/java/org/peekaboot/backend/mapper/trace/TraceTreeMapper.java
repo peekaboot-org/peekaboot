@@ -149,7 +149,11 @@ public class TraceTreeMapper {
         Span.Kind kind = rootSpan.kind();
         Map<String, String> tags = rootSpan.tags() != null ? rootSpan.tags() : Map.of();
 
-        if (kind == Span.Kind.CONSUMER || hasTagPrefix(tags, "messaging.")) {
+        // messaging.* tags say "a message was involved", not "we received one" - a
+        // producer root span carries the same tags as a consumer. Only CONSUMER kind
+        // states the direction outright; PRODUCER states the opposite, so it must not
+        // fall into the tag arm below.
+        if (kind == Span.Kind.CONSUMER || (kind != Span.Kind.PRODUCER && hasTagPrefix(tags, "messaging."))) {
             return RootActionType.MESSAGE_CONSUMER;
         }
         if (kind == Span.Kind.SERVER) {
@@ -158,15 +162,24 @@ public class TraceTreeMapper {
         return detectNonServerActionType(kind, tags);
     }
 
+    /**
+     * Classifies a root span that isn't inbound. Note what is deliberately absent: no
+     * {@code http.}/{@code rpc.} check. Those tags on a non-SERVER root describe an
+     * <em>outbound</em> call that became the root only because its caller's span hasn't
+     * been exported yet, so they say nothing about what started the trace - UNKNOWN is
+     * the honest answer there, not HTTP_REQUEST.
+     */
     private static RootActionType detectNonServerActionType(Span.Kind kind, Map<String, String> tags) {
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
         // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
         // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind
-        // branch below it; it must still run before the null-kind catch-all, which is
-        // exactly where an unrecognised scheduled span used to fall.
+        // branch below it, and it must run before the null-kind catch-all that would
+        // otherwise swallow it.
         if (hasScheduledTaskTags(tags)) {
             return RootActionType.SCHEDULED_JOB;
         }
+        // CLIENT-kind, not merely db.* tagged: only the client side of a query is a span
+        // Peekaboot ever sees, so any other kind carrying db.* is not a database action.
         if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
             return RootActionType.DATABASE;
         }
@@ -178,15 +191,18 @@ public class TraceTreeMapper {
         return RootActionType.UNKNOWN;
     }
 
+    /**
+     * Classifies an inbound (SERVER-kind) root span. HTTP_REQUEST appears twice on
+     * purpose: once as a positive {@code http.} match, and again as the fallback, because
+     * an inbound span the app served with no protocol tags at all is far likelier to be an
+     * HTTP request than anything else Peekaboot can name.
+     */
     private static RootActionType detectServerActionType(Map<String, String> tags) {
         if (hasTagPrefix(tags, "http.")) {
             return RootActionType.HTTP_REQUEST;
         }
         if (hasTagPrefix(tags, "rpc.")) {
             return RootActionType.RPC_CALL;
-        }
-        if (hasScheduledTaskTags(tags)) {
-            return RootActionType.SCHEDULED_JOB;
         }
         return RootActionType.HTTP_REQUEST;
     }
