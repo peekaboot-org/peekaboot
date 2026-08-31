@@ -1,9 +1,14 @@
 /**
  * Peekaboot dev toolbar (collapsed bar).
  *
- * Loaded by DevToolbarFilter via a small bootstrap:
+ * The bar itself is rendered by DevToolbarFilter (see ToolbarShell) into a declarative
+ * shadow root, together with its stylesheets and this data blob:
+ *   <div id="peekaboot-toolbar-host"><template shadowrootmode="open">...</template></div>
  *   <script id="peekaboot-toolbar-data" type="application/json">{...}</script>
  *   <script src="/peekaboot/ui/toolbar/toolbar.js" type="module"></script>
+ * This module enhances that markup rather than building it, so a page whose authorization
+ * gate refuses this script still gets a bar - carrying the notice removed in initToolbar()
+ * below, which links to the dashboard so the reader can authenticate.
  *
  * The data JSON carries method/path/status/traceId/basePath for regular pages
  * or {idle:true, basePath} for Swagger UI, where a fetch interceptor picks up
@@ -14,50 +19,29 @@ import {formatDurationMs} from '../shared/format.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
-import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 
 const dataEl = document.getElementById('peekaboot-toolbar-data');
-if (dataEl && !document.getElementById('peekaboot-toolbar-host')) {
-    initToolbar(JSON.parse(dataEl.textContent));
+const hostEl = document.getElementById('peekaboot-toolbar-host');
+// shadowRoot is absent if the browser did not honour <template shadowrootmode>; there is
+// nothing to enhance in that case, and the unenhanced bar is still on the page.
+if (dataEl && hostEl && hostEl.shadowRoot && !hostEl.dataset.pkReady) {
+    hostEl.dataset.pkReady = 'true';
+    initToolbar(hostEl, JSON.parse(dataEl.textContent));
 }
 
-function initToolbar(data) {
-    const host = document.createElement('div');
-    host.id = 'peekaboot-toolbar-host';
-    host.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:2147483647;';
-    document.body.appendChild(host);
-
-    const shadow = host.attachShadow({mode: 'open'});
+function initToolbar(host, data) {
+    const shadow = host.shadowRoot;
     applyTheme(host, resolveTheme());
     watchTheme(theme => applyTheme(host, theme));
-    attachSharedStyles(shadow, host, data.basePath, `${data.basePath}/ui/toolbar/toolbar.css`);
 
-    const bar = document.createElement('div');
-    bar.className = 'pk-toolbar';
+    // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
+    // looking, so the notice the server rendered for the opposite case has served its
+    // purpose. Removing it rather than hiding it keeps it out of the accessibility tree.
+    const authNotice = shadow.getElementById('pk-auth');
+    if (authNotice) authNotice.remove();
 
-    // A real <button> carries the "open trace details" action so keyboard users get it for
-    // free (Enter/Space -> a real click event, natively) and assistive tech gets a proper
-    // control - not a role="button" div, which ARIA defines as children-presentational and
-    // could flatten the dashboard link right out of the accessibility tree. The link and the
-    // copyable trace id are siblings, not descendants of the button, so both stay
-    // independently reachable.
-    bar.innerHTML = `
-        <button type="button" class="pk-toolbar__open" aria-label="Open request trace details" aria-disabled="true">
-            <span class="pk-toolbar__side">
-                <span class="pk-badge" id="pk-status"></span>
-                <span class="pk-toolbar__method" id="pk-method"></span>
-                <span class="pk-toolbar__path" id="pk-path"></span>
-                <span class="pk-toolbar__controller" id="pk-controller"></span>
-                <span class="pk-toolbar__metrics" id="pk-metrics">
-                    <span class="pk-toolbar__pending">Waiting for request…</span>
-                </span>
-            </span>
-        </button>
-        <span class="pk-toolbar__trace" id="pk-trace">-</span>
-        <a class="pk-toolbar__link" href="${data.basePath}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
-    `;
-    shadow.appendChild(bar);
+    const bar = shadow.querySelector('.pk-toolbar');
 
     const openButton = shadow.querySelector('.pk-toolbar__open');
     // A dedicated listener (rather than the inline onclick CSP would block on host pages

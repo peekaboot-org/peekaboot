@@ -1,0 +1,33 @@
+# The only profile in this module that runs with Spring Security auto-configured, used by
+# SecuredPeekabootIntegrationTest and SecuredDashboardTest. It deliberately does not build
+# on application-test.yml: that file excludes the servlet security auto-configuration for
+# every other test here (see pom.xml), which is precisely what these two need switched on.
+# Kept to what a secured run actually needs - no masking fixtures, no insights tuning.
+spring:
+  datasource:
+    url: jdbc:h2:mem:securitydb;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  flyway:
+    enabled: false
+  docker:
+    compose:
+      enabled: false
+
+peekaboot:
+  enabled: true
+  dev-toolbar: true
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        # As in application-test.yml: SecuredDashboardTest reads the toolbar right after
+        # page load, well inside the OTel SDK's 5s default batch delay.
+        schedule-delay: 50ms

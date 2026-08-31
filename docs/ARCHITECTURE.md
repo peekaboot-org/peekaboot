@@ -108,7 +108,7 @@ org.peekaboot.backend/
 
 | Filter | Purpose |
 |--------|---------|
-| `DevToolbarFilter` | Injects toolbar HTML/JS into responses |
+| `DevToolbarFilter` | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it |
 | `RequestCaptureFilter` | Captures request/response metadata for traces |
 
 Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints. Both
@@ -224,7 +224,8 @@ static/peekaboot/ui/
 │   └── tabs/*.js               # One module per tab (4: request, spans, queries, logs)
 └── toolbar/
     ├── toolbar.css            # Toolbar chrome
-    └── toolbar.js              # Collapsed bar (shadow-rooted; lazy-imports trace-detail.js)
+    └── toolbar.js              # Enhances the server-rendered bar (declarative shadow root;
+                                #   lazy-imports trace-detail.js)
 ```
 
 ### Design Principles

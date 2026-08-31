@@ -1,16 +1,17 @@
 package org.peekaboot.testingapp.ui;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 /**
  * Exercises attachSharedStyles against a real open shadow root. This is the mechanism that
- * later lets the toolbar and trace-detail overlay consume the same tokens/base/components
- * stylesheets as the dashboard, instead of hardcoding a dark palette.
+ * lets the trace-detail overlay consume the same tokens/base/components stylesheets as the
+ * dashboard, instead of hardcoding a dark palette. The toolbar no longer uses it: its shadow
+ * root is declarative and DevToolbarFilter carries the sheets it cannot live without inline,
+ * so that the bar still renders when /peekaboot/** is behind an authorization gate.
  */
 class ShadowStylesAttachmentTest extends PlaywrightTestBase {
 
@@ -52,11 +53,12 @@ class ShadowStylesAttachmentTest extends PlaywrightTestBase {
             """);
         @SuppressWarnings("unchecked")
         List<String> hrefList = (List<String>) hrefs;
-        assertThat(hrefList).containsExactlyInAnyOrder(
-                "/peekaboot/ui/assets/tokens.css",
-                "/peekaboot/ui/assets/base.css",
-                "/peekaboot/ui/assets/components.css",
-                "/peekaboot/ui/toolbar/toolbar.css");
+        assertThat(hrefList)
+                .containsExactlyInAnyOrder(
+                        "/peekaboot/ui/assets/tokens.css",
+                        "/peekaboot/ui/assets/base.css",
+                        "/peekaboot/ui/assets/components.css",
+                        "/peekaboot/ui/toolbar/toolbar.css");
     }
 
     @Test

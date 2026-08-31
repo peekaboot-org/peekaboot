@@ -30,8 +30,16 @@ import org.springframework.test.context.ActiveProfiles;
             // ThrowingLoggersEndpoint below stands in for the real "loggers" endpoint - both
             // sharing the id would otherwise fail context startup ("Found two endpoints with
             // the id 'loggers'").
+            // An inlined property replaces application-test.yml's value for the same key
+            // rather than merging with it, so this list has to repeat that file's servlet
+            // security exclusions too - without them this context alone would start with
+            // Spring Security auto-configured. Anything added there belongs here as well.
             "spring.autoconfigure.exclude="
-                    + "org.springframework.boot.actuate.autoconfigure.logging.LoggersEndpointAutoConfiguration"
+                    + "org.springframework.boot.actuate.autoconfigure.logging.LoggersEndpointAutoConfiguration,"
+                    + "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,"
+                    + "org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,"
+                    + "org.springframework.boot.security.autoconfigure.actuate.web.servlet"
+                    + ".ManagementWebSecurityAutoConfiguration"
         })
 @ActiveProfiles("test")
 @Import({

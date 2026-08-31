@@ -2,6 +2,13 @@
 # so the Flyway tab photographs a genuine migration history instead of an empty state.
 # Requires Docker. Never used by `mvn test`.
 spring:
+  # Same servlet-security exclusion as application-test.yml, repeated because
+  # ScreenshotCapture runs with inheritProfiles = false and so never sees that file.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
   jpa:
     hibernate:
       ddl-auto: validate

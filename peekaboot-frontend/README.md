@@ -4,7 +4,8 @@ Static resources served from `/peekaboot/ui/`, backing three separate UI surface
 share one design system:
 
 - **Dashboard** (`dashboard/`) — the standalone app-insights page.
-- **Dev toolbar** (`toolbar/`) — injected into host-application pages by `DevToolbarFilter`,
+- **Dev toolbar** (`toolbar/`) — rendered into host-application pages by `DevToolbarFilter`
+  and enhanced in place by `toolbar.js`,
   rendered inside a shadow root so host-page CSS can't reach it and vice versa.
 - **Trace-detail overlay** (`trace-detail/`) — a full-screen dialog, also shadow-rooted,
   opened from either the dashboard or the toolbar.
@@ -122,15 +123,21 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 
 ## How the embedded surfaces consume the shared sheets
 
-The toolbar and the trace-detail overlay each render into their own shadow root
-(`element.attachShadow({mode: 'open'})`) and call:
+The trace-detail overlay renders into its own shadow root
+(`element.attachShadow({mode: 'open'})`) and calls:
 
 ```js
 attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref);
 ```
 
-This links `tokens.css`, `base.css`, `components.css`, and (if given) the surface's own
-sheet as `<link>` elements inside the shadow root. A linked sheet in a shadow root loads
+The toolbar does not: its shadow root is declarative, written by `DevToolbarFilter` (see
+`ToolbarShell`), which carries `tokens.css`, `base.css` and `toolbar.css` inline and links
+all four. It has to be self-sufficient — a reader who has put Spring Security in front of
+`/peekaboot/**` cannot load a linked sheet from there any more than they can load
+`toolbar.js`, and the bar still has to render and say so.
+
+`attachSharedStyles` links `tokens.css`, `base.css`, `components.css`, and (if given) the
+surface's own sheet as `<link>` elements inside the shadow root. A linked sheet in a shadow root loads
 asynchronously, so `attachSharedStyles` holds `hostElement.style.visibility = 'hidden'`
 until every sheet has settled (`load` or `error`), then reveals it — this is the FOUC
 guard: without it, the toolbar/overlay would flash unstyled (or, worse, briefly show
@@ -144,11 +151,10 @@ one blocked or 404'd stylesheet can never leave the host permanently invisible.
   resulting URL gets a double slash and 404s.
 - `attachSharedStyles` must be called **exactly once per shadow root**. It doesn't guard
   against re-entry: a second call appends a second set of `<link>` elements rather than
-  replacing the first. Both current call sites make this safe by construction —
-  `toolbar.js`'s bootstrap only runs if `#peekaboot-toolbar-host` isn't already in the
-  DOM, and `trace-detail.js`'s `open()` always calls `close()` (which removes the whole
-  host element) before creating a new host and shadow root — but a future call site needs
-  the same discipline.
+  replacing the first. Its one remaining call site makes this safe by construction —
+  `trace-detail.js`'s `open()` always calls `close()` (which removes the whole host
+  element) before creating a new host and shadow root — but a future call site needs the
+  same discipline.
 
 ## Theme resolution
 

@@ -95,6 +95,16 @@
         </dependency>
 
         <!-- Test dependencies -->
+        <!-- The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off
+             the runtime classpath. Test scope only: at runtime the starter puts both jars
+             there, and a compile-scope edge would invert the intended layering, in which
+             frontend is a passive resource bundle nothing depends on. -->
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-frontend</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

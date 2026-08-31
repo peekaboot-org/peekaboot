@@ -94,10 +94,38 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 that state first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert
 exact counts, never defensive `contains`.
 
+## Spring Security on the testing-app classpath
+
+`peekaboot-testing-app` carries `spring-boot-starter-security` in test scope for two tests
+only: `SecuredPeekabootIntegrationTest` and `SecuredDashboardTest`, which prove the
+`SecurityFilterChain` the website's security page publishes. Test scope keeps it out of the
+repackaged jar and out of `spring-boot:run`, so the sample app itself still starts
+unsecured.
+
+Left auto-configured, it would put `anyRequest().authenticated()` in front of every
+`@SpringBootTest` in the module. So `application-test.yml` and `application-screenshots.yml`
+both exclude the servlet security auto-configuration (`UserDetailsServiceAutoConfiguration`,
+`ServletWebSecurityAutoConfiguration`, `ManagementWebSecurityAutoConfiguration`) &mdash;
+two files rather than one because `ScreenshotCapture` runs with `inheritProfiles = false`
+and never sees the first. The two security tests run under their own `security` profile
+instead, which excludes nothing, so neither has to undo a module-wide setting.
+
+One gotcha: an inlined `@SpringBootTest(properties = "spring.autoconfigure.exclude=...")`
+*replaces* the profile's value for that key rather than merging with it, so a context that
+sets its own exclusion list has to repeat the security exclusions too.
+`PeekabootActuatorServiceTest` is the one that does; anything added to the profile's list
+belongs in its list as well. Symptom when it's missed: Boot logs `Using generated security
+password` for that context.
+
+The example config itself, `PeekabootSecurityConfig`, lives in `org.peekaboot.example.security`
+&mdash; outside `TestingApp`'s component-scan root on purpose, since a stray
+`SecurityFilterChain` bean would fail the context of every test that excluded the
+auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
+
 ## Running
 - Full suite: `mvn test` (root). Single class: `mvn -pl <module> test -Dtest=<Class>`
   — never combine `-am` with `-Dtest`.
-- Full reactor with the five static-analysis gates: `mvn clean verify` (1,099 tests).
+- Full reactor with the five static-analysis gates: `mvn clean verify` (1,123 tests).
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):
