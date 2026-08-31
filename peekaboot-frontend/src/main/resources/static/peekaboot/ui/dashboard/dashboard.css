@@ -518,6 +518,23 @@
 /* min/max band edges and percentile hairlines take their panel series' colour and
    would otherwise repeat every label five times over (see insights-chart.js) */
 .pk-insight-chart .u-legend tr.pk-insight-legend-muted { display: none; }
+
+/* Restart markers: the lines are painted on the canvas (see insights-markers.js);
+   only their tooltip is a DOM node, and it must never eat the cursor uPlot tracks. */
+.pk-insight-marker-tip {
+    position: absolute; top: var(--pk-space-xs); z-index: 2; pointer-events: none;
+    max-width: 240px; padding: var(--pk-space-xs) var(--pk-space-sm);
+    border: 1px solid var(--pk-border); border-radius: var(--pk-radius);
+    background: var(--pk-bg); color: var(--pk-text); font-size: var(--pk-text-xs);
+    box-shadow: var(--pk-shadow);
+}
+.pk-insight-marker-tip__title { margin: 0; font-weight: 600; }
+.pk-insight-marker-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 0 var(--pk-space-sm); margin: var(--pk-space-xs) 0 0; }
+.pk-insight-marker-tip dt { color: var(--pk-text-muted); }
+.pk-insight-marker-tip dd { margin: 0; font-family: var(--pk-font-mono); }
+.pk-insight-marker-tip__note { margin: var(--pk-space-xs) 0 0; color: var(--pk-text-muted); }
+.pk-insight-marker-tip hr { margin: var(--pk-space-xs) 0; border: 0; border-top: 1px solid var(--pk-border); }
+
 @keyframes pk-insight-blink { from { background-color: var(--pk-primary-light); } to { background-color: transparent; } }
 .pk-blink { animation: pk-insight-blink 0.6s ease-out; }
 
