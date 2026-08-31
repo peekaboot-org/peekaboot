@@ -132,6 +132,17 @@
             <artifactId>spring-boot-resttestclient</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- test scope only: the sample app itself ships unsecured, and spring-boot:repackage
+             leaves test-scoped dependencies out of the executable jar. It exists so
+             SecuredPeekabootIntegrationTest and SecuredDashboardTest can prove the
+             SecurityFilterChain the website's security page tells readers to write. Every
+             other test in this module runs with the servlet security auto-configuration
+             excluded - see application-test.yml. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>

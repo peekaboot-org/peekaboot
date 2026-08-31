@@ -1,4 +1,14 @@
 spring:
+  # spring-boot-starter-security is on this module's test classpath for
+  # SecuredPeekabootIntegrationTest and SecuredDashboardTest only (see pom.xml). Left
+  # auto-configured it would put `anyRequest().authenticated()` in front of every test in
+  # this module. Those two tests run under the `security` profile instead, which excludes
+  # nothing.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
