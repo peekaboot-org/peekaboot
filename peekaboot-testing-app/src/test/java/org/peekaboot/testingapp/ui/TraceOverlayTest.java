@@ -28,34 +28,17 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
-     * Opens the overlay for the index page's error-path trace - the one trace this app
-     * produces whose logs are spread over more than one span: the request handler's own
-     * ERROR log, and the INFO line PersonQueryService.findAll() writes inside its own
-     * observed span. Returns that trace's id.
-     *
-     * <p>Two things this deliberately does not do the short way. It polls the insights
-     * endpoint until the second logging span has actually landed, because the toolbar
-     * publishes the trace id as soon as the response is written while spans reach the
-     * store asynchronously afterwards - the same ingestion race
-     * overlayTabStripExposesAsARealTablistInTheAccessibilityTree documents (observed on
-     * macOS). The poll lives in a single evaluate() for that test's reason too: a second,
-     * separate fetch could race the trace's eviction from a bounded store. It counts spans
-     * carrying logs the way spans.js itself derives them (span.logs, walked down
-     * span.children), so the precondition is measured against the very shape the Spans tab
-     * renders its "N logs" toggles from.
-     *
-     * <p>And it opens through the dashboard's hash route rather than the toolbar, because
-     * only that path supplies an urlState (main.js's expandTraceById -> buildTraceUrlState).
-     * The toolbar calls openTraceDetail with none, so there every urlState write is a silent
-     * no-op and the URL assertions below could not fail even if the wiring were deleted.
+     * Polls the insights endpoint for the trace the toolbar currently tracks until its
+     * spans carry logs on more than one span - shared by both the hash-route and
+     * toolbar-path variants of the span-logs filter test below, since both need the
+     * same real, non-vacuous precondition. It counts spans carrying logs the way spans.js
+     * itself derives them (span.logs, walked down span.children), so the precondition is
+     * measured against the very shape the Spans tab renders its "N logs" toggles from. The
+     * poll lives in a single evaluate() rather than separate Java-side calls: a second,
+     * separate fetch could race the trace's eviction from a bounded store.
      */
-    private String openOverlayForTheMultiSpanLogTrace() {
-        page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-
-        String traceId = (String) page.evaluate("""
+    private String waitForMultiSpanLogTraceId() {
+        return (String) page.evaluate("""
                 async () => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
@@ -76,6 +59,28 @@ class TraceOverlayTest extends PlaywrightTestBase {
                     throw new Error('no trace with logs on more than one span arrived within 15s');
                 }
                 """);
+    }
+
+    /**
+     * Opens the overlay for the index page's error-path trace - the one trace this app
+     * produces whose logs are spread over more than one span: the request handler's own
+     * ERROR log, and the INFO line PersonQueryService.findAll() writes inside its own
+     * observed span. Returns that trace's id.
+     *
+     * <p>It opens through the dashboard's hash route rather than the toolbar, because
+     * only that path supplies an urlState (main.js's expandTraceById -> buildTraceUrlState).
+     * The toolbar calls openTraceDetail with none, so there every urlState write is a silent
+     * no-op and the URL assertions below could not fail even if the wiring were deleted -
+     * see spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar below for the
+     * toolbar-path counterpart, which asserts only the DOM hand-off for that reason.
+     */
+    private String openOverlayForTheMultiSpanLogTrace() {
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+
+        String traceId = waitForMultiSpanLogTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         page.waitForFunction(
@@ -564,6 +569,13 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
                         + "deep link into this filtered view would use")
                 .contains("#traces/" + traceId + "/logs?span=" + spanId);
+        String focusedTab = (String) page.evaluate(
+                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".activeElement?.dataset.tab");
+        assertThat(focusedTab)
+                .as("the clicked toggle belonged to the Spans tab's markup, which the tab switch just "
+                        + "replaced, destroying it - focus must move deliberately to the Logs tab's own "
+                        + "button rather than falling back to the shadow host")
+                .isEqualTo("logs");
         String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('#pk-tab-content').innerHTML");
         assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
@@ -594,6 +606,45 @@ class TraceOverlayTest extends PlaywrightTestBase {
                 .as("clearing takes the param back out, so the URL never claims a filter that is "
                         + "no longer applied")
                 .doesNotContain("span=");
+    }
+
+    /**
+     * The cheap DOM-only counterpart to spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable
+     * above, covering the toolbar-open path rather than the hash route. The toolbar calls
+     * openTraceDetail with no urlState at all (see openOverlayForTheMultiSpanLogTrace's own
+     * javadoc), so goToSpanLogs's urlState?.update is a silent no-op there and the URL never
+     * changes by design - there is nothing to assert about it on this path, only the DOM
+     * hand-off itself.
+     */
+    @Test
+    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span when opened from the toolbar")
+    void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
+        page.navigate(baseUrl + "/?error=true");
+        page.waitForSelector("#peekaboot-toolbar-host");
+        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
+                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        waitForMultiSpanLogTraceId();
+
+        openOverlayFromLoadedToolbar();
+
+        @SuppressWarnings("unchecked")
+        List<String> spansOfferingLogs = (List<String>)
+                page.evalOnSelectorAll(".pk-span-logs-toggle", "els => els.map(el => el.dataset.spanId)");
+        assertThat(spansOfferingLogs).hasSizeGreaterThan(1);
+        String spanId = spansOfferingLogs.getFirst();
+
+        page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
+
+        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+
+        page.waitForSelector(".pk-log:not(.pk-log--hidden)");
+        @SuppressWarnings("unchecked")
+        List<String> visibleSpanIds = (List<String>)
+                page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
+        assertThat(visibleSpanIds)
+                .as("only the span the toggle was clicked for stays visible")
+                .containsOnly(spanId);
     }
 
     @Test

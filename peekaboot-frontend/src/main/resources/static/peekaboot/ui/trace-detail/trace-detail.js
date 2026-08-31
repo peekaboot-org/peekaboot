@@ -267,10 +267,14 @@ function render(content, trace, urlState) {
     // linkable as any other - hence the urlState.update alongside the render. `select`
     // with silent:true only moves the tab strip's own selection state; the render call
     // is what seeds logs.js, since onSelect's default render deliberately starts empty.
+    // `focus: true` moves keyboard focus onto the Logs tab button - the toggle that was
+    // clicked belongs to the Spans tab's markup, which renderTabContent below replaces,
+    // destroying it and leaving focus to fall back to the shadow host with nowhere
+    // sensible to land.
     let tabApi;
     function goToSpanLogs(spanId) {
         activeTabId = 'logs';
-        tabApi.select('logs', {silent: true});
+        tabApi.select('logs', {silent: true, focus: true});
         urlState?.update('logs', {span: spanId});
         renderTabContent(tabContent, 'logs', trace, tabView('logs', {span: spanId}));
     }
