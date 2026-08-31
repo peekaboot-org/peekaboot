@@ -92,6 +92,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             report.append(" Swagger UI: ").append(url).append("\n");
             report.append(LINE).append("\n");
         });
+
+        serverUrlResolver.resolveDashboardUrl(event).ifPresent(url -> {
+            report.append(" Peekaboot Dashboard: ").append(url).append("\n");
+            report.append(LINE).append("\n");
+        });
     }
 
     private void appendBuildInfo(StringBuilder report) {

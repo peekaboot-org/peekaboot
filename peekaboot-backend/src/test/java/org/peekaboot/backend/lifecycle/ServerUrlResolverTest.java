@@ -1,15 +1,11 @@
 package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.boot.web.server.WebServer;
-import org.springframework.boot.web.server.context.ConfigurableWebServerApplicationContext;
-import org.springframework.context.ConfigurableApplicationContext;
+import org.peekaboot.backend.config.PeekabootWebConfig;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.mock.env.MockEnvironment;
 
 class ServerUrlResolverTest {
@@ -27,7 +23,7 @@ class ServerUrlResolverTest {
         var environment = new MockEnvironment();
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
 
         assertThat(url).contains("http://localhost:8080");
     }
@@ -38,7 +34,7 @@ class ServerUrlResolverTest {
         environment.setProperty("server.ssl.enabled", "true");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveServiceUrl(webEvent(8443));
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8443));
 
         assertThat(url).contains("https://localhost:8443");
     }
@@ -49,7 +45,7 @@ class ServerUrlResolverTest {
         environment.setProperty("server.address", "0.0.0.0");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
 
         assertThat(url).contains("http://localhost:8080");
     }
@@ -60,7 +56,7 @@ class ServerUrlResolverTest {
         environment.setProperty("server.address", "api.example.com");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
 
         assertThat(url).contains("http://api.example.com:8080");
     }
@@ -71,7 +67,7 @@ class ServerUrlResolverTest {
         environment.setProperty("server.servlet.context-path", "/api/");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveServiceUrl(webEvent(8080));
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
 
         assertThat(url).contains("http://localhost:8080/api");
     }
@@ -81,10 +77,7 @@ class ServerUrlResolverTest {
         var environment = new MockEnvironment();
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        var event = mock(ApplicationReadyEvent.class);
-        when(event.getApplicationContext()).thenReturn(mock(ConfigurableApplicationContext.class));
-
-        Optional<String> url = resolver.resolveServiceUrl(event);
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.nonWebApplication());
 
         assertThat(url).isEmpty();
     }
@@ -94,7 +87,7 @@ class ServerUrlResolverTest {
         var environment = new MockEnvironment();
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
 
-        Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8080));
+        Optional<String> url = resolver.resolveSwaggerUiUrl(ReadyEvents.webApplication(8080));
 
         assertThat(url).isEmpty();
     }
@@ -104,7 +97,7 @@ class ServerUrlResolverTest {
         var environment = new MockEnvironment();
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
-        Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
+        Optional<String> url = resolver.resolveSwaggerUiUrl(ReadyEvents.webApplication(8083));
 
         assertThat(url).contains("http://localhost:8083/swagger-ui.html");
     }
@@ -115,7 +108,7 @@ class ServerUrlResolverTest {
         environment.setProperty("springdoc.swagger-ui.path", "/api-docs/swagger");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
-        Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
+        Optional<String> url = resolver.resolveSwaggerUiUrl(ReadyEvents.webApplication(8083));
 
         assertThat(url).contains("http://localhost:8083/api-docs/swagger");
     }
@@ -126,7 +119,7 @@ class ServerUrlResolverTest {
         environment.setProperty("server.servlet.context-path", "/app");
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
-        Optional<String> url = resolver.resolveSwaggerUiUrl(webEvent(8083));
+        Optional<String> url = resolver.resolveSwaggerUiUrl(ReadyEvents.webApplication(8083));
 
         assertThat(url).contains("http://localhost:8083/app/swagger-ui.html");
     }
@@ -136,21 +129,63 @@ class ServerUrlResolverTest {
         var environment = new MockEnvironment();
         var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocPresent);
 
-        var event = mock(ApplicationReadyEvent.class);
-        when(event.getApplicationContext()).thenReturn(mock(ConfigurableApplicationContext.class));
-
-        Optional<String> url = resolver.resolveSwaggerUiUrl(event);
+        Optional<String> url = resolver.resolveSwaggerUiUrl(ReadyEvents.nonWebApplication());
 
         assertThat(url).isEmpty();
     }
 
-    private static ApplicationReadyEvent webEvent(int port) {
-        var event = mock(ApplicationReadyEvent.class);
-        var ctx = mock(ConfigurableWebServerApplicationContext.class);
-        var server = mock(WebServer.class);
-        when(event.getApplicationContext()).thenReturn(ctx);
-        when(ctx.getWebServer()).thenReturn(server);
-        when(server.getPort()).thenReturn(port);
-        return event;
+    @Test
+    void resolveDashboardUrl_pointsAtTheDashboardWhenPeekabootServesIt() {
+        var environment = new MockEnvironment();
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveDashboardUrl(ReadyEvents.webApplicationServingDashboard(8083));
+
+        assertThat(url).contains("http://localhost:8083/peekaboot/");
+    }
+
+    @Test
+    void resolveDashboardUrl_includesContextPath() {
+        var environment = new MockEnvironment();
+        environment.setProperty("server.servlet.context-path", "/app");
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveDashboardUrl(ReadyEvents.webApplicationServingDashboard(8083));
+
+        assertThat(url).contains("http://localhost:8083/app/peekaboot/");
+    }
+
+    @Test
+    void resolveDashboardUrl_emptyWhenPeekabootDoesNotServeTheDashboard() {
+        var environment = new MockEnvironment();
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveDashboardUrl(ReadyEvents.webApplication(8083));
+
+        assertThat(url).isEmpty();
+    }
+
+    @Test
+    void resolveDashboardUrl_emptyForNonWebContext() {
+        var environment = new MockEnvironment();
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveDashboardUrl(ReadyEvents.nonWebApplication());
+
+        assertThat(url).isEmpty();
+    }
+
+    // Guards the string lookup in resolveDashboardUrl: the bean cannot be looked up by type,
+    // because loading PeekabootWebConfig would drag in WebMvcConfigurer, and spring-webmvc is
+    // an optional dependency absent from a reactive application. Renaming the class without
+    // renaming the constant would silently drop the dashboard line from the banner.
+    @Test
+    void dashboardConfigBeanName_isTheNameSpringGivesPeekabootWebConfig() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.register(PeekabootWebConfig.class);
+
+            assertThat(context.containsBeanDefinition(ServerUrlResolver.DASHBOARD_CONFIG_BEAN_NAME))
+                    .isTrue();
+        }
     }
 }

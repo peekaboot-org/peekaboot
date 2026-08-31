@@ -15,6 +15,13 @@ public class ServerUrlResolver {
 
     private static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
 
+    // Looked up by name rather than by type: resolving PeekabootWebConfig.class would load
+    // WebMvcConfigurer, and spring-webmvc is optional - absent from a reactive application,
+    // which still reaches this resolver. ServerUrlResolverTest pins the name to the class.
+    static final String DASHBOARD_CONFIG_BEAN_NAME = "peekabootWebConfig";
+
+    private static final String DASHBOARD_PATH = "/peekaboot/";
+
     private final Environment environment;
 
     private final BooleanSupplier swaggerUiOnClasspath;
@@ -45,6 +52,13 @@ public class ServerUrlResolver {
             return Optional.empty();
         }
         return resolveServiceUrl(event).map(base -> base + swaggerUiPath());
+    }
+
+    public Optional<String> resolveDashboardUrl(ApplicationReadyEvent event) {
+        if (!event.getApplicationContext().containsBean(DASHBOARD_CONFIG_BEAN_NAME)) {
+            return Optional.empty();
+        }
+        return resolveServiceUrl(event).map(base -> base + DASHBOARD_PATH);
     }
 
     private String buildBaseUrl(int port) {
