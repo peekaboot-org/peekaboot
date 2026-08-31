@@ -120,7 +120,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             return;
         }
         try {
-            Files.createDirectories(file.getParent());
+            Path parent = file.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
             try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
                 InsightsSnapshotCodec.write(out, snapshot);
             }

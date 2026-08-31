@@ -102,6 +102,8 @@ class InsightsServicePersistenceTest {
         Thread.sleep(300);
         service.stop();
 
-        assertThat(Files.list(directory).toList()).isEmpty();
+        try (var files = Files.list(directory)) {
+            assertThat(files.toList()).isEmpty();
+        }
     }
 }

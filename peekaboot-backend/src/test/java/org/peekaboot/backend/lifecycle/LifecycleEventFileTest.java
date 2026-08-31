@@ -66,10 +66,9 @@ class LifecycleEventFileTest {
         file.write(List.of(start(1_000), start(2_000)));
 
         assertThat(file.read()).hasSize(2);
-        assertThat(Files.list(directory)
-                        .map(Path::getFileName)
-                        .map(Path::toString)
-                        .toList())
-                .containsExactly("lifecycle.jsonl");
+        try (var files = Files.list(directory)) {
+            assertThat(files.map(Path::getFileName).map(Path::toString).toList())
+                    .containsExactly("lifecycle.jsonl");
+        }
     }
 }

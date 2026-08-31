@@ -76,7 +76,10 @@ public final class LifecycleEventFile {
         for (LifecycleEvent event : events) {
             content.append(MAPPER.writeValueAsString(event)).append("\n");
         }
-        Files.createDirectories(file.getParent());
+        Path parent = file.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
         Files.writeString(temp, content.toString(), StandardCharsets.UTF_8);
         try {
             Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);

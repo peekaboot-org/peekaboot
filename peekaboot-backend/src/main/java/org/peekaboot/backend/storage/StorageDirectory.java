@@ -61,6 +61,6 @@ public final class StorageDirectory {
             return UNNAMED_APPLICATION;
         }
         String sanitized = applicationName.trim().replaceAll("[^A-Za-z0-9._-]", "-");
-        return sanitized.equals(".") || sanitized.equals("..") ? UNNAMED_APPLICATION : sanitized;
+        return ".".equals(sanitized) || "..".equals(sanitized) ? UNNAMED_APPLICATION : sanitized;
     }
 }
