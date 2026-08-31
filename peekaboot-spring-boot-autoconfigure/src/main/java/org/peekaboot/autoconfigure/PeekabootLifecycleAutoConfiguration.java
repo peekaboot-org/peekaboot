@@ -1,5 +1,7 @@
 package org.peekaboot.autoconfigure;
 
+import java.util.*;
+import javax.sql.DataSource;
 import org.peekaboot.backend.lifecycle.*;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -11,13 +13,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
-import javax.sql.DataSource;
-import java.util.*;
-
 @AutoConfiguration(
         after = org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
-        afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
-)
+        afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
@@ -55,11 +53,18 @@ public class PeekabootLifecycleAutoConfiguration {
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
             ObjectProvider<Map<String, DataSource>> dataSourcesProvider) {
-        List<DataSourceMetadata> dataSourceMetadataList = databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
+        List<DataSourceMetadata> dataSourceMetadataList =
+                databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
-        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
+        return new ApplicationReadyListener(
+                environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public ApplicationStoppedListener applicationStoppedListener(BuildInfoProvider buildInfoProvider) {
+        return new ApplicationStoppedListener(buildInfoProvider);
+    }
 
     @Configuration
     @ConditionalOnBean(DataSource.class)
@@ -70,9 +75,8 @@ public class PeekabootLifecycleAutoConfiguration {
         public List<DataSourceMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
             List<DataSourceMetadata> metadataList = new ArrayList<>();
             dataSources.forEach((name, dataSource) ->
-                DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
+                    DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
             return metadataList;
         }
     }
-
 }
