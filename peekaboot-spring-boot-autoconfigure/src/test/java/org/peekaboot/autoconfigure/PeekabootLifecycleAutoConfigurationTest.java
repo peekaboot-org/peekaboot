@@ -89,6 +89,22 @@ class PeekabootLifecycleAutoConfigurationTest {
     }
 
     @Test
+    void bannersStillWorkWithNoStorageBeanAtAll() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootLifecycleAutoConfiguration.class,
+                        ProjectInfoAutoConfiguration.class,
+                        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ApplicationReadyListener.class);
+                    assertThat(context).hasSingleBean(ApplicationStoppedListener.class);
+                    assertThat(context).doesNotHaveBean(LifecycleEventLog.class);
+                    assertThat(context).doesNotHaveBean(LifecycleEventRecorder.class);
+                });
+    }
+
+    @Test
     void canBeDisabledViaProperty() {
         contextRunner
                 .withPropertyValues("peekaboot.lifecycle.enabled=false")

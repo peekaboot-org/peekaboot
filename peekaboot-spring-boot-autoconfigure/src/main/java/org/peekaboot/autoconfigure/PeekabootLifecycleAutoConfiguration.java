@@ -3,12 +3,14 @@ package org.peekaboot.autoconfigure;
 import java.util.*;
 import javax.sql.DataSource;
 import org.peekaboot.backend.lifecycle.*;
+import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.annotation.Bean;
@@ -111,6 +113,19 @@ public class PeekabootLifecycleAutoConfiguration {
                 BuildInfoProvider buildInfoProvider,
                 ObjectProvider<GitProperties> gitProperties) {
             return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable());
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEvents lifecycleEvents(LifecycleEventLog lifecycleEventLog) {
+            return new LifecycleEvents(lifecycleEventLog);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+        public LifecycleController lifecycleController(LifecycleEvents lifecycleEvents) {
+            return new LifecycleController(lifecycleEvents);
         }
     }
 }
