@@ -189,4 +189,54 @@ class SharedModuleTest extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.formatCount(1, 'span')")).isEqualTo("1 span");
         assertThat(evalModule("format.js", "m.formatCount(0, 'span')")).isEqualTo("0 spans");
     }
+
+    @Test
+    void statusLabelSpellsOutTheReasonPhrase() {
+        assertThat(evalModule("http-status.js", "m.statusLabel(200)")).isEqualTo("200 OK");
+        assertThat(evalModule("http-status.js", "m.statusLabel(301)")).isEqualTo("301 Moved Permanently");
+        assertThat(evalModule("http-status.js", "m.statusLabel(404)")).isEqualTo("404 Not Found");
+        assertThat(evalModule("http-status.js", "m.statusLabel(500)")).isEqualTo("500 Internal Server Error");
+    }
+
+    /**
+     * A status arrives from the API as a number but from a span tag as a string; both
+     * spell out the same way, so neither call site has to coerce before asking.
+     */
+    @Test
+    void statusLabelAcceptsANumericString() {
+        assertThat(evalModule("http-status.js", "m.statusLabel('404')")).isEqualTo("404 Not Found");
+    }
+
+    /**
+     * The registry only covers the codes IANA has assigned. A vendor-specific code
+     * still has to render as itself rather than as a blank or an invented phrase.
+     */
+    @Test
+    void statusLabelFallsBackToTheBareCodeWhenNoPhraseIsRegistered() {
+        assertThat(evalModule("http-status.js", "m.statusLabel(599)")).isEqualTo("599");
+    }
+
+    @Test
+    void statusLabelPassesThroughAPlaceholderForATraceWithNoHttpStatus() {
+        assertThat(evalModule("http-status.js", "m.statusLabel('-')")).isEqualTo("-");
+        assertThat(evalModule("http-status.js", "m.statusLabel(null)")).isEqualTo("-");
+    }
+
+    @Test
+    void statusVariantGivesEachResponseFamilyItsOwnBadgeTier() {
+        assertThat(evalModule("http-status.js", "m.statusVariant(204)")).isEqualTo("ok");
+        assertThat(evalModule("http-status.js", "m.statusVariant(301)")).isEqualTo("warn");
+        assertThat(evalModule("http-status.js", "m.statusVariant(404)")).isEqualTo("error-soft");
+        assertThat(evalModule("http-status.js", "m.statusVariant(500)")).isEqualTo("error");
+    }
+
+    /**
+     * A trace with no HTTP exchange at all (a scheduled job, say) has no status to
+     * colour - it must not borrow the 5xx tier just because it is not a 2xx.
+     */
+    @Test
+    void statusVariantIsMutedWhenThereIsNoStatusToColour() {
+        assertThat(evalModule("http-status.js", "m.statusVariant('-')")).isEqualTo("muted");
+        assertThat(evalModule("http-status.js", "m.statusVariant(null)")).isEqualTo("muted");
+    }
 }

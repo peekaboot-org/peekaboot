@@ -12,6 +12,7 @@
 import {escapeHtml} from '../shared/markup.js';
 import {durationSeverity} from '../shared/severity.js';
 import {formatCount} from '../shared/format.js';
+import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
@@ -169,14 +170,6 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
     }
 }
 
-function statusBadgeVariant(statusNum) {
-    if (!Number.isFinite(statusNum)) return 'muted';
-    const family = Math.floor(statusNum / 100);
-    if (family === 2) return 'ok';
-    if (family === 3) return 'warn';
-    return 'error';
-}
-
 function render(content, trace, urlState) {
     // delegated once on the container, which outlives every innerHTML swap below
     bindCopyables(content);
@@ -190,8 +183,7 @@ function render(content, trace, urlState) {
     // a trace with no HTTP request at all, so the title falls back to the root-action label.
     const method = req.method || tags['http.method'] || tags['http.request.method'] || null;
     const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
-    const status = res.status || tags['http.status_code'] || tags['http.response.status_code'] || '-';
-    const statusNum = parseInt(status);
+    const status = res.status || tags['http.status_code'] || tags['http.response.status_code'];
     const durationClass = durationSeverity(trace.durationMs);
 
     const queryCount = (trace.queries || []).length;
@@ -212,7 +204,7 @@ function render(content, trace, urlState) {
                         </h2>
                         <div class="pk-overlay__meta">
                             <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
-                            <span class="pk-badge pk-badge--${statusBadgeVariant(statusNum)}">${escapeHtml(String(status))}</span>
+                            <span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>
                             <span>${formatCount(spanCount, 'span')}</span>
                             <span>${formatCount(queryCount, 'query', 'queries')}</span>
                             <span>${formatCount(logCount, 'log')}</span>

@@ -84,14 +84,13 @@
 }
 .pk-overlay__close:hover { color: var(--pk-danger); }
 
-/* Main tab strip reuses shared .pk-tabs/.pk-tab; this direct-child selector adds the
-   overlay's own chrome (padding, alt background) without leaking onto the request
-   sub-tabs, which reuse the same shared classes nested inside .pk-overlay__content. */
+/* The overlay's tab strip reuses shared .pk-tabs/.pk-tab and adds its own chrome
+   (padding, alt background). The direct-child selector keeps that chrome off any strip
+   a tab might one day render inside .pk-overlay__content. */
 .pk-overlay__container > .pk-tabs {
     padding: 0 20px;
     background: var(--pk-bg-alt);
 }
-.pk-overlay__content .pk-tabs { margin-bottom: 16px; }
 
 .pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); border-radius: 10px; font-size: 11px; }
 
@@ -173,7 +172,10 @@
 .pk-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
 .pk-table td:first-child { width: 200px; color: var(--pk-text-muted); }
 .pk-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
-.pk-request-masked { color: var(--pk-text-muted); font-style: italic; }
+/* Two muted-italic notes that must not share a class: --masked marks a value the
+   masking engine replaced, and the mask tests count those. --empty is the placeholder
+   row a header section shows when nothing was captured, which is not a masked value. */
+.pk-request-masked, .pk-request-empty { color: var(--pk-text-muted); font-style: italic; }
 .pk-controller-info { font-family: var(--pk-font-mono); font-size: 13px; color: var(--pk-text); padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
 /* Queries tab styles */

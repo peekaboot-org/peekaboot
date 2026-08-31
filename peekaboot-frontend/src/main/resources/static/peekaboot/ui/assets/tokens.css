@@ -34,6 +34,8 @@
     --pk-on-warning: #0d1117;   /* 6.44:1 on --pk-warning */
     --pk-on-danger:  #ffffff;   /* 4.83:1 on --pk-danger */
     --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
+    --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */
+    --pk-on-danger-soft: #7f1d1d; /* 6.93:1 on --pk-danger-soft */
     --pk-on-info:    #0d1117;   /* 4.77:1 on --pk-info */
     --pk-primary-text: #487e1b; /* 4.91:1 on --pk-bg, 4.61:1 on --pk-bg-alt */
     --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt */
@@ -78,6 +80,10 @@
     --pk-on-warning: #0d1117;   /* 7.50:1 */
     --pk-on-danger:  #0d1117;   /* 5.65:1 */
     --pk-on-primary: #0d1117;   /* 9.89:1 */
+    /* On the dark surface a pale fill would out-glow the full-error pill and invert
+       the hierarchy, so the softer 4xx tier recedes rather than lightens. */
+    --pk-danger-soft: #5c1f1f;
+    --pk-on-danger-soft: #f8d7da; /* 9.41:1 on --pk-danger-soft */
     --pk-on-info:    #0d1117;   /* 9.38:1 */
     /* all four clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
     --pk-primary-text: #84cf3d; /* 9.89:1 on --pk-bg */

@@ -1,7 +1,7 @@
 /* Shared Peekaboot UI primitives. Consumed by the dashboard document and by
    the toolbar and trace-detail shadow roots. */
 
-/* Badge — one pill, five semantic variants. Each variant uses its own
+/* Badge — one pill, six semantic variants. Each variant uses its own
    on-colour token: --pk-warning/--pk-success/--pk-info are fill-tuned,
    not text-tuned, so white text on them fails WCAG AA (2.6-3.7:1) — dark
    ink at --pk-on-* clears it (5.1-7.5:1). Matches the ink/fill choice
@@ -25,6 +25,12 @@
 .pk-badge--ok      { background: var(--pk-success); color: var(--pk-on-success); }
 .pk-badge--warn    { background: var(--pk-warning); color: var(--pk-on-warning); }
 .pk-badge--error   { background: var(--pk-danger);  color: var(--pk-on-danger); }
+/* 4xx. Its fill sits close to the page in both themes (~1.4:1) by design - it is meant to
+   recede next to a 5xx pill - so the pill's edge comes from a --pk-danger ring. An inset
+   shadow rather than a border: a border would make this one variant a pixel taller than
+   the pills beside it in the overlay's meta line. */
+.pk-badge--error-soft { background: var(--pk-danger-soft); color: var(--pk-on-danger-soft);
+                        box-shadow: inset 0 0 0 1px var(--pk-danger); }
 .pk-badge--info    { background: var(--pk-info); color: var(--pk-on-info); }
 .pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text); }
 

@@ -1,8 +1,8 @@
 package org.peekaboot.testingapp.ui;
 
-import org.junit.jupiter.api.Test;
-
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 class ThemeTokenTest extends PlaywrightTestBase {
 
@@ -54,5 +54,29 @@ class ThemeTokenTest extends PlaywrightTestBase {
         assertThat(cssVar(":root", "--pk-danger")).isEqualTo("#f85149");
         assertThat(cssVar(":root", "--pk-success")).isEqualTo("#3fb950");
         assertThat(cssVar(":root", "--pk-warning")).isEqualTo("#d29922");
+    }
+
+    /**
+     * The 4xx badge tier. A client error is the caller's fault, not the server's, so it
+     * reads as a lighter red than the 5xx pill - but "lighter" means a different thing
+     * per theme: on white a pale fill recedes, while on the dark surface a pale fill
+     * would out-glow the full-error pill, so dark gets a deep, recessive red instead.
+     */
+    @Test
+    void softDangerTierIsAPaleFillWithDarkInkInLightTheme() {
+        setStoredTheme("light");
+        openDashboard();
+
+        assertThat(cssVar(":root", "--pk-danger-soft")).isEqualTo("#fecaca");
+        assertThat(cssVar(":root", "--pk-on-danger-soft")).isEqualTo("#7f1d1d");
+    }
+
+    @Test
+    void softDangerTierIsARecessiveFillWithPaleInkInDarkTheme() {
+        setStoredTheme("dark");
+        openDashboard();
+
+        assertThat(cssVar(":root", "--pk-danger-soft")).isEqualTo("#5c1f1f");
+        assertThat(cssVar(":root", "--pk-on-danger-soft")).isEqualTo("#f8d7da");
     }
 }

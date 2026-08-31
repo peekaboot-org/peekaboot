@@ -12,6 +12,7 @@
  */
 import {formatDurationMs} from '../shared/format.js';
 import {durationSeverity} from '../shared/severity.js';
+import {statusVariant} from '../shared/http-status.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
@@ -70,12 +71,11 @@ function initToolbar(data) {
         currentTraceId = traceId;
         openButton.setAttribute('aria-disabled', traceId ? 'false' : 'true');
 
-        const statusFamily = Math.floor(status / 100);
-        const statusVariant = statusFamily === 2 ? 'ok' : (statusFamily === 3 ? 'warn' : 'error');
-
+        // The bar has room for the number alone; the overlay's own pill spells the
+        // status out. The colouring is shared, so a 404 reads the same in both places.
         const statusEl = shadow.getElementById('pk-status');
         statusEl.textContent = status;
-        statusEl.className = 'pk-badge pk-badge--' + statusVariant;
+        statusEl.className = 'pk-badge pk-badge--' + statusVariant(status);
 
         // textContent/title are safe sinks on their own; escaping before assigning to them
         // would double-escape (e.g. a literal "&" in the path would render as "&amp;").

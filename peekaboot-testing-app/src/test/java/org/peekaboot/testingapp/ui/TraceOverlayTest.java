@@ -469,30 +469,18 @@ class TraceOverlayTest extends PlaywrightTestBase {
     }
 
     /**
-     * The Request tab's own overview/request-headers/response-headers sub-tabs reuse
-     * the same shared tabStrip() helper as the main strips - migrated off hand-rolled
-     * click wiring (and a bespoke data-subtab attribute) alongside them, since it was
-     * the same missing-roving-tabindex defect.
+     * The header pill is the one place a status code is read at a glance, so it carries
+     * the reason phrase rather than a bare number. The testing app's /persons page
+     * answers 200, so that is the phrase asserted here.
      */
     @Test
-    void requestSubTabsAreKeyboardNavigable() {
+    void theHeaderStatusPillSpellsOutTheReasonPhrase() {
         openOverlayFromToolbar();
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content .pk-tab[data-tab=\"overview\"]')");
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content .pk-tab[data-tab=\"overview\"]').focus()");
 
-        page.keyboard().press("ArrowRight");
+        String status = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
+                + ".querySelector('.pk-overlay__meta .pk-badge').textContent.trim()");
 
-        String selected = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content .pk-tab[aria-selected=\"true\"]').dataset.tab");
-        assertThat(selected).isEqualTo("request-headers");
-
-        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-request-subtab-content').innerHTML");
-        assertThat(content).isNotEmpty();
+        assertThat(status).isEqualTo("200 OK");
     }
 
     @Test
