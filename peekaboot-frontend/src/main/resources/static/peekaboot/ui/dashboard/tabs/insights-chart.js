@@ -12,6 +12,7 @@
  * callers only ever hand over a level snapshot.
  */
 import {formatMetricValue} from '../../shared/format.js';
+import {createMarkerLayer} from './insights-markers.js';
 
 const UPLOT_SCRIPT = new URL('../../vendor/uplot/uplot.iife.min.js', import.meta.url);
 const UPLOT_STYLES = new URL('../../vendor/uplot/uplot.min.css', import.meta.url);
@@ -136,14 +137,24 @@ function valueAxis(scale, unit, side, colors) {
  * another one) is read back from uPlot's own setScale hook onto the panel's own
  * element as data-zoom-min/-max - the readback proves the scale really changed,
  * rather than just that the caller intended it to (see insights.js).
+ *
+ * A marker layer (insights-markers.js) is created fresh for every chart - it needs
+ * the charted level's own interval (snapshot.intervalMs) to place a run's own start
+ * marker even when the chart has no second sample to derive a spacing from - and is
+ * registered as a uPlot plugin rather than drawn separately, so it shares the
+ * canvas and the draw/cursor hooks uPlot already runs.
  */
-export function createChart({panel, mount, level, snapshot, showPercentiles, onZoom, onZoomReset}) {
+export function createChart({panel, mount, level, snapshot, showPercentiles, events, showMarkers, onZoom, onZoomReset}) {
     const colors = themeColors();
     const columns = [];                        // data column i feeds uPlot series i + 1
     const series = [{}];                       // [0] is the x series
     const bands = [];
     const percentileIndices = [];
     let secondaryUnit = null;
+
+    const markers = createMarkerLayer({intervalMs: snapshot.intervalMs});
+    markers.setEvents(events);
+    markers.setVisible(showMarkers);
 
     const line = (label, stroke, scale, paths) => ({
         label, stroke, scale, width: 2, paths, points: {show: false}, spanGaps: false
@@ -204,6 +215,7 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
         series,
         bands,
         axes,
+        plugins: [markers.plugin],
         // values live in the panel header readout and the axis labels; a live legend
         // would repeat them per series and, at level >= 1, dwarf the card.
         // Solid swatches instead of uPlot's default outline boxes - the 1em outline
@@ -265,6 +277,14 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, onZ
         },
         setPercentiles(show) {
             percentileIndices.forEach(index => plot.setSeries(index, {show}));
+        },
+        setEvents(next) {
+            markers.setEvents(next);
+            plot.redraw(false);
+        },
+        setMarkers(visible) {
+            markers.setVisible(visible);
+            plot.redraw(false);
         },
         setXScale(min, max) {
             plot.setScale('x', {min, max});
