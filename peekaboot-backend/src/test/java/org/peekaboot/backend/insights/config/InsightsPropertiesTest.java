@@ -48,4 +48,40 @@ class InsightsPropertiesTest {
         properties.setLevels(List.of(level(Duration.ofSeconds(10), 0)));
         assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void rejectsNonPositivePersistenceInterval() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setInterval(Duration.ZERO);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("interval");
+
+        properties.getPersistence().setInterval(Duration.ofSeconds(-1));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("interval");
+    }
+
+    @Test
+    void rejectsNonPositivePersistenceMaxAge() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setMaxAge(Duration.ZERO);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-age");
+
+        properties.getPersistence().setMaxAge(Duration.ofSeconds(-1));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-age");
+    }
+
+    @Test
+    void persistenceDefaultsToOneWritePerCoarsestWindowAndItsWholeSpan() {
+        InsightsProperties properties = new InsightsProperties();
+
+        assertThat(properties.resolvePersistenceInterval()).isEqualTo(Duration.ofHours(1));
+        assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofHours(720));
+    }
 }

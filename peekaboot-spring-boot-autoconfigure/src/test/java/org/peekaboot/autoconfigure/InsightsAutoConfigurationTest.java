@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
@@ -49,6 +51,24 @@ class InsightsAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(InsightsService.class);
+                });
+    }
+
+    @Test
+    void startsWithPersistenceWiredWhenStorageIsEnabled(@TempDir Path tempDir) {
+        new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class,
+                        PeekabootStorageAutoConfiguration.class,
+                        InsightsAutoConfiguration.class,
+                        JacksonAutoConfiguration.class))
+                .withUserConfiguration(MockActuatorConfig.class, MeterRegistryConfig.class)
+                .withPropertyValues(
+                        "peekaboot.enabled=true", "peekaboot.storage.enabled=true", "peekaboot.storage.dir=" + tempDir)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    InsightsService service = context.getBean(InsightsService.class);
+                    assertThat(service.isRunning()).isTrue();
                 });
     }
 

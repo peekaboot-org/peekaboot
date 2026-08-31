@@ -30,7 +30,11 @@ class InsightsServiceTest {
         registry = new SimpleMeterRegistry();
         cpuUsage = registry.gauge("process.cpu.usage", new AtomicLong(1)); // resolves the cpu panel's first series
         service = new InsightsService(
-                registry, new InsightsProperties(), new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP);
+                registry,
+                new InsightsProperties(),
+                new DefaultResourceLoader(),
+                InsightsCollector.Listener.NO_OP,
+                null);
     }
 
     @Test
@@ -71,7 +75,7 @@ class InsightsServiceTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
             InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP);
+                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -99,7 +103,7 @@ class InsightsServiceTest {
         };
 
         assertThatThrownBy(() -> new InsightsService(
-                        registry, new InsightsProperties(), brokenDefaults, InsightsCollector.Listener.NO_OP))
+                        registry, new InsightsProperties(), brokenDefaults, InsightsCollector.Listener.NO_OP, null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bogus");
     }

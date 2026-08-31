@@ -5,6 +5,8 @@ import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
+import org.peekaboot.backend.storage.StorageDirectory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -21,7 +23,7 @@ import tools.jackson.databind.ObjectMapper;
  * Requires a {@link MeterRegistry} bean, since insights has nothing to sample
  * without one.
  */
-@AutoConfiguration(after = PeekabootAutoConfiguration.class)
+@AutoConfiguration(after = {PeekabootAutoConfiguration.class, PeekabootStorageAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnBooleanProperty(name = "peekaboot.insights.enabled", matchIfMissing = true)
@@ -39,8 +41,10 @@ public class InsightsAutoConfiguration {
             MeterRegistry meterRegistry,
             InsightsProperties properties,
             ResourceLoader resourceLoader,
-            InsightsSsePublisher insightsSsePublisher) {
-        return new InsightsService(meterRegistry, properties, resourceLoader, insightsSsePublisher);
+            InsightsSsePublisher insightsSsePublisher,
+            ObjectProvider<StorageDirectory> storageDirectory) {
+        return new InsightsService(
+                meterRegistry, properties, resourceLoader, insightsSsePublisher, storageDirectory.getIfAvailable());
     }
 
     @Bean

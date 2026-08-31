@@ -11,6 +11,7 @@ public class InsightsProperties {
     private boolean enabled = true;
     private List<Level> levels = defaultLevels();
     private String configLocation;
+    private Persistence persistence = new Persistence();
 
     private static List<Level> defaultLevels() {
         List<Level> defaults = new ArrayList<>();
@@ -38,6 +39,12 @@ public class InsightsProperties {
             }
             previous = level.interval;
         }
+        if (persistence.interval != null && (persistence.interval.isZero() || persistence.interval.isNegative())) {
+            throw new IllegalStateException("peekaboot.insights.persistence.interval must be positive");
+        }
+        if (persistence.maxAge != null && (persistence.maxAge.isZero() || persistence.maxAge.isNegative())) {
+            throw new IllegalStateException("peekaboot.insights.persistence.max-age must be positive");
+        }
     }
 
     public boolean isEnabled() {
@@ -62,6 +69,56 @@ public class InsightsProperties {
 
     public void setConfigLocation(String configLocation) {
         this.configLocation = configLocation;
+    }
+
+    public Persistence getPersistence() {
+        return persistence;
+    }
+
+    public void setPersistence(Persistence persistence) {
+        this.persistence = persistence;
+    }
+
+    /** How often the rings are written, defaulting to one write per coarsest window. */
+    public Duration resolvePersistenceInterval() {
+        return persistence.getInterval() != null
+                ? persistence.getInterval()
+                : levels.get(levels.size() - 1).getInterval();
+    }
+
+    /**
+     * How old a snapshot may be and still be worth loading, defaulting to the span the
+     * coarsest level covers - beyond it, every restored sample would be an empty gap.
+     */
+    public Duration resolvePersistenceMaxAge() {
+        if (persistence.getMaxAge() != null) {
+            return persistence.getMaxAge();
+        }
+        Level coarsest = levels.get(levels.size() - 1);
+        return coarsest.getInterval().multipliedBy(coarsest.getSize());
+    }
+
+    public static class Persistence {
+
+        private Duration interval;
+
+        private Duration maxAge;
+
+        public Duration getInterval() {
+            return interval;
+        }
+
+        public void setInterval(Duration interval) {
+            this.interval = interval;
+        }
+
+        public Duration getMaxAge() {
+            return maxAge;
+        }
+
+        public void setMaxAge(Duration maxAge) {
+            this.maxAge = maxAge;
+        }
     }
 
     public static class Level {
