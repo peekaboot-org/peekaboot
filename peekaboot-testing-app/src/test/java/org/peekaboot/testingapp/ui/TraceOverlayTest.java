@@ -838,8 +838,10 @@ class TraceOverlayTest extends PlaywrightTestBase {
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
      * happens. Also covers the "1 queries" pluralisation defect on the same header
-     * (formatCount() in format.js) against the real query count reconcileOrders()
-     * produces, whatever that count happens to be.
+     * (formatCount() in format.js): reconcileOrders() calls orderRepository.findAll()
+     * exactly once, and CustomerOrder is a flat entity with no lazy associations to
+     * trigger further queries, so the trace's query count is deterministically 1
+     * regardless of how many orders exist when the test runs.
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
@@ -860,18 +862,13 @@ class TraceOverlayTest extends PlaywrightTestBase {
                         + "the root-action label rather than a fake method")
                 .isEqualTo("Scheduled Job");
 
-        int queryCount = ((Number) page.evaluate(
-                        "id => fetch('/peekaboot/api/traces/' + id + '/insights').then(r => r.json())"
-                                + ".then(t => t.summary?.queries?.count ?? (t.queries || []).length)",
-                        traceId))
-                .intValue();
-        String expectedQueryFragment = queryCount == 1 ? "1 query" : queryCount + " queries";
-
         String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
                 + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
-        assertThat(metaText).contains(expectedQueryFragment);
-        if (queryCount == 1) {
-            assertThat(metaText).doesNotContain("1 queries");
-        }
+        assertThat(metaText)
+                .as("reconcileOrders() issues exactly one query (CustomerOrder is a flat entity, so "
+                        + "findAll() is a single SELECT regardless of row count) - the count is "
+                        + "deterministic, not just usually 1")
+                .contains("1 query")
+                .doesNotContain("1 queries");
     }
 }
