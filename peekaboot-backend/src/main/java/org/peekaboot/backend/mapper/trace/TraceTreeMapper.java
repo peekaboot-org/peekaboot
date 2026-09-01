@@ -3,7 +3,6 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -233,23 +232,6 @@ public class TraceTreeMapper {
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
-        // Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
-        // credential the key name alone can't catch. errorMessage below is masked the same
-        // way - it can carry the same kind of credential, e.g. an exception message that
-        // echoes back the failing request's URL.
-        Map<String, Object> tags = new HashMap<>();
-        if (spanData.tags() != null) {
-            tags.putAll(tagMasker.mask(spanData.tags()));
-        }
-
-        // Map events
-        List<SpanEvent> events = List.of();
-        if (spanData.events() != null && !spanData.events().isEmpty()) {
-            events = spanData.events().stream()
-                    .map(e -> new SpanEvent(e.name(), e.timestamp()))
-                    .toList();
-        }
-
         return new SpanNode(
                 spanData.spanId(),
                 spanData.name(),
@@ -258,15 +240,37 @@ public class TraceTreeMapper {
                 durationMs,
                 status,
                 children,
-                Map.copyOf(tags),
-                events,
+                maskedTags(spanData),
+                mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
                 spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
-                DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null,
+                queryText(spanData),
                 null);
+    }
+
+    /**
+     * Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
+     * credential the key name alone can't catch. A span's errorMessage and query text are
+     * masked the same way: an exception message can echo back the failing request's URL.
+     */
+    private Map<String, Object> maskedTags(SpanData spanData) {
+        return spanData.tags() == null ? Map.of() : Map.<String, Object>copyOf(tagMasker.mask(spanData.tags()));
+    }
+
+    private static List<SpanEvent> mapEvents(SpanData spanData) {
+        if (spanData.events() == null) {
+            return List.of();
+        }
+        return spanData.events().stream()
+                .map(e -> new SpanEvent(e.name(), e.timestamp()))
+                .toList();
+    }
+
+    private String queryText(SpanData spanData) {
+        return DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null;
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
