@@ -140,9 +140,12 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void durationSeverityReadsThePublishedThresholds() {
         String features = "{slowSpanThresholdMs: 200, verySlowSpanThresholdMs: 300, slowTraceThresholdMs: null}";
-        assertThat(evalModule("severity.js", "m.durationSeverity(150, " + features + ")")).isEqualTo("");
-        assertThat(evalModule("severity.js", "m.durationSeverity(250, " + features + ")")).isEqualTo("slow");
-        assertThat(evalModule("severity.js", "m.durationSeverity(350, " + features + ")")).isEqualTo("very-slow");
+        assertThat(evalModule("severity.js", "m.durationSeverity(150, " + features + ")"))
+                .isEqualTo("");
+        assertThat(evalModule("severity.js", "m.durationSeverity(250, " + features + ")"))
+                .isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.durationSeverity(350, " + features + ")"))
+                .isEqualTo("very-slow");
         assertThat(evalModule("severity.js", "m.threshold(" + features + ", 'slowTraceThresholdMs')"))
                 .isEqualTo(1000);
     }
@@ -191,7 +194,8 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW'}, {type: 'VERY_SLOW'}])"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'HIGH_QUERY_COUNT'}])")).isEqualTo("");
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'HIGH_QUERY_COUNT'}])"))
+                .isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }
 
@@ -228,10 +232,13 @@ class SharedModuleIT extends PlaywrightTestBase {
         List<String> levels = (List<String>) evalModule("severity.js", "m.LOG_LEVELS");
 
         assertThat(levels).hasSize(5).doesNotContain(Level.OFF.toString(), Level.ALL.toString());
-        assertThat(levels).allSatisfy(level -> assertThat(Level.toLevel(level, null))
-                .as("%s is a Logback level", level)
-                .isNotNull());
-        assertThat(levels).isSortedAccordingTo((a, b) -> Level.toLevel(b).toInt() - Level.toLevel(a).toInt());
+        assertThat(levels)
+                .allSatisfy(level -> assertThat(Level.toLevel(level, null))
+                        .as("%s is a Logback level", level)
+                        .isNotNull());
+        assertThat(levels)
+                .isSortedAccordingTo(
+                        (a, b) -> Level.toLevel(b).toInt() - Level.toLevel(a).toInt());
     }
 
     @Test
