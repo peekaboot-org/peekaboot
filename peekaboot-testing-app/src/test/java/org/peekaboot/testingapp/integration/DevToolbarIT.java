@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.repository.PersonRepository;
@@ -28,6 +30,9 @@ import org.springframework.web.client.RestClient;
         classes = {TestingApp.class, SharedToolbarTestConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+// READ side of the shared TraceStore: pins its own traces by id, which tolerates
+// concurrent readers but not DashboardTraceViewIT's per-test clear (the WRITE side).
+@ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ)
 class DevToolbarIT {
 
     @LocalServerPort

@@ -6,6 +6,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.repository.PersonRepository;
@@ -32,6 +34,9 @@ import org.springframework.test.web.servlet.client.RestTestClient;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
 @ActiveProfiles("test")
+// READ side of the shared TraceStore: pins its own traces by id, which tolerates
+// concurrent readers but not DashboardTraceViewIT's per-test clear (the WRITE side).
+@ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ)
 class TraceDetailOverlayIT {
 
     @Autowired
