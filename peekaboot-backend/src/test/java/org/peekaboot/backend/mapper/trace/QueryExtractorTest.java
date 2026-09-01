@@ -1,10 +1,9 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -388,25 +387,12 @@ class QueryExtractorTest {
 
     private SpanData createSpan(
             String spanId, String name, long durationMs, Map<String, String> tags, long creationOrder) {
-        Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                "trace1",
-                spanId,
-                null,
-                name,
-                Span.Kind.CLIENT,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return span(spanId)
+                .named(name)
+                .kind(Span.Kind.CLIENT)
+                .at(creationOrder * 100, durationMs)
+                .tags(tags)
+                .order(creationOrder)
+                .build();
     }
 }

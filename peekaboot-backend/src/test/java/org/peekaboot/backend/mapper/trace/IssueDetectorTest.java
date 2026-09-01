@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.SpanNodes.node;
 
 import java.time.Instant;
 import java.util.List;
@@ -99,21 +100,11 @@ class IssueDetectorTest {
     void detectIssues_shouldPreferErrorMessageFieldOverTag() {
         // The exporter stores the error in SpanNode.errorMessage; it never
         // writes an error.message tag
-        SpanNode span = new SpanNode(
-                "span1",
-                "test-op",
-                "SERVER",
-                0,
-                50,
-                "ERROR",
-                List.of(),
-                Map.of(),
-                List.of(),
-                List.of(),
-                0,
-                "Connection refused: db:5432",
-                "java.net.ConnectException",
-                null);
+        SpanNode span = node("span1")
+                .durationMs(50)
+                .status("ERROR")
+                .error("Connection refused: db:5432", "java.net.ConnectException")
+                .build();
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 1));
 
         TraceTree result = detector.detectIssues(trace);
@@ -289,17 +280,13 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldPreserveExistingSpanProperties() {
-        SpanNode span = new SpanNode(
-                "span-id-123",
-                "my-operation",
-                "CLIENT",
-                1000L,
-                150L,
-                "OK",
-                List.of(),
-                Map.of("custom.attr", "value"),
-                List.of(),
-                List.of());
+        SpanNode span = node("span-id-123")
+                .named("my-operation")
+                .kind("CLIENT")
+                .startTimeMs(1000L)
+                .durationMs(150L)
+                .tags(Map.of("custom.attr", "value"))
+                .build();
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
         TraceTree result = detector.detectIssues(trace);
@@ -316,24 +303,16 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldPreserveErrorAndRemoteServiceProperties() {
-        // a span using the full-field constructor, so errorMessage/
-        // errorClass/remoteServiceName/creationOrder are all set to real values
-        SpanNode span = new SpanNode(
-                "span-id-456",
-                "remote-call",
-                "CLIENT",
-                1000L,
-                50L,
-                "ERROR",
-                List.of(),
-                Map.of(),
-                List.of(),
-                List.of(),
-                42L,
-                "boom",
-                "java.lang.RuntimeException",
-                "orders-service",
-                null);
+        SpanNode span = node("span-id-456")
+                .named("remote-call")
+                .kind("CLIENT")
+                .startTimeMs(1000L)
+                .durationMs(50L)
+                .status("ERROR")
+                .order(42L)
+                .error("boom", "java.lang.RuntimeException")
+                .remoteServiceName("orders-service")
+                .build();
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
         TraceTree result = detector.detectIssues(trace);
@@ -411,7 +390,12 @@ class IssueDetectorTest {
 
     private SpanNode createSpan(
             String spanId, long durationMs, String status, Map<String, Object> tags, List<SpanNode> children) {
-        return new SpanNode(spanId, "test-op", "SERVER", 0, durationMs, status, children, tags, List.of(), List.of());
+        return node(spanId)
+                .durationMs(durationMs)
+                .status(status)
+                .tags(tags)
+                .children(children)
+                .build();
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceTabSummary summary) {

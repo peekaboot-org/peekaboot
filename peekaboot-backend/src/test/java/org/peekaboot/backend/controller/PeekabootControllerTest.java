@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.peekaboot.backend.testsupport.SpanNodes.node;
 
 import java.util.List;
 import java.util.Locale;
@@ -343,17 +344,8 @@ class PeekabootControllerTest {
     }
 
     private TraceTree createTraceTree(String traceId) {
-        SpanNode rootSpan = new SpanNode(
-                "span-" + traceId,
-                "test-operation",
-                "SERVER",
-                0L,
-                100L,
-                "OK",
-                List.of(),
-                Map.of(),
-                List.of(),
-                List.of());
+        SpanNode rootSpan =
+                node("span-" + traceId).named("test-operation").durationMs(100L).build();
 
         return new TraceTree(
                 traceId,

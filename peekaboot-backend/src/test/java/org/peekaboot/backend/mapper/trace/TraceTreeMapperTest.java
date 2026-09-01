@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
@@ -458,24 +459,10 @@ class TraceTreeMapperTest {
     @Test
     void map_shouldConvertTimesToMilliseconds() {
         var baseTime = Instant.parse("2024-01-15T10:00:00Z");
-        var span = new SpanData(
-                "trace1",
-                "span1",
-                null,
-                "op",
-                Span.Kind.SERVER,
-                baseTime,
-                baseTime.plusMillis(150),
-                Duration.ofMillis(150),
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                0);
+        var span = span("span1")
+                .kind(Span.Kind.SERVER)
+                .at(baseTime, Duration.ofMillis(150))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(span));
 
@@ -754,24 +741,11 @@ class TraceTreeMapperTest {
     @Test
     void map_shouldMapSpanEventsFromNonEmptyEventsList() {
         var eventTime = Instant.parse("2024-01-15T10:00:00.500Z");
-        var span = new SpanData(
-                "trace1",
-                "span1",
-                null,
-                "op",
-                Span.Kind.SERVER,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(100),
-                Duration.ofMillis(100),
-                Map.of(),
-                List.of(new SpanData.Event("cache-miss", eventTime)),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                0);
+        var span = span("span1")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .events(List.of(new SpanData.Event("cache-miss", eventTime)))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(span));
 
@@ -782,7 +756,6 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().events().getFirst().timestamp()).isEqualTo(eventTime);
     }
 
-    // Helper methods to create test data
     private SpanData createSpan(
             String traceId,
             String spanId,
@@ -792,26 +765,14 @@ class TraceTreeMapperTest {
             long startOffsetMs,
             long durationMs,
             Map<String, String> tags) {
-        Instant start = Instant.EPOCH.plusMillis(startOffsetMs);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                traceId,
-                spanId,
-                parentId,
-                name,
-                kind,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                startOffsetMs);
+        return span(spanId)
+                .in(traceId)
+                .parent(parentId)
+                .named(name)
+                .kind(kind)
+                .at(startOffsetMs, durationMs)
+                .tags(tags)
+                .build();
     }
 
     private SpanData createSpanWithError(
@@ -825,25 +786,14 @@ class TraceTreeMapperTest {
             Map<String, String> tags,
             String errorMessage,
             String errorClass) {
-        Instant start = Instant.EPOCH.plusMillis(startOffsetMs);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                traceId,
-                spanId,
-                parentId,
-                name,
-                kind,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                errorMessage,
-                errorClass,
-                null,
-                null,
-                null,
-                List.of(),
-                startOffsetMs);
+        return span(spanId)
+                .in(traceId)
+                .parent(parentId)
+                .named(name)
+                .kind(kind)
+                .at(startOffsetMs, durationMs)
+                .tags(tags)
+                .error(errorMessage, errorClass)
+                .build();
     }
 }

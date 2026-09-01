@@ -1,10 +1,10 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +48,7 @@ class TraceWritePathBenchmark {
     private static final int CAP = 600;
     private static final int WARMUP_ITERATIONS = 20;
     private static final int MEASURED_ITERATIONS = 50;
+    private static final String TRACE_ID = "bench-trace";
 
     @Test
     void reportsWritePathThroughputBeforeAndAfterWriteTimeDeduplication() {
@@ -110,7 +111,7 @@ class TraceWritePathBenchmark {
     }
 
     private static long timeNewPath(List<SpanData> spans, int cap) {
-        TraceDataBundle bundle = new TraceDataBundle("bench-trace");
+        TraceDataBundle bundle = new TraceDataBundle(TRACE_ID);
         long start = System.nanoTime();
         for (SpanData span : spans) {
             bundle.addSpan(span, cap);
@@ -136,47 +137,25 @@ class TraceWritePathBenchmark {
             spans.add(jdbcSpan(
                     realId, rootId, "SELECT * FROM order_line WHERE order_id = " + i, "sample_app_db", order++));
         }
-        spans.add(new SpanData(
-                "bench-trace",
-                rootId,
-                null,
-                "GET /orders",
-                Span.Kind.SERVER,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(realQueryCount),
-                Duration.ofMillis(realQueryCount),
-                Map.of("http.method", "GET", "http.target", "/orders"),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                order));
+        spans.add(span(rootId)
+                .in(TRACE_ID)
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, realQueryCount)
+                .tags(Map.of("http.method", "GET", "http.target", "/orders"))
+                .order(order)
+                .build());
         return spans;
     }
 
     private static SpanData jdbcSpan(
             String spanId, String parentId, String query, String peerService, long creationOrder) {
-        Instant start = Instant.EPOCH.plusMillis(creationOrder);
-        return new SpanData(
-                "bench-trace",
-                spanId,
-                parentId,
-                "query",
-                Span.Kind.CLIENT,
-                start,
-                start.plusMillis(1),
-                Duration.ofMillis(1),
-                Map.of("jdbc.query[0]", query, "peer.service", peerService),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return jdbcQuery(spanId, query)
+                .in(TRACE_ID)
+                .parent(parentId)
+                .tag("peer.service", peerService)
+                .at(creationOrder, 1)
+                .order(creationOrder)
+                .build();
     }
 }
