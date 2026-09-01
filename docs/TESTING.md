@@ -103,8 +103,8 @@ that state first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert
 exact counts, never defensive `contains`. Since `*IT` classes run concurrently,
 a class that clears shared state this way MUST hold the corresponding
 `@ResourceLock(..., mode = READ_WRITE)`, and every class pinning its own data in
-that same store holds the `READ` side — `DashboardTraceViewIT`, `DevToolbarIT`
-and `TraceDetailOverlayIT` are the pattern. A class on its own context
+that same store holds the `READ` side — `DashboardTraceViewIT` and `DevToolbarIT`
+are the pattern. A class on its own context
 configuration (its own app) needs no lock.
 
 The database needs no such discipline: `application-test.yml` and `application-security.yml`

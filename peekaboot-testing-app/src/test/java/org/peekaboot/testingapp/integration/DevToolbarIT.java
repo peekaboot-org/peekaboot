@@ -86,8 +86,12 @@ class DevToolbarIT {
 
     @Test
     void toolbarShouldContainTraceId() {
-        // traceId can be null in test environment without full tracing setup
-        assertThat(getPersonsHtml()).matches("(?s).*\"traceId\":(null|\"[a-f0-9]+\").*");
+        assertThat(getPersonsHtml()).contains("\"traceId\":\"" + SharedToolbarTestConfig.FIXED_TRACE_ID + "\"");
+    }
+
+    @Test
+    void injectedPageShouldLoadExternalToolbarScript() {
+        assertThat(getPersonsHtml()).contains("/peekaboot/ui/toolbar/toolbar.js");
     }
 
     @Test

@@ -26,7 +26,9 @@ import org.springframework.context.annotation.Bean;
 @TestConfiguration
 public class SharedToolbarTestConfig {
 
-    private static final String FIXED_TRACE_ID = "cafebabecafebabecafebabecafebabe";
+    /** The one trace id every toolbar rendered under this configuration reports. */
+    static final String FIXED_TRACE_ID = "cafebabecafebabecafebabecafebabe";
+
     private static final String FIXED_SPAN_ID = "deadbeefdeadbeef";
 
     @Bean

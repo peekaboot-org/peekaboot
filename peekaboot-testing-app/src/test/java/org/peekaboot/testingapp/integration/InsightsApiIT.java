@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -62,12 +63,13 @@ class InsightsApiIT {
     }
 
     @Test
-    void dataReturnsGrowingTickSeries() throws InterruptedException {
-        Thread.sleep(1000); // >= 4 ticks at the test profile's 250ms level-0 interval
+    void dataReturnsGrowingTickSeries() {
+        // level 0 ticks every 250ms in the test profile, so two samples are a moment away
+        JsonNode data = await().atMost(Duration.ofSeconds(5))
+                .until(
+                        () -> api.getJson("/peekaboot/api/insights/data?level=0"),
+                        d -> d.get("count").asInt() >= 2);
 
-        JsonNode data = api.getJson("/peekaboot/api/insights/data?level=0");
-
-        assertThat(data.get("count").asInt()).isGreaterThanOrEqualTo(2);
         // cpu.process (process.cpu.usage) resolves in a real JVM app
         assertThat(data.get("series").get("cpu.process").get("values")).isNotEmpty();
     }
