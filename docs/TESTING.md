@@ -107,6 +107,13 @@ that same store holds the `READ` side — `DashboardTraceViewIT`, `DevToolbarIT`
 and `TraceDetailOverlayIT` are the pattern. A class on its own context
 configuration (its own app) needs no lock.
 
+The database needs no such discipline: `application-test.yml` and `application-security.yml`
+set no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its
+own `jdbc:h2:mem:<uuid>` (H2 keys in-memory databases by name per JVM — a shared fixed name
+would let each lazily booted context's `ddl-auto: create-drop` wipe the tables under whichever
+test is mid-flight). Only `FlywayTabIT` names its database, because it needs `MODE=PostgreSQL`
+on the URL. The `TraceStore` is the only state the shared context's classes contend for.
+
 ## Spring Security on the testing-app classpath
 
 `peekaboot-testing-app` carries `spring-boot-starter-security` in test scope for two tests

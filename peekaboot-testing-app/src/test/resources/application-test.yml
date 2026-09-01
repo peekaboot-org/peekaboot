@@ -9,9 +9,10 @@ spring:
       - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
       - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
       - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  # No url: Boot's generate-unique-name default gives every Spring context its own
+  # jdbc:h2:mem:<uuid>, so the dozen contexts this suite caches never drop and re-create
+  # each other's schema mid-test (H2 keys in-memory databases by name per JVM).
   datasource:
-    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
-    driver-class-name: org.h2.Driver
     # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
     # tabs have a real, secret-looking property to prove the masking engine against
     # (see DashboardTabsIT.configTabMasksSensitiveValues and
