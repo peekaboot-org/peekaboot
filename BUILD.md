@@ -121,9 +121,9 @@ consume-the-starter-as-a-published-artifact proof stays with Maven, which is why
 Maven module keeps its `spring-boot-starter-parent` parent.
 
 **Lockstep.** Two values live once, in `gradle.properties`: `version` (the six poms'
-`<version>` — `maven-release-plugin` rewrites only the poms, so **the release commit must
-carry the matching one-line edit here**, or `./gradlew build` keeps producing pre-release
-jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
+`<version>` — `maven-release-plugin` rewrites only the poms, so **bump it by hand after every
+release**, see the checklist under [Releasing](#releasing), or `./gradlew build` keeps
+producing pre-release jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
 parent version), which the convention plugin turns into the BOM import every module gets
 and `buildSrc` reads for the Boot plugin. Mockito's agent jar takes its version from that
 BOM, as Maven does. Every other shared literal — Error Prone, palantir, the ratchet SHA,
@@ -265,11 +265,18 @@ mechanics.
 Three workflows, all under `.github/workflows/`.
 
 **`build-on-push.yml`** — every branch except `main`. JDK 25 (temurin), `fetch-depth: 0` for
-the ratchet, `~/.cache/ms-playwright` cached on a `**/pom.xml` hash, then `mvn --batch-mode
---update-snapshots clean verify`. The Chromium install is split into two steps on purpose:
-`exec:java` ignores `-pl` scoping when combined with `-am`, so the reactor's SNAPSHOTs are
-installed first (`-pl peekaboot-testing-app -am install -Dmaven.test.skip=true`) and the
-plain `exec:java` call resolves against the local repo afterwards.
+the ratchet, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
+`playwright.version` property (Chromium changes with Playwright, not with any other
+dependency), then `./mvnw --batch-mode clean verify`. The Chromium install is split into two
+steps on purpose: `exec:java` ignores `-pl` scoping when combined with `-am`, so the
+reactor's SNAPSHOTs are installed first (`-pl peekaboot-testing-app -am install
+-Dmaven.test.skip=true`) and the plain `exec:java` call resolves against the local repo
+afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
+`pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
+invocation resolves whatever is latest that day.
+
+Both workflows build with the checked-in `./mvnw`, and every action is pinned to a commit
+SHA with the tag in a trailing comment; Dependabot's `github-actions` updates move the pins.
 
 **`build-release-on-main-push.yml`** — see Releasing. Untested in anger: `dev` is currently
 the only branch on the remote, so no release has ever run.
@@ -298,6 +305,14 @@ which is how recursion is prevented) runs:
    not get that check either — `build-on-push` ignores `main`, and events raised with
    `GITHUB_TOKEN` trigger no workflows — so until the job runs with a token that does, the
    PR waits for a human merge (an open one is reused by the next release)
+
+Nothing automates what follows a release; do it on `dev` once the merge-back has landed:
+
+1. Set `version` in `gradle.properties` to the new `-SNAPSHOT` version the poms now carry.
+2. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
+   to the released version — every dependency snippet on the site reads it.
+3. Remove the pre-release callout from the site's `quick-start.md`.
+4. Put the released version into the two quick-start snippets in `README.md`.
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
@@ -330,7 +345,10 @@ Playwright suite. The four static-analysis gates still run. Reproducibility depe
 being explicit.
 
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
-`OSSRH_GPG_SECRET_KEY_PASSWORD`.
+`OSSRH_GPG_SECRET_KEY_PASSWORD`. The `OSSRH_` prefix is historical — the workflow talks to
+the Central Portal (`server-id: central`) and the first two hold a Portal user token, not
+OSSRH credentials. The names live in the repository settings as well as in the workflow, so a
+rename has to touch both.
 
 ## Things that will bite you
 
