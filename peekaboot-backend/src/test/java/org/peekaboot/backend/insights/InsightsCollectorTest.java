@@ -183,6 +183,26 @@ class InsightsCollectorTest {
         assertThat(collector.tileValues().get("uptime")).isEqualTo(11.0);
     }
 
+    /**
+     * The Overview tab fetches tile values off /api/insights/config the moment the
+     * dashboard opens - typically well before the first boundary-aligned level-0 tick
+     * (up to a full interval after startup). Tiles are plain value samples, so a read
+     * must resolve them itself rather than serve NaN until the collector's cadence
+     * catches up.
+     */
+    @Test
+    void tileValuesResolveOnReadBeforeTheFirstTick() {
+        AtomicLong start = registry.gauge("app.start", new AtomicLong(42));
+        registry.gauge("app.uptime", new AtomicLong(7));
+
+        assertThat(collector.tileValues().get("startup")).isEqualTo(42.0);
+        assertThat(collector.tileValues().get("uptime")).isEqualTo(7.0);
+
+        // a static tile freezes at its first resolved read
+        start.set(99);
+        assertThat(collector.tileValues().get("startup")).isEqualTo(42.0);
+    }
+
     @Test
     void memoryEstimateMatchesFormula() {
         // 2 series x (90 + 1440*8 + 720*8) x 8 bytes

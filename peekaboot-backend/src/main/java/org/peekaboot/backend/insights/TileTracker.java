@@ -8,9 +8,17 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
 
 /**
- * The single-value tiles the Overview tab renders: sampled alongside every tick but
- * never charted or rolled into a level. A tile freezes at its first non-NaN reading
- * unless declared {@code live}, in which case it keeps sampling forever.
+ * The single-value tiles the Overview tab renders: never charted or rolled into a
+ * level. A tile freezes at its first non-NaN reading unless declared {@code live},
+ * in which case it keeps sampling forever.
+ *
+ * <p>Sampled on read rather than on the collector's tick cadence: the Overview fetches
+ * tile values off {@code /api/insights/config} the moment the dashboard opens, which is
+ * routinely before the first boundary-aligned level-0 tick - waiting for that tick would
+ * serve every tile as unresolved to exactly the first look at the dashboard. Every tile
+ * is a plain {@code value}-stat sample, so a read needs no elapsed interval, and
+ * concurrent reads race only benignly: sampling is idempotent and both fields below
+ * are volatile.
  */
 final class TileTracker {
 
@@ -24,17 +32,11 @@ final class TileTracker {
         }
     }
 
-    void sample(long elapsedMs) {
-        for (TileState tile : tiles.values()) {
-            tile.sample(elapsedMs);
-        }
-    }
-
     /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */
     Map<String, Double> values() {
         Map<String, Double> values = new LinkedHashMap<>();
         for (Map.Entry<String, TileState> entry : tiles.entrySet()) {
-            values.put(entry.getKey(), entry.getValue().value);
+            values.put(entry.getKey(), entry.getValue().sample());
         }
         return values;
     }
@@ -51,19 +53,20 @@ final class TileTracker {
             this.live = live;
         }
 
-        private void sample(long intervalMillis) {
+        /** Samples unless frozen and returns the tile's value; the interval is irrelevant to a value stat. */
+        private double sample() {
             if (live) {
-                value = sampler.sample(intervalMillis);
-                return;
+                value = sampler.sample(0);
+                return value;
             }
-            if (frozen) {
-                return;
+            if (!frozen) {
+                double sampled = sampler.sample(0);
+                if (!Double.isNaN(sampled)) {
+                    value = sampled;
+                    frozen = true;
+                }
             }
-            double sampled = sampler.sample(intervalMillis);
-            if (!Double.isNaN(sampled)) {
-                value = sampled;
-                frozen = true;
-            }
+            return value;
         }
     }
 }
