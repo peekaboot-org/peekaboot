@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -37,43 +36,28 @@ public class QueryExtractor {
 
         // Query spans in creation order, so each query's row-count search can
         // be bounded by the next query
-        List<SpanData> querySpans = sortedSpans.stream()
-                .filter(s -> s.tags() != null && !s.tags().isEmpty() && findSql(s.tags(), s.name()) != null)
-                .toList();
+        List<SpanData> querySpans =
+                sortedSpans.stream().filter(DbSpans::isQuery).toList();
 
         List<QueryInfo> queries = new ArrayList<>();
         for (int i = 0; i < querySpans.size(); i++) {
             long nextQueryOrder =
                     i + 1 < querySpans.size() ? querySpans.get(i + 1).creationOrder() : Long.MAX_VALUE;
-            QueryInfo query = extractQuery(querySpans.get(i), resultSets, nextQueryOrder);
-            if (query != null) {
-                queries.add(query);
-            }
+            queries.add(extractQuery(querySpans.get(i), resultSets, nextQueryOrder));
         }
 
         return queries;
     }
 
     private QueryInfo extractQuery(SpanData span, List<ResultSetInfo> resultSets, long nextQueryOrder) {
-        Map<String, String> tags = span.tags();
-        if (tags == null || tags.isEmpty()) {
-            return null;
-        }
-
-        // Look for SQL in various tag patterns
-        String sql = findSql(tags, span.name());
-        if (sql == null) {
-            return null;
-        }
         // Value patterns only - not column-aware literal masking. Parsing SQL to find
         // which literal belongs to a "password" column is a much larger, more
         // error-prone job; captured traces are documented as containing plaintext SQL.
         // This still catches a JWT, an AWS key, a PEM block or a credential-bearing URL
         // pasted into the statement.
-        sql = maskingEngine.maskValue(sql);
+        String sql = maskingEngine.maskValue(DbSpans.sql(span));
 
-        // Get database system from various sources
-        String dbSystem = findDbSystem(tags);
+        String dbSystem = findDbSystem(span.tags());
 
         Instant timestamp = span.startTime();
         long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
@@ -111,43 +95,6 @@ public class QueryExtractor {
                 return rs.rowCount;
             }
         }
-        return null;
-    }
-
-    private String findSql(Map<String, String> tags, String spanName) {
-        // 1. Current OpenTelemetry semantic convention, emitted by
-        // datasource-micrometer-opentelemetry - the default stack. Ahead of db.statement,
-        // which is the same convention's superseded spelling: when a library emits both,
-        // the current one is authoritative.
-        String sql = tags.get("db.query.text");
-        if (sql != null) {
-            return sql;
-        }
-
-        // 2. Superseded OpenTelemetry convention
-        sql = tags.get("db.statement");
-        if (sql != null) {
-            return sql;
-        }
-
-        // 3. datasource-proxy/micrometer: jdbc.query[0], jdbc.query[1], etc.
-        for (Map.Entry<String, String> entry : tags.entrySet()) {
-            if (entry.getKey().startsWith("jdbc.query[")) {
-                return entry.getValue();
-            }
-        }
-
-        // 4. Span name if it looks like SQL
-        if (spanName != null) {
-            String upper = spanName.toUpperCase(Locale.ROOT);
-            if (upper.startsWith("SELECT ")
-                    || upper.startsWith("INSERT ")
-                    || upper.startsWith("UPDATE ")
-                    || upper.startsWith("DELETE ")) {
-                return spanName;
-            }
-        }
-
         return null;
     }
 

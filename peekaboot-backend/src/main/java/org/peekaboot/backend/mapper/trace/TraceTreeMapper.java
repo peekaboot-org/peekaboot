@@ -263,6 +263,7 @@ public class TraceTreeMapper {
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
+                DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null,
                 null);
     }
 
@@ -278,7 +279,7 @@ public class TraceTreeMapper {
             }
             long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
             totalDurationMs += durationMs;
-            if (isDbQuery(span)) {
+            if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
                 dbTotalDurationMs += durationMs;
             }
@@ -290,18 +291,6 @@ public class TraceTreeMapper {
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
                 new TraceTabSummary.LogsSummary(0, 0, 0) // Logs populated later by TraceInsightsService
                 );
-    }
-
-    /**
-     * An actual DB query is a CLIENT span carrying db.* tags (standard OpenTelemetry) or
-     * jdbc.query* tags (datasource-proxy/Micrometer - not just jdbc.* to avoid counting
-     * connection/result-set spans).
-     */
-    private static boolean isDbQuery(SpanData span) {
-        if (span.kind() != Span.Kind.CLIENT || span.tags() == null) {
-            return false;
-        }
-        return span.tags().keySet().stream().anyMatch(k -> k.startsWith("db.") || k.startsWith("jdbc.query"));
     }
 
     private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {

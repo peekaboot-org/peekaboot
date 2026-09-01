@@ -71,7 +71,7 @@ public class IssueDetector {
         }
 
         // Check for SLOW_QUERY (if DB query span)
-        if (isDbQuerySpan(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
+        if (DbSpans.isQuery(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.SLOW_QUERY,
                     String.format(
@@ -92,7 +92,7 @@ public class IssueDetector {
 
         // Check for HIGH_QUERY_COUNT per span (many direct query children)
         long directQueryChildren =
-                span.children().stream().filter(this::isDbQuerySpan).count();
+                span.children().stream().filter(DbSpans::isQuery).count();
         if (directQueryChildren > properties.getHighQueryCountThreshold()) {
             issues.add(new SpanIssue(
                     IssueType.HIGH_QUERY_COUNT,
@@ -122,17 +122,8 @@ public class IssueDetector {
                 span.errorMessage(),
                 span.errorClass(),
                 span.remoteServiceName(),
+                span.query(),
                 span.logs());
-    }
-
-    /**
-     * Actual query spans only - excludes datasource-proxy connection and result-set
-     * spans. The same tag test as {@code TraceTreeMapper.isDbQuery}, minus its
-     * CLIENT-kind check: a query span of any kind counts here.
-     */
-    private boolean isDbQuerySpan(SpanNode span) {
-        return span.tags() != null
-                && span.tags().keySet().stream().anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     private String getErrorMessage(SpanNode span) {

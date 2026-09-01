@@ -121,7 +121,7 @@ class IssueDetectorTest {
     void detectIssues_shouldNotFlagResultSetSpansAsSlowQuery() {
         // datasource-proxy connection/result-set spans carry jdbc.* tags but
         // are not queries (same distinction as the trace summary)
-        SpanNode span = createSpan("span1", 80, SpanStatus.OK, Map.of("jdbc.row-count", "10"), List.of());
+        SpanNode span = querySpan("span1", 80, Map.of("jdbc.row-count", "10"));
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
         TraceTree result = detector.detectIssues(trace);
@@ -132,12 +132,8 @@ class IssueDetectorTest {
     @Test
     void detectIssues_shouldDetectSlowQuery() {
         // 80ms is at or above the 50ms slow-query threshold
-        SpanNode span = createSpan(
-                "span1",
-                80,
-                SpanStatus.OK,
-                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"),
-                List.of());
+        SpanNode span =
+                querySpan("span1", 80, Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"));
         TraceTree trace = createTrace(span, createSummary(1, 1, 80L, 0));
 
         TraceTree result = detector.detectIssues(trace);
@@ -147,6 +143,17 @@ class IssueDetectorTest {
         assertThat(issue.type()).isEqualTo(IssueType.SLOW_QUERY);
         assertThat(issue.severity()).isEqualTo(IssueSeverity.WARNING);
         assertThat(issue.message()).isEqualTo("Query took 80ms (threshold: 50ms)");
+    }
+
+    @Test
+    void detectIssues_shouldNotDetectSlowQueryOnTheServerSideOfADbTaggedExchange() {
+        // DbSpans.isQuery: only the CLIENT side of a database call is a query
+        SpanNode span = createSpan("span1", 80, SpanStatus.OK, Map.of("db.statement", "SELECT 1"), List.of());
+        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
+
+        TraceTree result = detector.detectIssues(trace);
+
+        assertThat(result.rootSpan().issues()).isEmpty();
     }
 
     @Test
@@ -164,7 +171,7 @@ class IssueDetectorTest {
     @Test
     void detectIssues_shouldDetectHighQueryCountOnRootSpan() {
         // 25 queries: over the 20-query trace threshold
-        SpanNode child = createSpan("child1", 30, SpanStatus.OK, Map.of("db.system", "mysql"), List.of());
+        SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
         SpanNode root = createSpan("root", 50, SpanStatus.OK, Map.of(), List.of(child));
         TraceTree trace = createTrace(root, createSummary(2, 25, 500L, 0));
 
@@ -179,7 +186,7 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldNotAddHighQueryCountToChildSpans() {
-        SpanNode child = createSpan("child1", 30, SpanStatus.OK, Map.of("db.system", "mysql"), List.of());
+        SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
         SpanNode root = createSpan("root", 50, SpanStatus.OK, Map.of(), List.of(child));
         TraceTree trace = createTrace(root, createSummary(2, 25, 500L, 0));
 
@@ -193,7 +200,7 @@ class IssueDetectorTest {
         // Default highQueryCountThreshold is 5; six direct query children exceed it
         List<SpanNode> queries = new java.util.ArrayList<>();
         for (int i = 0; i < 6; i++) {
-            queries.add(createSpan("q" + i, 10, SpanStatus.OK, Map.of("jdbc.query[0]", "SELECT " + i), List.of()));
+            queries.add(querySpan("q" + i, 10, Map.of("jdbc.query[0]", "SELECT " + i)));
         }
         SpanNode service = createSpan("service", 80, SpanStatus.OK, Map.of(), List.copyOf(queries));
         SpanNode root = createSpan("root", 90, SpanStatus.OK, Map.of(), List.of(service));
@@ -209,7 +216,7 @@ class IssueDetectorTest {
     void detectIssues_shouldNotFlagSpanWithQueryChildrenAtThreshold() {
         List<SpanNode> queries = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            queries.add(createSpan("q" + i, 10, SpanStatus.OK, Map.of("jdbc.query[0]", "SELECT " + i), List.of()));
+            queries.add(querySpan("q" + i, 10, Map.of("jdbc.query[0]", "SELECT " + i)));
         }
         SpanNode service = createSpan("service", 80, SpanStatus.OK, Map.of(), List.copyOf(queries));
         SpanNode root = createSpan("root", 90, SpanStatus.OK, Map.of(), List.of(service));
@@ -273,7 +280,12 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldDetectMultipleIssuesOnSameSpan() {
-        SpanNode span = createSpan("span1", 200, SpanStatus.ERROR, Map.of("db.system", "postgresql"), List.of());
+        SpanNode span = node("span1")
+                .kind("CLIENT")
+                .durationMs(200)
+                .status(SpanStatus.ERROR)
+                .tags(Map.of("db.system", "postgresql"))
+                .build();
         TraceTree trace = createTrace(span, createSummary(1, 1, 200L, 1));
 
         TraceTree result = detector.detectIssues(trace);
@@ -403,6 +415,11 @@ class IssueDetectorTest {
                 .tags(tags)
                 .children(children)
                 .build();
+    }
+
+    /** A CLIENT span, the only kind {@code DbSpans.isQuery} accepts. */
+    private SpanNode querySpan(String spanId, long durationMs, Map<String, Object> tags) {
+        return node(spanId).kind("CLIENT").durationMs(durationMs).tags(tags).build();
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceTabSummary summary) {

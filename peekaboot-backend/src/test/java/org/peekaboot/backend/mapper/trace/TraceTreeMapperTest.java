@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -280,6 +281,107 @@ class TraceTreeMapperTest {
         // Then: Only the query span with jdbc.query* tag should be counted, not connection or result-set
         assertThat(result.summary().queries().count()).isEqualTo(1);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(30L);
+    }
+
+    /**
+     * One predicate, {@link DbSpans#isQuery}, decides what a query is for the summary count,
+     * for the Queries tab and for the issue detector's per-span children count - so a trace
+     * mixing every span shape the JDBC instrumentations emit reports one number, not three.
+     */
+    @Test
+    void map_countsExactlyTheSpansTheQueriesTabListsAndTheIssueDetectorInspects() {
+        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
+        var otelQuery = createSpan(
+                "trace1",
+                "q1",
+                "root",
+                "SELECT orders",
+                Span.Kind.CLIENT,
+                10,
+                20,
+                Map.of("db.query.text", "select * from orders", "db.system.name", "h2"));
+        var proxyQuery = createSpan(
+                "trace1",
+                "q2",
+                "root",
+                "query",
+                Span.Kind.CLIENT,
+                40,
+                20,
+                Map.of("jdbc.query[0]", "select * from lines"));
+        var untaggedStatement =
+                createSpan("trace1", "q3", "root", "SELECT users", Span.Kind.CLIENT, 70, 20, Map.of("db.system", "h2"));
+        var connection = createSpan(
+                "trace1",
+                "conn",
+                "root",
+                "connection",
+                Span.Kind.CLIENT,
+                5,
+                100,
+                Map.of("jdbc.datasource.name", "primary"));
+        var resultSet = createSpan(
+                "trace1", "rs", "root", "result-set", Span.Kind.CLIENT, 60, 5, Map.of("jdbc.row-count", "3"));
+        var serverWithDbTag = createSpan(
+                "trace1", "srv", "root", "handle", Span.Kind.SERVER, 90, 5, Map.of("db.statement", "SELECT 1"));
+        var httpCall = createSpan(
+                "trace1", "http", "root", "GET /ext", Span.Kind.CLIENT, 100, 50, Map.of("http.url", "http://x"));
+        var traceData = TraceData.fromSpans(
+                "trace1",
+                List.of(
+                        root,
+                        otelQuery,
+                        proxyQuery,
+                        untaggedStatement,
+                        connection,
+                        resultSet,
+                        serverWithDbTag,
+                        httpCall));
+
+        TraceTree result = mapper.map(traceData, false);
+        int queriesListed = new QueryExtractor().extract(traceData).size();
+        long queryNodes =
+                result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
+
+        assertThat(result.summary().queries().count()).isEqualTo(3);
+        assertThat(queriesListed).isEqualTo(result.summary().queries().count());
+        assertThat(queryNodes).isEqualTo(result.summary().queries().count());
+    }
+
+    @Test
+    void map_putsTheMaskedStatementOnQuerySpansOnly() {
+        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
+        var query = createSpan(
+                "trace1",
+                "q1",
+                "root",
+                "query",
+                Span.Kind.CLIENT,
+                10,
+                20,
+                Map.of("db.query.text", "INSERT INTO hooks VALUES ('https://admin:hunter2@example.com/x')"));
+        var statementless =
+                createSpan("trace1", "q2", "root", "query", Span.Kind.CLIENT, 40, 20, Map.of("db.system", "h2"));
+        var connection = createSpan(
+                "trace1",
+                "conn",
+                "root",
+                "connection",
+                Span.Kind.CLIENT,
+                5,
+                100,
+                Map.of("jdbc.datasource.name", "primary"));
+
+        TraceTree result =
+                mapper.map(TraceData.fromSpans("trace1", List.of(root, query, statementless, connection)), false);
+
+        assertThat(result.rootSpan().query()).isNull();
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId, SpanNode::query)
+                .containsExactly(
+                        tuple("conn", null),
+                        tuple("q1", "INSERT INTO hooks VALUES ('https://******@example.com/x')"),
+                        tuple("q2", null));
     }
 
     @Test
