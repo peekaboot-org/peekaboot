@@ -15,18 +15,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-
 @RestController
 public class OrderApi {
 
     private final OrderService orderService;
 
-
     public OrderApi(OrderService orderService) {
 
         this.orderService = orderService;
     }
-
 
     @GetMapping("/api/orders/{id}/report")
     public OrderReport report(@PathVariable("id") long id) {
@@ -34,13 +31,18 @@ public class OrderApi {
         return orderService.buildReport(id);
     }
 
-
     @PostMapping("/api/orders")
     @ResponseStatus(HttpStatus.CREATED)
     public OrderSummary place(@Valid @RequestBody NewOrder request) {
 
         CustomerOrder created = orderService.placeOrder(request);
-        return new OrderSummary(created.getId(), created.getReference(), created.getStatus(),
-                created.getPlacedAt(), 1, new BigDecimal("19.99"), "customer #" + created.getCustomerId());
+        return new OrderSummary(
+                created.getId(),
+                created.getReference(),
+                created.getStatus(),
+                created.getPlacedAt(),
+                1,
+                new BigDecimal("19.99"),
+                "customer #" + created.getCustomerId());
     }
 }
