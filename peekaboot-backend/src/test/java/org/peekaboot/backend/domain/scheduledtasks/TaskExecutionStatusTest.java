@@ -12,11 +12,10 @@ class TaskExecutionStatusTest {
     @CsvSource({
         "SUCCESS, SUCCESS",
         "success, SUCCESS",
-        "FAILED, FAILED",
         "ERROR, FAILED",
-        "PENDING, PENDING",
         // Boot reports STARTED for a task that is currently executing
         "STARTED, RUNNING",
+        "NONE, UNKNOWN",
         "invalid, UNKNOWN"
     })
     void fromString_shouldParseStatus(String input, TaskExecutionStatus expected) {

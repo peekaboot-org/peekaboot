@@ -96,7 +96,7 @@ class ScheduledTasksMapperTest {
                         new ScheduledTasksResponse.TaskExecution(
                                 new ScheduledTasksResponse.TaskExceptionInfo(
                                         "Task failed", "java.lang.NullPointerException"),
-                                "FAILED",
+                                "ERROR",
                                 "2026-01-11T06:49:20Z"),
                         null,
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask"))),
