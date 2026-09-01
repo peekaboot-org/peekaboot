@@ -1,4 +1,4 @@
-package org.peekaboot.backend.api.insights;
+package org.peekaboot.backend.domain.insights;
 
 import java.util.List;
 import org.peekaboot.backend.domain.application.ApplicationInfo;

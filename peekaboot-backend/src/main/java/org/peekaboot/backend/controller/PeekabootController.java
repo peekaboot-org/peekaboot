@@ -1,10 +1,10 @@
 package org.peekaboot.backend.controller;
 
 import java.util.Locale;
-import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;

@@ -5,7 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
-import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
+import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.mapper.actuator.*;
