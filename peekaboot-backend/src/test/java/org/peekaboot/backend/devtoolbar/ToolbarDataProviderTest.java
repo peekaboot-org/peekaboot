@@ -1,9 +1,9 @@
 package org.peekaboot.backend.devtoolbar;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class ToolbarDataProviderTest {
 
@@ -16,7 +16,7 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldGenerateValidJson() {
-        String json = provider.getToolbarSummaryJson("GET", "/users", 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
 
         assertThat(json).startsWith("{");
         assertThat(json).endsWith("}");
@@ -27,7 +27,7 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldIncludeAllFields() {
-        String json = provider.getToolbarSummaryJson("POST", "/api/data", 201, "trace123");
+        String json = provider.getToolbarSummaryJson("/peekaboot", "POST", "/api/data", 201, "trace123");
 
         assertThat(json).contains("\"method\":\"POST\"");
         assertThat(json).contains("\"path\":\"/api/data\"");
@@ -38,35 +38,35 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldEscapeJsonSpecialCharacters() {
-        String json = provider.getToolbarSummaryJson("GET", "/path/with\"quotes", 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path/with\"quotes", 200, null);
 
         assertThat(json).contains("/path/with\\\"quotes");
     }
 
     @Test
     void shouldHandleNullTraceId() {
-        String json = provider.getToolbarSummaryJson("GET", "/users", 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
 
         assertThat(json).contains("\"traceId\":null");
     }
 
     @Test
     void shouldEscapeBackslashInPath() {
-        String json = provider.getToolbarSummaryJson("GET", "/path\\with\\backslashes", 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path\\with\\backslashes", 200, null);
 
         assertThat(json).contains("/path\\\\with\\\\backslashes");
     }
 
     @Test
     void shouldEscapeNewlinesInPath() {
-        String json = provider.getToolbarSummaryJson("GET", "/path\nwith\nnewlines", 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path\nwith\nnewlines", 200, null);
 
         assertThat(json).contains("/path\\nwith\\nnewlines");
     }
 
     @Test
     void shouldEscapeTabsInTraceId() {
-        String json = provider.getToolbarSummaryJson("GET", "/page", 200, "trace\twith\ttabs");
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/page", 200, "trace\twith\ttabs");
 
         assertThat(json).contains("trace\\twith\\ttabs");
     }
@@ -75,7 +75,8 @@ class ToolbarDataProviderTest {
     void shouldEscapeAngleBracketsToPreventScriptTagBreakout() {
         // The JSON is embedded verbatim inside a <script> tag; a literal
         // </script> in the payload would terminate the tag and inject markup.
-        String json = provider.getToolbarSummaryJson("GET", "/foo</script><script>alert(1)</script>", 200, null);
+        String json = provider.getToolbarSummaryJson(
+                "/peekaboot", "GET", "/foo</script><script>alert(1)</script>", 200, null);
 
         assertThat(json).doesNotContainIgnoringCase("</script>");
         assertThat(json).contains("\\u003c/script\\u003e");
@@ -86,7 +87,7 @@ class ToolbarDataProviderTest {
         String nul = String.valueOf((char) 0x00);
         String bel = String.valueOf((char) 0x07);
 
-        String json = provider.getToolbarSummaryJson("GET", "/p" + nul + "ath" + bel, 200, null);
+        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/p" + nul + "ath" + bel, 200, null);
 
         assertThat(json).doesNotContain(nul);
         assertThat(json).doesNotContain(bel);
@@ -94,9 +95,17 @@ class ToolbarDataProviderTest {
         assertThat(json).contains("\\u0007");
     }
 
+    /** The base path is whatever the filter resolved for this request - context path included. */
+    @Test
+    void shouldCarryTheBasePathItIsGiven() {
+        assertThat(provider.getToolbarSummaryJson("/app/peekaboot", "GET", "/app/users", 200, null))
+                .contains("\"basePath\":\"/app/peekaboot\"");
+        assertThat(provider.getIdleModeJson("/app/peekaboot")).contains("\"basePath\":\"/app/peekaboot\"");
+    }
+
     @Test
     void shouldGenerateIdleModeJson() {
-        String json = provider.getIdleModeJson();
+        String json = provider.getIdleModeJson("/peekaboot");
 
         assertThat(json).startsWith("{");
         assertThat(json).endsWith("}");

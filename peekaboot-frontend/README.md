@@ -113,7 +113,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 
 | Module | Exports |
 |---|---|
-| `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. |
+| `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH` — the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
 | `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables` — the click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |

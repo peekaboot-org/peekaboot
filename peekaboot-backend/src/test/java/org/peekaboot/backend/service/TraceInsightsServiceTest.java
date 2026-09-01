@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
@@ -17,6 +18,7 @@ import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceLog;
+import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
@@ -277,6 +279,29 @@ class TraceInsightsServiceTest {
 
         // Then: slowTrace has VERY_SLOW issue, so slowCount should be 1
         assertThat(response.summary().slowCount()).isEqualTo(1);
+    }
+
+    /** The list feeds the Traces tab's log badges; the counts come from the logs the bundle already holds. */
+    @Test
+    void getInsights_shouldCountEachTracesLogsByLevel() {
+        addTrace("trace1", 100, false);
+        addTrace("trace2", 100, false);
+        store.addLog(logAt("trace1", "ERROR"));
+        store.addLog(logAt("trace1", "WARN"));
+        store.addLog(logAt("trace1", "INFO"));
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces())
+                .extracting(TraceTree::traceId, tree -> tree.summary().logs())
+                .containsExactlyInAnyOrder(
+                        tuple("trace1", new TraceTabSummary.LogsSummary(3, 1, 1)),
+                        tuple("trace2", new TraceTabSummary.LogsSummary(0, 0, 0)));
+    }
+
+    private static LogCapturedEvent logAt(String traceId, String level) {
+        return new LogCapturedEvent(
+                traceId, "span-" + traceId, Instant.EPOCH, level, "TestLogger", level + " line", "main");
     }
 
     @Test

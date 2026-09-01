@@ -25,6 +25,7 @@ import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
@@ -122,9 +123,38 @@ public class TraceInsightsService {
         return traceStore.getTraces(bucket, limit).stream()
                 .map(bundle -> {
                     TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-                    return traceTreeMapper.map(traceData, bundle.truncated());
+                    return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
                 })
                 .filter(Objects::nonNull);
+    }
+
+    /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
+    private static TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
+        TraceTabSummary summary = tree.summary();
+        return new TraceTree(
+                tree.traceId(),
+                tree.startTimeMs(),
+                tree.durationMs(),
+                tree.status(),
+                tree.rootActionType(),
+                tree.rootOperation(),
+                tree.rootSpan(),
+                new TraceTabSummary(
+                        summary.request(),
+                        summary.spans(),
+                        summary.queries(),
+                        logsSummary(logs.stream().map(LogCapturedEvent::level).toList())),
+                tree.inheritedAttributes(),
+                tree.httpExchange(),
+                tree.logs(),
+                tree.queries(),
+                tree.truncated());
+    }
+
+    private static TraceTabSummary.LogsSummary logsSummary(List<String> levels) {
+        int errors = (int) levels.stream().filter("ERROR"::equalsIgnoreCase).count();
+        int warnings = (int) levels.stream().filter("WARN"::equalsIgnoreCase).count();
+        return new TraceTabSummary.LogsSummary(levels.size(), errors, warnings);
     }
 
     private boolean matchesFilters(TraceTree tree, Set<RootActionType> actionTypes, String rootOperation) {
@@ -200,17 +230,11 @@ public class TraceInsightsService {
         // Update logs summary
         TraceTabSummary updatedSummary = tree.summary();
         if (!logs.isEmpty()) {
-            int errorLogCount = (int) logs.stream()
-                    .filter(l -> "ERROR".equalsIgnoreCase(l.level()))
-                    .count();
-            int warnLogCount = (int) logs.stream()
-                    .filter(l -> "WARN".equalsIgnoreCase(l.level()))
-                    .count();
             updatedSummary = new TraceTabSummary(
                     tree.summary().request(),
                     tree.summary().spans(),
                     tree.summary().queries(),
-                    new TraceTabSummary.LogsSummary(logs.size(), errorLogCount, warnLogCount));
+                    logsSummary(logs.stream().map(TraceLog::level).toList()));
         }
 
         return new TraceTree(

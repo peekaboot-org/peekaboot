@@ -698,6 +698,39 @@ class TraceTreeMapperTest {
         assertThat(result.summary().request().statusCode()).isEqualTo(201);
     }
 
+    /**
+     * The names Spring Boot's own server-request observation puts on the root span - the
+     * only ones a default Boot application ever produces. {@code uri} is the route pattern;
+     * {@code http.url} carries the request URI and is the path worth showing.
+     */
+    @Test
+    void map_shouldExtractRequestSummaryFromSpringsDefaultObservationTags() {
+        var root = createSpan(
+                "trace1",
+                "root",
+                null,
+                "http get /api/users/{id}",
+                Span.Kind.SERVER,
+                0,
+                100,
+                Map.of(
+                        "method", "GET",
+                        "uri", "/api/users/{id}",
+                        "status", "200",
+                        "outcome", "SUCCESS",
+                        "exception", "none",
+                        "http.url", "/api/users/42"));
+
+        var traceData = TraceData.fromSpans("trace1", List.of(root));
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.summary().request().method()).isEqualTo("GET");
+        assertThat(result.summary().request().path()).isEqualTo("/api/users/42");
+        assertThat(result.summary().request().statusCode()).isEqualTo(200);
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
+    }
+
     @Test
     void map_shouldTolerateMalformedStatusCodeInRequestSummary() {
         var root = createSpan(

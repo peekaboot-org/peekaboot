@@ -468,7 +468,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * data either: the backend's error-bucket membership is driven by any ERROR-level
      * *log* during the trace, while the frontend's HAS_ERRORS badge is driven only by an
      * actual span exception - the scheduler's fixedRate() logs an error without throwing
-     * and lands in the errors bucket with no badge, alongside fixedDelay()'s real
+     * and lands in the errors bucket with an error-log count but no status badge, alongside fixedDelay()'s real
      * exception, which does get one.
      * <p>
      * What genuinely differs between bucket responses is the item count, so the list is

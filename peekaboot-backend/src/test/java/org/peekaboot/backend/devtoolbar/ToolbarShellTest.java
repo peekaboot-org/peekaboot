@@ -16,13 +16,14 @@ import org.junit.jupiter.api.Test;
  */
 class ToolbarShellTest {
 
+    private static final String BASE_PATH = "/peekaboot";
     private static final String DATA_JSON = "{\"method\":\"GET\",\"path\":\"/persons\",\"basePath\":\"/peekaboot\"}";
 
     private final ToolbarShell shell = new ToolbarShell();
 
     @Test
     void rendersTheBarMarkupIntoADeclarativeShadowRoot() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains("id=\"peekaboot-toolbar-host\"");
         assertThat(html).contains("<template shadowrootmode=\"open\">");
@@ -33,10 +34,27 @@ class ToolbarShellTest {
 
     @Test
     void carriesTheDataBlobAndTheEnhancingModule() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains(DATA_JSON);
         assertThat(html).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\">");
+    }
+
+    /**
+     * Behind a {@code server.servlet.context-path} every URL the shell writes - the script,
+     * the linked sheets, the dashboard links and the {@code url()}s rewritten into the inlined
+     * CSS - has to carry that prefix, or the bar arrives and then 404s on all of them.
+     */
+    @Test
+    void prefixesEveryUrlItWritesWithTheBasePathItIsGiven() {
+        String html = shell.render("/app/peekaboot", DATA_JSON);
+
+        assertThat(html).contains("<script src=\"/app/peekaboot/ui/toolbar/toolbar.js\" type=\"module\">");
+        assertThat(html).contains("<link rel=\"stylesheet\" href=\"/app/peekaboot/ui/assets/tokens.css\">");
+        assertThat(html).contains("<link rel=\"stylesheet\" href=\"/app/peekaboot/ui/toolbar/toolbar.css\">");
+        assertThat(html).contains("href=\"/app/peekaboot/\"");
+        assertThat(html).contains("url('/app/peekaboot/ui/assets/logo-mark.png')");
+        assertThat(html).doesNotContain("\"/peekaboot/ui/");
     }
 
     /**
@@ -46,7 +64,7 @@ class ToolbarShellTest {
      */
     @Test
     void inlinesTheStylesheetsThatAnAuthorizationGateWouldOtherwiseRefuse() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains("--pk-bg:");
         assertThat(html).contains(".pk-toolbar__open");
@@ -60,7 +78,7 @@ class ToolbarShellTest {
      */
     @Test
     void rewritesStylesheetRelativeUrlsToTheirServedPaths() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains("url('/peekaboot/ui/assets/logo-mark.png')");
         assertThat(html).doesNotContain("url('../assets/");
@@ -76,7 +94,7 @@ class ToolbarShellTest {
      */
     @Test
     void inlinesAndAlsoLinksEachSheetSoAStrictCspKeepsOne() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains("<link rel=\"stylesheet\" href=\"/peekaboot/ui/assets/tokens.css\">");
         assertThat(html).contains("<link rel=\"stylesheet\" href=\"/peekaboot/ui/assets/base.css\">");
@@ -92,7 +110,7 @@ class ToolbarShellTest {
      */
     @Test
     void takesItsPositioningFromTheStylesheetNotAnInlineStyleAttribute() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).doesNotContain("style=\"position");
         assertThat(html).contains("position: fixed");
@@ -104,7 +122,7 @@ class ToolbarShellTest {
      */
     @Test
     void theNoticeIsARealLinkToTheDashboard() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         assertThat(html).contains("class=\"pk-toolbar__auth\"");
         assertThat(html).contains("href=\"/peekaboot/\"");
@@ -117,7 +135,7 @@ class ToolbarShellTest {
      */
     @Test
     void theNoticeSitsOutsideTheOpenButton() {
-        String html = shell.render(DATA_JSON);
+        String html = shell.render(BASE_PATH, DATA_JSON);
 
         int buttonEnd = html.indexOf("</button>");
         int noticeStart = html.indexOf("class=\"pk-toolbar__auth\"");

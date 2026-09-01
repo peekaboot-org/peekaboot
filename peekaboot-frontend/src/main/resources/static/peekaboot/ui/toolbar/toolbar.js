@@ -201,7 +201,11 @@ function initToolbar(host, data) {
     // Idle mode (Swagger UI): no request of its own - intercept fetch calls and
     // pick up the trace id from the Server-Timing header of API responses.
     if (data.idle) {
-        const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/'];
+        // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
+        // the prefixes to ignore have to be put behind it too.
+        const contextPath = data.basePath.slice(0, data.basePath.lastIndexOf('/'));
+        const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
+            .map(function(prefix) { return contextPath + prefix; });
         const originalFetch = window.fetch;
 
         window.fetch = function(input, init) {

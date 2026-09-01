@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.observation.ObservationRegistry;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +23,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty(name = "peekaboot.tracing.enabled", matchIfMissing = true)
 public class TracingInterceptorAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);
@@ -39,7 +41,7 @@ public class TracingInterceptorAutoConfiguration {
             public void addInterceptors(InterceptorRegistry registry) {
                 registry.addInterceptor(interceptor)
                         .addPathPatterns("/**")
-                        .excludePathPatterns("/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
+                        .excludePathPatterns(PeekabootPaths.excludePatterns());
             }
         };
     }

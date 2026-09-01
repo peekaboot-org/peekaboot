@@ -93,10 +93,24 @@ public final class LifecycleEventLog {
      */
     private void append(LifecycleEvent event) {
         synchronized (events) {
-            events.add(event);
+            events.add(insertionIndex(event), event);
             trim();
             persist(List.copyOf(events));
         }
+    }
+
+    /**
+     * Events are filed in time order whatever order they arrive: a stop handed over by a
+     * context closing inside the load window would otherwise be persisted ahead of its own
+     * start, which the next run reads as an unclean exit with a negative downtime.
+     * Callers hold the monitor.
+     */
+    private int insertionIndex(LifecycleEvent event) {
+        int index = events.size();
+        while (index > 0 && events.get(index - 1).epochMs() > event.epochMs()) {
+            index--;
+        }
+        return index;
     }
 
     /** Callers hold the monitor. */

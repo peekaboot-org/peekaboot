@@ -16,7 +16,7 @@ import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
-import {createClient} from '../shared/api.js';
+import {createClient, BASE_PATH} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 import * as request from './tabs/request.js';
@@ -85,7 +85,7 @@ export function openTraceDetail(traceId, options = {}) {
     currentSession += 1;
     const session = currentSession;
 
-    const basePath = options.basePath || '/peekaboot';
+    const basePath = options.basePath || BASE_PATH;
 
     const overlayHost = document.createElement('div');
     overlayHost.id = 'peekaboot-trace-overlay';
@@ -175,15 +175,17 @@ function render(content, trace, urlState) {
     bindCopyables(content);
 
     const rootSpan = trace.rootSpan || {};
-    const tags = rootSpan.tags || {};
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
     const res = httpExchange.response || {};
-    // Prefer httpExchange data, fall back to span tags; null (not a placeholder string) for
-    // a trace with no HTTP request at all, so the title falls back to the root-action label.
-    const method = req.method || tags['http.method'] || tags['http.request.method'] || null;
-    const path = req.path || tags['http.target'] || tags['url.path'] || rootSpan.name || '-';
-    const status = res.status || tags['http.status_code'] || tags['http.response.status_code'];
+    // Prefer httpExchange data (toolbar-only), then the summary the server read off the
+    // root span's tags - it knows every convention's names, this module does not; null
+    // (not a placeholder string) for a trace with no HTTP request at all, so the title
+    // falls back to the root-action label.
+    const summaryRequest = trace.summary?.request || {};
+    const method = req.method || summaryRequest.method || null;
+    const path = req.path || summaryRequest.path || rootSpan.name || '-';
+    const status = res.status || summaryRequest.statusCode;
     const durationClass = durationSeverity(trace.durationMs);
 
     const queryCount = (trace.queries || []).length;

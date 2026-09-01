@@ -29,6 +29,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -105,8 +106,9 @@ public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ApplicationStoppedListener applicationStoppedListener(BuildInfoProvider buildInfoProvider) {
-        return new ApplicationStoppedListener(buildInfoProvider);
+    public ApplicationStoppedListener applicationStoppedListener(
+            BuildInfoProvider buildInfoProvider, ApplicationContext applicationContext) {
+        return new ApplicationStoppedListener(buildInfoProvider, applicationContext);
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -147,8 +149,10 @@ public class PeekabootLifecycleAutoConfiguration {
         public LifecycleEventRecorder lifecycleEventRecorder(
                 LifecycleEventLog lifecycleEventLog,
                 BuildInfoProvider buildInfoProvider,
-                ObjectProvider<GitProperties> gitProperties) {
-            return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable());
+                ObjectProvider<GitProperties> gitProperties,
+                ApplicationContext applicationContext) {
+            return new LifecycleEventRecorder(
+                    lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable(), applicationContext);
         }
 
         @Bean

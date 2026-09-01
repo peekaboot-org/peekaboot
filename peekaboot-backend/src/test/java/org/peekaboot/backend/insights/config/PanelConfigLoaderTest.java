@@ -10,6 +10,12 @@ class PanelConfigLoaderTest {
 
     private final ClassPathResource defaults = new ClassPathResource("insights/loader-defaults.yml");
     private final ClassPathResource user = new ClassPathResource("insights/loader-user.yml");
+    private final ClassPathResource shipped = new ClassPathResource("insights/loader-shipped.yml");
+    private final ClassPathResource patch = new ClassPathResource("insights/loader-patch.yml");
+
+    private static PanelDef panelNamed(PanelsFile file, String id) {
+        return file.panels().stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
+    }
 
     @Test
     void loadsDefaultsAlone() {
@@ -41,6 +47,42 @@ class PanelConfigLoaderTest {
         PanelDef custom = file.panels().get(2);
         assertThat(custom.enabled()).isFalse();
         assertThat(custom.series().get(0).stat()).isEqualTo("rate");
+    }
+
+    /** The website's first by-id example: {@code - id: thread-states / enabled: true}, nothing else. */
+    @Test
+    void aTitlelessEntrySwitchesAShippedPanelOnByIdAlone() {
+        PanelsFile file = PanelConfigLoader.load(shipped, patch);
+
+        PanelDef threadStates = panelNamed(file, "thread-states");
+        assertThat(threadStates.enabled()).isTrue();
+        // everything the entry did not mention is the shipped panel's
+        assertThat(threadStates.title()).isEqualTo("Thread states");
+        assertThat(threadStates.chart()).isEqualTo("bars");
+        assertThat(threadStates.order()).isEqualTo(60);
+        assertThat(threadStates.level()).isEqualTo(1);
+        assertThat(threadStates.series()).extracting(SeriesDef::meter).containsExactly("jvm.threads.states");
+    }
+
+    /** The website's second by-id example: {@code - id: load / enabled: false}. */
+    @Test
+    void aTitlelessEntryHidesAShippedPanelWithoutRedefiningIt() {
+        PanelsFile file = PanelConfigLoader.load(shipped, patch);
+
+        PanelDef load = panelNamed(file, "load");
+        assertThat(load.enabled()).isFalse();
+        assertThat(load.title()).isEqualTo("System load");
+        assertThat(load.series()).extracting(SeriesDef::meter).containsExactly("system.load.average.1m");
+    }
+
+    /** A title-less entry can only patch a panel that exists; under a new id there is nothing to patch. */
+    @Test
+    void aTitlelessEntryUnderAnUnknownIdIsRejected() {
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.load(shipped, new ClassPathResource("insights/loader-patch-unknown-id.yml")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("nothing-ships-under-this-id")
+                .hasMessageContaining("title");
     }
 
     @Test

@@ -13,16 +13,25 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * Buffers the response body so the dev toolbar can be injected into HTML
- * pages. Only text/html responses stay buffered: as soon as a non-HTML
- * content type is set (JSON APIs, downloads, text/event-stream) - or
- * {@link #enablePassthrough()} is called explicitly (async requests) - the
+ * pages. Only text/html responses stay buffered, and only up to
+ * {@link #MAX_BUFFERED_BYTES}: as soon as a non-HTML content type is set (JSON
+ * APIs, downloads, text/event-stream), the buffer outgrows the cap, or
+ * {@link #enablePassthrough()} is called explicitly (async requests), the
  * wrapper hands the buffered bytes to the real response and delegates all
- * further writes directly, so streaming and async responses work and large
- * non-HTML bodies are not held in heap.
+ * further writes directly, so streaming and async responses work and no large
+ * body is held in heap. A page past the cap is served without the toolbar.
+ *
+ * <p>Reset and commit semantics follow Spring's {@code ContentCachingResponseWrapper}:
+ * {@link #reset()} clears the buffer along with the real response, {@link #isCommitted()}
+ * is true once the real response is, and {@code sendError}/{@code sendRedirect} drop
+ * what was buffered, since the container replaces the body either way.
  */
 public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
+
+    /** Past this an HTML body streams through uninjected rather than being held in heap. */
+    static final int MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
 
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private ServletOutputStream outputStream;
@@ -57,10 +66,29 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         if (writer != null) {
             writer.flush();
         }
+        switchToPassthrough();
+    }
+
+    /**
+     * The hand-over itself, without flushing the writer: called from inside a write when the
+     * buffer outgrows the cap, where the writer's encoder is mid-flush already.
+     */
+    private void switchToPassthrough() throws IOException {
         passthrough = true;
         if (buffer.size() > 0) {
             buffer.writeTo(getResponse().getOutputStream());
             buffer.reset();
+        }
+    }
+
+    private void bufferOrPassThrough(byte[] b, int off, int len) throws IOException {
+        if (passthrough) {
+            getResponse().getOutputStream().write(b, off, len);
+            return;
+        }
+        buffer.write(b, off, len);
+        if (buffer.size() > MAX_BUFFERED_BYTES) {
+            switchToPassthrough();
         }
     }
 
@@ -108,12 +136,58 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
 
     @Override
     public void resetBuffer() {
+        if (passthrough) {
+            getResponse().resetBuffer();
+        } else {
+            buffer.reset();
+        }
+    }
+
+    @Override
+    public void reset() {
+        super.reset();
         buffer.reset();
     }
 
     @Override
     public boolean isCommitted() {
-        return committed || (passthrough && getResponse().isCommitted());
+        return committed || getResponse().isCommitted();
+    }
+
+    @Override
+    public void sendError(int sc) throws IOException {
+        buffer.reset();
+        super.sendError(sc);
+    }
+
+    @Override
+    public void sendError(int sc, String msg) throws IOException {
+        buffer.reset();
+        super.sendError(sc, msg);
+    }
+
+    @Override
+    public void sendRedirect(String location) throws IOException {
+        buffer.reset();
+        super.sendRedirect(location);
+    }
+
+    @Override
+    public void sendRedirect(String location, int sc) throws IOException {
+        buffer.reset();
+        super.sendRedirect(location, sc);
+    }
+
+    @Override
+    public void sendRedirect(String location, boolean clearBuffer) throws IOException {
+        buffer.reset();
+        super.sendRedirect(location, clearBuffer);
+    }
+
+    @Override
+    public void sendRedirect(String location, int sc, boolean clearBuffer) throws IOException {
+        buffer.reset();
+        super.sendRedirect(location, sc, clearBuffer);
     }
 
     public byte[] getContentAsByteArray() {
@@ -159,20 +233,12 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
 
         @Override
         public void write(int b) throws IOException {
-            if (passthrough) {
-                getResponse().getOutputStream().write(b);
-            } else {
-                buffer.write(b);
-            }
+            bufferOrPassThrough(new byte[] {(byte) b}, 0, 1);
         }
 
         @Override
         public void write(byte[] b, int off, int len) throws IOException {
-            if (passthrough) {
-                getResponse().getOutputStream().write(b, off, len);
-            } else {
-                buffer.write(b, off, len);
-            }
+            bufferOrPassThrough(b, off, len);
         }
 
         @Override

@@ -119,7 +119,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldSkipSpanWhenPathAttributeMatchesFilterPathMatcher() {
+    void shouldSkipSpanWhenPathAttributeMatchesAnExcludedPrefix() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/health", SpanKind.SERVER)
                 .attributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))

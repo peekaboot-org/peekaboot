@@ -80,6 +80,24 @@ class LifecycleEventLogTest {
     }
 
     /**
+     * The start is appended from a virtual thread once the load is in, the stop from the
+     * shutdown thread; a context that closes inside the load window can hand the stop over
+     * first. Persisted as [STOP, START], the next run would read an unclean exit and a
+     * negative downtime, so the log keeps its events in time order whatever order they arrive.
+     */
+    @Test
+    void aStopThatArrivesBeforeItsStartIsStillFiledAfterIt() {
+        LifecycleEventLog log = loaded(null);
+
+        log.recordAndPersist(LifecycleEvent.stop(2_000, 7));
+        log.recordAndPersist(start(1_000));
+
+        assertThat(log.events())
+                .extracting(LifecycleEvent::type)
+                .containsExactly(LifecycleEvent.Type.START, LifecycleEvent.Type.STOP);
+    }
+
+    /**
      * A start is recorded on a virtual thread while a stop is recorded by the shutdown
      * thread, and in a short-lived run the two overlap. Neither may lose its event, and
      * the file must never end up holding a different order than the log it came from.

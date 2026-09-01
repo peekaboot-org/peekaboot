@@ -18,6 +18,12 @@ import org.springframework.core.io.Resource;
  * Loads the bundled panel file and merges an optional user override by id.
  * Uses Spring's YAML property-source machinery so no YAML library dependency
  * is needed anywhere in the starter.
+ *
+ * <p>An override entry with a title is a whole panel and replaces the bundled one of the
+ * same id outright. An entry without a title is a patch: it switches a bundled panel on or
+ * off, or moves it, by id alone - {@code enabled}, {@code order} and {@code level} are taken
+ * from the entry, everything else stays the bundled panel's. A patch under an id nothing
+ * ships is rejected, since there is nothing to patch.
  */
 public final class PanelConfigLoader {
 
@@ -29,11 +35,12 @@ public final class PanelConfigLoader {
     private PanelConfigLoader() {}
 
     public static PanelsFile load(Resource defaults, Resource userOverride) {
-        PanelsFile base = validate(read(defaults));
+        PanelsFile file = validate(read(defaults));
         if (userOverride != null && userOverride.exists()) {
-            base = merge(base, validate(read(userOverride)));
+            file = merge(file, validate(read(userOverride)));
         }
-        return sorted(base);
+        file.panels().forEach(PanelConfigLoader::requireTitle);
+        return sorted(file);
     }
 
     private static PanelsFile read(Resource resource) {
@@ -62,7 +69,7 @@ public final class PanelConfigLoader {
     }
 
     private static void validatePanel(PanelDef panel) {
-        require(panel.id() != null && panel.title() != null, "panel without id/title");
+        require(panel.id() != null, "panel without id");
         require(
                 panel.chart() == null || CHARTS.contains(panel.chart()),
                 "panel '" + panel.id() + "': unknown chart '" + panel.chart() + "'");
@@ -112,14 +119,35 @@ public final class PanelConfigLoader {
         return new PanelsFile(panels, file.tiles());
     }
 
+    /** A panel that survives the merge without a title was a patch that found nothing to patch. */
+    private static void requireTitle(PanelDef panel) {
+        require(panel.title() != null, "panel '" + panel.id() + "' has no title and patches no bundled panel");
+    }
+
     private static PanelsFile merge(PanelsFile base, PanelsFile override) {
         Map<String, PanelDef> panels = new LinkedHashMap<>();
         base.panels().forEach(p -> panels.put(p.id(), p));
-        override.panels().forEach(p -> panels.put(p.id(), p));
+        override.panels().forEach(p -> panels.put(p.id(), isPatch(p, panels) ? patched(panels.get(p.id()), p) : p));
         Map<String, TileDef> tiles = new LinkedHashMap<>();
         base.tiles().forEach(t -> tiles.put(t.id(), t));
         override.tiles().forEach(t -> tiles.put(t.id(), t));
         return new PanelsFile(new ArrayList<>(panels.values()), new ArrayList<>(tiles.values()));
+    }
+
+    private static boolean isPatch(PanelDef entry, Map<String, PanelDef> base) {
+        return entry.title() == null && base.containsKey(entry.id());
+    }
+
+    private static PanelDef patched(PanelDef base, PanelDef patch) {
+        return new PanelDef(
+                base.id(),
+                base.title(),
+                base.chart(),
+                base.unit(),
+                patch.order() != null ? patch.order() : base.order(),
+                patch.enabled() != null ? patch.enabled() : base.enabled(),
+                patch.level() != null ? patch.level() : base.level(),
+                base.series());
     }
 
     private static PanelsFile sorted(PanelsFile file) {

@@ -218,14 +218,14 @@ Core module containing all business logic.
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
 ├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
-├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter)
+├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── application/, config/, datasource/, environment/, flyway/, health/,
 │   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, ...
-├── filter/                 # DevToolbarFilter, RequestCaptureFilter, FilterPathMatcher
+├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
 │   └── web/                # InsightsController, InsightsSsePublisher — /peekaboot/api/insights/*
@@ -264,15 +264,28 @@ org.peekaboot.backend/
 | `DevToolbarFilter` | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it |
 | `RequestCaptureFilter` | Captures request/response metadata for traces |
 
-Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints. Both
+Both use `PeekabootPaths` to skip static resources and peekaboot's own endpoints. That
+class is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix, the
+excluded prefixes, and the same exclusions as MVC patterns for the tracing interceptor.
+Everything in it is relative to the servlet context: the filters match on the container's
+mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather than the
+raw request URI, so a `server.servlet.context-path` or a `/x/../peekaboot/...` spelling
+cannot hide the dashboard's own calls from the exclusion, and every URL the toolbar
+writes into a page — script, stylesheets, dashboard links, the `basePath` in its data blob
+— is prefixed with `request.getContextPath()`. On the browser side `shared/api.js`
+derives the same base path from its own module URL, so the dashboard and the overlay it
+opens need no configuration either. The `/actuator/` exclusion is a fixed prefix and does
+not follow `management.endpoints.web.base-path`. Both filters
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
-toolbar on, a trace can still carry a basic method/path/status summary read directly off the
-root span's own HTTP tags — but `TraceTreeMapper.extractRequestSummary` only recognises the
-OpenTelemetry-convention names (`http.request.method`/`http.method`, `url.path`/`http.target`,
-`http.response.status_code`/`http.status_code`), not the `method`/`uri`/`status` tags Spring
-Boot's own server-request observation puts on the span, so whether the summary is populated
-depends on which instrumentation named the root span's tags. Headers, query/form parameters
+toolbar on, a trace still carries a basic method/path/status summary (`summary.request`)
+read off the root span's own HTTP tags by `HttpSpanTags`, which knows all three naming
+schemes that reach the store: Spring Boot's default server-request observation (`method`,
+`status`, `uri` — the route pattern — and `http.url`, which is the request URI and therefore
+the path shown), the current OpenTelemetry names (`http.request.method`, `url.path`,
+`http.response.status_code`) and their superseded spelling (`http.method`, `http.target`,
+`http.status_code`). The overlay reads `summary.request` rather than the tags itself, so the
+browser never has to know those names. Headers, query/form parameters
 and the resolved controller class/method are never available without the toolbar;
 correlated logs are likewise unavailable (see *Log Capture* below). Request/response body
 content and uploaded file names have fields reserved for them on `HttpExchange` but aren't
@@ -495,6 +508,11 @@ guard, since neither touches anything servlet-specific. `PeekabootDefaultsEnviro
 applies the same split to the property defaults: the activation, storage and value-visibility
 detection is web-type independent, while `peekaboot-defaults.yml` and the dev-toolbar defaults
 are skipped for a non-servlet application (see *Default Properties*).
+
+guard, since neither touches anything servlet-specific. `OtelTracingAutoConfiguration` and
+`TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled`
+(default on): handler and view observations are tracing, and with it off there is no store
+for them to land in.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
@@ -784,5 +802,4 @@ The `afterName` attribute (string-based) is used instead of a class reference be
 ## Known defects
 
 Open defects live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2, each naming the class at
-fault and the remedy. The one open at the time of writing: the trace-list endpoint's
-`summary.logs` is always `0/0/0` (§2.4).
+fault and the remedy; what was closed, and why, is in its §5.

@@ -12,22 +12,42 @@ import org.springframework.context.event.ContextClosedEvent;
 
 class ApplicationStoppedListenerTest {
 
-    /** A close event whose context has been up for {@code uptime}. */
-    private static ContextClosedEvent closedAfter(Duration uptime) {
+    private static ApplicationContext contextUpFor(Duration uptime) {
         ApplicationContext context = mock(ApplicationContext.class);
         when(context.getStartupDate()).thenReturn(System.currentTimeMillis() - uptime.toMillis());
+        return context;
+    }
+
+    private static ContextClosedEvent closing(ApplicationContext context) {
         ContextClosedEvent event = mock(ContextClosedEvent.class);
         when(event.getApplicationContext()).thenReturn(context);
         return event;
     }
 
     private static String banner(Duration uptime, BuildInfoProvider buildInfo) {
-        ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo);
+        ApplicationContext context = contextUpFor(uptime);
+        ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo, context);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
-            listener.onApplicationEvent(closedAfter(uptime));
+            listener.onApplicationEvent(closing(context));
 
             assertThat(capture.appender().list).hasSize(1);
             return capture.appender().list.get(0).getFormattedMessage();
+        }
+    }
+
+    /**
+     * With a separate management port, Boot closes the child management context as the
+     * parent closes and its ContextClosedEvent is forwarded to the parent's listeners; only
+     * the context this listener belongs to gets a banner, or the application logs two.
+     */
+    @Test
+    void anotherContextsCloseIsNotThisApplicationsStop() {
+        ApplicationStoppedListener listener =
+                new ApplicationStoppedListener(new BuildInfoProvider(null), contextUpFor(Duration.ofMinutes(5)));
+        try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
+            listener.onApplicationEvent(closing(contextUpFor(Duration.ofMinutes(4))));
+
+            assertThat(capture.appender().list).isEmpty();
         }
     }
 
