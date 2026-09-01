@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.AsyncHandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.View;
 
 /**
  * Interceptor that creates spans for controller execution and view rendering.
@@ -63,8 +64,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         stopHandlerObservation(request, null);
 
         // Start view rendering observation only if there's a view to render
-        if (modelAndView != null && modelAndView.getViewName() != null) {
-            String viewName = modelAndView.getViewName();
+        String viewName = viewName(modelAndView);
+        if (viewName != null) {
             Observation viewObservation = Observation.createNotStarted("spring.view.render", observationRegistry)
                     .lowCardinalityKeyValue("view.type", "template")
                     .highCardinalityKeyValue("view.name", viewName)
@@ -126,6 +127,18 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
             scope.close();
             request.removeAttribute(scopeAttribute);
         }
+    }
+
+    /** The view to render, by name or - for a handler that returned a View instance - by type; null when there is none. */
+    private static String viewName(ModelAndView modelAndView) {
+        if (modelAndView == null) {
+            return null;
+        }
+        if (modelAndView.getViewName() != null) {
+            return modelAndView.getViewName();
+        }
+        View view = modelAndView.getView();
+        return view == null ? null : view.getClass().getSimpleName();
     }
 
     private String resolveHandlerName(Object handler) {

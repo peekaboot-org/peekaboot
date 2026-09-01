@@ -14,6 +14,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.ModelAndView;
+import org.springframework.web.servlet.view.RedirectView;
 
 class TracingHandlerInterceptorTest {
 
@@ -70,6 +71,22 @@ class TracingHandlerInterceptorTest {
                 .hasObservationWithNameEqualTo("spring.view.render")
                 .that()
                 .hasHighCardinalityKeyValue("view.name", "users/list");
+    }
+
+    /** A handler may return a View instance rather than a name; it renders all the same. */
+    @Test
+    void postHandle_shouldStartViewObservationForAViewInstance() {
+        request.setRequestURI("/api/users");
+        Object handler = new Object();
+        ModelAndView modelAndView = new ModelAndView(new RedirectView("/users"));
+
+        interceptor.preHandle(request, response, handler);
+        interceptor.postHandle(request, response, handler, modelAndView);
+
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.view.render")
+                .that()
+                .hasHighCardinalityKeyValue("view.name", "RedirectView");
     }
 
     @Test
