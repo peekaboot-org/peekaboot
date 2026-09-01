@@ -93,6 +93,11 @@ function writeUrlParams(container) {
     currentContext.setUrlParams(params);
 }
 
+/** A logger with an explicitly configured level, as opposed to one merely inheriting its parent's. */
+function isConfigured(logger) {
+    return logger.configuredLevel != null;
+}
+
 /** ERROR/WARN/INFO map to their badge variant; DEBUG/TRACE/unset fall back to muted. */
 function levelVariant(level) {
     if (level === 'ERROR') return 'error';
@@ -127,7 +132,7 @@ function renderGroups(container, filterQuery) {
         .map(group => ({
             packageName: group.packageName,
             loggers: group.loggers.filter(logger => {
-                if (configuredOnly && !logger.configuredLevel) return false;
+                if (configuredOnly && !isConfigured(logger)) return false;
                 if (filterQuery && !logger.name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
                 return true;
             })
@@ -161,7 +166,7 @@ function renderLoggerRow(logger, filterQuery) {
     row.className = 'pk-kv';
 
     const nameEl = document.createElement('span');
-    nameEl.className = 'pk-kv__key' + (logger.configuredLevel !== null ? ' pk-kv__key--configured' : '');
+    nameEl.className = 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '');
     nameEl.innerHTML = highlightText(logger.name, filterQuery);
     row.appendChild(nameEl);
 
