@@ -23,11 +23,6 @@ public final class DataSourceMetadata {
 
     private final String username;
 
-    public List<Host> getHosts() {
-
-        return hosts;
-    }
-
     private final List<Host> hosts;
 
     private final String databaseName;
@@ -105,6 +100,11 @@ public final class DataSourceMetadata {
     public String getUsername() {
 
         return username;
+    }
+
+    public List<Host> getHosts() {
+
+        return hosts;
     }
 
     public String getDatabaseName() {

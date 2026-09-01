@@ -149,9 +149,10 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
         report.append(String.format(
-                "Heap Memory: used=%s, max=%s%n", formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())));
+                " Heap Memory: used=%s, max=%s\n",
+                formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())));
         report.append(String.format(
-                "Non-Heap Memory: used=%s, max=%s%n",
+                " Non-Heap Memory: used=%s, max=%s\n",
                 formatBytes(nonHeapMemory.getUsed()),
                 formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)));
         report.append(LifecycleBanner.LINE).append("\n");
@@ -167,7 +168,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
             report.append(String.format(
-                    " DB Connection [%s]: %s on %s (user: %s)%n%n",
+                    " DB Connection [%s]: %s on %s (user: %s)\n\n",
                     metadata.getDataSourceName(),
                     metadata.getDatabaseName(),
                     metadata.getHosts(),
@@ -183,7 +184,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             }
 
             report.append(String.format(
-                    " DB Version: %s %s%n", metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
+                    " DB Version: %s %s\n", metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
             report.append(LifecycleBanner.LINE).append("\n");
 
             appendPoolInfo(report, metadata.getDataSourceName());
@@ -203,17 +204,13 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         if (dataSource instanceof HikariDataSource hikariDataSource) {
             HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
             report.append(String.format(
-                    " DB Pool: minimumIdle=%d, maximumPoolSize=%d%n%n",
+                    " DB Pool: minimumIdle=%d, maximumPoolSize=%d\n\n",
                     config.getMinimumIdle(), config.getMaximumPoolSize()));
 
-            try {
-                report.append(" Connection Timeout: ")
-                        .append(config.getConnectionTimeout())
-                        .append(" ms\n");
-                report.append(LifecycleBanner.LINE).append("\n");
-            } catch (Exception e) {
-                logger.debug("Could not retrieve connection timeout", e);
-            }
+            report.append(" Connection Timeout: ")
+                    .append(config.getConnectionTimeout())
+                    .append(" ms\n");
+            report.append(LifecycleBanner.LINE).append("\n");
         }
     }
 
