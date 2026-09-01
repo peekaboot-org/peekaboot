@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.slf4j.Logger;
@@ -57,9 +58,7 @@ public class RequestCaptureFilter implements Filter {
             return;
         }
 
-        String uri = httpRequest.getRequestURI();
-
-        if (shouldSkip(uri)) {
+        if (PeekabootPaths.isExcluded(PeekabootPaths.pathWithinApplication(httpRequest))) {
             chain.doFilter(request, response);
             return;
         }
@@ -77,10 +76,6 @@ public class RequestCaptureFilter implements Filter {
                 log.warn("Failed to capture request details", e);
             }
         }
-    }
-
-    private boolean shouldSkip(String path) {
-        return FilterPathMatcher.shouldSkip(path);
     }
 
     private void setServerTimingHeader(HttpServletResponse response) {

@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.observation.ObservationRegistry;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ public class TracingInterceptorAutoConfiguration {
             public void addInterceptors(InterceptorRegistry registry) {
                 registry.addInterceptor(interceptor)
                         .addPathPatterns("/**")
-                        .excludePathPatterns("/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
+                        .excludePathPatterns(PeekabootPaths.excludePatterns());
             }
         };
     }

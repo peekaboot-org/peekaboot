@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -71,7 +72,7 @@ class DevToolbarFilterTest {
                 "/error"
             })
     void shouldSkipExcludedPaths(String path) throws Exception {
-        when(request.getRequestURI()).thenReturn(path);
+        when(request.getServletPath()).thenReturn(path);
 
         filter.doFilter(request, response, chain);
 
@@ -83,7 +84,7 @@ class DevToolbarFilterTest {
             strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
             })
     void shouldSkipStaticFileExtensions(String extension) throws Exception {
-        when(request.getRequestURI()).thenReturn("/app/file" + extension);
+        when(request.getServletPath()).thenReturn("/app/file" + extension);
 
         filter.doFilter(request, response, chain);
 
@@ -92,7 +93,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldSkipAjaxRequests() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getServletPath()).thenReturn("/users/123");
         when(request.getHeader("X-Requested-With")).thenReturn("XMLHttpRequest");
 
         filter.doFilter(request, response, chain);
@@ -100,9 +101,47 @@ class DevToolbarFilterTest {
         verify(chain).doFilter(request, response);
     }
 
+    /**
+     * Peekaboot's own endpoints stay excluded behind a context path: the filter matches on
+     * the container's mapped, context-relative path rather than the raw request URI - which
+     * is also what keeps a {@code /x/../peekaboot/...} spelling from slipping past.
+     */
+    @Test
+    void shouldSkipPeekabootPathsBehindAContextPath() throws Exception {
+        lenient().when(request.getContextPath()).thenReturn("/app");
+        lenient().when(request.getRequestURI()).thenReturn("/app/peekaboot/ui/dashboard/index.html");
+        when(request.getServletPath()).thenReturn("/peekaboot/ui/dashboard/index.html");
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+    }
+
+    /** Every URL the bar carries - script, sheets, links, API base - has to sit behind the context path. */
+    @Test
+    void shouldPrefixTheBarsUrlsWithTheContextPath() throws Exception {
+        when(request.getContextPath()).thenReturn("/app");
+        when(request.getRequestURI()).thenReturn("/app/users/123");
+        when(request.getServletPath()).thenReturn("/users/123");
+        when(request.getMethod()).thenReturn("GET");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+        when(response.getStatus()).thenReturn(200);
+
+        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
+        stubHtmlResponse("<html><body></body></html>");
+
+        filter.doFilter(request, response, chain);
+
+        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        assertThat(result).contains("<script src=\"/app/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
+        assertThat(result).contains("href=\"/app/peekaboot/ui/assets/tokens.css\"");
+        assertThat(result).contains("\"basePath\":\"/app/peekaboot\"");
+        assertThat(result).contains("\"path\":\"/app/users/123\"");
+    }
+
     @Test
     void shouldSkipNonHtmlResponses() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
@@ -125,7 +164,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldInjectToolbarIntoHtmlResponse() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -146,7 +185,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldResolveTraceIdFromCurrentSpanWhenPresent() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -173,7 +212,7 @@ class DevToolbarFilterTest {
     void shouldInjectBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
         // 'İ' (U+0130) lowercases to two characters; the </body> index must be
         // computed on the original string, not a lowercased copy
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -194,7 +233,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldPreserveResponseCharsetWhenInjecting() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -215,7 +254,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldHandleResponseWithoutBodyTag() throws Exception {
-        when(request.getRequestURI()).thenReturn("/fragment");
+        stubPath("/fragment");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
@@ -233,7 +272,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldHandleToolbarGenerationError() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -243,7 +282,7 @@ class DevToolbarFilterTest {
         // ToolbarDataProvider is a plain, real class with no injectable failure point;
         // a locally-scoped mock is needed here to force the error path this test targets.
         ToolbarDataProvider throwingProvider = mock(ToolbarDataProvider.class);
-        when(throwingProvider.getToolbarSummaryJson(any(), any(), any(Integer.class), any()))
+        when(throwingProvider.getToolbarSummaryJson(any(), any(), any(), any(Integer.class), any()))
                 .thenThrow(new RuntimeException("Provider error"));
         DevToolbarFilter throwingFilter = new DevToolbarFilter(throwingProvider, tracer);
 
@@ -271,7 +310,7 @@ class DevToolbarFilterTest {
      */
     @Test
     void shouldNotCommitAPartialPageWhenTheChainThrows() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPath("/users/123");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
         doAnswer(invocation -> {
@@ -294,7 +333,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldPassthroughAsyncResponsesWithoutInjection() throws Exception {
-        when(request.getRequestURI()).thenReturn("/sse/stream");
+        stubPath("/sse/stream");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(request.isAsyncStarted()).thenReturn(true);
@@ -316,7 +355,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldStreamNonHtmlResponsesDuringRequest() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/stream");
+        stubPath("/api/stream");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
@@ -342,7 +381,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldInjectExternalToolbarScriptLoader() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -359,7 +398,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldInjectIdleModeToolbarForSwaggerUi() throws Exception {
-        when(request.getRequestURI()).thenReturn("/swagger-ui/index.html");
+        stubPage("/swagger-ui/index.html");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
 
@@ -376,7 +415,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldNotUseIdleModeForRegularPages() throws Exception {
-        when(request.getRequestURI()).thenReturn("/users/123");
+        stubPage("/users/123");
         when(request.getMethod()).thenReturn("GET");
         when(request.getHeader("X-Requested-With")).thenReturn(null);
         when(response.getStatus()).thenReturn(200);
@@ -399,6 +438,18 @@ class DevToolbarFilterTest {
         TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
         when(response.getOutputStream()).thenReturn(servletOutputStream);
         return originalOutput;
+    }
+
+    /** A request without a context path: the request URI and the container's mapped path coincide. */
+    private void stubPath(String path) {
+        when(request.getRequestURI()).thenReturn(path);
+        when(request.getServletPath()).thenReturn(path);
+    }
+
+    /** {@link #stubPath} for a page the bar gets rendered into, which also needs the (empty) context path. */
+    private void stubPage(String path) {
+        stubPath(path);
+        when(request.getContextPath()).thenReturn("");
     }
 
     /** {@code stubResponse("text/html", content)} — the common case for the tests below. */

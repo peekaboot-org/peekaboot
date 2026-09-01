@@ -203,8 +203,10 @@ class PeekabootTracingAutoConfigurationTest {
             MappedInterceptor mapped = (MappedInterceptor) registered.getFirst();
 
             assertThat(mapped.getIncludePathPatterns()).containsExactly("/**");
+            // context-relative MVC patterns, so a server.servlet.context-path changes nothing here
             assertThat(mapped.getExcludePathPatterns())
-                    .containsExactlyInAnyOrder("/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
+                    .containsExactlyInAnyOrder(
+                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**", "/error");
         });
     }
 

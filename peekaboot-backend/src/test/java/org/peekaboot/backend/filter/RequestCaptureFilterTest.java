@@ -74,7 +74,7 @@ class RequestCaptureFilterTest {
     @ValueSource(
             strings = {"/static/app.js", "/webjars/jquery.js", "/actuator/health", "/peekaboot/api/traces", "/error"})
     void shouldSkipExcludedPaths(String path) throws Exception {
-        when(request.getRequestURI()).thenReturn(path);
+        stubPath(path);
 
         filter.doFilter(request, response, chain);
 
@@ -84,7 +84,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldNotPublishEventWithoutTraceId() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
@@ -114,7 +114,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureRequestHeaders() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("POST");
         when(response.getStatus()).thenReturn(201);
 
@@ -139,7 +139,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskSensitiveHeaders() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
 
@@ -174,7 +174,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskProxyAuthorizationHeader() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
 
@@ -196,7 +196,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureQueryParameters() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -220,7 +220,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskSensitiveQueryParameterValues() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/search");
+        stubPath("/search");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -245,7 +245,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskTheRawQueryStringPerParameter() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/search");
+        stubPath("/search");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -271,7 +271,7 @@ class RequestCaptureFilterTest {
         // query-string keys belong in queryParams and only body keys in formParams -
         // "password" here has no query-string counterpart, so it lands in formParams.
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/login");
+        stubPath("/login");
         when(request.getMethod()).thenReturn("POST");
         when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
         when(request.getQueryString()).thenReturn(null);
@@ -297,7 +297,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldPreserveAQueryStringPairWithNoValue() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/search");
+        stubPath("/search");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -336,7 +336,7 @@ class RequestCaptureFilterTest {
         // only actual query-string keys belong in queryParams and only
         // body keys in formParams
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("POST");
         when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
         when(request.getQueryString()).thenReturn("page=1");
@@ -384,7 +384,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureResponseHeaders() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -407,7 +407,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskSensitiveResponseHeaders() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
@@ -429,7 +429,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldStillExecuteFilterChainEvenWhenNoTraceId() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
@@ -487,7 +487,7 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldNotSetServerTimingHeaderWhenNoSpan() throws Exception {
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
@@ -498,7 +498,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldLogWarningAndNotPublishEventWhenCaptureFails() throws Exception {
         setupTraceContext("trace1");
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenThrow(new RuntimeException("boom"));
@@ -516,13 +516,52 @@ class RequestCaptureFilterTest {
         }
     }
 
+    /**
+     * Peekaboot's own endpoints stay excluded behind a context path: the filter matches on
+     * the container's mapped path, which is context-relative, not on the raw request URI.
+     */
+    @Test
+    void shouldSkipPeekabootPathsBehindAContextPath() throws Exception {
+        when(request.getContextPath()).thenReturn("/app");
+        when(request.getRequestURI()).thenReturn("/app/peekaboot/api/traces");
+        when(request.getServletPath()).thenReturn("/peekaboot/api/traces");
+        setupTraceContext("trace1");
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain).doFilter(request, response);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    /** The captured path is what the browser addressed - context path included. */
+    @Test
+    void shouldCaptureTheRequestUriWithItsContextPath() throws Exception {
+        setupTraceContext("trace1");
+        setupBasicRequestResponse();
+        when(request.getContextPath()).thenReturn("/app");
+        when(request.getRequestURI()).thenReturn("/app/api/users");
+        when(request.getServletPath()).thenReturn("/api/users");
+
+        filter.doFilter(request, response, chain);
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().path()).isEqualTo("/app/api/users");
+    }
+
     private void setupBasicRequestResponse() {
-        when(request.getRequestURI()).thenReturn("/api/users");
+        stubPath("/api/users");
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
         when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
         when(response.getHeaderNames()).thenReturn(Collections.emptyList());
         when(request.getParameterMap()).thenReturn(Map.of());
+    }
+
+    /** Without a context path the request URI and the container's mapped path coincide. */
+    private void stubPath(String path) {
+        when(request.getRequestURI()).thenReturn(path);
+        when(request.getServletPath()).thenReturn(path);
     }
 
     public static class TestController {

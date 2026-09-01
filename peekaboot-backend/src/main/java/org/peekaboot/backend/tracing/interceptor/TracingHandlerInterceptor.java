@@ -5,7 +5,6 @@ import io.micrometer.observation.ObservationRegistry;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.peekaboot.backend.filter.FilterPathMatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.method.HandlerMethod;
@@ -16,6 +15,9 @@ import org.springframework.web.servlet.ModelAndView;
  * Interceptor that creates spans for controller execution and view rendering.
  * Opens an observation scope so spans created inside the handler (JDBC, HTTP
  * clients, ...) nest under the handler span instead of the HTTP server span.
+ *
+ * <p>Peekaboot's own endpoints and static resources are kept out by the context-relative
+ * exclude patterns the interceptor is registered with, not by the interceptor itself.
  */
 public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
@@ -35,9 +37,6 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        if (FilterPathMatcher.shouldSkip(request.getRequestURI())) {
-            return true;
-        }
         // the initial dispatch already observed this request; don't double-count
         // the ASYNC re-dispatch
         if (request.getDispatcherType() == DispatcherType.ASYNC
@@ -61,10 +60,6 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     @Override
     public void postHandle(
             HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
-        if (FilterPathMatcher.shouldSkip(request.getRequestURI())) {
-            return;
-        }
-
         stopHandlerObservation(request, null);
 
         // Start view rendering observation only if there's a view to render
@@ -92,10 +87,6 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     @Override
     public void afterCompletion(
             HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        if (FilterPathMatcher.shouldSkip(request.getRequestURI())) {
-            return;
-        }
-
         // Stop view observation if present
         Observation viewObservation = (Observation) request.getAttribute(VIEW_OBSERVATION_ATTR);
         if (viewObservation != null) {

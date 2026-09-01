@@ -214,14 +214,14 @@ Core module containing all business logic.
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
 ├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
-├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig
+├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig, PeekabootPaths
 ├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── application/, config/, datasource/, environment/, flyway/, health/,
 │   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, ...
-├── filter/                 # DevToolbarFilter, RequestCaptureFilter, FilterPathMatcher
+├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
 │   └── web/                # InsightsController, InsightsSsePublisher — /peekaboot/api/insights/*
@@ -260,7 +260,18 @@ org.peekaboot.backend/
 | `DevToolbarFilter` | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it |
 | `RequestCaptureFilter` | Captures request/response metadata for traces |
 
-Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints. Both
+Both use `PeekabootPaths` to skip static resources and peekaboot's own endpoints. That
+class is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix, the
+excluded prefixes, and the same exclusions as MVC patterns for the tracing interceptor.
+Everything in it is relative to the servlet context: the filters match on the container's
+mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather than the
+raw request URI, so a `server.servlet.context-path` or a `/x/../peekaboot/...` spelling
+cannot hide the dashboard's own calls from the exclusion, and every URL the toolbar
+writes into a page — script, stylesheets, dashboard links, the `basePath` in its data blob
+— is prefixed with `request.getContextPath()`. On the browser side `shared/api.js`
+derives the same base path from its own module URL, so the dashboard and the overlay it
+opens need no configuration either. The `/actuator/` exclusion is a fixed prefix and does
+not follow `management.endpoints.web.base-path`. Both filters
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
 toolbar on, a trace can still carry a basic method/path/status summary read directly off the

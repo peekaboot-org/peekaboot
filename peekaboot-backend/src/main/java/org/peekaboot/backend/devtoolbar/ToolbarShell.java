@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,21 +23,28 @@ import org.slf4j.LoggerFactory;
  * bar arrives with the page: unauthorized, it shows the notice and a real link to the
  * dashboard, where their browser can challenge them for credentials; authorized,
  * toolbar.js adopts the same markup and fills it in.
+ *
+ * <p>Every URL the shell writes is relative to the base path handed to {@link #render}, so
+ * a page served behind a {@code server.servlet.context-path} gets links that resolve.
  */
 public class ToolbarShell {
 
     private static final Logger log = LoggerFactory.getLogger(ToolbarShell.class);
 
-    private static final String CLASSPATH_ROOT = "/static";
+    /** Where the sheets live on the classpath; mirrors the base path they are served under. */
+    private static final String CLASSPATH_ROOT = "/static" + PeekabootPaths.BASE_PATH;
+
+    /** Stands in for the base path until {@link #render} knows it; also survives into the inlined CSS. */
+    private static final String BASE_TOKEN = "{{BASE}}";
 
     /**
-     * Every sheet the bar's own appearance depends on, in cascade order. components.css is
-     * deliberately absent: it styles the status badge and the copy control, both of which
-     * only exist once toolbar.js has injected them, so a reader who cannot load the script
-     * cannot reach anything it styles either - and it is 12 KB.
+     * Every sheet the bar's own appearance depends on, in cascade order, relative to the base
+     * path. components.css is deliberately absent: it styles the status badge and the copy
+     * control, both of which only exist once toolbar.js has injected them, so a reader who
+     * cannot load the script cannot reach anything it styles either - and it is 12 KB.
      */
-    private static final List<String> INLINED_SHEETS = List.of(
-            "/peekaboot/ui/assets/tokens.css", "/peekaboot/ui/assets/base.css", "/peekaboot/ui/toolbar/toolbar.css");
+    private static final List<String> INLINED_SHEETS =
+            List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/toolbar/toolbar.css");
 
     /**
      * Linked as well as inlined. A host page whose CSP omits {@code style-src 'unsafe-inline'}
@@ -46,10 +54,7 @@ public class ToolbarShell {
      * links. Both come from the same file, so there is nothing to keep in sync.
      */
     private static final List<String> LINKED_SHEETS = List.of(
-            "/peekaboot/ui/assets/tokens.css",
-            "/peekaboot/ui/assets/base.css",
-            "/peekaboot/ui/assets/components.css",
-            "/peekaboot/ui/toolbar/toolbar.css");
+            "/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css", "/ui/toolbar/toolbar.css");
 
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
@@ -70,8 +75,11 @@ public class ToolbarShell {
      * accessibility tree. The dashboard link, the sign-in notice and the copyable trace id
      * are siblings of that button rather than descendants, so each stays independently
      * reachable - and a link nested inside a button would be invalid HTML the parser moves.
+     *
+     * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
+     *     prefix behind the request's context path
      */
-    public String render(String dataJson) {
+    public String render(String basePath, String dataJson) {
         return """
             <!-- Peekaboot Dev Toolbar -->
             <div id="peekaboot-toolbar-host">
@@ -100,13 +108,13 @@ public class ToolbarShell {
             <script src="{{BASE}}/ui/toolbar/toolbar.js" type="module"></script>
             """.replace("{{CSS}}", inlinedCss)
                 .replace("{{LINKS}}", stylesheetLinks())
-                .replace("{{BASE}}", ToolbarDataProvider.BASE_PATH)
+                .replace(BASE_TOKEN, basePath)
                 .replace("{{DATA}}", dataJson);
     }
 
     private static String stylesheetLinks() {
         return LINKED_SHEETS.stream()
-                .map(href -> "        <link rel=\"stylesheet\" href=\"" + href + "\">")
+                .map(href -> "        <link rel=\"stylesheet\" href=\"" + BASE_TOKEN + href + "\">")
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("");
     }
@@ -140,7 +148,8 @@ public class ToolbarShell {
     /**
      * A relative {@code url()} resolves against the stylesheet that contains it. Inlined into
      * the page the same text would resolve against the page instead, so each one is rewritten
-     * to the path it had while the sheet was still being served from its own URL.
+     * to the path it had while the sheet was still being served from its own URL - behind the
+     * base-path token, which {@link #render} fills in per request.
      */
     private static String resolveRelativeUrls(String css, String servedPath) {
         URI sheetUri = URI.create(servedPath);
@@ -158,7 +167,8 @@ public class ToolbarShell {
             return "url('" + target + "')";
         }
         try {
-            return "url('" + sheetUri.resolve(new URI(null, null, target, null)).getPath() + "')";
+            return "url('" + BASE_TOKEN
+                    + sheetUri.resolve(new URI(null, null, target, null)).getPath() + "')";
         } catch (URISyntaxException e) {
             log.debug("Leaving unparseable stylesheet url({}) alone: {}", target, e.getMessage());
             return "url('" + target + "')";

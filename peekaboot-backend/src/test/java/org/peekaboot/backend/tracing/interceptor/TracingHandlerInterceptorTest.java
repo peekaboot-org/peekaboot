@@ -54,26 +54,6 @@ class TracingHandlerInterceptorTest {
     }
 
     @Test
-    void preHandle_shouldSkipExcludedPaths() {
-        request.setRequestURI("/peekaboot/api/traces");
-        Object handler = new Object();
-
-        interceptor.preHandle(request, response, handler);
-
-        assertThat(observationRegistry).hasNumberOfObservationsEqualTo(0);
-    }
-
-    @Test
-    void preHandle_shouldSkipActuatorPaths() {
-        request.setRequestURI("/actuator/health");
-        Object handler = new Object();
-
-        interceptor.preHandle(request, response, handler);
-
-        assertThat(observationRegistry).hasNumberOfObservationsEqualTo(0);
-    }
-
-    @Test
     void postHandle_shouldStopHandlerAndStartViewObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();

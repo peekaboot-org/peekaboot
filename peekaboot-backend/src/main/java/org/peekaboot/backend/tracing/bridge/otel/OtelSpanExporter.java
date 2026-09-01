@@ -14,7 +14,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.peekaboot.backend.filter.FilterPathMatcher;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.context.ApplicationEventPublisher;
@@ -51,11 +51,11 @@ public class OtelSpanExporter implements SpanExporter {
 
     private boolean shouldSkipSpan(SpanData span) {
         String path = extractPath(span);
-        if (path != null && FilterPathMatcher.shouldSkip(path)) {
+        if (path != null && PeekabootPaths.isExcluded(path)) {
             return true;
         }
         String name = span.getName();
-        return name != null && name.contains("/peekaboot/");
+        return name != null && name.contains(PeekabootPaths.BASE_PATH + "/");
     }
 
     private String extractPath(SpanData span) {

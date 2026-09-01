@@ -2,21 +2,22 @@ package org.peekaboot.backend.devtoolbar;
 
 public class ToolbarDataProvider {
 
-    /** Peekaboot's UI/API prefix; also hardcoded in PeekabootController and FilterPathMatcher. */
-    static final String BASE_PATH = "/peekaboot";
-
-    public String getToolbarSummaryJson(String method, String path, int status, String traceId) {
+    /**
+     * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
+     *     prefix behind the request's context path
+     */
+    public String getToolbarSummaryJson(String basePath, String method, String path, int status, String traceId) {
         return String.format(
                 "{\"method\":\"%s\",\"path\":\"%s\",\"status\":%d,\"traceId\":%s,\"basePath\":\"%s\"}",
                 escapeJson(method),
                 escapeJson(path),
                 status,
                 traceId != null ? "\"" + escapeJson(traceId) + "\"" : "null",
-                escapeJson(BASE_PATH));
+                escapeJson(basePath));
     }
 
-    public String getIdleModeJson() {
-        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(BASE_PATH));
+    public String getIdleModeJson(String basePath) {
+        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(basePath));
     }
 
     /**

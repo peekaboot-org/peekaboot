@@ -16,7 +16,7 @@ import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
-import {createClient} from '../shared/api.js';
+import {createClient, BASE_PATH} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 import * as request from './tabs/request.js';
@@ -85,7 +85,7 @@ export function openTraceDetail(traceId, options = {}) {
     currentSession += 1;
     const session = currentSession;
 
-    const basePath = options.basePath || '/peekaboot';
+    const basePath = options.basePath || BASE_PATH;
 
     const overlayHost = document.createElement('div');
     overlayHost.id = 'peekaboot-trace-overlay';

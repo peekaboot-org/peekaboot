@@ -13,7 +13,14 @@
  * counter of its own. It still de-duplicates against its own repeat calls, which is
  * the whole point of the mechanism.
  */
-export function createClient({basePath = '/peekaboot'} = {}) {
+
+// Where Peekaboot lives on this server, read off this module's own URL
+// (<context-path>/peekaboot/ui/shared/api.js) so a server.servlet.context-path needs no
+// configuration on the browser side. The toolbar gets the same value from the server in
+// its injected data blob; this default serves the dashboard and anything it opens.
+export const BASE_PATH = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
+
+export function createClient({basePath = BASE_PATH} = {}) {
     const generations = new Map();
 
     async function get(path, {params, dedupeKey = path} = {}) {

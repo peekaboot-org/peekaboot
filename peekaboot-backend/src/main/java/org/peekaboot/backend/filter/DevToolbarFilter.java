@@ -14,6 +14,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.devtoolbar.ToolbarShell;
 import org.slf4j.Logger;
@@ -51,14 +52,12 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
-        String uri = httpRequest.getRequestURI();
-
         if (shouldSkip(httpRequest)) {
             chain.doFilter(request, response);
             return;
         }
 
-        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), uri);
+        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), httpRequest.getRequestURI());
         ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
 
         // Deliberately not a finally: a handler that throws mid-render leaves a partial page
@@ -81,10 +80,10 @@ public class DevToolbarFilter implements Filter {
     }
 
     private boolean shouldSkip(HttpServletRequest request) {
-        String path = request.getRequestURI();
+        String path = PeekabootPaths.pathWithinApplication(request);
 
         // Skip excluded prefixes
-        if (FilterPathMatcher.shouldSkip(path)) {
+        if (PeekabootPaths.isExcluded(path)) {
             return true;
         }
 
@@ -138,8 +137,8 @@ public class DevToolbarFilter implements Filter {
 
         String toolbarHtml;
         try {
-            if (isSwaggerUi(request.getRequestURI())) {
-                toolbarHtml = generateSwaggerToolbarHtml();
+            if (isSwaggerUi(request)) {
+                toolbarHtml = generateSwaggerToolbarHtml(request);
             } else {
                 toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
             }
@@ -176,16 +175,18 @@ public class DevToolbarFilter implements Filter {
 
     private String generateToolbarHtml(
             HttpServletRequest request, ContentBufferingResponseWrapper response, String traceId) {
+        String basePath = PeekabootPaths.basePath(request);
         String summaryJson = toolbarDataProvider.getToolbarSummaryJson(
-                request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
-        return toolbarShell.render(summaryJson);
+                basePath, request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
+        return toolbarShell.render(basePath, summaryJson);
     }
 
-    private boolean isSwaggerUi(String path) {
-        return path.startsWith(SWAGGER_UI_PREFIX);
+    private boolean isSwaggerUi(HttpServletRequest request) {
+        return PeekabootPaths.pathWithinApplication(request).startsWith(SWAGGER_UI_PREFIX);
     }
 
-    private String generateSwaggerToolbarHtml() {
-        return toolbarShell.render(toolbarDataProvider.getIdleModeJson());
+    private String generateSwaggerToolbarHtml(HttpServletRequest request) {
+        String basePath = PeekabootPaths.basePath(request);
+        return toolbarShell.render(basePath, toolbarDataProvider.getIdleModeJson(basePath));
     }
 }
