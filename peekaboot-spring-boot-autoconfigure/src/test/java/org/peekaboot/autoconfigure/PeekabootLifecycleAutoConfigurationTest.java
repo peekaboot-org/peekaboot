@@ -18,6 +18,7 @@ import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
+import org.peekaboot.backend.lifecycle.LifecycleRuns;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
@@ -84,6 +85,7 @@ class PeekabootLifecycleAutoConfigurationTest {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(LifecycleEventLog.class);
             assertThat(context).hasSingleBean(LifecycleEventRecorder.class);
+            assertThat(context).hasSingleBean(LifecycleRuns.class);
             assertThat(context.getBean(LifecycleEventLog.class).events()).isEmpty();
         });
     }
@@ -101,6 +103,7 @@ class PeekabootLifecycleAutoConfigurationTest {
                     assertThat(context).hasSingleBean(ApplicationStoppedListener.class);
                     assertThat(context).doesNotHaveBean(LifecycleEventLog.class);
                     assertThat(context).doesNotHaveBean(LifecycleEventRecorder.class);
+                    assertThat(context).doesNotHaveBean(LifecycleRuns.class);
                 });
     }
 
