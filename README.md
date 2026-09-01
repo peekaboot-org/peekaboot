@@ -98,7 +98,9 @@ sample app's demo scenarios and the screenshot-capture command.
 
 ## Requirements
 
-- Java 25+
+- Java 25+ — the baseline is the current LTS on purpose: the build compiles with
+  `release 25` and has no toolchain fallback, Peekaboot's collectors run on virtual
+  threads, and nothing below 25 is built or tested
 - Spring Boot 4.1 (built and tested against)
 
 ## License
