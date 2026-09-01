@@ -23,10 +23,10 @@ export function render(container, data, context) {
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
 const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate'};
 
-/** SUCCESS -> ok, FAILED/ERROR -> error, everything else (PENDING/RUNNING/unset) -> muted. */
+/** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
 function taskSeverity(status) {
     if (status === 'SUCCESS') return 'ok';
-    if (status === 'FAILED' || status === 'ERROR') return 'error';
+    if (status === 'FAILED') return 'error';
     return 'muted';
 }
 
