@@ -9,12 +9,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
 
 /**
  * The markers are canvas drawing, so the assertions hang off the readback the layer
  * publishes onto the panel (data-marker-count/-x) and off the tooltip, which is the
  * only part of the feature that is a DOM node - the same approach the zoom tests take.
+ *
+ * <p>{@code PlaywrightTestBase}'s {@code @SpringBootTest} configuration is shared
+ * verbatim by every UI test class, so Spring caches and reuses one application
+ * context across the whole suite - this class runs against an application that may
+ * have started minutes earlier. {@code @DirtiesContext(BEFORE_CLASS)} forces a fresh
+ * boot just for this class, so "the application started recently" - the precondition
+ * every test here relies on - is actually true rather than an accident of test order.
+ * A fresh boot alone is not enough on its own for a multi-test class, though: level
+ * 0's window is only 22.5s (250ms x 90 samples, see application-test.yml), which the
+ * class's own three tests can burn through before the last one runs. Every test
+ * switches to level 1 (1.5s x 100 samples = 150s) before reading anything off the
+ * chart, for headroom the class can't outrun.
  */
+@DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
 class InsightsMarkersTest extends PlaywrightTestBase {
 
     private static final String PANEL = "#insights-panels .pk-insight-panel";
@@ -51,11 +66,23 @@ class InsightsMarkersTest extends PlaywrightTestBase {
         page.waitForSelector(PANEL + " .u-over");
     }
 
+    /**
+     * Switches every panel off level 0's 22.5s window onto level 1's 150s one, and
+     * waits out the level switch's chart rebuild (a level change destroys and
+     * recreates the chart, see insights.js's rebuildChart) before anything is
+     * measured off it - re-querying {@code .u-over} rather than reusing a handle
+     * from before the switch, since the rebuild replaces it with a new element.
+     */
+    private void useALevelWithHeadroomForTheStartMarker() {
+        page.click("#insights-level .pk-insight-level[data-level='1']");
+        page.waitForSelector(PANEL + " .u-over");
+        page.waitForFunction("() => Number(document.querySelector('" + PANEL + "')?.dataset.markerCount ?? 0) > 0");
+    }
+
     @Test
     void theRunningApplicationsOwnStartIsMarkedOnTheChart() {
         openInsights();
-
-        page.waitForFunction("() => Number(document.querySelector('" + PANEL + "')?.dataset.markerCount ?? 0) > 0");
+        useALevelWithHeadroomForTheStartMarker();
 
         assertThat(page.locator(PANEL).first().getAttribute("data-marker-x")).isNotBlank();
     }
@@ -63,7 +90,7 @@ class InsightsMarkersTest extends PlaywrightTestBase {
     @Test
     void hoveringAMarkerNamesTheBuildThatStarted() {
         openInsights();
-        page.waitForFunction("() => Number(document.querySelector('" + PANEL + "')?.dataset.markerCount ?? 0) > 0");
+        useALevelWithHeadroomForTheStartMarker();
 
         double markerX = Double.parseDouble(
                 page.locator(PANEL).first().getAttribute("data-marker-x").split(",")[0]);
@@ -84,7 +111,7 @@ class InsightsMarkersTest extends PlaywrightTestBase {
     @Test
     void theRestartsToggleClearsEveryMarker() {
         openInsights();
-        page.waitForFunction("() => Number(document.querySelector('" + PANEL + "')?.dataset.markerCount ?? 0) > 0");
+        useALevelWithHeadroomForTheStartMarker();
 
         page.uncheck("#insights-markers");
 
