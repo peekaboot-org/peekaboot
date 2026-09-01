@@ -21,8 +21,8 @@ public class ToolbarDataProvider {
 
     /**
      * Escapes a string for a JSON string literal that is embedded verbatim
-     * inside a &lt;script&gt; tag: besides the JSON-mandated escapes, '&lt;' is
-     * escaped to prevent script-tag breakout and all remaining control
+     * inside a &lt;script&gt; tag: besides the JSON-mandated escapes, '&lt;' and '&gt;'
+     * are escaped to prevent script-tag breakout and all remaining control
      * characters become \\uXXXX sequences to keep the JSON valid.
      */
     private String escapeJson(String value) {

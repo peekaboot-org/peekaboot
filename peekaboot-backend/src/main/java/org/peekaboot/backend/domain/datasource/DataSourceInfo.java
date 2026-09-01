@@ -6,14 +6,7 @@ import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import org.peekaboot.backend.domain.health.HealthStatus;
 
-/**
- * Rich domain record for datasource information.
- *
- * Uses explicit typing because datasources:
- * - Cross-reference health status from health actuator
- * - Mask sensitive connection properties
- * - Parse JDBC URLs via net.osslabz.jdbc library
- */
+/** One datasource, its health taken from the health actuator and its connection properties masked. */
 public record DataSourceInfo(
         String name,
         DatabaseProduct databaseProduct,

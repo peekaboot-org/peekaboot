@@ -2,14 +2,7 @@ package org.peekaboot.backend.domain.application;
 
 import java.util.Map;
 
-/**
- * Minimal domain record for application information.
- *
- * Uses Map<String, Object> for build and git because:
- * - Actuator structure is stable and rarely changes
- * - No transformation needed, just pass-through
- * - Adding explicit typing would add maintenance burden without benefit
- */
+/** Application information; build and git stay untyped maps because the actuator structure is passed through as is. */
 public record ApplicationInfo(
         Map<String, Object> build,
         Map<String, Object> git,

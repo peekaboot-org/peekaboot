@@ -5,7 +5,7 @@ import java.util.Arrays;
 /**
  * One aggregated window. Percentiles use nearest-rank over the ascending sort;
  * ofAggregates() computes percentiles over the finer entries' avg values -
- * a deliberate approximation (Micrometer keeps no raw samples), see spec.
+ * a deliberate approximation (Micrometer keeps no raw samples).
  */
 public record AggregateStats(
         double min, double max, double avg, double median, double p90, double p95, double p99, int samples) {

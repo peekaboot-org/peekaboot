@@ -176,7 +176,8 @@ public final class MaskingEngine {
         int cursor = 0;
         for (int[] span : spans) {
             if (span[0] < cursor) {
-                // overlaps a span already masked by an earlier (higher-precedence) rule
+                // spans are sorted by start offset, so the earliest-starting span wins; rule
+                // order only breaks ties between spans that start at the same offset
                 continue;
             }
             result.append(value, cursor, span[0]).append(MaskingRules.MASK);

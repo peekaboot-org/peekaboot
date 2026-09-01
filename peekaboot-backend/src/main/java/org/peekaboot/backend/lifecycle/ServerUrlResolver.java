@@ -17,7 +17,7 @@ public class ServerUrlResolver {
 
     // Looked up by name rather than by type: resolving PeekabootWebConfig.class would load
     // WebMvcConfigurer, and spring-webmvc is optional - absent from a reactive application,
-    // which still reaches this resolver. ServerUrlResolverTest pins the name to the class.
+    // which still reaches this resolver.
     static final String DASHBOARD_CONFIG_BEAN_NAME = "peekabootWebConfig";
 
     private static final String DASHBOARD_PATH = "/peekaboot/";

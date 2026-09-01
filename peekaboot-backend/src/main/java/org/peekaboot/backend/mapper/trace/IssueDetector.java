@@ -126,8 +126,9 @@ public class IssueDetector {
     }
 
     /**
-     * Actual query spans only - excludes datasource-proxy connection and
-     * result-set spans (same definition as TraceTreeMapper's query summary).
+     * Actual query spans only - excludes datasource-proxy connection and result-set
+     * spans. The same tag test as {@code TraceTreeMapper.isDbQuery}, minus its
+     * CLIENT-kind check: a query span of any kind counts here.
      */
     private boolean isDbQuerySpan(SpanNode span) {
         return span.tags() != null

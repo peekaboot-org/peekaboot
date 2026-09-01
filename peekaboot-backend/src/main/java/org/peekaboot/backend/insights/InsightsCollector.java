@@ -236,7 +236,7 @@ public final class InsightsCollector implements SmartLifecycle {
      * Appends one empty entry per boundary this level slept through (a suspended
      * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)},
      * so a silently skipped boundary would shift every older sample one interval
-     * into the future; the spec calls for NaN gaps instead. Capped at the ring size,
+     * into the future, so the gap is recorded as NaN entries instead. Capped at the ring size,
      * beyond which every visible sample is a gap anyway. Listeners see no synthetic
      * events - clients mirror the same geometry from the event's epoch.
      */
