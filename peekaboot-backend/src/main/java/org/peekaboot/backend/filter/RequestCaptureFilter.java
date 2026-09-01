@@ -3,6 +3,8 @@ package org.peekaboot.backend.filter;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -70,11 +72,71 @@ public class RequestCaptureFilter implements Filter {
         try {
             chain.doFilter(request, response);
         } finally {
-            try {
-                captureRequest(httpRequest, httpResponse, startTime);
-            } catch (Exception e) {
-                log.warn("Failed to capture request details", e);
+            // Resolved here, on the request thread, where the server span is current; an
+            // async completion callback runs on a container thread that has no span.
+            String traceId = currentTraceId();
+            if (traceId == null) {
+                log.trace("No current trace, skipping request capture");
+            } else if (httpRequest.isAsyncStarted()) {
+                // a DeferredResult/Callable/SseEmitter handler has only handed off: its status
+                // and duration are not known until the async cycle completes
+                httpRequest
+                        .getAsyncContext()
+                        .addListener(new CaptureOnCompletion(httpRequest, httpResponse, traceId, startTime));
+            } else {
+                capture(httpRequest, httpResponse, traceId, startTime);
             }
+        }
+    }
+
+    private String currentTraceId() {
+        Span currentSpan = tracer.currentSpan();
+        return currentSpan == null ? null : currentSpan.context().traceId();
+    }
+
+    private void capture(HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
+        try {
+            captureRequest(request, response, traceId, startTime);
+        } catch (Exception e) {
+            log.warn("Failed to capture request details", e);
+        }
+    }
+
+    /** Captures once the async cycle has run its course, whichever way it ended. */
+    private final class CaptureOnCompletion implements AsyncListener {
+
+        private final HttpServletRequest request;
+        private final HttpServletResponse response;
+        private final String traceId;
+        private final long startTime;
+
+        private CaptureOnCompletion(
+                HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
+            this.request = request;
+            this.response = response;
+            this.traceId = traceId;
+            this.startTime = startTime;
+        }
+
+        @Override
+        public void onComplete(AsyncEvent event) {
+            capture(request, response, traceId, startTime);
+        }
+
+        @Override
+        public void onTimeout(AsyncEvent event) {
+            // the container completes the cycle afterwards; onComplete captures then
+        }
+
+        @Override
+        public void onError(AsyncEvent event) {
+            // the container completes the cycle afterwards; onComplete captures then
+        }
+
+        @Override
+        public void onStartAsync(AsyncEvent event) {
+            // listeners do not carry over into a restarted cycle unless they re-register
+            event.getAsyncContext().addListener(this);
         }
     }
 
@@ -93,19 +155,8 @@ public class RequestCaptureFilter implements Filter {
         response.setHeader("Server-Timing", "trace;desc=\"00-" + traceId + "-" + spanId + "-" + traceFlags + "\"");
     }
 
-    private void captureRequest(HttpServletRequest request, HttpServletResponse response, long startTime) {
-        Span currentSpan = tracer.currentSpan();
-        if (currentSpan == null) {
-            log.trace("No current span, skipping request capture");
-            return;
-        }
-
-        String traceId = currentSpan.context().traceId();
-        if (traceId == null) {
-            log.trace("No traceId in current span, skipping request capture");
-            return;
-        }
-
+    private void captureRequest(
+            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
         long durationMs = System.currentTimeMillis() - startTime;
 
         Map<String, String> requestHeaders = maskedRequestHeaders(request);

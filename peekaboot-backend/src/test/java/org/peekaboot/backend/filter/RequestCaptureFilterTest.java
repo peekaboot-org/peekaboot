@@ -12,6 +12,9 @@ import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.AsyncContext;
+import jakarta.servlet.AsyncEvent;
+import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -547,6 +550,71 @@ class RequestCaptureFilterTest {
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().path()).isEqualTo("/app/api/users");
+    }
+
+    /**
+     * A DeferredResult/Callable/SseEmitter handler returns from the initial dispatch before
+     * its result exists; the status and duration are only known once the async cycle
+     * completes, so capture waits for the container's completion callback.
+     */
+    @Test
+    void shouldCaptureAnAsyncRequestOnCompletionRatherThanOnHandOff() throws Exception {
+        setupTraceContext("trace1");
+        setupBasicRequestResponse();
+        when(request.isAsyncStarted()).thenReturn(true);
+        AsyncContext asyncContext = mock(AsyncContext.class);
+        when(request.getAsyncContext()).thenReturn(asyncContext);
+
+        filter.doFilter(request, response, chain);
+
+        verify(eventPublisher, never()).publishEvent(any());
+        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
+        verify(asyncContext).addListener(listener.capture());
+
+        when(response.getStatus()).thenReturn(500);
+        listener.getValue().onComplete(new AsyncEvent(asyncContext));
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().status()).isEqualTo(500);
+    }
+
+    /** The completion callback runs on a container thread with no current span; the id comes from the request thread. */
+    @Test
+    void asyncCaptureKeepsTheTraceIdResolvedOnTheRequestThread() throws Exception {
+        setupTraceContext("trace1");
+        setupBasicRequestResponse();
+        when(request.isAsyncStarted()).thenReturn(true);
+        AsyncContext asyncContext = mock(AsyncContext.class);
+        when(request.getAsyncContext()).thenReturn(asyncContext);
+        filter.doFilter(request, response, chain);
+        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
+        verify(asyncContext).addListener(listener.capture());
+
+        when(tracer.currentSpan()).thenReturn(null);
+        listener.getValue().onComplete(new AsyncEvent(asyncContext));
+
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().traceId()).isEqualTo("trace1");
+    }
+
+    /** A listener is dropped when a new async cycle starts unless it re-registers itself. */
+    @Test
+    void asyncCaptureFollowsARestartedAsyncCycle() throws Exception {
+        setupTraceContext("trace1");
+        setupBasicRequestResponse();
+        when(request.isAsyncStarted()).thenReturn(true);
+        AsyncContext asyncContext = mock(AsyncContext.class);
+        when(request.getAsyncContext()).thenReturn(asyncContext);
+        filter.doFilter(request, response, chain);
+        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
+        verify(asyncContext).addListener(listener.capture());
+
+        AsyncContext restarted = mock(AsyncContext.class);
+        listener.getValue().onStartAsync(new AsyncEvent(restarted));
+
+        verify(restarted).addListener(listener.getValue());
     }
 
     private void setupBasicRequestResponse() {
