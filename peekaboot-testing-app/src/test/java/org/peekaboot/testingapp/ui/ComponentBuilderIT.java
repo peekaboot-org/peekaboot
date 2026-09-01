@@ -2,7 +2,8 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import com.microsoft.playwright.Route;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -215,26 +216,30 @@ class ComponentBuilderIT extends PlaywrightTestBase {
     /**
      * Fires two calls to the same path without awaiting between them, so both are
      * genuinely in flight together (the dashboard's auto-refresh, manual refresh and
-     * locale switch all do this). The first request's underlying network response is
-     * held back so it arrives strictly after the second's -- the exact "slow older
-     * response" scenario the per-path generation guard exists for. If the guard were
-     * removed (or checked before the await instead of after), the first call would
-     * resolve with the real feature payload instead of null.
+     * locale switch all do this). The first request is parked at the route until the
+     * second's response has arrived, so the older response lands strictly after the
+     * newer one however loaded the machine is -- the exact "slow older response"
+     * scenario the per-path generation guard exists for. If the guard were removed (or
+     * checked before the await instead of after), the first call would resolve with the
+     * real feature payload instead of null.
      */
     @Test
     void staleOverlappingResponseIsSupersededByTheNewerCall() {
         openDashboard();
 
-        AtomicInteger callCount = new AtomicInteger(0);
+        AtomicReference<Route> parkedFirstRequest = new AtomicReference<>();
         page.route("**/peekaboot/api/features", route -> {
-            if (callCount.getAndIncrement() == 0) {
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+            if (!parkedFirstRequest.compareAndSet(null, route)) {
+                route.resume();
+            }
+        });
+        page.onResponse(response -> {
+            if (response.url().endsWith("/peekaboot/api/features")) {
+                Route parked = parkedFirstRequest.getAndSet(null);
+                if (parked != null) {
+                    parked.resume();
                 }
             }
-            route.resume();
         });
 
         Object result = page.evaluate("""

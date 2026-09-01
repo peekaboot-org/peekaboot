@@ -8,7 +8,6 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
-
 @Controller
 public class PersonController {
 
@@ -16,12 +15,10 @@ public class PersonController {
 
     private final PersonQueryService personQueryService;
 
-
     public PersonController(PersonQueryService personQueryService) {
 
         this.personQueryService = personQueryService;
     }
-
 
     @GetMapping("/")
     public String index(@RequestParam(name = "error", defaultValue = "false") boolean error, Model model) {
@@ -30,9 +27,8 @@ public class PersonController {
         if (error) {
             log.error("An error occurred while trying to find all persons");
         }
-        return "index";
+        return "persons";
     }
-
 
     @GetMapping("/persons")
     public String persons(Model model) {

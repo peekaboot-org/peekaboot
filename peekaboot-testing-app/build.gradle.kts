@@ -29,8 +29,6 @@ dependencies {
     implementation("org.hibernate.orm:hibernate-micrometer")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
-    implementation("org.springframework.boot:spring-boot-starter-cache")
-    implementation("com.github.ben-manes.caffeine:caffeine")
     implementation(project(":peekaboot-spring-boot-starter"))
 
     // developmentOnly comes from the Boot plugin, so the convention plugin's BOM import

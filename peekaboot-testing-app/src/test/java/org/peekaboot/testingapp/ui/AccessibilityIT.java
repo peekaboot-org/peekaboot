@@ -161,16 +161,14 @@ class AccessibilityIT extends PlaywrightTestBase {
     @Test
     void overlayMakesTheRestOfThePageInert() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        overlay.waitFor(".pk-overlay__error");
 
         boolean siblingsInert = (boolean) page.evaluate("() => Array.from(document.body.children)"
                 + ".filter(el => el.id !== 'peekaboot-trace-overlay').every(el => el.inert)");
         assertThat(siblingsInert).isTrue();
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__error button').click()");
-        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay')");
+        overlay.click(".pk-overlay__error button");
+        overlay.awaitClosed();
 
         boolean anyStillInert =
                 (boolean) page.evaluate("() => Array.from(document.body.children).some(el => el.inert)");
@@ -178,29 +176,19 @@ class AccessibilityIT extends PlaywrightTestBase {
     }
 
     /**
-     * The 2026-08-22 audit gave .pk-copy a 24px min-height because a copy control is a real
-     * click target, not a word in a sentence (components.css says so at the rule). The Logs
-     * tab then stacks one inside a deliberately dense row, and the first attempt at fitting
-     * it there cancelled exactly that floor with "min-height: auto; padding: 0" - a change
-     * that looks like harmless tightening in a diff and like nothing at all in a screenshot.
+     * .pk-copy carries a 24px min-height because a copy control is a real click target, not
+     * a word in a sentence (components.css says so at the rule). The Logs tab stacks one
+     * inside a deliberately dense row, where cancelling that floor with "min-height: auto;
+     * padding: 0" looks like harmless tightening in a diff and like nothing at all in a
+     * screenshot.
      * Measures the rendered box rather than the declared property, so a future override
      * anywhere in the cascade fails here too.
      */
     @Test
     void logRowCopyControlsKeepTheMinimumHitTarget() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
         page.waitForSelector(".pk-log__span-cell .pk-copy");
 
         BoundingBox box = page.locator(".pk-log__span-cell .pk-copy").first().boundingBox();

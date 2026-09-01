@@ -4,9 +4,7 @@
 # every other test here (see pom.xml), which is precisely what these two need switched on.
 # Kept to what a secured run actually needs - no masking fixtures, no insights tuning.
 spring:
-  datasource:
-    url: jdbc:h2:mem:securitydb;DB_CLOSE_DELAY=-1
-    driver-class-name: org.h2.Driver
+  # No datasource url, as in application-test.yml: each context gets its own in-memory H2.
   jpa:
     hibernate:
       ddl-auto: create-drop

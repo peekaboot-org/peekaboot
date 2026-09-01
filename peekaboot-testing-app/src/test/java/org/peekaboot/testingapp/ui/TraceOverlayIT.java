@@ -9,19 +9,19 @@ import com.microsoft.playwright.options.ColorScheme;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
- * Migrated onto the shared design system alongside the toolbar (see ToolbarIT) - the
- * overlay used to hardcode a dark-only palette on :host with no theme awareness at all,
- * so a light dashboard opened a hard-dark fullscreen overlay. That is the specific defect
- * overlayIsLightWhenTheStoredPreferenceIsLight proves fixed.
+ * The overlay shares the design system with the toolbar (see ToolbarIT) and follows the
+ * same theme; a dark-only palette hardcoded on :host would open a hard-dark fullscreen
+ * overlay over a light dashboard, which is what overlayIsLightWhenTheStoredPreferenceIsLight
+ * guards.
  */
 class TraceOverlayIT extends PlaywrightTestBase {
 
@@ -30,7 +30,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     private void openOverlayFromToolbar() {
         openPersonsPage();
-        openOverlayFromLoadedToolbar();
+        toolbar.openOverlay();
     }
 
     /**
@@ -44,14 +44,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * separate fetch could race the trace's eviction from a bounded store.
      */
     private String waitForMultiSpanLogTraceId() {
-        return (String) page.evaluate("""
-                async () => {
+        return (String) toolbar.evaluate("""
+                async root => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
                           + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
                     for (let attempt = 0; attempt < 150; attempt++) {
-                        const copyEl = document.getElementById('peekaboot-toolbar-host')
-                            .shadowRoot.querySelector('#pk-trace .pk-copy');
+                        const copyEl = root.querySelector('#pk-trace .pk-copy');
                         const id = copyEl ? copyEl.dataset.pkCopy : null;
                         if (id) {
                             const response = await fetch('/peekaboot/api/traces/' + id + '/insights');
@@ -82,45 +81,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     private String openOverlayForTheMultiSpanLogTrace() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
 
         String traceId = waitForMultiSpanLogTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-gantt-rows')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-gantt-rows");
         return traceId;
-    }
-
-    private void openOverlayFromLoadedToolbar() {
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // #peekaboot-trace-overlay (the host) exists as soon as openTraceDetail() creates
-        // it - well before fetchAndRender() replaces the loading placeholder with either
-        // the success render() (which registers the ESC handler) or the error state. This
-        // helper is used by both paths (see closeButtonDismissesTheOverlayOnTheErrorPath),
-        // so it waits for the loading placeholder to be gone rather than for a
-        // success-only element, and cannot race either outcome.
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-    }
-
-    private String overlayVar(String property) {
-        return (String) page.evaluate(
-                "prop => getComputedStyle(document.getElementById('peekaboot-trace-overlay')"
-                        + ".shadowRoot.querySelector('.pk-overlay')).getPropertyValue(prop).trim()",
-                property);
     }
 
     /**
@@ -134,14 +101,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
     }
 
-    /** The defect that motivated this work: a light dashboard opening a dark overlay. */
+    /** A light dashboard must not open a dark overlay. */
     @Test
     void overlayIsLightWhenTheStoredPreferenceIsLight() {
         setStoredTheme("light");
         emulateOppositeOsPreference(ColorScheme.DARK);
         openOverlayFromToolbar();
 
-        assertThat(overlayVar("--pk-bg")).isEqualTo("#ffffff");
+        assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#ffffff");
     }
 
     @Test
@@ -150,23 +117,20 @@ class TraceOverlayIT extends PlaywrightTestBase {
         emulateOppositeOsPreference(ColorScheme.LIGHT);
         openOverlayFromToolbar();
 
-        assertThat(overlayVar("--pk-bg")).isEqualTo("#0d1117");
+        assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#0d1117");
     }
 
     /**
-     * Regression guard for a real defect an earlier review caught: fills that reuse
-     * --pk-primary (this chip, the gantt "server" kind badge) or --pk-success (the
-     * result-set row-count badge) for their background had their foreground accidentally
-     * set to --pk-text-strong instead of the contrast-tuned --pk-on-primary/--pk-on-success
-     * that components.css's .pk-badge already uses for the same fills - near-white text on
-     * light-blue/light-green at ~2.3:1 in dark mode, where the pre-migration hardcoded
-     * #000 gave 8.2-8.3:1. Pins the literal resolved colour rather than comparing against
-     * the --pk-on-primary token itself, which would pass even if both sides regressed back
-     * to the same wrong token.
+     * Fills that reuse --pk-primary (this chip, the gantt "server" kind badge) or
+     * --pk-success (the result-set row-count badge) for their background take the
+     * contrast-tuned --pk-on-primary/--pk-on-success foreground that components.css's
+     * .pk-badge uses for the same fills - --pk-text-strong there would be near-white text
+     * on light-blue/light-green at ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
+     * Pins the literal resolved colour rather than comparing against the --pk-on-primary
+     * token itself, which would pass even if both sides regressed to the same wrong token.
      *
-     * The pinned value is dark ink in both themes now that --pk-primary is the brand
-     * green: white on it measures 2.61:1, so the light theme can no longer get away
-     * with the plain white it used while --pk-primary was a blue.
+     * The pinned value is dark ink in both themes because --pk-primary is the brand green:
+     * white on it measures 2.61:1, so not even the light theme can use plain white.
      *
      * Drives a real ERROR log entry (matching ToolbarIT's
      * toolbarShowsErrorLogCountWhenRequestLogsAnError) rather than the gantt "server" kind
@@ -181,36 +145,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void logsFilterChipUsesTheContrastTunedForeground() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // #peekaboot-trace-overlay exists as soon as openTraceDetail() creates the host -
-        // well before render() builds the tab strip, which only happens once the trace
-        // fetch and the shared stylesheets have both resolved. Wait for the real tab
-        // before clicking it.
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String color = (String)
-                page.evaluate("() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-logs-filter-span')).color");
+        String color =
+                (String) overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-logs-filter-span')).color");
 
         assertThat(color).isEqualTo("rgb(13, 17, 23)");
     }
@@ -225,31 +166,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void logsFilterChipShowsTheSpanNameWithItsShortenedId() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String chipText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span').textContent");
+        String chipText = overlay.text(".pk-logs-filter-span");
 
         assertThat(chipText.trim()).matches("^Span: .+\\([0-9a-f]{8}\\)\\s*×?$");
     }
@@ -258,8 +180,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void overlayShowsSpansTabByDefault() {
         openOverlayFromToolbar();
 
-        String selected = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String selected = overlay.selectedTab();
         assertThat(selected).isEqualTo("spans");
     }
 
@@ -269,7 +190,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.keyboard().press("Escape");
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
 
@@ -278,15 +199,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void overlayExposesDialogSemantics() {
         openOverlayFromToolbar();
 
-        String role = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay').getAttribute('role')");
-        String ariaModal = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay').getAttribute('aria-modal')");
+        String role = (String) overlay.evaluate("root => root.querySelector('.pk-overlay').getAttribute('role')");
+        String ariaModal =
+                (String) overlay.evaluate("root => root.querySelector('.pk-overlay').getAttribute('aria-modal')");
         String accessibleName = (String)
-                page.evaluate("() => { const el = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay'); const labelledBy = el.getAttribute('aria-labelledby');"
-                        + " return labelledBy ? el.getRootNode().getElementById(labelledBy).textContent.trim()"
-                        + " : el.getAttribute('aria-label'); }");
+                overlay.evaluate(
+                        "root => { const el = root.querySelector('.pk-overlay'); const labelledBy = el.getAttribute('aria-labelledby'); return labelledBy ? el.getRootNode().getElementById(labelledBy).textContent.trim() : el.getAttribute('aria-label'); }");
 
         assertThat(role).isEqualTo("dialog");
         assertThat(ariaModal).isEqualTo("true");
@@ -301,51 +219,41 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void focusMovesIntoTheOverlayOnOpenAndReturnsToTheInvokerOnClose() {
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
+        toolbar.traceId();
+        toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
         page.waitForSelector("#peekaboot-trace-overlay");
         // container.focus() only happens once render() actually runs (after the trace
         // fetch and shared stylesheets both resolve) - wait for real content so the
         // assertion below cannot race a still-loading overlay.
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".querySelector('.pk-tab')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor(".pk-tab");
 
-        boolean focusIsInsideOverlay =
-                (Boolean) page.evaluate("() => { const host = document.getElementById('peekaboot-trace-overlay');"
-                        + " return host.shadowRoot.activeElement !== null; }");
+        boolean focusIsInsideOverlay = (Boolean) overlay.evaluate("root => root.activeElement !== null");
         assertThat(focusIsInsideOverlay).isTrue();
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
 
         boolean focusIsBackOnTheInvoker = (Boolean)
-                page.evaluate("() => document.getElementById('peekaboot-toolbar-host').shadowRoot.activeElement"
-                        + "?.classList.contains('pk-toolbar__open') ?? false");
+                toolbar.evaluate("root => root.activeElement?.classList.contains('pk-toolbar__open') ?? false");
         assertThat(focusIsBackOnTheInvoker).isTrue();
     }
 
     /**
      * Forces the overlay's error path (a real network failure, not a mocked response) and
-     * proves its Close button actually works. Pre-existing defect: the button called
-     * this.closest('#peekaboot-trace-overlay').remove() from inside the shadow root, where
-     * closest() cannot cross the shadow boundary, so the button threw and did nothing.
+     * proves its Close button actually works. The button must not rely on
+     * this.closest('#peekaboot-trace-overlay') from inside the shadow root: closest() cannot
+     * cross the shadow boundary, so such a button throws and does nothing.
      */
     @Test
     void closeButtonDismissesTheOverlayOnTheErrorPath() {
         page.route("**/api/traces/*/insights", route -> route.abort());
         openOverlayFromToolbar();
 
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__error')");
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__error button').click()");
+        overlay.waitFor(".pk-overlay__error");
+        overlay.click(".pk-overlay__error button");
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
 
@@ -357,22 +265,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void overlayTabStripIsKeyboardNavigable() {
         openOverlayFromToolbar();
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"spans\"]').focus()");
+        overlay.evaluate("root => root.querySelector('.pk-tab[data-tab=\"spans\"]').focus()");
 
         page.keyboard().press("ArrowRight");
 
-        String focused =
-                (String) page.evaluate("() => { const host = document.getElementById('peekaboot-trace-overlay');"
-                        + " return host.shadowRoot.activeElement?.dataset.tab; }");
-        String selected = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String focused = (String) overlay.evaluate("root => root.activeElement?.dataset.tab");
+        String selected = overlay.selectedTab();
 
         assertThat(focused).isEqualTo("queries");
         assertThat(selected).isEqualTo("queries");
 
-        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content').innerHTML");
+        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
         assertThat(content).isNotEmpty();
     }
 
@@ -381,10 +284,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void onlyTheSelectedOverlayTabIsInTheTabOrder() {
         openOverlayFromToolbar();
 
-        Object selectedTabIndex = page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
-        Object otherTabIndex = page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
+        Object selectedTabIndex =
+                overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
+        Object otherTabIndex =
+                overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
 
         assertThat(selectedTabIndex).isEqualTo(0);
         assertThat(otherTabIndex).isEqualTo(-1);
@@ -393,13 +296,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * Inspects the real accessibility tree for the overlay's strip too - confirms it
      * exposes as an actual tablist with the right tabs and selected state, same as
-     * the dashboard's equivalent check. This alone does NOT prove TABS.count is
-     * load-bearing: the pre-change hand-rolled markup rendered an identical
-     * "Queries 1" from its own separately-computed queryCount, so this snapshot
-     * would very likely have passed before this change too. The actual proof is
-     * that render() no longer has that duplicate template text at all - a
-     * code-level fact (see the task report's TDD section for the discriminating
-     * evidence). Also pins the spans tab's own count badge, computed from the same
+     * the dashboard's equivalent check. The tab counts come from TABS.count(trace)
+     * through the shared tabStrip(); hand-rolled markup computing its own queryCount
+     * would render an identical "Queries 1", so this snapshot alone does not prove the
+     * shared path is load-bearing - only render() carrying no duplicate template text
+     * does. Also pins the spans tab's own count badge, computed from the same
      * endpoint TABS.count(trace) reads (trace.summary.spans.count) rather than a
      * hardcoded literal, so a real change to the trace's span count still passes.
      */
@@ -414,8 +315,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // backend to actually serve the query before opening the overlay - the same
         // endpoint and field the overlay's TABS.count reads (trace.queries).
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
         // Polls (inside one evaluate(), not a separate waitForFunction + a later re-fetch)
         // until the query span lands, then returns the span count from that very same
         // response - both to dodge the ingestion race documented above, and to read the
@@ -425,10 +325,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // own background scheduler). Reads the id from the copy button's data-pk-copy
         // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon baked
         // in by copyableIdHtml), not the bare id a URL path segment needs.
-        int spanCount = ((Number) page.evaluate("async () => {"
+        int spanCount = ((Number) toolbar.evaluate("async root => {"
                         + "for (let i = 0; i < 150; i++) {"
-                        + "  const copyEl = document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-trace .pk-copy');"
+                        + "  const copyEl = root.querySelector('#pk-trace .pk-copy');"
                         + "  const id = copyEl ? copyEl.dataset.pkCopy : null;"
                         + "  if (id) {"
                         + "    const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
@@ -447,16 +346,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+        toolbar.openOverlay();
+        overlay.openTab("queries");
 
         Locator tablist = page.locator("#peekaboot-trace-overlay .pk-overlay__container > .pk-tabs");
         String snapshot = tablist.ariaSnapshot();
@@ -477,8 +368,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void theHeaderStatusPillSpellsOutTheReasonPhrase() {
         openOverlayFromToolbar();
 
-        String status = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__meta .pk-badge').textContent.trim()");
+        String status = (String)
+                overlay.evaluate("root => root.querySelector('.pk-overlay__meta .pk-badge').textContent.trim()");
 
         assertThat(status).isEqualTo("200 OK");
     }
@@ -487,45 +378,35 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void everyOverlayTabRendersContent() {
         openOverlayFromToolbar();
 
-        for (String tab : java.util.List.of("request", "spans", "queries", "logs")) {
-            page.evaluate(
-                    "id => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                            + ".querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()",
-                    tab);
+        for (String tab : List.of("request", "spans", "queries", "logs")) {
+            overlay.evaluate("(root, id) => root.querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
 
-            String content =
-                    (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                            + ".querySelector('#pk-tab-content').innerHTML");
+            String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
             assertThat(content).as("tab %s renders something", tab).isNotEmpty();
         }
     }
 
     /**
-     * The span tree used to carry a copyable full-length span id on every row, which made
-     * the tree too crowded (see logsTableRendersCopyableSpanIds and
-     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT for its new home).
-     * A row still keeps its span name, duration, badges and the logs/SQL toggles - just
-     * not a copy control.
+     * A copyable full-length span id on every span-tree row would crowd the tree, so the
+     * id lives on the Logs tab's rows instead (see logsTableRendersCopyableSpanIds and
+     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT). A row keeps its span
+     * name, duration, badges and the logs/SQL toggles - just not a copy control.
      */
     @Test
-    @DisplayName("the Spans tab's tree rows no longer carry a copyable span id")
     void spanTreeRowsDoNotRenderACopyableSpanId() {
         openOverlayFromToolbar();
 
         boolean anyRowHasACopyControl =
-                (boolean) page.evaluate("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('#pk-gantt-rows .pk-copy')");
+                (boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-copy')");
 
         assertThat(anyRowHasACopyControl).isFalse();
     }
 
     /**
-     * The Spans tab's per-span "N logs" toggle used to open a bespoke fullscreen popup
-     * that reused the Logs tab's own row renderer verbatim - fully redundant once the
-     * Logs tab grew its own span filter (99345f81, which the popup - af1fa88a - predates).
-     * It now hands off to that existing filter instead: switch the overlay to the Logs
-     * tab, seed its span filter, and rely on the filter chip's own clear button for a
-     * reversible "back to all logs".
+     * The Spans tab's per-span "N logs" toggle hands off to the Logs tab's own span filter
+     * - switch the overlay to the Logs tab, seed its span filter, and rely on the filter
+     * chip's own clear button for a reversible "back to all logs" - rather than opening a
+     * popup of its own, which would only duplicate the Logs tab's row renderer.
      *
      * <p>Runs against a real captured trace with nothing stubbed. The index page's error
      * path writes its ERROR log inside the request handler's span while
@@ -541,7 +422,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * and Back-navigated like any other, and clearing the filter takes the param back out.
      */
     @Test
-    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span, and the filter is clearable")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
         String traceId = openOverlayForTheMultiSpanLogTrace();
 
@@ -557,21 +437,18 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
 
-        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
         assertThat(page.url())
                 .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
                         + "deep link into this filtered view would use")
                 .contains("#traces/" + traceId + "/logs?span=" + spanId);
-        String focusedTab = (String) page.evaluate(
-                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".activeElement?.dataset.tab");
+        String focusedTab = (String) overlay.evaluate("root => root.activeElement?.dataset.tab");
         assertThat(focusedTab)
                 .as("the clicked toggle belonged to the Spans tab's markup, which the tab switch just "
                         + "replaced, destroying it - focus must move deliberately to the Logs tab's own "
                         + "button rather than falling back to the shadow host")
                 .isEqualTo("logs");
-        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content').innerHTML");
+        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
         assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
 
         page.waitForSelector(".pk-log:not(.pk-log--hidden)");
@@ -587,8 +464,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click("#pk-clear-span-filter");
 
-        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        overlay.waitForGone(".pk-logs-filter-span");
         @SuppressWarnings("unchecked")
         List<String> visibleAfterClear = (List<String>)
                 page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
@@ -611,15 +487,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * hand-off itself.
      */
     @Test
-    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span when opened from the toolbar")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
         waitForMultiSpanLogTraceId();
 
-        openOverlayFromLoadedToolbar();
+        toolbar.openOverlay();
 
         @SuppressWarnings("unchecked")
         List<String> spansOfferingLogs = (List<String>)
@@ -629,8 +502,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
 
-        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
 
         page.waitForSelector(".pk-log:not(.pk-log--hidden)");
         @SuppressWarnings("unchecked")
@@ -644,11 +516,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
         openOverlayFromToolbar();
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+        overlay.click(".pk-tab[data-tab=\"queries\"]");
 
-        String sql = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-query__sql')?.textContent ?? ''");
+        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-query__sql')?.textContent ?? ''");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 
@@ -662,10 +532,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
         openOverlayFromToolbar();
 
-        Object allDurationsMatchPattern =
-                page.evaluate("() => Array.from(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelectorAll('.pk-gantt-duration'))"
-                        + ".every(el => /^\\d+ms \u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+        Object allDurationsMatchPattern = overlay.evaluate(
+                "root => Array.from(root.querySelectorAll('.pk-gantt-duration')).every(el => /^\\d+ms \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
         assertThat((Boolean) allDurationsMatchPattern)
                 .as("every duration cell reads '<ms>ms \u00B7 <pct>%'")
                 .isTrue();
@@ -679,21 +547,20 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         assertThat(headerBox.x)
                 .as("header timeline's left edge lines up with the first row's track")
-                .isCloseTo(trackBox.x, org.assertj.core.data.Offset.offset(1.0));
+                .isCloseTo(trackBox.x, Offset.offset(1.0));
         assertThat(headerBox.x + headerBox.width)
                 .as("header timeline's right edge lines up with the first row's track")
-                .isCloseTo(trackBox.x + trackBox.width, org.assertj.core.data.Offset.offset(1.0));
+                .isCloseTo(trackBox.x + trackBox.width, Offset.offset(1.0));
     }
 
     /**
-     * Regression test for a residual duplication: the SLOW label used to re-derive the
-     * 100ms slow threshold with a bare literal (`duration > 100`) on the same line that
-     * already computes `durationClass` from severity.js's durationSeverity() - now it just
-     * reads durationClass. Imports queries.js directly (SharedModuleIT's pk-blank.html
-     * pattern) rather than driving a real slow query through the app, and pins the exact
-     * SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) since an earlier
-     * off-by-one at this same boundary was a real bug in this project (see severity.js's
-     * own boundary test in SharedModuleIT).
+     * The SLOW label reads `durationClass`, which severity.js's durationSeverity()
+     * computes, rather than re-deriving the 100ms slow threshold with a bare literal
+     * (`duration > 100`) on the same line. Imports queries.js directly (SharedModuleIT's
+     * pk-blank.html pattern) rather than driving a real slow query through the app, and
+     * pins the exact SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) -
+     * the boundary an off-by-one moves (see severity.js's own boundary test in
+     * SharedModuleIT).
      */
     @Test
     void queriesTabSlowLabelFollowsTheSharedSeverityThresholdAtTheBoundary() {
@@ -714,30 +581,27 @@ class TraceOverlayIT extends PlaywrightTestBase {
             """);
 
         @SuppressWarnings("unchecked")
-        java.util.List<String> durationLabels = (java.util.List<String>) labels;
+        List<String> durationLabels = (List<String>) labels;
         assertThat(durationLabels).containsExactly("99ms", "100ms", "101ms SLOW", "501ms SLOW");
     }
 
     /**
-     * Root-cause pin for the misaligned back button: .pk-overlay__back and .pk-overlay__close
-     * used to be position:absolute against .pk-overlay__container, with the title carrying a
-     * hand-rolled margin-left hack to fake reserving space for the button - two independent
-     * layouts that only looked aligned by coincidence, and drifted the moment the title's UA
-     * margin-top pushed it down without moving the absolutely-positioned button. Both buttons
-     * now sit in the header's own flex flow next to a .pk-overlay__header-main wrapper, so
-     * they cannot drift from the title's first line.
+     * .pk-overlay__back and .pk-overlay__close sit in the header's own flex flow next to a
+     * .pk-overlay__header-main wrapper, so they cannot drift from the title's first line.
+     * Positioned absolutely against .pk-overlay__container, with the title carrying a
+     * margin-left hack to fake reserving space for the button, they would be two
+     * independent layouts that only look aligned by coincidence - and drift the moment the
+     * title's UA margin-top pushes it down without moving the absolutely-positioned button.
      */
     @Test
     void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
         openOverlayFromToolbar();
 
-        assertThat((String) page.evaluate(
-                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                                + ".querySelector('.pk-overlay__back')).position"))
+        assertThat((String)
+                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__back')).position"))
                 .isEqualTo("static");
-        assertThat((String) page.evaluate(
-                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                                + ".querySelector('.pk-overlay__close')).position"))
+        assertThat((String)
+                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__close')).position"))
                 .isEqualTo("static");
 
         BoundingBox backBox =
@@ -763,35 +627,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes for
-     * {@link OrderReconciler#reconcileOrders()}, rather than waiting on its own
-     * {@code fixedDelay} (2 minutes - far past what this test should block on, and
-     * Scheduler's own jobs are hourly/multi-minute on top of that). Same technique, same
-     * reasoning as OrderTraceCaptureIT's runScheduledReconciliation(): the
-     * {@link ScheduledTaskHolder} bean exposes the {@link ScheduledTask} Spring registered
-     * for the method, and running its {@code Runnable} here is the real production code
-     * path - it builds the same {@code ScheduledTaskObservationContext} and sets the same
-     * {@code code.function}/{@code code.namespace} tags that classify the trace root
-     * SCHEDULED_JOB, not a hand-built stand-in for that classification.
-     */
-    private void runScheduledReconciliation() {
-        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
-        scheduledTaskHolder.getScheduledTasks().stream()
-                .map(ScheduledTask::getTask)
-                .filter(task -> taskDescription.equals(task.toString()))
-                .findFirst()
-                .orElseThrow(() ->
-                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
-                .getRunnable()
-                .run();
-    }
-
-    /**
      * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
      * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
      * anything this test constructed. Whichever trace turns up first is fair game: the
      * assertions below hold for any correctly-captured scheduled-job trace, not
-     * specifically the one runScheduledReconciliation() just fired, so a trace left behind
+     * specifically the one the test just fired, so a trace left behind
      * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
      */
     private String waitForScheduledJobTraceId() {
@@ -814,18 +654,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the fake "UNKNOWN" HTTP method rendered on non-HTTP traces (a
-     * scheduled job here): trace-detail.js used to hardcode 'UNKNOWN' as the method fallback,
-     * even though httpExchange/http.* tags are only ever populated for real HTTP requests.
-     * The method now falls back to null, which the header renders as the trace's root-action
-     * label instead (root-actions.js).
+     * On a non-HTTP trace (a scheduled job here) trace-detail.js's method falls back to
+     * null, which the header renders as the trace's root-action label (root-actions.js):
+     * httpExchange/http.* tags are only ever populated for real HTTP requests, so a
+     * hardcoded 'UNKNOWN' fallback would be a fake method.
      *
      * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
-     * scheduled-task observation (see runScheduledReconciliation()) rather than stubbing
+     * scheduled-task observation (see {@link ScheduledJobs}) rather than stubbing
      * the insights endpoint with a canned response - the fix is about what real
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
-     * happens. Also covers the "1 queries" pluralisation defect on the same header
+     * happens. Also covers the "1 query" pluralisation on the same header
      * (formatCount() in format.js): reconcileOrders() calls orderRepository.findAll()
      * exactly once, and CustomerOrder is a flat entity with no lazy associations to
      * trigger further queries, so the trace's query count is deterministically 1
@@ -833,25 +672,19 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        runScheduledReconciliation();
+        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
         String traceId = waitForScheduledJobTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('.pk-overlay__title-method')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor(".pk-overlay__title-method");
 
-        String methodText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__title-method').textContent");
+        String methodText = overlay.text(".pk-overlay__title-method");
         assertThat(methodText)
                 .as("no HTTP method exists for a scheduled job, so the header must fall back to "
                         + "the root-action label rather than a fake method")
                 .isEqualTo("Scheduled Job");
 
-        String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
+        String metaText = overlay.text(".pk-overlay__meta");
         assertThat(metaText)
                 .as("reconcileOrders() issues exactly one query (CustomerOrder is a flat entity, so "
                         + "findAll() is a single SELECT regardless of row count) - the count is "

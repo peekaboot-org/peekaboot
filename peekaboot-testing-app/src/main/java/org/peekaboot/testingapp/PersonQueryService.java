@@ -7,8 +7,6 @@ import org.peekaboot.testingapp.entity.Person;
 import org.peekaboot.testingapp.repository.PersonRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,13 +14,10 @@ public class PersonQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(PersonQueryService.class);
 
-    @Autowired
-    PersonRepository personRepository;
+    private final PersonRepository personRepository;
 
-    @Cacheable(cacheNames = "cache1")
-    public Optional<Person> getPersonCached(long i) {
-
-        return personRepository.findById(i);
+    public PersonQueryService(PersonRepository personRepository) {
+        this.personRepository = personRepository;
     }
 
     public Optional<Person> getPerson(long i) {

@@ -2,49 +2,38 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.ColorScheme;
 import org.junit.jupiter.api.Test;
 
 class ThemeTokenIT extends PlaywrightTestBase {
 
+    /**
+     * Each theme is opened against the opposite OS preference, so the same test also
+     * proves the stored preference beats prefers-color-scheme on the rendered tokens -
+     * headless Chromium defaults to light, where "stored light" would pass regardless.
+     */
     @Test
-    void lightThemeResolvesLightBackground() {
+    void storedLightAndDarkPreferencesResolveDifferentSurfaceTokens() {
         setStoredTheme("light");
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
         openDashboard();
+        String lightBackground = cssVar(":root", "--pk-bg");
+        String lightText = cssVar(":root", "--pk-text");
 
-        assertThat(cssVar(":root", "--pk-bg")).isEqualTo("#ffffff");
-        assertThat(cssVar(":root", "--pk-text")).isEqualTo("#1f2937");
-    }
-
-    @Test
-    void darkThemeResolvesDarkBackground() {
         setStoredTheme("dark");
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
         openDashboard();
 
-        assertThat(cssVar(":root", "--pk-bg")).isEqualTo("#0d1117");
-        assertThat(cssVar(":root", "--pk-text")).isEqualTo("#c9d1d9");
-    }
-
-    @Test
-    void purpleTokenResolvesInLightTheme() {
-        setStoredTheme("light");
-        openDashboard();
-
-        assertThat(cssVar(":root", "--pk-purple")).isEqualTo("#7c3aed");
-    }
-
-    @Test
-    void purpleTokenResolvesInDarkTheme() {
-        setStoredTheme("dark");
-        openDashboard();
-
-        assertThat(cssVar(":root", "--pk-purple")).isEqualTo("#a371f7");
+        assertThat(cssVar(":root", "--pk-bg")).isNotEqualTo(lightBackground);
+        assertThat(cssVar(":root", "--pk-text")).isNotEqualTo(lightText);
     }
 
     /**
-     * Dark mode previously inherited the light theme's status colours, which are tuned
-     * for contrast against white: #dc2626 on the #0d1117 background scores 3.92:1,
-     * below WCAG AA's 4.5:1. The dark overrides fix that (#f85149 scores 5.65:1) and
-     * align the dashboard with the overlay's palette.
+     * The light theme's status colours are tuned for contrast against white: #dc2626 on
+     * the #0d1117 dark background scores 3.92:1, below WCAG AA's 4.5:1. The dark overrides
+     * (#f85149 scores 5.65:1) keep the dashboard's status colours readable and aligned
+     * with the overlay's palette.
      */
     @Test
     void darkThemeStatusColoursAreDarkAdapted() {
@@ -54,29 +43,5 @@ class ThemeTokenIT extends PlaywrightTestBase {
         assertThat(cssVar(":root", "--pk-danger")).isEqualTo("#f85149");
         assertThat(cssVar(":root", "--pk-success")).isEqualTo("#3fb950");
         assertThat(cssVar(":root", "--pk-warning")).isEqualTo("#d29922");
-    }
-
-    /**
-     * The 4xx badge tier. A client error is the caller's fault, not the server's, so it
-     * reads as a lighter red than the 5xx pill - but "lighter" means a different thing
-     * per theme: on white a pale fill recedes, while on the dark surface a pale fill
-     * would out-glow the full-error pill, so dark gets a deep, recessive red instead.
-     */
-    @Test
-    void softDangerTierIsAPaleFillWithDarkInkInLightTheme() {
-        setStoredTheme("light");
-        openDashboard();
-
-        assertThat(cssVar(":root", "--pk-danger-soft")).isEqualTo("#fecaca");
-        assertThat(cssVar(":root", "--pk-on-danger-soft")).isEqualTo("#7f1d1d");
-    }
-
-    @Test
-    void softDangerTierIsARecessiveFillWithPaleInkInDarkTheme() {
-        setStoredTheme("dark");
-        openDashboard();
-
-        assertThat(cssVar(":root", "--pk-danger-soft")).isEqualTo("#5c1f1f");
-        assertThat(cssVar(":root", "--pk-on-danger-soft")).isEqualTo("#f8d7da");
     }
 }

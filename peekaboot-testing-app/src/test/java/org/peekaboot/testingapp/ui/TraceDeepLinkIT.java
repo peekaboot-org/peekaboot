@@ -2,8 +2,11 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.Scheduler;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the trace-detail overlay's URL-driven tab + filter state: deep-linking straight
@@ -15,54 +18,52 @@ import org.junit.jupiter.api.Test;
  */
 class TraceDeepLinkIT extends PlaywrightTestBase {
 
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
+
     /**
-     * Scheduler#fixedRate (peekaboot-testing-app) is a purpose-built fixture already relied
-     * on elsewhere (see DashboardTabsIT.tracesTabListsTracesAndBucketsThem's javadoc): a
-     * {@code fixedRate} job with no initial delay, so it runs once right at app boot, and
-     * logs an INFO ("fixedRate start") followed by an ERROR ("fixedRate failed") in the same
-     * trace - real data with both a row that matches a level=ERROR&q=failed filter and one
-     * that doesn't, so this proves both the restore AND the actual hide/show, not just one
-     * of the two. (OrderReconciler's WARN-per-stale-order logs would have made a more
-     * on-the-nose fixture for this test, but the test profile runs with flyway.enabled=false
-     * - see application-test.yml - so V4__order-data.sql never seeds the orders it needs and
-     * it logs "reconciling 0 orders"; confirmed empirically before choosing this fixture
-     * instead.) Searching the real traces-list API for it (rather than depending on test
-     * execution order) is what makes this robust regardless of which test class runs first.
+     * Scheduler#fixedRate (peekaboot-testing-app) is a purpose-built fixture: it logs an
+     * INFO ("fixedRate start") followed by an ERROR ("fixedRate failed") in the same trace -
+     * real data with both a row that matches a level=ERROR&q=failed filter and one that
+     * doesn't, so this proves both the restore AND the actual hide/show, not just one of
+     * the two. (OrderReconciler's WARN-per-stale-order logs would be a more on-the-nose
+     * fixture, but the test profile runs with flyway.enabled=false - see
+     * application-test.yml - so V4__order-data.sql never seeds the orders it needs and it
+     * logs "reconciling 0 orders".)
+     *
+     * <p>Fired per test through the scheduler's own runnable rather than relying on the
+     * boot-time run: every /?error=true and /boom the concurrent classes issue pushes an
+     * older error trace further down the list, so only a freshly minted one is guaranteed
+     * to be found. The poll matches on the root span's name, which is what proves the
+     * trace's spans - exported asynchronously, unlike its logs - have landed.
      */
-    private String findFixedRateSchedulerTraceId() {
+    private String freshFixedRateSchedulerTraceId() {
+        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
         openDashboard();
-        String traceId = (String) page.evaluate("""
+        return (String) page.evaluate("""
                 async () => {
-                    const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
-                    const result = await response.json();
-                    const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
-                    return match ? match.traceId : null;
+                    for (let attempt = 0; attempt < 150; attempt++) {
+                        const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
+                        const result = await response.json();
+                        const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
+                        if (match) return match.traceId;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error('no scheduler.fixedRate trace reached the errors bucket within 15s');
                 }
                 """);
-        assertThat(traceId)
-                .as("expected a real scheduler.fixedRate trace (INFO 'fixedRate start' + ERROR 'fixedRate "
-                        + "failed') - Scheduler#fixedRate runs once at boot with no initial delay")
-                .isNotNull();
-        return traceId;
     }
 
     @Test
     void deepLinkToATraceLogsTabRestoresTabAndFilters() {
-        String traceId = findFixedRateSchedulerTraceId();
+        String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=ERROR&q=failed");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-log-level')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-log-level");
 
-        String selectedTab = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
-        String levelValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-level').value");
-        String textValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-filter').value");
+        String selectedTab = overlay.selectedTab();
+        String levelValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-level').value");
+        String textValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-filter').value");
 
         assertThat(selectedTab).isEqualTo("logs");
         assertThat(levelValue).isEqualTo("ERROR");
@@ -72,8 +73,8 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // that matches must be visible - the same check applyFilters() itself enforces,
         // proven here via the real rendered pk-log--hidden classes on real fixture data
         // (one matching ERROR row, one non-matching INFO row - see the fixture's javadoc).
-        Boolean everyRowConsistentWithTheFilters = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean everyRowConsistentWithTheFilters = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .every(row => {
                         const matches = row.dataset.level === 'ERROR'
                             && row.querySelector('.pk-log__message').textContent.toLowerCase().includes('failed');
@@ -82,12 +83,12 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
                 """);
         assertThat(everyRowConsistentWithTheFilters).isTrue();
 
-        Boolean atLeastOneRowVisible = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean atLeastOneRowVisible = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => !row.classList.contains('pk-log--hidden'))
                 """);
-        Boolean atLeastOneRowHidden = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean atLeastOneRowHidden = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => row.classList.contains('pk-log--hidden'))
                 """);
         assertThat(atLeastOneRowVisible)
@@ -99,7 +100,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the push/replace rule (url-state.js): the overlay's tab strip
+     * The push/replace rule (url-state.js): the overlay's tab strip
      * and the Logs tab's own filters must both write via replaceState, so a single Back
      * step from a filtered subview closes the overlay outright rather than unwinding the
      * tab switch and filter edit as separate Back stops.
@@ -112,13 +113,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // filter correctness, only that changing a filter rewrites the URL without pushing
         // a new history entry.
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        // #pk-trace's own textContent is "traceId<hex><copy-icon>" (a labelled copy-button,
-        // see shared/copyable.js) - the bare id lives in its .pk-copy__value child.
-        String traceId = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace .pk-copy__value').textContent.trim()");
+        String traceId = toolbar.traceId();
 
         openDashboard();
         // Establishes a real pushed '#traces' history entry - the state Back below must
@@ -134,57 +129,42 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", traceId);
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.openTab("logs");
+        overlay.waitFor("#pk-log-level");
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-level')");
-
-        page.evaluate("() => { const select = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-level'); select.value = 'ERROR';"
-                + " select.dispatchEvent(new Event('change', {bubbles: true})); }");
+        overlay.evaluate(
+                "root => { const select = root.querySelector('#pk-log-level'); select.value = 'ERROR'; select.dispatchEvent(new Event('change', {bubbles: true})); }");
 
         assertThat(page.url()).contains("level=");
 
         page.goBack();
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.url()).endsWith("#traces");
     }
 
     /**
-     * Regression guard for a review finding: logs.js used to seed {@code state.level}
-     * straight from the URL's {@code level} param with no validation against the real
-     * {@code LEVELS} list. A typo'd, wrong-case, or stale value (a malformed hand-edited
-     * link, or a level value from an older build) then matched no {@code <option>}, so the
-     * browser fell back to showing "All Levels" selected while applyFilters() kept
+     * logs.js validates the URL's {@code level} param against the real {@code LEVELS} list
+     * and falls back to '' for anything else (matching how an unrecognized subview falls
+     * back to 'spans' in trace-detail.js), so the dropdown and the actual filtering agree.
+     * Seeded verbatim into {@code state.level}, a typo'd, wrong-case, or stale value (a
+     * malformed hand-edited link, or a level value from an older build) matches no {@code
+     * <option>}: the browser shows "All Levels" selected while applyFilters() keeps
      * filtering by the bogus value underneath - a dropdown that visually claims "no
-     * filter" while silently hiding every row. logs.js now falls back to '' (matching how
-     * an unrecognized subview falls back to 'spans' in trace-detail.js) so the dropdown and
-     * the actual filtering agree.
+     * filter" while silently hiding every row.
      */
     @Test
     void deepLinkWithAnUnrecognizedLevelFallsBackToAllLevelsAndShowsEveryRow() {
-        String traceId = findFixedRateSchedulerTraceId();
+        String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=BOGUS");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-log-level')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-log-level");
 
-        String levelValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-level').value");
+        String levelValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-level').value");
         assertThat(levelValue).isEqualTo("");
 
-        Boolean anyRowHidden = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean anyRowHidden = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => row.classList.contains('pk-log--hidden'))
                 """);
         assertThat(anyRowHidden)
@@ -193,22 +173,19 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for a controller ruling: traces.js's own click-to-open path
-     * (openTrace(), the trace list's "open" button) used to call overlay.open() with no
-     * urlState at all, so a trace opened by clicking it - the primary way anyone opens a
-     * trace - never got its tab switches or filter changes synced to the URL; only the
-     * hash-driven paths (deep link, Back/Forward) did. main.js now exposes the same
-     * urlState factory expandTraceById uses (context.traceUrlState) and traces.js passes
-     * it through.
+     * traces.js's own click-to-open path (openTrace(), the trace list's "open" button)
+     * passes the same urlState factory main.js's expandTraceById uses
+     * (context.traceUrlState) into overlay.open(), so a trace opened by clicking it - the
+     * primary way anyone opens a trace - gets its tab switches and filter changes synced to
+     * the URL just like the hash-driven paths (deep link, Back/Forward) do.
      * <p>
-     * Also covers the follow-up regression that wiring urlState in activated: openTrace's
-     * onClose compared window.location.hash against the exact string
-     * "#traces/{traceId}" - true only while the overlay was still on its opening subview.
-     * Once a tab switch rewrites the hash to "#traces/{traceId}/{subview}" (replaceAppHash,
-     * same as any hash-driven open), that exact-string check stops matching, onClose's
-     * cleanup never fires, and closing the overlay leaves the detail segment in the URL -
-     * a reload would silently reopen the trace on that subview. Fixed to parse the hash and
-     * compare tab/detail only, mirroring main.js's expandTraceById onClose.
+     * Also covers openTrace's onClose, which parses the hash and compares tab/detail only,
+     * mirroring expandTraceById's onClose: an exact-string comparison against
+     * "#traces/{traceId}" holds only while the overlay is still on its opening subview -
+     * once a tab switch rewrites the hash to "#traces/{traceId}/{subview}" (replaceAppHash,
+     * same as any hash-driven open) it stops matching, onClose's cleanup never fires, and
+     * closing the overlay leaves the detail segment in the URL, so a reload would silently
+     * reopen the trace on that subview.
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
@@ -221,63 +198,35 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         page.click("#traces-list .pk-trace-item__open");
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"request\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
+        overlay.openTab("request");
 
         assertThat(page.url()).endsWith("#traces/" + traceId + "/request");
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
 
         assertThat(page.url()).endsWith("#traces");
     }
 
     /**
-     * Regression guard for the DOM-only-state bug this task's logs.js refactor fixes: the
-     * span filter chip used to force a full re-render off container.innerHTML, and the text/
-     * level inputs' values lived only in the DOM - so that re-render silently wiped whatever
-     * the user had typed. logs.js now renders its controls from a `state` object instead.
+     * logs.js renders its controls from a `state` object: the span filter chip forces a
+     * full re-render off container.innerHTML, and were the text/level inputs' values kept
+     * only in the DOM, that re-render would silently wipe whatever the user had typed.
      */
     @Test
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        toolbar.openOverlay();
+        overlay.openLogsTab();
 
-        page.evaluate("() => { const input = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-filter'); input.value = 'persons';"
-                + " input.dispatchEvent(new Event('input', {bubbles: true})); }");
+        overlay.evaluate(
+                "root => { const input = root.querySelector('#pk-log-filter'); input.value = 'persons'; input.dispatchEvent(new Event('input', {bubbles: true})); }");
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String textValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-filter').value");
+        String textValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-filter').value");
         assertThat(textValue).isEqualTo("persons");
     }
 }

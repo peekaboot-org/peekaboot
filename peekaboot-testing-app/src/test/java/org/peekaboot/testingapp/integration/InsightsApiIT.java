@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -16,7 +17,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatusCode;
@@ -24,7 +24,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
@@ -41,19 +40,18 @@ class InsightsApiIT {
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
+    private PeekabootApi api;
     private RestClient restClient;
 
     @BeforeEach
-    void setUp() {
-        restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+    void connect() {
+        api = new PeekabootApi(port);
+        restClient = api.restClient();
     }
 
     @Test
     void configServesPanelsAndLevels() {
-        JsonNode config = getJson("/peekaboot/api/insights/config");
+        JsonNode config = api.getJson("/peekaboot/api/insights/config");
 
         assertThat(config.get("levels")).hasSize(3);
 
@@ -65,12 +63,13 @@ class InsightsApiIT {
     }
 
     @Test
-    void dataReturnsGrowingTickSeries() throws InterruptedException {
-        Thread.sleep(1000); // >= 4 ticks at the test profile's 250ms level-0 interval
+    void dataReturnsGrowingTickSeries() {
+        // level 0 ticks every 250ms in the test profile, so two samples are a moment away
+        JsonNode data = await().atMost(Duration.ofSeconds(5))
+                .until(
+                        () -> api.getJson("/peekaboot/api/insights/data?level=0"),
+                        d -> d.get("count").asInt() >= 2);
 
-        JsonNode data = getJson("/peekaboot/api/insights/data?level=0");
-
-        assertThat(data.get("count").asInt()).isGreaterThanOrEqualTo(2);
         // cpu.process (process.cpu.usage) resolves in a real JVM app
         assertThat(data.get("series").get("cpu.process").get("values")).isNotEmpty();
     }
@@ -116,15 +115,5 @@ class InsightsApiIT {
                 assertThat(sawTick).as("received a tick SSE event").isTrue();
             }
         }
-    }
-
-    private JsonNode getJson(String path) {
-        String json = restClient
-                .get()
-                .uri(path)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String.class);
-        return objectMapper.readTree(json);
     }
 }

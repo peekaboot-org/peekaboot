@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -23,18 +24,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
- * Proves two masking fixes (Fix round 1: C1, C2) end to end through the real HTTP API and
- * a real Spring context - a unit test on the mapper/filter alone would not catch either,
- * since both defects existed despite RequestCaptureFilter's header masking and
- * QueryExtractor's own unit tests being green: the bug was in the parts neither test
- * exercised (parameters/query string). These assertions now run against
- * {@code /api/traces/{traceId}/insights} - the only trace endpoint left, so it is the
- * only path this masking has to hold on.
+ * Proves request-parameter and SQL masking end to end through the real HTTP API and a
+ * real Spring context - a unit test on the mapper/filter alone does not cover it:
+ * RequestCaptureFilter's header masking and QueryExtractor's own unit tests can be green
+ * while parameters and the query string leak, because neither exercises those parts.
+ * The assertions run against {@code /api/traces/{traceId}/insights}, the only trace
+ * endpoint, so it is the only path this masking has to hold on.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -45,17 +43,13 @@ class RequestAndQueryMaskingIT {
     private int port;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private TraceStore traceStore;
 
-    private TraceApiClient traces() {
-        return new TraceApiClient(port, objectMapper);
-    }
+    private TraceApiClient traces;
 
-    private RestClient restClient() {
-        return RestClient.builder().baseUrl("http://localhost:" + port).build();
+    @BeforeEach
+    void connect() {
+        traces = new TraceApiClient(port);
     }
 
     /**
@@ -67,14 +61,14 @@ class RequestAndQueryMaskingIT {
      */
     @Test
     void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
-        restClient()
+        traces.restClient()
                 .get()
                 .uri("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets")
                 .retrieve()
                 .toBodilessEntity();
 
-        JsonNode listed = traces().awaitTraceInBucket("all", "/masking-test/search");
-        JsonNode trace = fetchTrace(listed.path("traceId").asString());
+        JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/search");
+        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
 
         JsonNode queryParams =
                 trace.path("httpExchange").path("request").path("params").path("query");
@@ -86,7 +80,7 @@ class RequestAndQueryMaskingIT {
 
     @Test
     void aSecretBearingFormFieldComesBackMaskedFromTheTraceInsightsApi() {
-        restClient()
+        traces.restClient()
                 .post()
                 .uri("/masking-test/login")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -94,8 +88,8 @@ class RequestAndQueryMaskingIT {
                 .retrieve()
                 .toBodilessEntity();
 
-        JsonNode listed = traces().awaitTraceInBucket("all", "/masking-test/login");
-        JsonNode trace = fetchTrace(listed.path("traceId").asString());
+        JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/login");
+        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
 
         JsonNode formParams =
                 trace.path("httpExchange").path("request").path("params").path("form");
@@ -160,22 +154,13 @@ class RequestAndQueryMaskingIT {
                 List.of(),
                 traceStore.nextCreationOrder()));
 
-        JsonNode trace = fetchTrace(traceId);
+        JsonNode trace = traces.awaitTrace(traceId);
 
         assertThat(trace.path("queries")).hasSize(1);
         String sql = trace.path("queries").get(0).path("sql").asString();
         assertThat(sql)
                 .isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
                         + "('https://******@internal.example.com/callback')");
-    }
-
-    private JsonNode fetchTrace(String traceId) {
-        String body = restClient()
-                .get()
-                .uri("/peekaboot/api/traces/" + traceId + "/insights")
-                .retrieve()
-                .body(String.class);
-        return objectMapper.readTree(body);
     }
 
     @TestConfiguration

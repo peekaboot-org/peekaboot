@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,9 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Drives the testing app and reads back what Peekaboot captured, through the same public
@@ -29,12 +28,12 @@ class TraceApiClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final long POLL_INTERVAL_MS = 50;
 
+    private final PeekabootApi api;
     private final RestClient restClient;
-    private final ObjectMapper objectMapper;
 
-    TraceApiClient(int port, ObjectMapper objectMapper) {
-        this.restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
-        this.objectMapper = objectMapper;
+    TraceApiClient(int port) {
+        this.api = new PeekabootApi(port);
+        this.restClient = api.restClient();
     }
 
     RestClient restClient() {
@@ -42,7 +41,8 @@ class TraceApiClient {
     }
 
     String triggerAndCaptureTraceId(String path) {
-        String html = restClient.get()
+        String html = restClient
+                .get()
                 .uri(path)
                 .accept(MediaType.TEXT_HTML)
                 .retrieve()
@@ -50,8 +50,10 @@ class TraceApiClient {
 
         Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
         assertThat(matcher.find())
-                .as("dev toolbar must embed a trace id for %s - without one the request was "
-                  + "never traced and any capture assertion would be meaningless", path)
+                .as(
+                        "dev toolbar must embed a trace id for %s - without one the request was "
+                                + "never traced and any capture assertion would be meaningless",
+                        path)
                 .isTrue();
         return matcher.group(1);
     }
@@ -72,7 +74,8 @@ class TraceApiClient {
             JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
             if (trace != null) {
                 lastSeen = trace;
-                int spanCount = trace.path("summary").path("spans").path("count").asInt();
+                int spanCount =
+                        trace.path("summary").path("spans").path("count").asInt();
                 // A trace with an outbound call is exported in more than one BatchSpanProcessor
                 // flush, so a single non-zero read can be a partial snapshot. Requiring the count
                 // to hold steady across two consecutive polls confirms the flushes have caught up.
@@ -90,15 +93,15 @@ class TraceApiClient {
             }
             sleepBriefly();
         }
-        throw new AssertionError("trace " + traceId + " never had a stable exported span count within "
-                + TIMEOUT + "; last response: " + lastSeen);
+        throw new AssertionError("trace " + traceId + " never had a stable exported span count within " + TIMEOUT
+                + "; last response: " + lastSeen);
     }
 
     JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
         List<String> seen = new ArrayList<>();
         while (System.nanoTime() < deadline) {
-            JsonNode response = fetch("/peekaboot/api/traces/insights?bucket=" + bucket);
+            JsonNode response = api.getJson("/peekaboot/api/traces/insights?bucket=" + bucket);
             seen.clear();
             for (JsonNode trace : response.path("traces")) {
                 String rootOperation = trace.path("rootOperation").asString("");
@@ -114,14 +117,9 @@ class TraceApiClient {
                 + "; the bucket held: " + seen);
     }
 
-    private JsonNode fetch(String uri) {
-        String body = restClient.get().uri(uri).retrieve().body(String.class);
-        return body == null ? null : objectMapper.readTree(body);
-    }
-
     private JsonNode fetchOrNull(String uri) {
         try {
-            return fetch(uri);
+            return api.getJson(uri);
         } catch (HttpClientErrorException.NotFound notYetAvailable) {
             // single-trace endpoint returns 404 until the first span for the trace is exported
             return null;

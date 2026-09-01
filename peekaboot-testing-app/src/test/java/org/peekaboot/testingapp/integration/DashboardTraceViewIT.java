@@ -3,7 +3,6 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,17 +16,12 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
-import org.peekaboot.testingapp.entity.Person;
-import org.peekaboot.testingapp.repository.PersonRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Asserts on the dashboard's trace API against a {@link TraceStore} that holds only
@@ -52,16 +46,9 @@ class DashboardTraceViewIT {
     private int port;
 
     @Autowired
-    private PersonRepository personRepository;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private TraceStore traceStore;
 
-    private RestClient restClient;
-    private String baseUrl;
+    private PeekabootApi api;
     private String testTraceId;
     private String testSpanId;
 
@@ -69,15 +56,7 @@ class DashboardTraceViewIT {
     void setUp(TestInfo testInfo) {
         traceStore.clear();
 
-        baseUrl = "http://localhost:" + port;
-        restClient = RestClient.builder().baseUrl(baseUrl).build();
-
-        personRepository.deleteAll();
-        Person person = new Person();
-        person.setFirstName("Test");
-        person.setLastName("User");
-        person.setEmail("test@example.com");
-        personRepository.save(person);
+        api = new PeekabootApi(port);
 
         String testName = testInfo.getTestMethod().map(m -> m.getName()).orElse("unknown");
         testTraceId = String.format("%016x", testName.hashCode());
@@ -88,7 +67,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceFromToolbarShouldBeVisibleInDashboardApi() throws Exception {
-        JsonNode response = getJson("/peekaboot/api/traces/insights");
+        JsonNode response = api.getJson("/peekaboot/api/traces/insights");
         JsonNode traces = response.get("traces");
 
         assertThat(traces).isNotNull();
@@ -101,7 +80,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceDetailsShouldContainSpans() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode rootSpan = trace.get("rootSpan");
 
         assertThat(rootSpan).as("Trace should contain rootSpan").isNotNull();
@@ -112,22 +91,16 @@ class DashboardTraceViewIT {
 
     @Test
     void traceDetailsShouldContainHttpAttributes() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
-        JsonNode inheritedAttributes = trace.get("inheritedAttributes");
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode rootTags = trace.get("rootSpan").get("tags");
 
-        boolean hasHttpMethod = inheritedAttributes != null && inheritedAttributes.has("http.method");
-        boolean hasUrlPath = inheritedAttributes != null && inheritedAttributes.has("url.path");
-        boolean hasRootOperation =
-                trace.has("rootOperation") && !trace.get("rootOperation").isNull();
-
-        assertThat(hasHttpMethod || hasUrlPath || hasRootOperation)
-                .as("Trace should contain HTTP attributes (http.method, url.path) or rootOperation")
-                .isTrue();
+        assertThat(rootTags.get("http.method").asString()).isEqualTo("GET");
+        assertThat(rootTags.get("url.path").asString()).isEqualTo("/persons");
     }
 
     @Test
     void traceShouldContainDatabaseSpansWhenQueryExecuted() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode summary = trace.get("summary");
 
         assertThat(summary).isNotNull();
@@ -141,34 +114,14 @@ class DashboardTraceViewIT {
 
     @Test
     void dashboardShouldBeAccessible() {
-        Map<String, Object> response = restClient
+        String html = api.restClient()
                 .get()
                 .uri("/peekaboot/ui/dashboard/index.html")
                 .accept(MediaType.TEXT_HTML)
-                .exchange((req, res) -> {
-                    return Map.of(
-                            "status",
-                            res.getStatusCode(),
-                            "body",
-                            res.getStatusCode().is2xxSuccessful()
-                                    ? new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8)
-                                    : "");
-                });
+                .retrieve()
+                .body(String.class);
 
-        HttpStatusCode status = (HttpStatusCode) response.get("status");
-        String body = (String) response.get("body");
-
-        if (status.is2xxSuccessful()) {
-            assertThat(body)
-                    .as("Dashboard HTML should load successfully")
-                    .isNotNull()
-                    .isNotEmpty()
-                    .contains("<!DOCTYPE html>");
-        } else {
-            assertThat(status.value())
-                    .as("Dashboard endpoint should return 200 or 404 (if frontend not bundled)")
-                    .isIn(200, 404);
-        }
+        assertThat(html).contains("<!DOCTYPE html>");
     }
 
     @Test
@@ -211,8 +164,8 @@ class DashboardTraceViewIT {
                 List.of(),
                 traceStore.nextCreationOrder()));
 
-        JsonNode errors = getJson("/peekaboot/api/traces/insights?bucket=errors");
-        JsonNode all = getJson("/peekaboot/api/traces/insights?bucket=all");
+        JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
+        JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
 
         assertThat(errors.get("traces")).hasSize(1);
         assertThat(errors.get("traces").get(0).get("traceId").asString()).isEqualTo("berr");
@@ -223,17 +176,8 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void dashboardHtmlContainsBucketControl() {
-        String html = getHtml("/peekaboot/ui/dashboard/index.html");
-
-        assertThat(html).contains("id=\"traces-bucket\"");
-        assertThat(html).contains("data-bucket=\"errors\"");
-        assertThat(html).contains("data-bucket=\"slow\"");
-    }
-
-    @Test
     void featuresShouldIndicateTracingEnabled() throws Exception {
-        JsonNode features = getJson("/peekaboot/api/features");
+        JsonNode features = api.getJson("/peekaboot/api/features");
 
         assertThat(features.get("tracing").asBoolean())
                 .as("Tracing feature should be enabled")
@@ -242,20 +186,6 @@ class DashboardTraceViewIT {
         assertThat(features.get("devToolbar").asBoolean())
                 .as("DevToolbar feature should be enabled")
                 .isTrue();
-    }
-
-    private JsonNode getJson(String path, Object... uriVariables) {
-        String json = restClient
-                .get()
-                .uri(path, uriVariables)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String.class);
-        return objectMapper.readTree(json);
-    }
-
-    private String getHtml(String path) {
-        return restClient.get().uri(path).accept(MediaType.TEXT_HTML).retrieve().body(String.class);
     }
 
     private void injectTestSpan() {

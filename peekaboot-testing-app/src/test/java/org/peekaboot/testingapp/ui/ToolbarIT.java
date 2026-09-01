@@ -7,33 +7,20 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the real toolbar.js served by the running app in a real browser. Supersedes the
- * old HtmlUnit-based ToolbarScriptTest, which could not parse toolbar.js once it became an ES
- * module. Coverage that used to come from stubbed fetch/setTimeout now comes from real requests
- * (a real DB-backed /persons request for query counts and controller name, a real logged error
- * for log counts, a real Server-Timing header for idle mode) rather than mocked responses, per
- * the project's no-mocking-in-e2e-tests policy. Aborting a single, specific network request to
+ * Exercises the real toolbar.js served by the running app in a real browser. Coverage comes
+ * from real requests (a real DB-backed /persons request for query counts and controller name,
+ * a real logged error for log counts, a real Server-Timing header for idle mode) rather than
+ * stubbed fetch/setTimeout or mocked responses, per the project's no-mocking-in-e2e-tests
+ * policy. Aborting a single, specific network request to
  * simulate a real fetch failure is not the same as mocking a fake response, so it is used for
  * the "pending" state test.
  */
 class ToolbarIT extends PlaywrightTestBase {
-
-    private String shadowVar(String property) {
-        return (String) page.evaluate(
-                "prop => getComputedStyle(document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('.pk-toolbar')).getPropertyValue(prop).trim()",
-                property);
-    }
-
-    private String shadowText(String id) {
-        return (String) page.evaluate(
-                "id => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.getElementById(id).textContent",
-                id);
-    }
 
     /**
      * Headless Chromium's own default is prefers-color-scheme: light, so a naive
@@ -50,9 +37,8 @@ class ToolbarIT extends PlaywrightTestBase {
         setStoredTheme("light");
         emulateOppositeOsPreference(ColorScheme.DARK);
         openPersonsPage();
-        page.waitForSelector("#peekaboot-toolbar-host");
 
-        assertThat(shadowVar("--pk-bg")).isEqualTo("#ffffff");
+        assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#ffffff");
     }
 
     @Test
@@ -60,21 +46,17 @@ class ToolbarIT extends PlaywrightTestBase {
         setStoredTheme("dark");
         emulateOppositeOsPreference(ColorScheme.LIGHT);
         openPersonsPage();
-        page.waitForSelector("#peekaboot-toolbar-host");
 
-        assertThat(shadowVar("--pk-bg")).isEqualTo("#0d1117");
+        assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#0d1117");
     }
 
     @Test
     void toolbarShowsMethodPathAndStatusForTheRequest() {
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-status').textContent.trim() !== ''");
+        toolbar.waitUntil("root => root.querySelector('#pk-status').textContent.trim() !== ''");
 
-        String status = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-status').textContent");
-        String path = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-path').textContent");
+        String status = toolbar.text("#pk-status");
+        String path = toolbar.text("#pk-path");
 
         assertThat(status).isEqualTo("200");
         assertThat(path).isEqualTo("/persons");
@@ -83,11 +65,9 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void clickingTheBarOpensTheTraceOverlay() {
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
 
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
+        toolbar.click(".pk-toolbar");
 
         page.waitForSelector("#peekaboot-trace-overlay");
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
@@ -108,11 +88,9 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void theBarIsKeyboardOperableAndOpensTheOverlayOnEnter() {
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
 
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
+        toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
 
         page.waitForSelector("#peekaboot-trace-overlay");
@@ -132,15 +110,12 @@ class ToolbarIT extends PlaywrightTestBase {
     void theDashboardLinkDoesNotTriggerTheBarsOwnAction() {
         openPersonsPage();
 
-        boolean linkIsFocusable =
-                (Boolean) page.evaluate("() => { const a = document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('.pk-toolbar a'); a.focus();"
-                        + " return document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.activeElement === a; }");
+        boolean linkIsFocusable = (Boolean)
+                toolbar.evaluate(
+                        "root => { const a = root.querySelector('.pk-toolbar a'); a.focus(); return root.activeElement === a; }");
         assertThat(linkIsFocusable).isTrue();
 
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar a').click()");
+        toolbar.click(".pk-toolbar a");
 
         assertThatThrownBy(() -> page.waitForSelector(
                         "#peekaboot-trace-overlay",
@@ -150,10 +125,8 @@ class ToolbarIT extends PlaywrightTestBase {
                 .isInstanceOf(TimeoutError.class);
 
         // Not vacuous: the bar's own action still works on this same page.
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
+        toolbar.traceId();
+        toolbar.click(".pk-toolbar");
         page.waitForSelector("#peekaboot-trace-overlay");
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
@@ -168,14 +141,10 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarShowsQueryCountAndControllerNameAfterTraceCompletes() {
         openPersonsPage();
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('quer')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
 
-        assertThat(shadowText("pk-metrics")).contains("queries");
-        assertThat(shadowText("pk-controller")).contains("PersonController.persons");
+        assertThat(toolbar.text("#pk-metrics")).contains("queries");
+        assertThat(toolbar.text("#pk-controller")).contains("PersonController.persons");
     }
 
     /**
@@ -185,14 +154,9 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarShowsErrorLogCountWhenRequestLogsAnError() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-metrics').textContent.includes('err')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('err')");
 
-        assertThat(shadowText("pk-metrics")).contains("1 err");
+        assertThat(toolbar.text("#pk-metrics")).contains("1 err");
     }
 
     /**
@@ -208,16 +172,12 @@ class ToolbarIT extends PlaywrightTestBase {
 
         openPersonsPage();
 
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending') !== null",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(10000));
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics .pk-toolbar__pending') !== null");
 
-        boolean hasPendingElement = (Boolean) page.evaluate("() => !!document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-metrics .pk-toolbar__pending')");
+        boolean hasPendingElement =
+                (Boolean) toolbar.evaluate("root => !!root.querySelector('#pk-metrics .pk-toolbar__pending')");
         assertThat(hasPendingElement).isTrue();
-        assertThat(shadowText("pk-metrics")).contains("?");
+        assertThat(toolbar.text("#pk-metrics")).contains("?");
     }
 
     /**
@@ -252,21 +212,19 @@ class ToolbarIT extends PlaywrightTestBase {
      */
     @Test
     void openOverlayImportFailureIsCaughtAndLeavesTheBarUsable() {
-        java.util.List<String> pageErrors = new java.util.ArrayList<>();
+        List<String> pageErrors = new ArrayList<>();
         page.onPageError(pageErrors::add);
         page.route("**/trace-detail/trace-detail.js", route -> route.abort());
 
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
 
         // waitForConsoleMessage blocks until the warning fires (or times out), giving
         // positive proof the rejection was handled rather than merely not-yet-observed.
         page.waitForConsoleMessage(
                 new Page.WaitForConsoleMessageOptions()
                         .setPredicate(msg -> msg.type().equals("warning")),
-                () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+                () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
@@ -277,8 +235,7 @@ class ToolbarIT extends PlaywrightTestBase {
         page.waitForConsoleMessage(
                 new Page.WaitForConsoleMessageOptions()
                         .setPredicate(msg -> msg.type().equals("warning")),
-                () -> page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('.pk-toolbar').click()"));
+                () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
@@ -300,10 +257,6 @@ class ToolbarIT extends PlaywrightTestBase {
 
         page.evaluate("() => fetch('/api/person/all')");
 
-        page.waitForFunction(
-                "() => document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(10000));
+        toolbar.traceId();
     }
 }

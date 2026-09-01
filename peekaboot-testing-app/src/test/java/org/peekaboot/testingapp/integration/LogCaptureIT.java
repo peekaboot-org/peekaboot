@@ -2,20 +2,13 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.Duration;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Covers the log-capture path end to end without a browser.
@@ -37,35 +30,30 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Uses the real auto-configured tracer deliberately - {@code SharedToolbarTestConfig}'s
  * stand-in {@code Tracer} is NOOP-backed and populates no MDC, which is exactly the
  * condition under test.
+ *
+ * <p>Waiting for the spans is enough to know the logs are in: spans arrive via the OTel
+ * BatchSpanProcessor whereas logs are published synchronously during the request, so a
+ * trace that has spans has necessarily already received any log it will ever get.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 class LogCaptureIT {
 
-    /** The toolbar embeds its payload as JSON in a {@code <script id="peekaboot-toolbar-data">} tag. */
-    private static final Pattern TOOLBAR_TRACE_ID = Pattern.compile("\"traceId\"\\s*:\\s*\"([0-9a-fA-F]+)\"");
-
-    private static final Duration TRACE_EXPORT_TIMEOUT = Duration.ofSeconds(15);
-    private static final long POLL_INTERVAL_MS = 50;
-
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    private RestClient restClient;
+    private TraceApiClient traces;
 
     @BeforeEach
-    void setUp() {
-        restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+    void connect() {
+        traces = new TraceApiClient(port);
     }
 
     @Test
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {
-        String traceId = requestTraceIdFor("/?error=true");
+        String traceId = traces.triggerAndCaptureTraceId("/?error=true");
 
-        JsonNode summary = awaitExportedTrace(traceId).path("summary");
+        JsonNode summary = traces.awaitTrace(traceId).path("summary");
         JsonNode logs = summary.path("logs");
 
         assertThat(logs.isMissingNode() || logs.isNull())
@@ -89,78 +77,12 @@ class LogCaptureIT {
      */
     @Test
     void requestWithoutAnErrorLogReportsNoErrorCount() {
-        String traceId = requestTraceIdFor("/persons");
+        String traceId = traces.triggerAndCaptureTraceId("/persons");
 
-        JsonNode logs = awaitExportedTrace(traceId).path("summary").path("logs");
+        JsonNode logs = traces.awaitTrace(traceId).path("summary").path("logs");
 
         assertThat(logs.path("errorCount").asInt())
                 .as("/persons logs no ERROR, so trace %s must report none", traceId)
                 .isZero();
-    }
-
-    private String requestTraceIdFor(String path) {
-        String html = restClient
-                .get()
-                .uri(path)
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
-
-        Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
-        assertThat(matcher.find())
-                .as(
-                        "dev toolbar must embed a trace id for %s - without one the request was "
-                                + "never traced and the log-capture assertion would be meaningless",
-                        path)
-                .isTrue();
-        return matcher.group(1);
-    }
-
-    /**
-     * Polls until the trace's spans have been exported, mirroring the toolbar's own
-     * completeness rule. Spans arrive via the OTel BatchSpanProcessor (50ms in the test
-     * profile) whereas logs are published synchronously during the request, so a trace
-     * that has spans has necessarily already received any log it will ever get.
-     */
-    private JsonNode awaitExportedTrace(String traceId) {
-        long deadline = System.nanoTime() + TRACE_EXPORT_TIMEOUT.toNanos();
-        JsonNode lastSeen = null;
-
-        while (System.nanoTime() < deadline) {
-            JsonNode trace = fetchTraceOrNull(traceId);
-            if (trace != null) {
-                lastSeen = trace;
-                if (trace.path("summary").path("spans").path("count").asInt() > 0) {
-                    return trace;
-                }
-            }
-            sleepBriefly();
-        }
-
-        throw new AssertionError("trace " + traceId + " never had an exported span within " + TRACE_EXPORT_TIMEOUT
-                + "; last response: " + lastSeen);
-    }
-
-    private JsonNode fetchTraceOrNull(String traceId) {
-        try {
-            String body = restClient
-                    .get()
-                    .uri("/peekaboot/api/traces/{traceId}/insights", traceId)
-                    .retrieve()
-                    .body(String.class);
-            return body == null ? null : objectMapper.readTree(body);
-        } catch (RuntimeException notYetExported) {
-            // the endpoint 404s until the first span for the trace lands
-            return null;
-        }
-    }
-
-    private void sleepBriefly() {
-        try {
-            Thread.sleep(POLL_INTERVAL_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while waiting for trace export", e);
-        }
     }
 }

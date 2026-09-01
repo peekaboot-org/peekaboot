@@ -4,11 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 class DashboardTabsIT extends PlaywrightTestBase {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** The {@code limit} traces.js requests with (its fetchAndRender). */
+    private static final int TRACES_PAGE_SIZE = 50;
 
     @Test
     void overviewShowsJavaAndSystemCards() {
@@ -170,7 +178,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * Inspects the real accessibility tree (not just the markup) to confirm the
      * strip exposes as an actual tablist with the right tabs and selected state -
      * markup alone has repeatedly looked right in this project without being right
-     * (see the role="button"-wrapping-a-link defect from Tasks 10/15).
+     * (a role="button" wrapping a link is the classic case).
      */
     @Test
     void tabStripExposesAsARealTablistInTheAccessibilityTree() {
@@ -193,8 +201,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for a real bug tabStrip()'s {silent: true} option exists to
-     * fix: handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
+     * tabStrip()'s {silent: true} option exists for this:
+     * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
      * so that syncing the strip's visual selection on a hash-driven boot doesn't also
      * re-trigger onSelect() - which calls setHash(tabId) with no detail argument, and
      * would silently strip the "/deadbeef" segment off a URL like "#traces/deadbeef"
@@ -214,8 +222,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * The health banner used to be a click-handled <div> - not reachable by keyboard at
-     * all. It is now a real <button> with aria-expanded/aria-controls; this proves Space
+     * The health banner is a real <button> with aria-expanded/aria-controls, not a
+     * click-handled <div> that no keyboard reaches; this proves Space
      * actually expands it, not just that a mouse click does (which every other test here
      * would still pass even if the element were a div with an onclick handler).
      */
@@ -237,7 +245,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /**
      * main.js fetches /api/features once at boot and unhides the traces/meters tab
      * buttons directly from the result - the only place those two buttons are ever
-     * unhidden, since neither has a tab module registered yet (Task 15). Tracing is
+     * unhidden. Tracing is
      * enabled in the test profile (see TraceOverlayIT/ToolbarIT, which depend on
      * real trace data), so this is a real assertion on a real feature flag, not a stub.
      */
@@ -316,9 +324,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * application-test.yml binds spring.datasource.password as a fixture value purely so
      * this test has a real, secret-looking property to filter on and check against the
      * masking engine's actual output - the test profile's H2 datasource doesn't otherwise
-     * need it. Filtering on "password" would previously have found nothing: Spring's
+     * need it. Without the fixture, filtering on "password" finds nothing: Spring's
      * /configprops report omits unset properties entirely rather than masking them, and
-     * before that fixture existed no property in the real payload contained "password".
+     * no other property in the real payload contains "password".
      */
     @Test
     void configTabMasksSensitiveValues() {
@@ -395,15 +403,13 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding: the tab strip's own onSelect handler
-     * (main.js) pushes a plain "#<tab>" hash with no params on every tab switch, so
-     * switching away from meters and back used to hand this tab a bare URL - and the
-     * seed logic treated that bare URL as authoritative, actively clearing the filter
-     * the user had just typed even though nothing about it had ever been undone. Fixed
-     * by only treating the URL as authoritative when it actually carries this tab's own
-     * "q" param; when it's bare but the tab still has non-default state, that state is
-     * written back to the URL instead, so the filter survives the round trip and the URL
-     * becomes truthful again.
+     * The tab strip's own onSelect handler (main.js) pushes a plain "#<tab>" hash with no
+     * params on every tab switch, so switching away from meters and back hands this tab a
+     * bare URL. The seed logic must not treat that bare URL as authoritative - that would
+     * clear the filter the user just typed even though nothing about it was undone. The
+     * URL is authoritative only when it carries this tab's own "q" param; when it is bare
+     * but the tab still has non-default state, that state is written back to the URL
+     * instead, so the filter survives the round trip and the URL stays truthful.
      */
     @Test
     void metersFilterSurvivesSwitchingTabsAwayAndBack() {
@@ -425,16 +431,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding on the fix above: the reconcile logic
-     * couldn't tell "the tab strip switched tabs" (a bare hash this tab's own filter
-     * should survive - see metersFilterSurvivesSwitchingTabsAwayAndBack) apart from "the
-     * user hand-edited the address bar to remove the q param" (a bare hash that should
-     * actually clear the filter) - both looked identical, so it always favored the
-     * surviving-filter behavior, silently reverting a real edit. Fixed by having
-     * main.js flag a render as URL-authoritative only when it's the direct result of a
+     * The counterpart of metersFilterSurvivesSwitchingTabsAwayAndBack: "the tab strip
+     * switched tabs" (a bare hash this tab's own filter should survive) and "the user
+     * hand-edited the address bar to remove the q param" (a bare hash that should
+     * actually clear the filter) look identical in the URL. main.js tells them apart by
+     * flagging a render as URL-authoritative only when it is the direct result of a
      * genuine hashchange event (handleHashChange()'s urlChangeInProgress) - a
-     * programmatic tab switch never sets it, so its own bare hash still lets the filter
-     * survive, while a real hash edit now actually clears it.
+     * programmatic tab switch never sets it, so its own bare hash lets the filter
+     * survive, while a real hash edit clears it.
      */
     @Test
     void handEditingTheHashToRemoveTheFilterClearsIt() {
@@ -459,55 +463,52 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct
-     * before any click - waiting on it (the first attempt at this test) resolves
-     * immediately and proves nothing. And "every visible trace has .pk-badge--error"
-     * (the second attempt) is also not a valid predicate against real data: the
-     * backend's error-bucket membership is driven by any ERROR-level *log* during the
-     * trace, while the frontend's HAS_ERRORS badge is driven only by an actual span
-     * exception - confirmed empirically, the scheduler's fixedRate() logs an error
-     * without throwing and lands in the errors bucket with no badge, alongside
-     * fixedDelay()'s real exception, which does get one; a strict "every item has the
-     * badge" wait against this app's real data never resolves.
+     * before any click - waiting on it resolves immediately and proves nothing. And
+     * "every visible trace has .pk-badge--error" is not a valid predicate against real
+     * data either: the backend's error-bucket membership is driven by any ERROR-level
+     * *log* during the trace, while the frontend's HAS_ERRORS badge is driven only by an
+     * actual span exception - the scheduler's fixedRate() logs an error without throwing
+     * and lands in the errors bucket with no badge, alongside fixedDelay()'s real
+     * exception, which does get one.
      * <p>
-     * What genuinely differs between bucket responses is the item count. The errors
-     * bucket's total is already known from its button's text (see above - available
-     * before any click), so read it once, then wait for the rendered list to actually
-     * match it once real filtering has taken effect. The sanity assertion that it's
-     * smaller than the unfiltered count is what keeps this non-vacuous: confirmed by
-     * inspection that the unfiltered list contains a mix of error and non-error traces
-     * (the scheduler's deliberate failures alongside ordinary HTTP request traces for
-     * the dashboard's own page loads), so the two counts are never equal in practice.
+     * What genuinely differs between bucket responses is the item count, so the list is
+     * checked against the count carried by the very response that rendered it: the
+     * bucket count is app-global and uncapped, the list is capped at the page size, and
+     * any class running alongside this one can log an ERROR between two requests. The
+     * sanity assertion that the errors count is smaller than the all count is what keeps
+     * this non-vacuous: the unfiltered store always holds a mix of error and non-error
+     * traces (the scheduler's deliberate failures alongside ordinary HTTP request traces
+     * for the dashboard's own page loads).
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");
-
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
                 .contains("All (");
-        int allCount = page.querySelectorAll("#traces-list .pk-trace-item").size();
 
-        String errorsButtonText = page.textContent("#traces-bucket .pk-btn[data-bucket='errors']");
-        // Stripping non-digits only yields the right number because no type filter is
-        // active here: updateBucketCounts renders the plain "Errors (N)" form when
-        // filteredCounts is null, and switches to "Errors (M / N)" once a filter is
-        // applied - which this replaceAll would silently mangle into "MN".
-        int expectedErrorsCount = Integer.parseInt(errorsButtonText.replaceAll("\\D+", ""));
-        assertThat(expectedErrorsCount).isLessThan(allCount);
+        Response errorsResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights")
+                        && response.url().contains("bucket=errors"),
+                () -> page.click("#traces-bucket .pk-btn[data-bucket='errors']"));
+        JsonNode errorsBucket = JSON.readTree(errorsResponse.text());
+        int errorsCount = errorsBucket.path("bucketCounts").path("errors").asInt();
+        int listedCount = errorsBucket.path("traces").size();
 
-        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        assertThat(errorsCount)
+                .isPositive()
+                .isLessThan(errorsBucket.path("bucketCounts").path("all").asInt());
+        assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
-                expectedErrorsCount);
-
-        assertThat(page.querySelectorAll("#traces-list .pk-trace-item")).hasSize(expectedErrorsCount);
+                listedCount);
     }
 
     /**
      * A deep link into the traces tab must restore the bucket and type filter controls
-     * from the URL, not just land on the traces tab - the whole point of Task 5 is that
-     * a filtered traces URL is shareable/bookmarkable.
+     * from the URL, not just land on the traces tab - a filtered traces URL is meant to
+     * be shareable/bookmarkable.
      */
     @Test
     void deepLinkRestoresTheTracesBucketAndTypeFilter() {
@@ -527,11 +528,11 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding: "bucket" was the only URL-sourced filter value
-     * traces.js never validated - "#traces?bucket=bogus" used to seed currentBucket='bogus'
-     * verbatim, hit the backend with it, and (on an empty result) render BUCKET_EMPTY_MESSAGES's
-     * literal "undefined" as the empty-state text since no such key exists. seedFromUrl now
-     * falls back to 'all' for anything not in BUCKET_EMPTY_MESSAGES's own key set - proven here
+     * Every URL-sourced filter value traces.js reads is validated, "bucket" included: seeding
+     * currentBucket='bogus' verbatim from "#traces?bucket=bogus" would hit the backend with it
+     * and (on an empty result) render BUCKET_EMPTY_MESSAGES's literal "undefined" as the
+     * empty-state text, since no such key exists. seedFromUrl falls back to 'all' for
+     * anything not in BUCKET_EMPTY_MESSAGES's own key set - proven here
      * by the bucket strip itself: an unvalidated 'bogus' would match none of the three real
      * bucket buttons, leaving all three unpressed, where the fallback leaves "All" pressed.
      */
@@ -575,19 +576,17 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding: context.setUrlParams's closure (main.js's
-     * currentContext()) used to capture detail/subview once, at the last render() of a
-     * tab - but opening a trace (traces.js's click-to-open path) and closing it (its
-     * onClose callback, both via context.navigate()) each skip a fresh render whenever
-     * the traces tab was already active (navigate()'s wasAlreadyActive guard), so the
-     * closure only ever picked up "detail = the open trace's id" if some *other* render
-     * happened while the overlay was open - in real use, the 30s auto-refresh cycle;
-     * here, a manual refresh click makes it deterministic. Once that was baked in,
-     * closing the overlay cleared the real hash back to plain "#traces" but left the
-     * closure stale - so the very next filter change replaced the hash with the
-     * just-closed trace's id still attached, silently reopening it on reload/share.
-     * Fixed by having setUrlParams re-parse the hash at call time instead of closing
-     * over a snapshot.
+     * context.setUrlParams (main.js's currentContext()) re-parses the hash at call time
+     * rather than closing over a detail/subview snapshot taken at the tab's last render().
+     * A snapshot goes stale: opening a trace (traces.js's click-to-open path) and closing
+     * it (its onClose callback, both via context.navigate()) each skip a fresh render
+     * whenever the traces tab was already active (navigate()'s wasAlreadyActive guard), so
+     * it would only pick up "detail = the open trace's id" through some *other* render
+     * while the overlay is open - in real use, the 30s auto-refresh cycle; here, a manual
+     * refresh click makes it deterministic. Closing the overlay then clears the real hash
+     * back to plain "#traces" but leaves the snapshot behind, and the very next filter
+     * change would replace the hash with the just-closed trace's id still attached,
+     * silently reopening it on reload/share.
      */
     @Test
     void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
@@ -618,18 +617,18 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding: the traces tab's own filter write-back used to
-     * ignore an open overlay entirely. With "#traces?bucket=errors" active and a trace open
-     * on top of it, switching the overlay to Logs and setting a level filter puts
-     * "#traces/<id>/logs?level=ERROR" in the address bar - but the traces tab's panel is
-     * still ".active" underneath, so the 30s auto-refresh (forced here via the refresh
-     * button, same pattern as closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace
-     * above) re-renders it. Its reconcileWithUrl saw no bucket/type/op keys in the URL
-     * (level/q are the overlay's own), decided the URL was stale, and wrote its own
-     * {bucket: 'errors'} back over the whole params slot - silently discarding the overlay's
-     * level filter from the shareable URL. Fixed by having both the seed direction
-     * (traces.js's reconcileWithUrl) and the write direction (main.js's setUrlParams) treat
-     * a detail segment in the hash as "the params slot belongs to the overlay - no-op".
+     * The traces tab's own filter write-back has to respect an open overlay. With
+     * "#traces?bucket=errors" active and a trace open on top of it, switching the overlay to
+     * Logs and setting a level filter puts "#traces/<id>/logs?level=ERROR" in the address
+     * bar - but the traces tab's panel is still ".active" underneath, so the 30s
+     * auto-refresh (forced here via the refresh button, same pattern as
+     * closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace above) re-renders it.
+     * Seeing no bucket/type/op keys in the URL (level/q are the overlay's own), its
+     * reconcileWithUrl would take the URL for stale and write its own {bucket: 'errors'}
+     * back over the whole params slot, silently discarding the overlay's level filter from
+     * the shareable URL. So both the seed direction (traces.js's reconcileWithUrl) and the
+     * write direction (main.js's setUrlParams) treat a detail segment in the hash as "the
+     * params slot belongs to the overlay - no-op".
      */
     @Test
     void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
@@ -675,20 +674,18 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression test for a review finding on the trace-detail re-open guard: two
-     * hash-driven opens in a row - e.g. deep-linking from one trace straight into another,
-     * or a Back/Forward step that lands on a different trace - used to desync main.js's
-     * bookkeeping of "which trace is open" (a private module variable at the time).
-     * openTraceDetail's synchronous closeTraceDetail() call fires the *first* trace's
-     * still-registered onClose callback - which unconditionally cleared that bookkeeping -
-     * before the *second* traceId was even recorded, clobbering it back to unset. The next
-     * hashchange landing back on the (already open) second trace then failed the
-     * "already open" check and tore the overlay down to rebuild it for no reason - the
-     * exact flicker the guard exists to prevent. Fixed by deriving "is trace X open" from
-     * the overlay host's own data-trace-id (stamped by trace-detail.js) instead of a
-     * private flag, so it can't desync regardless of which of the app's two entry points
-     * (main.js's hash routing, or traces.js's own click-to-open, which bypasses main.js's
-     * bookkeeping entirely) opened the overlay.
+     * The trace-detail re-open guard derives "is trace X open" from the overlay host's own
+     * data-trace-id (stamped by trace-detail.js) rather than from a private flag in
+     * main.js. A flag desyncs on two hash-driven opens in a row - e.g. deep-linking from
+     * one trace straight into another, or a Back/Forward step that lands on a different
+     * trace: openTraceDetail's synchronous closeTraceDetail() call fires the *first*
+     * trace's still-registered onClose callback, which would clear the flag before the
+     * *second* traceId was even recorded, and the next hashchange landing back on the
+     * (already open) second trace would then fail the "already open" check and tear the
+     * overlay down to rebuild it for no reason - the exact flicker the guard exists to
+     * prevent. The host attribute cannot desync regardless of which of the app's two
+     * entry points (main.js's hash routing, or traces.js's own click-to-open, which
+     * bypasses main.js's bookkeeping entirely) opened the overlay.
      * <p>
      * Marks the host with a throwaway attribute right after switching traces, then
      * re-fires the very hashchange event Back/Forward (or a redundant navigation) would
@@ -719,8 +716,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", firstTraceId);
 
-        // Straight to a *different* trace by hash, without closing the first - the exact
-        // sequence that used to clobber the guard's bookkeeping (see the javadoc above).
+        // Straight to a *different* trace by hash, without closing the first - the
+        // sequence that desyncs a flag-based guard (see the javadoc above).
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", secondTraceId);
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", secondTraceId);

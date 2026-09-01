@@ -19,11 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The demo endpoints exist to make Peekaboot's trace view worth looking at. These tests
@@ -36,12 +35,10 @@ import tools.jackson.databind.ObjectMapper;
 class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @LocalServerPort
     private int port;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -76,7 +73,7 @@ class OrderTraceCaptureIT {
             line.setUnitPrice(new BigDecimal("19.99"));
             orderLineRepository.save(line);
         }
-        traces = new TraceApiClient(port, objectMapper);
+        traces = new TraceApiClient(port);
     }
 
     @Test
@@ -200,19 +197,28 @@ class OrderTraceCaptureIT {
 
     @Test
     void placingAnOrderIsCapturedAsItsOwnTrace() {
-        traces.restClient()
+        String summary = traces.restClient()
                 .post()
                 .uri("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new NewOrder(1L, "WIDGET-NEW", 2))
                 .retrieve()
-                .toBodilessEntity();
+                .body(String.class);
 
-        JsonNode trace = traces.awaitTraceInBucket("all", "http post /api/orders");
+        JsonNode listed = traces.awaitTraceInBucket("all", "http post /api/orders");
+        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
                 .isEqualTo("HTTP_REQUEST");
+        assertThat(spanNames(trace))
+                .as("the order-placed listener runs inside the request, so its span belongs to this trace")
+                .contains("order.placed");
+        JsonNode placed = JSON.readTree(summary);
+        assertThat(placed.path("lineCount").asInt()).isEqualTo(1);
+        assertThat(placed.path("total").decimalValue())
+                .as("the summary describes the line that was persisted: 2 x 19.99")
+                .isEqualByComparingTo("39.98");
     }
 
     /**
@@ -221,11 +227,10 @@ class OrderTraceCaptureIT {
      * {@code order.reconcile.job}) is the trace root. That span carries only its own
      * {@code class}/{@code method} tags, not the {@code code.function}/
      * {@code code.namespace} pair Spring's {@code DefaultScheduledTaskObservationConvention}
-     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB. Before this
-     * defect was fixed it did, purely because the span's name happened to contain "job";
-     * this test now guards against that false positive recurring.
+     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB, as a classifier
+     * keyed on the span's name containing "job" would.
      * {@link #reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace()} covers
-     * the shape that does classify SCHEDULED_JOB - the one the defect was actually about.
+     * the shape that does classify SCHEDULED_JOB.
      */
     @Test
     void directReconciliationCallDoesNotClassifyAsScheduledJob() {
@@ -241,20 +246,14 @@ class OrderTraceCaptureIT {
     }
 
     /**
-     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes every
-     * {@code fixedDelay}, instead of waiting on the timer: {@code reconcileOrders()} is
-     * scheduled every 2 minutes, far past what an integration test should block on. The
-     * {@link ScheduledTaskHolder} bean (Spring's {@code ScheduledAnnotationBeanPostProcessor})
-     * exposes the {@link ScheduledTask} registered for every {@code @Scheduled} method;
-     * running its {@code Runnable} here is the real production code path, not a stand-in
-     * for it - it builds the same {@code ScheduledTaskObservationContext}, sets the same
-     * {@code code.function}/{@code code.namespace} tags, and names the root span
-     * {@code task orderReconciler.reconcileOrders}, exactly as a live scheduler firing it
-     * would.
+     * Fires {@code reconcileOrders()} through the scheduler's own {@link Runnable} (see
+     * {@link ScheduledJobs}), so the trace root is Spring's scheduled-task observation
+     * with its {@code code.function}/{@code code.namespace} tags - the same tree a live
+     * timer produces.
      */
     @Test
     void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
-        runScheduledReconciliation();
+        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
 
         JsonNode trace = traces.awaitTraceInBucket("all", "task orderReconciler.reconcileOrders");
 
@@ -263,22 +262,6 @@ class OrderTraceCaptureIT {
                         + "trace root when the scheduler fires it; that root span's "
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
-    }
-
-    private void runScheduledReconciliation() {
-        // Task#toString() delegates down to the underlying ScheduledMethodRunnable's
-        // toString() ("<declaringClass>.<method>"); getTask() itself wraps the runnable
-        // in an outcome-tracking decorator, so matching on the runnable's type directly
-        // isn't an option.
-        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
-        scheduledTaskHolder.getScheduledTasks().stream()
-                .map(ScheduledTask::getTask)
-                .filter(task -> taskDescription.equals(task.toString()))
-                .findFirst()
-                .orElseThrow(() ->
-                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
-                .getRunnable()
-                .run();
     }
 
     private static List<String> spanNames(JsonNode trace) {

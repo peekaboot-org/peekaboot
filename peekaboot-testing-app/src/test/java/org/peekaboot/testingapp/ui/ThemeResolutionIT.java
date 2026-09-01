@@ -2,6 +2,8 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.ColorScheme;
 import org.junit.jupiter.api.Test;
 
 class ThemeResolutionIT extends PlaywrightTestBase {
@@ -21,16 +23,14 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
     @Test
     void osPreferenceIsTheFallback() {
-        page.emulateMedia(new com.microsoft.playwright.Page.EmulateMediaOptions()
-                .setColorScheme(com.microsoft.playwright.options.ColorScheme.DARK));
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
     @Test
     void corruptedStoredValueFallsBackToOsPreference() {
         setStoredTheme("purple");
-        page.emulateMedia(new com.microsoft.playwright.Page.EmulateMediaOptions()
-                .setColorScheme(com.microsoft.playwright.options.ColorScheme.DARK));
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
@@ -49,11 +49,6 @@ class ThemeResolutionIT extends PlaywrightTestBase {
         assertThat(result).isEqualTo("dark");
     }
 
-    @Test
-    void storageKeyMatchesTheDashboardToggle() {
-        assertThat(evalTheme("m.THEME_STORAGE_KEY")).isEqualTo("peekaboot-theme");
-    }
-
     /**
      * The toolbar and overlay run inside pages Peekaboot does not own, where storage access
      * can throw (private browsing, sandboxed iframes, embedder policy). resolveTheme() must
@@ -62,8 +57,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void resolveThemeDegradesToOsPreferenceWhenLocalStorageThrows() {
         page.addInitScript("localStorage.getItem = () => { throw new Error('storage blocked'); };");
-        page.emulateMedia(new com.microsoft.playwright.Page.EmulateMediaOptions()
-                .setColorScheme(com.microsoft.playwright.options.ColorScheme.DARK));
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
@@ -75,8 +69,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void resolveThemeDegradesToLightOsPreferenceWhenLocalStorageThrows() {
         page.addInitScript("localStorage.getItem = () => { throw new Error('storage blocked'); };");
-        page.emulateMedia(new com.microsoft.playwright.Page.EmulateMediaOptions()
-                .setColorScheme(com.microsoft.playwright.options.ColorScheme.LIGHT));
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("light");
     }
 

@@ -48,7 +48,11 @@ abstract class PlaywrightTestBase {
     protected int port;
 
     protected Page page;
+    protected Toolbar toolbar;
+    protected TraceOverlay overlay;
     protected String baseUrl;
+
+    private final List<String> browserSignals = new CopyOnWriteArrayList<>();
 
     protected static Browser browser() {
         return WORKER_BROWSER.get();
@@ -73,6 +77,25 @@ abstract class PlaywrightTestBase {
     void openPage() {
         baseUrl = "http://localhost:" + port;
         page = browserContextPage();
+        toolbar = new Toolbar(page);
+        overlay = new TraceOverlay(page);
+    }
+
+    /**
+     * Opt-in for tests whose subject fails invisibly - a swallowed script error leaves the
+     * page mute in test output - so every browser-side signal is collected and printed at
+     * teardown, the only way to see what headless Chromium actually did on a CI runner.
+     */
+    protected void captureBrowserSignals() {
+        page.onConsoleMessage(msg -> browserSignals.add("console." + msg.type() + ": " + msg.text()));
+        page.onPageError(error -> browserSignals.add("pageerror: " + error));
+        page.onRequestFailed(
+                request -> browserSignals.add("requestfailed: " + request.url() + " -> " + request.failure()));
+        page.onResponse(response -> {
+            if (response.status() >= 400) {
+                browserSignals.add("http" + response.status() + ": " + response.url());
+            }
+        });
     }
 
     /** Overridable so a subclass can fix the viewport without changing every test's context. */
@@ -93,6 +116,9 @@ abstract class PlaywrightTestBase {
 
     @AfterEach
     void closePage() {
+        if (!browserSignals.isEmpty()) {
+            System.out.println("[browser] " + String.join("\n[browser] ", browserSignals));
+        }
         if (page != null) {
             try {
                 // Ends everything the page still has in flight - the toolbar's fetch ladder

@@ -8,10 +8,9 @@ import org.junit.jupiter.api.Test;
  * Exercises trace-detail/tabs/request.js directly, with synthetic trace data, rather
  * than through the real toolbar -> overlay -> captured-request flow. A natural browser
  * navigation never sends a header shaped to be masked, so there would be no way to
- * distinguish the fix (M1: the "this was masked" highlight compared against the old
- * eight-star literal, which the backend's engine had already stopped emitting in
- * favour of Spring's own six-star "******") from the regression it fixes without
- * fabricating a masked value. The same directness lets a status code of any family be
+ * distinguish a "this was masked" highlight keyed on the backend's actual six-star
+ * "******" mask from one keyed on a stale eight-star literal without fabricating a
+ * masked value. The same directness lets a status code of any family be
  * rendered on demand, which a live request against the testing app cannot offer.
  */
 class RequestTabIT extends PlaywrightTestBase {
@@ -61,11 +60,10 @@ class RequestTabIT extends PlaywrightTestBase {
 
     @Test
     void requestHeadersDoNotHighlightTheStaleEightStarLiteral() {
-        // Pins the actual regression: the old frontend copy compared against
-        // '********' (eight stars), which the backend no longer emits at all, so the
-        // highlight silently never fired for a real masked header. An eight-star
-        // value reaching the frontend would be a backend bug, not a masked value -
-        // it must NOT be highlighted either.
+        // The backend masks with six stars, so an eight-star value reaching the frontend
+        // would be a backend bug, not a masked value - it must NOT be highlighted. A
+        // highlight keyed on '********' would also silently never fire for a real masked
+        // header.
         renderWithTrace("""
                 {"durationMs": 12, "httpExchange": {
                     "request": {"method": "GET", "path": "/api/users",
@@ -95,9 +93,8 @@ class RequestTabIT extends PlaywrightTestBase {
     }
 
     /**
-     * Both header tables used to sit behind their own sub-tabs, so seeing a request
-     * meant three clicks through a strip that never held more than three entries. They
-     * are now sections of one scrolling page.
+     * Both header tables are sections of one scrolling page rather than sub-tabs: a strip
+     * that never holds more than three entries would cost three clicks to see one request.
      */
     @Test
     void everySectionRendersOnOnePageWithoutNavigation() {

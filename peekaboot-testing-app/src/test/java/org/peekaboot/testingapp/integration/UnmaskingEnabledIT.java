@@ -4,19 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Proves the second half of the two-independent-opt-ins design end to end through the
  * real HTTP API: with {@code peekaboot.enable-unmasking=true}, the request's
- * {@code unmask=true} parameter now actually takes effect - but only when it is present.
+ * {@code unmask=true} parameter takes effect - but only when it is present.
  * See {@code UnmaskingDisabledIT} for the security-critical case where the
  * property is false.
  *
@@ -37,23 +36,17 @@ class UnmaskingEnabledIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi api;
 
-    private JsonNode getJson(String uri) {
-        String body = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
-        return jsonMapper.readTree(body);
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     @Test
     void insightsEndpointReturnsRealValuesWhenUnmaskIsRequested() {
         JsonNode config =
-                getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
+                api.getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty.path("value").asString()).isEqualTo("test-fixture-password");
@@ -62,7 +55,7 @@ class UnmaskingEnabledIT {
     @Test
     void insightsEndpointAlsoUnmasksTheEnvironmentTab() {
         JsonNode environment =
-                getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("environment");
+                api.getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("environment");
 
         JsonNode passwordValue = findEnvironmentPropertyValue(environment, "spring.datasource.password");
         assertThat(passwordValue.asString()).isEqualTo("test-fixture-password");
@@ -74,7 +67,7 @@ class UnmaskingEnabledIT {
      */
     @Test
     void insightsEndpointStaysMaskedWhenUnmaskParameterIsNotSet() {
-        JsonNode config = getJson("/peekaboot/api/actuator/all/insights").path("config");
+        JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
@@ -82,7 +75,7 @@ class UnmaskingEnabledIT {
 
     @Test
     void featuresReportsUnmaskingAsEnabled() {
-        JsonNode features = getJson("/peekaboot/api/features");
+        JsonNode features = api.getJson("/peekaboot/api/features");
 
         assertThat(features.path("unmaskingEnabled").asBoolean()).isTrue();
     }

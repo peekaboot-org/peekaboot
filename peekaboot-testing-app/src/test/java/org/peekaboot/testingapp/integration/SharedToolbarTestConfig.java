@@ -10,12 +10,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
 /**
- * Shared test configuration for dev toolbar integration tests.
- * Supplies a deterministic {@link Tracer} and a small-capacity
- * {@link TraceStore}; the toolbar-injection beans themselves
- * (ToolbarDataProvider, the devToolbarFilter registration) come from the
- * real {@code DevToolbarAutoConfiguration} now that these tests boot the
- * real sample app, so this config no longer redefines them.
+ * Shared test configuration for dev toolbar integration tests. Supplies a deterministic
+ * {@link Tracer} and a small-capacity {@link TraceStore}; the toolbar-injection beans
+ * themselves (ToolbarDataProvider, the devToolbarFilter registration) come from the real
+ * {@code DevToolbarAutoConfiguration}, because these tests boot the real sample app.
  *
  * <p>A stand-in {@code Tracer} is used rather than the real, auto-configured one:
  * {@link DashboardTraceViewIT}'s exact trace-count assertions need the
@@ -26,7 +24,9 @@ import org.springframework.context.annotation.Bean;
 @TestConfiguration
 public class SharedToolbarTestConfig {
 
-    private static final String FIXED_TRACE_ID = "cafebabecafebabecafebabecafebabe";
+    /** The one trace id every toolbar rendered under this configuration reports. */
+    static final String FIXED_TRACE_ID = "cafebabecafebabecafebabecafebabe";
+
     private static final String FIXED_SPAN_ID = "deadbeefdeadbeef";
 
     @Bean

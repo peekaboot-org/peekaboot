@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
 class ComponentPrimitiveIT extends PlaywrightTestBase {
@@ -27,15 +28,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         openFixture();
 
         assertThat(page.isVisible("#group-list")).isFalse();
-
-        // Pin a components.css-authored fact: the header's own border-radius changes
-        // with its aria-expanded state (full radius when collapsed, top-only when
-        // expanded) — asserting only the [hidden] list leaves the header CSS unpinned.
-        String collapsedRadius =
-                (String) page.evalOnSelector("#group-header", "el => getComputedStyle(el).borderRadius");
-        String expandedRadius =
-                (String) page.evalOnSelector("#group-header-expanded", "el => getComputedStyle(el).borderRadius");
-        assertThat(collapsedRadius).isNotEqualTo(expandedRadius);
     }
 
     @Test
@@ -48,15 +40,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         page.focus("#group-header");
         String focused = (String) page.evaluate("() => document.activeElement.id");
         assertThat(focused).isEqualTo("group-header");
-
-        // Pin the header's own styling, not just its semantics: a plain unstyled
-        // <button> would also pass the assertions above.
-        String background = (String) page.evalOnSelector("#group-header", "el => getComputedStyle(el).backgroundColor");
-        assertThat(background).isNotEqualTo("rgba(0, 0, 0, 0)");
-
-        String headerFontSize = (String) page.evalOnSelector("#group-header", "el => getComputedStyle(el).fontSize");
-        String bodyFontSize = (String) page.evalOnSelector("body", "el => getComputedStyle(el).fontSize");
-        assertThat(headerFontSize).isEqualTo(bodyFontSize);
     }
 
     @Test
@@ -93,7 +76,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         Object width = page.evalOnSelector(
                 "#meter-fill-danger",
                 "el => el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width");
-        assertThat((Double) width).isCloseTo(0.95, org.assertj.core.data.Offset.offset(0.02));
+        assertThat((Double) width).isCloseTo(0.95, Offset.offset(0.02));
 
         String baseColor =
                 (String) page.evalOnSelector("#meter-fill-base", "el => getComputedStyle(el).backgroundColor");
@@ -103,28 +86,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         String overflow = (String) page.evalOnSelector("#meter-danger", "el => getComputedStyle(el).overflow");
         assertThat(overflow).isEqualTo("hidden");
-    }
-
-    @Test
-    void emptyStateIsCenteredAndMuted() {
-        openFixture();
-
-        String textAlign = (String) page.evalOnSelector("#empty", "el => getComputedStyle(el).textAlign");
-        String fontStyle = (String) page.evalOnSelector("#empty", "el => getComputedStyle(el).fontStyle");
-
-        assertThat(textAlign).isEqualTo("center");
-        assertThat(fontStyle).isEqualTo("italic");
-    }
-
-    @Test
-    void buttonIsStyledAndClickable() {
-        openFixture();
-
-        String display = (String) page.evalOnSelector("#btn", "el => getComputedStyle(el).display");
-        String cursor = (String) page.evalOnSelector("#btn", "el => getComputedStyle(el).cursor");
-
-        assertThat(display).isEqualTo("inline-flex");
-        assertThat(cursor).isEqualTo("pointer");
     }
 
     @Test

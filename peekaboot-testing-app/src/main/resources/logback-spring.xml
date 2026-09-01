@@ -5,27 +5,13 @@
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <logger name="org.peekaboot" level="INFO"/>
-    <logger name="org.peekaboot" level="TRACE"/>
+    <!-- datasource-proxy logs every SQL statement here (at the level its
+         datasource-proxy.query.log-level sets), which is what makes the demo's
+         deliberate N+1 visible on the console as well as in the trace view -->
+    <logger name="net.ttddyy.dsproxy.listener.logging.SLF4JQueryLoggingListener" level="TRACE"/>
 
-    <springProfile name="default">
-
-        <logger name="net.ttddyy" level="INFO"/>
-
-        <logger name="net.ttddyy.dsproxy.listener.logging.SLF4JQueryLoggingListener" level="TRACE"/>
-        <logger name="org.zalando.logbook" level="TRACE"/>
-
-        <root level="INFO">
-            <appender-ref ref="CONSOLE"/>
-        </root>
-    </springProfile>
-
-    <springProfile name="!default">
-        <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-        <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
-
-        <root level="INFO">
-            <appender-ref ref="FILE"/>
-        </root>
-    </springProfile>
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
 
 </configuration>

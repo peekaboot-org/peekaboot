@@ -45,7 +45,6 @@ public class OrderService {
         this.eventPublisher = eventPublisher;
     }
 
-
     /**
      * Deliberate N+1: one query for the orders, then three per order. Trips the
      * high-trace-query-count threshold so the Traces tab has a warning to render.
@@ -81,7 +80,6 @@ public class OrderService {
         return summaries;
     }
 
-
     /**
      * Deliberately slow, in three observed stages, so the Slow bucket holds a trace whose
      * span tree shows where the time actually went.
@@ -89,8 +87,8 @@ public class OrderService {
     public OrderReport buildReport(long orderId) {
 
         long started = System.nanoTime();
-        CustomerOrder order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new NoSuchElementException("no order " + orderId));
+        CustomerOrder order =
+                orderRepository.findById(orderId).orElseThrow(() -> new NoSuchElementException("no order " + orderId));
 
         List<OrderLine> lines = reportStages.loadLines(orderId);
         BigDecimal total = reportStages.priceLines(lines);
@@ -101,8 +99,7 @@ public class OrderService {
         return new OrderReport(order.getReference(), lines.size(), total, computeMillis);
     }
 
-
-    public CustomerOrder placeOrder(NewOrder request) {
+    public OrderSummary placeOrder(NewOrder request) {
 
         CustomerOrder order = new CustomerOrder();
         order.setReference("PK-" + System.currentTimeMillis());
@@ -120,6 +117,13 @@ public class OrderService {
 
         log.info("placed order {} for customer {}", saved.getReference(), request.customerId());
         eventPublisher.publishEvent(new OrderPlacedEvent(saved.getId(), saved.getReference()));
-        return saved;
+        return new OrderSummary(
+                saved.getId(),
+                saved.getReference(),
+                saved.getStatus(),
+                saved.getPlacedAt(),
+                1,
+                line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())),
+                "customer #" + saved.getCustomerId());
     }
 }

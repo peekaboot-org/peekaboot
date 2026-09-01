@@ -27,10 +27,12 @@ collaborators being asked to compute something, not this pass-through shape.
 ## Pristine output
 Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN.
 - Browser-side errors are asserted where a test's subject is the JavaScript itself:
-  `page.onPageError` (and, in `InsightsTabIT`, `onConsoleMessage`/`onRequestFailed`/
-  `onResponse`) collects into a list the test then asserts on. There is no shared
-  listener and no allow-list — the Chromium engine, unlike the HtmlUnit setup this
-  replaced, has no incompatibilities of its own to excuse.
+  `page.onPageError` collects into a list the test then asserts on. Classes whose subject
+  fails invisibly (the charts, the lifecycle table) opt into
+  `PlaywrightTestBase.captureBrowserSignals()`, which prints every console message, page
+  error, failed request and error response at teardown. There is no shared listener that
+  filters, and no allow-list — the Chromium engine has no incompatibilities of its own to
+  excuse.
 - Tests that trigger error paths capture the log event (logback `ListAppender`) and assert
   it instead of letting it print. `peekaboot-backend` shares one helper for this,
   `org.peekaboot.backend.testsupport.LogCapture`; it is test-scoped to that module, so
@@ -103,9 +105,16 @@ that state first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert
 exact counts, never defensive `contains`. Since `*IT` classes run concurrently,
 a class that clears shared state this way MUST hold the corresponding
 `@ResourceLock(..., mode = READ_WRITE)`, and every class pinning its own data in
-that same store holds the `READ` side — `DashboardTraceViewIT`, `DevToolbarIT`
-and `TraceDetailOverlayIT` are the pattern. A class on its own context
+that same store holds the `READ` side — `DashboardTraceViewIT` and `DevToolbarIT`
+are the pattern. A class on its own context
 configuration (its own app) needs no lock.
+
+The database needs no such discipline: `application-test.yml` and `application-security.yml`
+set no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its
+own `jdbc:h2:mem:<uuid>` (H2 keys in-memory databases by name per JVM — a shared fixed name
+would let each lazily booted context's `ddl-auto: create-drop` wipe the tables under whichever
+test is mid-flight). Only `FlywayTabIT` names its database, because it needs `MODE=PostgreSQL`
+on the URL. The `TraceStore` is the only state the shared context's classes contend for.
 
 ## Spring Security on the testing-app classpath
 

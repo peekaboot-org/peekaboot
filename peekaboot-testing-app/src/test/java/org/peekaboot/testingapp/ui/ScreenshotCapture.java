@@ -30,7 +30,7 @@ import org.springframework.test.context.ActiveProfiles;
 // Boot's last-profile-wins rule applies to the *resolved* order rather than declaration
 // order, "test"'s H2/Flyway-disabled settings silently won over this profile's real
 // Postgres config. Confirmed empirically: with inheritProfiles left at its default, the
-// app started against H2's in-memory testdb rather than the Postgres compose service.
+// app started against the test profile's in-memory H2 rather than the Postgres compose service.
 @ActiveProfiles(profiles = "screenshots", inheritProfiles = false)
 class ScreenshotCapture extends PlaywrightTestBase {
 
