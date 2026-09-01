@@ -4,12 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.SeriesDef;
@@ -37,16 +37,15 @@ class SeriesSamplerTest {
     void resolvesMetersRegisteredAfterConstruction() {
         SeriesSampler sampler = new SeriesSampler(def("late.gauge", Map.of(), "value"), registry);
         assertThat(sampler.sample(10_000)).isNaN();
-        AtomicLong value = registry.gauge("late.gauge", new AtomicLong(42));
+        Gauge.builder("late.gauge", () -> 42).register(registry);
         assertThat(sampler.sample(10_000)).isEqualTo(42.0);
     }
 
     @Test
     void sumsGaugesAcrossTagCombinations() {
-        registry.gauge("mem", io.micrometer.core.instrument.Tags.of("area", "heap", "id", "eden"), new AtomicLong(100));
-        registry.gauge("mem", io.micrometer.core.instrument.Tags.of("area", "heap", "id", "old"), new AtomicLong(200));
-        registry.gauge(
-                "mem", io.micrometer.core.instrument.Tags.of("area", "nonheap", "id", "meta"), new AtomicLong(999));
+        Gauge.builder("mem", () -> 100).tags("area", "heap", "id", "eden").register(registry);
+        Gauge.builder("mem", () -> 200).tags("area", "heap", "id", "old").register(registry);
+        Gauge.builder("mem", () -> 999).tags("area", "nonheap", "id", "meta").register(registry);
         SeriesSampler sampler = new SeriesSampler(def("mem", Map.of("area", "heap"), "value"), registry);
         assertThat(sampler.sample(10_000)).isEqualTo(300.0);
     }
@@ -93,8 +92,8 @@ class SeriesSamplerTest {
 
     @Test
     void subtractMeterComputesDifference() {
-        registry.gauge("disk.total", new AtomicLong(1000));
-        registry.gauge("disk.free", new AtomicLong(400));
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        Gauge.builder("disk.free", () -> 400).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
         SeriesSampler sampler = new SeriesSampler(diff, registry);
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);

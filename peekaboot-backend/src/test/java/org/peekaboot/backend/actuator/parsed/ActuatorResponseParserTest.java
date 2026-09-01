@@ -3,6 +3,7 @@ package org.peekaboot.backend.actuator.parsed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -38,12 +39,11 @@ class ActuatorResponseParserTest {
     }
 
     @Test
-    void toleratesErrorPlaceholderForSingleEndpoint() {
-        // PeekabootActuatorService stores "Error: ..." strings for endpoints
-        // that failed to invoke; one broken endpoint must not break parsing
-        // of all the others.
-        Map<String, Object> data = new java.util.LinkedHashMap<>(rawData);
-        data.put("env", "Error: env endpoint failed");
+    void parsesAnAbsentEndpointAsNull() {
+        // PeekabootActuatorService leaves out an endpoint that failed to invoke;
+        // the others must still parse.
+        Map<String, Object> data = new LinkedHashMap<>(rawData);
+        data.remove("env");
 
         ActuatorParsedData response = parser.parse(data);
 

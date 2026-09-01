@@ -1,6 +1,7 @@
 package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -92,5 +93,15 @@ class LifecycleEventFileTest {
             assertThat(files.map(Path::getFileName).map(Path::toString).toList())
                     .containsExactly("lifecycle.jsonl");
         }
+    }
+
+    @Test
+    void aFailedRewriteLeavesNoTemporaryFileBehind() throws IOException {
+        Path target = directory.resolve("lifecycle.jsonl");
+        Files.createDirectories(target.resolve("occupied"));
+        LifecycleEventFile file = new LifecycleEventFile(target);
+
+        assertThatThrownBy(() -> file.write(List.of(start(1_000)))).isInstanceOf(IOException.class);
+        assertThat(directory.resolve("lifecycle.jsonl.tmp")).doesNotExist();
     }
 }

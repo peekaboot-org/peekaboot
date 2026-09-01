@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,8 +36,8 @@ class LoggersMapperTest {
         assertThat(exampleGroup.loggers())
                 .extracting(LoggerInfo::name, LoggerInfo::effectiveLevel)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple("com.example.service.UserService", "INFO"),
-                        org.assertj.core.groups.Tuple.tuple("com.example.controller.UserController", "DEBUG"));
+                        tuple("com.example.service.UserService", "INFO"),
+                        tuple("com.example.controller.UserController", "DEBUG"));
     }
 
     @Test

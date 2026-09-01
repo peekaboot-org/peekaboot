@@ -236,7 +236,7 @@ public final class InsightsCollector implements SmartLifecycle {
      * Appends one empty entry per boundary this level slept through (a suspended
      * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)},
      * so a silently skipped boundary would shift every older sample one interval
-     * into the future; the spec calls for NaN gaps instead. Capped at the ring size,
+     * into the future, so the gap is recorded as NaN entries instead. Capped at the ring size,
      * beyond which every visible sample is a gap anyway. Listeners see no synthetic
      * events - clients mirror the same geometry from the event's epoch.
      */
@@ -421,11 +421,11 @@ public final class InsightsCollector implements SmartLifecycle {
         return tiles.values();
     }
 
-    /** seriesCount x (level0Size + sum of higher-level sizes x 7) x 8 bytes. */
+    /** seriesCount x (level0Size + sum of higher-level sizes x 8) x 8 bytes. */
     public static long estimateMemoryBytes(int seriesCount, List<InsightsProperties.Level> levels) {
         long doublesPerSeries = levels.get(0).getSize();
         for (int i = 1; i < levels.size(); i++) {
-            doublesPerSeries += levels.get(i).getSize() * 7L;
+            doublesPerSeries += levels.get(i).getSize() * 8L;
         }
         return seriesCount * doublesPerSeries * 8L;
     }

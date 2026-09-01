@@ -74,7 +74,7 @@ public class RequestCaptureFilter implements Filter {
             try {
                 captureRequest(httpRequest, httpResponse, startTime);
             } catch (Exception e) {
-                log.warn("Failed to capture request details: {}", e.getMessage());
+                log.warn("Failed to capture request details", e);
             }
         }
     }

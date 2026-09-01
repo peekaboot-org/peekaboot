@@ -26,10 +26,7 @@ class InsightsServicePersistenceTest {
 
     private static InsightsProperties properties() {
         InsightsProperties properties = new InsightsProperties();
-        InsightsProperties.Level level = new InsightsProperties.Level();
-        level.setInterval(Duration.ofMillis(100));
-        level.setSize(50);
-        properties.setLevels(List.of(level));
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 50)));
         // The default max-age is derived from this geometry (5s) and would discard the
         // file as stale on any real pause between the two runs; this test exercises
         // restoration, not the staleness cutoff.

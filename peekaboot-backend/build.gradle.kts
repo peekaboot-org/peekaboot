@@ -33,6 +33,9 @@ dependencies {
     // layering, in which frontend is a passive resource bundle nothing depends on.
     testImplementation(project(":peekaboot-frontend"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    // otherwise resolves only transitively through spring-boot-starter-test, so a
+    // starter change could remove it silently
+    testImplementation("org.awaitility:awaitility")
     testImplementation("org.springframework.boot:spring-boot-starter-web")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
     testImplementation("io.micrometer:micrometer-observation-test")

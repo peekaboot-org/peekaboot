@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.testsupport.LogCapture;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
@@ -315,7 +316,7 @@ class InsightsSsePublisherTest {
 
     @Test
     void rollupPayloadCarriesAllStats() {
-        var entry = org.peekaboot.backend.insights.AggregateStats.of(new double[] {2.0});
+        var entry = AggregateStats.of(new double[] {2.0});
         String json = publisher.rollupJson(1, 60_000, Map.of("a", entry));
         assertThat(json).contains("\"level\":1").contains("\"avg\":2.0").contains("\"p99\":2.0");
     }

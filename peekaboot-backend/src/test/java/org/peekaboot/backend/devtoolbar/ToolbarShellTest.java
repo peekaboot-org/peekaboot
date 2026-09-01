@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 
 /**
- * The bar used to be built entirely by toolbar.js. It is rendered here instead, so that a
+ * The bar is rendered on the server rather than built by toolbar.js, so that a
  * reader who has put Spring Security in front of {@code /peekaboot/**} - which refuses
  * toolbar.js along with everything else under that prefix - still gets a bar that says why
  * it is empty and a link that takes them somewhere they can authenticate.
@@ -85,8 +85,8 @@ class ToolbarShellTest {
     }
 
     /**
-     * Positioning moved out of toolbar.js's {@code host.style.cssText} and into a
-     * {@code :host} rule, so it travels with whichever copy of the sheet a given page is
+     * Positioning lives in a {@code :host} rule rather than an inline style set by
+     * toolbar.js, so it travels with whichever copy of the sheet a given page is
      * allowed to use. An inline {@code style} attribute would be dropped by the same strict
      * CSP that drops the inline sheet, leaving the bar unpositioned in the page flow.
      */

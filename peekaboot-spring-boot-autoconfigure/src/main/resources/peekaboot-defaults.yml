@@ -84,6 +84,6 @@ logbook:
     # Library default: json | We use http for human-readable format
     style: http
   # When to log response bodies
-  # Library default: without-body | We log body only on errors for debugging
+  # Library default: default (every body is logged) | We log body only on errors for debugging
   strategy: body-only-if-status-at-least
   minimum-status: 400

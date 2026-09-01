@@ -1,5 +1,7 @@
 package org.peekaboot.backend.tracing.bridge.otel;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.api.trace.SpanContext;
@@ -14,18 +16,15 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
-import org.peekaboot.backend.tracing.event.SpanDataEvent;
-import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationEventPublisher;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
+import org.springframework.context.ApplicationEventPublisher;
 
 class OtelSpanExporterTest {
 
@@ -240,7 +239,8 @@ class OtelSpanExporterTest {
     void shouldExtractParentSpanIdWhenParentContextIsValid() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String parentSpanId = "aaaaaaaaaaaaaaaa";
-        SpanContext parentContext = SpanContext.create(traceId, parentSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanContext parentContext =
+                SpanContext.create(traceId, parentSpanId, TraceFlags.getSampled(), TraceState.getDefault());
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
                 .parentSpanContext(parentContext)
                 .build();
@@ -303,12 +303,15 @@ class OtelSpanExporterTest {
     void shouldMapSpanKindsToSpecificMicrometerKind() {
         assertMappedKind(SpanKind.CLIENT, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", io.micrometer.tracing.Span.Kind.CLIENT);
         assertMappedKind(SpanKind.SERVER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", io.micrometer.tracing.Span.Kind.SERVER);
-        assertMappedKind(SpanKind.PRODUCER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", io.micrometer.tracing.Span.Kind.PRODUCER);
-        assertMappedKind(SpanKind.CONSUMER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4", io.micrometer.tracing.Span.Kind.CONSUMER);
+        assertMappedKind(
+                SpanKind.PRODUCER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", io.micrometer.tracing.Span.Kind.PRODUCER);
+        assertMappedKind(
+                SpanKind.CONSUMER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4", io.micrometer.tracing.Span.Kind.CONSUMER);
     }
 
     private void assertMappedKind(SpanKind otelKind, String traceId, io.micrometer.tracing.Span.Kind expected) {
-        SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", otelKind).build();
+        SpanData span =
+                testSpanBuilder(traceId, "0000000000000001", "op", otelKind).build();
 
         exporter.export(List.of(span));
 
@@ -330,8 +333,16 @@ class OtelSpanExporterTest {
     }
 
     private SpanData createTestSpan(String traceId, String spanId, String name, SpanKind kind) {
-        return new TestSpanData(traceId, spanId, name, kind, Attributes.empty(), StatusData.ok(),
-                SpanContext.getInvalid(), List.of(), "test-service");
+        return new TestSpanData(
+                traceId,
+                spanId,
+                name,
+                kind,
+                Attributes.empty(),
+                StatusData.ok(),
+                SpanContext.getInvalid(),
+                List.of(),
+                "test-service");
     }
 
     private TestSpanDataBuilder testSpanBuilder(String traceId, String spanId, String name, SpanKind kind) {
@@ -382,7 +393,8 @@ class OtelSpanExporterTest {
         }
 
         SpanData build() {
-            return new TestSpanData(traceId, spanId, name, kind, attributes, status, parentSpanContext, events, serviceName);
+            return new TestSpanData(
+                    traceId, spanId, name, kind, attributes, status, parentSpanContext, events, serviceName);
         }
     }
 
@@ -397,12 +409,19 @@ class OtelSpanExporterTest {
         private final SpanContext parentSpanContext;
         private final List<EventData> events;
         private final String serviceName;
-        private final long startNanos = System.nanoTime();
+        private final long startNanos = Instant.parse("2026-01-01T00:00:00Z").getEpochSecond() * 1_000_000_000L;
         private final long endNanos = startNanos + 1_000_000_000L;
 
-        TestSpanData(String traceId, String spanId, String name, SpanKind kind,
-                Attributes attributes, StatusData status, SpanContext parentSpanContext,
-                List<EventData> events, String serviceName) {
+        TestSpanData(
+                String traceId,
+                String spanId,
+                String name,
+                SpanKind kind,
+                Attributes attributes,
+                StatusData status,
+                SpanContext parentSpanContext,
+                List<EventData> events,
+                String serviceName) {
             this.traceId = traceId;
             this.spanId = spanId;
             this.name = name;
@@ -414,30 +433,89 @@ class OtelSpanExporterTest {
             this.serviceName = serviceName;
         }
 
-        @Override public SpanContext getSpanContext() {
+        @Override
+        public SpanContext getSpanContext() {
             return SpanContext.create(traceId, spanId, TraceFlags.getSampled(), TraceState.getDefault());
         }
-        @Override public SpanContext getParentSpanContext() { return parentSpanContext; }
-        @Override public Resource getResource() {
+
+        @Override
+        public SpanContext getParentSpanContext() {
+            return parentSpanContext;
+        }
+
+        @Override
+        public Resource getResource() {
             return Resource.create(Attributes.of(SERVICE_NAME_KEY, serviceName));
         }
-        @Override public InstrumentationScopeInfo getInstrumentationScopeInfo() {
+
+        @Override
+        public InstrumentationScopeInfo getInstrumentationScopeInfo() {
             return InstrumentationScopeInfo.create("test");
         }
-        @Override public InstrumentationLibraryInfo getInstrumentationLibraryInfo() {
+
+        @Override
+        public InstrumentationLibraryInfo getInstrumentationLibraryInfo() {
             return InstrumentationLibraryInfo.create("test", "1.0.0");
         }
-        @Override public String getName() { return name; }
-        @Override public SpanKind getKind() { return kind; }
-        @Override public long getStartEpochNanos() { return startNanos; }
-        @Override public Attributes getAttributes() { return attributes; }
-        @Override public List<EventData> getEvents() { return events; }
-        @Override public List<io.opentelemetry.sdk.trace.data.LinkData> getLinks() { return List.of(); }
-        @Override public StatusData getStatus() { return status; }
-        @Override public long getEndEpochNanos() { return endNanos; }
-        @Override public boolean hasEnded() { return true; }
-        @Override public int getTotalRecordedEvents() { return 0; }
-        @Override public int getTotalRecordedLinks() { return 0; }
-        @Override public int getTotalAttributeCount() { return 0; }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public SpanKind getKind() {
+            return kind;
+        }
+
+        @Override
+        public long getStartEpochNanos() {
+            return startNanos;
+        }
+
+        @Override
+        public Attributes getAttributes() {
+            return attributes;
+        }
+
+        @Override
+        public List<EventData> getEvents() {
+            return events;
+        }
+
+        @Override
+        public List<io.opentelemetry.sdk.trace.data.LinkData> getLinks() {
+            return List.of();
+        }
+
+        @Override
+        public StatusData getStatus() {
+            return status;
+        }
+
+        @Override
+        public long getEndEpochNanos() {
+            return endNanos;
+        }
+
+        @Override
+        public boolean hasEnded() {
+            return true;
+        }
+
+        @Override
+        public int getTotalRecordedEvents() {
+            return 0;
+        }
+
+        @Override
+        public int getTotalRecordedLinks() {
+            return 0;
+        }
+
+        @Override
+        public int getTotalAttributeCount() {
+            return 0;
+        }
     }
 }

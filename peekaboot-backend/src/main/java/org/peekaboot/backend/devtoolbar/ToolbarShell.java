@@ -15,14 +15,13 @@ import org.slf4j.LoggerFactory;
  * The dev toolbar's server-rendered shell: the bar's markup, in a declarative shadow root,
  * with the stylesheets it cannot do without carried inline.
  *
- * <p>toolbar.js used to build all of this in the browser. It no longer does, because a
- * reader who has put Spring Security in front of {@code /peekaboot/**} - as the website's
- * security page tells them to - has that script refused along with every other path under
- * the prefix, and a bar that only exists once its script runs cannot tell them so. Rendered
- * here, the bar arrives with the page: unauthorized, it shows the notice and a real link to
- * the dashboard, where their browser can challenge them for credentials; authorized,
- * toolbar.js adopts the same markup and fills it in, which is why nothing about the enriched
- * bar changed.
+ * <p>Rendered here rather than built in the browser by toolbar.js because a reader who has
+ * put Spring Security in front of {@code /peekaboot/**} - as the website's security page
+ * tells them to - has that script refused along with every other path under the prefix,
+ * and a bar that only exists once its script runs cannot tell them so. Rendered here, the
+ * bar arrives with the page: unauthorized, it shows the notice and a real link to the
+ * dashboard, where their browser can challenge them for credentials; authorized,
+ * toolbar.js adopts the same markup and fills it in.
  */
 public class ToolbarShell {
 
@@ -41,7 +40,7 @@ public class ToolbarShell {
 
     /**
      * Linked as well as inlined. A host page whose CSP omits {@code style-src 'unsafe-inline'}
-     * drops the inline copy; the toolbar works on such a page today because toolbar.js creates
+     * drops the inline copy; the toolbar works on such a page because toolbar.js creates
      * its link elements through the CSSOM, which CSP does not govern. Keeping the links means
      * that reader loses nothing, while the inline copy serves the reader whose gate refuses
      * links. Both come from the same file, so there is nothing to keep in sync.

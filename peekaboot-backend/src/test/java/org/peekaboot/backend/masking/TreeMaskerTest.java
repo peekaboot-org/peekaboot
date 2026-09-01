@@ -1,11 +1,10 @@
 package org.peekaboot.backend.masking;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class TreeMaskerTest {
 
@@ -23,15 +22,15 @@ class TreeMaskerTest {
     @SuppressWarnings("unchecked")
     void mask_shouldReplaceANestedObjectEntirelyWhenItsKeyIsSensitive() {
         Map<String, Object> tree = Map.of(
-            "connectionParams", Map.of(
-                "password", Map.of("value", "hunter2", "source", "QUERY"),
-                "mode", Map.of("value", "MEMORY", "source", "DERIVED")
-            )
-        );
+                "connectionParams",
+                Map.of(
+                        "password", Map.of("value", "hunter2", "source", "QUERY"),
+                        "mode", Map.of("value", "MEMORY", "source", "DERIVED")));
 
         Object masked = treeMasker.mask(tree);
 
-        Map<String, Object> connectionParams = (Map<String, Object>) ((Map<String, Object>) masked).get("connectionParams");
+        Map<String, Object> connectionParams =
+                (Map<String, Object>) ((Map<String, Object>) masked).get("connectionParams");
         assertThat(connectionParams.get("password")).isEqualTo("******");
         assertThat(connectionParams.get("mode")).isEqualTo(Map.of("value", "MEMORY", "source", "DERIVED"));
     }
@@ -47,10 +46,7 @@ class TreeMaskerTest {
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldRecurseIntoLists() {
-        Object masked = treeMasker.mask(Map.of("items", List.of(
-            Map.of("password", "hunter2"),
-            Map.of("name", "ok")
-        )));
+        Object masked = treeMasker.mask(Map.of("items", List.of(Map.of("password", "hunter2"), Map.of("name", "ok"))));
 
         List<Object> items = (List<Object>) ((Map<String, Object>) masked).get("items");
         assertThat((Map<String, Object>) items.get(0)).containsEntry("password", "******");
@@ -86,7 +82,7 @@ class TreeMaskerTest {
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
     }
 
-    // Known Defect C1: ConfigMapper's caller has a root node that IS one property's value,
+    // ConfigMapper's caller has a root node that IS one property's value,
     // not a subtree it needs checked for descendants only - the sensitive key can name the
     // root itself (a @ConfigurationProperties bean's "client-secret" entry). The one-arg
     // mask(Object) overload checks descendants but never the root, so this key-aware

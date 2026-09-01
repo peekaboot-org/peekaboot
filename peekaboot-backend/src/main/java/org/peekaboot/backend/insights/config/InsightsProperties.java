@@ -8,9 +8,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "peekaboot.insights")
 public class InsightsProperties {
 
+    /** Whether the collector, the /api/insights endpoints and the Insights tab exist at all; also needs a MeterRegistry bean. */
     private boolean enabled = true;
+
+    /** The sampling tick (level 0) and each aggregation window above it; every interval must be a whole multiple of the previous one. */
     private List<Level> levels = defaultLevels();
+
+    /** A Spring resource location for the panel file, replacing the default lookup of peekaboot-insights.yml on the classpath root. */
     private String configLocation;
+
     private Persistence persistence = new Persistence();
 
     private static List<Level> defaultLevels() {
@@ -30,7 +36,7 @@ public class InsightsProperties {
         if (levels == null || levels.isEmpty()) {
             throw new IllegalStateException("peekaboot.insights.levels must contain at least one level");
         }
-        Duration previous = null;
+        Level previous = null;
         for (Level level : levels) {
             if (level.interval == null || level.interval.isZero() || level.interval.isNegative()) {
                 throw new IllegalStateException("peekaboot.insights.levels: interval must be positive");
@@ -38,11 +44,24 @@ public class InsightsProperties {
             if (level.size <= 0) {
                 throw new IllegalStateException("peekaboot.insights.levels: size must be > 0");
             }
-            if (previous != null && level.interval.toMillis() % previous.toMillis() != 0) {
-                throw new IllegalStateException("peekaboot.insights.levels: each interval must be a"
-                        + " multiple of the previous one (" + level.interval + " vs " + previous + ")");
+            if (previous != null) {
+                validateRollUp(level, previous);
             }
-            previous = level.interval;
+            previous = level;
+        }
+    }
+
+    /** A roll-up aggregates the previous ring, so its window must be whole entries of that ring and fit inside it. */
+    private static void validateRollUp(Level level, Level previous) {
+        if (level.interval.toMillis() % previous.interval.toMillis() != 0) {
+            throw new IllegalStateException("peekaboot.insights.levels: each interval must be a"
+                    + " multiple of the previous one (" + level.interval + " vs " + previous.interval + ")");
+        }
+        long entries = level.interval.toMillis() / previous.interval.toMillis();
+        if (entries > previous.size) {
+            throw new IllegalStateException("peekaboot.insights.levels: each interval must fit in the previous"
+                    + " level's ring (" + level.interval + " spans " + entries + " entries of " + previous.interval
+                    + ", but that ring holds " + previous.size + ")");
         }
     }
 
@@ -111,8 +130,10 @@ public class InsightsProperties {
 
     public static class Persistence {
 
+        /** How often the rings are written to insights.snapshot; defaults to the coarsest level's interval. */
         private Duration interval;
 
+        /** How old a snapshot may be and still be loaded; defaults to the coarsest level's span (interval x size). */
         private Duration maxAge;
 
         public Duration getInterval() {
@@ -133,10 +154,14 @@ public class InsightsProperties {
     }
 
     public static class Level {
+
+        /** The sampling tick for level 0, the aggregation window for every level above it. */
         private Duration interval;
+
+        /** Ring buffer entries kept per series at this level; interval x size is how far back the charts reach. */
         private int size;
 
-        static Level of(Duration interval, int size) {
+        public static Level of(Duration interval, int size) {
             Level level = new Level();
             level.interval = interval;
             level.size = size;

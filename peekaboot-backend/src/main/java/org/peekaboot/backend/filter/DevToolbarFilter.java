@@ -73,7 +73,7 @@ public class DevToolbarFilter implements Filter {
                     processResponse(httpRequest, wrappedResponse, httpResponse);
                 }
             } catch (Exception e) {
-                log.warn("Failed to inject dev toolbar, returning original response: {}", e.getMessage());
+                log.warn("Failed to inject dev toolbar, returning original response", e);
                 wrappedResponse.copyBodyToResponse();
             }
         }
@@ -143,7 +143,7 @@ public class DevToolbarFilter implements Filter {
                 toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
             }
         } catch (Exception e) {
-            log.warn("Failed to generate toolbar HTML: {}", e.getMessage());
+            log.warn("Failed to generate toolbar HTML", e);
             wrappedResponse.copyBodyToResponse();
             return;
         }
@@ -177,16 +177,7 @@ public class DevToolbarFilter implements Filter {
             HttpServletRequest request, ContentBufferingResponseWrapper response, String traceId) {
         String summaryJson = toolbarDataProvider.getToolbarSummaryJson(
                 request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
-        return toolbarBootstrapHtml(summaryJson);
-    }
-
-    /**
-     * Injects the bar itself - markup, styles and the data blob - plus the script that
-     * enhances it. See {@link ToolbarShell} for why the bar is rendered here rather than
-     * built by /peekaboot/ui/toolbar/toolbar.js, which still owns every behaviour.
-     */
-    private String toolbarBootstrapHtml(String dataJson) {
-        return toolbarShell.render(dataJson);
+        return toolbarShell.render(summaryJson);
     }
 
     private boolean isSwaggerUi(String path) {
@@ -194,6 +185,6 @@ public class DevToolbarFilter implements Filter {
     }
 
     private String generateSwaggerToolbarHtml() {
-        return toolbarBootstrapHtml(toolbarDataProvider.getIdleModeJson());
+        return toolbarShell.render(toolbarDataProvider.getIdleModeJson());
     }
 }

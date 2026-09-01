@@ -17,15 +17,10 @@ import org.peekaboot.backend.insights.config.TileDef;
 
 class InsightsCollectorTest {
 
-    private static InsightsProperties.Level level(Duration interval, int size) {
-        InsightsProperties.Level level = new InsightsProperties.Level();
-        level.setInterval(interval);
-        level.setSize(size);
-        return level;
-    }
-
     private final List<InsightsProperties.Level> levels = List.of(
-            level(Duration.ofSeconds(10), 6), level(Duration.ofMinutes(1), 10), level(Duration.ofMinutes(2), 5));
+            InsightsProperties.Level.of(Duration.ofSeconds(10), 6),
+            InsightsProperties.Level.of(Duration.ofMinutes(1), 10),
+            InsightsProperties.Level.of(Duration.ofMinutes(2), 5));
 
     private SimpleMeterRegistry registry;
     private AtomicLong gaugeValue;
@@ -186,9 +181,11 @@ class InsightsCollectorTest {
 
     @Test
     void memoryEstimateMatchesFormula() {
-        // 2 series x (90 + 1440*7 + 720*7) x 8 bytes
+        // 2 series x (90 + 1440*8 + 720*8) x 8 bytes
         List<InsightsProperties.Level> spec = List.of(
-                level(Duration.ofSeconds(10), 90), level(Duration.ofMinutes(1), 1440), level(Duration.ofHours(1), 720));
-        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 7 + 720 * 7) * 8);
+                InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
+                InsightsProperties.Level.of(Duration.ofMinutes(1), 1440),
+                InsightsProperties.Level.of(Duration.ofHours(1), 720));
+        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 8 + 720 * 8) * 8);
     }
 }

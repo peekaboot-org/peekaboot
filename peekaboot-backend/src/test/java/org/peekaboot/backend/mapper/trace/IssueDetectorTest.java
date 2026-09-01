@@ -1,22 +1,21 @@
 package org.peekaboot.backend.mapper.trace;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceStatus;
+import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class IssueDetectorTest {
 
@@ -31,14 +30,12 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldDetectSlowSpan() {
-        // Given: A span with duration 150ms (between 100-499ms threshold)
+        // 150ms sits between the 100ms slow and the 500ms very-slow threshold
         SpanNode span = createSpan("span1", 150, "OK", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan().issues()).hasSize(1);
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.SLOW);
@@ -48,14 +45,12 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldDetectVerySlowSpan() {
-        // Given: A span with duration 600ms (>= 500ms threshold)
+        // 600ms is at or above the 500ms very-slow threshold
         SpanNode span = createSpan("span1", 600, "OK", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan().issues()).hasSize(1);
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.VERY_SLOW);
@@ -65,28 +60,22 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldNotAddBothSlowAndVerySlowForSameSpan() {
-        // Given: A very slow span (600ms) should NOT also be marked as SLOW
         SpanNode span = createSpan("span1", 600, "OK", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: Only VERY_SLOW, not both SLOW and VERY_SLOW
         assertThat(result.rootSpan().issues()).hasSize(1);
         assertThat(result.rootSpan().issues().get(0).type()).isEqualTo(IssueType.VERY_SLOW);
     }
 
     @Test
     void detectIssues_shouldDetectErrorSpan() {
-        // Given: A span with ERROR status
         SpanNode span = createSpan("span1", 50, "ERROR", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan().issues()).hasSize(1);
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.ERROR);
@@ -96,15 +85,11 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldUseErrorMessageFromSpanAttributeIfAvailable() {
-        // Given: A span with ERROR status and an error message in attributes
-        SpanNode span = createSpan("span1", 50, "ERROR",
-                Map.of("error.message", "Connection refused"), List.of());
+        SpanNode span = createSpan("span1", 50, "ERROR", Map.of("error.message", "Connection refused"), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.ERROR);
         assertThat(issue.message()).isEqualTo("Connection refused");
@@ -114,9 +99,21 @@ class IssueDetectorTest {
     void detectIssues_shouldPreferErrorMessageFieldOverTag() {
         // The exporter stores the error in SpanNode.errorMessage; it never
         // writes an error.message tag
-        SpanNode span = new SpanNode("span1", "test-op", "SERVER", 0, 50, "ERROR",
-                List.of(), Map.of(), List.of(), List.of(), 0,
-                "Connection refused: db:5432", "java.net.ConnectException", null);
+        SpanNode span = new SpanNode(
+                "span1",
+                "test-op",
+                "SERVER",
+                0,
+                50,
+                "ERROR",
+                List.of(),
+                Map.of(),
+                List.of(),
+                List.of(),
+                0,
+                "Connection refused: db:5432",
+                "java.net.ConnectException",
+                null);
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 1));
 
         TraceTree result = detector.detectIssues(trace);
@@ -135,21 +132,18 @@ class IssueDetectorTest {
 
         TraceTree result = detector.detectIssues(trace);
 
-        assertThat(result.rootSpan().issues())
-                .noneMatch(issue -> issue.type() == IssueType.SLOW_QUERY);
+        assertThat(result.rootSpan().issues()).noneMatch(issue -> issue.type() == IssueType.SLOW_QUERY);
     }
 
     @Test
     void detectIssues_shouldDetectSlowQuery() {
-        // Given: A DB span with duration 80ms (>= 50ms threshold)
-        SpanNode span = createSpan("span1", 80, "OK",
-                Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"), List.of());
+        // 80ms is at or above the 50ms slow-query threshold
+        SpanNode span = createSpan(
+                "span1", 80, "OK", Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 1, 80L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan().issues()).hasSize(1);
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.SLOW_QUERY);
@@ -159,29 +153,25 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldNotDetectSlowQueryOnNonDbSpan() {
-        // Given: A non-DB span with duration 80ms (would be slow if it were a DB span)
-        SpanNode span = createSpan("span1", 80, "OK",
-                Map.of("http.method", "GET"), List.of());
+        // 80ms would be a slow query, but this is not a DB span
+        SpanNode span = createSpan("span1", 80, "OK", Map.of("http.method", "GET"), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: No SLOW_QUERY issue (and no SLOW issue since 80 < 100)
+        // and no SLOW either: 80ms is under the 100ms span threshold
         assertThat(result.rootSpan().issues()).isEmpty();
     }
 
     @Test
     void detectIssues_shouldDetectHighQueryCountOnRootSpan() {
-        // Given: A trace with 25 DB queries (> 20 threshold)
+        // 25 queries: over the 20-query trace threshold
         SpanNode child = createSpan("child1", 30, "OK", Map.of("db.system", "mysql"), List.of());
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
         TraceTree trace = createTrace(root, createSummary(2, 25, 500L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: HIGH_QUERY_COUNT issue on root span
         assertThat(result.rootSpan().issues()).hasSize(1);
         SpanIssue issue = result.rootSpan().issues().get(0);
         assertThat(issue.type()).isEqualTo(IssueType.HIGH_QUERY_COUNT);
@@ -191,15 +181,12 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldNotAddHighQueryCountToChildSpans() {
-        // Given: A trace with high query count but child span should not have the issue
         SpanNode child = createSpan("child1", 30, "OK", Map.of("db.system", "mysql"), List.of());
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
         TraceTree trace = createTrace(root, createSummary(2, 25, 500L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: HIGH_QUERY_COUNT only on root, not on child
         assertThat(result.rootSpan().children().get(0).issues()).isEmpty();
     }
 
@@ -217,8 +204,7 @@ class IssueDetectorTest {
         TraceTree result = detector.detectIssues(trace);
 
         SpanNode serviceNode = result.rootSpan().children().get(0);
-        assertThat(serviceNode.issues())
-                .anyMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
+        assertThat(serviceNode.issues()).anyMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
     }
 
     @Test
@@ -234,78 +220,75 @@ class IssueDetectorTest {
         TraceTree result = detector.detectIssues(trace);
 
         SpanNode serviceNode = result.rootSpan().children().get(0);
-        assertThat(serviceNode.issues())
-                .noneMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
+        assertThat(serviceNode.issues()).noneMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
     }
 
     @Test
     void detectIssues_shouldSupportCustomThresholds() {
-        // Given: Custom thresholds - slow at 200ms instead of 100ms
+        // slow threshold raised to 200ms
         properties.setSlowSpanThresholdMs(200);
         properties.setVerySlowSpanThresholdMs(1000);
 
         SpanNode span = createSpan("span1", 150, "OK", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: 150ms is under the 200ms threshold, so no issue
+        // 150ms is under the raised threshold
         assertThat(result.rootSpan().issues()).isEmpty();
     }
 
     @Test
     void detectIssues_shouldReturnNoIssuesWhenUnderAllThresholds() {
-        // Given: A fast span with no errors
         SpanNode span = createSpan("span1", 50, "OK", Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan().issues()).isEmpty();
     }
 
     @Test
     void detectIssues_shouldProcessNestedSpansRecursively() {
-        // Given: A tree with nested slow spans
         SpanNode grandchild = createSpan("gc", 200, "OK", Map.of(), List.of());
         SpanNode child = createSpan("child", 300, "OK", Map.of(), List.of(grandchild));
         SpanNode root = createSpan("root", 50, "OK", Map.of(), List.of(child));
         TraceTree trace = createTrace(root, createSummary(3, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: Root has no issues, child and grandchild have SLOW issues
         assertThat(result.rootSpan().issues()).isEmpty();
         assertThat(result.rootSpan().children().get(0).issues()).hasSize(1);
         assertThat(result.rootSpan().children().get(0).issues().get(0).type()).isEqualTo(IssueType.SLOW);
-        assertThat(result.rootSpan().children().get(0).children().get(0).issues()).hasSize(1);
-        assertThat(result.rootSpan().children().get(0).children().get(0).issues().get(0).type()).isEqualTo(IssueType.SLOW);
+        assertThat(result.rootSpan().children().get(0).children().get(0).issues())
+                .hasSize(1);
+        assertThat(result.rootSpan()
+                        .children()
+                        .get(0)
+                        .children()
+                        .get(0)
+                        .issues()
+                        .get(0)
+                        .type())
+                .isEqualTo(IssueType.SLOW);
     }
 
     @Test
     void detectIssues_shouldDetectMultipleIssuesOnSameSpan() {
-        // Given: A slow DB span with an error (multiple issues)
-        SpanNode span = createSpan("span1", 200, "ERROR",
-                Map.of("db.system", "postgresql"), List.of());
+        SpanNode span = createSpan("span1", 200, "ERROR", Map.of("db.system", "postgresql"), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 1, 200L, 1));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: Should have SLOW, SLOW_QUERY, and ERROR issues
         List<SpanIssue> issues = result.rootSpan().issues();
         assertThat(issues).hasSize(3);
-        assertThat(issues).extracting(SpanIssue::type)
+        assertThat(issues)
+                .extracting(SpanIssue::type)
                 .containsExactlyInAnyOrder(IssueType.SLOW, IssueType.SLOW_QUERY, IssueType.ERROR);
     }
 
     @Test
     void detectIssues_shouldPreserveExistingSpanProperties() {
-        // Given: A span with various properties
         SpanNode span = new SpanNode(
                 "span-id-123",
                 "my-operation",
@@ -316,14 +299,11 @@ class IssueDetectorTest {
                 List.of(),
                 Map.of("custom.attr", "value"),
                 List.of(),
-                List.of()
-        );
+                List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: All properties preserved
         SpanNode resultSpan = result.rootSpan();
         assertThat(resultSpan.spanId()).isEqualTo("span-id-123");
         assertThat(resultSpan.name()).isEqualTo("my-operation");
@@ -336,7 +316,7 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldPreserveErrorAndRemoteServiceProperties() {
-        // Given: a span using the full-field constructor, so errorMessage/
+        // a span using the full-field constructor, so errorMessage/
         // errorClass/remoteServiceName/creationOrder are all set to real values
         SpanNode span = new SpanNode(
                 "span-id-456",
@@ -353,8 +333,7 @@ class IssueDetectorTest {
                 "boom",
                 "java.lang.RuntimeException",
                 "orders-service",
-                null
-        );
+                null);
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
 
         TraceTree result = detector.detectIssues(trace);
@@ -368,69 +347,88 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldPreserveSpanLogs() {
-        // Given: root and child spans that both carry attached logs
         List<TraceLog> childLogs = List.of(new TraceLog(
                 "child1", Instant.parse("2026-01-01T00:00:00Z"), "DEBUG", "ChildLogger", "child log", "main"));
-        List<TraceLog> rootLogs = List.of(new TraceLog(
-                "span1", Instant.parse("2026-01-01T00:00:01Z"), "INFO", "RootLogger", "root log", "main"));
+        List<TraceLog> rootLogs = List.of(
+                new TraceLog("span1", Instant.parse("2026-01-01T00:00:01Z"), "INFO", "RootLogger", "root log", "main"));
         SpanNode child = createSpan("child1", 10, "OK", Map.of(), List.of()).withLogs(childLogs);
         SpanNode root = createSpan("span1", 50, "OK", Map.of(), List.of(child)).withLogs(rootLogs);
         TraceTree trace = createTrace(root, createSummary(2, 0, 0L, 0));
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: the rebuilt tree keeps the logs at every level
         assertThat(result.rootSpan().logs()).isEqualTo(rootLogs);
         assertThat(result.rootSpan().children().get(0).logs()).isEqualTo(childLogs);
     }
 
     @Test
     void detectIssues_shouldHandleNullRootSpan() {
-        // Given: A trace with no root span
         TraceTree trace = new TraceTree(
-                "trace1", 0, 0, TraceStatus.OK, RootActionType.UNKNOWN, null, null,
-                createSummary(0, 0, 0L, 0), Map.of(),
-                null, null, null, false
-        );
+                "trace1",
+                0,
+                0,
+                TraceStatus.OK,
+                RootActionType.UNKNOWN,
+                null,
+                null,
+                createSummary(0, 0, 0L, 0),
+                Map.of(),
+                null,
+                null,
+                null,
+                false);
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then
         assertThat(result.rootSpan()).isNull();
     }
 
     @Test
     void detectIssues_preservesTheTruncatedFlag() {
-        // Given: a trace the store marked truncated because the span cap dropped real spans
+        // a trace the store marked truncated because the span cap dropped real spans
         SpanNode span = createSpan("span1", 50, "OK", Map.of(), List.of());
         TraceTree trace = new TraceTree(
-                "trace-1", 0, 50, TraceStatus.OK, RootActionType.UNKNOWN, "test-op",
-                span, createSummary(1, 0, 0L, 0), Map.of(),
-                null, null, null, true
-        );
+                "trace-1",
+                0,
+                50,
+                TraceStatus.OK,
+                RootActionType.UNKNOWN,
+                "test-op",
+                span,
+                createSummary(1, 0, 0L, 0),
+                Map.of(),
+                null,
+                null,
+                null,
+                true);
 
-        // When
         TraceTree result = detector.detectIssues(trace);
 
-        // Then: rebuilding the tree around the processed span tree must not silently
+        // rebuilding the tree around the processed span tree must not silently
         // reset the flag - a shortened trace must never look complete again
         assertThat(result.truncated()).isTrue();
     }
 
-    private SpanNode createSpan(String spanId, long durationMs, String status,
-                                 Map<String, Object> tags, List<SpanNode> children) {
+    private SpanNode createSpan(
+            String spanId, long durationMs, String status, Map<String, Object> tags, List<SpanNode> children) {
         return new SpanNode(spanId, "test-op", "SERVER", 0, durationMs, status, children, tags, List.of(), List.of());
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceTabSummary summary) {
         return new TraceTree(
-                "trace-1", 0, rootSpan != null ? rootSpan.durationMs() : 0,
-                TraceStatus.OK, RootActionType.UNKNOWN, rootSpan != null ? rootSpan.name() : null,
-                rootSpan, summary, Map.of(),
-                null, null, null, false
-        );
+                "trace-1",
+                0,
+                rootSpan != null ? rootSpan.durationMs() : 0,
+                TraceStatus.OK,
+                RootActionType.UNKNOWN,
+                rootSpan != null ? rootSpan.name() : null,
+                rootSpan,
+                summary,
+                Map.of(),
+                null,
+                null,
+                null,
+                false);
     }
 
     private TraceTabSummary createSummary(int spanCount, int queryCount, long queryDurationMs, int errorCount) {
@@ -438,7 +436,6 @@ class IssueDetectorTest {
                 null,
                 new TraceTabSummary.SpansSummary(spanCount, 0L, errorCount),
                 new TraceTabSummary.QueriesSummary(queryCount, queryDurationMs),
-                new TraceTabSummary.LogsSummary(0, 0, 0)
-        );
+                new TraceTabSummary.LogsSummary(0, 0, 0));
     }
 }

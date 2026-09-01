@@ -36,16 +36,12 @@ class DataSourceMapperTest {
     }
 
     /**
-     * The pre-engine regex was a bare substring match on "key", so any connection param
-     * whose name merely contained "key" - not just the compound "api-key"/"apiKey" shape -
-     * was masked too (e.g. "keyStore", "encryptionKeyPath"). The masking engine deliberately
-     * drops bare "key" as a rule (it would otherwise mask server.ssl.key-store and
-     * spring.jpa.key-generator elsewhere), so routing DataSourceMapper through the engine
-     * narrows what gets masked here. This is the intended behaviour, not a regression -
-     * pinned explicitly so a future reader sees it was a deliberate choice.
+     * Bare "key" is deliberately not a masking rule (it would mask server.ssl.key-store and
+     * spring.jpa.key-generator), so a connection param whose name merely contains "key"
+     * stays readable; only the compound api-key/apiKey shape is masked.
      */
     @Test
-    void map_shouldNoLongerMaskConnectionParamsThatOnlyContainBareKey() {
+    void map_leavesBareKeyConnectionParamsUnmasked() {
         DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getConnectionParams())
                 .thenReturn(Map.of("keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")));

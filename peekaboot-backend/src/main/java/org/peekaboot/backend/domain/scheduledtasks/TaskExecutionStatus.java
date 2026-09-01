@@ -15,8 +15,7 @@ public enum TaskExecutionStatus {
         }
         return switch (status.toUpperCase(Locale.ROOT)) {
             case "SUCCESS" -> SUCCESS;
-            case "FAILED", "ERROR" -> FAILED;
-            case "PENDING" -> PENDING;
+            case "ERROR" -> FAILED;
             case "STARTED" -> RUNNING;
             default -> UNKNOWN;
         };

@@ -9,13 +9,6 @@ import org.junit.jupiter.api.Test;
 
 class InsightsPropertiesTest {
 
-    private static InsightsProperties.Level level(Duration interval, int size) {
-        InsightsProperties.Level level = new InsightsProperties.Level();
-        level.setInterval(interval);
-        level.setSize(size);
-        return level;
-    }
-
     @Test
     void defaultsMatchSpec() {
         InsightsProperties properties = new InsightsProperties();
@@ -33,10 +26,24 @@ class InsightsPropertiesTest {
     @Test
     void rejectsNonMultipleIntervals() {
         InsightsProperties properties = new InsightsProperties();
-        properties.setLevels(List.of(level(Duration.ofSeconds(10), 90), level(Duration.ofSeconds(25), 100)));
+        properties.setLevels(List.of(
+                InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
+                InsightsProperties.Level.of(Duration.ofSeconds(25), 100)));
         assertThatThrownBy(properties::validate)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("multiple");
+    }
+
+    /** A roll-up reads the previous ring; a window wider than that ring would aggregate a partial window silently. */
+    @Test
+    void rejectsARollUpWindowWiderThanThePreviousRing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(
+                InsightsProperties.Level.of(Duration.ofSeconds(10), 5),
+                InsightsProperties.Level.of(Duration.ofMinutes(1), 10)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ring");
     }
 
     @Test
@@ -45,7 +52,7 @@ class InsightsPropertiesTest {
         properties.setLevels(List.of());
         assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
 
-        properties.setLevels(List.of(level(Duration.ofSeconds(10), 0)));
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofSeconds(10), 0)));
         assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
     }
 

@@ -1,12 +1,11 @@
 package org.peekaboot.backend.log;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.AppenderBase;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.springframework.context.ApplicationEventPublisher;
-
+import ch.qos.logback.core.UnsynchronizedAppenderBase;
 import java.time.Instant;
 import java.util.Map;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Logback appender that captures log events and publishes them via Spring events.
@@ -18,7 +17,7 @@ import java.util.Map;
  * disagree with the log file. Per-trace volume stays bounded by
  * {@code peekaboot.tracing.max-logs-per-trace}.
  */
-public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
+public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
 
     private static final String TRACE_ID_KEY = "traceId";
     private static final String SPAN_ID_KEY = "spanId";
@@ -54,15 +53,8 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
             String message = event.getFormattedMessage();
             String threadName = event.getThreadName();
 
-            eventPublisher.publishEvent(new LogCapturedEvent(
-                    traceId,
-                    spanId,
-                    timestamp,
-                    level,
-                    loggerName,
-                    message,
-                    threadName
-            ));
+            eventPublisher.publishEvent(
+                    new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, threadName));
         }
     }
 }

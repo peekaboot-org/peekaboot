@@ -131,12 +131,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /**
-     * complete()/completeWithError() are overridden because outside a real
-     * request dispatch (e.g. in unit tests, or when our own dispatch loop calls
-     * them directly) Spring's container-driven onCompletion/onError callbacks
-     * never fire - there is no Handler registered to invoke them. Package-visible
-     * (rather than inlined into subscribe()) so tests can override the emitter's
-     * send behavior.
+     * complete()/completeWithError() are overridden because Spring's container-driven
+     * onCompletion/onError callbacks fire only inside a real request dispatch; when the
+     * dispatch loop here completes an emitter itself (or a unit test does), no Handler is
+     * registered to invoke them and the emitter would stay in {@code emitters}.
+     * Package-visible (rather than inlined into subscribe()) so tests can override the
+     * emitter's send behavior.
      */
     SseEmitter newEmitter() {
         return new SseEmitter(0L) {
@@ -232,11 +232,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 return;
             }
             queue.poll();
-            if (!queue.offer(event)) {
-                // unreachable: this thread holds the lock and poll() just freed a slot
-                log.warn("Insights SSE dispatch queue rejected an event after freeing a slot");
-                return;
-            }
+            queue.add(event);
             if (!queueOverflowWarned) {
                 queueOverflowWarned = true;
                 log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);

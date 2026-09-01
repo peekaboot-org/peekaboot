@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
-import org.peekaboot.backend.domain.scheduledtasks.*;
+import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
+import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
+import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.service.CronDescriptionService;
 
 class ScheduledTasksMapperTest {
@@ -96,7 +98,7 @@ class ScheduledTasksMapperTest {
                         new ScheduledTasksResponse.TaskExecution(
                                 new ScheduledTasksResponse.TaskExceptionInfo(
                                         "Task failed", "java.lang.NullPointerException"),
-                                "FAILED",
+                                "ERROR",
                                 "2026-01-11T06:49:20Z"),
                         null,
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.failingTask"))),

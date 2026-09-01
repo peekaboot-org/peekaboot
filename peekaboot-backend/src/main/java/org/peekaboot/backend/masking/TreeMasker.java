@@ -61,7 +61,7 @@ public final class TreeMasker {
 
     private Object maskNode(String key, Object value) {
         if (key != null && maskingEngine.isSensitiveKey(key)) {
-            return value == null ? null : maskingEngine.mask(key, "x");
+            return value == null ? null : MaskingRules.MASK;
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> result = new LinkedHashMap<>();

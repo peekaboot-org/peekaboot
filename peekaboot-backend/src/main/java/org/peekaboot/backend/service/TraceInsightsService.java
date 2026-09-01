@@ -110,7 +110,6 @@ public class TraceInsightsService {
             try {
                 types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException ignored) {
-                // Ignore invalid values
             }
         }
         return types;

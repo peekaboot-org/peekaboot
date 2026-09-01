@@ -154,7 +154,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         writeNow();
     }
 
-    void writeNow() {
+    synchronized void writeNow() {
         Supplier<InsightsSnapshot> source = capture;
         if (source == null) {
             return;

@@ -144,10 +144,10 @@ class TraceDataBundleTest {
 
     @Test
     void addSpan_boundsTheRedirectTableAsRealSpansAreEvicted() {
-        // Regression test: the redirect table used to gain one entry per fold and never
-        // shrink, so it grew for the trace's whole life regardless of maxSpans. Here 500
-        // real+duplicate pairs are folded against a cap of 10 - if the table weren't pruned
-        // as spans are evicted, it would hold close to 500 entries by the end.
+        // The redirect table gains one entry per fold; unless it is pruned as spans are
+        // evicted it grows for the trace's whole life regardless of maxSpans. Here 500
+        // real+duplicate pairs are folded against a cap of 10 - unpruned, the table would
+        // hold close to 500 entries by the end.
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         int cap = 10;
         int pairs = 500;
@@ -168,12 +168,12 @@ class TraceDataBundleTest {
 
     @Test
     void addSpan_boundsTheRedirectTableAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
-        // Regression test for chained-redirect residue: when a duplicate (dup1) is itself
+        // Chained-redirect residue: when a duplicate (dup1) is itself
         // later folded into a further survivor, an earlier fold that had targeted dup1
         // (gc -> dup1) stays keyed on dup1 in the reverse index. dup1 was folded away and
         // never itself stored as a real span, so it is never passed to
         // pruneRedirectsPointingAt when the eventual survivor is evicted - the entry for gc
-        // leaks forever instead of being pruned with it. This needs triple instrumentation
+        // would leak forever instead of being pruned with it. This needs triple instrumentation
         // (three spans that pairwise match, nested three deep), which does not occur in
         // production - but the class Javadoc promises the redirect table "stays bounded by
         // the maxSpans cap" unconditionally, so this must hold even for that shape.
