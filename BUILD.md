@@ -294,9 +294,9 @@ Everything release-specific sits in the `peekaboot-release` profile; a normal bu
 signs or publishes anything. A push to `main` (whose message does not contain `[release]`,
 which is how recursion is prevented) runs:
 
-1. `mvn --batch-mode verify`
-2. `mvn -P peekaboot-release release:prepare`
-3. `mvn -P peekaboot-release release:perform`
+1. `./mvnw --batch-mode verify`
+2. `./mvnw -P peekaboot-release release:prepare`
+3. `./mvnw -P peekaboot-release release:perform`
 4. GitHub release notes from the new tag, then a pull request `main` → `dev` with auto-merge
    enabled (`gh pr create` + `gh pr merge --auto`), carrying the two `[release]` version
    commits back. It is a PR and not a push because the `green-default-branch` ruleset on
@@ -343,6 +343,37 @@ and the upload to Maven Central happen. The workflow passes it
 Playwright suite. The four static-analysis gates still run. Reproducibility depends on
 `project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
 being explicit.
+
+### First release
+
+`ConventionalCommitsVersionPolicy` looks at the commits since the most recent tag matching
+`x.y.z`, takes the highest step it finds (`feat:` → minor; `type!:` or a `BREAKING CHANGE:`
+line anywhere in the message → major, `-SNAPSHOT` stripped otherwise) and applies it to that
+tag's version. With **no tag** it walks the entire history and starts from the pom version
+instead. There is no tag today, and commit `254956ae` carries a `BREAKING CHANGE:` footer,
+so an unprepared first release would be **1.0.0** — verified with
+`./mvnw -P peekaboot-release release:prepare -DdryRun=true`, which reports
+`Starting from project.version 0.0.5-SNAPSHOT … Doing a MAJOR version increase … Next
+release version : 1.0.0`.
+
+The first release is **0.1.0**. The recipe that works with the workflow exactly as it is:
+
+1. On `dev`, tag the commit that bumped the poms to `0.0.5-SNAPSHOT` as the baseline, and
+   push the tag: `git tag 0.0.4 ef175ff && git push origin 0.0.4`. Everything after it is
+   `feat:`/`fix:`/`chore:`/`test:` work without a breaking marker, so the policy computes a
+   minor step from 0.0.4 (verified in a throwaway clone: `Starting from SCM tag with version
+   0.0.4 … Doing a MINOR version increase … Next release version : 0.1.0`). The tag must sit
+   *before* the features that make this a minor release: on the current tip the window holds
+   no `feat:` and the same dry run answers `0.0.5`.
+2. Confirm nothing merged after the tag carries `!:` or a `BREAKING CHANGE:` footer — either
+   turns the answer into 1.0.0.
+3. Create `main` from `dev` and push. The workflow tags `0.1.0`; the next development version
+   is `0.1.1-SNAPSHOT`.
+
+The manual alternative, `./mvnw --batch-mode -P peekaboot-release release:prepare
+-DreleaseVersion=0.1.0` (dry run verified: tag `0.1.0`, next `0.1.1-SNAPSHOT`), bypasses the
+policy for that one run. A push-triggered workflow cannot carry that flag, so it is the
+fallback for a release run by hand, not the plan.
 
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
 `OSSRH_GPG_SECRET_KEY_PASSWORD`. The `OSSRH_` prefix is historical — the workflow talks to
