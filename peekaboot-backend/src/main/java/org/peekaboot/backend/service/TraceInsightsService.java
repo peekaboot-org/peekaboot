@@ -123,8 +123,7 @@ public class TraceInsightsService {
         return traceStore.getTraces(bucket, limit).stream()
                 .map(bundle -> {
                     TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-                    TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
-                    return tree == null ? null : withLogsSummary(tree, bundle.logs());
+                    return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
                 })
                 .filter(Objects::nonNull);
     }
