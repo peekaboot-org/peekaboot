@@ -552,10 +552,11 @@ two signals of its own, checked in order:
    `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main` or `bin/main`, or
    containing `out/production/` — which an IDE, `spring-boot:run` and `bootRun` always put
    there and a Jib image (`/app/classes`) or Boot's `extract` layout (a thin jar with a
-   `Class-Path` manifest) never do; and the process must show no container marker —
-   `/.dockerenv`, a `KUBERNETES_SERVICE_HOST` variable, or `/proc/1/cgroup` naming `docker`,
-   `kubepods` or `containerd`. A build-output classpath inside a container still resolves
-   `false`.
+   `Class-Path` manifest) never do; and the backend's shared `ContainerRuntime.current()`
+   (also behind the Overview tab's Machine card) must report `NONE` — no `/.dockerenv`, no
+   Podman `/run/.containerenv`, no `KUBERNETES_SERVICE_HOST` variable, and no
+   `/proc/1/cgroup` naming `docker`, `kubepods` or `containerd`. A build-output classpath
+   inside a container still resolves `false`.
 
 In practice: an IDE run, `mvn spring-boot:run`, and `gradle bootRun` on a developer's machine
 default to on. A `java -jar` of the packaged artifact (Boot's `LaunchedClassLoader`), a war in
@@ -738,7 +739,7 @@ SpanData
 ```
 ActuatorInsightsResponse
 ├── application: ApplicationInfo
-├── runtime: RuntimeInfo
+├── runtime: RuntimeInfo (os, memory, storage, process, machine)
 ├── dataSources: List<DataSourceInfo>
 ├── health: HealthInfo
 ├── environment: EnvironmentInfo
@@ -748,6 +749,16 @@ ActuatorInsightsResponse
 ├── scheduledTasks: ScheduledTasksInfo
 └── server: ServerInfo
 ```
+
+`RuntimeInfo.machine` (`MachineInfo`, computed once and cached) describes the deployment
+environment: the logical processor count, the CPU model (only where cheaply readable —
+`/proc/cpuinfo` on Linux, no forking), total physical memory, the JVM's max heap, and the
+`ContainerRuntime` the process runs under — docker (`/.dockerenv`), podman
+(`/run/.containerenv`), kubernetes (`KUBERNETES_SERVICE_HOST`), a generic container (a
+`/proc/1/cgroup` marker), or none. The JDK's processor count and total memory are
+container-aware: inside a limited container they report the container's share, not the
+host's. `ContainerRuntime.current()` is the one detection in the codebase; the
+autoconfigure module's `LocalDevDetector` consumes the same cached result.
 
 ## Testing
 
