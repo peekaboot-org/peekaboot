@@ -1,0 +1,3 @@
+panels:
+  - id: nothing-ships-under-this-id
+    enabled: true

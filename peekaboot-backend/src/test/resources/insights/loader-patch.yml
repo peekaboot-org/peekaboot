@@ -1,0 +1,9 @@
+# The two by-id examples from the website's "customising panels" section, verbatim.
+panels:
+  # switch a shipped-but-off panel on, by id alone
+  - id: thread-states
+    enabled: true
+
+  # hide one you don't care about
+  - id: load
+    enabled: false

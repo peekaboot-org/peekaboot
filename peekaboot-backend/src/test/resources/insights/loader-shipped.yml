@@ -1,0 +1,25 @@
+# Stands in for the bundled defaults the website's "customising panels" example is written
+# against: one panel that ships on, one that ships off.
+panels:
+  - id: load
+    title: System load
+    chart: line
+    unit: count
+    order: 20
+    series:
+      - id: load-1m
+        label: 1m
+        meter: system.load.average.1m
+  - id: thread-states
+    title: Thread states
+    chart: bars
+    unit: count
+    order: 60
+    enabled: false
+    level: 1
+    series:
+      - id: runnable
+        label: Runnable
+        meter: jvm.threads.states
+        tags:
+          state: runnable
