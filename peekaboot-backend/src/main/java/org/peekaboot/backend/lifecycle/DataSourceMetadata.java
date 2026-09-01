@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.JdbcUrl;
@@ -27,6 +28,8 @@ public final class DataSourceMetadata {
 
     private final String databaseName;
 
+    private final DatabaseProduct databaseProduct;
+
     private final Map<String, JdbcProperty> connectionParams;
 
     private final String databaseProductName;
@@ -43,6 +46,7 @@ public final class DataSourceMetadata {
             String username,
             List<Host> hosts,
             String databaseName,
+            DatabaseProduct databaseProduct,
             Map<String, JdbcProperty> connectionParams,
             String databaseProductName,
             String databaseProductVersion,
@@ -54,6 +58,7 @@ public final class DataSourceMetadata {
         this.username = username;
         this.hosts = hosts;
         this.databaseName = databaseName;
+        this.databaseProduct = databaseProduct;
         this.connectionParams = connectionParams;
         this.databaseProductName = databaseProductName;
         this.databaseProductVersion = databaseProductVersion;
@@ -75,6 +80,7 @@ public final class DataSourceMetadata {
                     username,
                     jdbcUrl.hosts(),
                     jdbcUrl.databaseName(),
+                    jdbcUrl.databaseProduct(),
                     jdbcUrl.properties(),
                     metaData.getDatabaseProductName(),
                     metaData.getDatabaseProductVersion(),
@@ -110,6 +116,12 @@ public final class DataSourceMetadata {
     public String getDatabaseName() {
 
         return databaseName;
+    }
+
+    /** What the JDBC URL names, so a MariaDB reached through a {@code jdbc:mysql:} URL reports MySQL. */
+    public DatabaseProduct getDatabaseProduct() {
+
+        return databaseProduct;
     }
 
     public Map<String, JdbcProperty> getConnectionParams() {

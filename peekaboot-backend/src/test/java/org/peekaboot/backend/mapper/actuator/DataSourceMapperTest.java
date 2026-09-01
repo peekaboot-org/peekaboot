@@ -11,8 +11,6 @@ import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
@@ -116,13 +114,15 @@ class DataSourceMapperTest {
         assertThat(result).isEmpty();
     }
 
+    /** The product comes from the parsed JDBC URL, which DataSourceMetadata already carries. */
     @Test
-    void map_shouldDetectDatabaseProduct() {
+    void map_carriesTheDatabaseProductOfTheJdbcUrl() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL 15.1");
+        when(metadata.getDatabaseProduct()).thenReturn(DatabaseProduct.POSTGRESQL);
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-        assertThat(result.get(0).databaseProduct().name()).isEqualTo("POSTGRESQL");
+
+        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.POSTGRESQL);
     }
 
     @Test
@@ -174,37 +174,6 @@ class DataSourceMapperTest {
 
         List<DataSourceInfo> result = mapper.map(listWithNulls, null, false);
         assertThat(result).hasSize(1);
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "MySQL 8.0, MYSQL",
-        "MariaDB 10.6, MARIADB",
-        "H2, H2",
-        "Oracle Database 19c, ORACLE",
-        "Microsoft SQL Server 2019, SQLSERVER",
-        "SQLite, SQLITE",
-        "Apache Derby, DERBY",
-        "HSQL Database Engine, HSQLDB",
-        "SomeExoticDatabase, UNKNOWN"
-    })
-    void map_shouldDetectDatabaseProductForEachVendor(String productName, DatabaseProduct expected) {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn(productName);
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).databaseProduct()).isEqualTo(expected);
-    }
-
-    @Test
-    void map_shouldDetectUnknownDatabaseProductWhenNameIsNull() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn(null);
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.UNKNOWN);
     }
 
     private DataSourceMetadata mockMetadata(String name) {
