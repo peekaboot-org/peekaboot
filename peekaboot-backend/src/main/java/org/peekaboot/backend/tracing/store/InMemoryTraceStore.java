@@ -2,9 +2,6 @@ package org.peekaboot.backend.tracing.store;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /** In-memory {@link TraceStore} backed by a bounded Caffeine cache. */
 public class InMemoryTraceStore implements TraceStore {
@@ -42,19 +41,40 @@ public class InMemoryTraceStore implements TraceStore {
     }
 
     public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
-        this(maxTraces, maxSpansPerTrace, expireAfter,
-                DEFAULT_MAX_ERROR_TRACES, DEFAULT_MAX_SLOW_TRACES, DEFAULT_SLOW_TRACE_THRESHOLD_MS);
+        this(
+                maxTraces,
+                maxSpansPerTrace,
+                expireAfter,
+                DEFAULT_MAX_ERROR_TRACES,
+                DEFAULT_MAX_SLOW_TRACES,
+                DEFAULT_SLOW_TRACE_THRESHOLD_MS);
     }
 
-    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter,
-                              int maxErrorTraces, int maxSlowTraces, long slowTraceThresholdMs) {
-        this(maxTraces, maxSpansPerTrace, expireAfter,
-                maxErrorTraces, maxSlowTraces, slowTraceThresholdMs, DEFAULT_MAX_LOGS_PER_TRACE);
+    public InMemoryTraceStore(
+            int maxTraces,
+            int maxSpansPerTrace,
+            Duration expireAfter,
+            int maxErrorTraces,
+            int maxSlowTraces,
+            long slowTraceThresholdMs) {
+        this(
+                maxTraces,
+                maxSpansPerTrace,
+                expireAfter,
+                maxErrorTraces,
+                maxSlowTraces,
+                slowTraceThresholdMs,
+                DEFAULT_MAX_LOGS_PER_TRACE);
     }
 
-    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter,
-                              int maxErrorTraces, int maxSlowTraces, long slowTraceThresholdMs,
-                              int maxLogsPerTrace) {
+    public InMemoryTraceStore(
+            int maxTraces,
+            int maxSpansPerTrace,
+            Duration expireAfter,
+            int maxErrorTraces,
+            int maxSlowTraces,
+            long slowTraceThresholdMs,
+            int maxLogsPerTrace) {
         this.maxSpansPerTrace = maxSpansPerTrace;
         this.slowTraceThresholdMs = slowTraceThresholdMs;
         this.maxLogsPerTrace = maxLogsPerTrace;
@@ -137,10 +157,12 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public List<TraceDataBundle> getTraces(TraceBucket bucket, int limit) {
         return switch (bucket) {
-            case ALL -> cache.asMap().values().stream()
-                    .sorted(Comparator.comparingLong(TraceDataBundle::createdAt).reversed())
-                    .limit(limit)
-                    .toList();
+            case ALL ->
+                cache.asMap().values().stream()
+                        .sorted(Comparator.comparingLong(TraceDataBundle::createdAt)
+                                .reversed())
+                        .limit(limit)
+                        .toList();
             case ERRORS -> newestFirst(errorTraces, limit);
             case SLOW -> newestFirst(slowTraces, limit);
         };
@@ -184,8 +206,7 @@ public class InMemoryTraceStore implements TraceStore {
 
     private boolean isSlow(TraceDataBundle bundle) {
         TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-        return traceData.duration() != null
-                && traceData.duration().toMillis() >= slowTraceThresholdMs;
+        return traceData.duration() != null && traceData.duration().toMillis() >= slowTraceThresholdMs;
     }
 
     @Override
