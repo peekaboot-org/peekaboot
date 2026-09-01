@@ -156,12 +156,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         report.append(String.format(
                         " Heap Memory: used=%s, max=%s",
-                        formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())))
+                        ByteFormat.humanize(heapMemory.getUsed()), ByteFormat.humanize(heapMemory.getMax())))
                 .append("\n");
         report.append(String.format(
                         " Non-Heap Memory: used=%s, max=%s",
-                        formatBytes(nonHeapMemory.getUsed()),
-                        formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)))
+                        ByteFormat.humanize(nonHeapMemory.getUsed()),
+                        ByteFormat.humanize(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)))
                 .append("\n");
         report.append(LifecycleBanner.LINE).append("\n");
     }
@@ -223,18 +223,5 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                     .append(" ms\n");
             report.append(LifecycleBanner.LINE).append("\n");
         });
-    }
-
-    private String formatBytes(long bytes) {
-
-        if (bytes < 1024) {
-            return bytes + " B";
-        } else if (bytes < 1024 * 1024) {
-            return String.format("%.2f KB", bytes / 1024.0);
-        } else if (bytes < 1024 * 1024 * 1024) {
-            return String.format("%.2f MB", bytes / (1024.0 * 1024));
-        } else {
-            return String.format("%.2f GB", bytes / (1024.0 * 1024 * 1024));
-        }
     }
 }

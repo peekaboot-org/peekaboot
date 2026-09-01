@@ -3,7 +3,6 @@ package org.peekaboot.backend.insights;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
@@ -14,6 +13,7 @@ import org.peekaboot.backend.insights.config.PanelDef;
 import org.peekaboot.backend.insights.config.PanelsFile;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
+import org.peekaboot.backend.lifecycle.ByteFormat;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,7 +122,7 @@ public final class InsightsService implements SmartLifecycle {
                 seriesCount,
                 panels.size(),
                 levelsDescription(),
-                humanBytes(estimatedMemoryBytes()),
+                ByteFormat.humanize(estimatedMemoryBytes()),
                 store != null ? ", persisted across restarts" : "");
     }
 
@@ -200,22 +200,5 @@ public final class InsightsService implements SmartLifecycle {
 
     private static Double nanToNull(Double value) {
         return value == null || Double.isNaN(value) ? null : value;
-    }
-
-    /** Human-readable byte count, 1024-based, one decimal (e.g. {@code "5.8 MB"}). */
-    static String humanBytes(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
-        double kilo = bytes / 1024.0;
-        if (kilo < 1024) {
-            return String.format(Locale.ROOT, "%.1f KB", kilo);
-        }
-        double mega = kilo / 1024.0;
-        if (mega < 1024) {
-            return String.format(Locale.ROOT, "%.1f MB", mega);
-        }
-        double giga = mega / 1024.0;
-        return String.format(Locale.ROOT, "%.1f GB", giga);
     }
 }
