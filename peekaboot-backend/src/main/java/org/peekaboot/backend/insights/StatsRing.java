@@ -44,11 +44,12 @@ public final class StatsRing {
      */
     public synchronized double[][] toColumns() {
         double[][] columns = new double[InsightsSnapshot.STAT_COLUMNS.size()][];
-        int i = 0;
+        int column = 0;
         for (DoubleRing ring : stats.values()) {
-            columns[i++] = ring.toArray();
+            columns[column] = ring.toArray();
+            column++;
         }
-        columns[i] = samples.toArray();
+        columns[column] = samples.toArray();
         return columns;
     }
 
