@@ -149,6 +149,36 @@ class ContentBufferingResponseWrapperTest {
         assertThat(originalResponse.getContentAsByteArray()).isEmpty();
     }
 
+    /**
+     * Spring's message converters declare the type as a plain header (ServletServerHttpResponse
+     * writes every header with addHeader), so a JSON API response never reaches setContentType;
+     * it has to be recognised there or it is buffered up to the cap for nothing.
+     */
+    @Test
+    void nonHtmlContentTypeAddedAsAHeaderSwitchesToPassthrough() throws IOException {
+        wrapper.addHeader("Content-Type", "application/json");
+        wrapper.getOutputStream().write("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalResponse.getContentAsString()).isEqualTo("{\"id\":1}");
+    }
+
+    @Test
+    void nonHtmlContentTypeSetAsAHeaderSwitchesToPassthrough() throws IOException {
+        wrapper.setHeader("content-type", "application/octet-stream");
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+    }
+
+    @Test
+    void htmlContentTypeSetAsAHeaderKeepsBuffering() throws IOException {
+        wrapper.addHeader("Content-Type", "text/html;charset=UTF-8");
+        wrapper.getOutputStream().write("<html>".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isFalse();
+        assertThat(originalResponse.getContentAsByteArray()).isEmpty();
+    }
+
     @Test
     void enablePassthroughFlushesBufferAndRoutesLaterWrites() throws IOException {
         wrapper.getOutputStream().write("early".getBytes(StandardCharsets.UTF_8));

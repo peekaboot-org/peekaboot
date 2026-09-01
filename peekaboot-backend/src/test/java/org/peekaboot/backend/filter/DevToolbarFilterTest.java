@@ -15,9 +15,13 @@ import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.WriteListener;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import org.apache.catalina.connector.ClientAbortException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -253,6 +257,88 @@ class DevToolbarFilterTest {
         assertThat(response.containsHeader("Content-Length")).isFalse();
     }
 
+    /**
+     * A browser that navigates away mid-response closes the socket; the container surfaces
+     * that as an IOException from the write. Nothing went wrong on the server, so it is a
+     * DEBUG line without a stack trace - and no second write onto a dead connection.
+     */
+    @Test
+    void aClientAbortWhileWritingTheInjectedPageIsNotAFailure() throws Exception {
+        FailingWriteResponse aborted = new FailingWriteResponse(new ClientAbortException(), false);
+        response = aborted;
+        chainWritesHtml("<html><body></body></html>");
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Client closed the connection before the toolbar could be written: GET /users/123");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
+        assertThat(aborted.writeAttempts).isEqualTo(1);
+    }
+
+    /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
+    @Test
+    void aBrokenPipeFromAnotherContainerIsAClientAbortToo() throws Exception {
+        FailingWriteResponse aborted = new FailingWriteResponse(new IOException("Broken pipe"), false);
+        response = aborted;
+        chainWritesHtml("<html><body></body></html>");
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
+        assertThat(aborted.writeAttempts).isEqualTo(1);
+    }
+
+    /** Once bytes have gone out there is no response left to fall back to; the failure is reported once. */
+    @Test
+    void aWriteFailureOnACommittedResponseIsWarnedAboutOnceAndNotRetried() throws Exception {
+        FailingWriteResponse committed = new FailingWriteResponse(new IOException("disk full"), true);
+        response = committed;
+        chainWritesHtml("<html><body></body></html>");
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Failed to inject dev toolbar, returning original response");
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("disk full");
+            });
+        }
+        assertThat(committed.writeAttempts).isEqualTo(1);
+    }
+
+    /** With nothing committed yet, the page the handler produced still gets out, minus the toolbar. */
+    @Test
+    void aWriteFailureBeforeAnythingWasCommittedFallsBackToTheOriginalPage() throws Exception {
+        FailingWriteResponse hiccup = new FailingWriteResponse(new IOException("hiccup"), false);
+        response = hiccup;
+        String htmlContent = "<html><body></body></html>";
+        chainWritesHtml(htmlContent);
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("hiccup");
+            });
+        }
+        assertThat(hiccup.writeAttempts).isEqualTo(2);
+        assertThat(response.getContentAsString()).isEqualTo(htmlContent);
+    }
+
     @Test
     void shouldPassthroughAsyncResponsesWithoutInjection() throws Exception {
         request = get("/sse/stream");
@@ -321,6 +407,56 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         assertThat(response.getContentAsString()).doesNotContain("\"idle\":true");
+    }
+
+    /**
+     * A response whose first write fails the way a container's does: with {@code failure},
+     * and - when {@code commitsOnFailure} - with the response committed by the bytes that
+     * were already on the wire. Later writes succeed.
+     */
+    private static final class FailingWriteResponse extends MockHttpServletResponse {
+
+        private final IOException failure;
+        private final boolean commitsOnFailure;
+        int writeAttempts;
+
+        FailingWriteResponse(IOException failure, boolean commitsOnFailure) {
+            this.failure = failure;
+            this.commitsOnFailure = commitsOnFailure;
+        }
+
+        @Override
+        public ServletOutputStream getOutputStream() {
+            ServletOutputStream real = super.getOutputStream();
+            return new ServletOutputStream() {
+                @Override
+                public void write(int b) throws IOException {
+                    attempt();
+                    real.write(b);
+                }
+
+                @Override
+                public void write(byte[] b, int off, int len) throws IOException {
+                    attempt();
+                    real.write(b, off, len);
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setWriteListener(WriteListener listener) {}
+            };
+        }
+
+        private void attempt() throws IOException {
+            if (++writeAttempts == 1) {
+                setCommitted(commitsOnFailure);
+                throw failure;
+            }
+        }
     }
 
     /** A GET without a context path: the request URI and the container's mapped path coincide. */
