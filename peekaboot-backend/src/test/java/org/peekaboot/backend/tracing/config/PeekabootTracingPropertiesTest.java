@@ -1,4 +1,4 @@
-package org.peekaboot.backend.tracing.autoconfigure;
+package org.peekaboot.backend.tracing.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

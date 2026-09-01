@@ -1,7 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import java.time.Duration;
-import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;

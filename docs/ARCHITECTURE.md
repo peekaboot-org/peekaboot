@@ -236,8 +236,8 @@ org.peekaboot.backend/
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── storage/                # StorageDirectory — resolves peekaboot.storage.dir (see Persisted state)
 ├── tracing/                # In-memory tracing
-│   ├── autoconfigure/      # PeekabootTracingProperties
 │   ├── bridge/otel/        # OtelSpanExporter
+│   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDataEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
@@ -726,7 +726,7 @@ class DevToolbarAutoConfigurationIT {
 )
 ```
 
-The `afterName` attribute (string-based) is used instead of class reference to avoid compile-time dependency on the tracing autoconfigure module.
+The `afterName` attribute (string-based) is used instead of a class reference because Boot's OpenTelemetry auto-configuration is an optional dependency: a class literal would fail to load when it is absent. `InsightsAutoConfiguration` names `CompositeMeterRegistryAutoConfiguration` the same way.
 
 ## Known defects
 

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.log.PeekabootLogbackAppender;
-import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
