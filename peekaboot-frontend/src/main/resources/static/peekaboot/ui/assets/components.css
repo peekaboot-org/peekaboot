@@ -168,8 +168,16 @@
     cursor: pointer;
     transition: background-color var(--pk-transition);
 }
-.pk-btn:hover { background: var(--pk-bg-hover); }
+.pk-btn:not(:disabled):hover { background: var(--pk-bg-hover); }
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+/* 0.65 opacity, not the more common 0.5: this button's own text sits on --pk-bg/
+   --pk-bg-alt at well over 10:1 (see tokens.css), and WCAG exempts disabled controls
+   from the 1.4.3 contrast minimum outright - but a label that reads as "maybe clickable"
+   is worse than one that reads as "clearly off", so this still clears the same 4.5:1 AA
+   floor the project's own -text tokens are tuned to (~4.6-4.7:1 on --pk-bg/--pk-bg-alt
+   light, ~5.7:1 dark), rather than leaning on the exemption. cursor makes the same point
+   to a mouse user that the dimmed label makes visually. */
+.pk-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
 /* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's
    24px target floor, and the extra height must not push the label off-centre. */

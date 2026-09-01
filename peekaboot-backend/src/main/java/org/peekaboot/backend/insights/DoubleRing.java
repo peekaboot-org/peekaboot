@@ -44,4 +44,11 @@ public final class DoubleRing {
         }
         return result;
     }
+
+    /** Refills an empty ring from persisted values, oldest first. */
+    public synchronized void restore(double[] values) {
+        for (double value : values) {
+            add(value);
+        }
+    }
 }

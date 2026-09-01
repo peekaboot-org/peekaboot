@@ -17,6 +17,135 @@ peekaboot/
 └── peekaboot-testing-app/                # Sample app + UI tests
 ```
 
+## Persisted state
+
+Two stores opt into the filesystem behind one switch:
+
+```
+peekaboot.storage.enabled = false                             # off by default
+peekaboot.storage.dir     = ${user.home}/.peekaboot/<app>      # both stores
+```
+
+`<app>` is `spring.application.name`, sanitized to `[A-Za-z0-9._-]`, or `application`
+when unset. An explicit `peekaboot.storage.dir` is used verbatim, with no app-name
+subdirectory appended. `StorageDirectory` only resolves this path — it never touches
+the disk itself; while `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)`
+returns empty and neither store ever writes. Directory creation and I/O failure handling
+belong to the stores themselves: each creates its parent directory on first write and,
+on `IOException`, logs once and continues in memory rather than taking the host
+application down over an unwritable `$HOME`.
+
+Both stores assume one application instance per directory. Two instances pointed at the
+same `peekaboot.storage.dir` overwrite each other's files: the loser's history is lost,
+and a half-written file is discarded on the next read like any other unusable one, so the
+cost is lost history rather than corruption. Peekaboot is a development tool, and
+coordinating instances is out of its scope — give each instance its own
+`peekaboot.storage.dir` if you run several against one home directory.
+
+### `insights.snapshot`
+
+The insights ring buffers' contents: every level's geometry (`intervalMs`, `size`,
+`endEpochMs`, `count`) and, per series, one ring per level — a single `values` column
+at level 0, eight aggregate columns (`min`, `max`, `avg`, `median`, `p90`, `p95`, `p99`,
+`samples`) at every coarser level. `samples` is carried alongside the seven the API
+exposes because the next roll-up weights its average by it; omitting it would restore
+rings whose first roll-up computes the wrong average. `InsightsSnapshotCodec` reads and
+writes this as a small versioned binary format (magic `"PKIN"`, a schema version, then
+the header and body described above); `InsightsSnapshotStore` owns the file, writing it
+to `insights.snapshot.tmp` and moving it into place with `ATOMIC_MOVE` on each boundary
+of `peekaboot.insights.persistence.interval` (default: the coarsest level's own
+interval) and once more, synchronously, at shutdown, after the collector has stopped so
+the final write sees quiesced rings. A run that never ticked skips the write rather than
+overwriting a good file with an empty one.
+
+The snapshot is a cache, never a source of truth: anything wrong with it — a bad magic
+number, a schema version this build doesn't know, a ring geometry that no longer
+matches `peekaboot.insights.levels`, or an age past
+`peekaboot.insights.persistence.max-age` (default: the coarsest level's span) — costs
+only the history. The file is deleted and the rings start empty, exactly as they would
+with storage off. Every length read from the file is checked against a plausibility
+bound before it is used to allocate, so a corrupt file can never provoke an oversized
+allocation.
+
+Loading never delays an application's startup. `InsightsSnapshotStore.beginLoad()`
+submits the parse to a virtual thread and returns immediately; nothing on the startup
+path awaits it. Instead, each of the collector's level threads runs a one-shot restore
+just before its *first* write, gated by `SnapshotRestoreBarrier` so only the thread that
+arrives first applies the snapshot — a level-1 roll-up can never land ahead of the
+restore it depends on. That thread waits up to 5 seconds for the parse; a snapshot that
+lands after the wait is discarded rather than layered on top of live samples. Restoring
+a level's `endEpochMs` is what turns the outage into a visible gap on the chart: the
+collector's existing `fillMissed()` — the same code that already pads a suspended
+laptop or a stalled sampler — runs at that level's next tick or roll-up and pads exactly
+the missed interval, capped at the ring size.
+
+### `lifecycle.jsonl`
+
+The application's start/stop history: one JSON object per line, at most 1000 events
+(oldest dropped first), read on a virtual thread rather than the startup path.
+`LifecycleEventFile` rewrites the whole file and moves it into place atomically on every
+change — cheap at this size (≤400 KB for the full 1000), and it removes both a
+partial-line corruption window and a second trim code path. A line that fails to parse
+is skipped on read; the rest of the file still loads. A start event carries every
+`BuildProperties` and `GitProperties` entry the application has, plus its epoch
+timestamp and pid; a stop event carries only its own timestamp and pid; its build
+belongs to the start it follows, which the log still remembers.
+
+The log's in-memory half runs independently of `peekaboot.storage.enabled`: with
+storage off, `LifecycleEventLog` still records the current run's start and stop in
+memory and serves them from there — `LifecycleEventFile` is simply never consulted. This
+is why a default dashboard, with persistence off, still shows one start marker for the
+run in progress.
+
+### API and dashboard
+
+`GET /peekaboot/api/lifecycle/events`, gated by the existing `peekaboot.lifecycle.enabled`
+property, serves the log as start/stop markers. For each start, `LifecycleEvents`
+compares it against the previous start already in the log and includes `version`,
+`branch`, `commitId`/`shortCommitId` and `buildTimeEpochMs` only when they differ from
+it (all four are present on the log's first entry); a start whose predecessor in the
+log is itself a start — no stop in between — is flagged `uncleanPrevious`. Computing
+this diff server-side, rather than in the dashboard, gives the browser one definition of
+"what changed" instead of reimplementing it wherever a marker is drawn. This endpoint
+complements the existing insights endpoints under `/peekaboot/api/insights/*`
+(`/config`, `/data`, `/stream`): the dashboard fetches lifecycle events alongside the
+ring data and renders them as restart markers over the same charts.
+
+`GET /peekaboot/api/lifecycle/runs`, gated by the same property, is the second
+projection over the same log. A chart marker only wants to say what's new, so
+`LifecycleEvents` nulls a field the moment it repeats the previous start; a table row has
+no previous cell to inherit from, so `LifecycleRuns` makes every run stand on its own —
+`version`, `branch`, `shortCommitId` and `buildTimeEpochMs` are carried forward from the
+last start that actually reported them, and `changed` is the separate, explicit answer to
+whether this run was a deployment: which of `version`, `branch` and `commit` differ from
+the run before it. The oldest run in the log has no predecessor to differ from, so it is
+never a deployment.
+
+A run's `stoppedAtEpochMs` and `ranForMs` are null, not a guess, when its start has no
+matching stop: a `kill -9` writes nothing, so when that run actually ended is genuinely
+unknown. `downForMs`, the gap since the previous run stopped, is null for the same
+reason whenever the previous run itself has no recorded stop — there is nothing to
+measure the gap from, and null there means unknowable, not zero. Because the log caps at
+1000 events, a long-lived application's retained history begins mid-cycle rather than at
+its first start, and the oldest surviving event is often a stop whose own start already
+aged out; that leading, orphaned stop is normal, and — since it still carries a real
+timestamp — the downtime between it and the next start is still knowable and reported.
+
+The dashboard's Lifecycle tab renders `/runs` as this history's second view, a table
+alongside `/events`' markers on the charts, 20 rows to a page. Paging is done client-side
+over the single fetch: the log's 1000-event cap bounds the response at roughly 500 runs,
+small enough to hold in the browser and page through locally rather than adding
+pagination parameters to the endpoint.
+
+### Shutdown banner
+
+`ApplicationStoppedListener`, mirroring the ready banner's frame, logs a banner on
+`ContextClosedEvent` reporting how long the application ran. Its uptime is measured from
+`ApplicationContext.getStartupDate()` — the context's own refresh — rather than the
+`ApplicationReadyEvent` timestamp the lifecycle log and chart markers use: it stays
+available even when the context closes before the application ever became ready, at the
+cost of a few seconds' divergence from "ready" that the banner's own label names.
+
 ## Architecture Overview
 
 ```

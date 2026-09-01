@@ -14,6 +14,7 @@ import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js'
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
+import * as lifecycle from './tabs/lifecycle.js';
 import * as traces from './tabs/traces.js';
 import * as meters from './tabs/meters.js';
 import * as environment from './tabs/environment.js';
@@ -24,7 +25,7 @@ import * as scheduledTasks from './tabs/scheduled-tasks.js';
 
 const API_PATH = '/api/actuator/all/insights';
 const REFRESH_INTERVAL_MS = 30000;
-const TABS = [overview, insights, traces, meters, environment, flyway, loggers, config, scheduledTasks];
+const TABS = [overview, insights, lifecycle, traces, meters, environment, flyway, loggers, config, scheduledTasks];
 const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();

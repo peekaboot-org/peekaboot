@@ -56,6 +56,33 @@ public final class StatsRing {
         return columns;
     }
 
+    /**
+     * Every column, including the {@code samples} column {@link #toArrays()} withholds
+     * from the API - persistence needs it, because the next roll-up weights its average
+     * by it. Order matches {@link InsightsSnapshot#STAT_COLUMNS}.
+     */
+    public synchronized double[][] toColumns() {
+        return new double[][] {
+            min.toArray(), max.toArray(), avg.toArray(), median.toArray(),
+            p90.toArray(), p95.toArray(), p99.toArray(), samples.toArray()
+        };
+    }
+
+    /** Refills an empty ring from {@link #toColumns()} output, oldest entry first. */
+    public synchronized void restore(double[][] columns) {
+        for (int i = 0; i < columns[0].length; i++) {
+            add(new AggregateStats(
+                    columns[0][i],
+                    columns[1][i],
+                    columns[2][i],
+                    columns[3][i],
+                    columns[4][i],
+                    columns[5][i],
+                    columns[6][i],
+                    (int) columns[7][i]));
+        }
+    }
+
     public synchronized List<AggregateStats> last(int n) {
         double[] mins = min.last(n);
         double[] maxes = max.last(n);

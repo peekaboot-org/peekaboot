@@ -1,23 +1,28 @@
 package org.peekaboot.autoconfigure;
 
+import java.util.*;
+import javax.sql.DataSource;
 import org.peekaboot.backend.lifecycle.*;
+import org.peekaboot.backend.lifecycle.web.LifecycleController;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.info.BuildProperties;
+import org.springframework.boot.info.GitProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
-import javax.sql.DataSource;
-import java.util.*;
-
 @AutoConfiguration(
-        after = org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
-        afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
-)
+        after = {
+            org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
+            PeekabootStorageAutoConfiguration.class
+        },
+        afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
@@ -55,11 +60,18 @@ public class PeekabootLifecycleAutoConfiguration {
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
             ObjectProvider<Map<String, DataSource>> dataSourcesProvider) {
-        List<DataSourceMetadata> dataSourceMetadataList = databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
+        List<DataSourceMetadata> dataSourceMetadataList =
+                databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
-        return new ApplicationReadyListener(environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
+        return new ApplicationReadyListener(
+                environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
     }
 
+    @Bean
+    @ConditionalOnMissingBean
+    public ApplicationStoppedListener applicationStoppedListener(BuildInfoProvider buildInfoProvider) {
+        return new ApplicationStoppedListener(buildInfoProvider);
+    }
 
     @Configuration
     @ConditionalOnBean(DataSource.class)
@@ -70,9 +82,56 @@ public class PeekabootLifecycleAutoConfiguration {
         public List<DataSourceMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
             List<DataSourceMetadata> metadataList = new ArrayList<>();
             dataSources.forEach((name, dataSource) ->
-                DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
+                    DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
             return metadataList;
         }
     }
 
+    /**
+     * Kept apart from the rest of this auto-configuration: the banner listeners above
+     * must keep working in a context that has no storage bean at all.
+     */
+    @Configuration
+    @ConditionalOnBean(StorageDirectory.class)
+    static class LifecycleEventLogConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEventLog lifecycleEventLog(StorageDirectory storageDirectory) {
+            LifecycleEventLog log = new LifecycleEventLog(storageDirectory
+                    .file(LifecycleEventFile.FILE_NAME)
+                    .map(LifecycleEventFile::new)
+                    .orElse(null));
+            log.beginLoad();
+            return log;
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEventRecorder lifecycleEventRecorder(
+                LifecycleEventLog lifecycleEventLog,
+                BuildInfoProvider buildInfoProvider,
+                ObjectProvider<GitProperties> gitProperties) {
+            return new LifecycleEventRecorder(lifecycleEventLog, buildInfoProvider, gitProperties.getIfAvailable());
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleEvents lifecycleEvents(LifecycleEventLog lifecycleEventLog) {
+            return new LifecycleEvents(lifecycleEventLog);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        public LifecycleRuns lifecycleRuns(LifecycleEventLog lifecycleEventLog) {
+            return new LifecycleRuns(lifecycleEventLog);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
+        @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+        public LifecycleController lifecycleController(LifecycleEvents lifecycleEvents, LifecycleRuns lifecycleRuns) {
+            return new LifecycleController(lifecycleEvents, lifecycleRuns);
+        }
+    }
 }
