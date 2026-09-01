@@ -1,29 +1,27 @@
 package org.peekaboot.autoconfigure;
 
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Test;
 
 class LocalDevDetectorTest {
 
     private static final StackTraceElement[] CLEAN_STACK = {
-            frame("org.peekaboot.example.ExampleApplication"),
-            frame("org.springframework.boot.SpringApplication")
+        frame("org.peekaboot.example.ExampleApplication"), frame("org.springframework.boot.SpringApplication")
     };
 
     @Test
     void detectsLocalDevForMainThreadWithAppClassLoaderAndCleanStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK)).isTrue();
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK))
+                .isTrue();
     }
 
     @Test
     void detectsLocalDevForDevToolsRestartedThread() {
         // DevTools relaunches the app on "restartedMain" with its RestartClassLoader
         // and only ever enables itself in a local launch
-        Thread thread = new Thread(() -> {
-        }, "restartedMain");
+        Thread thread = new Thread(() -> {}, "restartedMain");
         thread.setContextClassLoader(new FakeRestartClassLoader());
 
         assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK)).isTrue();
@@ -31,8 +29,7 @@ class LocalDevDetectorTest {
 
     @Test
     void rejectsThreadNotNamedMain() {
-        Thread thread = new Thread(() -> {
-        }, "worker-1");
+        Thread thread = new Thread(() -> {}, "worker-1");
         thread.setContextClassLoader(new FakeAppClassLoader());
 
         assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK)).isFalse();
@@ -42,8 +39,7 @@ class LocalDevDetectorTest {
     void rejectsNonAppClassLoader() {
         // packaged jars run under Boot's LaunchedClassLoader, wars under the
         // container's webapp loader - neither name contains "AppClassLoader"
-        Thread thread = new Thread(() -> {
-        }, "main");
+        Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(new PackagedArchiveClassLoader());
 
         assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK)).isFalse();
@@ -51,8 +47,7 @@ class LocalDevDetectorTest {
 
     @Test
     void rejectsMissingContextClassLoader() {
-        Thread thread = new Thread(() -> {
-        }, "main");
+        Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(null);
 
         assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK)).isFalse();
@@ -60,32 +55,39 @@ class LocalDevDetectorTest {
 
     @Test
     void rejectsJUnitPlatformOnStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(),
-                stackWith("org.junit.platform.launcher.core.DefaultLauncher"))).isFalse();
+        assertThat(LocalDevDetector.isLocalDevelopment(
+                        mainThreadWithAppClassLoader(), stackWith("org.junit.platform.launcher.core.DefaultLauncher")))
+                .isFalse();
     }
 
     @Test
     void rejectsJUnitRunnersOnStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(),
-                stackWith("org.junit.runners.ParentRunner"))).isFalse();
+        assertThat(LocalDevDetector.isLocalDevelopment(
+                        mainThreadWithAppClassLoader(), stackWith("org.junit.runners.ParentRunner")))
+                .isFalse();
     }
 
     @Test
     void rejectsSpringBootTestOnStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(),
-                stackWith("org.springframework.boot.test.context.SpringBootContextLoader"))).isFalse();
+        assertThat(LocalDevDetector.isLocalDevelopment(
+                        mainThreadWithAppClassLoader(),
+                        stackWith("org.springframework.boot.test.context.SpringBootContextLoader")))
+                .isFalse();
     }
 
     @Test
     void rejectsCucumberOnStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(),
-                stackWith("cucumber.runtime.Runtime"))).isFalse();
+        assertThat(LocalDevDetector.isLocalDevelopment(
+                        mainThreadWithAppClassLoader(), stackWith("cucumber.runtime.Runtime")))
+                .isFalse();
     }
 
     @Test
     void rejectsAotProcessorOnStack() {
-        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(),
-                stackWith("org.springframework.boot.SpringApplicationAotProcessor"))).isFalse();
+        assertThat(LocalDevDetector.isLocalDevelopment(
+                        mainThreadWithAppClassLoader(),
+                        stackWith("org.springframework.boot.SpringApplicationAotProcessor")))
+                .isFalse();
     }
 
     @Test
@@ -99,8 +101,8 @@ class LocalDevDetectorTest {
         // a thread spawned from a test has no JUnit frames on its own stack, so
         // with the right name and classloader it must count as local dev
         AtomicBoolean result = new AtomicBoolean(false);
-        Thread thread = new Thread(
-                () -> result.set(LocalDevDetector.isLocalDevelopment(Thread.currentThread())), "main");
+        Thread thread =
+                new Thread(() -> result.set(LocalDevDetector.isLocalDevelopment(Thread.currentThread())), "main");
         thread.setContextClassLoader(new FakeAppClassLoader());
         thread.start();
         thread.join();
@@ -109,17 +111,16 @@ class LocalDevDetectorTest {
     }
 
     private static Thread mainThreadWithAppClassLoader() {
-        Thread thread = new Thread(() -> {
-        }, "main");
+        Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(new FakeAppClassLoader());
         return thread;
     }
 
     private static StackTraceElement[] stackWith(String className) {
-        return new StackTraceElement[]{
-                frame("org.peekaboot.example.ExampleApplication"),
-                frame(className),
-                frame("org.springframework.boot.SpringApplication")
+        return new StackTraceElement[] {
+            frame("org.peekaboot.example.ExampleApplication"),
+            frame(className),
+            frame("org.springframework.boot.SpringApplication")
         };
     }
 
@@ -128,13 +129,10 @@ class LocalDevDetectorTest {
     }
 
     /** Class name intentionally contains "AppClassLoader", like jdk.internal.loader.ClassLoaders$AppClassLoader. */
-    private static final class FakeAppClassLoader extends ClassLoader {
-    }
+    private static final class FakeAppClassLoader extends ClassLoader {}
 
     /** Class name intentionally contains "RestartClassLoader", like DevTools' restart.classloader.RestartClassLoader. */
-    private static final class FakeRestartClassLoader extends ClassLoader {
-    }
+    private static final class FakeRestartClassLoader extends ClassLoader {}
 
-    private static final class PackagedArchiveClassLoader extends ClassLoader {
-    }
+    private static final class PackagedArchiveClassLoader extends ClassLoader {}
 }

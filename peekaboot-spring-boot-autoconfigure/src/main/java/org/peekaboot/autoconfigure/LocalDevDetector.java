@@ -1,8 +1,7 @@
 package org.peekaboot.autoconfigure;
 
-import org.springframework.core.NativeDetector;
-
 import java.util.Set;
+import org.springframework.core.NativeDetector;
 
 /**
  * Detects whether the application is running in a local development environment
@@ -29,8 +28,7 @@ final class LocalDevDetector {
             "org.springframework.boot.SpringApplicationAotProcessor",
             "cucumber.runtime.");
 
-    private LocalDevDetector() {
-    }
+    private LocalDevDetector() {}
 
     static boolean isLocalDevelopment(Thread thread) {
         return isLocalDevelopment(thread, thread.getStackTrace());
