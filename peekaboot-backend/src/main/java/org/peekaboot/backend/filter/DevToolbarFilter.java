@@ -73,7 +73,7 @@ public class DevToolbarFilter implements Filter {
                     processResponse(httpRequest, wrappedResponse, httpResponse);
                 }
             } catch (Exception e) {
-                log.warn("Failed to inject dev toolbar, returning original response: {}", e.getMessage());
+                log.warn("Failed to inject dev toolbar, returning original response", e);
                 wrappedResponse.copyBodyToResponse();
             }
         }
@@ -143,7 +143,7 @@ public class DevToolbarFilter implements Filter {
                 toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
             }
         } catch (Exception e) {
-            log.warn("Failed to generate toolbar HTML: {}", e.getMessage());
+            log.warn("Failed to generate toolbar HTML", e);
             wrappedResponse.copyBodyToResponse();
             return;
         }

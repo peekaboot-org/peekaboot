@@ -253,7 +253,8 @@ class DevToolbarFilterTest {
             assertThat(result).isEqualTo(htmlContent);
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo("Failed to generate toolbar HTML: Provider error");
+                assertThat(event.getFormattedMessage()).isEqualTo("Failed to generate toolbar HTML");
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("Provider error");
             });
         }
     }

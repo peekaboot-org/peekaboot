@@ -510,7 +510,8 @@ class RequestCaptureFilterTest {
             verify(eventPublisher, never()).publishEvent(any());
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details: boom");
+                assertThat(event.getFormattedMessage()).isEqualTo("Failed to capture request details");
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("boom");
             });
         }
     }
