@@ -139,7 +139,7 @@ function initToolbar(host, data) {
                 const duration = trace.durationMs || 0;
                 const durationClass = durationSeverity(duration);
                 html += '<span class="pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '')
-                    + '">⏱<span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
+                    + '"><span aria-hidden="true">⏱</span><span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
 
                 const queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
                 const queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
@@ -153,10 +153,10 @@ function initToolbar(host, data) {
                 const errorCount = summary.logs ? summary.logs.errorCount : 0;
                 const warnCount = summary.logs ? summary.logs.warnCount : 0;
                 if (errorCount > 0) {
-                    html += '<span class="pk-badge pk-badge--error">❗' + errorCount + ' err</span>';
+                    html += '<span class="pk-badge pk-badge--error"><span aria-hidden="true">❗</span>' + errorCount + ' err</span>';
                 }
                 if (warnCount > 0) {
-                    html += '<span class="pk-badge pk-badge--warn">⚠' + warnCount + ' warn</span>';
+                    html += '<span class="pk-badge pk-badge--warn"><span aria-hidden="true">⚠</span>' + warnCount + ' warn</span>';
                 }
 
                 metricsEl.innerHTML = html;

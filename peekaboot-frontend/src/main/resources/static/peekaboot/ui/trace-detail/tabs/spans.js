@@ -52,12 +52,11 @@ export function render(container, trace, context = {}) {
         if (!toggle) return;
         const row = toggle.closest('.pk-gantt-row');
         const spanId = row.dataset.spanId;
-        const isCollapsed = toggle.textContent === '+';
+        const isCollapsed = toggle.getAttribute('aria-expanded') === 'false';
 
-        toggle.textContent = isCollapsed ? '-' : '+';
-        // The toggle is a real button now, so its expanded state has to be exposed.
         toggle.setAttribute('aria-expanded', String(isCollapsed));
         toggle.setAttribute('aria-label', isCollapsed ? 'Collapse child spans' : 'Expand child spans');
+        toggle.textContent = isCollapsed ? '-' : '+';
 
         // Show/hide descendant rows
         let sibling = row.nextElementSibling;
@@ -67,7 +66,7 @@ export function render(container, trace, context = {}) {
                 sibling.style.display = '';
                 // If this row has a collapsed toggle, skip its children
                 const sibToggle = sibling.querySelector('.pk-gantt-toggle');
-                if (sibToggle && sibToggle.textContent === '+') {
+                if (sibToggle && sibToggle.getAttribute('aria-expanded') === 'false') {
                     const sibDepth = parseInt(sibling.dataset.depth);
                     sibling = sibling.nextElementSibling;
                     while (sibling && parseInt(sibling.dataset.depth) > sibDepth) {
