@@ -207,10 +207,11 @@ exist, all constructing the warning initialiser. Behaviourally a no-op. It lives
 never unroute — `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`,
 `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails`, and
 `ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, the last with a Javadoc
-explaining it *must not* unroute because the browser's module map caches the failed import. So a scheduled poll can fire during `context().close()`. The tolerance lives in
-`PlaywrightTestBase` rather than per-test because the condition is structural, and because `unroute`
-is itself an interception update over the same wire and would not close the race. Reproduced once in
-7 runs before; 0 in 14 after.
+explaining it *must not* unroute because the browser's module map caches the failed import. So a
+scheduled poll can fire during `context().close()`. The tolerance lives in `PlaywrightTestBase`
+rather than per-test because the condition is structural, and because `unroute` is itself an
+interception update over the same wire and would not close the race. Reproduced once in 7 runs
+before; 0 in 14 after.
 
 **5.7 Both screenshot gaps are closed.** `ScreenshotCapture` now clicks into the trace overlay's
 Queries tab and expands a masked property group on Environment and Config. `trace-detail-queries-*`

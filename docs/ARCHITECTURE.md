@@ -215,7 +215,7 @@ org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
 ├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
 ├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig
-├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, traces, features)
+├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── application/, config/, datasource/, environment/, flyway/, health/,
@@ -270,9 +270,10 @@ OpenTelemetry-convention names (`http.request.method`/`http.method`, `url.path`/
 Boot's own server-request observation puts on the span, so whether the summary is populated
 depends on which instrumentation named the root span's tags. Headers, query/form parameters
 and the resolved controller class/method are never available without the toolbar;
-correlated logs are likewise unavailable (see *Log Capture* below). Request/response body content and uploaded file names have fields reserved for
-them on `HttpExchange` but aren't populated by `RequestCaptureFilter` yet — not captured,
-regardless of dev-toolbar.
+correlated logs are likewise unavailable (see *Log Capture* below). Request/response body
+content and uploaded file names have fields reserved for them on `HttpExchange` but aren't
+populated by `RequestCaptureFilter` — not captured, regardless of dev-toolbar (see
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
 
 ### Server-Timing Header
 
@@ -613,10 +614,10 @@ value-patterns only, not column-aware literal masking — see the class Javadoc 
 directly — OpenTelemetry's own span-name summary, e.g. `SELECT customer_order` — which is
 correct and expected for a span tree. The Queries tab (`trace-detail/tabs/queries.js`)
 renders `query.sql`, which is what `QueryExtractor` populates; this is where the tag
-`findSql` picks actually shows up. `ScreenshotCapture` only ever photographs the Spans tab
-— the overlay opens there by default (`trace-detail.js`'s `initial: 'spans'`) and the tool
-never clicks Queries — so no shipped screenshot demonstrates `QueryExtractor`'s behaviour
-at all.
+`findSql` picks actually shows up. The overlay opens on Spans by default
+(`trace-detail.js`'s `initial: 'spans'`); `ScreenshotCapture` photographs both views, so
+`trace-detail-queries-*` is the shipped image that demonstrates `QueryExtractor`'s output
+(see [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.7).
 
 ## Data Models
 

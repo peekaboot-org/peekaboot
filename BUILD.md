@@ -24,7 +24,7 @@ exactly the same.
 ## Commands
 
 ```bash
-mvn clean verify     # compile + all tests + all five gates          <- the real build
+mvn clean verify     # compile + all tests + all six gates           <- the real build
 mvn clean install    # the same, plus install into ~/.m2
 mvn test             # the fast gate: Error Prone + unit tests only (~1 min);
                      # integration tests (*IT) don't run before `verify`
