@@ -143,7 +143,7 @@ class ToolbarIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
 
-        assertThat(toolbar.text("#pk-metrics")).contains("queries");
+        assertThat(toolbar.text("#pk-metrics")).contains("1 query");
         assertThat(toolbar.text("#pk-controller")).contains("PersonController.persons");
     }
 
