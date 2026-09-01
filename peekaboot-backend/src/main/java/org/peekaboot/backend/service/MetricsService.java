@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
@@ -69,7 +70,7 @@ public class MetricsService {
                 List<MetricStatistic> statistics = StreamSupport.stream(
                                 meter.measure().spliterator(), false)
                         .map(measurement -> new MetricStatistic(
-                                measurement.getStatistic().name(), nanToNull(measurement.getValue())))
+                                measurement.getStatistic().name(), PeekabootJson.nanToNull(measurement.getValue())))
                         .toList();
 
                 measurements.add(new MetricMeasurement(tags, statistics));
@@ -82,9 +83,5 @@ public class MetricsService {
         groups.sort(Comparator.comparing(MetricGroup::name));
 
         return new MetricsInfo(groups.size(), totalMeasurements, groups);
-    }
-
-    private static Double nanToNull(double value) {
-        return Double.isNaN(value) ? null : value;
     }
 }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 
 /**
@@ -45,7 +46,7 @@ public record LevelSnapshot(
     private static List<Double> boxed(double[] values) {
         List<Double> boxed = new ArrayList<>(values.length);
         for (double value : values) {
-            boxed.add(Double.isNaN(value) ? null : value);
+            boxed.add(PeekabootJson.nanToNull(value));
         }
         return boxed;
     }

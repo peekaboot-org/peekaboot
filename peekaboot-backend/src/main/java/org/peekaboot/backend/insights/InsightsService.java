@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.InsightsProperties;
@@ -158,7 +159,11 @@ public final class InsightsService implements SmartLifecycle {
         Map<String, Double> tileValues = collector.tileValues();
         List<InsightsConfigResponse.Tile> tileResponses = tiles.stream()
                 .map(tile -> new InsightsConfigResponse.Tile(
-                        tile.id(), tile.label(), tile.format(), tile.live(), nanToNull(tileValues.get(tile.id()))))
+                        tile.id(),
+                        tile.label(),
+                        tile.format(),
+                        tile.live(),
+                        PeekabootJson.nanToNull(tileValues.get(tile.id()))))
                 .toList();
 
         return new InsightsConfigResponse(levels, panelResponses, tileResponses);
@@ -196,9 +201,5 @@ public final class InsightsService implements SmartLifecycle {
         return properties.getLevels().stream()
                 .map(level -> InsightsCollector.formatInterval(level.getInterval()) + " x" + level.getSize())
                 .collect(Collectors.joining(", "));
-    }
-
-    private static Double nanToNull(Double value) {
-        return value == null || Double.isNaN(value) ? null : value;
     }
 }
