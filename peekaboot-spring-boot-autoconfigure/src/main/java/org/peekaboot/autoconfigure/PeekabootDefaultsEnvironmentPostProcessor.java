@@ -7,6 +7,7 @@ import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.springframework.boot.EnvironmentPostProcessor;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.logging.DeferredLogFactory;
 import org.springframework.core.Ordered;
@@ -27,7 +28,9 @@ import org.springframework.core.io.Resource;
  * is applied unconditionally so the starter never pushes telemetry anywhere
  * unless the application explicitly opts in, the observability defaults in
  * {@code peekaboot-defaults.yml} are skipped entirely when Peekaboot ends up
- * disabled, and {@code peekaboot-dev-toolbar-defaults.yml} is applied only
+ * disabled or the application is not a servlet web application (everything
+ * that would read them - the dashboard, the filters, the trace store - is
+ * servlet-only), and {@code peekaboot-dev-toolbar-defaults.yml} is applied only
  * when the dev toolbar resolves on, shortening the span export delay so a
  * trace is readable while the developer is still looking at the page.
  */
@@ -82,6 +85,11 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
         if (!environment.getProperty(ENABLED_PROPERTY, Boolean.class, false)) {
             log.debug("Peekaboot is disabled - skipping peekaboot defaults");
+            return;
+        }
+
+        if (application.getWebApplicationType() != WebApplicationType.SERVLET) {
+            log.debug("Not a servlet web application - skipping peekaboot defaults");
             return;
         }
 

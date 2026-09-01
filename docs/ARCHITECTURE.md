@@ -487,7 +487,10 @@ even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration
 for the same reason: everything that reads the trace store is servlet-only, so a WebFlux or
 non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
 `PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no such
-guard, since neither touches anything servlet-specific.
+guard, since neither touches anything servlet-specific. `PeekabootDefaultsEnvironmentPostProcessor`
+applies the same split to the property defaults: the activation, storage and value-visibility
+detection is web-type independent, while `peekaboot-defaults.yml` and the dev-toolbar defaults
+are skipped for a non-servlet application (see *Default Properties*).
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
@@ -535,7 +538,10 @@ behaviour.
 precedence, all overridable by an app's own `application.yml`:
 
 - `peekaboot-defaults.yml` &mdash; enables full observability, but only when Peekaboot is
-  enabled; skipped entirely otherwise.
+  enabled *and* the application is a servlet web application
+  (`SpringApplication.getWebApplicationType()`); skipped entirely otherwise, since
+  everything that would read it &mdash; the dashboard, the filters, the trace store
+  &mdash; is servlet-only. The dev-toolbar defaults below sit behind the same check.
 - `peekaboot-no-push-defaults.yml` &mdash; applies unconditionally, even when Peekaboot
   itself is disabled, to keep telemetry from leaving the process by default.
 - `peekaboot-dev-toolbar-defaults.yml` &mdash; applied only when the dev toolbar resolves
