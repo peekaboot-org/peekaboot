@@ -61,12 +61,11 @@ class PeekabootControllerTest {
     class RemovedRawEndpoints {
 
         /**
-         * The /raw endpoints had no caller in the dashboard or the toolbar and were the
-         * broadest surface Peekaboot exposed. They are gone, not deprecated - nothing is
-         * released, so there is no consumer to keep working.
+         * No /raw endpoint exists: none had a caller in the dashboard or the toolbar, and
+         * together they were the broadest surface Peekaboot exposed.
          */
         @Test
-        void shouldNoLongerExposeAnyRawEndpoint() {
+        void shouldNotExposeAnyRawEndpoint() {
             assertThat(PeekabootController.class.getDeclaredMethods())
                     .extracting(java.lang.reflect.Method::getName)
                     .doesNotContain("getRaw", "getTracesRaw", "getTraceRaw");

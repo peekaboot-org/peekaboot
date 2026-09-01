@@ -22,7 +22,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 class PeekabootAutoConfigurationTest {
 
-    // PeekabootAutoConfiguration is now @ConditionalOnWebApplication(SERVLET), so most of
+    // PeekabootAutoConfiguration is @ConditionalOnWebApplication(SERVLET), so most of
     // this class exercises it through a servlet web application context; only
     // shouldNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()

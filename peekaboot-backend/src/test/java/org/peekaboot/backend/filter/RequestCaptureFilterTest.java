@@ -167,12 +167,12 @@ class RequestCaptureFilterTest {
     }
 
     /**
-     * The engine is strictly broader than the old hardcoded five-header set: it also
-     * catches headers the old set omitted by name, like Proxy-Authorization, which
-     * carries a credential just as much as Authorization does.
+     * Header masking goes through the engine's key-name rules rather than a fixed list,
+     * so Proxy-Authorization - which carries a credential just as Authorization does - is
+     * masked without being named anywhere.
      */
     @Test
-    void shouldMaskHeadersTheOldHardcodedSetDidNotCover() throws Exception {
+    void shouldMaskProxyAuthorizationHeader() throws Exception {
         setupTraceContext("trace1");
         when(request.getRequestURI()).thenReturn("/api/users");
         when(request.getMethod()).thenReturn("GET");

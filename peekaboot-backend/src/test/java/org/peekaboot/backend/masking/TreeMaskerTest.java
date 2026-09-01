@@ -82,7 +82,7 @@ class TreeMaskerTest {
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
     }
 
-    // Known Defect C1: ConfigMapper's caller has a root node that IS one property's value,
+    // ConfigMapper's caller has a root node that IS one property's value,
     // not a subtree it needs checked for descendants only - the sensitive key can name the
     // root itself (a @ConfigurationProperties bean's "client-secret" entry). The one-arg
     // mask(Object) overload checks descendants but never the root, so this key-aware

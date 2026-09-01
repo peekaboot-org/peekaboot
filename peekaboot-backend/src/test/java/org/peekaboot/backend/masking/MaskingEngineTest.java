@@ -83,12 +83,12 @@ class MaskingEngineTest {
                     "server.port",
                     "spring.application.name",
                     "peekaboot.tracing.max-spans-per-trace",
-                    // I3: server.ssl.certificate is a filesystem path, not a secret - identically
+                    // server.ssl.certificate is a filesystem path, not a secret - identically
                     // shaped to server.ssl.key-store above. Actual key material is already caught
                     // by the PEM value pattern.
                     "server.ssl.certificate",
                     "server.ssl.trust-certificate",
-                    // I4: PWD is set by every POSIX shell, so it hits every developer on the
+                    // PWD is set by every POSIX shell, so it hits every developer on the
                     // most-viewed property source (systemEnvironment). password/passwd already
                     // cover the real password case in practice.
                     "PWD",
@@ -98,7 +98,7 @@ class MaskingEngineTest {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
 
-        // I2: the cookie/set-cookie rules exist for HTTP header names (Cookie, Set-Cookie
+        // the cookie/set-cookie rules exist for HTTP header names (Cookie, Set-Cookie
         // exactly), not for the token "cookie" appearing anywhere in a compound key.
         // Session-cookie *configuration* is not a secret and is exactly what someone
         // opens the Environment tab to check when debugging a SameSite problem.
@@ -291,11 +291,9 @@ class MaskingEngineTest {
 
         // The legacy, pre-project-key OpenAI format: "sk-" plus an unbroken run of
         // alphanumerics, no hyphens or underscores anywhere in the tail - still common
-        // in the wild. Restored after being dropped in favor of "sk-proj-" alone; see
-        // MaskingRules' comment on the "Legacy OpenAI key" value pattern for why
-        // tightening the tail character class (rather than dropping the bare rule
-        // outright) is what lets this coexist with the infra-identifier negative case
-        // below.
+        // in the wild. See MaskingRules' comment on the "Legacy OpenAI key" value pattern
+        // for why the tightened tail character class is what lets this coexist with the
+        // infra-identifier negative case below.
         @Test
         void maskValue_shouldMaskLegacyOpenAiKey() {
             String value = "sk-EXAMPLEabcdefghijklmnopqrstuvwxyz1234567890";
@@ -525,8 +523,8 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("550e8400-e29b-41d4-a716-446655440000");
         }
 
-        // I2 pin: narrowing cookie/set-cookie to whole-key matches must not stop them
-        // masking the actual HTTP headers they exist for.
+        // Narrowing cookie/set-cookie to whole-key matches must not stop them masking
+        // the actual HTTP headers they exist for.
         @Test
         void mask_shouldMaskTheCookieHeader() {
             String result = engine.mask("Cookie", "session=abc123");

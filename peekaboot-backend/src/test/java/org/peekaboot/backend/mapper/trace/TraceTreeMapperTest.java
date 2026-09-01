@@ -361,10 +361,9 @@ class TraceTreeMapperTest {
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
     }
 
-    // Known Defect I5: errorMessage/errorClass used to pass straight through unmasked -
-    // only tags went through TagMasker - even though a realistic exception message can
-    // itself carry a credential, e.g. an HTTP client exception that echoes the failing
-    // request's URL back with a query-string API key attached.
+    // errorMessage/errorClass go through the masker like tags do: a realistic exception
+    // message can itself carry a credential, e.g. an HTTP client exception that echoes the
+    // failing request's URL back with a query-string API key attached.
     @Test
     void map_shouldMaskACredentialEmbeddedInTheSpanErrorMessage() {
         var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
@@ -605,7 +604,7 @@ class TraceTreeMapperTest {
     @Test
     void map_shouldNotDetectScheduledJobFromNameAloneWithoutTags() {
         // A bean that merely happens to have "job" in its name must not be misclassified;
-        // detection is tag-only now. No scheduled-task tags -> falls through to the SERVER
+        // detection is tag-only. No scheduled-task tags -> falls through to the SERVER
         // default (HTTP_REQUEST), same as any other untagged SERVER-kind root span.
         var rootSpan = createSpan("trace1", "root", null, "batch-job-processor", Span.Kind.SERVER, 0, 100, Map.of());
 

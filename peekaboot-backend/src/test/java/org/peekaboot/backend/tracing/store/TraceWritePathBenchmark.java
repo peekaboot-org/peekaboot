@@ -11,25 +11,23 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Write-path benchmark harness for defect 3 (the span cap used to truncate before
- * deduplication, so it counted double-instrumented artifacts as well as real work).
+ * Write-path benchmark harness for the deduplicating span cap: the cap counts real spans
+ * only, so double-instrumented duplicates are folded away before it is checked.
  *
- * <p>Moving deduplication into {@link TraceDataBundle#addSpan} puts extra work on every
+ * <p>Deduplicating inside {@link TraceDataBundle#addSpan} puts extra work on every
  * exported span's hot write path. This measures that cost directly rather than asserting a
  * number with nothing behind it: it replays the same large, N+1-shaped synthetic trace
  * through two implementations of the write path -
  *
  * <ul>
- *   <li>{@code timeOldPath} - the pre-fix behaviour: a plain list append plus a trim once the
- *       cap is exceeded, no deduplication, reconstructed here exactly as it read before this
- *       change (see git history for {@code TraceDataBundle.addSpan} on this branch);</li>
- *   <li>{@code timeNewPath} - the current {@link TraceDataBundle#addSpan}, which folds
- *       duplicates away before the cap is ever checked.</li>
+ *   <li>{@code timeOldPath} - a plain list append plus a trim once the cap is exceeded, no
+ *       deduplication;</li>
+ *   <li>{@code timeNewPath} - {@link TraceDataBundle#addSpan}, which folds duplicates away
+ *       before the cap is ever checked.</li>
  * </ul>
  *
  * <p>Both run against the identical raw span sequence and the identical cap, isolating the
- * cost of the fold logic itself from the unrelated fact that the default cap also changed
- * (100 -&gt; 500) as part of the same defect fix.
+ * cost of the fold logic itself.
  *
  * <p>Not picked up by Surefire's default include patterns (<code>**&#47;*Test.java</code> etc.) -
  * wall-clock measurement has no place in the pristine, deterministic default test run. Run it
@@ -37,12 +35,12 @@ import org.junit.jupiter.api.Test;
  *
  * <pre>mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark</pre>
  *
- * <p>Numbers vary by machine and JIT warmup; see the task-7 report for one recorded run.
+ * <p>Numbers vary by machine and JIT warmup.
  */
 class TraceWritePathBenchmark {
 
-    /** 500 real queries -&gt; 1001 raw spans (each query doubled, plus the root), matching
-     * the spec's "roughly a 1000-span pre-dedup trace" at the new default cap. */
+    /** 500 real queries -&gt; 1001 raw spans (each query doubled, plus the root): roughly a
+     * 1000-span pre-dedup trace at the default cap. */
     private static final int REAL_QUERY_COUNT = 500;
     // Comfortably above REAL_QUERY_COUNT + 1 (the queries plus the root span) so the cap
     // itself never truncates this trace - the benchmark measures the fold-on-insertion
