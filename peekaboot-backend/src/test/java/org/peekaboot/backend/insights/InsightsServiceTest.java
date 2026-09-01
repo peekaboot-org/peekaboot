@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -88,6 +90,31 @@ class InsightsServiceTest {
                 assertThat(event.getThrowableProxy().getMessage()).contains("bogus");
             });
         }
+    }
+
+    /**
+     * The bundled panels reach the service through the injected {@link ResourceLoader},
+     * not through a classloader of its own choosing: a host application that supplies its
+     * own loader has to be able to see, and to answer, the request.
+     */
+    @Test
+    void theBundledPanelConfigIsAskedForThroughTheResourceLoader() {
+        List<String> requested = new ArrayList<>();
+        ResourceLoader recording = new DefaultResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                requested.add(location);
+                return super.getResource(location);
+            }
+        };
+
+        InsightsService loaded = new InsightsService(
+                registry, new InsightsProperties(), recording, InsightsCollector.Listener.NO_OP, null);
+
+        assertThat(requested).contains("classpath:peekaboot-insights-defaults.yml");
+        assertThat(loaded.config().panels())
+                .extracting(InsightsConfigResponse.Panel::id)
+                .contains("cpu", "heap");
     }
 
     /** A broken file of ours is a bug of ours, and must not be papered over. */
