@@ -23,19 +23,43 @@ class ActuatorResponseParserTest {
         }
     }
 
+    /**
+     * One value per section, read through the typed records, so a binding that silently
+     * drops a section (a renamed component, a wrong nesting) fails here rather than as an
+     * empty tab. The fixture is a trimmed /actuator/* dump in the shape Spring Boot 4.1
+     * produces: the eight sections this parser binds, one entry each where the real
+     * response carries many.
+     */
     @Test
     void mapsFullResponse() {
         ActuatorParsedData response = parser.parse(rawData);
 
-        assertThat(response).isNotNull();
-        assertThat(response.spring()).isNotNull();
-        assertThat(response.health()).isNotNull();
-        assertThat(response.info()).isNotNull();
-        assertThat(response.env()).isNotNull();
-        assertThat(response.loggers()).isNotNull();
-        assertThat(response.flyway()).isNotNull();
-        assertThat(response.configprops()).isNotNull();
-        assertThat(response.scheduledtasks()).isNotNull();
+        assertThat(response.spring().bootVersion()).isEqualTo("4.1.1");
+        assertThat(response.health().body().status()).isEqualTo("UP");
+        assertThat(response.info().build()).containsEntry("artifact", "sample-app");
+        assertThat(response.env().activeProfiles()).containsExactly("local");
+        assertThat(response.env().propertySources())
+                .extracting(EnvResponse.PropertySource::name)
+                .contains("systemEnvironment");
+        assertThat(response.loggers().loggers())
+                .isNotEmpty()
+                .extractingByKey("ROOT")
+                .extracting(LoggersResponse.LoggerInfo::effectiveLevel)
+                .isEqualTo("INFO");
+        assertThat(response.flyway()
+                        .contexts()
+                        .get("sample-app")
+                        .flywayBeans()
+                        .get("flyway")
+                        .migrations())
+                .extracting(FlywayResponse.Migration::version)
+                .containsExactly("1");
+        assertThat(response.configprops().contexts().get("sample-app").beans().values())
+                .extracting(ConfigPropsResponse.ConfigBean::prefix)
+                .contains("server");
+        assertThat(response.scheduledtasks().cron())
+                .extracting(ScheduledTasksResponse.CronTask::expression)
+                .containsExactly("0 0 * * * *");
     }
 
     @Test
