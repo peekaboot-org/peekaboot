@@ -10,6 +10,7 @@ import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.lifecycle.EnvironmentInfo;
+import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventFile;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
@@ -70,12 +72,35 @@ public class PeekabootLifecycleAutoConfiguration {
             BuildInfoProvider buildInfoProvider,
             ServerUrlResolver serverUrlResolver,
             ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
-            ObjectProvider<Map<String, DataSource>> dataSourcesProvider) {
+            ObjectProvider<Map<String, DataSource>> dataSourcesProvider,
+            ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider) {
         List<DataSourceMetadata> dataSourceMetadataList =
                 databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
         return new ApplicationReadyListener(
-                environmentInfo, buildInfoProvider, serverUrlResolver, dataSourceMetadataList, dataSources);
+                environmentInfo,
+                buildInfoProvider,
+                serverUrlResolver,
+                dataSourceMetadataList,
+                dataSources,
+                hikariPoolInfoProvider.getIfAvailable());
+    }
+
+    /**
+     * HikariCP is optional for Peekaboot; an application on another pool has no
+     * HikariDataSource class, and the ready listener must then log its banner without the
+     * pool lines instead of failing the ApplicationReadyEvent. Named by string so this
+     * module needs no compile dependency on HikariCP either.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = "com.zaxxer.hikari.HikariDataSource")
+    static class HikariPoolInfoConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        public HikariPoolInfo hikariPoolInfo() {
+            return new HikariPoolInfo();
+        }
     }
 
     @Bean

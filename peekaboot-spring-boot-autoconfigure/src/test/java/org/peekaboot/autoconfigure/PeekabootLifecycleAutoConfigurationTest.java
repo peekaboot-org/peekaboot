@@ -8,20 +8,28 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 import javax.sql.DataSource;
+import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.assertj.AssertableApplicationContext;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -131,8 +139,39 @@ class PeekabootLifecycleAutoConfigurationTest {
     }
 
     @Test
+    void theReadyBannerReportsTheHikariPoolWhenHikariIsOnTheClasspath() {
+        contextRunner
+                .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecyclepool;DB_CLOSE_DELAY=-1")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(HikariPoolInfo.class);
+                    assertThat(readyBanner(context)).contains(" DB Pool: minimumIdle=");
+                });
+    }
+
+    /**
+     * An application on another pool (tomcat-jdbc, DBCP2, a JNDI DataSource) has no HikariCP
+     * on its classpath. The banner must still be logged with the DataSource's details, minus
+     * the pool lines - a NoClassDefFoundError inside the ApplicationReadyEvent listener would
+     * fail the whole start.
+     */
+    @Test
+    void theReadyBannerSurvivesADataSourceOnAnotherPoolWithoutHikariOnTheClasspath() {
+        contextRunner
+                .withClassLoader(new FilteredClassLoader(HikariDataSource.class))
+                .withUserConfiguration(PlainH2DataSourceConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(HikariPoolInfo.class);
+                    assertThat(readyBanner(context))
+                            .contains(" DB Connection [plainDataSource]")
+                            .contains(" DB Version: H2")
+                            .doesNotContain("DB Pool");
+                });
+    }
+
+    @Test
     void brokenDataSourceDoesNotFailStartup() {
-        ListAppender<ILoggingEvent> appender = attachListAppender();
+        ListAppender<ILoggingEvent> appender = attachListAppender(DataSourceMetadata.class);
         try {
             contextRunner.withUserConfiguration(BrokenDataSourceConfig.class).run(context -> {
                 assertThat(context).hasNotFailed();
@@ -146,16 +185,31 @@ class PeekabootLifecycleAutoConfigurationTest {
                         .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
             });
         } finally {
-            detachListAppender(appender);
+            detachListAppender(DataSourceMetadata.class, appender);
+        }
+    }
+
+    /** Fires the ApplicationReadyEvent at the context's listener and returns the banner it logs. */
+    private static String readyBanner(AssertableApplicationContext context) {
+        ListAppender<ILoggingEvent> appender = attachListAppender(ApplicationReadyListener.class);
+        try {
+            ApplicationReadyEvent event = new ApplicationReadyEvent(
+                    new SpringApplication(), new String[0], context.getSourceApplicationContext(), Duration.ZERO);
+            context.getBean(ApplicationReadyListener.class).onApplicationEvent(event);
+            assertThat(appender.list).hasSize(1);
+            return appender.list.get(0).getFormattedMessage();
+        } finally {
+            detachListAppender(ApplicationReadyListener.class, appender);
         }
     }
 
     /**
-     * Captures {@link DataSourceMetadata}'s WARN log instead of letting it reach the
-     * console; {@link #brokenDataSourceDoesNotFailStartup()} asserts on the captured event.
+     * Captures a class's log events instead of letting them reach the console, so a test can
+     * assert on them ({@link #brokenDataSourceDoesNotFailStartup()} on a WARN, the banner tests
+     * on the INFO banner itself).
      */
-    private static ListAppender<ILoggingEvent> attachListAppender() {
-        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
+    private static ListAppender<ILoggingEvent> attachListAppender(Class<?> loggerClass) {
+        Logger logger = (Logger) LoggerFactory.getLogger(loggerClass);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
         logger.addAppender(appender);
@@ -163,10 +217,21 @@ class PeekabootLifecycleAutoConfigurationTest {
         return appender;
     }
 
-    private static void detachListAppender(ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(DataSourceMetadata.class);
+    private static void detachListAppender(Class<?> loggerClass, ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(loggerClass);
         logger.detachAppender(appender);
         logger.setAdditive(true);
+    }
+
+    @Configuration
+    static class PlainH2DataSourceConfig {
+
+        @Bean
+        DataSource plainDataSource() {
+            JdbcDataSource dataSource = new JdbcDataSource();
+            dataSource.setURL("jdbc:h2:mem:plainpool;DB_CLOSE_DELAY=-1");
+            return dataSource;
+        }
     }
 
     @Configuration

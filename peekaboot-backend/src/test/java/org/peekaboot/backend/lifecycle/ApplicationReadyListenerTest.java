@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import javax.sql.DataSource;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
@@ -50,18 +52,63 @@ class ApplicationReadyListenerTest {
                 .doesNotContain("s3cret");
     }
 
+    @Test
+    void banner_reportsThePoolSettingsOfAHikariDataSource() {
+        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+        when(metadata.getDataSourceName()).thenReturn("primary");
+        try (HikariDataSource hikari = new HikariDataSource()) {
+            hikari.setMinimumIdle(3);
+            hikari.setMaximumPoolSize(7);
+            hikari.setConnectionTimeout(2500);
+
+            String report = report(
+                    ReadyEvents.webApplication(8083),
+                    List.of(metadata),
+                    Map.of("primary", hikari),
+                    new HikariPoolInfo());
+
+            assertThat(report)
+                    .contains(" DB Pool: minimumIdle=3, maximumPoolSize=7")
+                    .contains(" Connection Timeout: 2500 ms");
+        }
+    }
+
+    /**
+     * Without HikariCP on the classpath there is no contributor at all - the banner must
+     * simply skip the pool lines, not fail the ApplicationReadyEvent.
+     */
+    @Test
+    void banner_omitsThePoolLinesWithoutAPoolInfoContributor() {
+        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+        when(metadata.getDataSourceName()).thenReturn("primary");
+
+        String report = report(
+                ReadyEvents.webApplication(8083), List.of(metadata), Map.of("primary", mock(DataSource.class)), null);
+
+        assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
+    }
+
     private static String report(ApplicationReadyEvent event) {
         return report(event, List.of());
     }
 
-    /** Runs the listener against {@code event} and returns the single banner it logs. */
     private static String report(ApplicationReadyEvent event, List<DataSourceMetadata> dataSources) {
+        return report(event, dataSources, Map.of(), null);
+    }
+
+    /** Runs the listener against {@code event} and returns the single banner it logs. */
+    private static String report(
+            ApplicationReadyEvent event,
+            List<DataSourceMetadata> metadata,
+            Map<String, DataSource> dataSources,
+            HikariPoolInfo hikariPoolInfo) {
         var listener = new ApplicationReadyListener(
                 new EnvironmentInfo(new MockEnvironment()),
                 new BuildInfoProvider(null),
                 new ServerUrlResolver(new MockEnvironment(), () -> true),
+                metadata,
                 dataSources,
-                Map.of());
+                hikariPoolInfo);
 
         try (var capture = LogCapture.attach(ApplicationReadyListener.class)) {
             listener.onApplicationEvent(event);

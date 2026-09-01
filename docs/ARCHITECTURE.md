@@ -225,7 +225,7 @@ org.peekaboot.backend/
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
 │   └── web/                # InsightsController, InsightsSsePublisher — /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
 │   └── web/                # LifecycleController — /peekaboot/api/lifecycle/*
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
