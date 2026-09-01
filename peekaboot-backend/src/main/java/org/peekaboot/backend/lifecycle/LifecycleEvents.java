@@ -38,8 +38,11 @@ public class LifecycleEvents {
     /**
      * The four fields a marker can show. Read with a fallback each, because an
      * application may carry build info, git info, or both.
+     *
+     * <p>Package-visible so {@link LifecycleRuns} can read the same raw values off a start
+     * without duplicating the fallback rules above.
      */
-    private record Build(String version, String branch, String commitId, String shortCommitId, Long buildTimeEpochMs) {
+    record Build(String version, String branch, String commitId, String shortCommitId, Long buildTimeEpochMs) {
 
         static Build of(LifecycleEvent event) {
             Map<String, String> build = event.build();

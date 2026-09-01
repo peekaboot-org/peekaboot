@@ -123,9 +123,15 @@ public class PeekabootLifecycleAutoConfiguration {
 
         @Bean
         @ConditionalOnMissingBean
+        public LifecycleRuns lifecycleRuns(LifecycleEventLog lifecycleEventLog) {
+            return new LifecycleRuns(lifecycleEventLog);
+        }
+
+        @Bean
+        @ConditionalOnMissingBean
         @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-        public LifecycleController lifecycleController(LifecycleEvents lifecycleEvents) {
-            return new LifecycleController(lifecycleEvents);
+        public LifecycleController lifecycleController(LifecycleEvents lifecycleEvents, LifecycleRuns lifecycleRuns) {
+            return new LifecycleController(lifecycleEvents, lifecycleRuns);
         }
     }
 }

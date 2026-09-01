@@ -56,6 +56,7 @@
         <nav class="pk-tabs" id="main-tabs" role="tablist">
             <button class="pk-tab" role="tab" id="overview-tab-btn" data-tab="overview" aria-controls="overview-tab" aria-selected="true">Overview</button>
             <button class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
+            <button class="pk-tab" role="tab" id="lifecycle-tab-btn" data-tab="lifecycle" aria-controls="lifecycle-tab" aria-selected="false">Lifecycle</button>
             <button class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
             <button class="pk-tab hidden" role="tab" id="meters-tab-btn" data-tab="meters" aria-controls="meters-tab" aria-selected="false">Meters</button>
             <button class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
@@ -169,6 +170,11 @@
         <section class="pk-tab-panel" id="insights-tab" role="tabpanel" aria-labelledby="insights-tab-btn">
             <div id="insights-toolbar"></div>
             <div id="insights-panels"></div>
+        </section>
+
+        <!-- Lifecycle Tab -->
+        <section class="pk-tab-panel" id="lifecycle-tab" role="tabpanel" aria-labelledby="lifecycle-tab-btn">
+            <div id="lifecycle-runs"></div>
         </section>
 
         <!-- Traces Tab -->

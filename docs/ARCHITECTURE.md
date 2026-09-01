@@ -111,6 +111,32 @@ complements the existing insights endpoints under `/peekaboot/api/insights/*`
 (`/config`, `/data`, `/stream`): the dashboard fetches lifecycle events alongside the
 ring data and renders them as restart markers over the same charts.
 
+`GET /peekaboot/api/lifecycle/runs`, gated by the same property, is the second
+projection over the same log. A chart marker only wants to say what's new, so
+`LifecycleEvents` nulls a field the moment it repeats the previous start; a table row has
+no previous cell to inherit from, so `LifecycleRuns` makes every run stand on its own —
+`version`, `branch`, `shortCommitId` and `buildTimeEpochMs` are carried forward from the
+last start that actually reported them, and `changed` is the separate, explicit answer to
+whether this run was a deployment: which of `version`, `branch` and `commit` differ from
+the run before it. The oldest run in the log has no predecessor to differ from, so it is
+never a deployment.
+
+A run's `stoppedAtEpochMs` and `ranForMs` are null, not a guess, when its start has no
+matching stop: a `kill -9` writes nothing, so when that run actually ended is genuinely
+unknown. `downForMs`, the gap since the previous run stopped, is null for the same
+reason whenever the previous run itself has no recorded stop — there is nothing to
+measure the gap from, and null there means unknowable, not zero. Because the log caps at
+1000 events, a long-lived application's retained history begins mid-cycle rather than at
+its first start, and the oldest surviving event is often a stop whose own start already
+aged out; that leading, orphaned stop is normal, and — since it still carries a real
+timestamp — the downtime between it and the next start is still knowable and reported.
+
+The dashboard's Lifecycle tab renders `/runs` as this history's second view, a table
+alongside `/events`' markers on the charts, 20 rows to a page. Paging is done client-side
+over the single fetch: the log's 1000-event cap bounds the response at roughly 500 runs,
+small enough to hold in the browser and page through locally rather than adding
+pagination parameters to the endpoint.
+
 ### Shutdown banner
 
 `ApplicationStoppedListener`, mirroring the ready banner's frame, logs a banner on

@@ -9,6 +9,32 @@ export function formatDurationMs(ms) {
     return (ms / 60000).toFixed(2) + 'm';
 }
 
+/**
+ * Sibling of formatDurationMs for spans too long for it to say anything useful (two days
+ * would render as "2880.00m") - the three largest non-zero units ("1 day, 2 hours, 3
+ * minutes"), plain seconds below a minute. Mirrors the backend's UptimeFormat.humanize
+ * unit-by-unit so a run's duration reads identically in the log banner and this
+ * dashboard; null and negative input differ, falling back to this module's own '-'
+ * convention instead of the backend's "0 seconds".
+ */
+export function formatLongDuration(ms) {
+    if (ms == null || ms < 0) return '-';
+
+    const totalSeconds = Math.floor(ms / 1000);
+    if (totalSeconds < 60) return formatCount(totalSeconds, 'second');
+
+    const units = [
+        ['day', Math.floor(totalSeconds / 86400)],
+        ['hour', Math.floor((totalSeconds % 86400) / 3600)],
+        ['minute', Math.floor((totalSeconds % 3600) / 60)],
+        ['second', totalSeconds % 60]
+    ];
+    return units.filter(([, value]) => value > 0)
+        .slice(0, 3)
+        .map(([unit, value]) => formatCount(value, unit))
+        .join(', ');
+}
+
 export function formatBytes(bytes) {
     if (bytes == null || bytes < 0) return '-';
     if (bytes === 0) return '0 B';
