@@ -11,6 +11,15 @@ import java.util.Map;
  */
 public record LifecycleEvent(Type type, long epochMs, long pid, Map<String, String> build, Map<String, String> git) {
 
+    /**
+     * A line read back from the file may omit either map - it is a text file a person can
+     * edit - and everything downstream reads them without asking first.
+     */
+    public LifecycleEvent {
+        build = build == null ? Map.of() : build;
+        git = git == null ? Map.of() : git;
+    }
+
     public enum Type {
         START,
         STOP

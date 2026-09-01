@@ -42,12 +42,18 @@ public final class LifecycleEventLog {
             return;
         }
         Thread.ofVirtual().name("peekaboot-lifecycle-load").start(() -> {
-            List<LifecycleEvent> persisted = file.read();
-            synchronized (events) {
-                events.addAll(0, persisted);
-                trim();
+            try {
+                List<LifecycleEvent> persisted = file.read();
+                synchronized (events) {
+                    events.addAll(0, persisted);
+                    trim();
+                }
+            } finally {
+                // However the read ended, the waiters have to be released: a future left
+                // incomplete costs every later API request the full wait, on a thread the
+                // host application owns, and the same again at shutdown.
+                loaded.complete(null);
             }
-            loaded.complete(null);
         });
     }
 
@@ -77,16 +83,23 @@ public final class LifecycleEventLog {
         }
     }
 
+    /**
+     * The write stays inside the monitor. A start is appended from a virtual thread and a
+     * stop from the shutdown thread, and in a short-lived run the two overlap: two writers
+     * rewriting the same file would trade a lost event for a history whose stop precedes
+     * the start it follows, which the next run then reads as an unclean shutdown. Holding
+     * the lock across the write costs a reader a few hundred kilobytes of file I/O, twice
+     * per run - cheap for the ordering it buys.
+     */
     private void append(LifecycleEvent event) {
-        List<LifecycleEvent> persistable;
         synchronized (events) {
             events.add(event);
             trim();
-            persistable = List.copyOf(events);
+            persist(List.copyOf(events));
         }
-        persist(persistable);
     }
 
+    /** Callers hold the monitor. */
     private void persist(List<LifecycleEvent> snapshot) {
         if (file == null) {
             return;

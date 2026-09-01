@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -59,9 +60,10 @@ public final class LifecycleEventFile {
             if (line.isBlank()) {
                 continue;
             }
-            try {
-                events.add(MAPPER.readValue(line, LifecycleEvent.class));
-            } catch (JacksonException e) {
+            Optional<LifecycleEvent> event = parse(line);
+            if (event.isPresent()) {
+                events.add(event.get());
+            } else {
                 skipped++;
             }
         }
@@ -69,6 +71,21 @@ public final class LifecycleEventFile {
             log.debug("Peekaboot lifecycle: skipped {} unreadable line(s) in {}", skipped, file);
         }
         return events;
+    }
+
+    /**
+     * One line as an event, or empty when it is not one. Jackson fills a record's
+     * unmentioned components with defaults, so a foreign or hand-edited line can
+     * deserialize without complaint into something that describes nothing that happened;
+     * a line with no type is as unusable as one that failed to parse at all.
+     */
+    private static Optional<LifecycleEvent> parse(String line) {
+        try {
+            LifecycleEvent event = MAPPER.readValue(line, LifecycleEvent.class);
+            return event.type() == null ? Optional.empty() : Optional.of(event);
+        } catch (JacksonException e) {
+            return Optional.empty();
+        }
     }
 
     public void write(List<LifecycleEvent> events) throws IOException {

@@ -10,8 +10,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.LogCapture;
 
 class LifecycleEventLogTest {
 
@@ -75,6 +77,48 @@ class LifecycleEventLogTest {
         assertThat(log.events()).hasSize(1);
         assertThat(Files.exists(directory.resolve(LifecycleEventFile.FILE_NAME)))
                 .isFalse();
+    }
+
+    /**
+     * A start is recorded on a virtual thread while a stop is recorded by the shutdown
+     * thread, and in a short-lived run the two overlap. Neither may lose its event, and
+     * the file must never end up holding a different order than the log it came from.
+     */
+    @Test
+    void twoRecordersAtOnceLoseNothingAndLeaveTheFileMatchingTheLog() throws InterruptedException {
+        LifecycleEventFile file = file();
+        LifecycleEventLog log = loaded(file);
+        int perRecorder = 25;
+        CountDownLatch go = new CountDownLatch(1);
+
+        try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class)) {
+            List<Thread> recorders = new ArrayList<>();
+            for (int recorder = 0; recorder < 2; recorder++) {
+                long base = recorder * 1_000L;
+                recorders.add(Thread.ofPlatform().start(() -> {
+                    try {
+                        go.await();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    for (int i = 0; i < perRecorder; i++) {
+                        log.recordAndPersist(start(base + i));
+                    }
+                }));
+            }
+            go.countDown();
+            for (Thread recorder : recorders) {
+                recorder.join();
+            }
+
+            assertThat(capture.appender().list)
+                    .as("a recorder whose rewrite was cut in half by the other one reports it here")
+                    .isEmpty();
+        }
+
+        assertThat(log.events()).hasSize(2 * perRecorder);
+        assertThat(file.read()).containsExactlyElementsOf(log.events());
     }
 
     @Test

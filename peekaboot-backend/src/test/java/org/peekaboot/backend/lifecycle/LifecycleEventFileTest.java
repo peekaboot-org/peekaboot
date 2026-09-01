@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,27 @@ class LifecycleEventFileTest {
         file.write(List.of(start(1_000), start(2_000)));
         List<String> lines = Files.readAllLines(path);
         lines.set(0, "{not json");
+        Files.write(path, lines);
+
+        List<LifecycleEvent> read = file.read();
+
+        assertThat(read).hasSize(1);
+        assertThat(read.get(0).epochMs()).isEqualTo(2_000);
+    }
+
+    /**
+     * Jackson fills a record's unmentioned components with defaults, so a foreign or
+     * hand-edited line can parse into an event that describes nothing. It costs itself,
+     * like any other damaged line, rather than the request that reads the log.
+     */
+    @Test
+    void aLineThatParsesIntoNoEventAtAllIsSkippedLikeADamagedOne() throws IOException {
+        Path path = directory.resolve("lifecycle.jsonl");
+        LifecycleEventFile file = file();
+        file.write(List.of(start(2_000)));
+        List<String> lines = new ArrayList<>();
+        lines.add("{\"x\":1}");
+        lines.addAll(Files.readAllLines(path));
         Files.write(path, lines);
 
         List<LifecycleEvent> read = file.read();

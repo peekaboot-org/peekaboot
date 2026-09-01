@@ -27,6 +27,21 @@ class LifecycleEventsTest {
         return new LifecycleEvents(log).events();
     }
 
+    /** A line from another writer can carry no info maps at all; serving it must still work. */
+    @Test
+    void aStartWithoutAnyBuildInformationStillServes() {
+        LifecycleEventsResponse response =
+                served(List.of(new LifecycleEvent(LifecycleEvent.Type.START, 1_000, 1, null, null)));
+
+        LifecycleEventsResponse.Event event = response.events().get(0);
+        assertThat(event.type()).isEqualTo("start");
+        assertThat(event.epochMs()).isEqualTo(1_000);
+        assertThat(event.version()).isNull();
+        assertThat(event.branch()).isNull();
+        assertThat(event.commitId()).isNull();
+        assertThat(event.buildTimeEpochMs()).isNull();
+    }
+
     @Test
     void theFirstStartCarriesEverythingBecauseThereIsNothingToCompareItWith() {
         LifecycleEventsResponse response = served(List.of(start(1_000, "1.0.0", "dev", "abc1234def", "1756000000000")));
