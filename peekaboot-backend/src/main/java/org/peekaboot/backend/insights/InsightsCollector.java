@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLongArray;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
@@ -44,6 +45,18 @@ public final class InsightsCollector implements SmartLifecycle {
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
     }
 
+    /**
+     * The collector's read side of persistence. Awaited by the first level thread to
+     * reach a write - never on the startup path, which is why loading a snapshot cannot
+     * slow an application's boot.
+     */
+    public interface SnapshotSource {
+        SnapshotSource NONE = timeout -> Optional.empty();
+
+        /** The persisted rings, or empty if there are none or they did not arrive in time. */
+        Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
+    }
+
     private final long[] intervalMillis;
     private final int[] levelSizes;
     private final Map<String, SeriesSampler> samplers = new LinkedHashMap<>();
@@ -52,10 +65,11 @@ public final class InsightsCollector implements SmartLifecycle {
     private final Map<String, StatsRing[]> statsRings = new LinkedHashMap<>();
 
     private final AtomicLongArray levelEndEpochMs;
-    private final Map<String, TileState> tiles = new LinkedHashMap<>();
+    private final TileTracker tiles;
     private final Listener listener;
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
+    private final SnapshotRestoreBarrier restoreBarrier;
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
@@ -63,7 +77,18 @@ public final class InsightsCollector implements SmartLifecycle {
             List<TileDef> tiles,
             MeterRegistry registry,
             Listener listener) {
+        this(levels, series, tiles, registry, listener, SnapshotSource.NONE);
+    }
+
+    public InsightsCollector(
+            List<InsightsProperties.Level> levels,
+            List<SeriesDef> series,
+            List<TileDef> tiles,
+            MeterRegistry registry,
+            Listener listener,
+            SnapshotSource snapshotSource) {
         this.listener = listener;
+        this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
         this.intervalMillis = new long[levels.size()];
         this.levelSizes = new int[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
@@ -82,11 +107,7 @@ public final class InsightsCollector implements SmartLifecycle {
             statsRings.put(def.id(), rings);
         }
 
-        for (TileDef def : tiles) {
-            SeriesDef tileSeries = new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), "value", null, null);
-            boolean live = Boolean.TRUE.equals(def.live());
-            this.tiles.put(def.id(), new TileState(new SeriesSampler(tileSeries, registry), live));
-        }
+        this.tiles = new TileTracker(tiles, registry);
     }
 
     /** Starts one virtual thread per level, each ticking/rolling up on its own boundary-aligned schedule. */
@@ -170,6 +191,7 @@ public final class InsightsCollector implements SmartLifecycle {
                 return;
             }
             try {
+                restoreBarrier.arriveBefore(this::restore);
                 if (level == 0) {
                     tick(boundary);
                 } else {
@@ -194,9 +216,7 @@ public final class InsightsCollector implements SmartLifecycle {
         }
         levelEndEpochMs.set(0, epochMs);
 
-        for (TileState tile : tiles.values()) {
-            tile.sample(elapsedMs);
-        }
+        tiles.sample(elapsedMs);
 
         listener.onTick(epochMs, values, tileValues());
     }
@@ -302,13 +322,103 @@ public final class InsightsCollector implements SmartLifecycle {
         return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
     }
 
+    int levelCount() {
+        return intervalMillis.length;
+    }
+
+    /**
+     * Everything persistence needs: every level of every series, including the
+     * {@code samples} column the API's {@link #snapshot(int)} deliberately omits.
+     * Ring contents and {@code endEpochMs} are read without a common lock, exactly as
+     * the API reads them - a tick landing mid-capture can date the newest sample one
+     * interval early, once, in a cache.
+     */
+    InsightsSnapshot capture() {
+        List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
+        for (int level = 0; level < intervalMillis.length; level++) {
+            levels.add(new InsightsSnapshot.Level(
+                    intervalMillis[level], levelSizes[level], levelEndEpochMs.get(level), filled(level)));
+        }
+        Map<String, List<double[][]>> series = new LinkedHashMap<>();
+        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+            List<double[][]> byLevel = new ArrayList<>(intervalMillis.length);
+            byLevel.add(new double[][] {entry.getValue().toArray()});
+            StatsRing[] rings = statsRings.get(entry.getKey());
+            for (int level = 1; level < intervalMillis.length; level++) {
+                byLevel.add(rings[level].toColumns());
+            }
+            series.put(entry.getKey(), byLevel);
+        }
+        return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
+    }
+
+    /**
+     * Refills the rings from a snapshot whose geometry the store has already matched
+     * against the live config. Series the config no longer declares are skipped, and
+     * a series the file never carried is filled with gaps instead. Restoring each level's
+     * {@code endEpochMs} is what makes the outage visible: {@link #fillMissed} pads the
+     * gap on this level's first tick or roll-up, with no separate replay to maintain.
+     */
+    void restore(InsightsSnapshot snapshot) {
+        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+            List<double[][]> persisted = snapshot.series().get(entry.getKey());
+            StatsRing[] rings = statsRings.get(entry.getKey());
+            if (persisted != null && persisted.size() == intervalMillis.length) {
+                entry.getValue().restore(persisted.get(0)[0]);
+                for (int level = 1; level < intervalMillis.length; level++) {
+                    rings[level].restore(persisted.get(level));
+                }
+            } else {
+                padWithGaps(entry.getValue(), rings, snapshot.levels());
+            }
+        }
+        for (int level = 0; level < intervalMillis.length; level++) {
+            levelEndEpochMs.set(level, snapshot.levels().get(level).endEpochMs());
+        }
+    }
+
+    /**
+     * Brings a series the snapshot did not supply up to the length the snapshot's other
+     * series have. Every level carries one sample count for all series at once - both in
+     * {@link #capture()} and in the file - so a series left short would have the next
+     * capture promise more values in its header than it writes. Gaps are also what the
+     * window deserves: the series was not being sampled for it, and a gap is exactly what
+     * the charts already draw for that.
+     */
+    private void padWithGaps(DoubleRing level0, StatsRing[] rings, List<InsightsSnapshot.Level> levels) {
+        for (int i = 0; i < levels.get(0).count(); i++) {
+            level0.add(Double.NaN);
+        }
+        for (int level = 1; level < intervalMillis.length; level++) {
+            for (int i = 0; i < levels.get(level).count(); i++) {
+                rings[level].add(AggregateStats.EMPTY);
+            }
+        }
+    }
+
+    /**
+     * Whether the persisted history has reached the rings. Until it has, what the rings hold
+     * is only what this run sampled itself, which is less than the file it would replace.
+     */
+    boolean hasRestoredHistory() {
+        return restoreBarrier.hasApplied();
+    }
+
+    /** How much of a level's ring is filled; 0 when no series is configured at all. */
+    private int filled(int level) {
+        if (level == 0) {
+            return level0Rings.isEmpty()
+                    ? 0
+                    : level0Rings.values().iterator().next().size();
+        }
+        return statsRings.isEmpty()
+                ? 0
+                : statsRings.values().iterator().next()[level].size();
+    }
+
     /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */
     Map<String, Double> tileValues() {
-        Map<String, Double> values = new LinkedHashMap<>();
-        for (Map.Entry<String, TileState> entry : tiles.entrySet()) {
-            values.put(entry.getKey(), entry.getValue().value);
-        }
-        return values;
+        return tiles.values();
     }
 
     /** seriesCount x (level0Size + sum of higher-level sizes x 7) x 8 bytes. */
@@ -318,33 +428,5 @@ public final class InsightsCollector implements SmartLifecycle {
             doublesPerSeries += levels.get(i).getSize() * 7L;
         }
         return seriesCount * doublesPerSeries * 8L;
-    }
-
-    /** A tile's sampler plus its freeze state (static tiles stop sampling once resolved). */
-    private static final class TileState {
-        private final SeriesSampler sampler;
-        private final boolean live;
-        private volatile double value = Double.NaN;
-        private volatile boolean frozen;
-
-        private TileState(SeriesSampler sampler, boolean live) {
-            this.sampler = sampler;
-            this.live = live;
-        }
-
-        private void sample(long intervalMillis) {
-            if (live) {
-                value = sampler.sample(intervalMillis);
-                return;
-            }
-            if (frozen) {
-                return;
-            }
-            double sampled = sampler.sample(intervalMillis);
-            if (!Double.isNaN(sampled)) {
-                value = sampled;
-                frozen = true;
-            }
-        }
     }
 }

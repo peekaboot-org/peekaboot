@@ -45,6 +45,8 @@ let sizeObserver = null;
 let themeObserver = null;
 let frame = null;
 let showPercentiles = false;
+let lifecycleEvents = [];
+let showMarkers = true;
 // the level every panel charts at unless pinned to one of its own (see isOverridden)
 let globalLevel = 0;
 let levelGroup = null;
@@ -83,6 +85,7 @@ async function init(container, context) {
         // is waiting for already contains that sample.
         connectStream();
         observeCharts();
+        await loadLifecycleEvents();
         // level 0 backs the panel readouts and is where every tick lands, so it
         // is loaded up front rather than on a panel's demand; the charts coming
         // into view share this one request
@@ -109,6 +112,24 @@ function teardown() {
     panels.clear();
     levels.clear();
     levelLoads.clear();
+    lifecycleEvents = [];
+    showMarkers = true;
+}
+
+// --- Lifecycle events -------------------------------------------------------------------
+
+/**
+ * The application's own start/stop history. Absent (lifecycle disabled, or an older
+ * backend) simply means no markers - never a failed tab.
+ */
+async function loadLifecycleEvents() {
+    try {
+        const body = await currentContext.client.get('/api/lifecycle/events');
+        lifecycleEvents = body?.events ?? [];
+    } catch (error) {
+        console.warn('Insights: restart markers unavailable:', error);
+        lifecycleEvents = [];
+    }
 }
 
 // --- Interval formatting --------------------------------------------------------------
@@ -152,6 +173,7 @@ function renderToolbar(container) {
         <div id="insights-level" class="pk-insight-levels" role="group"
              aria-label="Aggregation level">${levelButtonsHtml(globalLevel, 'pk-btn--bucket')}</div>
         <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
+        <label><input type="checkbox" id="insights-markers" checked> Restarts</label>
         <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
                 title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
     `;
@@ -168,6 +190,11 @@ function renderToolbar(container) {
     toolbar.querySelector('#insights-percentiles').addEventListener('change', event => {
         showPercentiles = event.target.checked;
         panels.forEach(panel => panel.chart?.setPercentiles(showPercentiles));
+    });
+
+    toolbar.querySelector('#insights-markers').addEventListener('change', event => {
+        showMarkers = event.target.checked;
+        panels.forEach(panel => panel.chart?.setMarkers(showMarkers));
     });
 }
 
@@ -503,6 +530,7 @@ async function createPanelChart(panel) {
     try {
         panel.chart = createChart({
             panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles,
+            events: lifecycleEvents, showMarkers,
             onZoom: handleZoom, onZoomReset: handleZoomReset
         });
         // a chart built while a zoom is already active (first scroll into view, or a
@@ -698,6 +726,9 @@ function connectStream() {
  * none.
  */
 async function resync() {
+    // an application that restarted under an open dashboard has a new event to
+    // draw, fetched before the level loop so every chart is updated in one pass
+    await loadLifecycleEvents();
     for (const level of [...levels.keys()]) {
         // a load that is still in flight already returns post-reconnect data, and
         // a second request for the same path would only cancel it out
@@ -705,5 +736,6 @@ async function resync() {
         await loadLevel(level);
         markDirty(level);
     }
+    panels.forEach(panel => panel.chart?.setEvents(lifecycleEvents));
     scheduleFlush();
 }

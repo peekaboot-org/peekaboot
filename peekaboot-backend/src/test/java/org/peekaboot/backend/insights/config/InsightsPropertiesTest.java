@@ -48,4 +48,56 @@ class InsightsPropertiesTest {
         properties.setLevels(List.of(level(Duration.ofSeconds(10), 0)));
         assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void rejectsNonPositivePersistenceInterval() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setInterval(Duration.ZERO);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("interval");
+
+        properties.getPersistence().setInterval(Duration.ofSeconds(-1));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("interval");
+    }
+
+    @Test
+    void rejectsNonPositivePersistenceMaxAge() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.getPersistence().setMaxAge(Duration.ZERO);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-age");
+
+        properties.getPersistence().setMaxAge(Duration.ofSeconds(-1));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("max-age");
+    }
+
+    /** A YAML null binds through the setter, so both blocks have to say so rather than fail on a dereference. */
+    @Test
+    void rejectsBlocksThatWereBoundToNothing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setPersistence(null);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("persistence");
+
+        InsightsProperties withoutLevels = new InsightsProperties();
+        withoutLevels.setLevels(null);
+        assertThatThrownBy(withoutLevels::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("levels");
+    }
+
+    @Test
+    void persistenceDefaultsToOneWritePerCoarsestWindowAndItsWholeSpan() {
+        InsightsProperties properties = new InsightsProperties();
+
+        assertThat(properties.resolvePersistenceInterval()).isEqualTo(Duration.ofHours(1));
+        assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofHours(720));
+    }
 }

@@ -22,12 +22,6 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationReadyListener.class);
 
-    private static final String SEPARATOR =
-            "===========================================================================================";
-
-    private static final String LINE =
-            " ------------------------------------------------------------------------------------------";
-
     private final EnvironmentInfo environmentInfo;
 
     private final BuildInfoProvider buildInfoProvider;
@@ -55,10 +49,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
 
-        StringBuilder report = new StringBuilder();
-        report.append("\n").append(SEPARATOR).append("\n");
-        report.append(" :: ApplicationReady :: \n");
-        report.append(SEPARATOR).append("\n");
+        StringBuilder report = LifecycleBanner.open("ApplicationReady");
 
         appendApplicationInfo(report);
         appendServiceUrl(report, event);
@@ -67,7 +58,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         appendMemoryInfo(report);
         appendDatabaseInfo(report);
 
-        report.append(SEPARATOR);
+        LifecycleBanner.close(report);
 
         logger.info(report.toString());
     }
@@ -78,24 +69,24 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         String profiles = environmentInfo.getActiveProfilesAsString();
         report.append(String.format(" Application [%s] ready with active profiles [%s]", appName, profiles))
                 .append("\n");
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
     }
 
     private void appendServiceUrl(StringBuilder report, ApplicationReadyEvent event) {
 
         serverUrlResolver.resolveServiceUrl(event).ifPresent(url -> {
             report.append(" Service URL: ").append(url).append("\n");
-            report.append(LINE).append("\n");
+            report.append(LifecycleBanner.LINE).append("\n");
         });
 
         serverUrlResolver.resolveSwaggerUiUrl(event).ifPresent(url -> {
             report.append(" Swagger UI: ").append(url).append("\n");
-            report.append(LINE).append("\n");
+            report.append(LifecycleBanner.LINE).append("\n");
         });
 
         serverUrlResolver.resolveDashboardUrl(event).ifPresent(url -> {
             report.append(" Peekaboot Dashboard: ").append(url).append("\n");
-            report.append(LINE).append("\n");
+            report.append(LifecycleBanner.LINE).append("\n");
         });
     }
 
@@ -108,7 +99,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         } else {
             report.append(" Application Info: Build information not available\n");
         }
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
     }
 
     private void appendSystemInfo(StringBuilder report) {
@@ -116,22 +107,22 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         report.append(" Default Timezone: ")
                 .append(TimeZone.getDefault().getID())
                 .append("\n");
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
 
         String vmName = System.getProperty("java.vm.name");
         report.append(" Java VM Name: ").append(vmName).append("\n");
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
 
         String vmVersion = System.getProperty("java.version");
         report.append(" Java VM Version: ").append(vmVersion).append("\n");
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
 
         String osName = System.getProperty("os.name");
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
         report.append(String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch))
                 .append("\n");
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
 
         ProcessInfo processInfo = ProcessInfo.current();
         report.append(String.format(
@@ -145,7 +136,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                     .orElse("");
             report.append(" Process Tree: ").append(tree).append("\n");
         }
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
     }
 
     private void appendMemoryInfo(StringBuilder report) {
@@ -160,14 +151,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                 "Non-Heap Memory: used=%s, max=%s%n",
                 formatBytes(nonHeapMemory.getUsed()),
                 formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)));
-        report.append(LINE).append("\n");
+        report.append(LifecycleBanner.LINE).append("\n");
     }
 
     private void appendDatabaseInfo(StringBuilder report) {
 
         if (dataSourceMetadataList.isEmpty()) {
             report.append(" Database: No database configured\n");
-            report.append(LINE).append("\n");
+            report.append(LifecycleBanner.LINE).append("\n");
             return;
         }
 
@@ -185,12 +176,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("");
                 report.append(" DB Connection Params: ").append(params).append("\n");
-                report.append(LINE).append("\n");
+                report.append(LifecycleBanner.LINE).append("\n");
             }
 
             report.append(String.format(
                     " DB Version: %s %s%n", metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
-            report.append(LINE).append("\n");
+            report.append(LifecycleBanner.LINE).append("\n");
 
             appendPoolInfo(report, metadata.getDataSourceName());
         }
@@ -216,7 +207,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                 report.append(" Connection Timeout: ")
                         .append(config.getConnectionTimeout())
                         .append(" ms\n");
-                report.append(LINE).append("\n");
+                report.append(LifecycleBanner.LINE).append("\n");
             } catch (Exception e) {
                 logger.debug("Could not retrieve connection timeout", e);
             }

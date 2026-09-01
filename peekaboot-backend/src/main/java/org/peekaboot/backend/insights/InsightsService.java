@@ -14,10 +14,10 @@ import org.peekaboot.backend.insights.config.PanelDef;
 import org.peekaboot.backend.insights.config.PanelsFile;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
+import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 
@@ -38,6 +38,7 @@ public final class InsightsService implements SmartLifecycle {
 
     private final InsightsProperties properties;
     private final InsightsCollector collector;
+    private final InsightsSnapshotStore store;
     private final List<PanelDef> panels;
     private final List<TileDef> tiles;
     private final int seriesCount;
@@ -46,14 +47,15 @@ public final class InsightsService implements SmartLifecycle {
             MeterRegistry registry,
             InsightsProperties properties,
             ResourceLoader resourceLoader,
-            InsightsCollector.Listener listener) {
+            InsightsCollector.Listener listener,
+            StorageDirectory storage) {
         properties.validate();
         this.properties = properties;
 
         Resource defaults = resourceLoader.getResource(CLASSPATH_PREFIX + DEFAULTS_LOCATION);
         Resource userOverride = properties.getConfigLocation() != null
                 ? resourceLoader.getResource(properties.getConfigLocation())
-                : new ClassPathResource(USER_LOCATION);
+                : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
         PanelsFile file = load(defaults, userOverride);
 
         this.panels = file.panels().stream()
@@ -66,7 +68,14 @@ public final class InsightsService implements SmartLifecycle {
                 .toList();
         this.seriesCount = namespacedSeries.size();
 
-        this.collector = new InsightsCollector(properties.getLevels(), namespacedSeries, tiles, registry, listener);
+        this.store = InsightsSnapshotStore.create(storage, properties);
+        this.collector = new InsightsCollector(
+                properties.getLevels(),
+                namespacedSeries,
+                tiles,
+                registry,
+                listener,
+                store != null ? store : InsightsCollector.SnapshotSource.NONE);
     }
 
     /**
@@ -101,18 +110,32 @@ public final class InsightsService implements SmartLifecycle {
 
     @Override
     public void start() {
+        if (store != null) {
+            store.beginLoad();
+        }
         collector.start();
+        if (store != null) {
+            store.start(collector::capture, collector::hasRestoredHistory);
+        }
         log.info(
-                "Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}",
+                "Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}{}",
                 seriesCount,
                 panels.size(),
                 levelsDescription(),
-                humanBytes(estimatedMemoryBytes()));
+                humanBytes(estimatedMemoryBytes()),
+                store != null ? ", persisted across restarts" : "");
     }
 
+    /**
+     * The collector stops first, so the store's final capture sees rings nothing is
+     * still writing to.
+     */
     @Override
     public void stop() {
         collector.stop();
+        if (store != null) {
+            store.stop();
+        }
     }
 
     @Override
