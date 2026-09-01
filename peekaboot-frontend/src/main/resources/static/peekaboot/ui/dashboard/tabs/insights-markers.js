@@ -25,6 +25,7 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatDateTime} from '../../shared/format.js';
+import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
 const FALLBACK_INK = '#6b7280';
@@ -43,10 +44,8 @@ const TIMESTAMP_OPTIONS = {
  * every chart from scratch anyway, so there is nothing a per-draw reread could catch.
  */
 function ink() {
-    const styles = getComputedStyle(document.documentElement);
-    const stroke = styles.getPropertyValue('--pk-text-muted').trim() || FALLBACK_INK;
-    const band = /^#[0-9a-f]{6}$/i.test(stroke) ? stroke + BAND_ALPHA : FALLBACK_BAND;
-    return {stroke, band};
+    const stroke = themeToken('--pk-text-muted', FALLBACK_INK);
+    return {stroke, band: withAlpha(stroke, BAND_ALPHA, FALLBACK_BAND)};
 }
 
 /** Stop -> next start pairs, in uPlot's time scale (epoch seconds). */

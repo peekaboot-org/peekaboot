@@ -13,6 +13,7 @@
  */
 import {formatMetricValue} from '../../shared/format.js';
 import {createMarkerLayer} from './insights-markers.js';
+import {themeToken, withAlpha} from './insights-colors.js';
 
 const UPLOT_SCRIPT = new URL('../../vendor/uplot/uplot.iife.min.js', import.meta.url);
 const UPLOT_STYLES = new URL('../../vendor/uplot/uplot.min.css', import.meta.url);
@@ -68,27 +69,13 @@ export function ensureUplot() {
 
 // --- Token resolution ----------------------------------------------------------------------
 
-function token(styles, name, fallback) {
-    return styles.getPropertyValue(name).trim() || fallback;
-}
-
 function themeColors() {
-    const styles = getComputedStyle(document.documentElement);
     return {
-        strokes: STROKE_TOKENS.map(([name, fallback]) => token(styles, name, fallback)),
-        axis: token(styles, '--pk-text-muted', '#6b7280'),
-        grid: token(styles, '--pk-border', '#d1d5db'),
-        font: '12px ' + token(styles, '--pk-font', 'system-ui, sans-serif')
+        strokes: STROKE_TOKENS.map(([name, fallback]) => themeToken(name, fallback)),
+        axis: themeToken('--pk-text-muted', '#6b7280'),
+        grid: themeToken('--pk-border', '#d1d5db'),
+        font: '12px ' + themeToken('--pk-font', 'system-ui, sans-serif')
     };
-}
-
-/** The stroke color at ~17% opacity, for the min/max band fill. */
-function bandFill(stroke) {
-    if (/^#[0-9a-f]{6}$/i.test(stroke)) return stroke + BAND_ALPHA;
-    if (/^#[0-9a-f]{3}$/i.test(stroke)) {
-        return '#' + [...stroke.slice(1)].map(c => c + c).join('') + BAND_ALPHA;
-    }
-    return FALLBACK_BAND_FILL;
 }
 
 // --- Chart construction --------------------------------------------------------------------
@@ -194,7 +181,7 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, eve
         columns.push({key: definition.id, stat: 'max'});
         series.push(edge(`${definition.label} max`, stroke, scale));
         // uPlot fills a band while drawing its first series, clipped to the second
-        bands.push({series: [minIndex + 1, minIndex], fill: bandFill(stroke)});
+        bands.push({series: [minIndex + 1, minIndex], fill: withAlpha(stroke, BAND_ALPHA, FALLBACK_BAND_FILL)});
 
         columns.push({key: definition.id, stat: 'avg'});
         series.push(line(definition.label, stroke, scale, null));
@@ -252,10 +239,10 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, eve
             // insights.js) - fires for every x-scale change, whatever caused it
             setScale: [(u, key) => {
                 if (key !== 'x') return;
-                const panel = mount.closest('.pk-insight-panel');
-                if (!panel) return;
-                panel.dataset.zoomMin = String(u.scales.x.min);
-                panel.dataset.zoomMax = String(u.scales.x.max);
+                const panelEl = mount.closest('.pk-insight-panel');
+                if (!panelEl) return;
+                panelEl.dataset.zoomMin = String(u.scales.x.min);
+                panelEl.dataset.zoomMax = String(u.scales.x.max);
             }]
         }
     };
