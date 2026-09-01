@@ -1,5 +1,13 @@
 package org.peekaboot.backend.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
@@ -9,8 +17,9 @@ import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import org.peekaboot.backend.testsupport.LogCapture;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,18 +27,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.testsupport.LogCapture;
 
 @ExtendWith(MockitoExtension.class)
 class DevToolbarFilterTest {
@@ -56,16 +55,17 @@ class DevToolbarFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "/static/app.js",
-            "/static/style.css",
-            "/webjars/jquery/jquery.min.js",
-            "/actuator/health",
-            "/actuator/info",
-            "/peekaboot/api/traces",
-            "/peekaboot/ui/dashboard/index.html",
-            "/error"
-    })
+    @ValueSource(
+            strings = {
+                "/static/app.js",
+                "/static/style.css",
+                "/webjars/jquery/jquery.min.js",
+                "/actuator/health",
+                "/actuator/info",
+                "/peekaboot/api/traces",
+                "/peekaboot/ui/dashboard/index.html",
+                "/error"
+            })
     void shouldSkipExcludedPaths(String path) throws Exception {
         when(request.getRequestURI()).thenReturn(path);
 
@@ -75,7 +75,9 @@ class DevToolbarFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"})
+    @ValueSource(
+            strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
+            })
     void shouldSkipStaticFileExtensions(String extension) throws Exception {
         when(request.getRequestURI()).thenReturn("/app/file" + extension);
 
@@ -103,12 +105,14 @@ class DevToolbarFilterTest {
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("application/json");
-            wrapper.getWriter().write("{\"id\":1}");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+                    ContentBufferingResponseWrapper wrapper =
+                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    wrapper.setContentType("application/json");
+                    wrapper.getWriter().write("{\"id\":1}");
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
 
         filter.doFilter(request, response, chain);
 
@@ -249,8 +253,7 @@ class DevToolbarFilterTest {
             assertThat(result).isEqualTo(htmlContent);
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("Failed to generate toolbar HTML: Provider error");
+                assertThat(event.getFormattedMessage()).isEqualTo("Failed to generate toolbar HTML: Provider error");
             });
         }
     }
@@ -286,15 +289,17 @@ class DevToolbarFilterTest {
         ByteArrayOutputStream originalOutput = stubResponseOutputStream();
 
         doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType("text/event-stream");
-            wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
-            wrapper.flushBuffer();
-            // must be visible to the client while the handler is still running
-            assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+                    ContentBufferingResponseWrapper wrapper =
+                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    wrapper.setContentType("text/event-stream");
+                    wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
+                    wrapper.flushBuffer();
+                    // must be visible to the client while the handler is still running
+                    assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
 
         filter.doFilter(request, response, chain);
 
@@ -374,13 +379,15 @@ class DevToolbarFilterTest {
      */
     private void stubResponse(String contentType, String content) throws Exception {
         doAnswer(invocation -> {
-            ContentBufferingResponseWrapper wrapper =
-                    (ContentBufferingResponseWrapper) invocation.getArgument(1);
-            wrapper.setContentType(contentType);
-            wrapper.getWriter().write(content);
-            when(response.getContentType()).thenReturn(contentType);
-            return null;
-        }).when(chain).doFilter(eq(request), any());
+                    ContentBufferingResponseWrapper wrapper =
+                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    wrapper.setContentType(contentType);
+                    wrapper.getWriter().write(content);
+                    when(response.getContentType()).thenReturn(contentType);
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
     }
 
     private static class TestServletOutputStream extends ServletOutputStream {
@@ -406,7 +413,6 @@ class DevToolbarFilterTest {
         }
 
         @Override
-        public void setWriteListener(WriteListener listener) {
-        }
+        public void setWriteListener(WriteListener listener) {}
     }
 }
