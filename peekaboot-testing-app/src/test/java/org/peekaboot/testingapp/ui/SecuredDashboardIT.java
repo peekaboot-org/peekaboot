@@ -39,7 +39,8 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     /** The credentials PeekabootSecurityConfig's in-memory store holds for ROLE_ADMIN. */
     @Override
     protected Page browserContextPage() {
-        return browser.newContext(newContextOptions().setHttpCredentials("admin", "admin-password"))
+        return browser()
+                .newContext(newContextOptions().setHttpCredentials("admin", "admin-password"))
                 .newPage();
     }
 
@@ -65,7 +66,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
 
     @Test
     void anAnonymousBrowserIsRefusedTheDashboard() {
-        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
 
             Response response = anonymousPage.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
@@ -84,7 +85,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
      */
     @Test
     void theToolbarExplainsItselfToAnAnonymousBrowser() {
-        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
             List<Integer> toolbarScriptStatuses = new ArrayList<>();
             anonymousPage.onResponse(response -> {
@@ -114,7 +115,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
      */
     @Test
     void theNoticeLinksAnAnonymousBrowserToTheDashboard() {
-        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
             anonymousPage.navigate(baseUrl + "/persons");
             anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
@@ -133,7 +134,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
      */
     @Test
     void theNoticeBecomesVisibleForAnAnonymousBrowser() {
-        try (BrowserContext anonymous = browser.newContext(newContextOptions())) {
+        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
             anonymousPage.navigate(baseUrl + "/persons");
 

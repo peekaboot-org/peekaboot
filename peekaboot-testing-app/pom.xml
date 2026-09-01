@@ -24,11 +24,18 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.15</jacoco.version>
         <jacocoArgLine></jacocoArgLine>
-        <!-- Forked JVMs running the *IT suite in parallel. Each fork boots its own
-             Spring contexts and Chromium, so memory is the ceiling: 2 fits the 8GB
-             dev VM and a GitHub runner; raise locally via -Dpeekaboot.it.forks=3
-             only on a machine with headroom, set to 1 to diagnose flaky ITs. -->
-        <peekaboot.it.forks>2</peekaboot.it.forks>
+        <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
+             across forks: one JVM means one Spring context cache, so the ~12 distinct
+             application contexts boot once instead of once per fork - and concurrent
+             classes hammering the same running app is deliberate, it exercises
+             peekaboot the way a real concurrent host application does. Forks remain
+             available (forks x threads both apply) but 1 is the intended default. -->
+        <peekaboot.it.forks>1</peekaboot.it.forks>
+        <!-- Worker threads for concurrent *IT classes; each worker owns a Chromium.
+             2 measured fastest on an 8-core/7GB box - 3+ workers inflate every class's
+             own runtime through CPU contention faster than the extra overlap pays back.
+             Set to 1 to serialize when diagnosing a flaky test. -->
+        <peekaboot.it.threads>2</peekaboot.it.threads>
         <!-- not a published artifact: it exists to host the sample app and its UI tests -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
@@ -207,6 +214,16 @@
                 <configuration>
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                     <forkCount>${peekaboot.it.forks}</forkCount>
+                    <properties>
+                        <configurationParameters>
+                            junit.jupiter.execution.parallel.enabled = true
+                            junit.jupiter.execution.parallel.mode.default = same_thread
+                            junit.jupiter.execution.parallel.mode.classes.default = concurrent
+                            junit.jupiter.execution.parallel.config.strategy = fixed
+                            junit.jupiter.execution.parallel.config.fixed.parallelism = ${peekaboot.it.threads}
+                            junit.jupiter.execution.parallel.config.fixed.max-pool-size = ${peekaboot.it.threads}
+                        </configurationParameters>
+                    </properties>
                 </configuration>
             </plugin>
             <plugin>

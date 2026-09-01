@@ -12,6 +12,8 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.parallel.ResourceAccessMode;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
@@ -38,6 +40,12 @@ import tools.jackson.databind.ObjectMapper;
         classes = {TestingApp.class, SharedToolbarTestConfig.class},
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+/*
+ * READ_WRITE on the shared store: setUp() clears the TraceStore of the app this class
+ * shares with the other SharedToolbarTestConfig tests, so it must not overlap with a
+ * class that is pinning its own traces in that store (they hold the READ side).
+ */
+@ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ_WRITE)
 class DashboardTraceViewIT {
 
     @LocalServerPort

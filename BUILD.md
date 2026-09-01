@@ -42,11 +42,15 @@ tests. Per module, `verify` runs:
 unit tests → package → sources jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
 ```
 
-`peekaboot-testing-app` runs its `*IT` classes in **2 parallel forked JVMs**
-(`-Dpeekaboot.it.forks=N` to override; use `1` when diagnosing a flaky test, `3` only
-with RAM to spare — every fork boots its own Spring contexts and its own Chromium).
-Each fork appends to the module's `jacoco.exec`, so the coverage gate sees the same
-data it would from a serial run.
+`peekaboot-testing-app` runs its `*IT` classes **concurrently inside one JVM** — 2
+worker threads (`-Dpeekaboot.it.threads=N`; `1` serializes when diagnosing a flaky
+test), each owning its own Chromium, all sharing one Spring context cache and therefore
+one running app per context configuration. That concurrency is deliberate beyond speed:
+concurrent test classes hammer peekaboot the way a real concurrent host application
+does, so a race in peekaboot itself shows up here first. Classes that genuinely cannot
+overlap coordinate through JUnit `@ResourceLock` (see `DashboardTraceViewIT`).
+`-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults
+to 1. The coverage gate sees the same `jacoco.exec` data it would from a serial run.
 
 `peekaboot-coverage` runs last and adds the sixth gate over the whole reactor:
 
@@ -62,7 +66,7 @@ follows POM declaration order, and that module declares them itself (see below).
 adds `spring-boot:repackage`, so it is the only module producing an executable jar.
 
 A cold `mvn clean verify` takes roughly 3-5 minutes on a warm local repository (the
-Playwright suite is the bulk of it, parallel forks notwithstanding); `mvn test` alone
+Playwright suite is the bulk of it, concurrency notwithstanding); `mvn test` alone
 stays around a minute.
 
 ## The reactor

@@ -94,7 +94,12 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
 that state first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert
-exact counts, never defensive `contains`.
+exact counts, never defensive `contains`. Since `*IT` classes run concurrently,
+a class that clears shared state this way MUST hold the corresponding
+`@ResourceLock(..., mode = READ_WRITE)`, and every class pinning its own data in
+that same store holds the `READ` side — `DashboardTraceViewIT`, `DevToolbarIT`
+and `TraceDetailOverlayIT` are the pattern. A class on its own context
+configuration (its own app) needs no lock.
 
 ## Spring Security on the testing-app classpath
 
@@ -128,9 +133,12 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
 - Fast gate (unit tests + Error Prone only): `mvn test` (root). Single unit-test class:
   `mvn -pl <module> test -Dtest=<Class>` — never combine `-am` with `-Dtest`.
 - Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
-  phase) and only runs under `verify`; `peekaboot-testing-app` runs them in 2 parallel
-  forks (`-Dpeekaboot.it.forks=1` to serialize while debugging). Single class:
-  `mvn -pl <module> verify -Dit.test=<Class>`.
+  phase) and only runs under `verify`; `peekaboot-testing-app` runs them as concurrent
+  classes in one JVM, 2 worker threads with a Chromium each
+  (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test that asserts on
+  app-global state shared with other classes must either pin to its own traceId or take
+  a `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
+  Single class: `mvn -pl <module> verify -Dit.test=<Class>`.
 - Full reactor — unit tests, integration tests and the five static-analysis gates:
   `mvn clean verify` (1,123 tests).
 - Write-path benchmark, excluded from the default suite:

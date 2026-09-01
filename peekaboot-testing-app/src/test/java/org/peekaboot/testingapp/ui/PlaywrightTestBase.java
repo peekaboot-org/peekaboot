@@ -7,8 +7,9 @@ import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.impl.TargetClosedError;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.peekaboot.testingapp.TestingApp;
 import org.slf4j.Logger;
@@ -23,8 +24,25 @@ abstract class PlaywrightTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(PlaywrightTestBase.class);
 
-    private static Playwright playwright;
-    protected static Browser browser;
+    /**
+     * One browser per worker thread, launched on first use. Playwright's Java objects are
+     * confined to the thread that created them, and test classes run concurrently (one
+     * worker per class; methods stay on the class's thread), so each worker owns a whole
+     * Playwright instance. Isolation between tests comes from the per-test context, not
+     * the browser, and JUnit has no per-JVM {@code @AfterAll}, so the matching closes
+     * hang off JVM shutdown instead.
+     */
+    private static final List<Playwright> STARTED_PLAYWRIGHTS = new CopyOnWriteArrayList<>();
+
+    private static final ThreadLocal<Browser> WORKER_BROWSER = ThreadLocal.withInitial(() -> {
+        Playwright playwright = Playwright.create();
+        STARTED_PLAYWRIGHTS.add(playwright);
+        return playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+    });
+
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread(PlaywrightTestBase::closeBrowsers, "playwright-close"));
+    }
 
     @LocalServerPort
     protected int port;
@@ -32,33 +50,22 @@ abstract class PlaywrightTestBase {
     protected Page page;
     protected String baseUrl;
 
-    /**
-     * One browser for the whole JVM, not one per test class: a per-class launch/close
-     * cycle pays Chromium's startup once for every subclass in the fork. JUnit has no
-     * per-JVM {@code @AfterAll}, so the matching close hangs off JVM shutdown instead.
-     * Isolation between tests comes from the per-test context, not the browser.
-     */
-    @BeforeAll
-    static void launchBrowser() {
-        if (browser != null) {
-            return;
-        }
-        playwright = Playwright.create();
-        browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-        Runtime.getRuntime().addShutdownHook(new Thread(PlaywrightTestBase::closeBrowser, "playwright-close"));
+    protected static Browser browser() {
+        return WORKER_BROWSER.get();
     }
 
-    private static void closeBrowser() {
-        try {
-            browser.close();
-            playwright.close();
-        } catch (RuntimeException e) {
-            // The JVM is exiting and the driver process dies with it; a close that trips
-            // over that shutdown must not spray a stack trace into otherwise-green output.
-            log.warn(
-                    "swallowed {} closing Playwright at JVM shutdown: {}",
-                    e.getClass().getSimpleName(),
-                    e.getMessage());
+    private static void closeBrowsers() {
+        for (Playwright playwright : STARTED_PLAYWRIGHTS) {
+            try {
+                playwright.close();
+            } catch (RuntimeException e) {
+                // The JVM is exiting and the driver process dies with it; a close that trips
+                // over that shutdown must not spray a stack trace into otherwise-green output.
+                log.warn(
+                        "swallowed {} closing Playwright at JVM shutdown: {}",
+                        e.getClass().getSimpleName(),
+                        e.getMessage());
+            }
         }
     }
 
@@ -70,7 +77,7 @@ abstract class PlaywrightTestBase {
 
     /** Overridable so a subclass can fix the viewport without changing every test's context. */
     protected Page browserContextPage() {
-        return browser.newContext(newContextOptions()).newPage();
+        return browser().newContext(newContextOptions()).newPage();
     }
 
     /**
