@@ -3,6 +3,9 @@ package org.peekaboot.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -129,10 +132,13 @@ class ActuatorInsightsServiceTest {
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
-        assertThat(response.server()).isNotNull();
-        assertThat(response.server().timezone()).isNotNull();
-        assertThat(response.server().timezoneOffset()).isNotNull();
-        assertThat(response.server().timezoneDisplay()).isNotNull();
+        ZoneId zone = ZoneId.systemDefault();
+        assertThat(response.server().timezone()).isEqualTo(zone.getId());
+        assertThat(response.server().timezoneOffset())
+                .isEqualTo(zone.getRules().getOffset(Instant.now()).toString());
+        assertThat(response.server().timezoneDisplay()).isEqualTo(zone.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+        assertThat(response.server().availableProcessors())
+                .isEqualTo(Runtime.getRuntime().availableProcessors());
     }
 
     @Test
