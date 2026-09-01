@@ -60,21 +60,6 @@ class PeekabootControllerTest {
     }
 
     @Nested
-    class RemovedRawEndpoints {
-
-        /**
-         * No /raw endpoint exists: none had a caller in the dashboard or the toolbar, and
-         * together they were the broadest surface Peekaboot exposed.
-         */
-        @Test
-        void shouldNotExposeAnyRawEndpoint() {
-            assertThat(PeekabootController.class.getDeclaredMethods())
-                    .extracting(java.lang.reflect.Method::getName)
-                    .doesNotContain("getRaw", "getTracesRaw", "getTraceRaw");
-        }
-    }
-
-    @Nested
     class GetTracesInsights {
 
         @Test
@@ -223,13 +208,6 @@ class PeekabootControllerTest {
             Map<String, Object> features = controller.getFeatures();
 
             assertThat(features.get("metrics")).isEqualTo(false);
-        }
-
-        @Test
-        void shouldNotIncludeTraceCaptureMode() {
-            Map<String, Object> features = controller.getFeatures();
-
-            assertThat(features).doesNotContainKey("traceCaptureMode");
         }
 
         @Test

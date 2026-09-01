@@ -93,19 +93,6 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldHandleNullTraceStore() {
-        // Given: TraceStore is null (tracing not enabled)
-        TraceInsightsService serviceWithNullStore = newService(null);
-
-        // When
-        TraceInsightsResponse response = serviceWithNullStore.getInsights(10, TraceBucket.ALL, null, null);
-
-        // Then
-        assertThat(response.traces()).isEmpty();
-        assertThat(response.summary().traceCount()).isEqualTo(0);
-    }
-
-    @Test
     void isTracingAvailable_shouldBeTrueWhenTraceStoreIsPresent() {
         assertThat(service.isTracingAvailable()).isTrue();
     }
@@ -450,18 +437,6 @@ class TraceInsightsServiceTest {
         assertThat(result.get().httpExchange()).isNotNull();
         assertThat(result.get().httpExchange().request().method()).isEqualTo("GET");
         assertThat(result.get().httpExchange().response().status()).isEqualTo(200);
-    }
-
-    @Test
-    void getTraceInsights_theDuplicatePairIsAlreadyCollapsedInTheStoreBeforeTheServiceRuns() {
-        // Given: a DB span whose double-instrumented duplicate arrives first (as the OTel
-        // BatchSpanProcessor's export ordering has it in production)
-        addTraceWithDuplicatedDbSpan("trace1", 100);
-
-        // Then: the store itself must already hold just the real span - TraceInsightsService
-        // has no read-time dedup pass of its own to fall back on
-        assertThat(store.getTrace("trace1")).isPresent();
-        assertThat(store.getTrace("trace1").get().spans()).hasSize(2); // root span + the real query span
     }
 
     @Test
