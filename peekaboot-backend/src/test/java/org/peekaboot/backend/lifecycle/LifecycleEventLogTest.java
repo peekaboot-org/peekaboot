@@ -144,7 +144,8 @@ class LifecycleEventLogTest {
         LifecycleEventFile file = file();
         file.write(List.of(start(1_000), start(2_000)));
 
-        LifecycleEventLog log = new LifecycleEventLog(file); // beginLoad() deliberately not called
+        // beginLoad() deliberately not called; the wait is shortened so the test does not sit out the production 5s
+        LifecycleEventLog log = new LifecycleEventLog(file, Duration.ofMillis(50));
         log.recordAndPersist(LifecycleEvent.stop(3_000, 4711));
 
         assertThat(file.read()).hasSize(2);

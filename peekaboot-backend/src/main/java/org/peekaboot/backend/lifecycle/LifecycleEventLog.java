@@ -28,11 +28,18 @@ public final class LifecycleEventLog {
     private static final Duration LOAD_WAIT = Duration.ofSeconds(5);
 
     private final LifecycleEventFile file;
+    private final Duration loadWait;
     private final List<LifecycleEvent> events = new ArrayList<>();
     private final CompletableFuture<Void> loaded = new CompletableFuture<>();
 
     public LifecycleEventLog(LifecycleEventFile file) {
+        this(file, LOAD_WAIT);
+    }
+
+    /** {@code loadWait} bounds how long a recorder waits for the history; tests shorten it. */
+    LifecycleEventLog(LifecycleEventFile file, Duration loadWait) {
         this.file = file;
+        this.loadWait = loadWait;
     }
 
     /** Submits the read; returns immediately. Without a file the log is loaded by definition. */
@@ -134,7 +141,7 @@ public final class LifecycleEventLog {
 
     private boolean awaitLoad() {
         try {
-            loaded.get(LOAD_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            loaded.get(loadWait.toMillis(), TimeUnit.MILLISECONDS);
             return true;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
