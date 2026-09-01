@@ -55,6 +55,7 @@
 
     <developers>
         <developer>
+            <id>rvullriede</id>
             <name>Raphael</name>
             <email>raphael@peekaboot.org</email>
             <organization>peekaboot.org</organization>
