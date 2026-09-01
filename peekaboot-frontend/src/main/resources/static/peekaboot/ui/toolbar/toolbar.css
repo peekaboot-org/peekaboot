@@ -81,12 +81,6 @@
 .pk-toolbar__trace { flex: 0 1 auto; min-width: 0; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }
 .pk-toolbar__pending { color: var(--pk-text-muted); }
 
-.pk-stat { display: flex; align-items: center; gap: var(--pk-space-xs); }
-.pk-stat__duration { font-family: var(--pk-font-mono); }
-.pk-stat__separator { color: var(--pk-text-muted); opacity: 0.6; }
-.pk-stat--slow .pk-stat__duration { color: var(--pk-warning-text); }
-.pk-stat--very-slow .pk-stat__duration { color: var(--pk-danger); }
-
 .pk-toolbar__loading { color: var(--pk-text-muted); }
 .pk-toolbar__loading::after { content: ''; animation: pk-dots 1.5s infinite; }
 @keyframes pk-dots {

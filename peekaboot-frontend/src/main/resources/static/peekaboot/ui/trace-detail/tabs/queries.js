@@ -3,9 +3,9 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {durationSeverity} from '../../shared/severity.js';
-import {formatCount} from '../../shared/format.js';
+import {formatCount, formatDurationMs} from '../../shared/format.js';
 
-export function render(container, trace) {
+export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
 
     if (queries.length === 0) {
@@ -17,7 +17,7 @@ export function render(container, trace) {
     queries.forEach((query, idx) => {
         const sql = query.sql || 'Unknown query';
         const duration = query.durationMs || 0;
-        const durationClass = durationSeverity(duration);
+        const durationClass = durationSeverity(duration, view.features);
         const system = query.dbSystem || 'SQL';
         const rowCount = query.rowCount;
 
@@ -25,7 +25,7 @@ export function render(container, trace) {
         html += '<div class="pk-query-header">';
         html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
         html += '<span class="pk-query-meta">';
-        html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${duration}ms${durationClass ? ' SLOW' : ''}</span>`;
+        html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${formatDurationMs(duration)}${durationClass ? ' SLOW' : ''}</span>`;
         if (rowCount !== null && rowCount !== undefined) {
             html += `<span class="pk-query-rows">${formatCount(Number(rowCount), 'row')}</span>`;
         }

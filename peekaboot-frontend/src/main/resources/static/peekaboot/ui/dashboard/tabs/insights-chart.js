@@ -129,9 +129,13 @@ function valueAxis(scale, unit, side, colors) {
  * the charted level's own interval (snapshot.intervalMs) to place a run's own start
  * marker even when the chart has no second sample to derive a spacing from - and is
  * registered as a uPlot plugin rather than drawn separately, so it shares the
- * canvas and the draw/cursor hooks uPlot already runs.
+ * canvas and the draw/cursor hooks uPlot already runs. `dateOptions` is a function
+ * returning the dashboard's current {locale, timeZone}, read at hover time so a
+ * timezone toggle reaches a chart that is not rebuilt for it.
  */
-export function createChart({panel, mount, level, snapshot, showPercentiles, events, showMarkers, onZoom, onZoomReset}) {
+export function createChart({
+    panel, mount, level, snapshot, showPercentiles, events, showMarkers, dateOptions, onZoom, onZoomReset
+}) {
     const colors = themeColors();
     const columns = [];                        // data column i feeds uPlot series i + 1
     const series = [{}];                       // [0] is the x series
@@ -139,7 +143,7 @@ export function createChart({panel, mount, level, snapshot, showPercentiles, eve
     const percentileIndices = [];
     let secondaryUnit = null;
 
-    const markers = createMarkerLayer({intervalMs: snapshot.intervalMs});
+    const markers = createMarkerLayer({intervalMs: snapshot.intervalMs, dateOptions});
     markers.setEvents(events);
     markers.setVisible(showMarkers);
 

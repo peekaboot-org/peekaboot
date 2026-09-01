@@ -7,12 +7,11 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
+import {LOG_LEVELS} from '../../shared/severity.js';
 import {buildSpanNames} from '../../shared/span-names.js';
 import {copyableIdHtml} from '../../shared/copyable.js';
 
-const LEVELS = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
-
-function renderLogRows(logs, spanNames) {
+function renderLogRows(logs, spanNames, dateOptions) {
     return logs.map(log => {
         const spanId = log.spanId || '';
         const spanCell = `<span class="pk-log__span-cell">`
@@ -21,7 +20,7 @@ function renderLogRows(logs, spanNames) {
             + copyableIdHtml(spanId, {label: 'spanId', truncate: true})
             + `</span>`;
         return `<div class="pk-log" data-level="${escapeHtml(log.level)}" data-span-id="${escapeHtml(spanId)}">`
-             + `<span class="pk-log__time">${escapeHtml(formatTimeOfDay(log.timestamp))}</span>`
+             + `<span class="pk-log__time">${escapeHtml(formatTimeOfDay(log.timestamp, dateOptions))}</span>`
              + spanCell
              + `<span class="pk-log__level pk-log__level--${escapeHtml(String(log.level).toLowerCase())}">${escapeHtml(log.level)}</span>`
              + `<span class="pk-log__message">${escapeHtml(log.message)}</span>`
@@ -36,7 +35,8 @@ function renderLogRows(logs, spanNames) {
  * tab with `{span}`) instead of needing a hand-off channel of its own.
  * `view.setFilters(next)` reports every change back so it round-trips into the hash. Both
  * are optional - the dev toolbar's open path (no urlState at all) leaves filtering purely
- * local, as before.
+ * local. `view.locale`/`view.timeZone` are the dashboard's display settings for the
+ * timestamps; absent (the toolbar), the browser's own apply.
  */
 export function render(container, trace, view = {}) {
     const spanNames = buildSpanNames(trace.rootSpan);
@@ -51,7 +51,7 @@ export function render(container, trace, view = {}) {
     // controls FROM this, instead of the controls' own DOM values, so a re-render (the
     // span filter changing) cannot wipe out the text/level filters.
     //
-    // state.level is validated against LEVELS (mirroring how trace-detail.js falls an
+    // state.level is validated against LOG_LEVELS (mirroring how trace-detail.js falls an
     // unrecognized subview back to 'spans'): an unvalidated value from the URL (a typo, a
     // stale link, a different case) would match none of the rendered <option>s, so the
     // browser would default the <select> to "All Levels" while applyFilters() kept
@@ -59,7 +59,7 @@ export function render(container, trace, view = {}) {
     // is applied while silently hiding every row.
     const state = {
         q: view.filters?.q || '',
-        level: LEVELS.includes(view.filters?.level) ? view.filters.level : '',
+        level: LOG_LEVELS.includes(view.filters?.level) ? view.filters.level : '',
         span: view.filters?.span || null
     };
 
@@ -76,7 +76,7 @@ export function render(container, trace, view = {}) {
         html += `<input type="text" placeholder="Filter logs..." id="pk-log-filter" value="${escapeHtml(state.q)}">`;
         html += '<select id="pk-log-level">';
         html += `<option value=""${state.level === '' ? ' selected' : ''}>All Levels</option>`;
-        LEVELS.forEach(level => {
+        LOG_LEVELS.forEach(level => {
             html += `<option${state.level === level ? ' selected' : ''}>${level}</option>`;
         });
         html += '</select>';
@@ -96,7 +96,7 @@ export function render(container, trace, view = {}) {
                 + `<button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
-        html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames)}</div>`;
+        html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames, {locale: view.locale, timeZone: view.timeZone})}</div>`;
         container.innerHTML = html;
 
         // Filter controls

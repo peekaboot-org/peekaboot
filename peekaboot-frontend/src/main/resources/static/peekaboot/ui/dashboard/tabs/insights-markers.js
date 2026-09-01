@@ -60,7 +60,8 @@ function downtimes(events) {
 }
 
 /**
- * Draws restart markers on a chart. `intervalMs` is the charted level's own sample
+ * Draws restart markers on a chart. `dateOptions()` supplies the dashboard's current
+ * {locale, timeZone} for the tooltip's timestamps. `intervalMs` is the charted level's own sample
  * interval, in milliseconds - it is never derived from the chart's x data, because a
  * chart with a single sample (a freshly started application, which has exactly one
  * sample and only its own start marker to show in the first place) has no second
@@ -69,7 +70,7 @@ function downtimes(events) {
  * interval is fixed for a chart's lifetime - a level change rebuilds the chart - so
  * taking it once, at construction, is sound.
  */
-export function createMarkerLayer({intervalMs}) {
+export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
     const intervalSeconds = intervalMs / 1000;
     const colors = ink();
     let events = [];
@@ -171,12 +172,13 @@ export function createMarkerLayer({intervalMs}) {
     }
 
     function describe({event}) {
-        const when = formatDateTime(event.epochMs, TIMESTAMP_OPTIONS);
+        const options = {...TIMESTAMP_OPTIONS, ...dateOptions()};
+        const when = formatDateTime(event.epochMs, options);
         const rows = [];
         if (event.version) rows.push(['Version', event.version]);
         if (event.branch) rows.push(['Branch', event.branch]);
         if (event.shortCommitId) rows.push(['Commit', event.shortCommitId]);
-        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTime(event.buildTimeEpochMs, TIMESTAMP_OPTIONS)]);
+        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTime(event.buildTimeEpochMs, options)]);
 
         const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${escapeHtml(when)}`;
         const details = rows

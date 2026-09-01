@@ -14,12 +14,23 @@
  * or {idle:true, basePath} for Swagger UI, where a fetch interceptor picks up
  * trace ids from Server-Timing headers instead. Clicking the bar (or pressing
  * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
+ *
+ * The bar never fetches /api/features: it colours durations by the shared defaults
+ * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults.
  */
 import {formatDurationMs} from '../shared/format.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
+import {traceStatParts} from '../shared/trace-stats.js';
+
+// Four fixed attempts rather than backoff-until-complete: every one runs, so a span that
+// ends after the root - an @Async continuation, a streamed body - still reaches the bar
+// instead of being missed by a loop that stops the first time a trace looks finished.
+// Waits are measured from the previous attempt, so the last lands at 4.75s; with
+// peekaboot's 200ms span export delay, a trace absent by then is not coming.
+const ATTEMPT_DELAYS_MS = [250, 500, 1000, 3000];
 
 const dataEl = document.getElementById('peekaboot-toolbar-data');
 const hostEl = document.getElementById('peekaboot-toolbar-host');
@@ -42,8 +53,8 @@ function initToolbar(host, data) {
     if (authNotice) authNotice.remove();
 
     const bar = shadow.querySelector('.pk-toolbar');
-
     const openButton = shadow.querySelector('.pk-toolbar__open');
+    const metricsEl = shadow.getElementById('pk-metrics');
     // A dedicated listener (rather than the inline onclick CSP would block on host pages
     // whose script-src disallows 'unsafe-inline') keeps the link's own click from also
     // triggering the bar's open-overlay handler below.
@@ -54,7 +65,18 @@ function initToolbar(host, data) {
     function loadTrace(traceId, method, path, status) {
         currentTraceId = traceId;
         openButton.setAttribute('aria-disabled', traceId ? 'false' : 'true');
+        renderRequest(traceId, method, path, status);
+        metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
+        if (traceId) {
+            pollTrace(traceId, {
+                stillCurrent: () => currentTraceId === traceId,
+                onTrace: renderTrace,
+                onNothingArrived: renderPending
+            });
+        }
+    }
 
+    function renderRequest(traceId, method, path, status) {
         // The bar has room for the number alone; the overlay's own pill spells the
         // status out. The colouring is shared, so a 404 reads the same in both places.
         const statusEl = shadow.getElementById('pk-status');
@@ -73,103 +95,64 @@ function initToolbar(host, data) {
         // search, which is the only reason to show it on the bar at all
         shadow.getElementById('pk-trace').innerHTML = copyableIdHtml(traceId, {label: 'traceId'});
         bindCopyables(shadow);
+    }
 
-        const metricsEl = shadow.getElementById('pk-metrics');
-        metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
-
-        if (traceId) {
-            // Four fixed attempts rather than backoff-until-complete: every one runs, so a
-            // span that ends after the root - an @Async continuation, a streamed body - still
-            // reaches the bar instead of being missed by a loop that stops the first time a
-            // trace looks finished. Waits are measured from the previous attempt, so the last
-            // lands at 4.75s; with peekaboot's 200ms span export delay, a trace absent by then
-            // is not coming.
-            const attemptDelays = [250, 500, 1000, 3000];
-            let rendered = false;
-
-            function attempt(index) {
-                if (currentTraceId !== traceId || index >= attemptDelays.length) return;
-                setTimeout(function() {
-                    if (currentTraceId !== traceId) return;
-                    fetch(data.basePath + '/api/traces/' + traceId + '/insights')
-                        .then(function(resp) {
-                            if (currentTraceId !== traceId) return null;
-                            return resp.ok ? resp.json() : null;
-                        })
-                        .then(function(trace) {
-                            if (currentTraceId !== traceId) return;
-                            // a 404 or an empty result leaves the previous render standing
-                            if (trace && trace.rootSpan) updateToolbar(trace);
-                            else if (isLastAttempt(index)) showPendingIfUnrendered();
-                        })
-                        .catch(function() {
-                            if (currentTraceId === traceId && isLastAttempt(index)) {
-                                showPendingIfUnrendered();
-                            }
-                        })
-                        .finally(function() { attempt(index + 1); });
-                }, attemptDelays[index]);
-            }
-
-            function isLastAttempt(index) {
-                return index === attemptDelays.length - 1;
-            }
-
-            // Nothing ever arrived: replace "loading" with the placeholder row rather than
-            // leaving a spinner up forever. A bar that did render keeps what it has.
-            function showPendingIfUnrendered() {
-                if (!rendered) showPending();
-            }
-
-            function updateToolbar(trace) {
-                if (currentTraceId !== traceId) return;
-                const summary = trace.summary || {};
-                const httpExchange = trace.httpExchange || {};
-                const controller = httpExchange.request && httpExchange.request.controller || {};
-                const metricsEl = shadow.getElementById('pk-metrics');
-                const controllerEl = shadow.getElementById('pk-controller');
-
-                if (controller.class && controller.method) {
-                    const className = controller.class.split('.').pop();
-                    controllerEl.textContent = '→ ' + className + '.' + controller.method;
-                }
-
-                let html = '';
-
-                const duration = trace.durationMs || 0;
-                const durationClass = durationSeverity(duration);
-                html += '<span class="pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '')
-                    + '"><span aria-hidden="true">⏱</span><span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
-
-                const queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
-                const queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
-                if (queryCount > 0) {
-                    const queryClass = durationSeverity(queryDuration);
-                    html += '<span class="pk-stat' + (queryClass ? ' pk-stat--' + queryClass : '')
-                        + '">' + queryCount + ' queries<span class="pk-stat__separator"> | </span><span class="pk-stat__duration">'
-                        + formatDurationMs(queryDuration) + '</span></span>';
-                }
-
-                const errorCount = summary.logs ? summary.logs.errorCount : 0;
-                const warnCount = summary.logs ? summary.logs.warnCount : 0;
-                if (errorCount > 0) {
-                    html += '<span class="pk-badge pk-badge--error"><span aria-hidden="true">❗</span>' + errorCount + ' err</span>';
-                }
-                if (warnCount > 0) {
-                    html += '<span class="pk-badge pk-badge--warn"><span aria-hidden="true">⚠</span>' + warnCount + ' warn</span>';
-                }
-
-                metricsEl.innerHTML = html;
-                rendered = true;
-            }
-
-            function showPending() {
-                const metricsEl = shadow.getElementById('pk-metrics');
-                metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
-            }
-
-            attempt(0);
+    function renderTrace(trace) {
+        const controller = trace.httpExchange?.request?.controller || {};
+        if (controller.class && controller.method) {
+            const className = controller.class.split('.').pop();
+            shadow.getElementById('pk-controller').textContent = '→ ' + className + '.' + controller.method;
         }
+
+        const duration = trace.durationMs || 0;
+        const durationClass = durationSeverity(duration);
+        const durationStat = document.createElement('span');
+        durationStat.className = 'pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '');
+        durationStat.innerHTML = '<span aria-hidden="true">⏱</span><span class="pk-stat__duration"></span>';
+        durationStat.querySelector('.pk-stat__duration').textContent = formatDurationMs(duration);
+
+        metricsEl.replaceChildren(durationStat, ...traceStatParts(trace));
+    }
+
+    // Nothing ever arrived: replace "loading" with the placeholder row rather than
+    // leaving a spinner up forever.
+    function renderPending() {
+        metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
+    }
+
+    /**
+     * Fetches the trace's insights on the fixed schedule above, calling onTrace for every
+     * attempt that brings a trace with a root span - a 404 or an empty result leaves the
+     * previous render standing - and onNothingArrived once if no attempt ever did. Stops
+     * silently the moment stillCurrent() says the bar has moved on to another trace.
+     */
+    function pollTrace(traceId, {stillCurrent, onTrace, onNothingArrived}) {
+        let rendered = false;
+
+        function attempt(index) {
+            if (!stillCurrent() || index >= ATTEMPT_DELAYS_MS.length) return;
+            const last = index === ATTEMPT_DELAYS_MS.length - 1;
+            setTimeout(() => {
+                if (!stillCurrent()) return;
+                fetch(data.basePath + '/api/traces/' + traceId + '/insights')
+                    .then(resp => (resp.ok ? resp.json() : null))
+                    .then(trace => {
+                        if (!stillCurrent()) return;
+                        if (trace && trace.rootSpan) {
+                            onTrace(trace);
+                            rendered = true;
+                        } else if (last && !rendered) {
+                            onNothingArrived();
+                        }
+                    })
+                    .catch(() => {
+                        if (stillCurrent() && last && !rendered) onNothingArrived();
+                    })
+                    .finally(() => attempt(index + 1));
+            }, ATTEMPT_DELAYS_MS[index]);
+        }
+
+        attempt(0);
     }
 
     async function openOverlay() {

@@ -111,8 +111,12 @@ function expandTraceById(traceId, subview = null, params = {}) {
     // overlay for a trace that's already open, flickering it.
     if (document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === traceId) return;
 
+    const {locale: currentLocale, timeZone, features: currentFeatures} = currentContext();
     openTraceDetail(traceId, {
         urlState: buildTraceUrlState(traceId, subview, params),
+        locale: currentLocale,
+        timeZone,
+        features: currentFeatures,
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace.
         onClose: () => {
@@ -369,11 +373,20 @@ function togglePause() {
 
 // --- Locale / timezone controls --------------------------------------------------------
 
+/**
+ * The select lists a few common locales; the browser's own (navigator.language, the
+ * default the dates are formatted with) and a stored choice outside that list get an
+ * option added, so the control always shows the locale actually in effect rather than
+ * its first entry.
+ */
 function initLocaleSelector() {
     const select = document.getElementById('locale-select');
-    if (select.querySelector(`option[value="${locale}"]`)) {
-        select.value = locale;
-    }
+    [navigator.language, locale].filter(Boolean).forEach(tag => {
+        if (!select.querySelector(`option[value="${CSS.escape(tag)}"]`)) {
+            select.add(new Option(tag.toUpperCase(), tag));
+        }
+    });
+    select.value = locale;
     select.addEventListener('change', () => {
         locale = select.value;
         writeSetting('peekaboot-locale', locale);

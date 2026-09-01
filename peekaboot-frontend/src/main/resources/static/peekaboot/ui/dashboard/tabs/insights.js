@@ -516,6 +516,7 @@ async function createPanelChart(panel) {
         panel.chart = createChart({
             panel: panel.definition, mount: panel.mount, level, snapshot, showPercentiles,
             events: lifecycleEvents, showMarkers,
+            dateOptions: () => ({locale: currentContext.locale, timeZone: currentContext.timeZone}),
             onZoom: handleZoom, onZoomReset: handleZoomReset
         });
         // a chart built while a zoom is already active (first scroll into view, or a

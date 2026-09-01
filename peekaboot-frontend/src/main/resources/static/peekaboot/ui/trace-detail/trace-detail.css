@@ -134,6 +134,8 @@
 .pk-gantt-bar.has-error { background: var(--pk-danger); }
 
 .pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
+.pk-gantt-duration--slow { color: var(--pk-warning-text); }
+.pk-gantt-duration--very-slow { color: var(--pk-danger); }
 
 .pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; cursor: pointer;
     border: none; padding: 0; }
@@ -215,7 +217,7 @@
 .pk-log__span-cell .pk-copy { padding: 0 2px; gap: 3px; max-width: 100%; }
 .pk-log__span-cell .pk-copy__label, .pk-log__span-cell .pk-copy__value { font-size: 9px; }
 .pk-log__level { width: 50px; font-weight: 600; }
-.pk-log__level--debug { color: var(--pk-text-muted); }
+.pk-log__level--trace, .pk-log__level--debug { color: var(--pk-text-muted); }
 .pk-log__level--info { color: var(--pk-info-text); }
 .pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }

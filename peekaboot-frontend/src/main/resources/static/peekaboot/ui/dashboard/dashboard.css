@@ -390,15 +390,7 @@
 .pk-trace-item__stats .pk-copy { max-width: 24ch; }
 .pk-trace-item__time { color: var(--pk-text-muted); font-size: var(--pk-text-sm); }
 .pk-trace-item__stats { display: flex; align-items: center; gap: var(--pk-space-md); margin-top: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-.pk-trace-item__stat-group { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
-.pk-trace-item__stat-count { font-weight: 500; }
 .pk-trace-item__stat-separator { color: var(--pk-text-muted); opacity: 0.6; }
-.pk-trace-item__stat-duration { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
-.pk-trace-item__stat-group--slow .pk-trace-item__stat-duration { color: var(--pk-warning-text); }
-.pk-trace-item__stat-group--very-slow .pk-trace-item__stat-duration { color: var(--pk-danger); }
-.pk-trace-item__log-count { display: inline-flex; align-items: center; gap: 2px; }
-.pk-trace-item__log-count--error { color: var(--pk-danger); }
-.pk-trace-item__log-count--warn { color: var(--pk-warning-text); }
 
 /* Scheduled task item */
 .pk-task { padding: var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }
