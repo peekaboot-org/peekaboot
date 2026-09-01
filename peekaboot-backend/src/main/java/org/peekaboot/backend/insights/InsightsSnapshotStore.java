@@ -215,10 +215,8 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private void runWriter() {
         long intervalMs = interval.toMillis();
         while (!Thread.currentThread().isInterrupted()) {
-            long now = System.currentTimeMillis();
-            long boundary = ((now / intervalMs) + 1) * intervalMs;
             try {
-                Thread.sleep(boundary - now);
+                IntervalBoundary.sleepUntilNext(intervalMs, 0);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;

@@ -183,10 +183,9 @@ public final class InsightsCollector implements SmartLifecycle {
         long intervalMs = intervalMillis[level];
         long offsetMs = level == 0 ? 0 : intervalMillis[level - 1] / 2;
         while (!Thread.currentThread().isInterrupted()) {
-            long now = System.currentTimeMillis();
-            long boundary = ((now / intervalMs) + 1) * intervalMs;
+            long boundary;
             try {
-                Thread.sleep(boundary + offsetMs - now);
+                boundary = IntervalBoundary.sleepUntilNext(intervalMs, offsetMs);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
