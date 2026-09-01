@@ -97,11 +97,29 @@ public final class LifecycleEventFile {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.writeString(temp, content.toString(), StandardCharsets.UTF_8);
+        try {
+            Files.writeString(temp, content.toString(), StandardCharsets.UTF_8);
+            moveIntoPlace();
+        } catch (IOException e) {
+            deleteTemp(e);
+            throw e;
+        }
+    }
+
+    private void moveIntoPlace() throws IOException {
         try {
             Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
             Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /** A half-written temporary describes nothing; the next write starts from scratch anyway. */
+    private void deleteTemp(IOException cause) {
+        try {
+            Files.deleteIfExists(temp);
+        } catch (IOException e) {
+            cause.addSuppressed(e);
         }
     }
 }
