@@ -226,17 +226,17 @@ org.peekaboot.backend/
 │   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, ...
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
-├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store
+├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
 │   └── web/                # InsightsController, InsightsSsePublisher — /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present)
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
 │   └── web/                # LifecycleController — /peekaboot/api/lifecycle/*
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
-│   ├── actuator/           # Actuator → domain mappers
+│   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor
-├── masking/                # MaskingEngine, MaskingRules, TagMasker, TreeMasker — the one place
-│                           # "is this key/value sensitive" is decided; see peekaboot.org/docs/security
+├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
+│                           # ConnectionParamsMasker — the one place "is this key/value sensitive" is decided; see peekaboot.org/docs/security
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── storage/                # StorageDirectory — resolves peekaboot.storage.dir; OwnerOnlyFiles — owner-only, symlink-safe writes (see Persisted state)
 ├── tracing/                # In-memory tracing
