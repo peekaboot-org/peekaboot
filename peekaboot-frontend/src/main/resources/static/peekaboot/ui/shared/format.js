@@ -14,7 +14,7 @@ export function formatDurationMs(ms) {
  * would render as "2880.00m") - the three largest non-zero units ("1 day, 2 hours, 3
  * minutes"), plain seconds below a minute. Mirrors the backend's UptimeFormat.humanize
  * unit-by-unit so a run's duration reads identically in the log banner and this
- * dashboard; only the null case differs, falling back to this module's own '-'
+ * dashboard; null and negative input differ, falling back to this module's own '-'
  * convention instead of the backend's "0 seconds".
  */
 export function formatLongDuration(ms) {
