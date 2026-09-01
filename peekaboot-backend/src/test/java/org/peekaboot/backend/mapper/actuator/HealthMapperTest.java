@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.actuator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -52,19 +53,12 @@ class HealthMapperTest {
      */
     @Test
     void map_shouldFlattenACompositesChildrenUnderTheParentName() {
+        // insertion-ordered like Spring's TreeMap-backed composite, so the flat order is checkable
+        Map<String, HealthResponse.HealthComponent> children = new LinkedHashMap<>();
+        children.put("primary", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL")));
+        children.put("reporting", new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused")));
         HealthResponse health = new HealthResponse(
-                "DOWN",
-                Map.of(
-                        "db",
-                        new HealthResponse.HealthComponent(
-                                "DOWN",
-                                null,
-                                Map.of(
-                                        "primary",
-                                        new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL")),
-                                        "reporting",
-                                        new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused"))))),
-                List.of());
+                "DOWN", Map.of("db", new HealthResponse.HealthComponent("DOWN", null, children)), List.of());
 
         HealthInfo result = mapper.map(health);
 
