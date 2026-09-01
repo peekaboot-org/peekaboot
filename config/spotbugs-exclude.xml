@@ -16,12 +16,16 @@
         </Or>
     </Match>
 
-    <!-- The container markers the local-development detection reads - /.dockerenv and
-         /proc/1/cgroup - are absolute by definition: they are where Docker and the kernel
-         put them, not paths the application chooses. The reading code takes them as
-         parameters so tests can point it at temporary files. -->
+    <!-- The container markers and CPU facts the runtime detection reads - /.dockerenv,
+         /run/.containerenv, /proc/1/cgroup and /proc/cpuinfo - are absolute by definition:
+         they are where the container runtimes and the kernel put them, not paths the
+         application chooses. The reading code takes them as parameters so tests can point
+         it at temporary files. -->
     <Match>
-        <Class name="org.peekaboot.autoconfigure.LocalDevDetector$LaunchSignals"/>
+        <Or>
+            <Class name="org.peekaboot.backend.domain.runtime.ContainerRuntime$Signals"/>
+            <Class name="org.peekaboot.backend.domain.runtime.MachineInfo"/>
+        </Or>
         <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
     </Match>
 

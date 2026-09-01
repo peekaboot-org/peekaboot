@@ -6,6 +6,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
+import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 
 class RuntimeMapperTest {
@@ -66,6 +67,12 @@ class RuntimeMapperTest {
         InfoResponse info = new InfoResponse(null, null, null, null, null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
+    }
+
+    @Test
+    void map_shouldAlwaysIncludeMachineInfo() {
+        RuntimeInfo result = mapper.map(null, null);
+        assertThat(result.machine()).isSameAs(MachineInfo.current());
     }
 
     @Test
