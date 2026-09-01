@@ -4,6 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -82,14 +87,50 @@ class InsightsCollectorRestoreTest {
     }
 
     @Test
-    void aSeriesTheFileNeverCarriedStartsEmpty() {
+    void aSeriesTheFileNeverCarriedComesBackAsGapsBesideTheOneItDid() {
         InsightsCollector source = collector("cpu.process");
         source.tick(10_000);
 
         InsightsCollector restored = collector("cpu.process", "brand.new");
         restored.restore(source.capture());
 
-        assertThat(restored.snapshot(0).tickValues().get("brand.new")).isEmpty();
+        assertThat(restored.snapshot(0).tickValues().get("cpu.process")).containsExactly(7.0);
+        assertThat(restored.snapshot(0).tickValues().get("brand.new")).containsExactly(Double.NaN);
+    }
+
+    /**
+     * The file declares one sample count per level for every series it holds, so a series
+     * restored shorter than the rest makes the next capture write fewer values than its own
+     * header promises - and the run after that reads a double where a series id should be.
+     */
+    @Test
+    void aConfigThatGainedASeriesStillWritesAFileTheNextRunCanRead() throws IOException {
+        InsightsCollector source = collector("cpu.process", "heap.used");
+        source.tick(10_000);
+        source.tick(20_000);
+        source.rollUp(1, 60_000);
+
+        InsightsCollector restored = collector("cpu.process", "heap.used", "brand.new");
+        restored.restore(source.capture());
+        InsightsSnapshot captured = restored.capture();
+
+        InsightsSnapshot decoded = roundTrip(captured);
+
+        assertThat(decoded.levels()).isEqualTo(captured.levels());
+        assertThat(decoded.series()).containsOnlyKeys("cpu.process", "heap.used", "brand.new");
+        assertThat(decoded.series().get("cpu.process").get(0)[0]).containsExactly(7.0, 7.0);
+        assertThat(decoded.series().get("brand.new").get(0)[0]).containsExactly(Double.NaN, Double.NaN);
+        assertThat(decoded.series().get("brand.new").get(1)[7]).containsExactly(0.0); // no samples behind the gap
+    }
+
+    private static InsightsSnapshot roundTrip(InsightsSnapshot snapshot) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(bytes)) {
+            InsightsSnapshotCodec.write(out, snapshot);
+        }
+        try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+            return InsightsSnapshotCodec.readBody(in, InsightsSnapshotCodec.readHeader(in));
+        }
     }
 
     @Test

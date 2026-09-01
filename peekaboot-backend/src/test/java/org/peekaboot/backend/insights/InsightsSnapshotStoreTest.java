@@ -33,6 +33,14 @@ class InsightsSnapshotStoreTest {
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}})));
     }
 
+    /** One sample of {@code value}, the shape a run that restored nothing would capture. */
+    private static InsightsSnapshot ownSamplesOnly(double value) {
+        return new InsightsSnapshot(
+                System.currentTimeMillis(),
+                List.of(new InsightsSnapshot.Level(10_000, 90, 30_000, 1)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{value}})));
+    }
+
     private Optional<InsightsSnapshot> loadWith(InsightsSnapshotStore store) {
         store.beginLoad();
         return store.awaitSnapshot(Duration.ofSeconds(5));
@@ -46,7 +54,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void whatOneRunWritesTheNextRunReads() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90));
+        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         Optional<InsightsSnapshot> restored = loadWith(store(Duration.ofDays(30)));
@@ -59,24 +67,97 @@ class InsightsSnapshotStoreTest {
     @Test
     void aRunThatNeverSampledDoesNotReplaceGoodHistory() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90));
+        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
         writer.stop();
         long size = Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME));
 
         InsightsSnapshotStore empty = store(Duration.ofDays(30));
-        empty.start(() -> new InsightsSnapshot(
-                System.currentTimeMillis(), List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of()));
+        empty.start(
+                () -> new InsightsSnapshot(
+                        System.currentTimeMillis(), List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of()),
+                () -> false);
         empty.stop();
 
         assertThat(Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME)))
                 .isEqualTo(size);
     }
 
+    /**
+     * A restore that never landed leaves the rings holding only this run's own samples,
+     * which is less than the file already has.
+     */
+    @Test
+    void aRunThatNeverTookThePersistedHistoryOverDoesNotReplaceIt() {
+        InsightsSnapshotStore writer = store(Duration.ofDays(30));
+        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.stop();
+
+        InsightsSnapshotStore second = store(Duration.ofDays(30));
+        assertThat(loadWith(second)).isPresent();
+        second.start(() -> ownSamplesOnly(9.0), () -> false);
+        second.stop();
+
+        assertThat(loadWith(store(Duration.ofDays(30))))
+                .get()
+                .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
+                .isEqualTo(new double[] {1.0, 2.0});
+    }
+
+    @Test
+    void aRunThatTookThePersistedHistoryOverReplacesIt() {
+        InsightsSnapshotStore writer = store(Duration.ofDays(30));
+        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.stop();
+
+        InsightsSnapshotStore second = store(Duration.ofDays(30));
+        assertThat(loadWith(second)).isPresent();
+        second.start(() -> ownSamplesOnly(9.0), () -> true);
+        second.stop();
+
+        assertThat(loadWith(store(Duration.ofDays(30))))
+                .get()
+                .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
+                .isEqualTo(new double[] {9.0});
+    }
+
+    /** A write that fails part way must not leave megabytes of nothing in the user's home. */
+    @Test
+    void aWriteThatFailsLeavesNoPartialFileBehind() {
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        // a snapshot that contradicts its own header: the codec refuses it mid-write
+        store.start(
+                () -> new InsightsSnapshot(
+                        System.currentTimeMillis(),
+                        List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 3)),
+                        Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}))),
+                () -> false);
+
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
+            store.stop();
+
+            assertThat(capture.appender().list).hasSize(1);
+            assertThat(capture.appender().list.get(0).getLevel()).isEqualTo(Level.WARN);
+        }
+        assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
+        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+    }
+
+    @Test
+    void aSnapshotDatedInTheFutureIsDeletedUnread() {
+        InsightsSnapshotStore writer = store(Duration.ofDays(30));
+        writer.start(
+                () -> snapshot(System.currentTimeMillis() + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
+        writer.stop();
+
+        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+        assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+    }
+
     @Test
     void aSnapshotOlderThanTheCutoffIsDeletedUnread() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
         writer.start(
-                () -> snapshot(System.currentTimeMillis() - Duration.ofDays(31).toMillis(), 10_000, 90));
+                () -> snapshot(System.currentTimeMillis() - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
@@ -86,7 +167,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aReshapedRingGeometryDiscardsTheWholeFile() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 30_000, 90)); // level 0 was 10s
+        writer.start(() -> snapshot(System.currentTimeMillis(), 30_000, 90), () -> false); // level 0 was 10s
         writer.stop();
 
         assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
@@ -115,7 +196,7 @@ class InsightsSnapshotStoreTest {
                 blocked.resolve("insights.snapshot"), GEOMETRY, Duration.ofHours(1), Duration.ofDays(30));
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
-            store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90));
+            store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
             store.writeNow();
             store.stop();
 

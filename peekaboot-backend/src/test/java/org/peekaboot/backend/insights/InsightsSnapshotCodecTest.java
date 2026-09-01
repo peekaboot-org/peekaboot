@@ -58,6 +58,35 @@ class InsightsSnapshotCodecTest {
         assertThat(restored.series().get("cpu.process").get(1)[7]).containsExactly(7.0, Double.NaN);
     }
 
+    /** A misaligned file only fails on the next read, so the write is where it has to fail. */
+    @Test
+    void aColumnThatContradictsTheDeclaredCountIsRefusedRatherThanWritten() {
+        InsightsSnapshot mismatched = new InsightsSnapshot(
+                1L,
+                List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 3)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}})));
+
+        assertThatThrownBy(() -> encoded(mismatched))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("cpu.process")
+                .hasMessageContaining("level 0");
+    }
+
+    @Test
+    void aSeriesCoveringFewerLevelsThanTheHeaderIsRefusedRatherThanWritten() {
+        InsightsSnapshot mismatched = new InsightsSnapshot(
+                1L,
+                List.of(
+                        new InsightsSnapshot.Level(10_000, 90, 20_000, 1),
+                        new InsightsSnapshot.Level(60_000, 60, 0, 0)),
+                Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0}})));
+
+        assertThatThrownBy(() -> encoded(mismatched))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("cpu.process")
+                .hasMessageContaining("levels");
+    }
+
     @Test
     void aFileThatIsNotOursIsRejected() throws IOException {
         byte[] bytes = encoded(snapshot());

@@ -40,6 +40,13 @@ final class InsightsSnapshotCodec {
     /** Magic, version, and the level table - everything needed to judge a file before parsing it. */
     record Header(long writtenAtEpochMs, List<InsightsSnapshot.Level> levels) {}
 
+    /**
+     * The body carries no lengths of its own: the reader takes every column's length from
+     * the level table, which declares one sample count for all series at once. A column of
+     * any other length shifts every following byte, and the only symptom would be the next
+     * run reading a double where a series id belongs - so a snapshot that does not match
+     * its own header is refused here rather than written.
+     */
     static void write(OutputStream stream, InsightsSnapshot snapshot) throws IOException {
         DataOutputStream out = stream instanceof DataOutputStream data ? data : new DataOutputStream(stream);
         out.writeInt(MAGIC);
@@ -55,8 +62,18 @@ final class InsightsSnapshotCodec {
         out.writeInt(snapshot.series().size());
         for (Map.Entry<String, List<double[][]>> entry : snapshot.series().entrySet()) {
             out.writeUTF(entry.getKey());
-            for (double[][] columns : entry.getValue()) {
-                for (double[] column : columns) {
+            List<double[][]> byLevel = entry.getValue();
+            if (byLevel.size() != snapshot.levels().size()) {
+                throw new IOException("insights series " + entry.getKey() + " covers " + byLevel.size()
+                        + " levels, not the " + snapshot.levels().size() + " the header declares");
+            }
+            for (int level = 0; level < byLevel.size(); level++) {
+                int count = snapshot.levels().get(level).count();
+                for (double[] column : byLevel.get(level)) {
+                    if (column.length != count) {
+                        throw new IOException("insights series " + entry.getKey() + " holds " + column.length
+                                + " values at level " + level + ", not the " + count + " the header declares");
+                    }
                     for (double value : column) {
                         out.writeDouble(value);
                     }

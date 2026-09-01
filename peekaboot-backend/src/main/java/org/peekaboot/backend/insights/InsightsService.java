@@ -115,7 +115,7 @@ public final class InsightsService implements SmartLifecycle {
         }
         collector.start();
         if (store != null) {
-            store.start(collector::capture);
+            store.start(collector::capture, collector::hasRestoredHistory);
         }
         log.info(
                 "Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}{}",

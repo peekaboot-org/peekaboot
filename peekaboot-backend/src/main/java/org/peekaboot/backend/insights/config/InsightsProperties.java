@@ -47,6 +47,9 @@ public class InsightsProperties {
     }
 
     private void validatePersistence() {
+        if (persistence == null) {
+            throw new IllegalStateException("peekaboot.insights.persistence must not be null");
+        }
         if (persistence.interval != null && (persistence.interval.isZero() || persistence.interval.isNegative())) {
             throw new IllegalStateException("peekaboot.insights.persistence.interval must be positive");
         }

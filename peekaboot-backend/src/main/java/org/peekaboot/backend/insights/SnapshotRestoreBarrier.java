@@ -38,6 +38,11 @@ final class SnapshotRestoreBarrier {
         this.snapshotSource = snapshotSource;
     }
 
+    /** Whether the persisted rings reached the collector; false while pending and after an abandoned attempt. */
+    boolean hasApplied() {
+        return state.get() == State.APPLIED;
+    }
+
     /** Applies {@code restore} to the persisted snapshot, once, before returning control to the caller. */
     void arriveBefore(Consumer<InsightsSnapshot> restore) {
         if (state.get() != State.PENDING) {

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.storage.StorageDirectory;
@@ -36,6 +37,8 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     public static final String FILE_NAME = "insights.snapshot";
     private static final String TEMP_SUFFIX = ".tmp";
     private static final Duration WRITER_JOIN = Duration.ofSeconds(2);
+    /** Clock skew a snapshot may carry and still be believed; anything beyond it is a stepped clock. */
+    private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
     private final Path file;
     private final Path temp;
@@ -45,8 +48,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private final CompletableFuture<Optional<InsightsSnapshot>> loaded = new CompletableFuture<>();
 
     private volatile Supplier<InsightsSnapshot> capture;
+    private volatile BooleanSupplier historyRestored = () -> false;
     private volatile Thread writer;
     private volatile boolean writeFailureLogged;
+    private volatile boolean unclaimedHistory;
 
     public InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
         this.file = file;
@@ -102,8 +107,13 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         }
     }
 
-    /** Starts the periodic writer against {@code capture}, the collector's current state. */
-    public void start(Supplier<InsightsSnapshot> capture) {
+    /**
+     * Starts the periodic writer against {@code capture}, the collector's current state.
+     * {@code historyRestored} reports whether that collector has taken the persisted rings
+     * over, which is what decides whether its state may replace them.
+     */
+    public void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored) {
+        this.historyRestored = historyRestored;
         this.capture = capture;
         Thread thread = Thread.ofVirtual().name("peekaboot-insights-snapshot").unstarted(this::runWriter);
         this.writer = thread;
@@ -135,9 +145,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             return;
         }
         InsightsSnapshot snapshot = source.get();
-        // A run that never sampled and restored nothing has nothing to say, and must not
-        // replace a good file with an empty one.
-        if (snapshot.levels().stream().allMatch(level -> level.endEpochMs() == 0)) {
+        if (!replacesWhatIsThere(snapshot)) {
             return;
         }
         try {
@@ -150,10 +158,32 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             }
             move();
         } catch (IOException e) {
+            deleteTemp();
             if (!writeFailureLogged) {
                 writeFailureLogged = true;
                 log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e);
             }
+        }
+    }
+
+    /**
+     * Whether the rings behind {@code snapshot} are at least as complete as the file they
+     * would overwrite. They are not while a persisted history is still on disk unapplied -
+     * a run whose restore timed out on a busy disk holds a handful of samples and would
+     * otherwise replace a full retention window with them. A run that found nothing to take
+     * over has nothing to lose, and writes as soon as it has sampled at all.
+     */
+    private boolean replacesWhatIsThere(InsightsSnapshot snapshot) {
+        return historyRestored.getAsBoolean()
+                || (!unclaimedHistory && snapshot.levels().stream().anyMatch(level -> level.endEpochMs() > 0));
+    }
+
+    /** A half-written temporary is megabytes of nothing; the next write starts it from scratch anyway. */
+    private void deleteTemp() {
+        try {
+            Files.deleteIfExists(temp);
+        } catch (IOException e) {
+            log.debug("Could not delete the partial insights snapshot {}", temp, e);
         }
     }
 
@@ -184,10 +214,16 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         if (!Files.exists(file)) {
             return Optional.empty();
         }
+        // Set before the parse, so a write that follows a restore this run gave up waiting
+        // for still knows there is history on disk it never took over.
+        unclaimedHistory = true;
         try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(file)))) {
             InsightsSnapshotCodec.Header header = InsightsSnapshotCodec.readHeader(in);
-            if (isTooOld(header)) {
-                log.info("Peekaboot insights: {} is older than {}; starting with empty history", file, maxAge);
+            if (isImplausiblyDated(header)) {
+                log.info(
+                        "Peekaboot insights: {} is not dated within the last {}; starting with empty history",
+                        file,
+                        maxAge);
                 discard();
                 return Optional.empty();
             }
@@ -205,8 +241,17 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         }
     }
 
-    private boolean isTooOld(InsightsSnapshotCodec.Header header) {
-        return header.writtenAtEpochMs() < System.currentTimeMillis() - maxAge.toMillis();
+    /**
+     * A snapshot is worth reading only while it is dated inside the window it would restore
+     * into. Past the cutoff every restored sample would be an empty gap; ahead of now - a
+     * clock stepped back, a backup restored over a newer file - it would roll every level's
+     * {@code endEpochMs} into the future, so no gap is ever filled and the newest samples
+     * keep timestamps that never arrive.
+     */
+    private boolean isImplausiblyDated(InsightsSnapshotCodec.Header header) {
+        long now = System.currentTimeMillis();
+        return header.writtenAtEpochMs() < now - maxAge.toMillis()
+                || header.writtenAtEpochMs() > now + CLOCK_SKEW.toMillis();
     }
 
     /** Only shape matters here; how full the rings were and where they ended does not. */
@@ -226,6 +271,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
 
     /** A file that failed once will fail every start; deleting it keeps that from repeating. */
     private void discard() {
+        unclaimedHistory = false;
         try {
             Files.deleteIfExists(file);
         } catch (IOException e) {

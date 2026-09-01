@@ -77,6 +77,22 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("max-age");
     }
 
+    /** A YAML null binds through the setter, so both blocks have to say so rather than fail on a dereference. */
+    @Test
+    void rejectsBlocksThatWereBoundToNothing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setPersistence(null);
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("persistence");
+
+        InsightsProperties withoutLevels = new InsightsProperties();
+        withoutLevels.setLevels(null);
+        assertThatThrownBy(withoutLevels::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("levels");
+    }
+
     @Test
     void persistenceDefaultsToOneWritePerCoarsestWindowAndItsWholeSpan() {
         InsightsProperties properties = new InsightsProperties();

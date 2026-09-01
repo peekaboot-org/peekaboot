@@ -355,25 +355,53 @@ public final class InsightsCollector implements SmartLifecycle {
     /**
      * Refills the rings from a snapshot whose geometry the store has already matched
      * against the live config. Series the config no longer declares are skipped, and
-     * series the file never carried simply stay empty. Restoring each level's
+     * a series the file never carried is filled with gaps instead. Restoring each level's
      * {@code endEpochMs} is what makes the outage visible: {@link #fillMissed} pads the
      * gap on this level's first tick or roll-up, with no separate replay to maintain.
      */
     void restore(InsightsSnapshot snapshot) {
-        for (Map.Entry<String, List<double[][]>> entry : snapshot.series().entrySet()) {
-            DoubleRing level0 = level0Rings.get(entry.getKey());
-            if (level0 == null || entry.getValue().size() != intervalMillis.length) {
-                continue;
-            }
-            level0.restore(entry.getValue().get(0)[0]);
+        for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
+            List<double[][]> persisted = snapshot.series().get(entry.getKey());
             StatsRing[] rings = statsRings.get(entry.getKey());
-            for (int level = 1; level < intervalMillis.length; level++) {
-                rings[level].restore(entry.getValue().get(level));
+            if (persisted != null && persisted.size() == intervalMillis.length) {
+                entry.getValue().restore(persisted.get(0)[0]);
+                for (int level = 1; level < intervalMillis.length; level++) {
+                    rings[level].restore(persisted.get(level));
+                }
+            } else {
+                padWithGaps(entry.getValue(), rings, snapshot.levels());
             }
         }
         for (int level = 0; level < intervalMillis.length; level++) {
             levelEndEpochMs.set(level, snapshot.levels().get(level).endEpochMs());
         }
+    }
+
+    /**
+     * Brings a series the snapshot did not supply up to the length the snapshot's other
+     * series have. Every level carries one sample count for all series at once - both in
+     * {@link #capture()} and in the file - so a series left short would have the next
+     * capture promise more values in its header than it writes. Gaps are also what the
+     * window deserves: the series was not being sampled for it, and a gap is exactly what
+     * the charts already draw for that.
+     */
+    private void padWithGaps(DoubleRing level0, StatsRing[] rings, List<InsightsSnapshot.Level> levels) {
+        for (int i = 0; i < levels.get(0).count(); i++) {
+            level0.add(Double.NaN);
+        }
+        for (int level = 1; level < intervalMillis.length; level++) {
+            for (int i = 0; i < levels.get(level).count(); i++) {
+                rings[level].add(AggregateStats.EMPTY);
+            }
+        }
+    }
+
+    /**
+     * Whether the persisted history has reached the rings. Until it has, what the rings hold
+     * is only what this run sampled itself, which is less than the file it would replace.
+     */
+    boolean hasRestoredHistory() {
+        return restoreBarrier.hasApplied();
     }
 
     /** How much of a level's ring is filled; 0 when no series is configured at all. */
