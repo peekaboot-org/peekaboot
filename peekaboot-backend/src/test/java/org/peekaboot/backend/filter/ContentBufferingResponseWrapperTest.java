@@ -1,21 +1,20 @@
 package org.peekaboot.backend.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
+
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ContentBufferingResponseWrapperTest {
@@ -213,7 +212,6 @@ class ContentBufferingResponseWrapperTest {
         }
 
         @Override
-        public void setWriteListener(jakarta.servlet.WriteListener listener) {
-        }
+        public void setWriteListener(jakarta.servlet.WriteListener listener) {}
     }
 }
