@@ -5,8 +5,13 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "peekaboot")
 public class PeekabootProperties {
 
-    /** The master switch for the dashboard, its API and Peekaboot's own defaults; auto-detected: on for a local launch (IDE, spring-boot:run, bootRun), off otherwise. */
-    private boolean enabled = true;
+    /**
+     * The master switch for the dashboard, its API and Peekaboot's own defaults: false
+     * unless PeekabootDefaultsEnvironmentPostProcessor's launch-context detection sets it
+     * (on for a local launch from an IDE, spring-boot:run or bootRun), and any explicit
+     * setting wins over that detection.
+     */
+    private boolean enabled = false;
 
     /**
      * Injects the dev toolbar into HTML responses and turns on correlated-log and full

@@ -25,20 +25,21 @@ class PeekabootAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
             .withUserConfiguration(MockActuatorConfig.class);
 
+    /** Off without the post-processor's launch-context detection - the metadata must advertise that. */
     @Test
-    void propertiesHaveCorrectDefaults() {
+    void propertiesDefaultToOff() {
         PeekabootProperties properties = new PeekabootProperties();
-        assertThat(properties.isEnabled()).isTrue();
+        assertThat(properties.isEnabled()).isFalse();
         assertThat(properties.isDevToolbar()).isFalse();
     }
 
     @Test
     void propertiesCanBeModified() {
         PeekabootProperties properties = new PeekabootProperties();
-        properties.setEnabled(false);
+        properties.setEnabled(true);
         properties.setDevToolbar(true);
 
-        assertThat(properties.isEnabled()).isFalse();
+        assertThat(properties.isEnabled()).isTrue();
         assertThat(properties.isDevToolbar()).isTrue();
     }
 
