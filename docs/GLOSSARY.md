@@ -67,10 +67,12 @@ vocabulary.
 
 ## Data Representations
 
-### Raw Data
-The unprocessed trace data as captured from OpenTelemetry. Contains all spans with their full attributes.
+### Trace Data (internal)
+The trace as captured from OpenTelemetry and held in `TraceStore`: every span with its full
+tag map, plus the logs and request metadata correlated to it. Internal only — no endpoint
+serves it as-is; the insights endpoints are built from it.
 
-**Usage:** `TraceData`, `SpanData` — the internal domain model insights are built from
+**Usage:** `TraceData`, `SpanData`, `TraceDataBundle`
 
 ### Insights Data
 Enriched and analyzed trace data suitable for UI display. Includes detected issues, hierarchical structure, and correlated logs.
@@ -164,6 +166,10 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 | `params.form` | Form parameters |
 | `params.upload` | Uploaded files |
 
+`body.content`, `body.truncated` and `params.upload` are reserved fields: `RequestCaptureFilter`
+never populates them, so they are always null/empty (see
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
+
 **HttpResponse fields:**
 | Field | Description |
 |-------|-------------|
@@ -174,7 +180,7 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 
 ## UI Components
 
-### Debug Toolbar
+### Dev toolbar
 Development-time toolbar injected into HTML responses, showing trace data inline with the rendered page.
 
 ### Dashboard
