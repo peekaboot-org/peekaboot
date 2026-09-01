@@ -71,9 +71,10 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         detected.put(ENABLED_PROPERTY, localDevelopment);
         detected.put(DEV_TOOLBAR_PROPERTY, localDevelopment);
         detected.put(STORAGE_ENABLED_PROPERTY, localDevelopment);
-        if (localDevelopment) {
+        if (localDevelopment && application.getWebApplicationType() == WebApplicationType.SERVLET) {
             // Absent rather than an explicit "never" off-local: Peekaboot must not pin Spring's
-            // own default into an application that is not using it.
+            // own default into an application that is not using it. Servlet-gated like the
+            // defaults yml, because the dashboard is the only reader of the widened values.
             detected.put(ENV_SHOW_VALUES_PROPERTY, "always");
             detected.put(CONFIGPROPS_SHOW_VALUES_PROPERTY, "always");
         }

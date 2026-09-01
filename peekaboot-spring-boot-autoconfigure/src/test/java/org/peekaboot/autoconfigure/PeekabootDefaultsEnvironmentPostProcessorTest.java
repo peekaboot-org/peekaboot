@@ -166,9 +166,10 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
      * The dashboard, its filters and the trace store are servlet-only, so a WebFlux or
      * non-web application launched locally has nothing that would read the observability
      * defaults - Hibernate statistics, full sampling and the observation annotations would
-     * only cost. Detection (the activation switches, storage, value visibility) and the
-     * no-push default still apply: they gate the lifecycle and storage beans, which are not
-     * servlet-bound.
+     * only cost. Detection (the activation switches, storage) and the no-push default
+     * still apply: they gate the lifecycle and storage beans, which are not
+     * servlet-bound. Actuator value visibility is servlet-gated too - see
+     * {@code doesNotShowActuatorValuesForANonServletApplication}.
      */
     @Test
     void skipsTheObservabilityDefaultsForAReactiveApplication() {
@@ -217,6 +218,23 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo("always");
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
                 .isEqualTo("always");
+    }
+
+    /**
+     * The dashboard - the only reader of the widened values - is servlet-only, so a
+     * reactive or non-web local launch keeps Spring's defaults for them, like it skips
+     * the other observability defaults.
+     */
+    @Test
+    void doesNotShowActuatorValuesForANonServletApplication() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, application(WebApplicationType.REACTIVE));
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isNull();
     }
 
     /**
