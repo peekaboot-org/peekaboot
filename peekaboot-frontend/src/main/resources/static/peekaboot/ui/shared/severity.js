@@ -34,12 +34,12 @@ export function durationSeverity(ms, features) {
     return '';
 }
 
-/** Every IssueType the backend raises, and the severity suffix each one paints a duration with. */
+/** Every IssueType the backend raises, in the enum's order, and the severity suffix each one paints a duration with. */
 const ISSUE_SEVERITIES = Object.freeze({
     SLOW: 'slow',
     VERY_SLOW: 'very-slow',
-    SLOW_QUERY: 'slow',
     ERROR: '',
+    SLOW_QUERY: 'slow',
     HIGH_QUERY_COUNT: ''
 });
 
