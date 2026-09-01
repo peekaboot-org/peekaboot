@@ -1,5 +1,8 @@
 package org.peekaboot.backend.masking;
 
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -147,6 +150,40 @@ public final class MaskingEngine {
      */
     public String mask(String key, String value, boolean unmask) {
         return unmask ? value : mask(key, value);
+    }
+
+    /**
+     * Masks a raw, still-encoded query string per parameter rather than treating it as
+     * one opaque string - a whole-string regex could not tell a sensitive value from the
+     * rest of the string without false positives/negatives. Each pair is decoded, masked
+     * via the same {@link #mask(String, String)} rule as everywhere else, and re-encoded;
+     * a bare flag with no "=" (e.g. "?debug") is passed through unchanged since it
+     * carries no value to mask.
+     */
+    public String maskQueryString(String queryString) {
+        if (queryString == null || queryString.isBlank()) {
+            return queryString;
+        }
+        String[] pairs = queryString.split("&", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < pairs.length; i++) {
+            if (i > 0) {
+                result.append('&');
+            }
+            String pair = pairs[i];
+            int equalsIndex = pair.indexOf('=');
+            if (equalsIndex < 0) {
+                result.append(pair);
+                continue;
+            }
+            String key = URLDecoder.decode(pair.substring(0, equalsIndex), StandardCharsets.UTF_8);
+            String value = URLDecoder.decode(pair.substring(equalsIndex + 1), StandardCharsets.UTF_8);
+            String maskedValue = mask(key, value);
+            result.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
+                    .append('=')
+                    .append(URLEncoder.encode(maskedValue, StandardCharsets.UTF_8));
+        }
+        return result.toString();
     }
 
     /**

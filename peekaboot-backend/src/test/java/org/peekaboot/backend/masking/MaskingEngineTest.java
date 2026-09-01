@@ -491,6 +491,37 @@ class MaskingEngineTest {
     }
 
     /**
+     * A raw query string (no URL around it), masked pair by pair with the same key-name
+     * rules as everything else - the entry point {@code RequestCaptureFilter} uses for
+     * {@code request.getQueryString()}.
+     */
+    @Nested
+    class QueryStringMasking {
+
+        @Test
+        void maskQueryString_shouldMaskSensitivePairsAndLeaveTheRestAlone() {
+            assertThat(engine.maskQueryString("api_key=xyz&q=widgets")).isEqualTo("api_key=******&q=widgets");
+        }
+
+        @Test
+        void maskQueryString_shouldPreserveAPairWithNoValue() {
+            assertThat(engine.maskQueryString("debug&q=widgets")).isEqualTo("debug&q=widgets");
+        }
+
+        @Test
+        void maskQueryString_shouldReturnNullAndBlankInputUnchanged() {
+            assertThat(engine.maskQueryString(null)).isNull();
+            assertThat(engine.maskQueryString(" ")).isEqualTo(" ");
+        }
+
+        /** The key is judged decoded, so an encoded spelling of a sensitive name still masks. */
+        @Test
+        void maskQueryString_shouldDecodeTheKeyBeforeJudgingIt() {
+            assertThat(engine.maskQueryString("api%5Fkey=xyz&q=a%20b")).isEqualTo("api_key=******&q=a+b");
+        }
+    }
+
+    /**
      * Container platforms hand secrets to a JVM as {@code -Dspring.datasource.password=...}
      * inside JAVA_TOOL_OPTIONS and friends; the option's key decides, with the same
      * key-name rules as a property of that name.
