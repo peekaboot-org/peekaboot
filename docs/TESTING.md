@@ -76,8 +76,10 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   route.abort())`) and never unroutes it, so a scheduled poll can still fire while teardown's
   `context().close()` is mid-flight, and Playwright's client tries to sync interception patterns
   against a target that is already closing. `PlaywrightTestBase.closePage()` now catches
-  `TargetClosedError` around `context().close()` as a benign teardown race, the same tolerance it
-  already gives `TimeoutError` around the network-idle wait. Characterised by running `mvn -pl
+  `TargetClosedError` around `context().close()` as a benign teardown race. (Teardown has since
+  also started navigating to `about:blank` first, which stops the pollers before the close and
+  replaced the network-idle drain that used to run here — the tolerance stays as insurance.)
+  Characterised by running `mvn -pl
   peekaboot-testing-app verify -Dit.test=TraceOverlayIT` repeatedly before the fix (reproduced once
   in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
   previously-failing method).

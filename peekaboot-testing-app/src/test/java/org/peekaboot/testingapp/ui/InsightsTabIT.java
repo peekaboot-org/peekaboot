@@ -33,13 +33,11 @@ class InsightsTabIT extends PlaywrightTestBase {
         });
     }
 
-    /** A subclass @AfterEach runs before the base class's, so the stream is gone by teardown. */
     @AfterEach
-    void closeInsightsStream() {
+    void dumpBrowserLog() {
         if (!browserLog.isEmpty()) {
             System.out.println("[browser] " + String.join("\n[browser] ", new ArrayList<>(browserLog)));
         }
-        closeLiveStreams();
     }
 
     private void openInsights() {

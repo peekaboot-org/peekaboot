@@ -4,11 +4,9 @@ import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
-import com.microsoft.playwright.TimeoutError;
+import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.impl.TargetClosedError;
-import com.microsoft.playwright.options.LoadState;
 import com.microsoft.playwright.options.WaitForSelectorState;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,22 +32,33 @@ abstract class PlaywrightTestBase {
     protected Page page;
     protected String baseUrl;
 
+    /**
+     * One browser for the whole JVM, not one per test class: a per-class launch/close
+     * cycle pays Chromium's startup once for every subclass in the fork. JUnit has no
+     * per-JVM {@code @AfterAll}, so the matching close hangs off JVM shutdown instead.
+     * Isolation between tests comes from the per-test context, not the browser.
+     */
     @BeforeAll
     static void launchBrowser() {
+        if (browser != null) {
+            return;
+        }
         playwright = Playwright.create();
         browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+        Runtime.getRuntime().addShutdownHook(new Thread(PlaywrightTestBase::closeBrowser, "playwright-close"));
     }
 
-    @AfterAll
-    static void closeBrowser() {
+    private static void closeBrowser() {
         try {
-            if (browser != null) {
-                browser.close();
-            }
-        } finally {
-            if (playwright != null) {
-                playwright.close();
-            }
+            browser.close();
+            playwright.close();
+        } catch (RuntimeException e) {
+            // The JVM is exiting and the driver process dies with it; a close that trips
+            // over that shutdown must not spray a stack trace into otherwise-green output.
+            log.warn(
+                    "swallowed {} closing Playwright at JVM shutdown: {}",
+                    e.getClass().getSimpleName(),
+                    e.getMessage());
         }
     }
 
@@ -79,23 +88,27 @@ abstract class PlaywrightTestBase {
     void closePage() {
         if (page != null) {
             try {
-                page.waitForLoadState(LoadState.NETWORKIDLE, new Page.WaitForLoadStateOptions().setTimeout(2000));
-            } catch (TimeoutError e) {
-                // best-effort drain of in-flight requests; teardown must never fail a passing test
-                log.warn("swallowed TimeoutError waiting for network idle during teardown: {}", e.getMessage());
+                // Ends everything the page still has in flight - the toolbar's fetch ladder
+                // (it polls /api/traces/{id}/insights for up to 4.75s after load), the
+                // Insights tab's EventSource, half-finished fetches - deterministically and
+                // in milliseconds, where waiting for the network to go idle cost up to its
+                // full 2s timeout on any page with a poller.
+                page.navigate("about:blank");
+            } catch (PlaywrightException e) {
+                // teardown must never fail a passing test
+                log.warn(
+                        "swallowed {} navigating away during teardown: {}",
+                        e.getClass().getSimpleName(),
+                        e.getMessage());
             }
             try {
                 page.context().close();
             } catch (TargetClosedError e) {
-                // The collapsed toolbar's own fetch ladder (toolbar.js) keeps polling
-                // /api/traces/{id}/insights for up to 4.75s after page load, regardless of
-                // whether the test that opened the page is still running. A test that routes
-                // that endpoint (page.route(...)) and never unroutes it leaves the interceptor
-                // registered through teardown, so a scheduled poll can still fire while this
-                // close() is in flight; Playwright then tries to sync interception patterns
-                // against a target that is already gone. The context is closing either way -
-                // that is this call's whole goal - so a race in Playwright's own internal
-                // bookkeeping on the way there is not a real teardown failure.
+                // Kept although about:blank should have stopped every request producer: a
+                // scheduled poll firing while close() is in flight makes Playwright sync
+                // route-interception patterns against a target that is already gone. The
+                // context is closing either way - that is this call's whole goal - so a race
+                // in Playwright's own bookkeeping on the way there is not a real failure.
                 log.warn("swallowed TargetClosedError closing browser context during teardown: {}", e.getMessage());
             }
         }
@@ -111,15 +124,6 @@ abstract class PlaywrightTestBase {
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
-    }
-
-    /**
-     * Closes whatever the page is holding open - the Insights tab's EventSource above all.
-     * A live SSE stream keeps the teardown's NETWORKIDLE drain from ever settling, so a
-     * test that opens one pays the drain's full timeout unless it navigates away first.
-     */
-    protected void closeLiveStreams() {
-        page.navigate("about:blank");
     }
 
     protected void openPersonsPage() {
