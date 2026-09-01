@@ -20,6 +20,7 @@ import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {parseAppHash} from '../../shared/url-state.js';
+import {open as openTraceDetail} from '../../trace-detail/trace-detail.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -495,10 +496,9 @@ function logCountEl(count, modifier, singular, plural) {
     return el;
 }
 
-async function openTrace(traceId, context) {
+function openTrace(traceId, context) {
     context.navigate('traces', traceId);
-    const overlay = await import('../../trace-detail/trace-detail.js');
-    overlay.open(traceId, {
+    openTraceDetail(traceId, {
         // Threads the same urlState factory main.js's own hash-driven open uses (see
         // buildTraceUrlState), so a trace opened by clicking it here - the primary way
         // anyone opens one - gets its tab switches and filter changes synced to the URL
