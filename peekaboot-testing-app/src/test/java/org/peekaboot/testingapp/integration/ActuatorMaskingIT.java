@@ -14,7 +14,7 @@ import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Proves Defect 1's fix end-to-end through the real HTTP API, not just at the mapper/
+ * Proves masking end to end through the real HTTP API, not just at the mapper/
  * service unit level (see ConfigMapperTest, EnvironmentMapperTest, ActuatorResponseParserTest,
  * PeekabootActuatorServiceIT): a secret-looking property comes back masked from the
  * endpoint the dashboard reads.
@@ -51,8 +51,9 @@ class ActuatorMaskingIT {
     }
 
     /**
-     * EnvironmentMapper had no masking of its own before this - the Environment tab was
-     * the most exposed surface of Defect 1, not merely an inconsistent one.
+     * The Environment tab renders raw property sources, so EnvironmentMapper needs masking
+     * of its own - it is the most exposed surface, not merely one that has to stay
+     * consistent with the Config tab.
      */
     @Test
     void insightsEndpointMasksTheSameSecretLookingPropertyInTheEnvironmentTab() {
@@ -67,11 +68,12 @@ class ActuatorMaskingIT {
     }
 
     /**
-     * Known Defect C1: {@code ConfigMapper} used to flatten a {@code @ConfigurationProperties}
-     * bean's nested Map/List values to a string with {@code Object.toString()} before masking,
-     * so a sensitive key nested inside the tree (e.g. {@code registration.google.client-secret})
-     * never reached {@code isSensitiveKey} - only the flattened text did, and that text matches
-     * no value pattern. {@code NestedConfigPropertiesFixture} reproduces that nesting.
+     * {@code ConfigMapper} masks inside a {@code @ConfigurationProperties} bean's nested
+     * Map/List values before flattening them to text: flattened first with {@code
+     * Object.toString()}, a sensitive key nested inside the tree (e.g. {@code
+     * registration.google.client-secret}) would never reach {@code isSensitiveKey} - only
+     * the flattened text would, and that text matches no value pattern. {@code
+     * NestedConfigPropertiesFixture} provides that nesting.
      */
     @Test
     void insightsEndpointMasksASensitiveKeyNestedInsideAConfigurationPropertiesTree() {

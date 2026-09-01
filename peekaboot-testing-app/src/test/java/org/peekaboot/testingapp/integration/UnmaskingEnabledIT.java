@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
 /**
  * Proves the second half of the two-independent-opt-ins design end to end through the
  * real HTTP API: with {@code peekaboot.enable-unmasking=true}, the request's
- * {@code unmask=true} parameter now actually takes effect - but only when it is present.
+ * {@code unmask=true} parameter takes effect - but only when it is present.
  * See {@code UnmaskingDisabledIT} for the security-critical case where the
  * property is false.
  *

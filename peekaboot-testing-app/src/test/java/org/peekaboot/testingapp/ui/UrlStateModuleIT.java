@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -16,7 +17,7 @@ class UrlStateModuleIT extends PlaywrightTestBase {
         }
         return page.evaluate(
                 "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
-                java.util.List.of("/peekaboot/ui/shared/url-state.js", expression));
+                List.of("/peekaboot/ui/shared/url-state.js", expression));
     }
 
     @Test

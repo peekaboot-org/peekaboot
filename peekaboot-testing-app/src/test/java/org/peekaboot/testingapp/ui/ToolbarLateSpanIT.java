@@ -11,9 +11,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
 /**
- * The collapsed bar used to poll with backoff and stop the moment a trace looked complete, so
- * anything ending after the response - an {@code @Async} continuation, a streamed body - never
- * appeared on it. Four fixed attempts out to 4.75s close that gap.
+ * The collapsed bar polls in four fixed attempts out to 4.75s rather than stopping the moment a
+ * trace looks complete, so work ending after the response - an {@code @Async} continuation, a
+ * streamed body - still appears on it.
  *
  * <p>Real app, real spans, real browser: {@link LateSpanFixture} ends a genuine child span ~1.5s
  * after the response, and the assertions below check that it really is the same trace and really

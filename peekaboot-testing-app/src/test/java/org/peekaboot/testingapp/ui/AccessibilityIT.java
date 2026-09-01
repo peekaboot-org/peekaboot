@@ -176,11 +176,11 @@ class AccessibilityIT extends PlaywrightTestBase {
     }
 
     /**
-     * The 2026-08-22 audit gave .pk-copy a 24px min-height because a copy control is a real
-     * click target, not a word in a sentence (components.css says so at the rule). The Logs
-     * tab then stacks one inside a deliberately dense row, and the first attempt at fitting
-     * it there cancelled exactly that floor with "min-height: auto; padding: 0" - a change
-     * that looks like harmless tightening in a diff and like nothing at all in a screenshot.
+     * .pk-copy carries a 24px min-height because a copy control is a real click target, not
+     * a word in a sentence (components.css says so at the rule). The Logs tab stacks one
+     * inside a deliberately dense row, where cancelling that floor with "min-height: auto;
+     * padding: 0" looks like harmless tightening in a diff and like nothing at all in a
+     * screenshot.
      * Measures the rendered box rather than the declared property, so a future override
      * anywhere in the cascade fails here too.
      */

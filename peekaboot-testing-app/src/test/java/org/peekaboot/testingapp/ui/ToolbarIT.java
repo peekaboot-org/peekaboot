@@ -7,15 +7,16 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises the real toolbar.js served by the running app in a real browser. Supersedes the
- * old HtmlUnit-based ToolbarScriptTest, which could not parse toolbar.js once it became an ES
- * module. Coverage that used to come from stubbed fetch/setTimeout now comes from real requests
- * (a real DB-backed /persons request for query counts and controller name, a real logged error
- * for log counts, a real Server-Timing header for idle mode) rather than mocked responses, per
- * the project's no-mocking-in-e2e-tests policy. Aborting a single, specific network request to
+ * Exercises the real toolbar.js served by the running app in a real browser. Coverage comes
+ * from real requests (a real DB-backed /persons request for query counts and controller name,
+ * a real logged error for log counts, a real Server-Timing header for idle mode) rather than
+ * stubbed fetch/setTimeout or mocked responses, per the project's no-mocking-in-e2e-tests
+ * policy. Aborting a single, specific network request to
  * simulate a real fetch failure is not the same as mocking a fake response, so it is used for
  * the "pending" state test.
  */
@@ -211,7 +212,7 @@ class ToolbarIT extends PlaywrightTestBase {
      */
     @Test
     void openOverlayImportFailureIsCaughtAndLeavesTheBarUsable() {
-        java.util.List<String> pageErrors = new java.util.ArrayList<>();
+        List<String> pageErrors = new ArrayList<>();
         page.onPageError(pageErrors::add);
         page.route("**/trace-detail/trace-detail.js", route -> route.abort());
 

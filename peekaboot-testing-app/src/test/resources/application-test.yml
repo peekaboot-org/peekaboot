@@ -46,8 +46,8 @@ peekaboot:
         size: 50
 
 # Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIT can prove
-# ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree (Known
-# Defect C1) - the shape a real spring.security.oauth2.client.registration bean has.
+# ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree - the
+# shape a real spring.security.oauth2.client.registration bean has.
 nested-fixture:
   registration:
     google:
@@ -59,7 +59,7 @@ management:
     health:
       show-details: always
     env:
-      # Peekaboot no longer defaults this outside local development (see
+      # Peekaboot defaults this in local development only (see
       # PeekabootDefaultsEnvironmentPostProcessor); the test profile is not a local-dev
       # launch context, so it has to opt in explicitly, exactly like a real application
       # would, for UnmaskingEnabledIT to have real values to unmask.

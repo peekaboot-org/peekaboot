@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,7 +18,7 @@ class SharedModuleIT extends PlaywrightTestBase {
         }
         return page.evaluate(
                 "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
-                java.util.List.of("/peekaboot/ui/shared/" + module, expression));
+                List.of("/peekaboot/ui/shared/" + module, expression));
     }
 
     @Test
@@ -201,10 +202,9 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the overlay header meta line always reading "1 queries" - a
-     * bare "+ 's'" pluralisation with no singular/plural distinction. formatCount()'s
-     * plural defaults to singular + 's' (covers "span"/"spans", "log"/"logs") but takes an
-     * explicit override for irregular nouns like "query"/"queries".
+     * formatCount()'s plural defaults to singular + 's' (covers "span"/"spans", "log"/"logs")
+     * but takes an explicit override for irregular nouns like "query"/"queries" - without it
+     * the overlay header meta line reads "1 queries".
      */
     @Test
     void formatCountPluralisesIrregularNouns() {

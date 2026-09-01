@@ -216,11 +216,10 @@ class OrderTraceCaptureIT {
      * {@code order.reconcile.job}) is the trace root. That span carries only its own
      * {@code class}/{@code method} tags, not the {@code code.function}/
      * {@code code.namespace} pair Spring's {@code DefaultScheduledTaskObservationConvention}
-     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB. Before this
-     * defect was fixed it did, purely because the span's name happened to contain "job";
-     * this test now guards against that false positive recurring.
+     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB, as a classifier
+     * keyed on the span's name containing "job" would.
      * {@link #reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace()} covers
-     * the shape that does classify SCHEDULED_JOB - the one the defect was actually about.
+     * the shape that does classify SCHEDULED_JOB.
      */
     @Test
     void directReconciliationCallDoesNotClassifyAsScheduledJob() {

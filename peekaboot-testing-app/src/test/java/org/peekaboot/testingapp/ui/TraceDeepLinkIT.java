@@ -100,7 +100,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the push/replace rule (url-state.js): the overlay's tab strip
+     * The push/replace rule (url-state.js): the overlay's tab strip
      * and the Logs tab's own filters must both write via replaceState, so a single Back
      * step from a filtered subview closes the overlay outright rather than unwinding the
      * tab switch and filter edit as separate Back stops.
@@ -144,15 +144,14 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for a review finding: logs.js used to seed {@code state.level}
-     * straight from the URL's {@code level} param with no validation against the real
-     * {@code LEVELS} list. A typo'd, wrong-case, or stale value (a malformed hand-edited
-     * link, or a level value from an older build) then matched no {@code <option>}, so the
-     * browser fell back to showing "All Levels" selected while applyFilters() kept
+     * logs.js validates the URL's {@code level} param against the real {@code LEVELS} list
+     * and falls back to '' for anything else (matching how an unrecognized subview falls
+     * back to 'spans' in trace-detail.js), so the dropdown and the actual filtering agree.
+     * Seeded verbatim into {@code state.level}, a typo'd, wrong-case, or stale value (a
+     * malformed hand-edited link, or a level value from an older build) matches no {@code
+     * <option>}: the browser shows "All Levels" selected while applyFilters() keeps
      * filtering by the bogus value underneath - a dropdown that visually claims "no
-     * filter" while silently hiding every row. logs.js now falls back to '' (matching how
-     * an unrecognized subview falls back to 'spans' in trace-detail.js) so the dropdown and
-     * the actual filtering agree.
+     * filter" while silently hiding every row.
      */
     @Test
     void deepLinkWithAnUnrecognizedLevelFallsBackToAllLevelsAndShowsEveryRow() {
@@ -174,22 +173,19 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for a controller ruling: traces.js's own click-to-open path
-     * (openTrace(), the trace list's "open" button) used to call overlay.open() with no
-     * urlState at all, so a trace opened by clicking it - the primary way anyone opens a
-     * trace - never got its tab switches or filter changes synced to the URL; only the
-     * hash-driven paths (deep link, Back/Forward) did. main.js now exposes the same
-     * urlState factory expandTraceById uses (context.traceUrlState) and traces.js passes
-     * it through.
+     * traces.js's own click-to-open path (openTrace(), the trace list's "open" button)
+     * passes the same urlState factory main.js's expandTraceById uses
+     * (context.traceUrlState) into overlay.open(), so a trace opened by clicking it - the
+     * primary way anyone opens a trace - gets its tab switches and filter changes synced to
+     * the URL just like the hash-driven paths (deep link, Back/Forward) do.
      * <p>
-     * Also covers the follow-up regression that wiring urlState in activated: openTrace's
-     * onClose compared window.location.hash against the exact string
-     * "#traces/{traceId}" - true only while the overlay was still on its opening subview.
-     * Once a tab switch rewrites the hash to "#traces/{traceId}/{subview}" (replaceAppHash,
-     * same as any hash-driven open), that exact-string check stops matching, onClose's
-     * cleanup never fires, and closing the overlay leaves the detail segment in the URL -
-     * a reload would silently reopen the trace on that subview. Fixed to parse the hash and
-     * compare tab/detail only, mirroring main.js's expandTraceById onClose.
+     * Also covers openTrace's onClose, which parses the hash and compares tab/detail only,
+     * mirroring expandTraceById's onClose: an exact-string comparison against
+     * "#traces/{traceId}" holds only while the overlay is still on its opening subview -
+     * once a tab switch rewrites the hash to "#traces/{traceId}/{subview}" (replaceAppHash,
+     * same as any hash-driven open) it stops matching, onClose's cleanup never fires, and
+     * closing the overlay leaves the detail segment in the URL, so a reload would silently
+     * reopen the trace on that subview.
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
@@ -213,10 +209,9 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the DOM-only-state bug this task's logs.js refactor fixes: the
-     * span filter chip used to force a full re-render off container.innerHTML, and the text/
-     * level inputs' values lived only in the DOM - so that re-render silently wiped whatever
-     * the user had typed. logs.js now renders its controls from a `state` object instead.
+     * logs.js renders its controls from a `state` object: the span filter chip forces a
+     * full re-render off container.innerHTML, and were the text/level inputs' values kept
+     * only in the DOM, that re-render would silently wipe whatever the user had typed.
      */
     @Test
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {

@@ -78,10 +78,10 @@ class SecuredDashboardIT extends PlaywrightTestBase {
 
     /**
      * The case the server-rendered shell exists for. The toolbar's module is a
-     * {@code /peekaboot/**} request like any other, so it is refused - and before the bar was
-     * rendered by DevToolbarFilter that meant no bar at all, on every page of the
-     * application, with nothing to tell the reader why. Now the bar arrives with the page and
-     * says so.
+     * {@code /peekaboot/**} request like any other, so it is refused - were the bar itself
+     * script-rendered, that would mean no bar at all, on every page of the application, with
+     * nothing to tell the reader why. Rendered by DevToolbarFilter, the bar arrives with the
+     * page and says so.
      */
     @Test
     void theToolbarExplainsItselfToAnAnonymousBrowser() {

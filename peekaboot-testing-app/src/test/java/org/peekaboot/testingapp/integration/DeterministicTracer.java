@@ -7,7 +7,6 @@ import io.micrometer.tracing.Span;
 import io.micrometer.tracing.SpanCustomizer;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
-
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -26,12 +25,12 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Everything here is immutable and free of shared mutable state, so the single
  * tracer bean can be invoked concurrently from any number of request-handling threads.
- * That is the whole point: this replaced a {@code Mockito.mock(Tracer.class,
- * RETURNS_DEEP_STUBS)}, whose lazily generated deep stubs are recorded into the mock's
- * invocation container without synchronization. Concurrent JDBC instrumentation could
- * make a later call read back the stub recorded for an earlier, different method,
- * surfacing as {@code ClassCastException: Span$MockitoMock$... cannot be cast to
- * io.micrometer.tracing.TraceContext} out of {@code Span.Builder.start().context()}.
+ * A {@code Mockito.mock(Tracer.class, RETURNS_DEEP_STUBS)} is not: its lazily generated
+ * deep stubs are recorded into the mock's invocation container without synchronization,
+ * so concurrent JDBC instrumentation can make a later call read back the stub recorded
+ * for an earlier, different method, surfacing as {@code ClassCastException:
+ * Span$MockitoMock$... cannot be cast to io.micrometer.tracing.TraceContext} out of
+ * {@code Span.Builder.start().context()}.
  */
 final class DeterministicTracer implements Tracer {
 
@@ -112,8 +111,7 @@ final class DeterministicTracer implements Tracer {
     }
 
     private record FixedTraceContext(String traceId, String spanId, String parentId, Boolean sampled)
-            implements TraceContext {
-    }
+            implements TraceContext {}
 
     /**
      * Reports the fixed context; every recording method is a no-op, mirroring
@@ -157,16 +155,13 @@ final class DeterministicTracer implements Tracer {
         }
 
         @Override
-        public void end() {
-        }
+        public void end() {}
 
         @Override
-        public void end(long time, TimeUnit timeUnit) {
-        }
+        public void end(long time, TimeUnit timeUnit) {}
 
         @Override
-        public void abandon() {
-        }
+        public void abandon() {}
 
         @Override
         public Span remoteServiceName(String remoteServiceName) {

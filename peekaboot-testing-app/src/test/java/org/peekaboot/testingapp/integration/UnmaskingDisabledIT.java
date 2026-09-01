@@ -38,8 +38,7 @@ class UnmaskingDisabledIT {
 
     /**
      * The single most important test in this feature: unmask=true must never be a bypass
-     * on its own. Written first, and confirmed failing before peekaboot.enable-unmasking
-     * and the unmask parameter existed.
+     * on its own.
      */
     @Test
     void insightsEndpointIgnoresUnmaskTrueWhenUnmaskingIsDisabled() {

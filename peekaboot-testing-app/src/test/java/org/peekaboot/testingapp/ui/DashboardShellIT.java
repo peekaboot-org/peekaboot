@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DashboardShellIT extends PlaywrightTestBase {
@@ -21,8 +23,8 @@ class DashboardShellIT extends PlaywrightTestBase {
 
     /**
      * The header is a neutral --pk-bg surface, so the wordmark takes --pk-text-strong
-     * rather than an on-fill ink. It used to be a bare `color: white` on a --pk-primary
-     * slab, which was 5.17:1 while --pk-primary was a blue but only 2.53:1 in dark theme.
+     * rather than an on-fill ink - a bare `color: white` on a --pk-primary slab scores only
+     * 2.53:1 in dark theme.
      * Pinning the literal resolved colour (matching TraceOverlayIT's contrast
      * regression tests) catches a revert to any hardcoded colour, which "looks right" in
      * one theme and would pass every other test here.
@@ -82,8 +84,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void iconAssetsAreServed() {
-        for (String asset :
-                java.util.List.of("favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
+        for (String asset : List.of("favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
             APIResponse response = page.request().get(baseUrl + "/peekaboot/ui/assets/" + asset);
             assertThat(response.status()).as(asset).isEqualTo(200);
         }
@@ -101,10 +102,10 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
-     * main.js imports {open, close} directly from trace-detail.js (no more
+     * main.js imports {open, close} directly from trace-detail.js (no
      * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
      * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
-     * imported open() itself, before the traces tab that lists them exists (Task 15) - so a
+     * imported open() itself, without going through the traces tab - so a
      * direct navigation to such a link is enough to prove the import actually loaded and
      * ran, independent of whether the trace id resolves to anything real.
      *
@@ -150,7 +151,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void dashboardSurvivesLocalStorageWriteThrowingOnLocaleChange() {
         page.addInitScript("localStorage.setItem = () => { throw new Error('storage blocked'); };");
-        java.util.List<String> pageErrors = new java.util.ArrayList<>();
+        List<String> pageErrors = new ArrayList<>();
         page.onPageError(pageErrors::add);
         openDashboard();
 

@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Exercises attachSharedStyles against a real open shadow root. This is the mechanism that
  * lets the trace-detail overlay consume the same tokens/base/components stylesheets as the
- * dashboard, instead of hardcoding a dark palette. The toolbar no longer uses it: its shadow
+ * dashboard, instead of hardcoding a dark palette. The toolbar does not use it: its shadow
  * root is declarative and DevToolbarFilter carries the sheets it cannot live without inline,
  * so that the bar still renders when /peekaboot/** is behind an authorization gate.
  */

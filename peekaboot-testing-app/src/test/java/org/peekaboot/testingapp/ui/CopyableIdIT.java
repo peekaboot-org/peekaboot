@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,7 +29,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("the toolbar shows the whole trace id, labelled - a truncated id cannot be pasted anywhere")
     void toolbarShowsTheFullTraceIdWithItsLabel() {
         openPageWithToolbar();
 
@@ -46,7 +44,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("clicking the id copies it and does not open the overlay")
     void clickingTheTraceIdCopiesItWithoutOpeningTheOverlay() {
         openPageWithToolbar();
         String traceId = toolbar.traceId();
@@ -64,7 +61,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("the copy control is a sibling of the open button, never a descendant")
     void copyControlIsNotNestedInsideTheOpenButton() {
         openPageWithToolbar();
 
@@ -77,7 +73,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("the copy control carries an accessible name naming both the action and the id")
     void copyControlHasAnAccessibleName() {
         openPageWithToolbar();
 
@@ -89,7 +84,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("trace ids in the dashboard list are copy controls too")
     void traceListRendersCopyableIds() {
         page.navigate(baseUrl + "/");
         openDashboard();
@@ -118,12 +112,11 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     /**
-     * The span tree (Spans tab) dropped the copyable span id - a full id on every row
-     * made the tree too crowded. This is its new home: every Logs tab row now carries
-     * its span's full id next to the name button that filters to it.
+     * A full span id on every span-tree row would crowd the tree, so the Logs tab is where
+     * it lives: every row carries its span's full id next to the name button that filters
+     * to it.
      */
     @Test
-    @DisplayName("the Logs tab shows each row's full span id as a labelled copy control")
     void logsTableRendersCopyableSpanIds() {
         openLogsTabWithAtLeastOneLogRow();
 
@@ -138,7 +131,6 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     @Test
-    @DisplayName("clicking a log row's span id copies it and does not also trigger the row's span filter")
     void clickingTheLogSpanIdCopiesItWithoutFiltering() {
         openLogsTabWithAtLeastOneLogRow();
 

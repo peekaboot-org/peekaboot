@@ -27,13 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Proves two masking fixes (Fix round 1: C1, C2) end to end through the real HTTP API and
- * a real Spring context - a unit test on the mapper/filter alone would not catch either,
- * since both defects existed despite RequestCaptureFilter's header masking and
- * QueryExtractor's own unit tests being green: the bug was in the parts neither test
- * exercised (parameters/query string). These assertions now run against
- * {@code /api/traces/{traceId}/insights} - the only trace endpoint left, so it is the
- * only path this masking has to hold on.
+ * Proves request-parameter and SQL masking end to end through the real HTTP API and a
+ * real Spring context - a unit test on the mapper/filter alone does not cover it:
+ * RequestCaptureFilter's header masking and QueryExtractor's own unit tests can be green
+ * while parameters and the query string leak, because neither exercises those parts.
+ * The assertions run against {@code /api/traces/{traceId}/insights}, the only trace
+ * endpoint, so it is the only path this masking has to hold on.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

@@ -9,7 +9,7 @@ import com.microsoft.playwright.options.ColorScheme;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import org.junit.jupiter.api.DisplayName;
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.order.OrderReconciler;
@@ -18,10 +18,10 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
- * Migrated onto the shared design system alongside the toolbar (see ToolbarIT) - the
- * overlay used to hardcode a dark-only palette on :host with no theme awareness at all,
- * so a light dashboard opened a hard-dark fullscreen overlay. That is the specific defect
- * overlayIsLightWhenTheStoredPreferenceIsLight proves fixed.
+ * The overlay shares the design system with the toolbar (see ToolbarIT) and follows the
+ * same theme; a dark-only palette hardcoded on :host would open a hard-dark fullscreen
+ * overlay over a light dashboard, which is what overlayIsLightWhenTheStoredPreferenceIsLight
+ * guards.
  */
 class TraceOverlayIT extends PlaywrightTestBase {
 
@@ -101,7 +101,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
     }
 
-    /** The defect that motivated this work: a light dashboard opening a dark overlay. */
+    /** A light dashboard must not open a dark overlay. */
     @Test
     void overlayIsLightWhenTheStoredPreferenceIsLight() {
         setStoredTheme("light");
@@ -121,19 +121,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for a real defect an earlier review caught: fills that reuse
-     * --pk-primary (this chip, the gantt "server" kind badge) or --pk-success (the
-     * result-set row-count badge) for their background had their foreground accidentally
-     * set to --pk-text-strong instead of the contrast-tuned --pk-on-primary/--pk-on-success
-     * that components.css's .pk-badge already uses for the same fills - near-white text on
-     * light-blue/light-green at ~2.3:1 in dark mode, where the pre-migration hardcoded
-     * #000 gave 8.2-8.3:1. Pins the literal resolved colour rather than comparing against
-     * the --pk-on-primary token itself, which would pass even if both sides regressed back
-     * to the same wrong token.
+     * Fills that reuse --pk-primary (this chip, the gantt "server" kind badge) or
+     * --pk-success (the result-set row-count badge) for their background take the
+     * contrast-tuned --pk-on-primary/--pk-on-success foreground that components.css's
+     * .pk-badge uses for the same fills - --pk-text-strong there would be near-white text
+     * on light-blue/light-green at ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
+     * Pins the literal resolved colour rather than comparing against the --pk-on-primary
+     * token itself, which would pass even if both sides regressed to the same wrong token.
      *
-     * The pinned value is dark ink in both themes now that --pk-primary is the brand
-     * green: white on it measures 2.61:1, so the light theme can no longer get away
-     * with the plain white it used while --pk-primary was a blue.
+     * The pinned value is dark ink in both themes because --pk-primary is the brand green:
+     * white on it measures 2.61:1, so not even the light theme can use plain white.
      *
      * Drives a real ERROR log entry (matching ToolbarIT's
      * toolbarShowsErrorLogCountWhenRequestLogsAnError) rather than the gantt "server" kind
@@ -244,9 +241,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * Forces the overlay's error path (a real network failure, not a mocked response) and
-     * proves its Close button actually works. Pre-existing defect: the button called
-     * this.closest('#peekaboot-trace-overlay').remove() from inside the shadow root, where
-     * closest() cannot cross the shadow boundary, so the button threw and did nothing.
+     * proves its Close button actually works. The button must not rely on
+     * this.closest('#peekaboot-trace-overlay') from inside the shadow root: closest() cannot
+     * cross the shadow boundary, so such a button throws and does nothing.
      */
     @Test
     void closeButtonDismissesTheOverlayOnTheErrorPath() {
@@ -299,13 +296,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * Inspects the real accessibility tree for the overlay's strip too - confirms it
      * exposes as an actual tablist with the right tabs and selected state, same as
-     * the dashboard's equivalent check. This alone does NOT prove TABS.count is
-     * load-bearing: the pre-change hand-rolled markup rendered an identical
-     * "Queries 1" from its own separately-computed queryCount, so this snapshot
-     * would very likely have passed before this change too. The actual proof is
-     * that render() no longer has that duplicate template text at all - a
-     * code-level fact (see the task report's TDD section for the discriminating
-     * evidence). Also pins the spans tab's own count badge, computed from the same
+     * the dashboard's equivalent check. The tab counts come from TABS.count(trace)
+     * through the shared tabStrip(); hand-rolled markup computing its own queryCount
+     * would render an identical "Queries 1", so this snapshot alone does not prove the
+     * shared path is load-bearing - only render() carrying no duplicate template text
+     * does. Also pins the spans tab's own count badge, computed from the same
      * endpoint TABS.count(trace) reads (trace.summary.spans.count) rather than a
      * hardcoded literal, so a real change to the trace's span count still passes.
      */
@@ -383,7 +378,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void everyOverlayTabRendersContent() {
         openOverlayFromToolbar();
 
-        for (String tab : java.util.List.of("request", "spans", "queries", "logs")) {
+        for (String tab : List.of("request", "spans", "queries", "logs")) {
             overlay.evaluate("(root, id) => root.querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
 
             String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
@@ -392,14 +387,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The span tree used to carry a copyable full-length span id on every row, which made
-     * the tree too crowded (see logsTableRendersCopyableSpanIds and
-     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT for its new home).
-     * A row still keeps its span name, duration, badges and the logs/SQL toggles - just
-     * not a copy control.
+     * A copyable full-length span id on every span-tree row would crowd the tree, so the
+     * id lives on the Logs tab's rows instead (see logsTableRendersCopyableSpanIds and
+     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT). A row keeps its span
+     * name, duration, badges and the logs/SQL toggles - just not a copy control.
      */
     @Test
-    @DisplayName("the Spans tab's tree rows no longer carry a copyable span id")
     void spanTreeRowsDoNotRenderACopyableSpanId() {
         openOverlayFromToolbar();
 
@@ -410,12 +403,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The Spans tab's per-span "N logs" toggle used to open a bespoke fullscreen popup
-     * that reused the Logs tab's own row renderer verbatim - fully redundant once the
-     * Logs tab grew its own span filter (99345f81, which the popup - af1fa88a - predates).
-     * It now hands off to that existing filter instead: switch the overlay to the Logs
-     * tab, seed its span filter, and rely on the filter chip's own clear button for a
-     * reversible "back to all logs".
+     * The Spans tab's per-span "N logs" toggle hands off to the Logs tab's own span filter
+     * - switch the overlay to the Logs tab, seed its span filter, and rely on the filter
+     * chip's own clear button for a reversible "back to all logs" - rather than opening a
+     * popup of its own, which would only duplicate the Logs tab's row renderer.
      *
      * <p>Runs against a real captured trace with nothing stubbed. The index page's error
      * path writes its ERROR log inside the request handler's span while
@@ -431,7 +422,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * and Back-navigated like any other, and clearing the filter takes the param back out.
      */
     @Test
-    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span, and the filter is clearable")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanAndTheFilterIsClearable() {
         String traceId = openOverlayForTheMultiSpanLogTrace();
 
@@ -497,7 +487,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * hand-off itself.
      */
     @Test
-    @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span when opened from the toolbar")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
         page.navigate(baseUrl + "/?error=true");
         toolbar.traceId();
@@ -558,21 +547,20 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         assertThat(headerBox.x)
                 .as("header timeline's left edge lines up with the first row's track")
-                .isCloseTo(trackBox.x, org.assertj.core.data.Offset.offset(1.0));
+                .isCloseTo(trackBox.x, Offset.offset(1.0));
         assertThat(headerBox.x + headerBox.width)
                 .as("header timeline's right edge lines up with the first row's track")
-                .isCloseTo(trackBox.x + trackBox.width, org.assertj.core.data.Offset.offset(1.0));
+                .isCloseTo(trackBox.x + trackBox.width, Offset.offset(1.0));
     }
 
     /**
-     * Regression test for a residual duplication: the SLOW label used to re-derive the
-     * 100ms slow threshold with a bare literal (`duration > 100`) on the same line that
-     * already computes `durationClass` from severity.js's durationSeverity() - now it just
-     * reads durationClass. Imports queries.js directly (SharedModuleIT's pk-blank.html
-     * pattern) rather than driving a real slow query through the app, and pins the exact
-     * SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) since an earlier
-     * off-by-one at this same boundary was a real bug in this project (see severity.js's
-     * own boundary test in SharedModuleIT).
+     * The SLOW label reads `durationClass`, which severity.js's durationSeverity()
+     * computes, rather than re-deriving the 100ms slow threshold with a bare literal
+     * (`duration > 100`) on the same line. Imports queries.js directly (SharedModuleIT's
+     * pk-blank.html pattern) rather than driving a real slow query through the app, and
+     * pins the exact SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) -
+     * the boundary an off-by-one moves (see severity.js's own boundary test in
+     * SharedModuleIT).
      */
     @Test
     void queriesTabSlowLabelFollowsTheSharedSeverityThresholdAtTheBoundary() {
@@ -593,18 +581,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
             """);
 
         @SuppressWarnings("unchecked")
-        java.util.List<String> durationLabels = (java.util.List<String>) labels;
+        List<String> durationLabels = (List<String>) labels;
         assertThat(durationLabels).containsExactly("99ms", "100ms", "101ms SLOW", "501ms SLOW");
     }
 
     /**
-     * Root-cause pin for the misaligned back button: .pk-overlay__back and .pk-overlay__close
-     * used to be position:absolute against .pk-overlay__container, with the title carrying a
-     * hand-rolled margin-left hack to fake reserving space for the button - two independent
-     * layouts that only looked aligned by coincidence, and drifted the moment the title's UA
-     * margin-top pushed it down without moving the absolutely-positioned button. Both buttons
-     * now sit in the header's own flex flow next to a .pk-overlay__header-main wrapper, so
-     * they cannot drift from the title's first line.
+     * .pk-overlay__back and .pk-overlay__close sit in the header's own flex flow next to a
+     * .pk-overlay__header-main wrapper, so they cannot drift from the title's first line.
+     * Positioned absolutely against .pk-overlay__container, with the title carrying a
+     * margin-left hack to fake reserving space for the button, they would be two
+     * independent layouts that only look aligned by coincidence - and drift the moment the
+     * title's UA margin-top pushes it down without moving the absolutely-positioned button.
      */
     @Test
     void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
@@ -667,18 +654,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Regression guard for the fake "UNKNOWN" HTTP method rendered on non-HTTP traces (a
-     * scheduled job here): trace-detail.js used to hardcode 'UNKNOWN' as the method fallback,
-     * even though httpExchange/http.* tags are only ever populated for real HTTP requests.
-     * The method now falls back to null, which the header renders as the trace's root-action
-     * label instead (root-actions.js).
+     * On a non-HTTP trace (a scheduled job here) trace-detail.js's method falls back to
+     * null, which the header renders as the trace's root-action label (root-actions.js):
+     * httpExchange/http.* tags are only ever populated for real HTTP requests, so a
+     * hardcoded 'UNKNOWN' fallback would be a fake method.
      *
      * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
      * scheduled-task observation (see {@link ScheduledJobs}) rather than stubbing
      * the insights endpoint with a canned response - the fix is about what real
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
-     * happens. Also covers the "1 queries" pluralisation defect on the same header
+     * happens. Also covers the "1 query" pluralisation on the same header
      * (formatCount() in format.js): reconcileOrders() calls orderRepository.findAll()
      * exactly once, and CustomerOrder is a flat entity with no lazy associations to
      * trigger further queries, so the trace's query count is deterministically 1
