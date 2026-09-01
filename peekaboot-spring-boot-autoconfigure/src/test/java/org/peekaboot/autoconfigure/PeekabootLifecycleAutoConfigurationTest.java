@@ -6,11 +6,14 @@ import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.pool.HikariPool;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
 import javax.sql.DataSource;
 import org.h2.jdbcx.JdbcDataSource;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
@@ -39,6 +42,30 @@ import org.springframework.context.annotation.Configuration;
  * registers those beans, so they could never match.
  */
 class PeekabootLifecycleAutoConfigurationTest {
+
+    private LogCapture stopBanner;
+    private LogCapture hikariStartStopChatter;
+    private LogCapture hikariConnectionChatter;
+
+    /**
+     * Nearly every test here runs a context carrying the stopped-banner listener, and
+     * run() closes that context; DataSourceAutoConfiguration in the runner additionally
+     * starts and stops a Hikari pool inside run(). All of it logs at INFO, so it is
+     * captured per test rather than reaching the console.
+     */
+    @BeforeEach
+    void captureContextChatter() {
+        stopBanner = LogCapture.attach(ApplicationStoppedListener.class);
+        hikariStartStopChatter = LogCapture.attach(HikariDataSource.class);
+        hikariConnectionChatter = LogCapture.attach(HikariPool.class);
+    }
+
+    @AfterEach
+    void releaseContextChatterCapture() {
+        hikariConnectionChatter.close();
+        hikariStartStopChatter.close();
+        stopBanner.close();
+    }
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(

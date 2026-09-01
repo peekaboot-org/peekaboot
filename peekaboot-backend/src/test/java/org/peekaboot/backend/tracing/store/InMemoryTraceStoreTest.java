@@ -27,7 +27,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void addSpan_storesSpan() {
+    void anAddedSpanIsStored() {
         storage.addSpan(spanIn("trace1", "span1"));
 
         var bundle = storage.getTrace("trace1");
@@ -37,7 +37,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void addLog_storesLog() {
+    void anAddedLogIsStored() {
         storage.addLog(log("trace1", "INFO", "test message"));
 
         var bundle = storage.getTrace("trace1");
@@ -47,7 +47,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void setRequest_storesRequest() {
+    void aSetRequestIsStored() {
         storage.setRequest(RequestCompletedEvents.request("trace1")
                 .path("/api/test")
                 .controller("TestController", "test")
@@ -76,7 +76,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void addSpan_doesNotTruncateWhenDuplicateArtifactsPushRawArrivalsPastTheCap() {
+    void duplicateArtifactsPushingRawArrivalsPastTheCapDoNotTruncate() {
         // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
         // would overflow a cap enforced before deduplication but not one enforced after.
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
@@ -96,7 +96,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void addSpan_marksTheBundleTruncatedOnceRealSpansExceedTheCap() {
+    void theBundleIsMarkedTruncatedOnceRealSpansExceedTheCap() {
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
         for (int i = 1; i <= 3; i++) {
             capped.addSpan(span("s" + i).in("t1").named("op" + i).build());
@@ -108,7 +108,7 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void getTrace_returnsEmptyForUnknownTraceId() {
+    void anUnknownTraceIdYieldsAnEmptyTrace() {
         var bundle = storage.getTrace("unknown");
 
         assertThat(bundle).isEmpty();

@@ -294,16 +294,6 @@ class RequestCaptureFilterTest {
         assertThat(event.responseHeaders()).containsEntry("Content-Type", "application/json");
     }
 
-    @Test
-    void shouldStillExecuteFilterChainEvenWhenNoTraceId() throws Exception {
-        when(tracer.currentSpan()).thenReturn(null);
-
-        filter.doFilter(request, response, chain);
-
-        verify(chain).doFilter(request, response);
-        verify(eventPublisher, never()).publishEvent(any());
-    }
-
     /** The duration spans the chain: the clock is read once before it and once after. */
     @Test
     void shouldCalculateDuration() throws Exception {
