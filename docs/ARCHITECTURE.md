@@ -606,8 +606,8 @@ When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
 ```java
 @Bean
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter otelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
-    return new OtelSpanExporter(storage, eventPublisher);
+public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher) {
+    return new OtelSpanExporter(eventPublisher);
 }
 ```
 

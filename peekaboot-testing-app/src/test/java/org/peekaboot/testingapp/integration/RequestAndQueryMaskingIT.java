@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -38,6 +39,9 @@ import tools.jackson.databind.JsonNode;
 @ActiveProfiles("test")
 @Import(RequestAndQueryMaskingIT.MaskingTestEndpoints.class)
 class RequestAndQueryMaskingIT {
+
+    /** Creation orders for hand-built spans; only their per-trace ascending order matters. */
+    private static final AtomicLong CREATION_ORDER = new AtomicLong();
 
     @LocalServerPort
     private int port;
@@ -129,7 +133,7 @@ class RequestAndQueryMaskingIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder()));
+                CREATION_ORDER.incrementAndGet()));
         traceStore.addSpan(new SpanData(
                 traceId,
                 "db",
@@ -152,7 +156,7 @@ class RequestAndQueryMaskingIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder()));
+                CREATION_ORDER.incrementAndGet()));
 
         JsonNode trace = traces.awaitTrace(traceId);
 

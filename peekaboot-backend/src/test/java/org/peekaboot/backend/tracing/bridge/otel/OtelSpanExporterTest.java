@@ -47,7 +47,19 @@ class OtelSpanExporterTest {
                 storage.addSpan(spanDataEvent.spanData());
             }
         };
-        exporter = new OtelSpanExporter(storage, eventPublisher);
+        exporter = new OtelSpanExporter(eventPublisher);
+    }
+
+    @Test
+    void assignsIncreasingCreationOrdersInExportOrder() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        exporter.export(List.of(
+                createTestSpan(traceId, "0000000000000001", "first", SpanKind.SERVER),
+                createTestSpan(traceId, "0000000000000002", "second", SpanKind.CLIENT)));
+
+        List<org.peekaboot.backend.tracing.store.SpanData> spans = storedSpans(traceId);
+        assertThat(spans).hasSize(2);
+        assertThat(spans.get(1).creationOrder()).isGreaterThan(spans.get(0).creationOrder());
     }
 
     @Test

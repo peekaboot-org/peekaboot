@@ -63,12 +63,8 @@ class InMemoryTraceStoreTest {
     @Test
     void aggregatesMultipleEventsForSameTrace() {
         storage.addSpan(spanIn("trace1", "span1"));
-        storage.addSpan(span("span2")
-                .in("trace1")
-                .parent("span1")
-                .named("child")
-                .order(storage.nextCreationOrder())
-                .build());
+        storage.addSpan(
+                span("span2").in("trace1").parent("span1").named("child").build());
         storage.addLog(log("trace1", "INFO", "log1"));
         storage.setRequest(RequestCompletedEvents.minimal("trace1"));
 
@@ -84,20 +80,11 @@ class InMemoryTraceStoreTest {
         // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
         // would overflow a cap enforced before deduplication but not one enforced after.
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
-        SpanData root = span("root")
-                .in("t1")
-                .named("GET /orders")
-                .order(capped.nextCreationOrder())
-                .build();
-        SpanData duplicate = jdbcDuplicate("dup1", "query1", "SELECT 1")
-                .in("t1")
-                .order(capped.nextCreationOrder())
-                .build();
-        SpanData realQuery = jdbcQuery("query1", "SELECT 1")
-                .in("t1")
-                .parent("root")
-                .order(capped.nextCreationOrder())
-                .build();
+        SpanData root = span("root").in("t1").named("GET /orders").build();
+        SpanData duplicate =
+                jdbcDuplicate("dup1", "query1", "SELECT 1").in("t1").build();
+        SpanData realQuery =
+                jdbcQuery("query1", "SELECT 1").in("t1").parent("root").build();
 
         capped.addSpan(root);
         capped.addSpan(duplicate);
@@ -112,11 +99,7 @@ class InMemoryTraceStoreTest {
     void addSpan_marksTheBundleTruncatedOnceRealSpansExceedTheCap() {
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
         for (int i = 1; i <= 3; i++) {
-            capped.addSpan(span("s" + i)
-                    .in("t1")
-                    .named("op" + i)
-                    .order(capped.nextCreationOrder())
-                    .build());
+            capped.addSpan(span("s" + i).in("t1").named("op" + i).build());
         }
 
         var bundle = capped.getTrace("t1").orElseThrow();
@@ -159,11 +142,7 @@ class InMemoryTraceStoreTest {
     @Test
     void slowTraceClassifiedWhenTotalDurationReachesThreshold() {
         InMemoryTraceStore store = storeWithSlowThreshold(100);
-        store.addSpan(span("s1")
-                .in("t1")
-                .at(START, Duration.ofMillis(150))
-                .order(store.nextCreationOrder())
-                .build());
+        store.addSpan(span("s1").in("t1").at(START, Duration.ofMillis(150)).build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -173,11 +152,7 @@ class InMemoryTraceStoreTest {
     @Test
     void fastTraceNotClassifiedAsSlow() {
         InMemoryTraceStore store = storeWithSlowThreshold(100);
-        store.addSpan(span("s1")
-                .in("t1")
-                .at(START, Duration.ofMillis(50))
-                .order(store.nextCreationOrder())
-                .build());
+        store.addSpan(span("s1").in("t1").at(START, Duration.ofMillis(50)).build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
     }
@@ -186,18 +161,13 @@ class InMemoryTraceStoreTest {
     void slowDurationSpansMultipleSpans() {
         // two 60ms spans 60ms apart: total window 120ms >= 100ms threshold
         InMemoryTraceStore store = storeWithSlowThreshold(100);
-        store.addSpan(span("s1")
-                .in("t1")
-                .at(START, Duration.ofMillis(60))
-                .order(store.nextCreationOrder())
-                .build());
+        store.addSpan(span("s1").in("t1").at(START, Duration.ofMillis(60)).build());
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
         store.addSpan(span("s2")
                 .in("t1")
                 .parent("s1")
                 .named("op2")
                 .at(START.plusMillis(60), Duration.ofMillis(60))
-                .order(store.nextCreationOrder())
                 .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
@@ -208,11 +178,8 @@ class InMemoryTraceStoreTest {
     @Test
     void classificationIsIdempotent() {
         storage.addSpan(errorSpan(storage, "t1"));
-        storage.addSpan(span("s2")
-                .in("t1")
-                .error("boom", "java.lang.RuntimeException")
-                .order(storage.nextCreationOrder())
-                .build());
+        storage.addSpan(
+                span("s2").in("t1").error("boom", "java.lang.RuntimeException").build());
         storage.addLog(log("t1", "ERROR", "boom"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
@@ -336,12 +303,10 @@ class InMemoryTraceStoreTest {
         store.addSpan(span("s1")
                 .in("just-under")
                 .at(START, Duration.ofMillis(threshold - 1))
-                .order(store.nextCreationOrder())
                 .build());
         store.addSpan(span("s2")
                 .in("at-threshold")
                 .at(START, Duration.ofMillis(threshold))
-                .order(store.nextCreationOrder())
                 .build());
         for (int i = 0; i <= defaults.getMaxLogsPerTrace(); i++) {
             store.addLog(log("logged", "INFO", "log" + i));
@@ -367,20 +332,15 @@ class InMemoryTraceStoreTest {
         return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
     }
 
-    /** A 100ms span with nothing else about it, numbered by the fixture store. */
+    /** A 100ms span with nothing else about it. */
     private SpanData spanIn(String traceId, String spanId) {
-        return span(spanId)
-                .in(traceId)
-                .at(START, Duration.ofMillis(100))
-                .order(storage.nextCreationOrder())
-                .build();
+        return span(spanId).in(traceId).at(START, Duration.ofMillis(100)).build();
     }
 
     private static SpanData errorSpan(InMemoryTraceStore store, String traceId) {
         return span(traceId + "-s")
                 .in(traceId)
                 .error("boom", "java.lang.RuntimeException")
-                .order(store.nextCreationOrder())
                 .build();
     }
 

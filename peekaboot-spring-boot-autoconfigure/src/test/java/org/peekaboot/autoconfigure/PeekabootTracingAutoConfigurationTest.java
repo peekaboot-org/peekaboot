@@ -114,7 +114,7 @@ class PeekabootTracingAutoConfigurationTest {
                             null,
                             null,
                             List.of(),
-                            store.nextCreationOrder()));
+                            1L));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
     }

@@ -10,7 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -27,7 +26,6 @@ public class InMemoryTraceStore implements TraceStore {
     private final int maxLogsPerTrace;
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
-    private final AtomicLong spanCounter = new AtomicLong(0);
 
     /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
     public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
@@ -72,11 +70,6 @@ public class InMemoryTraceStore implements TraceStore {
                 return size() > maxEntries;
             }
         });
-    }
-
-    @Override
-    public long nextCreationOrder() {
-        return spanCounter.incrementAndGet();
     }
 
     @Override
