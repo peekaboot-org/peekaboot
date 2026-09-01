@@ -35,22 +35,6 @@ class DataSourceMapperTest {
         assertThat(result.get(0).properties()).containsEntry("password", "******");
     }
 
-    /**
-     * Bare "key" is deliberately not a masking rule (it would mask server.ssl.key-store and
-     * spring.jpa.key-generator), so a connection param whose name merely contains "key"
-     * stays readable; only the compound api-key/apiKey shape is masked.
-     */
-    @Test
-    void map_leavesBareKeyConnectionParamsUnmasked() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of("keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).properties()).containsEntry("keyStore", "classpath:keystore.p12");
-    }
-
     @Test
     void map_shouldAggregateHealthStatus() {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
@@ -127,22 +111,6 @@ class DataSourceMapperTest {
     }
 
     @Test
-    void map_shouldMaskKeyAndTokenProperties() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of(
-                        "apiKey", new JdbcProperty(PropertySource.QUERY, "myapikey"),
-                        "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
-                        "server", new JdbcProperty(PropertySource.QUERY, "localhost")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).properties()).containsEntry("apiKey", "******");
-        assertThat(result.get(0).properties()).containsEntry("authToken", "******");
-        assertThat(result.get(0).properties()).containsEntry("server", "localhost");
-    }
-
-    @Test
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getConnectionParams())
@@ -151,17 +119,6 @@ class DataSourceMapperTest {
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, true);
 
         assertThat(result.get(0).properties()).containsEntry("password", "secret123");
-    }
-
-    @Test
-    void map_shouldStillMaskWhenUnmaskIsFalse() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of("password", new JdbcProperty(PropertySource.QUERY, "secret123")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).properties()).containsEntry("password", "******");
     }
 
     @Test

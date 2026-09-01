@@ -136,21 +136,6 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldApplyValuePatternRulesToComponentDetailValues() {
-        HealthResponse health = new HealthResponse(
-                "UP",
-                Map.of(
-                        "customIndicator",
-                        new HealthResponse.HealthComponent(
-                                "UP", Map.of("endpoint", "https://admin:hunter2@internal.example.com/status"))));
-
-        HealthInfo result = mapper.map(health, false);
-
-        assertThat(result.components().get(0).details().get("endpoint"))
-                .isEqualTo("https://******@internal.example.com/status");
-    }
-
-    @Test
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         HealthResponse health = new HealthResponse(
                 "UP",
@@ -163,20 +148,6 @@ class HealthMapperTest {
 
         assertThat(result.components().get(0).details())
                 .containsEntry("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678");
-    }
-
-    @Test
-    void map_shouldStillMaskWhenUnmaskIsFalse() {
-        HealthResponse health = new HealthResponse(
-                "UP",
-                Map.of(
-                        "customIndicator",
-                        new HealthResponse.HealthComponent(
-                                "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))));
-
-        HealthInfo result = mapper.map(health, false);
-
-        assertThat(result.components().get(0).details()).containsEntry("apiKey", "******");
     }
 
     @Test

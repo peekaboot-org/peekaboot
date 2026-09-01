@@ -21,19 +21,21 @@ class ApplicationMapperTest {
         assertThat(result.build()).containsEntry("version", "1.0.0");
     }
 
+    /** {@code info.build} is a free-form map the consuming app fills itself, so its values are masked like any other. */
     @Test
-    void map_shouldMaskCredentialShapedValuesInBuildInfo() {
-        // Split literal, deliberately: this shape is exactly what GitHub push protection
-        // scans for. Concatenation is folded at compile time, so the value under test is
-        // unchanged; it just never appears contiguously in the source. See
-        // MaskingEngineTest for the other examples of this pattern.
-        String slackToken = "xoxb" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx";
-        InfoResponse info = new InfoResponse(null, Map.of("artifact", "my-app", "notes", slackToken), null, null, null);
+    void map_shouldMaskASensitiveKeyInBuildInfo() {
+        InfoResponse info = new InfoResponse(null, Map.of("artifact", "my-app", "apiKey", "hunter2"), null, null, null);
 
         ApplicationInfo result = mapper.map(info, null, false);
 
-        assertThat(result.build()).containsEntry("artifact", "my-app");
-        assertThat(result.build()).containsEntry("notes", "******");
+        assertThat(result.build()).containsEntry("artifact", "my-app").containsEntry("apiKey", "******");
+    }
+
+    @Test
+    void map_shouldReturnBuildInfoVerbatimWhenUnmaskIsTrue() {
+        InfoResponse info = new InfoResponse(null, Map.of("apiKey", "hunter2"), null, null, null);
+
+        assertThat(mapper.map(info, null, true).build()).containsEntry("apiKey", "hunter2");
     }
 
     @Test

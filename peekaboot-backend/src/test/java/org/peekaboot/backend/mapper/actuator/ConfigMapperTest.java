@@ -72,39 +72,6 @@ class ConfigMapperTest {
     }
 
     @Test
-    void map_shouldNotMaskNegativeCaseKeysThatMerelyContainKey() {
-        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
-                "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "jpa",
-                                new ConfigPropsResponse.ConfigBean("spring.jpa", Map.of("key-generator", "sequence"))),
-                        null)));
-
-        ConfigInfo result = mapper.map(configprops, false);
-
-        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("sequence");
-    }
-
-    @Test
-    void map_shouldMaskCredentialEmbeddedInValueUnderAnInnocuousKey() {
-        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
-                "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "datasource",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource",
-                                        Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"))),
-                        null)));
-
-        ConfigInfo result = mapper.map(configprops, false);
-
-        assertThat(result.groups().get(0).properties().get(0).value())
-                .isEqualTo("jdbc:postgresql://******@localhost/db");
-    }
-
-    @Test
     void map_shouldHandleNullInput() {
         ConfigInfo result = mapper.map(null, false);
         assertThat(result.groups()).isEmpty();
@@ -115,18 +82,6 @@ class ConfigMapperTest {
         ConfigPropsResponse configprops = new ConfigPropsResponse(null);
         ConfigInfo result = mapper.map(configprops, false);
         assertThat(result.groups()).isEmpty();
-    }
-
-    @Test
-    void map_shouldMaskCredentialsKey() {
-        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
-                "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of("aws", new ConfigPropsResponse.ConfigBean("aws", Map.of("credentials", "AKIA..."))),
-                        null)));
-
-        ConfigInfo result = mapper.map(configprops, false);
-        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
     }
 
     @Test
@@ -167,20 +122,5 @@ class ConfigMapperTest {
 
         ConfigInfo result = mapper.map(configprops, true);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("secret123");
-    }
-
-    @Test
-    void map_shouldStillMaskWhenUnmaskIsFalse() {
-        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
-                "application",
-                new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "datasource",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource", Map.of("password", "secret123"))),
-                        null)));
-
-        ConfigInfo result = mapper.map(configprops, false);
-        assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
     }
 }

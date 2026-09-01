@@ -102,52 +102,6 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldNotMaskInnocuousKeyValue() {
-        EnvResponse env = new EnvResponse(
-                List.of(),
-                List.of(new EnvResponse.PropertySource(
-                        "application.properties",
-                        Map.of("server.port", new EnvResponse.PropertyValue("8080", "application.properties")))));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("8080");
-    }
-
-    @Test
-    void map_shouldNotMaskNegativeCaseKeysThatMerelyContainKey() {
-        EnvResponse env = new EnvResponse(
-                List.of(),
-                List.of(new EnvResponse.PropertySource(
-                        "application.properties",
-                        Map.of(
-                                "spring.jpa.key-generator",
-                                        new EnvResponse.PropertyValue("sequence", "application.properties"),
-                                "server.ssl.key-store",
-                                        new EnvResponse.PropertyValue(
-                                                "classpath:keystore.p12", "application.properties")))));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources().get(0).properties())
-                .anyMatch(p ->
-                        p.key().equals("spring.jpa.key-generator") && p.value().equals("sequence"))
-                .anyMatch(
-                        p -> p.key().equals("server.ssl.key-store") && p.value().equals("classpath:keystore.p12"));
-    }
-
-    @Test
-    void map_shouldMaskCredentialEmbeddedInValueUnderAnInnocuousKey() {
-        EnvResponse env = new EnvResponse(
-                List.of(),
-                List.of(new EnvResponse.PropertySource(
-                        "application.properties",
-                        Map.of(
-                                "spring.datasource.url",
-                                new EnvResponse.PropertyValue(
-                                        "jdbc:postgresql://admin:hunter2@localhost/db", "application.properties")))));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources().get(0).properties().get(0).value())
-                .isEqualTo("jdbc:postgresql://******@localhost/db");
-    }
-
-    @Test
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         EnvResponse env = new EnvResponse(
                 List.of(),
@@ -158,18 +112,5 @@ class EnvironmentMapperTest {
                                 new EnvResponse.PropertyValue("hunter2", "application.properties")))));
         EnvironmentInfo result = mapper.map(env, true);
         assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("hunter2");
-    }
-
-    @Test
-    void map_shouldStillMaskWhenUnmaskIsFalse() {
-        EnvResponse env = new EnvResponse(
-                List.of(),
-                List.of(new EnvResponse.PropertySource(
-                        "application.properties",
-                        Map.of(
-                                "spring.datasource.password",
-                                new EnvResponse.PropertyValue("hunter2", "application.properties")))));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("******");
     }
 }
