@@ -1,6 +1,9 @@
 package org.peekaboot.backend.insights;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * One aggregated window. Percentiles use nearest-rank over the ascending sort;
@@ -12,6 +15,9 @@ public record AggregateStats(
 
     public static final AggregateStats EMPTY =
             new AggregateStats(Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0);
+
+    /** The statistic names, in {@link #byName()} order - the order the API, the SSE events and the file use. */
+    public static final List<String> STAT_NAMES = List.copyOf(EMPTY.byName().keySet());
 
     public static AggregateStats of(double[] values) {
         double[] usable = Arrays.stream(values).filter(v -> !Double.isNaN(v)).toArray();
@@ -64,6 +70,22 @@ public record AggregateStats(
                 percentile(sortedAvgs, 0.95),
                 percentile(sortedAvgs, 0.99),
                 totalSamples);
+    }
+
+    /**
+     * The seven statistics keyed by the name they travel under. {@code samples} is a count
+     * the roll-up weights by, not a statistic anyone charts, and is deliberately absent.
+     */
+    public Map<String, Double> byName() {
+        Map<String, Double> stats = new LinkedHashMap<>();
+        stats.put("min", min);
+        stats.put("max", max);
+        stats.put("avg", avg);
+        stats.put("median", median);
+        stats.put("p90", p90);
+        stats.put("p95", p95);
+        stats.put("p99", p99);
+        return stats;
     }
 
     private static double percentile(double[] sorted, double quantile) {

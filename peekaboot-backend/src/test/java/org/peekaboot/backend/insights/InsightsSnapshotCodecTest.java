@@ -43,6 +43,13 @@ class InsightsSnapshotCodecTest {
         }
     }
 
+    /** The column order is the file format: a snapshot written today must read back under tomorrow's build. */
+    @Test
+    void theStatColumnOrderIsTheFileFormat() {
+        assertThat(InsightsSnapshot.STAT_COLUMNS)
+                .containsExactly("min", "max", "avg", "median", "p90", "p95", "p99", "samples");
+    }
+
     @Test
     void aSnapshotSurvivesTheRoundTripIncludingItsGaps() throws IOException {
         InsightsSnapshot restored = decoded(encoded(snapshot()));

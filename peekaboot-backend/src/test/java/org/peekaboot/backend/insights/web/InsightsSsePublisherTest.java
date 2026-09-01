@@ -355,10 +355,13 @@ class InsightsSsePublisherTest {
         assertThat(json).isEqualTo("{\"epochMs\":7000,\"values\":{\"a\":1.5,\"b\":null},\"tiles\":{}}");
     }
 
+    /** The seven statistics the dashboard charts, by name; the sample count stays server-side. */
     @Test
-    void rollupPayloadCarriesAllStats() {
+    void rollupPayloadCarriesTheSevenStatsAndNotTheSampleCount() {
         var entry = AggregateStats.of(new double[] {2.0});
         String json = publisher.rollupJson(1, 60_000, Map.of("a", entry));
-        assertThat(json).contains("\"level\":1").contains("\"avg\":2.0").contains("\"p99\":2.0");
+        assertThat(json)
+                .isEqualTo("{\"level\":1,\"epochMs\":60000,\"entries\":{\"a\":"
+                        + "{\"min\":2.0,\"max\":2.0,\"avg\":2.0,\"median\":2.0,\"p90\":2.0,\"p95\":2.0,\"p99\":2.0}}}");
     }
 }

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.within;
 
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,22 @@ class AggregateStatsTest {
         assertThat(stats.p95()).isEqualTo(10); // ceil(0.95*10)=10th
         assertThat(stats.p99()).isEqualTo(10);
         assertThat(stats.samples()).isEqualTo(10);
+    }
+
+    @Test
+    void byNameListsTheSevenStatsInWireOrder() {
+        AggregateStats stats = AggregateStats.of(new double[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
+        assertThat(stats.byName())
+                .containsExactly(
+                        entry("min", 1.0),
+                        entry("max", 10.0),
+                        entry("avg", 5.5),
+                        entry("median", 5.0),
+                        entry("p90", 9.0),
+                        entry("p95", 10.0),
+                        entry("p99", 10.0));
+        assertThat(AggregateStats.STAT_NAMES)
+                .containsExactlyElementsOf(stats.byName().keySet());
     }
 
     @Test
