@@ -57,7 +57,7 @@ springBoot {
     // boot jar is byte-identical across rebuilds.
     buildInfo {
         properties {
-            time = "2025-04-23T12:21:37Z"
+            time = "2026-09-01T07:31:12Z"
         }
     }
 }
@@ -73,7 +73,7 @@ gitProperties {
     failOnNoGitDirectory = false
     // Pinned like build.time above: git-commit-id on the Maven side derives
     // git.build.time from project.build.outputTimestamp for reproducible builds.
-    customProperty("git.build.time", "2025-04-23T12:21:37Z")
+    customProperty("git.build.time", "2026-09-01T07:31:12Z")
     keys = listOf(
         "git.branch",
         "git.tags",
