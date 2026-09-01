@@ -26,7 +26,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-resttestclient")
     // OpenTelemetry tracing for auto-configuration integration tests
     testImplementation("org.springframework.boot:spring-boot-starter-opentelemetry")
-    testImplementation("org.springframework.boot:spring-boot-starter-thymeleaf")
-    testImplementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    // DataSourceAutoConfiguration + an in-memory H2: the lifecycle tests prove the
+    // database metadata path against an auto-configured DataSource
+    testImplementation("org.springframework.boot:spring-boot-starter-jdbc")
     testImplementation("com.h2database:h2")
 }
