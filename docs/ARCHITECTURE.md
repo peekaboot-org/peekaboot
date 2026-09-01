@@ -517,7 +517,7 @@ For integration tests that verify auto-configuration ordering, use real OpenTele
 ```java
 @SpringBootTest(classes = TestApplication.class, webEnvironment = RANDOM_PORT)
 @ActiveProfiles("integration")
-class DevToolbarAutoConfigurationIntegrationTest {
+class DevToolbarAutoConfigurationIT {
     // Uses spring-boot-starter-opentelemetry for real Tracer bean
     // Verifies auto-configuration creates beans in correct order
 }

@@ -15,7 +15,7 @@ import org.springframework.security.web.SecurityFilterChain;
  * The worked example published on the website's <a
  * href="https://peekaboot.org/docs/security/">security page</a>, kept here as compiled,
  * executed code so the page cannot drift from something that works.
- * {@code SecuredPeekabootIntegrationTest} and {@code SecuredDashboardTest} are its proof;
+ * {@code SecuredPeekabootIT} and {@code SecuredDashboardIT} are its proof;
  * change one and change the other.
  *
  * <p>Deliberately outside {@code org.peekaboot.testingapp} so {@code TestingApp}'s
