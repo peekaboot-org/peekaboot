@@ -28,7 +28,7 @@ public class TracingInterceptorAutoConfiguration {
 
     @Bean
     public TracingHandlerInterceptor tracingHandlerInterceptor(ObservationRegistry observationRegistry) {
-        log.info("Peekaboot TracingHandlerInterceptor registered for handler/view span capture");
+        log.debug("Peekaboot TracingHandlerInterceptor registered for handler/view span capture");
         return new TracingHandlerInterceptor(observationRegistry);
     }
 

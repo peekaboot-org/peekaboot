@@ -19,13 +19,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 
 /**
- * Integration test for DevToolbarAutoConfiguration with real OpenTelemetry tracing.
- * This test verifies that auto-configuration correctly creates beans when all
- * conditions are met, including proper ordering after OpenTelemetry auto-configuration.
- *
- * This test would have caught the auto-configuration ordering bug where
- * DevToolbarAutoConfiguration was evaluated before OpenTelemetryTracingAutoConfiguration
- * created the Tracer bean.
+ * Boots a real application with actuator and OpenTelemetry on the classpath to prove the
+ * auto-configuration order: the toolbar filters exist only if DevToolbarAutoConfiguration
+ * runs after OpenTelemetryTracingAutoConfiguration has created the Tracer, and Insights
+ * exists only if InsightsAutoConfiguration runs after Boot's metrics chain has created the
+ * MeterRegistry. The bar's injection into HTML responses is checked over HTTP.
  */
 @SpringBootTest(classes = TestApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration")

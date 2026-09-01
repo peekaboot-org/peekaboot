@@ -54,7 +54,7 @@ public class DevToolbarAutoConfiguration {
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
-        log.info("DevToolbarFilter registered for all URLs");
+        log.debug("DevToolbarFilter registered for all URLs");
         return registration;
     }
 
@@ -62,13 +62,12 @@ public class DevToolbarAutoConfiguration {
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
             Tracer tracer, ApplicationEventPublisher eventPublisher) {
-        log.trace("Creating RequestCaptureFilter bean");
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");
-        log.info("RequestCaptureFilter registered for all URLs");
+        log.debug("RequestCaptureFilter registered for all URLs");
         return registration;
     }
 

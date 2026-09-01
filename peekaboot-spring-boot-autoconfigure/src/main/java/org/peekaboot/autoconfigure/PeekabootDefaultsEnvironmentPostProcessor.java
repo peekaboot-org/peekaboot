@@ -52,7 +52,6 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private final Log log;
 
     public PeekabootDefaultsEnvironmentPostProcessor(DeferredLogFactory logFactory) {
-        // post-processors run before the logging system is initialized
         this.log = logFactory.getLog(PeekabootDefaultsEnvironmentPostProcessor.class);
     }
 
