@@ -115,9 +115,8 @@ final class MaskingRules {
             // ("sk-cluster-prod-eu-west-1a-worker-nodes"): the identifier's run breaks at
             // its first hyphen, only 7 characters in, so it never reaches the 20-character
             // floor. Tightening the tail to [A-Za-z0-9] (no "-"/"_") is what makes that
-            // separation possible - the same char class this project used to use, with
-            // "-"/"_" allowed, is exactly what made the infra identifier match in the first
-            // place. Doesn't overlap the two prefixed rules above: "sk-proj-" and "sk-ant-"
+            // separation possible: a tail that admits "-"/"_" matches the infra identifier
+            // as well. Doesn't overlap the two prefixed rules above: "sk-proj-" and "sk-ant-"
             // both put a hyphen right after "sk-", four or three characters in, so this
             // pattern's required run breaks there too and it never fires for either -
             // whichever of the three rules matches a given value, the masked span is the
