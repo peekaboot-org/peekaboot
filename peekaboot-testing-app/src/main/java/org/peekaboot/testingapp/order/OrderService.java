@@ -99,7 +99,7 @@ public class OrderService {
         return new OrderReport(order.getReference(), lines.size(), total, computeMillis);
     }
 
-    public CustomerOrder placeOrder(NewOrder request) {
+    public OrderSummary placeOrder(NewOrder request) {
 
         CustomerOrder order = new CustomerOrder();
         order.setReference("PK-" + System.currentTimeMillis());
@@ -117,6 +117,13 @@ public class OrderService {
 
         log.info("placed order {} for customer {}", saved.getReference(), request.customerId());
         eventPublisher.publishEvent(new OrderPlacedEvent(saved.getId(), saved.getReference()));
-        return saved;
+        return new OrderSummary(
+                saved.getId(),
+                saved.getReference(),
+                saved.getStatus(),
+                saved.getPlacedAt(),
+                1,
+                line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())),
+                "customer #" + saved.getCustomerId());
     }
 }

@@ -1,8 +1,6 @@
 package org.peekaboot.testingapp.controller;
 
 import jakarta.validation.Valid;
-import java.math.BigDecimal;
-import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.order.NewOrder;
 import org.peekaboot.testingapp.order.OrderReport;
 import org.peekaboot.testingapp.order.OrderService;
@@ -35,14 +33,6 @@ public class OrderApi {
     @ResponseStatus(HttpStatus.CREATED)
     public OrderSummary place(@Valid @RequestBody NewOrder request) {
 
-        CustomerOrder created = orderService.placeOrder(request);
-        return new OrderSummary(
-                created.getId(),
-                created.getReference(),
-                created.getStatus(),
-                created.getPlacedAt(),
-                1,
-                new BigDecimal("19.99"),
-                "customer #" + created.getCustomerId());
+        return orderService.placeOrder(request);
     }
 }
