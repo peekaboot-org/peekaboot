@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.springframework.core.NativeDetector;
 
 /**
@@ -64,7 +65,7 @@ final class LocalDevDetector {
         }
 
         boolean buildOutputOnClassPath() {
-            for (String entry : classPath.split(File.pathSeparator)) {
+            for (String entry : classPath.split(Pattern.quote(File.pathSeparator), -1)) {
                 String normalized = "/" + entry.replace('\\', '/');
                 if (normalized.endsWith("/")) {
                     normalized = normalized.substring(0, normalized.length() - 1);
