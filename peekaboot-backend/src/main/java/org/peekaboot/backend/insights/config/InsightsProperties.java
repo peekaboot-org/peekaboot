@@ -30,7 +30,7 @@ public class InsightsProperties {
         if (levels == null || levels.isEmpty()) {
             throw new IllegalStateException("peekaboot.insights.levels must contain at least one level");
         }
-        Duration previous = null;
+        Level previous = null;
         for (Level level : levels) {
             if (level.interval == null || level.interval.isZero() || level.interval.isNegative()) {
                 throw new IllegalStateException("peekaboot.insights.levels: interval must be positive");
@@ -38,11 +38,24 @@ public class InsightsProperties {
             if (level.size <= 0) {
                 throw new IllegalStateException("peekaboot.insights.levels: size must be > 0");
             }
-            if (previous != null && level.interval.toMillis() % previous.toMillis() != 0) {
-                throw new IllegalStateException("peekaboot.insights.levels: each interval must be a"
-                        + " multiple of the previous one (" + level.interval + " vs " + previous + ")");
+            if (previous != null) {
+                validateRollUp(level, previous);
             }
-            previous = level.interval;
+            previous = level;
+        }
+    }
+
+    /** A roll-up aggregates the previous ring, so its window must be whole entries of that ring and fit inside it. */
+    private static void validateRollUp(Level level, Level previous) {
+        if (level.interval.toMillis() % previous.interval.toMillis() != 0) {
+            throw new IllegalStateException("peekaboot.insights.levels: each interval must be a"
+                    + " multiple of the previous one (" + level.interval + " vs " + previous.interval + ")");
+        }
+        long entries = level.interval.toMillis() / previous.interval.toMillis();
+        if (entries > previous.size) {
+            throw new IllegalStateException("peekaboot.insights.levels: each interval must fit in the previous"
+                    + " level's ring (" + level.interval + " spans " + entries + " entries of " + previous.interval
+                    + ", but that ring holds " + previous.size + ")");
         }
     }
 

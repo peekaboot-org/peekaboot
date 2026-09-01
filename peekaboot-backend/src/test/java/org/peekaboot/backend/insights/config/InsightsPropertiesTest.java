@@ -39,6 +39,16 @@ class InsightsPropertiesTest {
                 .hasMessageContaining("multiple");
     }
 
+    /** A roll-up reads the previous ring; a window wider than that ring would aggregate a partial window silently. */
+    @Test
+    void rejectsARollUpWindowWiderThanThePreviousRing() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(level(Duration.ofSeconds(10), 5), level(Duration.ofMinutes(1), 10)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ring");
+    }
+
     @Test
     void rejectsEmptyLevelsAndBadSizes() {
         InsightsProperties properties = new InsightsProperties();
