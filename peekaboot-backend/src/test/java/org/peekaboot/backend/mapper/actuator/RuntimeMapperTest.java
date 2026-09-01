@@ -25,15 +25,12 @@ class RuntimeMapperTest {
     @Test
     void map_shouldExtractDiskSpaceFromHealth() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "diskSpace",
-                                new HealthResponse.HealthComponent(
-                                        "UP",
-                                        Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "diskSpace",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"))),
+                List.of());
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).usedPercent()).isEqualTo(60.0);
@@ -90,13 +87,9 @@ class RuntimeMapperTest {
     @Test
     void map_shouldUseFallbackPathForDiskSpace() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "diskSpace",
-                                new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of("diskSpace", new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L))),
+                List.of());
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
@@ -123,13 +116,11 @@ class RuntimeMapperTest {
     @Test
     void map_shouldSkipDiskEntryWhenTotalIsZeroOrNegative() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "diskSpace",
-                                new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "diskSpace",
+                        new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"))),
+                List.of());
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }

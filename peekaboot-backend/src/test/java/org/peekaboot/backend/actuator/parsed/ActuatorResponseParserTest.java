@@ -35,7 +35,7 @@ class ActuatorResponseParserTest {
         ActuatorParsedData response = parser.parse(rawData);
 
         assertThat(response.spring().bootVersion()).isEqualTo("4.1.1");
-        assertThat(response.health().body().status()).isEqualTo("UP");
+        assertThat(response.health().status()).isEqualTo("UP");
         assertThat(response.info().build()).containsEntry("artifact", "sample-app");
         assertThat(response.env().activeProfiles()).containsExactly("local");
         assertThat(response.env().propertySources())
@@ -79,17 +79,57 @@ class ActuatorResponseParserTest {
 
     @Test
     void parsesPojoEndpointResults() {
-        // At runtime the invoked operations return POJOs (WebEndpointResponse,
-        // descriptor objects), not Maps - they must be converted, not dropped.
-        record HealthBody(String status, Map<String, Object> components) {}
-        record HealthPojo(int status, HealthBody body) {}
-        Map<String, Object> data = Map.of("health", new HealthPojo(200, new HealthBody("UP", Map.of())));
+        // At runtime the invoked operations return POJOs (HealthEndpoint's descriptor,
+        // the other endpoints' descriptor objects), not Maps - they must be converted, not
+        // dropped.
+        record HealthPojo(String status, Map<String, Object> components) {}
+        Map<String, Object> data = Map.of("health", new HealthPojo("UP", Map.of()));
 
         ActuatorParsedData response = parser.parse(data);
 
         assertThat(response.health()).isNotNull();
-        assertThat(response.health().status()).isEqualTo(200);
-        assertThat(response.health().body().status()).isEqualTo("UP");
+        assertThat(response.health().status()).isEqualTo("UP");
+    }
+
+    /**
+     * The fixture's health entry is the bare descriptor {@code HealthEndpoint.health()}
+     * returns - aggregate status at the top, indicators under {@code components} - not the
+     * {@code WebEndpointResponse} the web extension wraps it in.
+     */
+    @Test
+    void parsesTheHealthDescriptorsComponents() {
+        ActuatorParsedData response = parser.parse(rawData);
+
+        assertThat(response.health().status()).isEqualTo("UP");
+        assertThat(response.health().groups()).containsExactly("liveness", "readiness");
+        assertThat(response.health().components()).containsKeys("db", "diskSpace", "ping");
+        assertThat(response.health().components().get("db").status()).isEqualTo("UP");
+        assertThat(response.health().components().get("db").details()).containsEntry("database", "PostgreSQL");
+    }
+
+    /**
+     * Two DataSources make Spring's {@code db} contributor a composite whose children sit
+     * under a nested {@code components} map, one level below the top-level indicators.
+     */
+    @Test
+    void parsesACompositeComponentsChildren() throws Exception {
+        JsonMapper jsonMapper = JsonMapper.builder().build();
+        Map<String, Object> health;
+        try (InputStream is =
+                ActuatorResponseParserTest.class.getResourceAsStream("/sample_health_two_datasources.json")) {
+            health = jsonMapper.readValue(is, new TypeReference<>() {});
+        }
+
+        ActuatorParsedData response = parser.parse(Map.of("health", health));
+
+        HealthResponse.HealthComponent db = response.health().components().get("db");
+        assertThat(db.status()).isEqualTo("DOWN");
+        assertThat(db.details()).isNull();
+        assertThat(db.components()).containsOnlyKeys("primary", "reporting");
+        assertThat(db.components().get("primary").status()).isEqualTo("UP");
+        assertThat(db.components().get("reporting").details())
+                .containsEntry("error", "org.postgresql.util.PSQLException: Connection refused");
+        assertThat(response.health().components().get("ping").components()).isNull();
     }
 
     @Test

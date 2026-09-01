@@ -27,32 +27,43 @@ public class HealthMapper {
      * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
      */
     public HealthInfo map(HealthResponse health, boolean unmask) {
-        if (health == null || health.body() == null) {
+        if (health == null) {
             return new HealthInfo(HealthStatus.UNKNOWN, List.of());
         }
 
-        HealthResponse.HealthBody body = health.body();
-        HealthStatus status = HealthStatus.fromString(body.status());
-        List<HealthComponent> components = extractComponents(body, unmask);
+        HealthStatus status = HealthStatus.fromString(health.status());
+        List<HealthComponent> components = extractComponents(health, unmask);
 
         return new HealthInfo(status, components);
     }
 
-    private List<HealthComponent> extractComponents(HealthResponse.HealthBody body, boolean unmask) {
-        if (body.components() == null || body.components().isEmpty()) {
-            return List.of();
-        }
-
+    private List<HealthComponent> extractComponents(HealthResponse health, boolean unmask) {
         List<HealthComponent> result = new ArrayList<>();
-        for (Map.Entry<String, HealthResponse.HealthComponent> entry :
-                body.components().entrySet()) {
-            String name = entry.getKey();
+        appendComponents("", health.components(), unmask, result);
+        return result;
+    }
+
+    /**
+     * The dashboard shows one flat list, so a composite's children follow it named
+     * {@code parent/child}; the composite itself keeps its aggregate status and, having no
+     * details of its own, an empty details map.
+     */
+    private void appendComponents(
+            String namePrefix,
+            Map<String, HealthResponse.HealthComponent> components,
+            boolean unmask,
+            List<HealthComponent> result) {
+        if (components == null) {
+            return;
+        }
+        for (Map.Entry<String, HealthResponse.HealthComponent> entry : components.entrySet()) {
+            String name = namePrefix + entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
             result.add(new HealthComponent(name, componentStatus, maskDetails(details, unmask)));
+            appendComponents(name + "/", component.components(), unmask, result);
         }
-        return result;
     }
 
     /**

@@ -21,6 +21,7 @@ dependencies {
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
+    compileOnly("org.springframework.boot:spring-boot-health")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
     compileOnly("org.springframework.boot:spring-boot-configuration-processor")
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")

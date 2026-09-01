@@ -70,6 +70,13 @@
             <artifactId>micrometer-tracing</artifactId>
         </dependency>
 
+        <!-- HealthEndpoint, read directly by PeekabootActuatorService; the auto-configuration
+             that creates the service is @ConditionalOnClass(HealthEndpoint) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-health</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- OpenTelemetry SDK (optional - for OTel integration) -->
         <dependency>
             <groupId>io.opentelemetry</groupId>

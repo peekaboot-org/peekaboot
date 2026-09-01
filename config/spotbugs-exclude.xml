@@ -16,4 +16,13 @@
         </Or>
     </Match>
 
+    <!-- The container markers the local-development detection reads - /.dockerenv and
+         /proc/1/cgroup - are absolute by definition: they are where Docker and the kernel
+         put them, not paths the application chooses. The reading code takes them as
+         parameters so tests can point it at temporary files. -->
+    <Match>
+        <Class name="org.peekaboot.autoconfigure.LocalDevDetector$LaunchSignals"/>
+        <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
+    </Match>
+
 </FindBugsFilter>

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -55,12 +56,52 @@ class DataSourceMapperTest {
     void map_shouldAggregateHealthStatus() {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
 
-        HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of()),
-                200);
+        HealthResponse health =
+                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of());
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
+        assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
+    }
+
+    /**
+     * With two DataSources Spring's {@code db} contributor is a composite: one child per
+     * DataSource bean, named after it. Each row must show its own status, not the composite's
+     * aggregate - otherwise one DataSource being down marks both rows down.
+     */
+    @Test
+    void map_shouldReadEachDataSourcesOwnStatusFromInsideACompositeDb() {
+        HealthResponse health = new HealthResponse(
+                "DOWN",
+                Map.of(
+                        "db",
+                        new HealthResponse.HealthComponent(
+                                "DOWN",
+                                null,
+                                Map.of(
+                                        "primary", new HealthResponse.HealthComponent("UP", Map.of()),
+                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))),
+                List.of());
+
+        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health);
+
+        assertThat(result)
+                .extracting(DataSourceInfo::name, DataSourceInfo::health)
+                .containsExactly(tuple("primary", HealthStatus.UP), tuple("reporting", HealthStatus.DOWN));
+    }
+
+    /** A DataSource the composite does not know (a bean Spring's indicator skipped) gets the composite's status. */
+    @Test
+    void map_shouldFallBackToTheCompositesStatusForADataSourceWithoutItsOwnChild() {
+        HealthResponse health = new HealthResponse(
+                "UP",
+                Map.of(
+                        "db",
+                        new HealthResponse.HealthComponent(
+                                "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))),
+                List.of());
+
+        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health);
+
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 

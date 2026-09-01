@@ -88,7 +88,7 @@ stays around a minute.
 | Module | Artifact | Published | Contains |
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
-| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
+| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/health-endpoint/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct. Its `-sources` and `-javadoc` jars are empty on purpose (below) |

@@ -1,11 +1,14 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.domain.health.HealthComponent;
 import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 
@@ -16,11 +19,9 @@ class HealthMapperTest {
     @Test
     void map_shouldExtractStatusAndComponents() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"))),
+                List.of());
 
         HealthInfo result = mapper.map(health);
 
@@ -36,14 +37,39 @@ class HealthMapperTest {
         // proving per-component status is read from the component, not copied
         // from the top-level aggregate.
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP", Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of())), List.of()),
-                200);
+                "UP", Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of())), List.of());
 
         HealthInfo result = mapper.map(health);
 
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components().get(0).status()).isEqualTo(HealthStatus.DOWN);
+    }
+
+    /**
+     * A composite contributor - Spring's {@code db} as soon as there are two DataSources,
+     * or any custom composite - nests its children under {@code components}. The dashboard
+     * shows one flat list, so the children are named after their parent, and the composite
+     * itself stays in the list with its aggregate status.
+     */
+    @Test
+    void map_shouldFlattenACompositesChildrenUnderTheParentName() {
+        // insertion-ordered like Spring's TreeMap-backed composite, so the flat order is checkable
+        Map<String, HealthResponse.HealthComponent> children = new LinkedHashMap<>();
+        children.put("primary", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL")));
+        children.put("reporting", new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused")));
+        HealthResponse health = new HealthResponse(
+                "DOWN", Map.of("db", new HealthResponse.HealthComponent("DOWN", null, children)), List.of());
+
+        HealthInfo result = mapper.map(health);
+
+        assertThat(result.components())
+                .extracting(HealthComponent::name, HealthComponent::status)
+                .containsExactly(
+                        tuple("db", HealthStatus.DOWN),
+                        tuple("db/primary", HealthStatus.UP),
+                        tuple("db/reporting", HealthStatus.DOWN));
+        assertThat(result.components().get(0).details()).isEmpty();
+        assertThat(result.components().get(1).details()).containsEntry("database", "PostgreSQL");
     }
 
     @Test
@@ -54,8 +80,8 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullBody() {
-        HealthResponse health = new HealthResponse(null, 200);
+    void map_shouldHandleAnEmptyDescriptor() {
+        HealthResponse health = new HealthResponse(null, null, null);
         HealthInfo result = mapper.map(health);
         assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(result.components()).isEmpty();
@@ -63,15 +89,14 @@ class HealthMapperTest {
 
     @Test
     void map_shouldHandleDownStatus() {
-        HealthResponse health = new HealthResponse(new HealthResponse.HealthBody("DOWN", Map.of(), List.of()), 503);
+        HealthResponse health = new HealthResponse("DOWN", Map.of(), List.of());
         HealthInfo result = mapper.map(health);
         assertThat(result.status()).isEqualTo(HealthStatus.DOWN);
     }
 
     @Test
     void map_shouldHandleOutOfServiceStatus() {
-        HealthResponse health =
-                new HealthResponse(new HealthResponse.HealthBody("OUT_OF_SERVICE", Map.of(), List.of()), 503);
+        HealthResponse health = new HealthResponse("OUT_OF_SERVICE", Map.of(), List.of());
         HealthInfo result = mapper.map(health);
         assertThat(result.status()).isEqualTo(HealthStatus.OUT_OF_SERVICE);
     }
@@ -79,14 +104,12 @@ class HealthMapperTest {
     @Test
     void map_shouldExtractComponentDetails() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "db",
-                                new HealthResponse.HealthComponent(
-                                        "UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "db",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"))),
+                List.of());
 
         HealthInfo result = mapper.map(health);
 
@@ -101,19 +124,13 @@ class HealthMapperTest {
     @Test
     void map_shouldMaskASensitiveKeyInComponentDetails() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "customIndicator",
-                                new HealthResponse.HealthComponent(
-                                        "UP",
-                                        Map.of(
-                                                "apiKey",
-                                                "sk-abcdefghijklmnopqrstuvwxyz012345678",
-                                                "region",
-                                                "eu-west-1"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "customIndicator",
+                        new HealthResponse.HealthComponent(
+                                "UP",
+                                Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))),
+                List.of());
 
         HealthInfo result = mapper.map(health);
 
@@ -125,14 +142,12 @@ class HealthMapperTest {
     @Test
     void map_shouldApplyValuePatternRulesToComponentDetailValues() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "customIndicator",
-                                new HealthResponse.HealthComponent(
-                                        "UP", Map.of("endpoint", "https://admin:hunter2@internal.example.com/status"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "customIndicator",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("endpoint", "https://admin:hunter2@internal.example.com/status"))),
+                List.of());
 
         HealthInfo result = mapper.map(health);
 
@@ -143,14 +158,12 @@ class HealthMapperTest {
     @Test
     void map_shouldReturnRealValueWhenUnmaskIsTrue() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "customIndicator",
-                                new HealthResponse.HealthComponent(
-                                        "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "customIndicator",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
+                List.of());
 
         HealthInfo result = mapper.map(health, true);
 
@@ -161,14 +174,12 @@ class HealthMapperTest {
     @Test
     void map_shouldStillMaskWhenUnmaskIsFalse() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "customIndicator",
-                                new HealthResponse.HealthComponent(
-                                        "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "customIndicator",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))),
+                List.of());
 
         HealthInfo result = mapper.map(health, false);
 
@@ -178,14 +189,11 @@ class HealthMapperTest {
     @Test
     void map_shouldLeaveNonStringDetailValuesUntouched() {
         HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP",
-                        Map.of(
-                                "diskSpace",
-                                new HealthResponse.HealthComponent(
-                                        "UP", Map.of("total", 500_000_000L, "free", 250_000_000L))),
-                        List.of()),
-                200);
+                "UP",
+                Map.of(
+                        "diskSpace",
+                        new HealthResponse.HealthComponent("UP", Map.of("total", 500_000_000L, "free", 250_000_000L))),
+                List.of());
 
         HealthInfo result = mapper.map(health);
 

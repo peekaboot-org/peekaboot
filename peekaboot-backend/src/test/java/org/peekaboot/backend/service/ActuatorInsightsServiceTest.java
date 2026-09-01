@@ -35,7 +35,7 @@ class ActuatorInsightsServiceTest {
     void getInsights_shouldMapAllSections() {
         when(actuatorService.getInsightsData())
                 .thenReturn(Map.of(
-                        "health", Map.of("body", Map.of("status", "UP", "components", Map.of()), "status", 200),
+                        "health", Map.of("status", "UP", "components", Map.of()),
                         "info",
                                 Map.of(
                                         "build", Map.of("name", "test"),

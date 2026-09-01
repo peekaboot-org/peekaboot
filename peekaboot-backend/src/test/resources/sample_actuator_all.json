@@ -1,312 +1,312 @@
 {
-  "spring":{
-    "bootVersion":"4.1.1",
-    "frameworkVersion":"7.0.9"
+  "spring": {
+    "bootVersion": "4.1.1",
+    "frameworkVersion": "7.0.9"
   },
-  "configprops":{
-    "contexts":{
-      "sample-app":{
-        "beans":{
-          "server-org.springframework.boot.web.server.autoconfigure.ServerProperties":{
-            "inputs":{
-              "maxHttpRequestHeaderSize":{},
-              "reactive":{
-                "session":{
-                  "maxSessions":{},
-                  "timeout":{}
+  "configprops": {
+    "contexts": {
+      "sample-app": {
+        "beans": {
+          "server-org.springframework.boot.web.server.autoconfigure.ServerProperties": {
+            "inputs": {
+              "maxHttpRequestHeaderSize": {},
+              "reactive": {
+                "session": {
+                  "maxSessions": {},
+                  "timeout": {}
                 }
               },
-              "port":{
-                "value":"******",
-                "origin":"class path resource [application.yml] - 2:9"
+              "port": {
+                "value": "******",
+                "origin": "class path resource [application.yml] - 2:9"
               },
-              "servlet":{
-                "applicationDisplayName":{},
-                "contextParameters":{},
-                "encoding":{},
-                "registerDefaultServlet":{}
+              "servlet": {
+                "applicationDisplayName": {},
+                "contextParameters": {},
+                "encoding": {},
+                "registerDefaultServlet": {}
               },
-              "shutdown":{}
+              "shutdown": {}
             },
-            "prefix":"server",
-            "properties":{
-              "maxHttpRequestHeaderSize":"******",
-              "reactive":{
-                "session":{
-                  "maxSessions":"******",
-                  "timeout":"******"
+            "prefix": "server",
+            "properties": {
+              "maxHttpRequestHeaderSize": "******",
+              "reactive": {
+                "session": {
+                  "maxSessions": "******",
+                  "timeout": "******"
                 }
               },
-              "port":"******",
-              "servlet":{
-                "applicationDisplayName":"******",
-                "contextParameters":{},
-                "encoding":{},
-                "registerDefaultServlet":"******"
+              "port": "******",
+              "servlet": {
+                "applicationDisplayName": "******",
+                "contextParameters": {},
+                "encoding": {},
+                "registerDefaultServlet": "******"
               },
-              "shutdown":"******"
+              "shutdown": "******"
             }
           }
         },
-        "parentId":null
+        "parentId": null
       }
     }
   },
-  "env":{
-    "activeProfiles":[
+  "env": {
+    "activeProfiles": [
       "local"
     ],
-    "defaultProfiles":[
+    "defaultProfiles": [
       "default"
     ],
-    "propertySources":[
+    "propertySources": [
       {
-        "name":"server.ports",
-        "properties":{
-          "local.server.port":{
-            "value":"******"
+        "name": "server.ports",
+        "properties": {
+          "local.server.port": {
+            "value": "******"
           }
         }
       },
       {
-        "name":"servletContextInitParams",
-        "properties":{}
+        "name": "servletContextInitParams",
+        "properties": {}
       },
       {
-        "name":"systemProperties",
-        "properties":{
-          "java.version":{
-            "value":"******"
+        "name": "systemProperties",
+        "properties": {
+          "java.version": {
+            "value": "******"
           },
-          "java.vendor":{
-            "value":"******"
+          "java.vendor": {
+            "value": "******"
           },
-          "java.home":{
-            "value":"******"
+          "java.home": {
+            "value": "******"
           },
-          "os.name":{
-            "value":"******"
+          "os.name": {
+            "value": "******"
           },
-          "os.arch":{
-            "value":"******"
+          "os.arch": {
+            "value": "******"
           },
-          "user.timezone":{
-            "value":"******"
+          "user.timezone": {
+            "value": "******"
           },
-          "file.encoding":{
-            "value":"******"
+          "file.encoding": {
+            "value": "******"
           },
-          "sun.java.command":{
-            "value":"******"
+          "sun.java.command": {
+            "value": "******"
           }
         }
       },
       {
-        "name":"systemEnvironment",
-        "properties":{
-          "PATH":{
-            "origin":"System Environment Property \"PATH\"",
-            "value":"******"
+        "name": "systemEnvironment",
+        "properties": {
+          "PATH": {
+            "origin": "System Environment Property \"PATH\"",
+            "value": "******"
           },
-          "HOME":{
-            "origin":"System Environment Property \"HOME\"",
-            "value":"******"
+          "HOME": {
+            "origin": "System Environment Property \"HOME\"",
+            "value": "******"
           },
-          "USER":{
-            "origin":"System Environment Property \"USER\"",
-            "value":"******"
+          "USER": {
+            "origin": "System Environment Property \"USER\"",
+            "value": "******"
           },
-          "SHELL":{
-            "origin":"System Environment Property \"SHELL\"",
-            "value":"******"
+          "SHELL": {
+            "origin": "System Environment Property \"SHELL\"",
+            "value": "******"
           },
-          "LANG":{
-            "origin":"System Environment Property \"LANG\"",
-            "value":"******"
+          "LANG": {
+            "origin": "System Environment Property \"LANG\"",
+            "value": "******"
           },
-          "TERM":{
-            "origin":"System Environment Property \"TERM\"",
-            "value":"******"
+          "TERM": {
+            "origin": "System Environment Property \"TERM\"",
+            "value": "******"
           },
-          "TMPDIR":{
-            "origin":"System Environment Property \"TMPDIR\"",
-            "value":"******"
+          "TMPDIR": {
+            "origin": "System Environment Property \"TMPDIR\"",
+            "value": "******"
           },
-          "JAVA_HOME":{
-            "origin":"System Environment Property \"JAVA_HOME\"",
-            "value":"******"
+          "JAVA_HOME": {
+            "origin": "System Environment Property \"JAVA_HOME\"",
+            "value": "******"
           }
         }
       },
       {
-        "name":"Config resource 'class path resource [application.yml]' via location 'optional:classpath:/'",
-        "properties":{
-          "server.port":{
-            "origin":"class path resource [application.yml] - 2:9",
-            "value":"******"
+        "name": "Config resource 'class path resource [application.yml]' via location 'optional:classpath:/'",
+        "properties": {
+          "server.port": {
+            "origin": "class path resource [application.yml] - 2:9",
+            "value": "******"
           },
-          "spring.application.name":{
-            "origin":"class path resource [application.yml] - 6:11",
-            "value":"******"
+          "spring.application.name": {
+            "origin": "class path resource [application.yml] - 6:11",
+            "value": "******"
           },
-          "spring.datasource":{
-            "origin":"class path resource [application.yml] - 7:14",
-            "value":"******"
+          "spring.datasource": {
+            "origin": "class path resource [application.yml] - 7:14",
+            "value": "******"
           },
-          "spring.jpa.open-in-view":{
-            "origin":"class path resource [application.yml] - 11:19",
-            "value":"******"
+          "spring.jpa.open-in-view": {
+            "origin": "class path resource [application.yml] - 11:19",
+            "value": "******"
           },
-          "peekaboot.dev-toolbar":{
-            "origin":"class path resource [application.yml] - 14:16",
-            "value":"******"
+          "peekaboot.dev-toolbar": {
+            "origin": "class path resource [application.yml] - 14:16",
+            "value": "******"
           },
-          "logging.level.org.peekaboot":{
-            "origin":"class path resource [application.yml] - 18:28",
-            "value":"******"
+          "logging.level.org.peekaboot": {
+            "origin": "class path resource [application.yml] - 18:28",
+            "value": "******"
           },
-          "debug":{
-            "origin":"class path resource [application.yml] - 20:8",
-            "value":"******"
+          "debug": {
+            "origin": "class path resource [application.yml] - 20:8",
+            "value": "******"
           },
-          "management.endpoint.health.show-details":{
-            "origin":"class path resource [application.yml] - 27:21",
-            "value":"******"
+          "management.endpoint.health.show-details": {
+            "origin": "class path resource [application.yml] - 27:21",
+            "value": "******"
           },
-          "management.info.env.enabled":{
-            "origin":"class path resource [application.yml] - 33:16",
-            "value":"******"
+          "management.info.env.enabled": {
+            "origin": "class path resource [application.yml] - 33:16",
+            "value": "******"
           },
-          "management.info.java.enabled":{
-            "origin":"class path resource [application.yml] - 37:16",
-            "value":"******"
+          "management.info.java.enabled": {
+            "origin": "class path resource [application.yml] - 37:16",
+            "value": "******"
           },
-          "management.info.os.enabled":{
-            "origin":"class path resource [application.yml] - 41:16",
-            "value":"******"
+          "management.info.os.enabled": {
+            "origin": "class path resource [application.yml] - 41:16",
+            "value": "******"
           },
-          "management.info.process.enabled":{
-            "origin":"class path resource [application.yml] - 45:16",
-            "value":"******"
+          "management.info.process.enabled": {
+            "origin": "class path resource [application.yml] - 45:16",
+            "value": "******"
           },
-          "management.info.git.enabled":{
-            "origin":"class path resource [application.yml] - 49:16",
-            "value":"******"
+          "management.info.git.enabled": {
+            "origin": "class path resource [application.yml] - 49:16",
+            "value": "******"
           },
-          "management.tracing.sampling.probability":{
-            "origin":"class path resource [application.yml] - 55:20",
-            "value":"******"
+          "management.tracing.sampling.probability": {
+            "origin": "class path resource [application.yml] - 55:20",
+            "value": "******"
           },
-          "management.observations.annotations.enabled":{
-            "origin":"class path resource [application.yml] - 61:16",
-            "value":"******"
+          "management.observations.annotations.enabled": {
+            "origin": "class path resource [application.yml] - 61:16",
+            "value": "******"
           },
-          "management.otlp.metrics.export.enabled":{
-            "origin":"class path resource [application.yml] - 68:18",
-            "value":"******"
+          "management.otlp.metrics.export.enabled": {
+            "origin": "class path resource [application.yml] - 68:18",
+            "value": "******"
           }
         }
       },
       {
-        "name":"logCorrelation",
-        "properties":{
-          "logging.expect-correlation-id":{
-            "value":"******"
+        "name": "logCorrelation",
+        "properties": {
+          "logging.expect-correlation-id": {
+            "value": "******"
           }
         }
       },
       {
-        "name":"applicationInfo",
-        "properties":{
-          "spring.application.pid":{
-            "value":"******"
+        "name": "applicationInfo",
+        "properties": {
+          "spring.application.pid": {
+            "value": "******"
           }
         }
       },
       {
-        "name":"Management Server",
-        "properties":{
-          "local.management.port":{
-            "value":"******"
+        "name": "Management Server",
+        "properties": {
+          "local.management.port": {
+            "value": "******"
           }
         }
       }
     ]
   },
-  "info":{
-    "git":{
-      "branch":"main",
-      "commit":{
-        "id":"1a2b3c4",
-        "time":"2026-01-10T20:52:19Z"
+  "info": {
+    "git": {
+      "branch": "main",
+      "commit": {
+        "id": "1a2b3c4",
+        "time": "2026-01-10T20:52:19Z"
       }
     },
-    "build":{
-      "artifact":"sample-app",
-      "name":"sample-app",
-      "time":"2026-01-11T06:43:46.332Z",
-      "version":"1.0.0",
-      "group":"com.example"
+    "build": {
+      "artifact": "sample-app",
+      "name": "sample-app",
+      "time": "2026-01-11T06:43:46.332Z",
+      "version": "1.0.0",
+      "group": "com.example"
     },
-    "java":{
-      "jvm":{
-        "name":"OpenJDK 64-Bit Server VM",
-        "vendor":"Eclipse Adoptium",
-        "version":"21.0.7+6-LTS"
+    "java": {
+      "jvm": {
+        "name": "OpenJDK 64-Bit Server VM",
+        "vendor": "Eclipse Adoptium",
+        "version": "21.0.7+6-LTS"
       },
-      "runtime":{
-        "name":"OpenJDK Runtime Environment",
-        "version":"21.0.7+6-LTS"
+      "runtime": {
+        "name": "OpenJDK Runtime Environment",
+        "version": "21.0.7+6-LTS"
       },
-      "vendor":{
-        "name":"Eclipse Adoptium",
-        "version":"Temurin-21.0.7+6"
+      "vendor": {
+        "name": "Eclipse Adoptium",
+        "version": "Temurin-21.0.7+6"
       },
-      "version":"21.0.7"
+      "version": "21.0.7"
     },
-    "os":{
-      "arch":"amd64",
-      "name":"Linux",
-      "version":"6.1.0"
+    "os": {
+      "arch": "amd64",
+      "name": "Linux",
+      "version": "6.1.0"
     },
-    "process":{
-      "cpus":10,
-      "memory":{
-        "garbageCollectors":[
+    "process": {
+      "cpus": 10,
+      "memory": {
+        "garbageCollectors": [
           {
-            "collectionCount":18,
-            "name":"G1 Young Generation"
+            "collectionCount": 18,
+            "name": "G1 Young Generation"
           },
           {
-            "collectionCount":8,
-            "name":"G1 Concurrent GC"
+            "collectionCount": 8,
+            "name": "G1 Concurrent GC"
           },
           {
-            "collectionCount":0,
-            "name":"G1 Old Generation"
+            "collectionCount": 0,
+            "name": "G1 Old Generation"
           }
         ],
-        "heap":{
-          "committed":171966464,
-          "init":536870912,
-          "max":8589934592,
-          "used":70876872
+        "heap": {
+          "committed": 171966464,
+          "init": 536870912,
+          "max": 8589934592,
+          "used": 70876872
         },
-        "nonHeap":{
-          "committed":135069696,
-          "init":2555904,
-          "max":-1,
-          "used":133339136
+        "nonHeap": {
+          "committed": 135069696,
+          "init": 2555904,
+          "max": -1,
+          "used": 133339136
         }
       },
-      "owner":"app",
-      "parentPid":39341,
-      "pid":65675,
-      "virtualThreads":null
+      "owner": "app",
+      "parentPid": 39341,
+      "pid": 65675,
+      "virtualThreads": null
     }
   },
-  "loggers":{
-    "levels":[
+  "loggers": {
+    "levels": [
       "OFF",
       "ERROR",
       "WARN",
@@ -314,28 +314,28 @@
       "DEBUG",
       "TRACE"
     ],
-    "loggers":{
-      "ROOT":{
-        "configuredLevel":"INFO",
-        "effectiveLevel":"INFO"
+    "loggers": {
+      "ROOT": {
+        "configuredLevel": "INFO",
+        "effectiveLevel": "INFO"
       },
-      "org.springframework":{
-        "configuredLevel":null,
-        "effectiveLevel":"INFO"
+      "org.springframework": {
+        "configuredLevel": null,
+        "effectiveLevel": "INFO"
       },
-      "org.hibernate.SQL":{
-        "configuredLevel":"DEBUG",
-        "effectiveLevel":"DEBUG"
+      "org.hibernate.SQL": {
+        "configuredLevel": "DEBUG",
+        "effectiveLevel": "DEBUG"
       },
-      "com.example.sample":{
-        "configuredLevel":"DEBUG",
-        "effectiveLevel":"DEBUG"
+      "com.example.sample": {
+        "configuredLevel": "DEBUG",
+        "effectiveLevel": "DEBUG"
       }
     },
-    "groups":{
-      "web":{
-        "configuredLevel":"DEBUG",
-        "members":[
+    "groups": {
+      "web": {
+        "configuredLevel": "DEBUG",
+        "members": [
           "org.springframework.core.codec",
           "org.springframework.http",
           "org.springframework.web",
@@ -343,9 +343,9 @@
           "org.springframework.boot.web.servlet.ServletContextInitializerBeans"
         ]
       },
-      "sql":{
-        "configuredLevel":"DEBUG",
-        "members":[
+      "sql": {
+        "configuredLevel": "DEBUG",
+        "members": [
           "org.springframework.jdbc.core",
           "org.hibernate.SQL",
           "org.jooq.tools.LoggerListener"
@@ -353,125 +353,121 @@
       }
     }
   },
-  "scheduledtasks":{
-    "cron":[
+  "scheduledtasks": {
+    "cron": [
       {
-        "expression":"0 0 * * * *",
-        "lastExecution":null,
-        "nextExecution":{
-          "time":"2026-01-11T06:59:59.999980Z"
+        "expression": "0 0 * * * *",
+        "lastExecution": null,
+        "nextExecution": {
+          "time": "2026-01-11T06:59:59.999980Z"
         },
-        "runnable":{
-          "target":"com.example.sample.Scheduler.hourlyReport"
+        "runnable": {
+          "target": "com.example.sample.Scheduler.hourlyReport"
         }
       }
     ],
-    "custom":[],
-    "fixedDelay":[
+    "custom": [],
+    "fixedDelay": [
       {
-        "initialDelay":0,
-        "interval":5000,
-        "lastExecution":{
-          "exception":null,
-          "status":"SUCCESS",
-          "time":"2026-01-11T06:49:25.932879Z"
+        "initialDelay": 0,
+        "interval": 5000,
+        "lastExecution": {
+          "exception": null,
+          "status": "SUCCESS",
+          "time": "2026-01-11T06:49:25.932879Z"
         },
-        "nextExecution":{
-          "time":"2026-01-11T06:49:30.932494Z"
+        "nextExecution": {
+          "time": "2026-01-11T06:49:30.932494Z"
         },
-        "runnable":{
-          "target":"com.example.sample.Scheduler.pollInbox"
+        "runnable": {
+          "target": "com.example.sample.Scheduler.pollInbox"
         }
       }
     ],
-    "fixedRate":[
+    "fixedRate": [
       {
-        "initialDelay":0,
-        "interval":3600000,
-        "lastExecution":{
-          "exception":null,
-          "status":"SUCCESS",
-          "time":"2026-01-11T06:49:20.813453Z"
+        "initialDelay": 0,
+        "interval": 3600000,
+        "lastExecution": {
+          "exception": null,
+          "status": "SUCCESS",
+          "time": "2026-01-11T06:49:20.813453Z"
         },
-        "nextExecution":{
-          "time":"2026-01-11T07:49:20.812700Z"
+        "nextExecution": {
+          "time": "2026-01-11T07:49:20.812700Z"
         },
-        "runnable":{
-          "target":"com.example.sample.Scheduler.refreshCache"
+        "runnable": {
+          "target": "com.example.sample.Scheduler.refreshCache"
         }
       }
     ]
   },
-  "flyway":{
-    "contexts":{
-      "sample-app":{
-        "flywayBeans":{
-          "flyway":{
-            "migrations":[
+  "flyway": {
+    "contexts": {
+      "sample-app": {
+        "flywayBeans": {
+          "flyway": {
+            "migrations": [
               {
-                "checksum":822053423,
-                "description":"initial-schema",
-                "executionTime":5,
-                "installedBy":"sample_app",
-                "installedOn":"2026-01-06T13:03:10.650Z",
-                "installedRank":1,
-                "script":"V1__initial-schema.sql",
-                "state":"SUCCESS",
-                "type":"SQL",
-                "version":"1"
+                "checksum": 822053423,
+                "description": "initial-schema",
+                "executionTime": 5,
+                "installedBy": "sample_app",
+                "installedOn": "2026-01-06T13:03:10.650Z",
+                "installedRank": 1,
+                "script": "V1__initial-schema.sql",
+                "state": "SUCCESS",
+                "type": "SQL",
+                "version": "1"
               }
             ]
           }
         },
-        "parentId":null
+        "parentId": null
       }
     }
   },
-  "health":{
-    "body":{
-      "components":{
-        "db":{
-          "details":{
-            "database":"PostgreSQL",
-            "validationQuery":"isValid()"
-          },
-          "status":"UP"
+  "health": {
+    "components": {
+      "db": {
+        "details": {
+          "database": "PostgreSQL",
+          "validationQuery": "isValid()"
         },
-        "diskSpace":{
-          "details":{
-            "total":1995218165760,
-            "free":961848963072,
-            "threshold":10485760,
-            "path":"/srv/sample-app/.",
-            "exists":true
-          },
-          "status":"UP"
-        },
-        "livenessState":{
-          "status":"UP"
-        },
-        "ping":{
-          "status":"UP"
-        },
-        "readinessState":{
-          "status":"UP"
-        },
-        "ssl":{
-          "details":{
-            "expiringChains":[],
-            "invalidChains":[],
-            "validChains":[]
-          },
-          "status":"UP"
-        }
+        "status": "UP"
       },
-      "groups":[
-        "liveness",
-        "readiness"
-      ],
-      "status":"UP"
+      "diskSpace": {
+        "details": {
+          "total": 1995218165760,
+          "free": 961848963072,
+          "threshold": 10485760,
+          "path": "/srv/sample-app/.",
+          "exists": true
+        },
+        "status": "UP"
+      },
+      "livenessState": {
+        "status": "UP"
+      },
+      "ping": {
+        "status": "UP"
+      },
+      "readinessState": {
+        "status": "UP"
+      },
+      "ssl": {
+        "details": {
+          "expiringChains": [],
+          "invalidChains": [],
+          "validChains": []
+        },
+        "status": "UP"
+      }
     },
-    "contentType":null,
-    "status":200
+    "groups": [
+      "liveness",
+      "readiness"
+    ],
+    "status": "UP"
   }
 }

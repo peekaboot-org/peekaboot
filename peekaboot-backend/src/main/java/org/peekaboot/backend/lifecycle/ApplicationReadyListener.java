@@ -1,7 +1,5 @@
 package org.peekaboot.backend.lifecycle;
 
-import com.zaxxer.hikari.HikariConfigMXBean;
-import com.zaxxer.hikari.HikariDataSource;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
@@ -17,6 +15,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
+import org.springframework.lang.Nullable;
 
 @Order(Ordered.LOWEST_PRECEDENCE)
 public class ApplicationReadyListener implements ApplicationListener<ApplicationReadyEvent> {
@@ -33,6 +32,10 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private final Map<String, DataSource> dataSources;
 
+    /** Absent when HikariCP is not on the classpath; the banner then has no pool lines. */
+    @Nullable
+    private final HikariPoolInfo hikariPoolInfo;
+
     private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
 
     public ApplicationReadyListener(
@@ -40,13 +43,15 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             BuildInfoProvider buildInfoProvider,
             ServerUrlResolver serverUrlResolver,
             List<DataSourceMetadata> dataSourceMetadataList,
-            Map<String, DataSource> dataSources) {
+            Map<String, DataSource> dataSources,
+            @Nullable HikariPoolInfo hikariPoolInfo) {
 
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
         this.serverUrlResolver = serverUrlResolver;
         this.dataSourceMetadataList = dataSourceMetadataList != null ? dataSourceMetadataList : List.of();
         this.dataSources = dataSources;
+        this.hikariPoolInfo = hikariPoolInfo;
     }
 
     @Override
@@ -201,23 +206,22 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @SuppressWarnings("PMD.CloseResource")
     private void appendPoolInfo(StringBuilder report, String dataSourceName) {
 
-        if (dataSources == null || !dataSources.containsKey(dataSourceName)) {
+        if (hikariPoolInfo == null || dataSources == null || !dataSources.containsKey(dataSourceName)) {
             return;
         }
 
         DataSource dataSource = dataSources.get(dataSourceName);
-        if (dataSource instanceof HikariDataSource hikariDataSource) {
-            HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
+        hikariPoolInfo.settingsOf(dataSource).ifPresent(settings -> {
             report.append(String.format(
                             " DB Pool: minimumIdle=%d, maximumPoolSize=%d",
-                            config.getMinimumIdle(), config.getMaximumPoolSize()))
+                            settings.minimumIdle(), settings.maximumPoolSize()))
                     .append("\n\n");
 
             report.append(" Connection Timeout: ")
-                    .append(config.getConnectionTimeout())
+                    .append(settings.connectionTimeoutMs())
                     .append(" ms\n");
             report.append(LifecycleBanner.LINE).append("\n");
-        }
+        });
     }
 
     private String formatBytes(long bytes) {

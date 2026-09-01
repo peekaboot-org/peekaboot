@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -21,6 +22,7 @@ import org.springframework.boot.actuate.endpoint.web.ExposableWebEndpoint;
 import org.springframework.boot.actuate.endpoint.web.PathMapper;
 import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
 import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpointDiscoverer;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.SpringVersion;
 import org.springframework.stereotype.Service;
@@ -30,16 +32,25 @@ public final class PeekabootActuatorService {
 
     private static final Logger log = LoggerFactory.getLogger(PeekabootActuatorService.class);
 
+    private static final String HEALTH_KEY = "health";
+
     /**
-     * The only actuator endpoints the insights mappers consume.
+     * The actuator endpoints the insights mappers consume through their web READ
+     * operation. Health is not among them: its web operation applies
+     * {@code management.endpoint.health.show-details}, which is the application's own
+     * choice for its public {@code /actuator/health}, so the dashboard reads the
+     * {@link HealthEndpoint} bean directly instead - {@link HealthEndpoint#health()} always
+     * carries the components.
      */
-    private static final Set<String> INSIGHTS_ENDPOINTS =
-            Set.of("health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
+    private static final Set<String> DISCOVERED_INSIGHTS_ENDPOINTS =
+            Set.of("info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
 
     private final WebEndpointDiscoverer discoverer;
+    private final ObjectProvider<HealthEndpoint> healthEndpoint;
 
     public PeekabootActuatorService(
             ApplicationContext context,
+            ObjectProvider<HealthEndpoint> healthEndpoint,
             ParameterValueMapper parameterMapper,
             EndpointMediaTypes mediaTypes,
             ObjectProvider<PathMapper> pathMappers,
@@ -56,6 +67,7 @@ public final class PeekabootActuatorService {
                 List.of(), // Empty endpoint filters = no exposure filtering
                 List.of() // Empty operation filters
                 );
+        this.healthEndpoint = healthEndpoint;
     }
 
     /**
@@ -68,6 +80,8 @@ public final class PeekabootActuatorService {
         Map<String, Object> results = new LinkedHashMap<>();
         results.put("spring", buildSpringInfo());
 
+        healthEndpoint.ifAvailable(endpoint -> invoke(HEALTH_KEY, endpoint::health, results));
+
         OperationArgumentResolver namespaceResolver =
                 OperationArgumentResolver.of(WebServerNamespace.class, () -> WebServerNamespace.SERVER);
 
@@ -75,25 +89,29 @@ public final class PeekabootActuatorService {
                 OperationArgumentResolver.of(ApiVersion.class, () -> ApiVersion.LATEST);
         for (ExposableWebEndpoint endpoint : discoverer.getEndpoints()) {
             String key = endpoint.getEndpointId().toLowerCaseString();
-            if (!INSIGHTS_ENDPOINTS.contains(key)) {
+            if (!DISCOVERED_INSIGHTS_ENDPOINTS.contains(key)) {
                 continue;
             }
             endpoint.getOperations().stream()
                     .filter(op -> op.getType() == OperationType.READ)
                     .filter(op -> op.getRequestPredicate().getPath().equals(endpoint.getRootPath()))
                     .findFirst()
-                    .ifPresent(op -> {
-                        try {
-                            Object result = op.invoke(new InvocationContext(
-                                    SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver));
-                            results.put(key, result);
-                        } catch (Exception e) {
-                            log.warn("Actuator endpoint '{}' failed: {}", key, e.toString());
-                        }
-                    });
+                    .ifPresent(op -> invoke(
+                            key,
+                            () -> op.invoke(new InvocationContext(
+                                    SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver)),
+                            results));
         }
 
         return results;
+    }
+
+    private static void invoke(String key, Supplier<Object> operation, Map<String, Object> results) {
+        try {
+            results.put(key, operation.get());
+        } catch (Exception e) {
+            log.warn("Actuator endpoint '{}' failed: {}", key, e.toString());
+        }
     }
 
     private Map<String, String> buildSpringInfo() {

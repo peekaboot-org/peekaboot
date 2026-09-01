@@ -33,6 +33,27 @@ class PeekabootAutoConfigurationTest {
         assertThat(properties.isDevToolbar()).isFalse();
     }
 
+    /**
+     * The lifecycle switch is read by {@code PeekabootLifecycleAutoConfiguration}'s condition
+     * before any Peekaboot bean exists, but it also binds here so it carries configuration
+     * metadata and appears on the dashboard's own Config tab like every other switch.
+     */
+    @Test
+    void bindsTheLifecycleSwitchDefaultingToOn() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> assertThat(context.getBean(PeekabootProperties.class)
+                                .getLifecycle()
+                                .isEnabled())
+                        .isTrue());
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.lifecycle.enabled=false")
+                .run(context -> assertThat(context.getBean(PeekabootProperties.class)
+                                .getLifecycle()
+                                .isEnabled())
+                        .isFalse());
+    }
+
     @Test
     void propertiesCanBeModified() {
         PeekabootProperties properties = new PeekabootProperties();

@@ -30,15 +30,14 @@ public class DataSourceMapper {
             return List.of();
         }
 
-        HealthStatus dbHealth = extractDbHealth(health);
-
         return metadataList.stream()
                 .filter(m -> m != null)
-                .map(m -> mapSingle(m, dbHealth, unmask))
+                .map(m -> mapSingle(m, health, unmask))
                 .toList();
     }
 
-    private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthStatus dbHealth, boolean unmask) {
+    private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthResponse health, boolean unmask) {
+        HealthStatus dbHealth = extractDbHealth(health, metadata.getDataSourceName());
         List<net.osslabz.jdbc.Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
         Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
         DatabaseProduct product = detectDatabaseProduct(metadata);
@@ -82,16 +81,23 @@ public class DataSourceMapper {
         return DatabaseProduct.UNKNOWN;
     }
 
-    private HealthStatus extractDbHealth(HealthResponse health) {
-        if (health == null || health.body() == null || health.body().components() == null) {
+    /**
+     * With several DataSources Spring's {@code db} contributor is a composite with one
+     * child per DataSource bean, so each row reads its own child's status; a DataSource
+     * without a child of its own, and the single-DataSource case, get {@code db}'s status.
+     */
+    private HealthStatus extractDbHealth(HealthResponse health, String dataSourceName) {
+        if (health == null || health.components() == null) {
             return HealthStatus.UNKNOWN;
         }
 
-        HealthResponse.HealthComponent db = health.body().components().get("db");
+        HealthResponse.HealthComponent db = health.components().get("db");
         if (db == null) {
             return HealthStatus.UNKNOWN;
         }
 
-        return HealthStatus.fromString(db.status());
+        HealthResponse.HealthComponent own =
+                db.components() != null ? db.components().get(dataSourceName) : null;
+        return HealthStatus.fromString(own != null ? own.status() : db.status());
     }
 }
