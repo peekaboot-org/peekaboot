@@ -24,14 +24,16 @@ public final class StorageDirectory {
 
     /**
      * An explicit {@code dir} is used verbatim; otherwise state lands in
-     * {@code ${user.home}/.peekaboot/<application name>}, which survives both a reboot
+     * {@code ${user.home}/.peekaboot/<application id>}, which survives both a reboot
      * and a {@code mvn clean} and never lands inside the application's own repository.
+     * The id is the application's build coordinates where it has them - see
+     * PeekabootStorageAutoConfiguration, which chooses it.
      */
-    public static StorageDirectory resolve(PeekabootProperties.Storage storage, String applicationName) {
+    public static StorageDirectory resolve(PeekabootProperties.Storage storage, String applicationId) {
         String dir = storage.getDir();
         Path root = dir != null && !dir.isBlank()
                 ? Path.of(dir.trim())
-                : Path.of(System.getProperty("user.home"), FOLDER, folderName(applicationName));
+                : Path.of(System.getProperty("user.home"), FOLDER, folderName(applicationId));
         return new StorageDirectory(storage.isEnabled(), root);
     }
 
@@ -49,18 +51,18 @@ public final class StorageDirectory {
     }
 
     /**
-     * An application name is free-form; a folder name is not. Anything that isn't a
+     * An application id is free-form; a folder name is not. Anything that isn't a
      * letter, digit, dot, underscore or dash becomes a dash - collapsing a path
      * separator instead of dropping it, so {@code "../orders svc"} still can't smuggle
-     * a directory boundary through. That alone doesn't stop a name of exactly "."
+     * a directory boundary through. That alone doesn't stop an id of exactly "."
      * or ".." surviving intact, so those two are caught explicitly and sent to the
-     * same fixed folder as no name at all.
+     * same fixed folder as no id at all.
      */
-    private static String folderName(String applicationName) {
-        if (applicationName == null || applicationName.isBlank()) {
+    private static String folderName(String applicationId) {
+        if (applicationId == null || applicationId.isBlank()) {
             return UNNAMED_APPLICATION;
         }
-        String sanitized = applicationName.trim().replaceAll("[^A-Za-z0-9._-]", "-");
+        String sanitized = applicationId.trim().replaceAll("[^A-Za-z0-9._-]", "-");
         return ".".equals(sanitized) || "..".equals(sanitized) ? UNNAMED_APPLICATION : sanitized;
     }
 }

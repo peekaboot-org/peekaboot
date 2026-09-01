@@ -32,37 +32,37 @@ class StorageDirectoryTest {
     }
 
     @Test
-    void theDefaultDirectoryIsNamedAfterTheApplication() {
+    void theDefaultDirectoryIsNamedAfterTheApplicationId() {
         StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "orders");
 
         assertThat(directory.root()).isEqualTo(Path.of(System.getProperty("user.home"), ".peekaboot", "orders"));
     }
 
     @Test
-    void anApplicationWithoutANameFallsBackToAFixedFolder() {
+    void anApplicationWithoutAnIdFallsBackToAFixedFolder() {
         StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "  ");
 
         assertThat(directory.root().getFileName()).isEqualTo(Path.of("application"));
     }
 
     @Test
-    void aNameThatCouldEscapeTheDirectoryIsSanitized() {
+    void anIdThatCouldEscapeTheDirectoryIsSanitized() {
         StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "../orders svc");
 
         assertThat(directory.root().getFileName()).isEqualTo(Path.of("..-orders-svc"));
     }
 
     @Test
-    void aNameThatIsNothingButParentDirectoryFallsBackToTheFixedFolder() {
+    void anIdThatIsNothingButParentDirectoryFallsBackToTheFixedFolder() {
         StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "..");
 
         assertThat(directory.root().getFileName()).isEqualTo(Path.of("application"));
     }
 
     @Test
-    void aDottedNameSurvivesIntact() {
-        StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "order.service");
+    void buildCoordinatesSurviveIntact() {
+        StorageDirectory directory = StorageDirectory.resolve(storage(true, null), "com.example.orders-service");
 
-        assertThat(directory.root().getFileName()).isEqualTo(Path.of("order.service"));
+        assertThat(directory.root().getFileName()).isEqualTo(Path.of("com.example.orders-service"));
     }
 }

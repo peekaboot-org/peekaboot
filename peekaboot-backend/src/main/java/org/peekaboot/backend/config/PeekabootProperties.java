@@ -53,8 +53,10 @@ public class PeekabootProperties {
 
     /**
      * Where Peekaboot keeps the state it wants to survive a restart, and whether it
-     * keeps any at all. Off by default: an embedded dev tool writes nothing to a
-     * developer's disk until asked.
+     * keeps any at all. The starter switches this on for a local launch and off
+     * everywhere else (see PeekabootDefaultsEnvironmentPostProcessor); the {@code false}
+     * here is what remains without that detection, so an embedded dev tool that is
+     * merely on the classpath still writes nothing to disk.
      */
     public static class Storage {
 
