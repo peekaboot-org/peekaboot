@@ -15,8 +15,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,8 +33,8 @@ import org.springframework.core.Ordered;
         afterName =
                 "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
 @ConditionalOnClass(TraceStore.class)
 public class DevToolbarAutoConfiguration {
 

@@ -8,8 +8,8 @@ import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
@@ -23,8 +23,8 @@ import org.springframework.core.env.Environment;
             PeekabootStorageAutoConfiguration.class
         },
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty(name = "peekaboot.lifecycle.enabled", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean

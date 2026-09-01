@@ -37,7 +37,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
-    private static final String ENABLED_PROPERTY = "peekaboot.enabled";
+    private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
     private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
     private static final String STORAGE_ENABLED_PROPERTY = "peekaboot.storage.enabled";
     private static final String ENV_SHOW_VALUES_PROPERTY = "management.endpoint.env.show-values";

@@ -437,8 +437,8 @@ Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
 @ConditionalOnClass(TraceStore.class)
 ```
 

@@ -18,7 +18,7 @@ import org.springframework.core.env.Environment;
  */
 public class PeekabootEndpointExposureOutcomeContributor implements EndpointExposureOutcomeContributor {
 
-    private static final String ENABLED_PROPERTY = "peekaboot.enabled";
+    private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
 
     private final Environment environment;
 

@@ -6,8 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +21,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 public class TracingInterceptorAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);
