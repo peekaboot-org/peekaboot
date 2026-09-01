@@ -7,10 +7,9 @@
    ink at --pk-on-* clears it (5.1-7.5:1). Matches the ink/fill choice
    trace-detail.js already makes for its own status pills.
 
-   --info deliberately does not reuse --pk-primary (it did, while --pk-primary
-   was a blue): since the brand turned green, a primary-filled INFO pill would
-   sit beside a green --pk-success UP pill and read as the same state. Holding
-   --pk-info in the cyan range keeps the two apart at pill size. */
+   --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
+   would sit beside a green --pk-success UP pill and read as the same state.
+   Holding --pk-info in the cyan range keeps the two apart at pill size. */
 .pk-badge {
     display: inline-flex;
     align-items: center;
@@ -65,10 +64,9 @@
 }
 .pk-group__header[aria-expanded="false"]::before { transform: rotate(-90deg); }
 .pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary-text); font-size: var(--pk-text-sm); }
-/* Modifiers absorbing the four collapsible-group variants this primitive
-   replaces: plain .pk-group__name matches .property-name/.config-group-name
-   (primary-coloured); --strong matches .logger-group-name; --mono matches
-   .metric-name (strong-coloured, monospace, ellipsis-truncated). */
+/* Group-name variants: plain .pk-group__name is primary-coloured (property and
+   config groups); --strong for logger packages; --mono for metric names
+   (strong-coloured, monospace, ellipsis-truncated). */
 .pk-group__name--strong { color: var(--pk-text-strong); }
 /* Monospace only. The colour stays the primary of .pk-group__name: every group header
    is expandable, so they must all carry the same affordance. */
@@ -98,9 +96,8 @@
     border-radius: 0 0 var(--pk-radius) var(--pk-radius);
 }
 
-/* Key/value row. Values are mono by default because the properties/config
-   rows this replaces (.property-value/.config-value) always render source
-   values in monospace — migration tasks should expect --mono on nearly
+/* Key/value row. Values are mono by default because property/config rows
+   always render source values in monospace — --mono is the rule on nearly
    every row, not the exception. */
 .pk-kv {
     display: flex;
@@ -111,10 +108,9 @@
     border-bottom: 1px solid var(--pk-border);
 }
 .pk-kv:last-child { border-bottom: none; }
-/* Denser row for lists that pack more items into the same space, matching
-   .ds-param-item's tighter vertical rhythm. The border-between-items,
-   none-after-last behaviour is already handled by .pk-kv/.pk-kv:last-child
-   above — --tight only overrides padding. */
+/* Denser row for lists that pack more items into the same space. The
+   border-between-items, none-after-last behaviour is already handled by
+   .pk-kv/.pk-kv:last-child above — --tight only overrides padding. */
 .pk-kv--tight { padding: var(--pk-space-xs) 0; }
 .pk-kv__key {
     flex-shrink: 0;

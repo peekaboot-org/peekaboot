@@ -274,9 +274,8 @@ async function fetchFeatures() {
 
 /**
  * Renders one tab against the latest data, and shows/hides its strip button according
- * to its (optional) isAvailable(data, features) check - the replacement for
- * peekaboot.js's scattered "unhide this tab once its data shows up" calls, now driven
- * by the tab contract instead of one-off code per tab.
+ * to its (optional) isAvailable(data, features) check - driven by the tab contract
+ * instead of one-off code per tab.
  */
 function renderTab(tab) {
     if (!data) return;

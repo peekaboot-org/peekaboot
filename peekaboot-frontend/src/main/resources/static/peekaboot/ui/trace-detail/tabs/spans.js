@@ -2,7 +2,7 @@
  * Trace-detail overlay - Spans tab: the gantt chart and its expand/collapse behaviour.
  * A span's "N logs" toggle does not render anything of its own - it asks trace-detail.js
  * (via context.goToSpanLogs) to switch the overlay to the Logs tab pre-filtered to that
- * span, which is where a span's logs and its full id both live now.
+ * span, which is where a span's logs and its full id both live.
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatCount} from '../../shared/format.js';
@@ -27,8 +27,7 @@ export function render(container, trace, context = {}) {
 
     // Add click handlers for expand/collapse
     rowsContainer.addEventListener('click', (e) => {
-        // Handle logs toggle clicks - hands off to the Logs tab rather than rendering
-        // anything here itself.
+        // Logs toggle: hands off to the Logs tab.
         const logsToggle = e.target.closest('.pk-span-logs-toggle');
         if (logsToggle) {
             context.goToSpanLogs?.(logsToggle.dataset.spanId);
@@ -108,7 +107,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     const hasQuery = queryTags.length > 0;
     const rowCount = tags['jdbc.row-count'];
 
-    // Check for logs (now attached to span by backend)
+    // Logs are attached to the span by the backend
     const spanLogs = span.logs || [];
     const hasLogs = spanLogs.length > 0;
 
@@ -188,7 +187,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
         container.appendChild(queryDetail);
     }
 
-    // Add tags row if present (events are now shown as markers on the timeline)
+    // Add tags row if present (events are shown as markers on the timeline)
     const tagEntries = Object.entries(tags).filter(([k]) => !k.startsWith('jdbc.query'));
     const hasTags = tagEntries.length > 0;
 

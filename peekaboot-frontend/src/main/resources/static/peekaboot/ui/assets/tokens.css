@@ -11,7 +11,7 @@
      --pk-primary-text  anything drawn ON --pk-bg/--pk-bg-alt: text, focus
                         rings, borders, the selected-tab underline
 
-   --pk-info no longer borrows --pk-primary. The pill it actually sits beside
+   --pk-info does not borrow --pk-primary. The pill it actually sits beside
    in the health panel is --pk-success, so that is the hue it has to clear:
    it is held ~47° off it (light) / ~64° (dark), far enough that an INFO pill
    and an UP pill cannot be confused at pill size. */

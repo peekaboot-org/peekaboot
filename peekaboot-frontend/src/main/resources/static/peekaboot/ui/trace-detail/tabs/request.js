@@ -60,7 +60,6 @@ function statusBadgeHtml(status) {
     return `<span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>`;
 }
 
-// The API returns 'class' and 'method' fields.
 function renderController(req) {
     if (!req?.controller?.class && !req?.controller?.method) return '';
     const signature = `${escapeHtml(req.controller.class || 'Unknown')}.${escapeHtml(req.controller.method || 'unknown')}()`;

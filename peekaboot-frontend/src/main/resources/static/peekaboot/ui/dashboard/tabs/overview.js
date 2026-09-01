@@ -282,8 +282,7 @@ function renderDataSourceCard(ds) {
     return card;
 }
 
-/** A usage meter with its caption row. Replaces createMemoryRowSimple/createStorageRowSimple,
-    which differed only in caption text. */
+/** A usage meter with its caption row. */
 function usageSection(label, caption, percent) {
     const wrapper = document.createElement('div');
     wrapper.className = 'pk-section';

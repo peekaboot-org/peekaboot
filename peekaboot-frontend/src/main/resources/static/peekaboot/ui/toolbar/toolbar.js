@@ -80,8 +80,8 @@ function initToolbar(host, data) {
         if (traceId) {
             // Four fixed attempts rather than backoff-until-complete: every one runs, so a
             // span that ends after the root - an @Async continuation, a streamed body - still
-            // reaches the bar, which the old loop missed because it stopped the first time a
-            // trace looked finished. Waits are measured from the previous attempt, so the last
+            // reaches the bar instead of being missed by a loop that stops the first time a
+            // trace looks finished. Waits are measured from the previous attempt, so the last
             // lands at 4.75s; with peekaboot's 200ms span export delay, a trace absent by then
             // is not coming.
             const attemptDelays = [250, 500, 1000, 3000];
@@ -182,9 +182,9 @@ function initToolbar(host, data) {
     }
 
     // Attached to the outer bar (not just the button) so a click anywhere on it - other
-    // than the dashboard link, which stops its own propagation above - opens the overlay,
-    // matching the pre-migration behaviour. A real <button> click (mouse or native
-    // Enter/Space activation) bubbles up to this listener like any other click.
+    // than the dashboard link, which stops its own propagation above - opens the overlay.
+    // A real <button> click (mouse or native Enter/Space activation) bubbles up to this
+    // listener like any other click.
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;
