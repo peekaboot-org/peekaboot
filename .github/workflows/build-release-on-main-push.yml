@@ -75,11 +75,8 @@ jobs:
         with:
           user: bot
 
-      # For reproducible builds is it required to separate release:prepare (with -DskipStaging=true) and release:perform, otherwise
-      # the artifact will be already uploaded during release:prepare
-
       - name: prepare-release
-        run: mvn --batch-mode -P peekaboot-release release:prepare -DskipStaging=true
+        run: mvn --batch-mode -P peekaboot-release release:prepare
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 

@@ -270,7 +270,7 @@ signs or publishes anything. A push to `main` (whose message does not contain `[
 which is how recursion is prevented) runs:
 
 1. `mvn --batch-mode verify`
-2. `mvn -P peekaboot-release release:prepare -DskipStaging=true`
+2. `mvn -P peekaboot-release release:prepare`
 3. `mvn -P peekaboot-release release:perform`
 4. GitHub release notes from the new tag, then an auto-merge of `main` back into `dev`
 
@@ -282,10 +282,13 @@ javadoc jar (`doclint` off, `failOnError` false), GPG-signs with `raphael@peekab
 publishes through `central-publishing-maven-plugin` (`autoPublish`, waits until published). A
 sources jar is attached on *every* build of the published modules, not just releases.
 
-`prepare` and `perform` are deliberately separate, with `-DskipStaging=true` on `prepare`:
-combined, the artifact would already be uploaded during `prepare` and the build would not be
-reproducible. Reproducibility also depends on `project.build.outputTimestamp` being pinned in
-the parent POM and on every plugin version being explicit.
+`release:prepare` bumps the POMs to the release version, commits, tags, runs its
+`preparationGoals` (`clean verify`) against that tag and then commits the next
+`-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
+`target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where signing
+and the upload to Maven Central happen. Reproducibility depends on
+`project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
+being explicit.
 
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
 `OSSRH_GPG_SECRET_KEY_PASSWORD`.
