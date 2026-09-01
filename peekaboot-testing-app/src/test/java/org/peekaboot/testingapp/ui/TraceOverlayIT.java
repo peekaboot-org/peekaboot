@@ -554,35 +554,39 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The SLOW label reads `durationClass`, which severity.js's durationSeverity()
-     * computes, rather than re-deriving the 100ms slow threshold with a bare literal
-     * (`duration > 100`) on the same line. Imports queries.js directly (SharedModuleIT's
-     * pk-blank.html pattern) rather than driving a real slow query through the app, and
-     * pins the exact SLOW_MS boundary (100ms itself must NOT get the label; 101ms must) -
-     * the boundary an off-by-one moves (see severity.js's own boundary test in
-     * SharedModuleIT).
+     * The SLOW label reads severity.js's querySeverity() - the query threshold behind the
+     * backend's SLOW_QUERY issue (slowQueryThresholdMs, default 50) - not the span
+     * thresholds, and not a bare literal re-derived on the same line. Imports queries.js
+     * directly (SharedModuleIT's pk-blank.html pattern) rather than driving a real slow
+     * query through the app, and pins the exact boundary (49ms must NOT get the label;
+     * 50ms - the threshold itself, IssueDetector compares with >= - must), for the
+     * fallback and for a published threshold alike (see severity.js's own boundary tests
+     * in SharedModuleIT).
      */
     @Test
-    void queriesTabSlowLabelFollowsTheSharedSeverityThresholdAtTheBoundary() {
+    void queriesTabSlowLabelFollowsTheQueryThresholdAtTheBoundary() {
         page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
 
         Object labels = page.evaluate("""
             async () => {
                 const m = await import('/peekaboot/ui/trace-detail/tabs/queries.js');
-                const container = document.createElement('div');
-                m.render(container, {queries: [
-                    {sql: 'SELECT 1', durationMs: 99,  dbSystem: 'h2', rowCount: 1},
-                    {sql: 'SELECT 2', durationMs: 100, dbSystem: 'h2', rowCount: 1},
-                    {sql: 'SELECT 3', durationMs: 101, dbSystem: 'h2', rowCount: 1},
-                    {sql: 'SELECT 4', durationMs: 501, dbSystem: 'h2', rowCount: 1}
-                ]});
-                return Array.from(container.querySelectorAll('.pk-query__duration')).map(el => el.textContent);
+                const queries = [
+                    {sql: 'SELECT 1', durationMs: 49, dbSystem: 'h2', rowCount: 1},
+                    {sql: 'SELECT 2', durationMs: 50, dbSystem: 'h2', rowCount: 1}
+                ];
+                const fallback = document.createElement('div');
+                m.render(fallback, {queries});
+                const published = document.createElement('div');
+                m.render(published, {queries}, {features: {slowQueryThresholdMs: 51}});
+                const labelsIn = el =>
+                    Array.from(el.querySelectorAll('.pk-query__duration')).map(cell => cell.textContent);
+                return [...labelsIn(fallback), ...labelsIn(published)];
             }
             """);
 
         @SuppressWarnings("unchecked")
         List<String> durationLabels = (List<String>) labels;
-        assertThat(durationLabels).containsExactly("99ms", "100ms", "101ms SLOW", "501ms SLOW");
+        assertThat(durationLabels).containsExactly("49ms", "50ms SLOW", "49ms", "50ms");
     }
 
     /**

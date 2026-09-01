@@ -122,7 +122,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)` — the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
-| `severity.js` | `durationSeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)` — the one place a duration, a span's issues, a log level or a health status is turned into a colour. See *Thresholds and the SLOW badge* below. |
+| `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)` — the one place a duration, a span's issues, a log level or a health status is turned into a colour. See *Thresholds and the SLOW badge* below. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
 | `storage.js` | `readSetting`, `writeSetting` — guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
@@ -144,10 +144,17 @@ mirrors the backend defaults, keyed by the same names, for the one path that has
 features in hand — the dev toolbar, which never fetches them, and the overlay it opens.
 `SharedModuleIT` pins the defaults to the backend properties' defaults.
 
+Every comparison is **at-or-above (`>=`)**, on both sides of the wire: `IssueDetector`
+raises SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
+`querySeverity()` colour with the same comparison — a 100 ms span is already SLOW at the
+default thresholds, a 50 ms query already slow.
+
 Where a span's own issues are in hand, `issueSeverity(span.issues)` is the backend's verdict
 and is what colours the gantt duration cells; `durationSeverity()` re-derives a severity only
 for durations no issue describes — a trace's total, a trace's total query time, a Flyway
-migration's execution time.
+migration's execution time. The Queries tab's per-query SLOW label uses `querySeverity()`,
+the query threshold behind the backend's SLOW_QUERY issue (`slowQueryThresholdMs`, 50 ms by
+default) — not the span thresholds.
 
 The Traces tab's **SLOW badge means "some span in this trace carries a SLOW or VERY_SLOW
 issue"** — the backend's per-trace `slow` flag, set by `IssueDetector`. It is deliberately

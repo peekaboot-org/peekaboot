@@ -147,6 +147,18 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.durationSeverity(null)")).isEqualTo("");
     }
 
+    @Test
+    void querySeverityFollowsTheQueryThreshold() {
+        assertThat(evalModule("severity.js", "m.querySeverity(49)")).isEqualTo("");
+        assertThat(evalModule("severity.js", "m.querySeverity(50)")).isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.querySeverity(null)")).isEqualTo("");
+        String features = "{slowQueryThresholdMs: 80}";
+        assertThat(evalModule("severity.js", "m.querySeverity(79, " + features + ")"))
+                .isEqualTo("");
+        assertThat(evalModule("severity.js", "m.querySeverity(80, " + features + ")"))
+                .isEqualTo("slow");
+    }
+
     /** The published thresholds win over the defaults; a null published value (tracing off) does not. */
     @Test
     void durationSeverityReadsThePublishedThresholds() {
@@ -162,10 +174,13 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     @Test
-    void durationSeverityAtExactlyTheSlowThresholdIsNotYetSlow() {
-        // Pins the boundary itself (ms > threshold, not >=) so an off-by-one in the
-        // comparison fails here instead of only showing up on values well past it.
-        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("");
+    void durationSeverityAtExactlyTheThresholdIsAlreadySlow() {
+        // Pins the boundary itself (ms >= threshold, matching IssueDetector's >=) so an
+        // off-by-one in the comparison fails here instead of only showing up on values
+        // well past it.
+        assertThat(evalModule("severity.js", "m.durationSeverity(99)")).isEqualTo("");
+        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.durationSeverity(500)")).isEqualTo("very-slow");
     }
 
     /** The backend's defaults are the fallbacks, keyed by the wire names /api/features publishes. */

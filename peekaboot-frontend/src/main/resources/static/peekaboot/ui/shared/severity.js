@@ -23,15 +23,25 @@ export function threshold(features, key) {
 /**
  * Severity of a latency, as a CSS modifier suffix, at the span thresholds. Deliberately
  * distinct from log-level vocabulary: 'warn' and 'error' describe log records and health
- * status, never how long something took. Strictly greater: a duration exactly at a
- * threshold is not yet slow. Where a span's own issues are in hand, issueSeverity() is the
- * backend's judgement and is preferred over re-deriving one here.
+ * status, never how long something took. At or above a threshold is slow (>=), the same
+ * comparison IssueDetector raises SLOW/VERY_SLOW with. Where a span's own issues are in
+ * hand, issueSeverity() is the backend's judgement and is preferred over re-deriving one
+ * here.
  */
 export function durationSeverity(ms, features) {
     if (ms == null) return '';
-    if (ms > threshold(features, 'verySlowSpanThresholdMs')) return 'very-slow';
-    if (ms > threshold(features, 'slowSpanThresholdMs')) return 'slow';
+    if (ms >= threshold(features, 'verySlowSpanThresholdMs')) return 'very-slow';
+    if (ms >= threshold(features, 'slowSpanThresholdMs')) return 'slow';
     return '';
+}
+
+/**
+ * Severity of a query's duration at the query threshold - the one behind the backend's
+ * SLOW_QUERY issue, which knows a single tier: a query at or above it (>=) is slow.
+ */
+export function querySeverity(ms, features) {
+    if (ms == null) return '';
+    return ms >= threshold(features, 'slowQueryThresholdMs') ? 'slow' : '';
 }
 
 /** Every IssueType the backend raises, in the enum's order, and the severity suffix each one paints a duration with. */
