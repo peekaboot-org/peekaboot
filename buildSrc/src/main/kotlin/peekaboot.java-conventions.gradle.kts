@@ -121,8 +121,9 @@ spotbugs {
 }
 
 // Main sources only, like the Maven gates: test data builders legitimately mirror the
-// wide domain records they construct (checkstyle), and PMD/SpotBugs gate main too.
-tasks.matching { it.name == "checkstyleTest" || it.name == "pmdTest" || it.name == "spotbugsTest" }
+// wide domain records they construct (checkstyle), and PMD/SpotBugs gate main too. The
+// test fixtures source set (java-test-fixtures) is test code as well.
+tasks.matching { it.name.matches(Regex("(checkstyle|pmd|spotbugs)Test(Fixtures)?")) }
     .configureEach { enabled = false }
 
 spotless {

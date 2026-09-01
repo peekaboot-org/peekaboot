@@ -70,6 +70,14 @@
         </dependency>
 
         <!-- Test dependencies -->
+        <!-- peekaboot-backend's test support (LogCapture) -->
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-backend</artifactId>
+            <version>${project.version}</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

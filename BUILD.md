@@ -260,6 +260,13 @@ mechanics.
   Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
+- `peekaboot-backend` shares its test support (`org.peekaboot.backend.testsupport`, i.e.
+  `LogCapture`) with the other modules' tests: Maven attaches a `-tests` jar holding only
+  that package (`maven-jar-plugin:test-jar` with an include; the tests and test resources
+  stay out of every other classpath), consumed as a `<type>test-jar</type>` test dependency;
+  Gradle publishes the same package as the module's test fixtures (`java-test-fixtures`, the
+  `testFixtures` source set reading it out of `src/test/java`), consumed as
+  `testImplementation(testFixtures(project(":peekaboot-backend")))`.
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
   `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes.
