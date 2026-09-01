@@ -17,10 +17,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
@@ -30,6 +30,7 @@ import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.insights.InsightsService;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -256,6 +257,12 @@ class PeekabootControllerTest {
             assertThat(features.slowSpanThresholdMs()).isEqualTo(250L);
             assertThat(features.verySlowSpanThresholdMs()).isEqualTo(900L);
             assertThat(features.slowQueryThresholdMs()).isEqualTo(75L);
+        }
+
+        /** The Request tab highlights masked headers by comparing against this exact literal. */
+        @Test
+        void shouldPublishTheMaskLiteral() {
+            assertThat(controller.getFeatures().maskLiteral()).isEqualTo(MaskingEngine.MASK_LITERAL);
         }
 
         @Test

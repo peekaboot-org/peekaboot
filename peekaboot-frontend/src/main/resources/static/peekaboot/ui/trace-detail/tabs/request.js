@@ -24,7 +24,8 @@ function section(title, body) {
     return `<div class="pk-request-section"><h3>${title}</h3>${body}</div>`;
 }
 
-export function render(container, trace) {
+export function render(container, trace, view = {}) {
+    const maskLiteral = view.features?.maskLiteral ?? MASK_LITERAL;
     const httpExchange = trace.httpExchange;
     const req = httpExchange?.request;
     const res = httpExchange?.response;
@@ -40,7 +41,7 @@ export function render(container, trace) {
         + renderParams('Form Parameters', req?.params?.form)
         + renderUploadedFiles(req?.params?.upload)
         + renderRequestBody(req?.body)
-        + renderRequestHeaders(req)
+        + renderRequestHeaders(req, maskLiteral)
         + renderResponseHeaders(res);
 }
 
@@ -87,10 +88,10 @@ function renderRequestBody(body) {
     return section(title, `<div class="pk-query__sql">${escapeHtml(body.content)}</div>`);
 }
 
-function renderRequestHeaders(req) {
+function renderRequestHeaders(req, maskLiteral) {
     const headers = Object.entries(req?.headers || {});
     const rows = headers.length > 0
-        ? headers.sort().map(([key, value]) => tableRow(key, value, value === MASK_LITERAL ? 'pk-request-masked' : ''))
+        ? headers.sort().map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
         : [noHeadersRow()];
     return section('Request Headers', renderTable(rows));
 }

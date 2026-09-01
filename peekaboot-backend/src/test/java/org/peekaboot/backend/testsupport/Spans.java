@@ -6,16 +6,20 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.tracing.store.SpanData;
 
 /**
  * Builds {@link SpanData} fixtures. Every field has a neutral default - trace {@code trace1},
- * no parent, no kind, starting at the epoch with zero duration, no tags, no error - so a
- * test names only what it asserts on.
+ * no parent, no kind, starting at the epoch with zero duration, no tags, no error, and a
+ * creation order that increases per builder created - so a test names only what it
+ * asserts on.
  */
 public final class Spans {
 
     public static final String DEFAULT_TRACE_ID = "trace1";
+
+    private static final AtomicLong NEXT_CREATION_ORDER = new AtomicLong();
 
     private Spans() {}
 
@@ -57,7 +61,7 @@ public final class Spans {
         private String errorMessage;
         private String errorClass;
         private String remoteServiceName;
-        private long creationOrder;
+        private long creationOrder = NEXT_CREATION_ORDER.incrementAndGet();
 
         private SpanBuilder(String spanId) {
             this.spanId = spanId;

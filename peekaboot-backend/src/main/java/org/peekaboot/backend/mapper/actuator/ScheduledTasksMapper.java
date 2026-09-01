@@ -60,7 +60,7 @@ public class ScheduledTasksMapper {
         return new ScheduledTaskInfo(
                 extractTarget(fixed.runnable()),
                 type,
-                formatInterval(fixed.interval()),
+                null,
                 null,
                 fixed.interval(),
                 timeOf(fixed.lastExecution()),
@@ -93,21 +93,5 @@ public class ScheduledTasksMapper {
             return ex.type() + ": " + ex.message();
         }
         return ex.message() != null ? ex.message() : ex.type();
-    }
-
-    private String formatInterval(Long intervalMs) {
-        if (intervalMs == null) {
-            return "-";
-        }
-        if (intervalMs < 1000) {
-            return intervalMs + "ms";
-        }
-        if (intervalMs < 60000) {
-            return (intervalMs / 1000) + "s";
-        }
-        if (intervalMs < 3600000) {
-            return (intervalMs / 60000) + "m";
-        }
-        return (intervalMs / 3600000) + "h";
     }
 }

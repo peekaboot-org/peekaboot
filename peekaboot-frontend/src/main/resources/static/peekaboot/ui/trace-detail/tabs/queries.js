@@ -2,7 +2,7 @@
  * Trace-detail overlay - Queries tab: the list of captured database queries.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {durationSeverity} from '../../shared/severity.js';
+import {querySeverity} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 
 export function render(container, trace, view = {}) {
@@ -17,7 +17,7 @@ export function render(container, trace, view = {}) {
     queries.forEach((query, idx) => {
         const sql = query.sql || 'Unknown query';
         const duration = query.durationMs || 0;
-        const durationClass = durationSeverity(duration, view.features);
+        const durationClass = querySeverity(duration, view.features);
         const system = query.dbSystem || 'SQL';
         const rowCount = query.rowCount;
 

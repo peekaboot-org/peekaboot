@@ -14,10 +14,10 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.mapper.trace.HttpSpanTags;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
-import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
@@ -29,11 +29,12 @@ public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
-    private final TraceStore storage;
     private final ApplicationEventPublisher eventPublisher;
 
-    public OtelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
-        this.storage = storage;
+    /** Numbers spans in export order; per-trace sorting only ever compares orders minted here. */
+    private final AtomicLong creationOrder = new AtomicLong();
+
+    public OtelSpanExporter(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
     }
 
@@ -108,7 +109,7 @@ public class OtelSpanExporter implements SpanExporter {
                 null,
                 null,
                 List.of(),
-                storage.nextCreationOrder());
+                creationOrder.incrementAndGet());
     }
 
     private Instant nanosToInstant(long nanos) {

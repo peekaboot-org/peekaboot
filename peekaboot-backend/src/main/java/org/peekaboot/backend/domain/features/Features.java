@@ -7,6 +7,8 @@ package org.peekaboot.backend.domain.features;
  *
  * @param slowTraceThresholdMs the Slow bucket's admission threshold; null while tracing is
  *                             off, when neither the store nor its properties exist
+ * @param maskLiteral the exact literal masked values are replaced with ({@code MaskingEngine.MASK_LITERAL});
+ *                             the Request tab highlights masked headers by comparing against it
  */
 public record Features(
         boolean tracing,
@@ -17,4 +19,5 @@ public record Features(
         long slowSpanThresholdMs,
         long verySlowSpanThresholdMs,
         long slowQueryThresholdMs,
-        Long slowTraceThresholdMs) {}
+        Long slowTraceThresholdMs,
+        String maskLiteral) {}

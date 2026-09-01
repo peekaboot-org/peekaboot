@@ -14,6 +14,7 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
 /**
@@ -69,6 +70,16 @@ class SharedModuleIT extends PlaywrightTestBase {
     void escapeHtmlTreatsUndefinedAsEmptyButPreservesFalsyZero() {
         assertThat(evalModule("markup.js", "m.escapeHtml(undefined)")).isEqualTo("");
         assertThat(evalModule("markup.js", "m.escapeHtml(0)")).isEqualTo("0");
+    }
+
+    /**
+     * markup.js's MASK_LITERAL is only the fallback for surfaces that never load
+     * /api/features (the dev toolbar and the overlay it opens); everywhere else the
+     * published Features.maskLiteral wins. Both must spell the literal identically.
+     */
+    @Test
+    void maskLiteralFallbackMirrorsTheBackendConstant() {
+        assertThat(evalModule("markup.js", "m.MASK_LITERAL")).isEqualTo(MaskingEngine.MASK_LITERAL);
     }
 
     @Test
@@ -136,6 +147,18 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.durationSeverity(null)")).isEqualTo("");
     }
 
+    @Test
+    void querySeverityFollowsTheQueryThreshold() {
+        assertThat(evalModule("severity.js", "m.querySeverity(49)")).isEqualTo("");
+        assertThat(evalModule("severity.js", "m.querySeverity(50)")).isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.querySeverity(null)")).isEqualTo("");
+        String features = "{slowQueryThresholdMs: 80}";
+        assertThat(evalModule("severity.js", "m.querySeverity(79, " + features + ")"))
+                .isEqualTo("");
+        assertThat(evalModule("severity.js", "m.querySeverity(80, " + features + ")"))
+                .isEqualTo("slow");
+    }
+
     /** The published thresholds win over the defaults; a null published value (tracing off) does not. */
     @Test
     void durationSeverityReadsThePublishedThresholds() {
@@ -151,10 +174,13 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     @Test
-    void durationSeverityAtExactlyTheSlowThresholdIsNotYetSlow() {
-        // Pins the boundary itself (ms > threshold, not >=) so an off-by-one in the
-        // comparison fails here instead of only showing up on values well past it.
-        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("");
+    void durationSeverityAtExactlyTheThresholdIsAlreadySlow() {
+        // Pins the boundary itself (ms >= threshold, matching IssueDetector's >=) so an
+        // off-by-one in the comparison fails here instead of only showing up on values
+        // well past it.
+        assertThat(evalModule("severity.js", "m.durationSeverity(99)")).isEqualTo("");
+        assertThat(evalModule("severity.js", "m.durationSeverity(100)")).isEqualTo("slow");
+        assertThat(evalModule("severity.js", "m.durationSeverity(500)")).isEqualTo("very-slow");
     }
 
     /** The backend's defaults are the fallbacks, keyed by the wire names /api/features publishes. */
@@ -182,7 +208,7 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .map(RecordComponent::getName)
                 .toList();
 
-        assertThat(published).contains("tracing", "metrics", "insights", "unmaskingEnabled");
+        assertThat(published).contains("tracing", "metrics", "insights", "unmaskingEnabled", "maskLiteral");
         @SuppressWarnings("unchecked")
         List<String> thresholdKeys = (List<String>) evalModule("severity.js", "Object.keys(m.DEFAULT_THRESHOLDS)");
         assertThat(published).containsAll(thresholdKeys);

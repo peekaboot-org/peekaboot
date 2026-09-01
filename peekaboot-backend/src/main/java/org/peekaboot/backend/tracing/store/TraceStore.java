@@ -11,8 +11,6 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
  */
 public interface TraceStore {
 
-    long nextCreationOrder();
-
     void addSpan(SpanData span);
 
     void addLog(LogCapturedEvent log);

@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -16,19 +17,24 @@ import org.junit.jupiter.api.Test;
 class RequestTabIT extends PlaywrightTestBase {
 
     private void renderWithTrace(String traceJson) {
+        renderWithTrace(traceJson, "{}");
+    }
+
+    private void renderWithTrace(String traceJson, String viewJson) {
         if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
             page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
         }
         page.evaluate(
-                "async (traceJson) => {"
+                "async ([traceJson, viewJson]) => {"
                         + " const trace = JSON.parse(traceJson);"
+                        + " const view = JSON.parse(viewJson);"
                         + " const m = await import('/peekaboot/ui/trace-detail/tabs/request.js');"
                         + " const container = document.createElement('div');"
                         + " container.id = 'pk-request-test-container';"
                         + " document.body.appendChild(container);"
-                        + " m.render(container, trace);"
+                        + " m.render(container, trace, view);"
                         + "}",
-                traceJson);
+                List.of(traceJson, viewJson));
     }
 
     private void renderWithStatus(int status) {
@@ -75,6 +81,31 @@ class RequestTabIT extends PlaywrightTestBase {
         assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
                         .count())
                 .isZero();
+    }
+
+    /**
+     * A dashboard-opened overlay carries /api/features, whose maskLiteral is the backend's
+     * authoritative spelling - if it ever changes, the highlight must follow it, and the
+     * module-local fallback must lose.
+     */
+    @Test
+    void requestHeadersHighlightByThePublishedMaskLiteralWhenFeaturesAreInHand() {
+        renderWithTrace("""
+                {"durationMs": 12, "httpExchange": {
+                    "request": {"method": "GET", "path": "/api/users",
+                        "headers": {"authorization": "###", "x-old": "******"}},
+                    "response": {"status": 200, "headers": {}}
+                }}
+                """, """
+                {"features": {"maskLiteral": "###"}}
+                """);
+
+        assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
+                        .count())
+                .isEqualTo(1);
+        assertThat(page.locator("#pk-request-test-container td.pk-request-masked")
+                        .textContent())
+                .isEqualTo("###");
     }
 
     @Test

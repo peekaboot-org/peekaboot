@@ -101,10 +101,8 @@ class TraceInsightsServiceTest {
         bucketStore.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
-                .order(bucketStore.nextCreationOrder())
                 .build());
-        bucketStore.addSpan(
-                span("s2").in("tok").order(bucketStore.nextCreationOrder()).build());
+        bucketStore.addSpan(span("s2").in("tok").build());
         TraceInsightsService bucketService = newService(bucketStore);
 
         TraceInsightsResponse errors = bucketService.getInsights(10, TraceBucket.ERRORS, null, null);
@@ -120,7 +118,6 @@ class TraceInsightsServiceTest {
         bucketStore.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
-                .order(bucketStore.nextCreationOrder())
                 .build());
         TraceInsightsService bucketService = newService(bucketStore);
 
@@ -478,11 +475,7 @@ class TraceInsightsServiceTest {
 
     private static SpanData rootSpanWithoutTags(
             InMemoryTraceStore forStore, String traceId, String spanId, String name) {
-        return span(spanId)
-                .in(traceId)
-                .named(name)
-                .order(forStore.nextCreationOrder())
-                .build();
+        return span(spanId).in(traceId).named(name).build();
     }
 
     private static LogCapturedEvent logAt(String traceId, String level) {
@@ -494,14 +487,9 @@ class TraceInsightsServiceTest {
         return new TraceInsightsService(store, traceTreeMapper, issueDetector, queryExtractor);
     }
 
-    /** A single SERVER root span of the given duration, numbered by the fixture store. */
+    /** A single SERVER root span of the given duration. */
     private Spans.SpanBuilder rootSpan(String traceId, String name, Span.Kind kind, long durationMs) {
-        return span("span-" + traceId)
-                .in(traceId)
-                .named(name)
-                .kind(kind)
-                .at(0, durationMs)
-                .order(store.nextCreationOrder());
+        return span("span-" + traceId).in(traceId).named(name).kind(kind).at(0, durationMs);
     }
 
     private void addTrace(String traceId, long durationMs, boolean hasError) {
@@ -537,7 +525,6 @@ class TraceInsightsServiceTest {
                 .kind(Span.Kind.SERVER)
                 .at(0, totalDurationMs)
                 .tags(Map.of("http.method", "GET", "http.url", "/users/123"))
-                .order(store.nextCreationOrder())
                 .build();
     }
 
@@ -548,8 +535,7 @@ class TraceInsightsServiceTest {
                 .named("SELECT users")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 50)
-                .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"))
-                .order(store.nextCreationOrder());
+                .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users WHERE id = ?"));
     }
 
     private void addTraceWithDbSpan(String traceId, long totalDurationMs) {

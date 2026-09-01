@@ -1,14 +1,15 @@
 package org.peekaboot.backend.controller;
 
 import java.util.Locale;
-import org.peekaboot.backend.api.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
+import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.insights.InsightsService;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.TraceInsightsService;
@@ -78,7 +79,8 @@ public class PeekabootController {
                 uiTracingProperties.getSlowSpanThresholdMs(),
                 uiTracingProperties.getVerySlowSpanThresholdMs(),
                 uiTracingProperties.getSlowQueryThresholdMs(),
-                tracingProperties != null ? tracingProperties.getSlowTraceThresholdMs() : null);
+                tracingProperties != null ? tracingProperties.getSlowTraceThresholdMs() : null,
+                MaskingEngine.MASK_LITERAL);
     }
 
     /**

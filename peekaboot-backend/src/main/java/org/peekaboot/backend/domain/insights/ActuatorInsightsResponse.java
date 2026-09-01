@@ -1,5 +1,6 @@
-package org.peekaboot.backend.api.insights;
+package org.peekaboot.backend.domain.insights;
 
+import java.util.List;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
 import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
@@ -11,17 +12,14 @@ import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.server.ServerInfo;
 
-import java.util.List;
-
 public record ActuatorInsightsResponse(
-    ApplicationInfo application,
-    RuntimeInfo runtime,
-    List<DataSourceInfo> dataSources,
-    HealthInfo health,
-    EnvironmentInfo environment,
-    LoggersInfo loggers,
-    FlywayInfo flyway,
-    ConfigInfo config,
-    ScheduledTasksInfo scheduledTasks,
-    ServerInfo server
-) {}
+        ApplicationInfo application,
+        RuntimeInfo runtime,
+        List<DataSourceInfo> dataSources,
+        HealthInfo health,
+        EnvironmentInfo environment,
+        LoggersInfo loggers,
+        FlywayInfo flyway,
+        ConfigInfo config,
+        ScheduledTasksInfo scheduledTasks,
+        ServerInfo server) {}

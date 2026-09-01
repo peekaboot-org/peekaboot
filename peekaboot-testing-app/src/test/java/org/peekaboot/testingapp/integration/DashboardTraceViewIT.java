@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -41,6 +42,9 @@ import tools.jackson.databind.JsonNode;
  */
 @ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ_WRITE)
 class DashboardTraceViewIT {
+
+    /** Creation orders for hand-built spans; only their per-trace ascending order matters. */
+    private static final AtomicLong CREATION_ORDER = new AtomicLong();
 
     @LocalServerPort
     private int port;
@@ -144,7 +148,7 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder()));
+                CREATION_ORDER.incrementAndGet()));
         traceStore.addSpan(new SpanData(
                 "bok",
                 "s2",
@@ -162,7 +166,7 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder()));
+                CREATION_ORDER.incrementAndGet()));
 
         JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
         JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
@@ -208,7 +212,7 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder());
+                CREATION_ORDER.incrementAndGet());
         traceStore.addSpan(rootSpan);
 
         SpanData dbSpan = new SpanData(
@@ -228,7 +232,7 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 List.of(),
-                traceStore.nextCreationOrder());
+                CREATION_ORDER.incrementAndGet());
         traceStore.addSpan(dbSpan);
     }
 }

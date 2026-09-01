@@ -183,7 +183,6 @@
 .pk-query-meta { display: flex; gap: 12px; align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
 .pk-query__duration--slow { color: var(--pk-warning-text); }
-.pk-query__duration--very-slow { color: var(--pk-danger); }
 .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: 11px; }
 .pk-query__sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 

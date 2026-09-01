@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
+import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
@@ -52,7 +53,7 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.fixedDelayCount()).isEqualTo(1);
         assertThat(result.tasks().get(0).type()).isEqualTo(TaskType.FIXED_DELAY);
-        assertThat(result.tasks().get(0).schedule()).isEqualTo("5s");
+        assertThat(result.tasks().get(0).schedule()).isNull();
         assertThat(result.tasks().get(0).intervalMs()).isEqualTo(5000L);
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.SUCCESS);
     }
@@ -74,7 +75,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks()).hasSize(1);
         assertThat(result.fixedRateCount()).isEqualTo(1);
         assertThat(result.tasks().get(0).type()).isEqualTo(TaskType.FIXED_RATE);
-        assertThat(result.tasks().get(0).schedule()).isEqualTo("1h");
+        assertThat(result.tasks().get(0).schedule()).isNull();
+        assertThat(result.tasks().get(0).intervalMs()).isEqualTo(3600000L);
     }
 
     @Test
@@ -122,8 +124,9 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(2).target()).isEqualTo("c.Scheduler.fixed");
     }
 
+    /** The interval reaches the frontend as milliseconds only; the frontend formats it. */
     @Test
-    void map_shouldFormatIntervalsCorrectly() {
+    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleString() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
                 List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b"), createFixedTask(120000L, "c")),
@@ -131,9 +134,8 @@ class ScheduledTasksMapperTest {
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
-        assertThat(result.tasks().get(0).schedule()).isEqualTo("500ms");
-        assertThat(result.tasks().get(1).schedule()).isEqualTo("30s");
-        assertThat(result.tasks().get(2).schedule()).isEqualTo("2m");
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::intervalMs).containsExactly(500L, 30000L, 120000L);
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::schedule).containsOnlyNulls();
     }
 
     @Test

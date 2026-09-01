@@ -217,13 +217,12 @@ Core module containing all business logic.
 ```
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
-├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
 ├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig (+ ApiSecurityHeadersInterceptor: no-store/nosniff on /peekaboot/api/**), PeekabootJson (+ its message converter), PeekabootPaths
 ├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── application/, config/, datasource/, environment/, flyway/, health/,
-│   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
+│   ├── insights/ (incl. ActuatorInsightsResponse, the dashboard's aggregate DTO), lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
 │   ├── features/           # Features — the /api/features payload: flags plus the effective slow thresholds
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
@@ -416,7 +415,7 @@ static/peekaboot/ui/
 │   ├── filtered-group-tab.js   # filteredGroupTab() — the shell of a filterable collapsible-group tab (config/environment/loggers)
 │   ├── format.js              # Duration/byte/date formatting
 │   ├── http-status.js          # statusLabel()/statusVariant() — IANA reason phrases and badge colouring
-│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL
+│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL (fallback for Features.maskLiteral)
 │   ├── root-actions.js         # Root action type -> icon/label map
 │   ├── severity.js             # Duration/issue/log-level/health colouring; thresholds read from /api/features
 │   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
@@ -607,8 +606,8 @@ When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
 ```java
 @Bean
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter otelSpanExporter(TraceStore storage, ApplicationEventPublisher eventPublisher) {
-    return new OtelSpanExporter(storage, eventPublisher);
+public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher) {
+    return new OtelSpanExporter(eventPublisher);
 }
 ```
 
