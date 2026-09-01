@@ -186,9 +186,9 @@ class InsightsCollectorTest {
 
     @Test
     void memoryEstimateMatchesFormula() {
-        // 2 series x (90 + 1440*7 + 720*7) x 8 bytes
+        // 2 series x (90 + 1440*8 + 720*8) x 8 bytes
         List<InsightsProperties.Level> spec = List.of(
                 level(Duration.ofSeconds(10), 90), level(Duration.ofMinutes(1), 1440), level(Duration.ofHours(1), 720));
-        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 7 + 720 * 7) * 8);
+        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 8 + 720 * 8) * 8);
     }
 }
