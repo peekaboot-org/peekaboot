@@ -513,6 +513,85 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .containsOnly(spanId);
     }
 
+    /**
+     * Cross-link: a span the backend classified as a query (span.query present) carries a
+     * link to its entry in the Queries tab. The jump switches the overlay tab, moves
+     * keyboard focus onto the target entry and marks it with a temporary highlight class,
+     * so the eye lands where focus just went. Runs on the toolbar-open path - the jump is
+     * pure DOM state and identical on every open path.
+     */
+    @Test
+    void spanQueryLinkJumpsToTheQueriesTabEntry() {
+        openOverlayFromToolbar();
+        overlay.waitFor(".pk-span-query-link");
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-query-link').dataset.spanId");
+
+        overlay.click(".pk-span-query-link");
+
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'queries'");
+        overlay.waitFor(".pk-query-item.pk-jump-flash");
+        String highlighted =
+                (String) overlay.evaluate("root => root.querySelector('.pk-query-item.pk-jump-flash')?.dataset.spanId");
+        assertThat(highlighted).isEqualTo(spanId);
+        Boolean focusOnTarget =
+                (Boolean) overlay.evaluate("root => root.activeElement?.classList.contains('pk-query-item') ?? false");
+        assertThat(focusOnTarget)
+                .as("focus moves with the jump - the clicked link's markup was just replaced")
+                .isTrue();
+
+        // temporary by design: the highlight clears on its own, the focus stays
+        overlay.waitForGone(".pk-jump-flash");
+    }
+
+    /**
+     * Cross-link in the other direction: each Queries-tab entry links back to its span in
+     * the Spans tab's tree - the row is scrolled to, focused and temporarily highlighted,
+     * mirroring spanQueryLinkJumpsToTheQueriesTabEntry above.
+     */
+    @Test
+    void queryEntrySpanLinkJumpsBackToItsSpanRow() {
+        openOverlayFromToolbar();
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-query-span-link");
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-query-span-link').dataset.spanId");
+
+        overlay.click(".pk-query-span-link");
+
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
+        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
+        String highlighted =
+                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-row.pk-jump-flash')?.dataset.spanId");
+        assertThat(highlighted).isEqualTo(spanId);
+        String focusedRowSpanId =
+                (String) overlay.evaluate("root => root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId");
+        assertThat(focusedRowSpanId).isEqualTo(spanId);
+    }
+
+    /**
+     * Cross-link from the Logs tab: beside the existing filter-to-span button, each log
+     * row links to its span in the Spans tab's tree the same way the Queries tab does.
+     */
+    @Test
+    void logRowSpanLinkJumpsToTheSpanTree() {
+        page.navigate(baseUrl + "/?error=true");
+        toolbar.traceId();
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.waitFor(".pk-log__goto-span");
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-log__goto-span').dataset.spanId");
+
+        overlay.click(".pk-log__goto-span");
+
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
+        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
+        String highlighted =
+                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-row.pk-jump-flash')?.dataset.spanId");
+        assertThat(highlighted).isEqualTo(spanId);
+        String focusedRowSpanId =
+                (String) overlay.evaluate("root => root.activeElement?.closest('.pk-gantt-row')?.dataset.spanId");
+        assertThat(focusedRowSpanId).isEqualTo(spanId);
+    }
+
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
         openOverlayFromToolbar();

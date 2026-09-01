@@ -1,5 +1,8 @@
 /**
- * Trace-detail overlay - Queries tab: the list of captured database queries.
+ * Trace-detail overlay - Queries tab: the list of captured database queries. Each entry
+ * carries its span's id (the backend's QueryInfo.spanId) as a stable anchor, so the
+ * Spans tab's query link can land on it - and links back to that span in the span tree
+ * via view.goToSpan (see trace-detail.js's jumpToElement).
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {querySeverity} from '../../shared/severity.js';
@@ -20,14 +23,20 @@ export function render(container, trace, view = {}) {
         const durationClass = querySeverity(duration, view.features);
         const system = query.dbSystem || 'SQL';
         const rowCount = query.rowCount;
+        const spanId = query.spanId || '';
 
-        html += '<div class="pk-query-item">';
+        html += `<div class="pk-query-item"${spanId ? ` data-span-id="${escapeHtml(spanId)}"` : ''}>`;
         html += '<div class="pk-query-header">';
         html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
         html += '<span class="pk-query-meta">';
         html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${formatDurationMs(duration)}${durationClass ? ' SLOW' : ''}</span>`;
         if (rowCount !== null && rowCount !== undefined) {
             html += `<span class="pk-query-rows">${formatCount(Number(rowCount), 'row')}</span>`;
+        }
+        if (spanId && view.goToSpan) {
+            html += `<button type="button" class="pk-query-span-link" data-span-id="${escapeHtml(spanId)}"`
+                + ` title="Show this query's span in the span tree"`
+                + ` aria-label="Show this query's span in the span tree">&#10550;</button>`;
         }
         html += '</span>';
         html += '</div>';
@@ -36,4 +45,10 @@ export function render(container, trace, view = {}) {
     });
 
     container.innerHTML = html;
+
+    // Fresh elements on every render, so per-element listeners cannot accumulate on the
+    // shared tab-content container the way a delegated one would.
+    container.querySelectorAll('.pk-query-span-link').forEach(link => {
+        link.addEventListener('click', () => view.goToSpan?.(link.dataset.spanId));
+    });
 }
