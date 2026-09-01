@@ -94,7 +94,12 @@ pick it up and a normal `mvn test` never runs it or touches Docker.
 It runs under the `screenshots` profile (`application-screenshots.yml`), which points at the
 real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,
 Environment and Traces tabs all show genuine content instead of an empty in-memory H2 state.
-**Docker must be running.**
+**Docker must be running.** The Lifecycle tab is photographed against a seeded run history
+(`LifecycleHistoryFixture`, shared with `LifecycleTabIT`), since a JUnit launch has storage
+off and would otherwise show the application's own run as the tab's only row. Insights is
+captured last, once its ring holds a dozen level-0 samples - about two minutes at the
+default 10s interval - so a chart shows a real line instead of a first point; expect a run
+to take a few minutes.
 
 ```bash
 mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
@@ -102,12 +107,20 @@ mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
 ```
 
 The output directory is required (the tool refuses to guess) and is created if missing. A
-successful run writes 26 PNGs, each in light and dark: one per dashboard tab (8), the
-trace-detail overlay's Spans and Queries views (2), the collapsed toolbar (1), and a revealed
-counterpart of the Environment and Config tab shots (2) showing the `spring.datasource.password`
-fixture after the "Show secrets" control is clicked - see
-`ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly which group that is
-and isn't, and why.
+successful run writes 30 PNGs, each in light and dark: one per dashboard tab (10, Insights
+and Lifecycle included), the trace-detail overlay's Spans and Queries views (2), the
+collapsed toolbar (1), and a revealed counterpart of the Environment and Config tab shots (2)
+showing the `spring.datasource.password` fixture after the "Show secrets" control is
+clicked - see `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly
+which group that is and isn't, and why.
+
+The tool's file names are canonical and follow the dashboard's own tab ids:
+`dashboard-<tab>-<theme>.png` (`overview`, `insights`, `lifecycle`, `traces`, `meters`,
+`environment`, `flyway`, `loggers`, `config`, `scheduled-tasks`),
+`dashboard-<environment|config>-revealed-<theme>.png`, `trace-detail-<theme>.png`,
+`trace-detail-queries-<theme>.png` and `toolbar-collapsed-<theme>.png`. The website's
+`assets/img/screenshots/` carries these names verbatim - when a tab id changes here, the
+site's files and `<img>` references are renamed to match, never the other way around.
 
 `docs/images/dashboard.png` at the product repo root is a byte-identical copy of this tool's
 `dashboard-overview-light.png` output, checked into the website repo's

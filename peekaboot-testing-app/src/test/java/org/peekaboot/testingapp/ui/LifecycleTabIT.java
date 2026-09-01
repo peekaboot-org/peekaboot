@@ -3,20 +3,10 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.peekaboot.backend.lifecycle.LifecycleEvent;
 import org.peekaboot.backend.lifecycle.LifecycleEventFile;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -25,11 +15,8 @@ import org.springframework.test.context.DynamicPropertySource;
 /**
  * A freshly booted application has exactly one run - its own - so a test against it
  * cannot prove paging, a deployment badge, an unclean exit, or a downtime at all. This
- * class gives the application a real history before it boots: {@link #seedLifecycleHistory}
- * writes a {@code lifecycle.jsonl} with the production {@link LifecycleEventFile} and
- * {@link LifecycleEvent}'s own factories - the fixture can never drift from the format
- * the reader expects, because if it did, every test below would fail instead of proving
- * nothing.
+ * class gives the application a real history before it boots, written by
+ * {@link LifecycleHistoryFixture} (which documents the shape of every seeded run).
  *
  * <p>{@code @DynamicPropertySource} runs while the context is being prepared, before
  * {@code LifecycleEventLog.beginLoad()} ever reads the file - seeding from
@@ -45,26 +32,11 @@ import org.springframework.test.context.DynamicPropertySource;
  * gets), so closing it costs no other class a re-boot.
  *
  * <p>45 seeded runs plus the application's own start is 46 runs = 3 pages of 20, so
- * paging is real rather than a single page pretending to be several. Chronologically
- * ascending, oldest first (index 0..44):
- * <ul>
- *   <li>every run ends cleanly with a 2h30m uptime and a 45m gap before the next start,
- *       except run {@value #UNCLEAN_INDEX};
- *   <li>run {@value #UNCLEAN_INDEX} has a start with no matching stop - a {@code kill -9} -
- *       so it renders an Unclean exit badge with a dash duration, and the run after it
- *       (whose preceding event is a start, not a stop) renders a dash downtime;
- *   <li>runs 0..{@value #VERSION_CHANGE_INDEX} exclusive carry version 1.0.0, the rest
- *       1.1.0, so run {@value #VERSION_CHANGE_INDEX} is flagged a deployment for its
- *       version change;
- *   <li>runs 0..{@value #BRANCH_CHANGE_INDEX} exclusive carry branch "main" and one commit,
- *       the rest "feature/redesign" and another, so run {@value #BRANCH_CHANGE_INDEX} is
- *       flagged a deployment for its branch and commit change.
- * </ul>
- *
- * <p>The whole seeded span is about 6 days (45 * (2h30m + 45m)), anchored 30 days before
- * "now", so it finishes roughly 24 days before the application's own (real-clock) start -
- * comfortably clear of any collision, and still the oldest-to-newest order the reader
- * expects.
+ * paging is real rather than a single page pretending to be several. Run
+ * {@value #UNCLEAN_INDEX} is the unclean one, run {@value #VERSION_CHANGE_INDEX} the version
+ * change and run {@value #BRANCH_CHANGE_INDEX} the branch and commit change; the whole
+ * seeded span is about 6 days (45 * (2h30m + 45m)), finishing roughly 24 days before the
+ * application's own start.
  *
  * <p>Response rows are newest first: index 0 is the application's own (real) run, and
  * seeded run {@code i} lands at response index {@code 45 - i}. That places every case
@@ -80,53 +52,16 @@ class LifecycleTabIT extends PlaywrightTestBase {
     private static final int UNCLEAN_INDEX = 40;
     private static final int VERSION_CHANGE_INDEX = 35;
     private static final int BRANCH_CHANGE_INDEX = 30;
-    private static final long RUN_DURATION_MS =
-            Duration.ofHours(2).plusMinutes(30).toMillis();
-    private static final long GAP_MS = Duration.ofMinutes(45).toMillis();
 
     @TempDir
     static Path storageDir;
 
     @DynamicPropertySource
     static void lifecycleStorage(DynamicPropertyRegistry registry) {
-        seedLifecycleHistory(storageDir.resolve(LifecycleEventFile.FILE_NAME));
+        new LifecycleHistoryFixture(SEEDED_RUN_COUNT, UNCLEAN_INDEX, VERSION_CHANGE_INDEX, BRANCH_CHANGE_INDEX)
+                .writeTo(storageDir.resolve(LifecycleEventFile.FILE_NAME));
         registry.add("peekaboot.storage.enabled", () -> "true");
         registry.add("peekaboot.storage.dir", () -> storageDir.toString());
-    }
-
-    private static void seedLifecycleHistory(Path file) {
-        long cursor = Instant.now().minus(30, ChronoUnit.DAYS).toEpochMilli();
-        List<LifecycleEvent> events = new ArrayList<>();
-        for (int i = 0; i < SEEDED_RUN_COUNT; i++) {
-            long pid = 1000L + i;
-            events.add(LifecycleEvent.start(cursor, pid, buildOf(i), gitOf(i)));
-            cursor += RUN_DURATION_MS;
-            if (i != UNCLEAN_INDEX) {
-                events.add(LifecycleEvent.stop(cursor, pid));
-            }
-            cursor += GAP_MS;
-        }
-        try {
-            new LifecycleEventFile(file).write(events);
-        } catch (IOException e) {
-            throw new UncheckedIOException("failed to seed " + file, e);
-        }
-    }
-
-    private static Map<String, String> buildOf(int i) {
-        Map<String, String> build = new LinkedHashMap<>();
-        build.put("version", i < VERSION_CHANGE_INDEX ? "1.0.0" : "1.1.0");
-        return build;
-    }
-
-    private static Map<String, String> gitOf(int i) {
-        Map<String, String> git = new LinkedHashMap<>();
-        boolean deployed = i >= BRANCH_CHANGE_INDEX;
-        git.put("branch", deployed ? "feature/redesign" : "main");
-        git.put(
-                "commit.id",
-                deployed ? "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" : "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        return git;
     }
 
     @BeforeEach
