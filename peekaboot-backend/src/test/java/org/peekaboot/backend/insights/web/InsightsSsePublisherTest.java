@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -318,6 +319,38 @@ class InsightsSsePublisherTest {
         return logs.appender().list.stream()
                 .filter(event -> event.getFormattedMessage().contains("dispatch queue full"))
                 .count();
+    }
+
+    /**
+     * A peer that went away is routine, not an incident: the reason is logged at DEBUG as
+     * one line, without the stack trace of the servlet container's broken pipe.
+     */
+    @Test
+    void aSubscriberWhoseSendFailsIsDroppedWithAOneLineDebugMessage() {
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            SseEmitter newEmitter() {
+                return new SseEmitter(0L) {
+                    @Override
+                    public void send(SseEventBuilder builder) throws IOException {
+                        throw new IOException("Broken pipe");
+                    }
+                };
+            }
+        };
+        publisher.subscribe();
+
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class, Level.DEBUG)) {
+            publisher.broadcast("tick", "{}");
+
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo(
+                                "Dropping insights SSE subscriber after send failure: java.io.IOException: Broken pipe");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
     }
 
     @Test

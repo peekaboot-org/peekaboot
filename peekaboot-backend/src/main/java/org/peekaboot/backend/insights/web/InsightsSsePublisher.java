@@ -268,7 +268,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 emitter.send(SseEmitter.event().name(eventName).data(json));
                 onDelivered(eventName);
             } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after send failure", e);
+                log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
                 emitter.completeWithError(e);
             }
         }
@@ -289,7 +289,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             try {
                 emitter.send(SseEmitter.event().comment("hb"));
             } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after heartbeat failure", e);
+                log.debug("Dropping insights SSE subscriber after heartbeat failure: {}", e.toString());
                 emitter.completeWithError(e);
             }
         }
