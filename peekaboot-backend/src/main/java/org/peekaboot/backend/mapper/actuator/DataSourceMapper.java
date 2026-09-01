@@ -1,22 +1,20 @@
 package org.peekaboot.backend.mapper.actuator;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import net.osslabz.jdbc.DatabaseProduct;
-import net.osslabz.jdbc.JdbcProperty;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DataSourceMapper {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
 
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
         return map(metadataList, health, false);
@@ -25,7 +23,7 @@ public class DataSourceMapper {
     /**
      * Same as {@link #map(List, HealthResponse)}, except when {@code unmask} is true, in
      * which case every connection property value is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
+     * {@link ConnectionParamsMasker#mask(Map, boolean)} for why this shape.
      */
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
         if (metadataList == null || metadataList.isEmpty()) {
@@ -42,7 +40,7 @@ public class DataSourceMapper {
 
     private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthStatus dbHealth, boolean unmask) {
         List<net.osslabz.jdbc.Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
-        Map<String, String> maskedProperties = maskSensitiveProperties(metadata.getConnectionParams(), unmask);
+        Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
         DatabaseProduct product = detectDatabaseProduct(metadata);
 
         return new DataSourceInfo(
@@ -82,21 +80,6 @@ public class DataSourceMapper {
             }
         }
         return DatabaseProduct.UNKNOWN;
-    }
-
-    private Map<String, String> maskSensitiveProperties(Map<String, JdbcProperty> properties, boolean unmask) {
-        if (properties == null) {
-            return Map.of();
-        }
-
-        Map<String, String> result = new LinkedHashMap<>();
-        for (Map.Entry<String, JdbcProperty> entry : properties.entrySet()) {
-            String key = entry.getKey();
-            String value = entry.getValue() != null ? entry.getValue().value() : null;
-
-            result.put(key, maskingEngine.mask(key, value, unmask));
-        }
-        return result;
     }
 
     private HealthStatus extractDbHealth(HealthResponse health) {

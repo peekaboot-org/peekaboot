@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.TimeZone;
 import javax.sql.DataSource;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
+import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -31,6 +32,8 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
     private final Map<String, DataSource> dataSources;
+
+    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
 
     public ApplicationReadyListener(
             EnvironmentInfo environmentInfo,
@@ -171,7 +174,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                     metadata.getUsername()));
 
             if (!metadata.getConnectionParams().isEmpty()) {
-                String params = metadata.getConnectionParams().entrySet().stream()
+                String params = connectionParamsMasker.mask(metadata.getConnectionParams()).entrySet().stream()
                         .map(e -> e.getKey() + "=" + e.getValue())
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("");
