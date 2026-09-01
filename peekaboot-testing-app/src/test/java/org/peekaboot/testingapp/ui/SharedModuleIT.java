@@ -68,6 +68,15 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     @Test
+    void formatIntervalClimbsTheUnitLadderWithOneDecimal() {
+        assertThat(evalModule("format.js", "m.formatInterval(250)")).isEqualTo("250ms");
+        assertThat(evalModule("format.js", "m.formatInterval(1500)")).isEqualTo("1.5s");
+        assertThat(evalModule("format.js", "m.formatInterval(90000)")).isEqualTo("1.5m");
+        assertThat(evalModule("format.js", "m.formatInterval(3600000)")).isEqualTo("1h");
+        assertThat(evalModule("format.js", "m.formatInterval(172800000)")).isEqualTo("2d");
+    }
+
+    @Test
     void formatBytesScalesByMagnitude() {
         assertThat(evalModule("format.js", "m.formatBytes(0)")).isEqualTo("0 B");
         assertThat(evalModule("format.js", "m.formatBytes(1536)")).isEqualTo("1.50 KB");

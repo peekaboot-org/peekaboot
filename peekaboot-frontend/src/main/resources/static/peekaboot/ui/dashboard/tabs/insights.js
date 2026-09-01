@@ -15,7 +15,7 @@
  *     every 30s dashboard refresh and must not rebuild any of this.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatMetricValue} from '../../shared/format.js';
+import {formatInterval, formatMetricValue} from '../../shared/format.js';
 import {createChart, ensureUplot} from './insights-chart.js';
 
 export const id = 'insights';
@@ -130,17 +130,6 @@ async function loadLifecycleEvents() {
         console.warn('Insights: restart markers unavailable:', error);
         lifecycleEvents = [];
     }
-}
-
-// --- Interval formatting --------------------------------------------------------------
-
-/** Compact aggregation-level label, e.g. 250 -> "250ms", 1500 -> "1.5s", 3600000 -> "1h". */
-function formatInterval(ms) {
-    const short = value => (Number.isInteger(value) ? String(value) : value.toFixed(1));
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${short(ms / 1000)}s`;
-    if (ms < 3600000) return `${short(ms / 60000)}m`;
-    return `${short(ms / 3600000)}h`;
 }
 
 // --- Toolbar ----------------------------------------------------------------------------

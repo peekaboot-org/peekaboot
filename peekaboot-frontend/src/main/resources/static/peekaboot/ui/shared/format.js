@@ -35,6 +35,16 @@ export function formatLongDuration(ms) {
         .join(', ');
 }
 
+/** Compact interval label, e.g. 250 -> "250ms", 1500 -> "1.5s", 3600000 -> "1h", 172800000 -> "2d". */
+export function formatInterval(ms) {
+    const short = value => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${short(ms / 1000)}s`;
+    if (ms < 3600000) return `${short(ms / 60000)}m`;
+    if (ms < 86400000) return `${short(ms / 3600000)}h`;
+    return `${short(ms / 86400000)}d`;
+}
+
 export function formatBytes(bytes) {
     if (bytes == null || bytes < 0) return '-';
     if (bytes === 0) return '0 B';
