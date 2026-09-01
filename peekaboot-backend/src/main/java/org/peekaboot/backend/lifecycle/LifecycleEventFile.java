@@ -1,6 +1,7 @@
 package org.peekaboot.backend.lifecycle;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -9,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.core.JacksonException;
@@ -95,10 +97,12 @@ public final class LifecycleEventFile {
         }
         Path parent = file.getParent();
         if (parent != null) {
-            Files.createDirectories(parent);
+            OwnerOnlyFiles.createDirectories(parent);
         }
         try {
-            Files.writeString(temp, content.toString(), StandardCharsets.UTF_8);
+            try (OutputStream out = OwnerOnlyFiles.newOutputStream(temp)) {
+                out.write(content.toString().getBytes(StandardCharsets.UTF_8));
+            }
             moveIntoPlace();
         } catch (IOException e) {
             deleteTemp(e);

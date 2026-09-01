@@ -2,10 +2,13 @@ package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -93,6 +96,36 @@ class LifecycleEventFileTest {
             assertThat(files.map(Path::getFileName).map(Path::toString).toList())
                     .containsExactly("lifecycle.jsonl");
         }
+    }
+
+    /** The log carries build and git details verbatim; the file is the owner's business and no one else's. */
+    @Test
+    void theLogAndItsDirectoryAreReadableByTheOwnerAlone() throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path stateDirectory = directory.resolve("state");
+        LifecycleEventFile file = new LifecycleEventFile(stateDirectory.resolve("lifecycle.jsonl"));
+
+        file.write(List.of(start(1_000)));
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(stateDirectory)))
+                .isEqualTo("rwx------");
+        assertThat(PosixFilePermissions.toString(
+                        Files.getPosixFilePermissions(stateDirectory.resolve("lifecycle.jsonl"))))
+                .isEqualTo("rw-------");
+    }
+
+    @Test
+    void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path victim = directory.resolve("victim");
+        Files.writeString(victim, "untouched");
+        Files.createSymbolicLink(directory.resolve("lifecycle.jsonl.tmp"), victim);
+        LifecycleEventFile file = file();
+
+        file.write(List.of(start(1_000)));
+
+        assertThat(Files.readString(victim)).isEqualTo("untouched");
+        assertThat(file.read()).hasSize(1);
     }
 
     @Test

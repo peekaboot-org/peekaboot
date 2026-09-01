@@ -1,11 +1,14 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import ch.qos.logback.classic.Level;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -208,6 +211,42 @@ class InsightsSnapshotStoreTest {
             assertThat(capture.appender().list.get(0).getFormattedMessage()).contains("insights");
         }
         assertThat(file).doesNotExist();
+    }
+
+    /** The rings describe the host application's runtime; the file is the owner's business and no one else's. */
+    @Test
+    void theSnapshotAndItsDirectoryAreReadableByTheOwnerAlone() throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path stateDirectory = directory.resolve("state");
+        InsightsSnapshotStore store = new InsightsSnapshotStore(
+                stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME),
+                GEOMETRY,
+                Duration.ofHours(1),
+                Duration.ofDays(30));
+        store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+
+        store.stop();
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(stateDirectory)))
+                .isEqualTo("rwx------");
+        assertThat(PosixFilePermissions.toString(
+                        Files.getPosixFilePermissions(stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME))))
+                .isEqualTo("rw-------");
+    }
+
+    @Test
+    void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        Path victim = directory.resolve("victim");
+        Files.writeString(victim, "untouched");
+        Files.createSymbolicLink(directory.resolve("insights.snapshot.tmp"), victim);
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+        store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+
+        store.stop();
+
+        assertThat(Files.readString(victim)).isEqualTo("untouched");
+        assertThat(loadWith(store(Duration.ofDays(30)))).isPresent();
     }
 
     @Test

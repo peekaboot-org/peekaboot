@@ -44,7 +44,11 @@ used verbatim, with no per-application subdirectory appended.
 neither store ever writes. Directory creation and I/O failure handling belong to the
 stores themselves: each creates its parent directory on first write and, on
 `IOException`, logs once and continues in memory rather than taking the host application
-down over an unwritable `$HOME`.
+down over an unwritable `$HOME`. Both go through `OwnerOnlyFiles` for that: on a POSIX
+file system the directory is created `rwx------` and every file `rw-------` regardless
+of the process umask (an existing directory keeps its permissions), and the temporary a
+write goes to is always created fresh with `CREATE_NEW` after removing whatever sat at
+its path — a symlink planted at `*.tmp` is deleted, never followed.
 
 Both stores assume one application instance per directory. Two instances pointed at the
 same `peekaboot.storage.dir` overwrite each other's files: the loser's history is lost,
@@ -234,7 +238,7 @@ org.peekaboot.backend/
 ├── masking/                # MaskingEngine, MaskingRules, TagMasker, TreeMasker — the one place
 │                           # "is this key/value sensitive" is decided; see peekaboot.org/docs/security
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
-├── storage/                # StorageDirectory — resolves peekaboot.storage.dir (see Persisted state)
+├── storage/                # StorageDirectory — resolves peekaboot.storage.dir; OwnerOnlyFiles — owner-only, symlink-safe writes (see Persisted state)
 ├── tracing/                # In-memory tracing
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── config/             # PeekabootTracingProperties

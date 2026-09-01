@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.storage.OwnerOnlyFiles;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -166,9 +167,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         try {
             Path parent = file.getParent();
             if (parent != null) {
-                Files.createDirectories(parent);
+                OwnerOnlyFiles.createDirectories(parent);
             }
-            try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(temp)))) {
+            try (DataOutputStream out =
+                    new DataOutputStream(new BufferedOutputStream(OwnerOnlyFiles.newOutputStream(temp)))) {
                 InsightsSnapshotCodec.write(out, snapshot);
             }
             move();
