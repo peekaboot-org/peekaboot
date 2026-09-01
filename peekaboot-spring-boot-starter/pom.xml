@@ -13,6 +13,12 @@
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Peekaboot Spring Boot Starter - Dependency aggregator for easy integration</description>
 
+    <properties>
+        <!-- No sources, yet Central requires a -sources jar for every jar component:
+             make the source plugin build the (empty) archive anyway. -->
+        <maven.source.forceCreation>true</maven.source.forceCreation>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.peekaboot</groupId>
@@ -32,4 +38,28 @@
             <artifactId>spring-boot-starter-opentelemetry</artifactId>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
+                 -javadoc jar for every jar component. Package the empty javadoc output
+                 directory as that jar. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>empty-javadoc-jar</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.build.directory}/apidocs</classesDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -11,9 +11,9 @@ description = "Peekaboot Testing App - sample application for manual and automat
 // that proof either way (project() substitution is inherent here), so it simply shares
 // the conventions; the Maven build remains the consume-as-a-user check.
 
-dependencies {
-    implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+val springBootVersion: String by project
 
+dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-restclient")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.0")
@@ -33,7 +33,9 @@ dependencies {
     implementation("com.github.ben-manes.caffeine:caffeine")
     implementation(project(":peekaboot-spring-boot-starter"))
 
-    developmentOnly(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+    // developmentOnly comes from the Boot plugin, so the convention plugin's BOM import
+    // does not reach it
+    developmentOnly(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     runtimeOnly("org.postgresql:postgresql")
 

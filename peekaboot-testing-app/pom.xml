@@ -39,7 +39,13 @@
              own runtime through CPU contention faster than the extra overlap pays back.
              Set to 1 to serialize when diagnosing a flaky test. -->
         <peekaboot.it.threads>2</peekaboot.it.threads>
-        <!-- not a published artifact: it exists to host the sample app and its UI tests -->
+        <!-- A property, not an inline version: the CI workflows key their Chromium cache on it. -->
+        <playwright.version>1.62.0</playwright.version>
+        <!-- Not a published artifact: it exists to host the sample app and its UI tests.
+             This module does not inherit peekaboot-parent, so the peekaboot-release
+             profile - and with it central-publishing-maven-plugin - never applies here:
+             a release build runs the plain maven-deploy-plugin for this module, and
+             this property is that plugin's skip switch. -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
@@ -174,12 +180,25 @@
         <dependency>
             <groupId>com.microsoft.playwright</groupId>
             <artifactId>playwright</artifactId>
-            <version>1.62.0</version>
+            <version>${playwright.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Not bound to any phase: the README and the CI workflows invoke exec:java
+                     ad hoc to install Playwright's Chromium, and spring-boot-starter-parent
+                     does not manage this plugin, so without the pin that call would resolve
+                     whatever version is latest on the day. -->
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>exec-maven-plugin</artifactId>
+                    <version>3.6.3</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <!-- resolves org.mockito:mockito-core:jar to its local repo path so
                  surefire can register it as a Java agent below, avoiding the

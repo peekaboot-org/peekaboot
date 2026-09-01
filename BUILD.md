@@ -48,7 +48,7 @@ else — and `mvn install`/`mvn verify` give you all six gates plus the integrat
 tests. Per module, `verify` runs:
 
 ```
-unit tests → package → sources jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
+unit tests → package → sources jar → javadoc jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
 ```
 
 `peekaboot-testing-app` runs its `*IT` classes **concurrently inside one JVM** — 2
@@ -84,11 +84,17 @@ stays around a minute.
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
-| `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources |
+| `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
-| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct |
-| `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
-| `peekaboot-coverage` | pom | **no** (`maven.deploy.skip`) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
+| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct. Its `-sources` and `-javadoc` jars are empty on purpose (below) |
+| `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`, see [Releasing](#releasing)) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
+| `peekaboot-coverage` | pom | **no** (`skipPublishing`, see [Releasing](#releasing)) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
+
+Maven Central requires a `-sources` and a `-javadoc` jar for every jar component, and two of
+the published modules have no Java sources: `maven-source-plugin` would build nothing for the
+starter, and `javadoc:jar` builds nothing for the starter or the frontend. So the starter sets
+`maven.source.forceCreation`, and both modules package their empty `target/apidocs` as the
+`-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is the intended content.
 
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
@@ -113,6 +119,18 @@ module's `build.gradle.kts` declares only its dependencies. `peekaboot-testing-a
 applies the same convention plus the Spring Boot and git-properties plugins — the
 consume-the-starter-as-a-published-artifact proof stays with Maven, which is why the
 Maven module keeps its `spring-boot-starter-parent` parent.
+
+**Lockstep.** Two values live once, in `gradle.properties`: `version` (the six poms'
+`<version>` — `maven-release-plugin` rewrites only the poms, so **bump it by hand after every
+release**, see the checklist under [Releasing](#releasing), or `./gradlew build` keeps
+producing pre-release jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
+parent version), which the convention plugin turns into the BOM import every module gets
+and `buildSrc` reads for the Boot plugin. Mockito's agent jar takes its version from that
+BOM, as Maven does. Every other shared literal — Error Prone, palantir, the ratchet SHA,
+Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors, the build timestamp, Playwright,
+springdoc and the testing-app's direct dependencies — is written on both sides and has to
+change on both. Dependabot watches the `gradle` ecosystem next to `maven`, so version bumps
+arrive as paired PRs.
 
 **Reproducibility and artifact parity** (verified by building each system twice and
 cross-diffing): both builds are self-reproducible - byte-identical jars across
@@ -247,17 +265,24 @@ mechanics.
 Three workflows, all under `.github/workflows/`.
 
 **`build-on-push.yml`** — every branch except `main`. JDK 25 (temurin), `fetch-depth: 0` for
-the ratchet, `~/.cache/ms-playwright` cached on a `**/pom.xml` hash, then `mvn --batch-mode
---update-snapshots clean verify`. The Chromium install is split into two steps on purpose:
-`exec:java` ignores `-pl` scoping when combined with `-am`, so the reactor's SNAPSHOTs are
-installed first (`-pl peekaboot-testing-app -am install -Dmaven.test.skip=true`) and the
-plain `exec:java` call resolves against the local repo afterwards.
+the ratchet, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
+`playwright.version` property (Chromium changes with Playwright, not with any other
+dependency), then `./mvnw --batch-mode clean verify`. The Chromium install is split into two
+steps on purpose: `exec:java` ignores `-pl` scoping when combined with `-am`, so the
+reactor's SNAPSHOTs are installed first (`-pl peekaboot-testing-app -am install
+-Dmaven.test.skip=true`) and the plain `exec:java` call resolves against the local repo
+afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
+`pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
+invocation resolves whatever is latest that day.
+
+Both workflows build with the checked-in `./mvnw`, and every action is pinned to a commit
+SHA with the tag in a trailing comment; Dependabot's `github-actions` updates move the pins.
 
 **`build-release-on-main-push.yml`** — see Releasing. Untested in anger: `dev` is currently
 the only branch on the remote, so no release has ever run.
 
 **`dependabot-pr-auto-merge.yml`** — auto-approves and auto-merges Dependabot PRs targeting
-`dev`. Dependabot watches Maven daily and GitHub Actions weekly.
+`dev`. Dependabot watches Maven and Gradle daily and GitHub Actions weekly.
 
 Branch model: `dev` is the default and integration branch; `main` is the release trunk, and
 pushing to it releases. Branch protection on `dev` is configured but not enforcing — see
@@ -269,29 +294,92 @@ Everything release-specific sits in the `peekaboot-release` profile; a normal bu
 signs or publishes anything. A push to `main` (whose message does not contain `[release]`,
 which is how recursion is prevented) runs:
 
-1. `mvn --batch-mode verify`
-2. `mvn -P peekaboot-release release:prepare`
-3. `mvn -P peekaboot-release release:perform`
-4. GitHub release notes from the new tag, then an auto-merge of `main` back into `dev`
+1. `./mvnw --batch-mode verify`
+2. `./mvnw -P peekaboot-release release:prepare`
+3. `./mvnw -P peekaboot-release release:perform`
+4. GitHub release notes from the new tag, then a pull request `main` → `dev` with auto-merge
+   enabled (`gh pr create` + `gh pr merge --auto`), carrying the two `[release]` version
+   commits back. It is a PR and not a push because the `green-default-branch` ruleset on
+   `dev` requires the `build-on-push` status check and only admins may bypass it; a merge
+   commit pushed by `GITHUB_TOKEN` has no such check and is refused. Note the PR itself does
+   not get that check either — `build-on-push` ignores `main`, and events raised with
+   `GITHUB_TOKEN` trigger no workflows — so until the job runs with a token that does, the
+   PR waits for a human merge (an open one is reused by the next release)
+
+Nothing automates what follows a release; do it on `dev` once the merge-back has landed:
+
+1. Set `version` in `gradle.properties` to the new `-SNAPSHOT` version the poms now carry.
+2. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
+   to the released version — every dependency snippet on the site reads it.
+3. Remove the pre-release callout from the site's `quick-start.md`.
+4. Put the released version into the two quick-start snippets in `README.md`.
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
 messages since the last `x.y.z` tag, so **commit message discipline decides the version bump**.
-Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also attaches a
-javadoc jar (`doclint` off, `failOnError` false), GPG-signs with `raphael@peekaboot.org`, and
-publishes through `central-publishing-maven-plugin` (`autoPublish`, waits until published). A
-sources jar is attached on *every* build of the published modules, not just releases.
+Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
+GPG-signs with `raphael@peekaboot.org` and publishes through
+`central-publishing-maven-plugin` (`autoPublish`, waits until published). The sources and
+javadoc jars are *not* release-only: both are attached on every build of the published
+modules, and javadoc runs with `doclint` at `all,-missing` and fails the build on an error, so
+a broken `@link` surfaces at `mvn package` rather than after `release:prepare` has pushed the
+tag.
+
+Two modules stay out of the bundle, by two different switches. The publishing plugin binds
+itself to `deploy` in every module that inherits the profile and **ignores
+`maven.deploy.skip`**; `peekaboot-coverage` therefore opts out with `skipPublishing`, the
+plugin's per-module switch (it only filters that module's own artifacts — the bundle is still
+uploaded from there, the last module of the reactor). `peekaboot-testing-app` never sees the
+plugin at all: the profile is undefined in its `spring-boot-starter-parent` pom, so the plain
+`maven-deploy-plugin` runs for it, and `maven.deploy.skip` is what keeps the sample app out.
 
 `release:prepare` bumps the POMs to the release version, commits, tags, runs its
 `preparationGoals` (`clean verify`) against that tag and then commits the next
 `-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
 `target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where signing
-and the upload to Maven Central happen. Reproducibility depends on
+and the upload to Maven Central happen. The workflow passes it
+`-Darguments="-DskipTests -Djacoco.skip=true"`: that tree has passed `verify` twice by then
+(the job's own build, then `preparationGoals`), so the third run would only repeat the
+Playwright suite. The four static-analysis gates still run. Reproducibility depends on
 `project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
 being explicit.
 
+### First release
+
+`ConventionalCommitsVersionPolicy` looks at the commits since the most recent tag matching
+`x.y.z`, takes the highest step it finds (`feat:` → minor; `type!:` or a `BREAKING CHANGE:`
+line anywhere in the message → major, `-SNAPSHOT` stripped otherwise) and applies it to that
+tag's version. With **no tag** it walks the entire history and starts from the pom version
+instead. There is no tag today, and commit `254956ae` carries a `BREAKING CHANGE:` footer,
+so an unprepared first release would be **1.0.0** — verified with
+`./mvnw -P peekaboot-release release:prepare -DdryRun=true`, which reports
+`Starting from project.version 0.0.5-SNAPSHOT … Doing a MAJOR version increase … Next
+release version : 1.0.0`.
+
+The first release is **0.1.0**. The recipe that works with the workflow exactly as it is:
+
+1. On `dev`, tag the commit that bumped the poms to `0.0.5-SNAPSHOT` as the baseline, and
+   push the tag: `git tag 0.0.4 ef175ff && git push origin 0.0.4`. Everything after it is
+   `feat:`/`fix:`/`chore:`/`test:` work without a breaking marker, so the policy computes a
+   minor step from 0.0.4 (verified in a throwaway clone: `Starting from SCM tag with version
+   0.0.4 … Doing a MINOR version increase … Next release version : 0.1.0`). The tag must sit
+   *before* the features that make this a minor release: on the current tip the window holds
+   no `feat:` and the same dry run answers `0.0.5`.
+2. Confirm nothing merged after the tag carries `!:` or a `BREAKING CHANGE:` footer — either
+   turns the answer into 1.0.0.
+3. Create `main` from `dev` and push. The workflow tags `0.1.0`; the next development version
+   is `0.1.1-SNAPSHOT`.
+
+The manual alternative, `./mvnw --batch-mode -P peekaboot-release release:prepare
+-DreleaseVersion=0.1.0` (dry run verified: tag `0.1.0`, next `0.1.1-SNAPSHOT`), bypasses the
+policy for that one run. A push-triggered workflow cannot carry that flag, so it is the
+fallback for a release run by hand, not the plan.
+
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
-`OSSRH_GPG_SECRET_KEY_PASSWORD`.
+`OSSRH_GPG_SECRET_KEY_PASSWORD`. The `OSSRH_` prefix is historical — the workflow talks to
+the Central Portal (`server-id: central`) and the first two hold a Portal user token, not
+OSSRH credentials. The names live in the repository settings as well as in the workflow, so a
+rename has to touch both.
 
 ## Things that will bite you
 
@@ -306,4 +394,5 @@ Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SE
   `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
 - A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
   everywhere thanks to that `failOnNoGitDirectory=false`.
-- The empty `peekaboot-spring-boot-starter` jar is intentional. Do not "fix" the warning.
+- The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
+  `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.

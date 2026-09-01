@@ -17,6 +17,7 @@ jobs:
 
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: checkout
@@ -38,11 +39,17 @@ jobs:
           gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
+      # Chromium changes with the Playwright version and nothing else, so the cache is
+      # keyed on that property rather than on every pom.
+      - name: playwright-version
+        id: playwright
+        run: echo "version=$(sed -n 's:.*<playwright.version>\(.*\)</playwright.version>.*:\1:p' peekaboot-testing-app/pom.xml)" >> "$GITHUB_OUTPUT"
+
       - name: Cache Playwright browsers
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
           restore-keys: playwright-${{ runner.os }}-
 
       # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
@@ -55,19 +62,19 @@ jobs:
       # the local repo before the plain (no -am) exec:java call below can resolve
       # peekaboot-testing-app's own dependency graph.
       - name: install-reactor-snapshots
-        run: mvn --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+        run: ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
 
       # classpathScope=test is required because the playwright dependency is test-scoped;
       # without it exec:java can't find com.microsoft.playwright.CLI.
       - name: install-playwright-browser
         run: >
-          mvn --batch-mode -pl peekaboot-testing-app exec:java
+          ./mvnw --batch-mode -pl peekaboot-testing-app exec:java
           -Dexec.mainClass=com.microsoft.playwright.CLI
           -Dexec.classpathScope=test
           -Dexec.args="install chromium"
 
       - name: maven-build-verify
-        run: mvn --batch-mode verify
+        run: ./mvnw --batch-mode verify
 
       - name: configure-git-user
         uses: qoomon/actions--setup-git@8e6bd30ac05e17a81b61169daae62cb6b7e61294 # v1.1.1
@@ -75,12 +82,13 @@ jobs:
           user: bot
 
       - name: prepare-release
-        run: mvn --batch-mode -P peekaboot-release release:prepare
+        run: ./mvnw --batch-mode -P peekaboot-release release:prepare
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 
       - name: perform-release-publish-on-maven-central
-        run: mvn --batch-mode -P peekaboot-release release:perform
+        # no third test run: the tag's tree passed `verify` in this job and again in release:prepare's preparationGoals
+        run: ./mvnw --batch-mode -P peekaboot-release release:perform -Darguments="-DskipTests -Djacoco.skip=true"
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
@@ -96,9 +104,18 @@ jobs:
           generate_release_notes: true
           tag_name: ${{ steps.get-latest-tag.outputs.tag }}
 
+      # A direct push would be refused: the ruleset on dev requires the build-on-push
+      # status check, and a merge commit pushed here has none. A pull request with
+      # auto-merge is the path that ruleset accepts. An open one from an earlier release
+      # is reused; new commits on main land on it automatically.
       - name: merge-main-to-dev
         run: |
-          git checkout dev
-          git pull
-          git merge --no-ff main -m "[release] auto-merge released main back to dev"
-          git push
+          pr_url="$(gh pr list --base dev --head main --state open --json url --jq '.[0].url')"
+          if [ -z "$pr_url" ]; then
+            pr_url="$(gh pr create --base dev --head main \
+              --title "[release] merge released main back to dev" \
+              --body "Carries the version commits of release ${{ steps.get-latest-tag.outputs.tag }} back to dev.")"
+          fi
+          gh pr merge --auto --merge "$pr_url"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

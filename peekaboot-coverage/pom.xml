@@ -15,8 +15,12 @@
     <description>Peekaboot Coverage - reactor-wide coverage report and the coverage gate</description>
 
     <properties>
-        <!-- not a published artifact: it exists to hold the reactor-wide coverage gate -->
-        <maven.deploy.skip>true</maven.deploy.skip>
+        <!-- Not a published artifact: it exists to hold the reactor-wide coverage gate.
+             central-publishing-maven-plugin (peekaboot-release profile) replaces the
+             deploy plugin and ignores maven.deploy.skip; skipPublishing is its per-module
+             switch. It keeps this module's pom out of the bundle while the plugin still
+             uploads the bundle from here, the last module of the reactor. -->
+        <skipPublishing>true</skipPublishing>
 
         <!-- Measured on the merged data at the time the gate landed: line 95.6%,
              branch 81.8%. The floors sit well below that on purpose - they catch a
