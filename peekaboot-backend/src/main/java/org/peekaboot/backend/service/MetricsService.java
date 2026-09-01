@@ -68,8 +68,8 @@ public class MetricsService {
 
                 List<MetricStatistic> statistics = StreamSupport.stream(
                                 meter.measure().spliterator(), false)
-                        .map(measurement ->
-                                new MetricStatistic(measurement.getStatistic().name(), measurement.getValue()))
+                        .map(measurement -> new MetricStatistic(
+                                measurement.getStatistic().name(), nanToNull(measurement.getValue())))
                         .toList();
 
                 measurements.add(new MetricMeasurement(tags, statistics));
@@ -82,5 +82,9 @@ public class MetricsService {
         groups.sort(Comparator.comparing(MetricGroup::name));
 
         return new MetricsInfo(groups.size(), totalMeasurements, groups);
+    }
+
+    private static Double nanToNull(double value) {
+        return Double.isNaN(value) ? null : value;
     }
 }

@@ -99,6 +99,21 @@ class MetricsServiceTest {
                 .contains(tuple("VALUE", 1024.0));
     }
 
+    /** A gauge with nothing to measure yields NaN; JSON has no NaN, so the wire carries null. */
+    @Test
+    void getMetrics_reportsANaNStatisticAsNull() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("cache.hit.ratio", () -> Double.NaN).register(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
+
+        MetricMeasurement measurement =
+                service.getMetrics().metrics().get(0).measurements().get(0);
+
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .containsExactly(tuple("VALUE", null));
+    }
+
     @Test
     void getMetrics_reportsActualStatisticValueForCounter() {
         MeterRegistry registry = new SimpleMeterRegistry();
