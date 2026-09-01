@@ -34,6 +34,9 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         this.ownContext = ownContext;
     }
 
+    // CompareObjectsWithEquals: identity is the point - the very context this listener
+    // belongs to, not one that happens to compare equal
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {
         // A child context's close (Boot's management context on a separate port) is

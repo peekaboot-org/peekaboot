@@ -39,6 +39,9 @@ public class LifecycleEventRecorder {
                 InfoEntries.of(gitProperties)));
     }
 
+    // CompareObjectsWithEquals: identity is the point - the very context this recorder
+    // belongs to, not one that happens to compare equal
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     @EventListener
     public void onClosed(ContextClosedEvent event) {
         // A child context's close (Boot's management context on a separate port) is
