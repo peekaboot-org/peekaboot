@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.actuator;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import org.peekaboot.backend.actuator.parsed.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
@@ -40,7 +39,8 @@ public class FlywayMapper {
             }
         }
 
-        migrations.sort(Comparator.comparing(MigrationInfo::version, this::compareVersions));
+        // Flyway's own order is kept: versioned ascending, then repeatables. Re-sorting by a
+        // parsed version put 14-digit timestamp versions first and repeatables ahead of all.
         return new FlywayInfo(migrations);
     }
 
@@ -64,38 +64,5 @@ public class FlywayMapper {
                 installedOn,
                 migration.executionTime(),
                 migration.script());
-    }
-
-    private int compareVersions(String v1, String v2) {
-        if (v1 == null && v2 == null) {
-            return 0;
-        }
-        if (v1 == null) {
-            return -1;
-        }
-        if (v2 == null) {
-            return 1;
-        }
-
-        String[] parts1 = v1.split("\\.", -1);
-        String[] parts2 = v2.split("\\.", -1);
-
-        int maxLen = Math.max(parts1.length, parts2.length);
-        for (int i = 0; i < maxLen; i++) {
-            int p1 = i < parts1.length ? parseIntSafe(parts1[i]) : 0;
-            int p2 = i < parts2.length ? parseIntSafe(parts2[i]) : 0;
-            if (p1 != p2) {
-                return Integer.compare(p1, p2);
-            }
-        }
-        return 0;
-    }
-
-    private int parseIntSafe(String s) {
-        try {
-            return Integer.parseInt(s);
-        } catch (NumberFormatException e) {
-            return 0;
-        }
     }
 }
