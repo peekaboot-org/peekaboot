@@ -5,7 +5,7 @@
 
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-parent</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
+    <version>0.0.5-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
@@ -29,7 +29,7 @@
         <project.build.sourceEncoding>${peekaboot.encoding}</project.build.sourceEncoding>
         <project.reporting.outputEncoding>${peekaboot.encoding}</project.reporting.outputEncoding>
 
-        <project.build.outputTimestamp>2025-04-23T12:21:37Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-09-01T07:31:12Z</project.build.outputTimestamp>
 
         <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
 

@@ -14,7 +14,7 @@
 
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-testing-app</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
+    <version>0.0.5-SNAPSHOT</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Peekaboot Testing App - sample application for manual and automated UI testing</description>
@@ -23,7 +23,7 @@
         <java.version>25</java.version>
         <!-- duplicated from peekaboot-parent (different parent pom): reproducible
              archives - spring-boot-starter-parent does not set this -->
-        <project.build.outputTimestamp>2025-04-23T12:21:37Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-09-01T07:31:12Z</project.build.outputTimestamp>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.15</jacoco.version>
         <jacocoArgLine></jacocoArgLine>
