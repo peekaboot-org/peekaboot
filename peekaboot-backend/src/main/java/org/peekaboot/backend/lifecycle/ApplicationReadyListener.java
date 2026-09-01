@@ -9,6 +9,7 @@ import java.util.TimeZone;
 import javax.sql.DataSource;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -36,7 +37,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @Nullable
     private final HikariPoolInfo hikariPoolInfo;
 
-    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
+    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker(new MaskingEngine());
 
     public ApplicationReadyListener(
             EnvironmentInfo environmentInfo,

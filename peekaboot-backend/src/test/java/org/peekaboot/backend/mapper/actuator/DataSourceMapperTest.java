@@ -15,10 +15,11 @@ import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class DataSourceMapperTest {
 
-    private final DataSourceMapper mapper = new DataSourceMapper();
+    private final DataSourceMapper mapper = new DataSourceMapper(new MaskingEngine());
 
     @Test
     void map_shouldMaskSensitiveProperties() {

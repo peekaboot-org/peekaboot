@@ -15,7 +15,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConfigMapper {
 
-    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
+    private final TreeMasker treeMasker;
+
+    public ConfigMapper(MaskingEngine maskingEngine) {
+        this.treeMasker = new TreeMasker(maskingEngine);
+    }
 
     public ConfigInfo map(ConfigPropsResponse configprops, boolean unmask) {
         if (configprops == null || configprops.contexts() == null) {

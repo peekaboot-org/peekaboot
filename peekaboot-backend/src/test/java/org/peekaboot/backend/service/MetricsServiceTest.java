@@ -14,12 +14,13 @@ import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class MetricsServiceTest {
 
     @Test
     void isAvailable_returnsFalse_whenNoMeterRegistry() {
-        MetricsService service = new MetricsService(null);
+        MetricsService service = new MetricsService(null, new MaskingEngine());
 
         assertThat(service.isAvailable()).isFalse();
     }
@@ -27,14 +28,14 @@ class MetricsServiceTest {
     @Test
     void isAvailable_returnsTrue_whenMeterRegistryPresent() {
         MeterRegistry registry = new SimpleMeterRegistry();
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         assertThat(service.isAvailable()).isTrue();
     }
 
     @Test
     void getMetrics_returnsEmpty_whenNoMeterRegistry() {
-        MetricsService service = new MetricsService(null);
+        MetricsService service = new MetricsService(null, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -63,7 +64,7 @@ class MetricsServiceTest {
                 .tags("area", "heap", "id", "Old Gen")
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -87,7 +88,7 @@ class MetricsServiceTest {
                 .tags("area", "heap")
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -104,7 +105,7 @@ class MetricsServiceTest {
 
         Counter.builder("http.requests").tag("method", "GET").register(registry).increment(42);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -125,7 +126,7 @@ class MetricsServiceTest {
                 .register(registry)
                 .increment(42);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -147,7 +148,7 @@ class MetricsServiceTest {
         Counter.builder("a.metric").register(registry);
         Counter.builder("m.metric").register(registry);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -162,7 +163,7 @@ class MetricsServiceTest {
                 .tags(Tags.of("env", "prod", "region", "us-east"))
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
@@ -185,7 +186,7 @@ class MetricsServiceTest {
                 .tags(Tags.of("api-key", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry);
+        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 

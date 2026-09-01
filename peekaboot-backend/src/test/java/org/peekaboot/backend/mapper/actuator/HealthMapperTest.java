@@ -10,10 +10,11 @@ import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.health.HealthComponent;
 import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class HealthMapperTest {
 
-    private final HealthMapper mapper = new HealthMapper();
+    private final HealthMapper mapper = new HealthMapper(new MaskingEngine());
 
     @Test
     void map_shouldExtractStatusAndComponents() {

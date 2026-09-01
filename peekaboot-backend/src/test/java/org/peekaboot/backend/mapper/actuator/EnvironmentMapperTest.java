@@ -7,10 +7,11 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.EnvResponse;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class EnvironmentMapperTest {
 
-    private final EnvironmentMapper mapper = new EnvironmentMapper();
+    private final EnvironmentMapper mapper = new EnvironmentMapper(new MaskingEngine());
 
     @Test
     void map_shouldExtractActiveProfiles() {

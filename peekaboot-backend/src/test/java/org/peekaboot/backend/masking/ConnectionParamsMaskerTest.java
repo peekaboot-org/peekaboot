@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class ConnectionParamsMaskerTest {
 
-    private final ConnectionParamsMasker masker = new ConnectionParamsMasker();
+    private final ConnectionParamsMasker masker = new ConnectionParamsMasker(new MaskingEngine());
 
     @Test
     void mask_replacesSensitiveValuesAndKeepsTheRestInOrder() {

@@ -13,7 +13,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class EnvironmentMapper {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final MaskingEngine maskingEngine;
+
+    public EnvironmentMapper(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
 
     public EnvironmentInfo map(EnvResponse env, boolean unmask) {
         if (env == null) {

@@ -25,10 +25,11 @@ public class MetricsService {
     @Nullable
     private final MeterRegistry meterRegistry;
 
-    private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
+    private final TagMasker tagMasker;
 
-    public MetricsService(@Nullable MeterRegistry meterRegistry) {
+    public MetricsService(@Nullable MeterRegistry meterRegistry, MaskingEngine maskingEngine) {
         this.meterRegistry = meterRegistry;
+        this.tagMasker = new TagMasker(maskingEngine);
     }
 
     public boolean isAvailable() {

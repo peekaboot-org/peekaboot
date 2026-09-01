@@ -15,7 +15,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class HealthMapper {
 
-    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
+    private final TreeMasker treeMasker;
+
+    public HealthMapper(MaskingEngine maskingEngine) {
+        this.treeMasker = new TreeMasker(maskingEngine);
+    }
 
     public HealthInfo map(HealthResponse health, boolean unmask) {
         if (health == null) {

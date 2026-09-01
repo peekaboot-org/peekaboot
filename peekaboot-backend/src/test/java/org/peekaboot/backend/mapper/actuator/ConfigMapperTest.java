@@ -8,10 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ConfigPropsResponse;
 import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class ConfigMapperTest {
 
-    private final ConfigMapper mapper = new ConfigMapper();
+    private final ConfigMapper mapper = new ConfigMapper(new MaskingEngine());
 
     @Test
     void map_shouldGroupByPrefix() {

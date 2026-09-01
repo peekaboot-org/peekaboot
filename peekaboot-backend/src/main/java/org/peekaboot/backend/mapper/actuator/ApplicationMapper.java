@@ -13,7 +13,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApplicationMapper {
 
-    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
+    private final TreeMasker treeMasker;
+
+    public ApplicationMapper(MaskingEngine maskingEngine) {
+        this.treeMasker = new TreeMasker(maskingEngine);
+    }
 
     public ApplicationInfo map(InfoResponse info, SpringInfo spring, boolean unmask) {
         Map<String, Object> build = Collections.emptyMap();

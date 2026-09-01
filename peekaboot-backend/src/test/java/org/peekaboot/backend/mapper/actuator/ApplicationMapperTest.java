@@ -7,10 +7,11 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
 import org.peekaboot.backend.actuator.parsed.SpringInfo;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class ApplicationMapperTest {
 
-    private final ApplicationMapper mapper = new ApplicationMapper();
+    private final ApplicationMapper mapper = new ApplicationMapper(new MaskingEngine());
 
     @Test
     void map_shouldExtractBuildInfo() {

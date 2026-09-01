@@ -7,12 +7,17 @@ import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DataSourceMapper {
 
-    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
+    private final ConnectionParamsMasker connectionParamsMasker;
+
+    public DataSourceMapper(MaskingEngine maskingEngine) {
+        this.connectionParamsMasker = new ConnectionParamsMasker(maskingEngine);
+    }
 
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
         if (metadataList == null || metadataList.isEmpty()) {

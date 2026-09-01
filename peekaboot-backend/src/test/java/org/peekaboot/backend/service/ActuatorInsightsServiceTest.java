@@ -14,6 +14,7 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.mapper.actuator.*;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.beans.factory.ObjectProvider;
 
 class ActuatorInsightsServiceTest {
@@ -158,17 +159,18 @@ class ActuatorInsightsServiceTest {
     }
 
     private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
+        MaskingEngine maskingEngine = new MaskingEngine();
         return new ActuatorInsightsService(
                 actuatorService,
                 new ActuatorResponseParser(),
-                new HealthMapper(),
+                new HealthMapper(maskingEngine),
                 new RuntimeMapper(),
-                new DataSourceMapper(),
-                new ApplicationMapper(),
-                new EnvironmentMapper(),
+                new DataSourceMapper(maskingEngine),
+                new ApplicationMapper(maskingEngine),
+                new EnvironmentMapper(maskingEngine),
                 new LoggersMapper(),
                 new FlywayMapper(),
-                new ConfigMapper(),
+                new ConfigMapper(maskingEngine),
                 new ScheduledTasksMapper(new CronDescriptionService()),
                 dataSourceProvider);
     }
