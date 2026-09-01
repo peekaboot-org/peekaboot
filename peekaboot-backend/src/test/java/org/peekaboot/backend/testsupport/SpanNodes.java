@@ -5,6 +5,7 @@ import java.util.Map;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceLog;
 
 /**
@@ -27,7 +28,7 @@ public final class SpanNodes {
         private String kind = "SERVER";
         private long startTimeMs;
         private long durationMs;
-        private String status = "OK";
+        private SpanStatus status = SpanStatus.OK;
         private List<SpanNode> children = List.of();
         private Map<String, Object> tags = Map.of();
         private List<SpanEvent> events = List.of();
@@ -62,7 +63,7 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder status(String status) {
+        public Builder status(SpanStatus status) {
             this.status = status;
             return this;
         }

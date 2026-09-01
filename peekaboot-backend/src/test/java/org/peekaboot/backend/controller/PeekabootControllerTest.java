@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
@@ -121,6 +122,21 @@ class PeekabootControllerTest {
             controller.getTracesInsights(100, "not-a-bucket", null, null);
 
             verify(traceInsightsService).getInsights(100, TraceBucket.ALL, null, null);
+        }
+
+        @Test
+        void shouldParseTheBucketRegardlessOfCase() {
+            controller.getTracesInsights(100, "SLOW", null, null);
+
+            verify(traceInsightsService).getInsights(100, TraceBucket.SLOW, null, null);
+        }
+
+        @Test
+        void shouldTreatAMissingOrBlankBucketAsAll() {
+            controller.getTracesInsights(100, null, null, null);
+            controller.getTracesInsights(100, "  ", null, null);
+
+            verify(traceInsightsService, times(2)).getInsights(100, TraceBucket.ALL, null, null);
         }
 
         @Test
@@ -360,10 +376,9 @@ class PeekabootControllerTest {
                         new TraceTabSummary.SpansSummary(1, 100L, 0),
                         new TraceTabSummary.QueriesSummary(0, 0L),
                         new TraceTabSummary.LogsSummary(0, 0, 0)),
-                Map.of(),
                 null,
-                null,
-                null,
+                List.of(),
+                List.of(),
                 false);
     }
 }

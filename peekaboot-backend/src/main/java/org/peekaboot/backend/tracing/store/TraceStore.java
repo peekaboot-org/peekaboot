@@ -25,7 +25,10 @@ public interface TraceStore {
 
     int getTraceCount(TraceBucket bucket);
 
+    /**
+     * Test hook: drops every trace from every bucket. Nothing in production calls it; the
+     * integration suite's classes that share one application context reset the store with
+     * it before each test so they can assert exact counts.
+     */
     void clear();
-
-    void cleanUp();
 }

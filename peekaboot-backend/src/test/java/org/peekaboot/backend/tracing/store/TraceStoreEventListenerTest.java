@@ -7,6 +7,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
+import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 
@@ -17,7 +18,7 @@ class TraceStoreEventListenerTest {
 
     @BeforeEach
     void setUp() {
-        store = new InMemoryTraceStore();
+        store = TraceStores.withDefaults();
         listener = new TraceStoreEventListener(store);
     }
 

@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -24,10 +25,6 @@ public class TraceTreeMapper {
 
     private final MaskingEngine maskingEngine = new MaskingEngine();
     private final TagMasker tagMasker = new TagMasker(maskingEngine);
-
-    public TraceTree map(TraceData traceData) {
-        return map(traceData, false);
-    }
 
     /**
      * Builds the {@link TraceTree} for a captured trace.
@@ -52,10 +49,9 @@ public class TraceTreeMapper {
                             new TraceTabSummary.SpansSummary(0, 0L, 0),
                             new TraceTabSummary.QueriesSummary(0, 0L),
                             new TraceTabSummary.LogsSummary(0, 0, 0)),
-                    Map.of(),
                     null,
-                    null,
-                    null,
+                    List.of(),
+                    List.of(),
                     truncated);
         }
 
@@ -79,7 +75,6 @@ public class TraceTreeMapper {
         // Determine trace status
         TraceStatus status = determineStatus(spans);
 
-        // Build tree directly (no hoisting - keep all tags per span)
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
 
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
@@ -96,10 +91,9 @@ public class TraceTreeMapper {
                 rootOperation,
                 rootSpan,
                 summary,
-                Map.of(), // No inherited attributes - all tags stay on spans
                 null,
-                null,
-                null,
+                List.of(),
+                List.of(),
                 truncated);
     }
 
@@ -232,15 +226,15 @@ public class TraceTreeMapper {
                 .map(child -> buildSpanTree(child, childrenByParentId))
                 .toList();
 
-        String status = spanData.hasError() ? "ERROR" : "OK";
+        SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
         String kind = spanData.kind() != null ? spanData.kind().name() : null;
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
-        // Copy tags directly (no hoisting), masked - db.statement, http.url etc. may
-        // carry a credential the key name alone can't catch. errorMessage below is masked
-        // the same way - it can carry the same kind of credential, e.g. an exception
-        // message that echoes back the failing request's URL.
+        // Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
+        // credential the key name alone can't catch. errorMessage below is masked the same
+        // way - it can carry the same kind of credential, e.g. an exception message that
+        // echoes back the failing request's URL.
         Map<String, Object> tags = new HashMap<>();
         if (spanData.tags() != null) {
             tags.putAll(tagMasker.mask(spanData.tags()));
@@ -268,7 +262,8 @@ public class TraceTreeMapper {
                 spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
-                spanData.remoteServiceName());
+                spanData.remoteServiceName(),
+                null);
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {

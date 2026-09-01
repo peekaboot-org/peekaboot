@@ -6,7 +6,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -120,17 +119,14 @@ public class TraceInsightsService {
         if (traceStore == null) {
             return Stream.empty();
         }
-        return traceStore.getTraces(bucket, limit).stream()
-                .map(bundle -> {
-                    TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-                    return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
-                })
-                .filter(Objects::nonNull);
+        return traceStore.getTraces(bucket, limit).stream().map(bundle -> {
+            TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
+            return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
+        });
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
     private static TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
-        TraceTabSummary summary = tree.summary();
         return new TraceTree(
                 tree.traceId(),
                 tree.startTimeMs(),
@@ -139,22 +135,21 @@ public class TraceInsightsService {
                 tree.rootActionType(),
                 tree.rootOperation(),
                 tree.rootSpan(),
-                new TraceTabSummary(
-                        summary.request(),
-                        summary.spans(),
-                        summary.queries(),
-                        logsSummary(logs.stream().map(LogCapturedEvent::level).toList())),
-                tree.inheritedAttributes(),
+                withLogs(tree.summary(), logs),
                 tree.httpExchange(),
                 tree.logs(),
                 tree.queries(),
                 tree.truncated());
     }
 
-    private static TraceTabSummary.LogsSummary logsSummary(List<String> levels) {
-        int errors = (int) levels.stream().filter("ERROR"::equalsIgnoreCase).count();
-        int warnings = (int) levels.stream().filter("WARN"::equalsIgnoreCase).count();
-        return new TraceTabSummary.LogsSummary(levels.size(), errors, warnings);
+    private static TraceTabSummary withLogs(TraceTabSummary summary, List<LogCapturedEvent> logs) {
+        return new TraceTabSummary(summary.request(), summary.spans(), summary.queries(), logsSummary(logs));
+    }
+
+    private static TraceTabSummary.LogsSummary logsSummary(List<LogCapturedEvent> logs) {
+        int errors = (int) logs.stream().filter(LogCapturedEvent::isError).count();
+        int warnings = (int) logs.stream().filter(LogCapturedEvent::isWarn).count();
+        return new TraceTabSummary.LogsSummary(logs.size(), errors, warnings);
     }
 
     private boolean matchesFilters(TraceTree tree, Set<RootActionType> actionTypes, String rootOperation) {
@@ -200,7 +195,8 @@ public class TraceInsightsService {
     }
 
     private TraceTree enrichWithDetails(TraceTree tree, TraceDataBundle bundle, List<QueryInfo> queries) {
-        List<TraceLog> logs = bundle.logs().stream()
+        List<LogCapturedEvent> capturedLogs = bundle.logs();
+        List<TraceLog> logs = capturedLogs.stream()
                 .map(e -> new TraceLog(
                         bundle.resolveSpanId(e.spanId()),
                         e.timestamp(),
@@ -210,32 +206,8 @@ public class TraceInsightsService {
                         e.threadName()))
                 .toList();
 
-        HttpExchange httpExchange = null;
         RequestCompletedEvent reqEvent = bundle.request();
-        if (reqEvent != null) {
-            httpExchange = HttpExchange.from(reqEvent);
-        }
-
-        if (logs.isEmpty() && queries.isEmpty() && httpExchange == null) {
-            return tree;
-        }
-
-        // Attach logs to their respective spans
-        SpanNode enrichedRootSpan = tree.rootSpan();
-        if (!logs.isEmpty() && enrichedRootSpan != null) {
-            Map<String, List<TraceLog>> logsBySpan = groupLogsBySpan(logs);
-            enrichedRootSpan = attachLogsToSpan(enrichedRootSpan, logsBySpan);
-        }
-
-        // Update logs summary
-        TraceTabSummary updatedSummary = tree.summary();
-        if (!logs.isEmpty()) {
-            updatedSummary = new TraceTabSummary(
-                    tree.summary().request(),
-                    tree.summary().spans(),
-                    tree.summary().queries(),
-                    logsSummary(logs.stream().map(TraceLog::level).toList()));
-        }
+        HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
 
         return new TraceTree(
                 tree.traceId(),
@@ -244,20 +216,21 @@ public class TraceInsightsService {
                 tree.status(),
                 tree.rootActionType(),
                 tree.rootOperation(),
-                enrichedRootSpan,
-                updatedSummary,
-                tree.inheritedAttributes(),
+                attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)),
+                withLogs(tree.summary(), capturedLogs),
                 httpExchange,
-                logs.isEmpty() ? null : logs,
-                queries.isEmpty() ? null : queries,
+                logs,
+                queries,
                 tree.truncated());
     }
 
-    private Map<String, List<TraceLog>> groupLogsBySpan(List<TraceLog> logs) {
+    /** Logs by the span they were emitted in; a log with no span id belongs to the flat list only. */
+    private static Map<String, List<TraceLog>> groupLogsBySpan(List<TraceLog> logs) {
         Map<String, List<TraceLog>> logsBySpan = new HashMap<>();
         for (TraceLog log : logs) {
-            String spanId = log.spanId() != null ? log.spanId() : "unknown";
-            logsBySpan.computeIfAbsent(spanId, k -> new ArrayList<>()).add(log);
+            if (log.spanId() != null) {
+                logsBySpan.computeIfAbsent(log.spanId(), k -> new ArrayList<>()).add(log);
+            }
         }
         return logsBySpan;
     }

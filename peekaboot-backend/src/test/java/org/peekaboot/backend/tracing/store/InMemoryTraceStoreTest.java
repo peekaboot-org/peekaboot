@@ -11,6 +11,8 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
+import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class InMemoryTraceStoreTest {
@@ -255,16 +257,11 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void bucketFromParamIsLenient() {
-        assertThat(TraceBucket.fromParam("errors")).isEqualTo(TraceBucket.ERRORS);
-        assertThat(TraceBucket.fromParam("SLOW")).isEqualTo(TraceBucket.SLOW);
-        assertThat(TraceBucket.fromParam(null)).isEqualTo(TraceBucket.ALL);
-        assertThat(TraceBucket.fromParam("bogus")).isEqualTo(TraceBucket.ALL);
-    }
-
-    @Test
     void lastNEvictionDropsOldestErrorTrace() {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 2, 2, 1000);
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxErrorTraces(2);
+            p.setMaxSlowTraces(2);
+        });
         store.addSpan(errorSpan(store, "t1"));
         store.addSpan(errorSpan(store, "t2"));
         store.addSpan(errorSpan(store, "t3"));
@@ -277,7 +274,7 @@ class InMemoryTraceStoreTest {
     @Test
     void errorTraceSurvivesAllCacheEviction() throws InterruptedException {
         // TTL-based eviction is deterministic, size-based (W-TinyLFU) is not
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
         store.addSpan(errorSpan(store, "t1"));
         Thread.sleep(10);
         store.cleanUp();
@@ -289,7 +286,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void lateEventAfterCacheEvictionReusesBucketBundle() throws InterruptedException {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
         store.addSpan(errorSpan(store, "t1"));
         Thread.sleep(10);
         store.cleanUp();
@@ -315,7 +312,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void logsAreCappedPerTrace() {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 1000, 3);
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxLogsPerTrace(3));
         for (int i = 1; i <= 5; i++) {
             store.addLog(log("t1", "INFO", "log" + i));
         }
@@ -323,6 +320,37 @@ class InMemoryTraceStoreTest {
         var bundle = store.getTrace("t1");
         assertThat(bundle).isPresent();
         assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+    }
+
+    /**
+     * The three-argument constructor - the one the autoconfigure and testing-app fixtures
+     * use - takes every limit it is not given from {@link PeekabootTracingProperties}, so
+     * those defaults have exactly one owner. Checked through behaviour at the two limits a
+     * test can reach cheaply: the slow-trace threshold and the per-trace log cap.
+     */
+    @Test
+    void threeArgumentConstructorTakesTheRemainingLimitsFromTheTracingPropertiesDefaults() {
+        PeekabootTracingProperties defaults = new PeekabootTracingProperties();
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        long threshold = defaults.getSlowTraceThresholdMs();
+        store.addSpan(span("s1")
+                .in("just-under")
+                .at(START, Duration.ofMillis(threshold - 1))
+                .order(store.nextCreationOrder())
+                .build());
+        store.addSpan(span("s2")
+                .in("at-threshold")
+                .at(START, Duration.ofMillis(threshold))
+                .order(store.nextCreationOrder())
+                .build());
+        for (int i = 0; i <= defaults.getMaxLogsPerTrace(); i++) {
+            store.addLog(log("logged", "INFO", "log" + i));
+        }
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("at-threshold");
+        assertThat(store.getTrace("logged").orElseThrow().logs()).hasSize(defaults.getMaxLogsPerTrace());
     }
 
     @Test
@@ -336,7 +364,7 @@ class InMemoryTraceStoreTest {
     }
 
     private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
-        return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, slowTraceThresholdMs);
+        return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
     }
 
     /** A 100ms span with nothing else about it, numbered by the fixture store. */

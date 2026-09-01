@@ -25,6 +25,7 @@ import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
+import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -41,7 +42,7 @@ class TraceInsightsServiceTest {
 
     @BeforeEach
     void setUp() {
-        store = new InMemoryTraceStore();
+        store = TraceStores.withDefaults();
         traceTreeMapper = new TraceTreeMapper();
         issueDetector = new IssueDetector(new UiTracingProperties());
         queryExtractor = new QueryExtractor();
@@ -118,7 +119,7 @@ class TraceInsightsServiceTest {
 
     @Test
     void getInsightsQueriesRequestedBucket() {
-        InMemoryTraceStore bucketStore = new InMemoryTraceStore();
+        InMemoryTraceStore bucketStore = TraceStores.withDefaults();
         bucketStore.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
@@ -137,7 +138,7 @@ class TraceInsightsServiceTest {
 
     @Test
     void responseCarriesBucketCounts() {
-        InMemoryTraceStore bucketStore = new InMemoryTraceStore();
+        InMemoryTraceStore bucketStore = TraceStores.withDefaults();
         bucketStore.addSpan(span("s1")
                 .in("terr")
                 .error("boom", "java.lang.RuntimeException")
@@ -283,7 +284,31 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(result).isPresent();
-        assertThat(result.get().logs()).isNullOrEmpty();
+        assertThat(result.get().logs()).isEmpty();
+    }
+
+    /** The list has no detail to carry, but its trees still say "none" as a list, never as null. */
+    @Test
+    void getInsights_carriesEmptyLogAndQueryListsRatherThanNulls() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces().getFirst().logs()).isEmpty();
+        assertThat(response.traces().getFirst().queries()).isEmpty();
+    }
+
+    /** A log captured outside any span (no spanId in the MDC) is listed but attached to no span. */
+    @Test
+    void getTraceInsights_keepsALogWithoutASpanIdInTheFlatListOnly() {
+        addTrace("trace1", 100, false);
+        store.addLog(new LogCapturedEvent("trace1", null, Instant.EPOCH, "INFO", "TestLogger", "spanless", "main"));
+
+        TraceTree result = service.getTraceInsights("trace1").orElseThrow();
+
+        assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
+        assertThat(result.rootSpan().logs()).isNull();
+        assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
     }
 
     @Test
@@ -313,7 +338,7 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(result).isPresent();
-        assertThat(result.get().queries()).isNullOrEmpty();
+        assertThat(result.get().queries()).isEmpty();
     }
 
     @Test

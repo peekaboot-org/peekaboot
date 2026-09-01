@@ -3,9 +3,11 @@ package org.peekaboot.backend.mapper.trace;
 import java.util.ArrayList;
 import java.util.List;
 import org.peekaboot.backend.config.UiTracingProperties;
+import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.springframework.stereotype.Component;
 
@@ -37,7 +39,6 @@ public class IssueDetector {
                 trace.rootOperation(),
                 processedRoot,
                 trace.summary(),
-                trace.inheritedAttributes(),
                 trace.httpExchange(),
                 trace.logs(),
                 trace.queries(),
@@ -54,20 +55,19 @@ public class IssueDetector {
                     String.format(
                             "Span took %dms (threshold: %dms)",
                             span.durationMs(), properties.getVerySlowSpanThresholdMs()),
-                    "error"));
+                    IssueSeverity.ERROR));
         } else if (span.durationMs() >= properties.getSlowSpanThresholdMs()) {
             // Check for SLOW (only if not VERY_SLOW)
             issues.add(new SpanIssue(
                     IssueType.SLOW,
                     String.format(
                             "Span took %dms (threshold: %dms)", span.durationMs(), properties.getSlowSpanThresholdMs()),
-                    "warning"));
+                    IssueSeverity.WARNING));
         }
 
         // Check for ERROR
-        if ("ERROR".equalsIgnoreCase(span.status())) {
-            String errorMessage = getErrorMessage(span);
-            issues.add(new SpanIssue(IssueType.ERROR, errorMessage, "error"));
+        if (span.status() == SpanStatus.ERROR) {
+            issues.add(new SpanIssue(IssueType.ERROR, getErrorMessage(span), IssueSeverity.ERROR));
         }
 
         // Check for SLOW_QUERY (if DB query span)
@@ -77,7 +77,7 @@ public class IssueDetector {
                     String.format(
                             "Query took %dms (threshold: %dms)",
                             span.durationMs(), properties.getSlowQueryThresholdMs()),
-                    "warning"));
+                    IssueSeverity.WARNING));
         }
 
         // Check for HIGH_QUERY_COUNT on trace level (only on root span)
@@ -87,7 +87,7 @@ public class IssueDetector {
                     String.format(
                             "Trace has %d database queries (threshold: %d)",
                             traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
-                    "warning"));
+                    IssueSeverity.WARNING));
         }
 
         // Check for HIGH_QUERY_COUNT per span (many direct query children)
@@ -99,7 +99,7 @@ public class IssueDetector {
                     String.format(
                             "Span has %d direct database queries (threshold: %d)",
                             directQueryChildren, properties.getHighQueryCountThreshold()),
-                    "warning"));
+                    IssueSeverity.WARNING));
         }
 
         // Recursively process children

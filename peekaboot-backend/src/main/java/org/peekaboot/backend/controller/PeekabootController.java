@@ -92,7 +92,19 @@ public class PeekabootController {
             @RequestParam(name = "rootActionType", required = false) String rootActionType,
             @RequestParam(name = "rootOperation", required = false) String rootOperation) {
         return traceInsightsService.getInsights(
-                sanitizeLimit(limit), TraceBucket.fromParam(bucket), rootActionType, rootOperation);
+                sanitizeLimit(limit), parseBucket(bucket), rootActionType, rootOperation);
+    }
+
+    /** Lenient: null, blank and unknown values all mean the All bucket, whatever the case. */
+    private static TraceBucket parseBucket(String value) {
+        if (value == null || value.isBlank()) {
+            return TraceBucket.ALL;
+        }
+        try {
+            return TraceBucket.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return TraceBucket.ALL;
+        }
     }
 
     /**
