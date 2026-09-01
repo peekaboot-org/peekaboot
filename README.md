@@ -44,8 +44,7 @@ on — open the dashboard at `http://localhost:8080/peekaboot/`.
   `MeterRegistry` — nothing exposed under `/actuator/**`
 - In-memory request tracing via Micrometer/OpenTelemetry, no collector to run
 - Restart-aware insights: charts mark every application start and stop, annotated with
-  what changed about the build, and — with `peekaboot.storage.enabled=true` — the metric
-  history itself survives a restart
+  what changed about the build, and the metric history itself survives a restart
 - Zero configuration: on automatically in local development, off everywhere else
 
 ## Documentation

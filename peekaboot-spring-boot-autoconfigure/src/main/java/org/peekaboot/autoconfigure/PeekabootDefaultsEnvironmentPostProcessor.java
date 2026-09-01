@@ -17,11 +17,11 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 /**
- * Derives the defaults for {@code peekaboot.enabled} and {@code peekaboot.dev-toolbar}
- * from the launch context (on only when running locally in an IDE or via
- * spring-boot:run/bootRun) and applies Peekaboot's defaults (lowest precedence, so any
- * application property wins). An explicit {@code peekaboot.enabled} or {@code
- * peekaboot.dev-toolbar} setting always overrides the detection.
+ * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar} and
+ * {@code peekaboot.storage.enabled} from the launch context (on only when running locally
+ * in an IDE or via spring-boot:run/bootRun) and applies Peekaboot's defaults (lowest
+ * precedence, so any application property wins). An explicit setting for any of the three
+ * always overrides the detection.
  * <p>
  * All defaults live in yml resources: {@code peekaboot-no-push-defaults.yml}
  * is applied unconditionally so the starter never pushes telemetry anywhere
@@ -39,6 +39,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String ENABLED_PROPERTY = "peekaboot.enabled";
     private static final String DEV_TOOLBAR_PROPERTY = "peekaboot.dev-toolbar";
+    private static final String STORAGE_ENABLED_PROPERTY = "peekaboot.storage.enabled";
     private static final String ENV_SHOW_VALUES_PROPERTY = "management.endpoint.env.show-values";
     private static final String CONFIGPROPS_SHOW_VALUES_PROPERTY = "management.endpoint.configprops.show-values";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
@@ -59,13 +60,15 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         boolean localDevelopment = localDevelopment();
         // lowest precedence: any explicit setting in the application wins over the detection.
-        // Peekaboot's activation, the toolbar and actuator value visibility all follow the
-        // launch context rather than peekaboot.enabled, so switching Peekaboot on deliberately
-        // in a shared environment neither injects a toolbar into every page nor widens that
-        // application's own /actuator/env.
+        // Peekaboot's activation, the toolbar, persistence and actuator value visibility all
+        // follow the launch context rather than peekaboot.enabled, so switching Peekaboot on
+        // deliberately in a shared environment neither injects a toolbar into every page, nor
+        // writes files into that host's home directory, nor widens the application's own
+        // /actuator/env.
         Map<String, Object> detected = new HashMap<>();
         detected.put(ENABLED_PROPERTY, localDevelopment);
         detected.put(DEV_TOOLBAR_PROPERTY, localDevelopment);
+        detected.put(STORAGE_ENABLED_PROPERTY, localDevelopment);
         if (localDevelopment) {
             // Absent rather than an explicit "never" off-local: Peekaboot must not pin Spring's
             // own default into an application that is not using it.
@@ -73,8 +76,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
             detected.put(CONFIGPROPS_SHOW_VALUES_PROPERTY, "always");
         }
         environment.getPropertySources().addLast(new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
-        log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot and the"
-                + " dev toolbar " + (localDevelopment ? "enabled" : "disabled") + " by default");
+        log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
+                + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 

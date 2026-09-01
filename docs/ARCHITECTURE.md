@@ -22,18 +22,28 @@ peekaboot/
 Two stores opt into the filesystem behind one switch:
 
 ```
-peekaboot.storage.enabled = false                             # off by default
+peekaboot.storage.enabled = <local run>                       # on for a local launch
 peekaboot.storage.dir     = ${user.home}/.peekaboot/<app>      # both stores
 ```
 
-`<app>` is `spring.application.name`, sanitized to `[A-Za-z0-9._-]`, or `application`
-when unset. An explicit `peekaboot.storage.dir` is used verbatim, with no app-name
-subdirectory appended. `StorageDirectory` only resolves this path — it never touches
-the disk itself; while `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)`
-returns empty and neither store ever writes. Directory creation and I/O failure handling
-belong to the stores themselves: each creates its parent directory on first write and,
-on `IOException`, logs once and continues in memory rather than taking the host
-application down over an unwritable `$HOME`.
+Like `peekaboot.enabled` and `peekaboot.dev-toolbar`, the switch follows the launch
+context rather than `peekaboot.enabled`: on for an IDE or `spring-boot:run` launch, off
+everywhere else, and an explicit setting wins in either direction. Switching Peekaboot on
+deliberately in a shared environment therefore writes nothing to that host's `$HOME`.
+
+`<app>` is `<groupId>.<artifactId>` from `build-info.properties`, sanitized to
+`[A-Za-z0-9._-]`; a build that publishes no build information falls back to
+`spring.application.name`, and an application with neither to `application`. Coordinates
+rather than the name so that two applications sharing a `spring.application.name` — or
+having none at all — keep their history apart. An explicit `peekaboot.storage.dir` is
+used verbatim, with no per-application subdirectory appended.
+
+`StorageDirectory` only resolves this path — it never touches the disk itself; while
+`peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and
+neither store ever writes. Directory creation and I/O failure handling belong to the
+stores themselves: each creates its parent directory on first write and, on
+`IOException`, logs once and continues in memory rather than taking the host application
+down over an unwritable `$HOME`.
 
 Both stores assume one application instance per directory. Two instances pointed at the
 same `peekaboot.storage.dir` overwrite each other's files: the loser's history is lost,
@@ -94,7 +104,7 @@ belongs to the start it follows, which the log still remembers.
 The log's in-memory half runs independently of `peekaboot.storage.enabled`: with
 storage off, `LifecycleEventLog` still records the current run's start and stop in
 memory and serves them from there — `LifecycleEventFile` is simply never consulted. This
-is why a default dashboard, with persistence off, still shows one start marker for the
+is why a dashboard with persistence switched off still shows one start marker for the
 run in progress.
 
 ### API and dashboard

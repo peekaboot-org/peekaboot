@@ -286,6 +286,65 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     }
 
     @Test
+    void enablesStorageByDefaultInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isTrue();
+    }
+
+    @Test
+    void disablesStorageByDefaultOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isFalse();
+    }
+
+    /**
+     * Switching Peekaboot on deliberately outside a local run must not also start writing
+     * files into that host's home directory - storage follows the launch context, not the
+     * enabled flag.
+     */
+    @Test
+    void explicitEnabledTrueOutsideLocalDevelopmentLeavesStorageOff() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isFalse();
+    }
+
+    @Test
+    void explicitStorageEnabledFalseWinsInLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.storage.enabled", "false");
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isFalse();
+    }
+
+    @Test
+    void explicitStorageEnabledTrueWinsOutsideLocalDevelopment() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.storage.enabled", "true");
+
+        postProcessor(false).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isTrue();
+    }
+
+    @Test
     void shortensTheSpanExportDelayWhenTheToolbarIsOn() {
         MockEnvironment environment = new MockEnvironment();
 
