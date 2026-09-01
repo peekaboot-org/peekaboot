@@ -83,6 +83,31 @@ class ActuatorResponseParserTest {
         assertThat(response.health().components().get("db").details()).containsEntry("database", "PostgreSQL");
     }
 
+    /**
+     * Two DataSources make Spring's {@code db} contributor a composite whose children sit
+     * under a nested {@code components} map, one level below the top-level indicators.
+     */
+    @Test
+    void parsesACompositeComponentsChildren() throws Exception {
+        JsonMapper jsonMapper = JsonMapper.builder().build();
+        Map<String, Object> health;
+        try (InputStream is =
+                ActuatorResponseParserTest.class.getResourceAsStream("/sample_health_two_datasources.json")) {
+            health = jsonMapper.readValue(is, new TypeReference<>() {});
+        }
+
+        ActuatorParsedData response = parser.parse(Map.of("health", health));
+
+        HealthResponse.HealthComponent db = response.health().components().get("db");
+        assertThat(db.status()).isEqualTo("DOWN");
+        assertThat(db.details()).isNull();
+        assertThat(db.components()).containsOnlyKeys("primary", "reporting");
+        assertThat(db.components().get("primary").status()).isEqualTo("UP");
+        assertThat(db.components().get("reporting").details())
+                .containsEntry("error", "org.postgresql.util.PSQLException: Connection refused");
+        assertThat(response.health().components().get("ping").components()).isNull();
+    }
+
     @Test
     void handlesNullInput() {
         ActuatorParsedData response = parser.parse(null);

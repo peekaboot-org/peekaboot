@@ -321,7 +321,11 @@ reads the `HealthEndpoint` bean itself: `HealthEndpoint.health()` always carries
 components and their details, so the dashboard has full health while `/actuator/health`
 keeps answering anonymous callers with the aggregate status only.
 `ActuatorResponseParser` accordingly parses the bare `HealthDescriptor` shape (`status`,
-`components`, `groups`), not a `WebEndpointResponse` wrapper.
+`components`, `groups`), not a `WebEndpointResponse` wrapper. A composite contributor —
+Spring's `db` as soon as there are two DataSources, or any custom composite — nests its
+children under a further `components` map: `HealthMapper` flattens them to `db/<name>`
+for the dashboard's single list, and `DataSourceMapper` reads each DataSource's own
+child status rather than the composite's aggregate.
 
 Bypassing exposure filtering is not enough on its own: Spring Boot only
 *creates* an endpoint bean when `@ConditionalOnAvailableEndpoint` matches, i.e.

@@ -1,11 +1,13 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
+import org.peekaboot.backend.domain.health.HealthComponent;
 import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 
@@ -40,6 +42,40 @@ class HealthMapperTest {
 
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components().get(0).status()).isEqualTo(HealthStatus.DOWN);
+    }
+
+    /**
+     * A composite contributor - Spring's {@code db} as soon as there are two DataSources,
+     * or any custom composite - nests its children under {@code components}. The dashboard
+     * shows one flat list, so the children are named after their parent, and the composite
+     * itself stays in the list with its aggregate status.
+     */
+    @Test
+    void map_shouldFlattenACompositesChildrenUnderTheParentName() {
+        HealthResponse health = new HealthResponse(
+                "DOWN",
+                Map.of(
+                        "db",
+                        new HealthResponse.HealthComponent(
+                                "DOWN",
+                                null,
+                                Map.of(
+                                        "primary",
+                                        new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL")),
+                                        "reporting",
+                                        new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused"))))),
+                List.of());
+
+        HealthInfo result = mapper.map(health);
+
+        assertThat(result.components())
+                .extracting(HealthComponent::name, HealthComponent::status)
+                .containsExactly(
+                        tuple("db", HealthStatus.DOWN),
+                        tuple("db/primary", HealthStatus.UP),
+                        tuple("db/reporting", HealthStatus.DOWN));
+        assertThat(result.components().get(0).details()).isEmpty();
+        assertThat(result.components().get(1).details()).containsEntry("database", "PostgreSQL");
     }
 
     @Test

@@ -38,20 +38,32 @@ public class HealthMapper {
     }
 
     private List<HealthComponent> extractComponents(HealthResponse health, boolean unmask) {
-        if (health.components() == null || health.components().isEmpty()) {
-            return List.of();
-        }
-
         List<HealthComponent> result = new ArrayList<>();
-        for (Map.Entry<String, HealthResponse.HealthComponent> entry :
-                health.components().entrySet()) {
-            String name = entry.getKey();
+        appendComponents("", health.components(), unmask, result);
+        return result;
+    }
+
+    /**
+     * The dashboard shows one flat list, so a composite's children follow it named
+     * {@code parent/child}; the composite itself keeps its aggregate status and, having no
+     * details of its own, an empty details map.
+     */
+    private void appendComponents(
+            String namePrefix,
+            Map<String, HealthResponse.HealthComponent> components,
+            boolean unmask,
+            List<HealthComponent> result) {
+        if (components == null) {
+            return;
+        }
+        for (Map.Entry<String, HealthResponse.HealthComponent> entry : components.entrySet()) {
+            String name = namePrefix + entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
             result.add(new HealthComponent(name, componentStatus, maskDetails(details, unmask)));
+            appendComponents(name + "/", component.components(), unmask, result);
         }
-        return result;
     }
 
     /**
