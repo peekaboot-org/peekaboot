@@ -744,5 +744,4 @@ The `afterName` attribute (string-based) is used instead of a class reference be
 ## Known defects
 
 Open defects live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2, each naming the class at
-fault and the remedy. The one open at the time of writing: the trace-list endpoint's
-`summary.logs` is always `0/0/0` (§2.4).
+fault and the remedy; what was closed, and why, is in its §5.

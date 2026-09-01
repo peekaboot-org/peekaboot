@@ -95,25 +95,6 @@ for f in <module>/target/surefire-reports/TEST-*.xml; do
 done | paste -sd+ | bc
 ```
 
-### 2.4 The trace LIST endpoint's `summary.logs` is always `0/0/0`
-
-`TraceInsightsService.getInsights()` (`peekaboot-backend/.../service/TraceInsightsService.java:68-98`, backing
-`GET /api/traces/insights`, the dashboard's trace list) never calls `enrichWithDetails` — that method
-(`TraceInsightsService.java:173-231`) is only reached from `getTraceInsights()` (line 159), which backs the
-single-trace detail endpoint (`GET /api/traces/{traceId}/insights`, used by the dev toolbar, not the list). Every
-`TraceTabSummary` the list endpoint returns keeps `TraceTreeMapper`'s construction-time default
-(`mapper/trace/TraceTreeMapper.java:280`, `new TraceTabSummary.LogsSummary(0, 0, 0) // Logs populated later by
-TraceInsightsService` — a promise the list path never keeps).
-
-The frontend reads it anyway: `dashboard/tabs/traces.js:483-486` renders each list row's error/warn log counts
-straight from `trace.summary.logs`, and `toolbar/toolbar.js`'s own equivalent read is safe only because it fetches
-the *detail* endpoint, not the list. So every trace in the dashboard's Traces tab shows no log-count badges at all,
-regardless of how many errors or warnings it actually logged.
-
-The fix belongs in `TraceInsightsService.getInsights()` — either call the same enrichment the detail path uses
-per trace (cost: N extra lookups for a list of N), or compute the three log counts directly from whatever the
-bucket/list query already touches, whichever `TraceInsightsService`'s existing data-access shape makes cheaper.
-
 ---
 
 ## 3. Deliberately unfixed
@@ -221,3 +202,10 @@ visible values, demonstrating *selective* masking rather than the blanket kind. 
 profile needed `enable-unmasking` and `show-values: always` for that: a JUnit-launched process is
 never a local run, so without them Spring's own `Sanitizer` masks everything and the image would
 prove the wrong thing.
+
+**5.8 The trace list's `summary.logs` is populated.** `TraceInsightsService.getInsights()`
+never ran the enrichment the single-trace path does, so every list entry kept
+`TraceTreeMapper`'s `0/0/0` placeholder and the Traces tab never showed a log badge. The
+counts are now taken in `mapBucket()` from the logs the bundle already carries — no extra
+lookups, since `TraceStore.getTraces` hands the bundle over with its logs — through the same
+`logsSummary` the detail path uses, so the two views cannot disagree.
