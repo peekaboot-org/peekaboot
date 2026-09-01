@@ -4,11 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 class DashboardTabsIT extends PlaywrightTestBase {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** The {@code limit} traces.js requests with (its fetchAndRender). */
+    private static final int TRACES_PAGE_SIZE = 50;
 
     @Test
     void overviewShowsJavaAndSystemCards() {
@@ -459,49 +467,46 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * Two things that look like they'd discriminate real bucket filtering, don't:
      * TraceInsightsService computes bucketCounts unconditionally (independent of the
      * requested bucket), so every bucket button's own count text is already correct
-     * before any click - waiting on it (the first attempt at this test) resolves
-     * immediately and proves nothing. And "every visible trace has .pk-badge--error"
-     * (the second attempt) is also not a valid predicate against real data: the
-     * backend's error-bucket membership is driven by any ERROR-level *log* during the
-     * trace, while the frontend's HAS_ERRORS badge is driven only by an actual span
-     * exception - confirmed empirically, the scheduler's fixedRate() logs an error
-     * without throwing and lands in the errors bucket with no badge, alongside
-     * fixedDelay()'s real exception, which does get one; a strict "every item has the
-     * badge" wait against this app's real data never resolves.
+     * before any click - waiting on it resolves immediately and proves nothing. And
+     * "every visible trace has .pk-badge--error" is not a valid predicate against real
+     * data either: the backend's error-bucket membership is driven by any ERROR-level
+     * *log* during the trace, while the frontend's HAS_ERRORS badge is driven only by an
+     * actual span exception - the scheduler's fixedRate() logs an error without throwing
+     * and lands in the errors bucket with no badge, alongside fixedDelay()'s real
+     * exception, which does get one.
      * <p>
-     * What genuinely differs between bucket responses is the item count. The errors
-     * bucket's total is already known from its button's text (see above - available
-     * before any click), so read it once, then wait for the rendered list to actually
-     * match it once real filtering has taken effect. The sanity assertion that it's
-     * smaller than the unfiltered count is what keeps this non-vacuous: confirmed by
-     * inspection that the unfiltered list contains a mix of error and non-error traces
-     * (the scheduler's deliberate failures alongside ordinary HTTP request traces for
-     * the dashboard's own page loads), so the two counts are never equal in practice.
+     * What genuinely differs between bucket responses is the item count, so the list is
+     * checked against the count carried by the very response that rendered it: the
+     * bucket count is app-global and uncapped, the list is capped at the page size, and
+     * any class running alongside this one can log an ERROR between two requests. The
+     * sanity assertion that the errors count is smaller than the all count is what keeps
+     * this non-vacuous: the unfiltered store always holds a mix of error and non-error
+     * traces (the scheduler's deliberate failures alongside ordinary HTTP request traces
+     * for the dashboard's own page loads).
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");
-
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
                 .contains("All (");
-        int allCount = page.querySelectorAll("#traces-list .pk-trace-item").size();
 
-        String errorsButtonText = page.textContent("#traces-bucket .pk-btn[data-bucket='errors']");
-        // Stripping non-digits only yields the right number because no type filter is
-        // active here: updateBucketCounts renders the plain "Errors (N)" form when
-        // filteredCounts is null, and switches to "Errors (M / N)" once a filter is
-        // applied - which this replaceAll would silently mangle into "MN".
-        int expectedErrorsCount = Integer.parseInt(errorsButtonText.replaceAll("\\D+", ""));
-        assertThat(expectedErrorsCount).isLessThan(allCount);
+        Response errorsResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights")
+                        && response.url().contains("bucket=errors"),
+                () -> page.click("#traces-bucket .pk-btn[data-bucket='errors']"));
+        JsonNode errorsBucket = JSON.readTree(errorsResponse.text());
+        int errorsCount = errorsBucket.path("bucketCounts").path("errors").asInt();
+        int listedCount = errorsBucket.path("traces").size();
 
-        page.click("#traces-bucket .pk-btn[data-bucket='errors']");
+        assertThat(errorsCount)
+                .isPositive()
+                .isLessThan(errorsBucket.path("bucketCounts").path("all").asInt());
+        assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
-                expectedErrorsCount);
-
-        assertThat(page.querySelectorAll("#traces-list .pk-trace-item")).hasSize(expectedErrorsCount);
+                listedCount);
     }
 
     /**
