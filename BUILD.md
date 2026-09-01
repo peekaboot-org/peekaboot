@@ -303,7 +303,10 @@ plugin at all: the profile is undefined in its `spring-boot-starter-parent` pom,
 `preparationGoals` (`clean verify`) against that tag and then commits the next
 `-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
 `target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where signing
-and the upload to Maven Central happen. Reproducibility depends on
+and the upload to Maven Central happen. The workflow passes it
+`-Darguments="-DskipTests -Djacoco.skip=true"`: that tree has passed `verify` twice by then
+(the job's own build, then `preparationGoals`), so the third run would only repeat the
+Playwright suite. The four static-analysis gates still run. Reproducibility depends on
 `project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
 being explicit.
 

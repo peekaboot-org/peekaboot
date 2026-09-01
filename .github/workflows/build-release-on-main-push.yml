@@ -80,7 +80,8 @@ jobs:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 
       - name: perform-release-publish-on-maven-central
-        run: mvn --batch-mode -P peekaboot-release release:perform
+        # no third test run: the tag's tree passed `verify` in this job and again in release:prepare's preparationGoals
+        run: mvn --batch-mode -P peekaboot-release release:perform -Darguments="-DskipTests -Djacoco.skip=true"
         env:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
