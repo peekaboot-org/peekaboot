@@ -84,8 +84,6 @@ class AccessibilityIT extends PlaywrightTestBase {
                 .isEqualTo(1);
         assertThat(page.getAttribute("#insights-panels .pk-insight-panel-reset", "aria-label"))
                 .endsWith("to global interval");
-
-        closeLiveStreams(); // the only test here that opens the Insights tab's SSE stream
     }
 
     /** The stat tiles' icons are decorative - the label beside them already names the value. */
