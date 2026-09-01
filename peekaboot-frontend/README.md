@@ -16,10 +16,10 @@ No build step. Plain ES modules and CSS, served as-is.
 static/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
-├── shared/          api.js, components.js, copyable.js, format.js, http-status.js,
-│                    markup.js, root-actions.js, severity.js, shadow-styles.js,
-│                    span-names.js, storage.js, theme.js, unmask-control.js,
-│                    url-filter.js, url-state.js
+├── shared/          api.js, components.js, copyable.js, filtered-group-tab.js, format.js,
+│                    http-status.js, markup.js, root-actions.js, severity.js,
+│                    shadow-styles.js, span-names.js, storage.js, theme.js, trace-stats.js,
+│                    unmask-control.js, url-filter.js, url-state.js
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (10 tabs, plus the
 │                    Insights tab's own insights-chart.js, insights-markers.js and
 │                    insights-colors.js)
@@ -116,18 +116,46 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH` — the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
 | `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables` — the click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
+| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate})` — the shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js` and `loggers.js` are built on it and supply only what differs. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — the backend's masked-value literal (`"******"`), centralised here so a masked-value comparison only needs updating in one place. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)` — the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
-| `severity.js` | `SLOW_MS`, `VERY_SLOW_MS`, `durationSeverity`, `healthSeverity` — the one place duration and health thresholds are decided. |
+| `severity.js` | `durationSeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)` — the one place a duration, a span's issues, a log level or a health status is turned into a colour. See *Thresholds and the SLOW badge* below. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
 | `storage.js` | `readSetting`, `writeSetting` — guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
+| `trace-stats.js` | `traceStatParts(trace, features)` — a trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
 | `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair). |
+
+## Thresholds and the SLOW badge
+
+Every number the frontend colours a duration by comes from the backend, once, over
+`GET /peekaboot/api/features` (the `Features` record): `slowSpanThresholdMs` and
+`verySlowSpanThresholdMs` (`peekaboot.ui.tracing.*`, what `IssueDetector` raises SLOW and
+VERY_SLOW at), `slowQueryThresholdMs` (SLOW_QUERY) and `slowTraceThresholdMs`
+(`peekaboot.tracing.slow-trace-threshold-ms`, the Slow bucket's admission threshold; `null`
+while tracing is off). The dashboard hands its `features` to every tab and to the overlay it
+opens (`open(traceId, {locale, timeZone, features})`); `severity.js`'s `DEFAULT_THRESHOLDS`
+mirrors the backend defaults, keyed by the same names, for the one path that has no
+features in hand — the dev toolbar, which never fetches them, and the overlay it opens.
+`SharedModuleIT` pins the defaults to the backend properties' defaults.
+
+Where a span's own issues are in hand, `issueSeverity(span.issues)` is the backend's verdict
+and is what colours the gantt duration cells; `durationSeverity()` re-derives a severity only
+for durations no issue describes — a trace's total, a trace's total query time, a Flyway
+migration's execution time.
+
+The Traces tab's **SLOW badge means "some span in this trace carries a SLOW or VERY_SLOW
+issue"** — the backend's per-trace `slow` flag, set by `IssueDetector`. It is deliberately
+not "this trace is in the Slow bucket": the bucket admits a trace by its total duration
+(`slowTraceThresholdMs`, 1 s by default), the badge reports a single span at or above the
+span threshold (100 ms by default). A 300 ms request with one 150 ms query shows the badge
+under *All* and never appears under *Slow*; a 1.2 s request made of twelve 100 ms spans
+appears under *Slow* and shows the badge too.
 
 ## How the embedded surfaces consume the shared sheets
 
@@ -319,6 +347,10 @@ hadn't reached the `TraceStore` yet.
    - optionally `export function applyFilter(payload) { ... }` — lets another tab jump
      here with a pre-selected filter via `context.navigate(id, detail, payload)` (see
      `traces.js`).
+
+   A tab that is a filterable list of collapsible groups builds on
+   `shared/filtered-group-tab.js` instead of hand-rolling the shell — see `config.js` for
+   the smallest example and `loggers.js` for one with a second filter control.
 2. In `dashboard/main.js`, `import * as <name> from './tabs/<id>.js';` and add `<name>`
    to the `TABS` array. `main.js` never renders domain data itself — it only decides
    which tab module gets the fetched payload, so this is the only wiring the file needs.
