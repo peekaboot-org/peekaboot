@@ -4,7 +4,7 @@
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
 import {groupList, expandedKeys, badge} from '../../shared/components.js';
-import {formatDateTime} from '../../shared/format.js';
+import {formatDateTime, formatInterval} from '../../shared/format.js';
 
 export const id = 'scheduled-tasks';
 export const label = 'Scheduled Tasks';
@@ -23,10 +23,10 @@ export function render(container, data, context) {
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
 const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate'};
 
-/** SUCCESS -> ok, FAILED/ERROR -> error, everything else (PENDING/RUNNING/unset) -> muted. */
+/** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
 function taskSeverity(status) {
     if (status === 'SUCCESS') return 'ok';
-    if (status === 'FAILED' || status === 'ERROR') return 'error';
+    if (status === 'FAILED') return 'error';
     return 'muted';
 }
 
@@ -173,10 +173,5 @@ function renderException(lastException) {
 }
 
 function formatFixedInterval(ms) {
-    if (!ms) return '-';
-    if (ms < 1000) return `Every ${ms}ms`;
-    if (ms < 60000) return `Every ${ms / 1000}s`;
-    if (ms < 3600000) return `Every ${ms / 60000}m`;
-    if (ms < 86400000) return `Every ${ms / 3600000}h`;
-    return `Every ${ms / 86400000}d`;
+    return ms ? `Every ${formatInterval(ms)}` : '-';
 }

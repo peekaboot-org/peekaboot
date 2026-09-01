@@ -2,7 +2,7 @@
  * Trace-detail overlay - Spans tab: the gantt chart and its expand/collapse behaviour.
  * A span's "N logs" toggle does not render anything of its own - it asks trace-detail.js
  * (via context.goToSpanLogs) to switch the overlay to the Logs tab pre-filtered to that
- * span, which is where a span's logs and its full id both live now.
+ * span, which is where a span's logs and its full id both live.
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatCount} from '../../shared/format.js';
@@ -27,8 +27,7 @@ export function render(container, trace, context = {}) {
 
     // Add click handlers for expand/collapse
     rowsContainer.addEventListener('click', (e) => {
-        // Handle logs toggle clicks - hands off to the Logs tab rather than rendering
-        // anything here itself.
+        // Logs toggle: hands off to the Logs tab.
         const logsToggle = e.target.closest('.pk-span-logs-toggle');
         if (logsToggle) {
             context.goToSpanLogs?.(logsToggle.dataset.spanId);
@@ -39,7 +38,7 @@ export function render(container, trace, context = {}) {
         const sqlToggle = e.target.closest('.pk-span-query-toggle');
         if (sqlToggle) {
             const spanId = sqlToggle.dataset.spanId;
-            const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${spanId}"]`);
+            const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${CSS.escape(spanId)}"]`);
             if (queryDetail) {
                 queryDetail.classList.toggle('expanded');
                 sqlToggle.title = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'Show SQL';
@@ -52,12 +51,11 @@ export function render(container, trace, context = {}) {
         if (!toggle) return;
         const row = toggle.closest('.pk-gantt-row');
         const spanId = row.dataset.spanId;
-        const isCollapsed = toggle.textContent === '+';
+        const isCollapsed = toggle.getAttribute('aria-expanded') === 'false';
 
-        toggle.textContent = isCollapsed ? '-' : '+';
-        // The toggle is a real button now, so its expanded state has to be exposed.
         toggle.setAttribute('aria-expanded', String(isCollapsed));
         toggle.setAttribute('aria-label', isCollapsed ? 'Collapse child spans' : 'Expand child spans');
+        toggle.textContent = isCollapsed ? '-' : '+';
 
         // Show/hide descendant rows
         let sibling = row.nextElementSibling;
@@ -67,7 +65,7 @@ export function render(container, trace, context = {}) {
                 sibling.style.display = '';
                 // If this row has a collapsed toggle, skip its children
                 const sibToggle = sibling.querySelector('.pk-gantt-toggle');
-                if (sibToggle && sibToggle.textContent === '+') {
+                if (sibToggle && sibToggle.getAttribute('aria-expanded') === 'false') {
                     const sibDepth = parseInt(sibling.dataset.depth);
                     sibling = sibling.nextElementSibling;
                     while (sibling && parseInt(sibling.dataset.depth) > sibDepth) {
@@ -109,7 +107,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     const hasQuery = queryTags.length > 0;
     const rowCount = tags['jdbc.row-count'];
 
-    // Check for logs (now attached to span by backend)
+    // Logs are attached to the span by the backend
     const spanLogs = span.logs || [];
     const hasLogs = spanLogs.length > 0;
 
@@ -125,7 +123,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     } else {
         nameHtml += `<span style="width:16px"></span>`;
     }
-    if (kind !== 'internal' && kind !== 'unknown' && kind !== 'null') {
+    if (kind !== 'internal' && kind !== 'unknown') {
         nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
     }
     nameHtml += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
@@ -137,7 +135,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
 
     // Add query toggle for query spans with SQL
     if (hasQuery) {
-        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
+        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${escapeHtml(span.spanId)}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
     }
 
     // Add logs toggle for spans with logs - switches the overlay to the Logs tab,
@@ -189,7 +187,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
         container.appendChild(queryDetail);
     }
 
-    // Add tags row if present (events are now shown as markers on the timeline)
+    // Add tags row if present (events are shown as markers on the timeline)
     const tagEntries = Object.entries(tags).filter(([k]) => !k.startsWith('jdbc.query'));
     const hasTags = tagEntries.length > 0;
 

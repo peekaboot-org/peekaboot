@@ -18,6 +18,6 @@ export function durationSeverity(ms) {
 /** Actuator health status as a badge modifier suffix. */
 export function healthSeverity(status) {
     if (status === 'UP') return 'ok';
-    if (status === 'DOWN') return 'error';
+    if (status === 'DOWN' || status === 'OUT_OF_SERVICE') return 'error';
     return 'muted';
 }

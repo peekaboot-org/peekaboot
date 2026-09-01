@@ -1,14 +1,14 @@
 /**
  * Trace-detail overlay - Request tab: the whole HTTP exchange on one page, request
  * details first and the two header tables last. Every section builds the same
- * `<table class="pk-table">` shape; renderTable/tableRow collapse that duplication
+ * `<table class="pk-table pk-table--kv">` shape; renderTable/tableRow collapse that duplication
  * into one helper each.
  */
 import {escapeHtml, MASK_LITERAL} from '../../shared/markup.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
 function renderTable(rows) {
-    return `<table class="pk-table">${rows.join('')}</table>`;
+    return `<table class="pk-table pk-table--kv">${rows.join('')}</table>`;
 }
 
 function tableRowHtml(key, valueHtml, valueClass) {
@@ -60,7 +60,6 @@ function statusBadgeHtml(status) {
     return `<span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>`;
 }
 
-// The API returns 'class' and 'method' fields.
 function renderController(req) {
     if (!req?.controller?.class && !req?.controller?.method) return '';
     const signature = `${escapeHtml(req.controller.class || 'Unknown')}.${escapeHtml(req.controller.method || 'unknown')}()`;

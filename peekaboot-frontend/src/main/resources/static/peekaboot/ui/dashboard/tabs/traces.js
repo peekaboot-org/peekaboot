@@ -20,6 +20,7 @@ import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {parseAppHash} from '../../shared/url-state.js';
+import {open as openTraceDetail} from '../../trace-detail/trace-detail.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -188,7 +189,7 @@ function wireControls(container) {
 }
 
 /** Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
-    root action type no longer means editing HTML. Each checkbox's accessible name comes
+    root action type means no HTML edit. Each checkbox's accessible name comes
     from the wrapping <label>, matching the loggers tab's checkbox-label convention. */
 function renderTypeFilterCheckboxes(container) {
     const filterEl = container.querySelector('#traces-filter');
@@ -407,8 +408,7 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
     return mainLine;
 }
 
-/** Plain "jump to Scheduled Tasks" navigation - the original carried no filter either
-    (navigateToScheduledTasks() took no arguments), so this is a faithful move. */
+/** Plain "jump to Scheduled Tasks" navigation, deliberately unfiltered. */
 function renderSchedulerLink(context) {
     const link = document.createElement('a');
     link.href = '#';
@@ -495,10 +495,9 @@ function logCountEl(count, modifier, singular, plural) {
     return el;
 }
 
-async function openTrace(traceId, context) {
+function openTrace(traceId, context) {
     context.navigate('traces', traceId);
-    const overlay = await import('../../trace-detail/trace-detail.js');
-    overlay.open(traceId, {
+    openTraceDetail(traceId, {
         // Threads the same urlState factory main.js's own hash-driven open uses (see
         // buildTraceUrlState), so a trace opened by clicking it here - the primary way
         // anyone opens one - gets its tab switches and filter changes synced to the URL

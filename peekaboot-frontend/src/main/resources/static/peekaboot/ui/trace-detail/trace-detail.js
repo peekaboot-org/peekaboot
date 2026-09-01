@@ -236,9 +236,8 @@ function render(content, trace, urlState) {
     const initialTab = TABS.some(t => t.id === urlState?.initial?.subview) ? urlState.initial.subview : 'spans';
 
     // Params are scoped to the deepest view (this tab), so a tab switch always starts
-    // that tab's filters empty - see url-state.js's push/replace rule and the plan's
-    // recorded ruling on this. Only the tab restored from the URL at open time seeds
-    // its filters from urlState.initial.params.
+    // that tab's filters empty - see url-state.js's push/replace rule. Only the tab
+    // restored from the URL at open time seeds its filters from urlState.initial.params.
     //
     // goToSpanLogs rides along on the same object every tab already receives, so the
     // Spans tab can reach it without a hand-off channel of its own beside this one.

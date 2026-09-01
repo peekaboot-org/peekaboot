@@ -156,7 +156,7 @@
                 </span>
                 <span class="pk-health__right">
                     <span class="pk-health__summary" id="health-summary"></span>
-                    <span class="pk-health__expand" id="health-expand">&#9654;</span>
+                    <span class="pk-health__expand" id="health-expand" aria-hidden="true">&#9654;</span>
                 </span>
             </button>
 
@@ -205,7 +205,7 @@
         <!-- Meters Tab -->
         <section class="pk-tab-panel" id="meters-tab" role="tabpanel" aria-labelledby="meters-tab-btn">
             <div class="pk-filter">
-                <span class="pk-filter__icon">&#128269;</span>
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="meters-filter" placeholder="Filter metrics...">
                 <span class="pk-filter__count" id="meters-count"></span>
             </div>
@@ -215,7 +215,7 @@
         <!-- Environment Tab -->
         <section class="pk-tab-panel" id="environment-tab" role="tabpanel" aria-labelledby="environment-tab-btn">
             <div class="pk-filter">
-                <span class="pk-filter__icon">&#128269;</span>
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties...">
                 <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
                      is true - empty, not hidden, when the backend gate is off. -->
@@ -235,7 +235,7 @@
         <!-- Loggers Tab -->
         <section class="pk-tab-panel" id="loggers-tab" role="tabpanel" aria-labelledby="loggers-tab-btn">
             <div class="pk-filter">
-                <span class="pk-filter__icon">&#128269;</span>
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers...">
             </div>
             <div class="loggers-controls">
@@ -250,7 +250,7 @@
         <!-- Config Tab -->
         <section class="pk-tab-panel" id="config-tab" role="tabpanel" aria-labelledby="config-tab-btn">
             <div class="pk-filter">
-                <span class="pk-filter__icon">&#128269;</span>
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
                 <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties...">
                 <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
                      is true - empty, not hidden, when the backend gate is off. -->

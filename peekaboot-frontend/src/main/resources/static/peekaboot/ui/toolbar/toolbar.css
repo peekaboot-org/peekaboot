@@ -2,7 +2,7 @@
    status pill and log counts reuse .pk-badge from ../assets/components.css. */
 
 /* Positioning lives here rather than in an inline style attribute on the host element:
-   DevToolbarFilter renders that element server-side now, and a page whose CSP omits
+   DevToolbarFilter renders that element server-side, and a page whose CSP omits
    style-src 'unsafe-inline' drops inline style attributes - which would leave the bar
    sitting unpositioned at the end of the document. */
 :host {

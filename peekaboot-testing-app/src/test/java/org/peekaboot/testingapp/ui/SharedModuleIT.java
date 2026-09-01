@@ -68,6 +68,15 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     @Test
+    void formatIntervalClimbsTheUnitLadderWithOneDecimal() {
+        assertThat(evalModule("format.js", "m.formatInterval(250)")).isEqualTo("250ms");
+        assertThat(evalModule("format.js", "m.formatInterval(1500)")).isEqualTo("1.5s");
+        assertThat(evalModule("format.js", "m.formatInterval(90000)")).isEqualTo("1.5m");
+        assertThat(evalModule("format.js", "m.formatInterval(3600000)")).isEqualTo("1h");
+        assertThat(evalModule("format.js", "m.formatInterval(172800000)")).isEqualTo("2d");
+    }
+
+    @Test
     void formatBytesScalesByMagnitude() {
         assertThat(evalModule("format.js", "m.formatBytes(0)")).isEqualTo("0 B");
         assertThat(evalModule("format.js", "m.formatBytes(1536)")).isEqualTo("1.50 KB");
@@ -115,6 +124,8 @@ class SharedModuleIT extends PlaywrightTestBase {
     void healthSeverityMapsActuatorStatuses() {
         assertThat(evalModule("severity.js", "m.healthSeverity('UP')")).isEqualTo("ok");
         assertThat(evalModule("severity.js", "m.healthSeverity('DOWN')")).isEqualTo("error");
+        assertThat(evalModule("severity.js", "m.healthSeverity('OUT_OF_SERVICE')"))
+                .isEqualTo("error");
         assertThat(evalModule("severity.js", "m.healthSeverity('WHATEVER')")).isEqualTo("muted");
     }
 
@@ -166,6 +177,21 @@ class SharedModuleIT extends PlaywrightTestBase {
     void formatDateTimeTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC'})"))
                 .isNotEqualTo("-");
+    }
+
+    /**
+     * The dashboard header's "Updated ..." readout passes hour/minute/second only; a
+     * date-first formatter would still prepend the day, which that one-line readout has
+     * no room for.
+     */
+    @Test
+    void formatDateTimeWithTimeOnlyOptionsRendersNoDate() {
+        String time = (String) evalModule(
+                "format.js",
+                "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC',"
+                        + " hour: '2-digit', minute: '2-digit', second: '2-digit'})");
+        assertThat(time).contains("12:00:00");
+        assertThat(time).doesNotContain("1970").doesNotContain("Jan");
     }
 
     @Test

@@ -2,7 +2,7 @@
  * The "Flyway" tab: one table row per migration, in the order the backend returns them.
  *
  * A real schema history runs to dozens or hundreds of migrations, so each one gets a
- * single scannable row rather than a card - the card layout spent roughly 130px per
+ * single scannable row rather than a card, which would spend roughly 130px per
  * migration on three stacked lines.
  */
 import {badge} from '../../shared/components.js';

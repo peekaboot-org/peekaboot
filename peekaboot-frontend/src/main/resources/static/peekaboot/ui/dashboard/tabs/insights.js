@@ -15,7 +15,7 @@
  *     every 30s dashboard refresh and must not rebuild any of this.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatMetricValue} from '../../shared/format.js';
+import {formatInterval, formatMetricValue} from '../../shared/format.js';
 import {createChart, ensureUplot} from './insights-chart.js';
 
 export const id = 'insights';
@@ -70,9 +70,9 @@ export function render(container, data, context) {
 async function init(container, context) {
     try {
         config = await context.client.get('/api/insights/config');
-        // only a second init of this same tab can supersede this call now that the
-        // Overview tab's tile row carries its own dedupe key; the next refresh
-        // cycle retries from scratch
+        // only a second init of this same tab can supersede this call (the Overview
+        // tab's tile row carries its own dedupe key); the next refresh cycle retries
+        // from scratch
         if (!config) throw new Error('insights config request was superseded');
         globalLevel = config.levels[0].index;
         renderToolbar(container);
@@ -130,17 +130,6 @@ async function loadLifecycleEvents() {
         console.warn('Insights: restart markers unavailable:', error);
         lifecycleEvents = [];
     }
-}
-
-// --- Interval formatting --------------------------------------------------------------
-
-/** Compact aggregation-level label, e.g. 250 -> "250ms", 1500 -> "1.5s", 3600000 -> "1h". */
-function formatInterval(ms) {
-    const short = value => (Number.isInteger(value) ? String(value) : value.toFixed(1));
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${short(ms / 1000)}s`;
-    if (ms < 3600000) return `${short(ms / 60000)}m`;
-    return `${short(ms / 3600000)}h`;
 }
 
 // --- Toolbar ----------------------------------------------------------------------------
@@ -342,13 +331,9 @@ function normalizeStats(stats) {
     return result;
 }
 
-/**
- * The query string is part of the path handed to client.get() on purpose: the
- * client de-duplicates concurrent calls per path, so passing the level as a
- * param would make a level-1 load cancel an in-flight level-0 load.
- */
+/** One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js). */
 async function loadLevel(level) {
-    const body = await currentContext.client.get(`/api/insights/data?level=${level}`);
+    const body = await currentContext.client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
     if (body) levels.set(level, normalizeLevel(body));
 }
 

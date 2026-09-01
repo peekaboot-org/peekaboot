@@ -80,8 +80,8 @@ function initToolbar(host, data) {
         if (traceId) {
             // Four fixed attempts rather than backoff-until-complete: every one runs, so a
             // span that ends after the root - an @Async continuation, a streamed body - still
-            // reaches the bar, which the old loop missed because it stopped the first time a
-            // trace looked finished. Waits are measured from the previous attempt, so the last
+            // reaches the bar instead of being missed by a loop that stops the first time a
+            // trace looks finished. Waits are measured from the previous attempt, so the last
             // lands at 4.75s; with peekaboot's 200ms span export delay, a trace absent by then
             // is not coming.
             const attemptDelays = [250, 500, 1000, 3000];
@@ -139,7 +139,7 @@ function initToolbar(host, data) {
                 const duration = trace.durationMs || 0;
                 const durationClass = durationSeverity(duration);
                 html += '<span class="pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '')
-                    + '">⏱<span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
+                    + '"><span aria-hidden="true">⏱</span><span class="pk-stat__duration">' + formatDurationMs(duration) + '</span></span>';
 
                 const queryCount = trace.queries ? trace.queries.length : (summary.queries ? summary.queries.count : 0);
                 const queryDuration = summary.queries ? summary.queries.totalDurationMs : 0;
@@ -153,10 +153,10 @@ function initToolbar(host, data) {
                 const errorCount = summary.logs ? summary.logs.errorCount : 0;
                 const warnCount = summary.logs ? summary.logs.warnCount : 0;
                 if (errorCount > 0) {
-                    html += '<span class="pk-badge pk-badge--error">❗' + errorCount + ' err</span>';
+                    html += '<span class="pk-badge pk-badge--error"><span aria-hidden="true">❗</span>' + errorCount + ' err</span>';
                 }
                 if (warnCount > 0) {
-                    html += '<span class="pk-badge pk-badge--warn">⚠' + warnCount + ' warn</span>';
+                    html += '<span class="pk-badge pk-badge--warn"><span aria-hidden="true">⚠</span>' + warnCount + ' warn</span>';
                 }
 
                 metricsEl.innerHTML = html;
@@ -182,9 +182,9 @@ function initToolbar(host, data) {
     }
 
     // Attached to the outer bar (not just the button) so a click anywhere on it - other
-    // than the dashboard link, which stops its own propagation above - opens the overlay,
-    // matching the pre-migration behaviour. A real <button> click (mouse or native
-    // Enter/Space activation) bubbles up to this listener like any other click.
+    // than the dashboard link, which stops its own propagation above - opens the overlay.
+    // A real <button> click (mouse or native Enter/Space activation) bubbles up to this
+    // listener like any other click.
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;

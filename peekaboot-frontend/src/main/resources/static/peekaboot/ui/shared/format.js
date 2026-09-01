@@ -35,6 +35,16 @@ export function formatLongDuration(ms) {
         .join(', ');
 }
 
+/** Compact interval label, e.g. 250 -> "250ms", 1500 -> "1.5s", 3600000 -> "1h", 172800000 -> "2d". */
+export function formatInterval(ms) {
+    const short = value => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${short(ms / 1000)}s`;
+    if (ms < 3600000) return `${short(ms / 60000)}m`;
+    if (ms < 86400000) return `${short(ms / 3600000)}h`;
+    return `${short(ms / 86400000)}d`;
+}
+
 export function formatBytes(bytes) {
     if (bytes == null || bytes < 0) return '-';
     if (bytes === 0) return '0 B';
@@ -62,19 +72,20 @@ const DEFAULT_DATE_OPTIONS = {
  * Formats a date/time value. Passing any option beyond locale/timeZone fully
  * replaces DEFAULT_DATE_OPTIONS rather than merging with it — callers that want
  * a single custom field (e.g. just dateStyle) must supply the complete option
- * set they want, not a partial override.
+ * set they want, not a partial override. Only the fields named in that set are
+ * rendered, so a time-only option set yields a time-only string.
  */
 export function formatDateTime(value, {locale, timeZone, ...options} = {}) {
     if (value == null || value === '') return '-';
     const date = new Date(value);
-    // toLocaleDateString does not throw on an invalid Date - it returns the
+    // toLocaleString does not throw on an invalid Date - it returns the
     // literal string "Invalid Date" - so this must be checked explicitly rather
     // than relying on the try/catch below, which only guards a malformed
     // locale/timeZone.
     if (Number.isNaN(date.getTime())) return String(value);
     try {
         const resolved = Object.keys(options).length > 0 ? options : DEFAULT_DATE_OPTIONS;
-        return date.toLocaleDateString(locale, timeZone ? {...resolved, timeZone} : resolved);
+        return date.toLocaleString(locale, timeZone ? {...resolved, timeZone} : resolved);
     } catch {
         return String(value);
     }

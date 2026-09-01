@@ -10,8 +10,8 @@
  */
 import {escapeHtml} from './markup.js';
 
-const COPY_ICON = '⧉';      // ⧉
-const COPIED_ICON = '✓';    // ✓
+const COPY_ICON = '⧉';
+const COPIED_ICON = '✓';
 const COPIED_FEEDBACK_MS = 1500;
 
 const boundRoots = new WeakSet();

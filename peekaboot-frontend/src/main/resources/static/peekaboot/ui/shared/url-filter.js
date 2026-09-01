@@ -5,8 +5,8 @@
  * combinable keys instead of one or two flat fields - that it keeps its own hand-rolled
  * version rather than being forced through this).
  *
- * `reconcileFilterWithUrl` is the shared "which direction wins" decision every one of those
- * tabs' own doc comments used to spell out identically. Two directions, picked by whether
+ * `reconcileFilterWithUrl` is the shared "which direction wins" decision for every one of
+ * those tabs. Two directions, picked by whether
  * this render is URL-authoritative (context.urlIsAuthoritative - a genuine hash change: a
  * deep link, Back/Forward, or a hand-edited hash, as opposed to a programmatic tab switch -
  * see main.js's urlChangeInProgress) or the URL already carries any of this filter's own

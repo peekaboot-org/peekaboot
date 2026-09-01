@@ -136,9 +136,8 @@ function renderList(filterQuery) {
 
 /**
  * The shared group() header only knows name/count - the metric type badge and unit
- * (which the six-way .metric-type-badge.type-* CSS split collapsed into a single
- * badge('type', 'info')) are appended afterwards, and the name gets the --mono
- * modifier group()'s own doc comment reserves for metric names.
+ * are appended afterwards, and the name gets the --mono modifier group()'s own doc
+ * comment reserves for metric names.
  *
  * The three trailing items move into a .pk-group__meta grid so they line up as columns
  * down the list. The unit cell is always emitted, empty when the metric has no base
@@ -206,7 +205,7 @@ function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
         nameEl.textContent = stat.name;
         const valueEl = document.createElement('span');
         valueEl.className = 'pk-metric__stat-value';
-        valueEl.textContent = formatMetricValue(stat.value, baseUnit, locale);
+        valueEl.textContent = formatMeasurementValue(stat.value, baseUnit, locale);
         statEl.append(nameEl, valueEl);
         statsEl.appendChild(statEl);
     });
@@ -215,7 +214,7 @@ function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
     return el;
 }
 
-function formatMetricValue(value, unit, locale) {
+function formatMeasurementValue(value, unit, locale) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     if (unit === 'bytes') return formatBytes(value);

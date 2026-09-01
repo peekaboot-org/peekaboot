@@ -111,9 +111,8 @@
 .pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
 .pk-gantt-row:hover { background: var(--pk-bg-alt); }
 
-/* These were clickable <span>s and are now real <button>s, so each needs the browser's
-   button chrome reset away and a focus ring added - the appearance is unchanged, the
-   keyboard reachability is the point. */
+/* Real <button>s with the browser's button chrome reset away and a focus ring added -
+   they look like the plain glyphs they are; the keyboard reachability is the point. */
 .pk-gantt-toggle { width: 16px; cursor: pointer; user-select: none; color: var(--pk-text-muted);
     background: none; border: none; padding: 0; font: inherit; line-height: inherit; }
 .pk-gantt-toggle:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
@@ -125,12 +124,13 @@
 .pk-gantt-kind.server { background: var(--pk-primary); color: var(--pk-on-primary); }
 .pk-gantt-kind.client { background: var(--pk-purple); color: var(--pk-bg); }
 .pk-gantt-kind.internal { background: var(--pk-border); color: var(--pk-text); }
+.pk-gantt-kind.producer, .pk-gantt-kind.consumer { background: var(--pk-info); color: var(--pk-on-info); }
 
 .pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 8px; }
-.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; }
+.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-text-muted); }
 .pk-gantt-bar.kind-server { background: var(--pk-primary); }
 .pk-gantt-bar.kind-client { background: var(--pk-purple); }
-.pk-gantt-bar.kind-internal, .pk-gantt-bar.kind-unknown { background: var(--pk-text-muted); }
+.pk-gantt-bar.kind-producer, .pk-gantt-bar.kind-consumer { background: var(--pk-info); }
 .pk-gantt-bar.has-error { background: var(--pk-danger); }
 
 .pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
@@ -168,10 +168,6 @@
 /* Request tab styles */
 .pk-request-section { margin-bottom: 24px; }
 .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.pk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.pk-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
-.pk-table td:first-child { width: 200px; color: var(--pk-text-muted); }
-.pk-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 /* Two muted-italic notes that must not share a class: --masked marks a value the
    masking engine replaced, and the mask tests count those. --empty is the placeholder
    row a header section shows when nothing was captured, which is not a masked value. */
@@ -206,7 +202,7 @@
 .pk-log--hidden { display: none; }
 .pk-log__time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
 /* Name button (filters to the span) stacked over its copyable full id - the span tree
-   dropped the id (too crowded with one on every row), so this is its only home now. */
+   shows no ids (too crowded with one on every row), so this is the id's only home. */
 .pk-log__span-cell { width: 140px; flex: none; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
 .pk-log__span { width: 100%; color: var(--pk-primary-text); cursor: pointer; font-family: var(--pk-font-mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     background: none; border: none; padding: 0; text-align: left; flex: none; }

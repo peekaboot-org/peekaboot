@@ -9,6 +9,7 @@
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
+import {readSetting, writeSetting} from '../shared/storage.js';
 import {formatDateTime} from '../shared/format.js';
 import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
@@ -30,33 +31,13 @@ const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
 
-// Mirrors shared/theme.js's storedTheme()/storeTheme() pattern: storage can be blocked
-// (private browsing, some embedded/iframe contexts, strict cookie policies), and a throw
-// here happens during module evaluation, so an unguarded read would blank the whole
-// dashboard before any code runs.
-function safeStorageGet(key) {
-    try {
-        return localStorage.getItem(key);
-    } catch {
-        return null;
-    }
-}
-
-function safeStorageSet(key, value) {
-    try {
-        localStorage.setItem(key, value);
-    } catch {
-        /* preference simply will not persist */
-    }
-}
-
 let data = null;
 let features = {};
 let mainTabs = null;
 let refreshTimer = null;
 let isPaused = false;
-let locale = safeStorageGet('peekaboot-locale') || navigator.language || 'en-US';
-let useServerTimezone = safeStorageGet('peekaboot-use-server-tz') === 'true';
+let locale = readSetting('peekaboot-locale') || navigator.language || 'en-US';
+let useServerTimezone = readSetting('peekaboot-use-server-tz') === 'true';
 let serverTimezone = null;
 // Whether the next fetch should ask the API for real values instead of "******" -
 // the Environment/Config tabs' unmask control (shared/unmask-control.js). Deliberately
@@ -293,9 +274,8 @@ async function fetchFeatures() {
 
 /**
  * Renders one tab against the latest data, and shows/hides its strip button according
- * to its (optional) isAvailable(data, features) check - the replacement for
- * peekaboot.js's scattered "unhide this tab once its data shows up" calls, now driven
- * by the tab contract instead of one-off code per tab.
+ * to its (optional) isAvailable(data, features) check - driven by the tab contract
+ * instead of one-off code per tab.
  */
 function renderTab(tab) {
     if (!data) return;
@@ -396,7 +376,7 @@ function initLocaleSelector() {
     }
     select.addEventListener('change', () => {
         locale = select.value;
-        safeStorageSet('peekaboot-locale', locale);
+        writeSetting('peekaboot-locale', locale);
         fetchData();
     });
 }
@@ -404,7 +384,7 @@ function initLocaleSelector() {
 function initTimezoneControls() {
     document.getElementById('timezone-toggle').addEventListener('click', () => {
         useServerTimezone = !useServerTimezone;
-        safeStorageSet('peekaboot-use-server-tz', String(useServerTimezone));
+        writeSetting('peekaboot-use-server-tz', String(useServerTimezone));
         updateTimezoneDisplay();
         renderData();
     });

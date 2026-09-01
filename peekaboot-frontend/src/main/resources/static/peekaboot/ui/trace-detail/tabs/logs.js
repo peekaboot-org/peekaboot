@@ -1,9 +1,9 @@
 /**
  * Trace-detail overlay - Logs tab: the filterable log list. Every row names its span
  * (a click filters to it) and carries that span's full id as a copyable control - the
- * one place a span's id lives now that the Spans tab tree dropped it (too crowded with
- * a full id on every row); see spans.js's "N logs" toggle, which lands here with this
- * tab's own span filter already seeded rather than opening a popup of its own.
+ * one place a span's id lives, since the Spans tab tree shows none (too crowded with a
+ * full id on every row); see spans.js's "N logs" toggle, which lands here with this
+ * tab's own span filter already seeded.
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatTimeOfDay} from '../../shared/format.js';
@@ -49,8 +49,7 @@ export function render(container, trace, view = {}) {
 
     // Single source of truth for the three filters - renderView() below renders the
     // controls FROM this, instead of the controls' own DOM values, so a re-render (the
-    // span filter changing) can no longer wipe out the text/level filters. See logs.js's
-    // task brief for the bug this replaced.
+    // span filter changing) cannot wipe out the text/level filters.
     //
     // state.level is validated against LEVELS (mirroring how trace-detail.js falls an
     // unrecognized subview back to 'spans'): an unvalidated value from the URL (a typo, a
