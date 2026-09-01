@@ -15,15 +15,6 @@ public class ApplicationMapper {
 
     private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
-    public ApplicationInfo map(InfoResponse info, SpringInfo spring) {
-        return map(info, spring, false);
-    }
-
-    /**
-     * Same as {@link #map(InfoResponse, SpringInfo)}, except when {@code unmask} is true, in
-     * which case {@code info.build()} is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
     public ApplicationInfo map(InfoResponse info, SpringInfo spring, boolean unmask) {
         Map<String, Object> build = Collections.emptyMap();
         Map<String, Object> git = Collections.emptyMap();

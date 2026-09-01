@@ -17,15 +17,6 @@ public class ConfigMapper {
 
     private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
-    public ConfigInfo map(ConfigPropsResponse configprops) {
-        return map(configprops, false);
-    }
-
-    /**
-     * Same as {@link #map(ConfigPropsResponse)}, except when {@code unmask} is true, in
-     * which case every property value is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
     public ConfigInfo map(ConfigPropsResponse configprops, boolean unmask) {
         if (configprops == null || configprops.contexts() == null) {
             return new ConfigInfo(List.of());

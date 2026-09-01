@@ -15,7 +15,7 @@ class ApplicationMapperTest {
     @Test
     void map_shouldExtractBuildInfo() {
         InfoResponse info = new InfoResponse(null, Map.of("artifact", "my-app", "version", "1.0.0"), null, null, null);
-        ApplicationInfo result = mapper.map(info, null);
+        ApplicationInfo result = mapper.map(info, null, false);
         assertThat(result.build()).containsEntry("artifact", "my-app");
         assertThat(result.build()).containsEntry("version", "1.0.0");
     }
@@ -29,7 +29,7 @@ class ApplicationMapperTest {
         String slackToken = "xoxb" + "-123456789012-1234567890123-abcdefghijklmnopqrstuvwx";
         InfoResponse info = new InfoResponse(null, Map.of("artifact", "my-app", "notes", slackToken), null, null, null);
 
-        ApplicationInfo result = mapper.map(info, null);
+        ApplicationInfo result = mapper.map(info, null, false);
 
         assertThat(result.build()).containsEntry("artifact", "my-app");
         assertThat(result.build()).containsEntry("notes", "******");
@@ -43,7 +43,7 @@ class ApplicationMapperTest {
                 null,
                 null,
                 null);
-        ApplicationInfo result = mapper.map(info, null);
+        ApplicationInfo result = mapper.map(info, null, false);
         assertThat(result.git()).containsEntry("branch", "main");
         assertThat(result.git()).containsKey("commit");
 
@@ -61,7 +61,7 @@ class ApplicationMapperTest {
                 new InfoResponse.JavaInfo(new InfoResponse.JavaInfo.VendorInfo("Eclipse Adoptium", "21.0.1"), "21.0.1"),
                 null,
                 null);
-        ApplicationInfo result = mapper.map(info, null);
+        ApplicationInfo result = mapper.map(info, null, false);
         assertThat(result.javaVersion()).isEqualTo("21.0.1");
         assertThat(result.javaVendor()).isEqualTo("Eclipse Adoptium");
     }
@@ -69,14 +69,14 @@ class ApplicationMapperTest {
     @Test
     void map_shouldExtractSpringVersions() {
         SpringInfo spring = new SpringInfo("3.2.0", "6.1.2");
-        ApplicationInfo result = mapper.map(null, spring);
+        ApplicationInfo result = mapper.map(null, spring, false);
         assertThat(result.springBootVersion()).isEqualTo("3.2.0");
         assertThat(result.springFrameworkVersion()).isEqualTo("6.1.2");
     }
 
     @Test
     void map_shouldHandleNullInputs() {
-        ApplicationInfo result = mapper.map(null, null);
+        ApplicationInfo result = mapper.map(null, null, false);
         assertThat(result.build()).isEmpty();
         assertThat(result.git()).isEmpty();
         assertThat(result.javaVersion()).isNull();

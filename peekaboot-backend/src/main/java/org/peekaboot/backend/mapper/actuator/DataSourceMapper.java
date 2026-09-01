@@ -16,15 +16,6 @@ public class DataSourceMapper {
 
     private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
 
-    public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
-        return map(metadataList, health, false);
-    }
-
-    /**
-     * Same as {@link #map(List, HealthResponse)}, except when {@code unmask} is true, in
-     * which case every connection property value is returned verbatim. See
-     * {@link ConnectionParamsMasker#mask(Map, boolean)} for why this shape.
-     */
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
         if (metadataList == null || metadataList.isEmpty()) {
             return List.of();

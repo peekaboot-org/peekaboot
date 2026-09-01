@@ -27,7 +27,7 @@ class ConfigMapperTest {
                                         new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups()).hasSize(2);
         assertThat(result.groups())
@@ -45,7 +45,7 @@ class ConfigMapperTest {
                                 new ConfigPropsResponse.ConfigBean(null, Map.of("value", "1"))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups()).hasSize(1);
         assertThat(result.groups().get(0).prefix()).isEqualTo("unknown");
@@ -62,7 +62,7 @@ class ConfigMapperTest {
                                         "spring.datasource", Map.of("password", "secret123", "username", "admin"))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties())
                 .anyMatch(p -> p.key().equals("password") && p.value().equals("******"));
@@ -80,7 +80,7 @@ class ConfigMapperTest {
                                 new ConfigPropsResponse.ConfigBean("spring.jpa", Map.of("key-generator", "sequence"))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("sequence");
     }
@@ -97,7 +97,7 @@ class ConfigMapperTest {
                                         Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         assertThat(result.groups().get(0).properties().get(0).value())
                 .isEqualTo("jdbc:postgresql://******@localhost/db");
@@ -105,14 +105,14 @@ class ConfigMapperTest {
 
     @Test
     void map_shouldHandleNullInput() {
-        ConfigInfo result = mapper.map(null);
+        ConfigInfo result = mapper.map(null, false);
         assertThat(result.groups()).isEmpty();
     }
 
     @Test
     void map_shouldHandleNullContexts() {
         ConfigPropsResponse configprops = new ConfigPropsResponse(null);
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
         assertThat(result.groups()).isEmpty();
     }
 
@@ -124,7 +124,7 @@ class ConfigMapperTest {
                         Map.of("aws", new ConfigPropsResponse.ConfigBean("aws", Map.of("credentials", "AKIA..."))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("******");
     }
 
@@ -145,7 +145,7 @@ class ConfigMapperTest {
                                         "spring.security.oauth2.client", Map.of("registration", registration))),
                         null)));
 
-        ConfigInfo result = mapper.map(configprops);
+        ConfigInfo result = mapper.map(configprops, false);
 
         String value = result.groups().get(0).properties().get(0).value();
         assertThat(value).contains("clientId=abc123");

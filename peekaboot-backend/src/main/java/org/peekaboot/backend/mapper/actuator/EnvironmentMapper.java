@@ -15,15 +15,6 @@ public class EnvironmentMapper {
 
     private final MaskingEngine maskingEngine = new MaskingEngine();
 
-    public EnvironmentInfo map(EnvResponse env) {
-        return map(env, false);
-    }
-
-    /**
-     * Same as {@link #map(EnvResponse)}, except when {@code unmask} is true, in which case
-     * every property value is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
     public EnvironmentInfo map(EnvResponse env, boolean unmask) {
         if (env == null) {
             return new EnvironmentInfo(List.of(), List.of());

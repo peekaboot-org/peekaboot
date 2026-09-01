@@ -30,7 +30,7 @@ class DataSourceMapperTest {
                         "user", new JdbcProperty(PropertySource.QUERY, "admin"),
                         "password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).properties()).containsEntry("user", "admin");
         assertThat(result.get(0).properties()).containsEntry("password", "******");
@@ -47,7 +47,7 @@ class DataSourceMapperTest {
         when(metadata.getConnectionParams())
                 .thenReturn(Map.of("keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).properties()).containsEntry("keyStore", "classpath:keystore.p12");
     }
@@ -59,7 +59,7 @@ class DataSourceMapperTest {
         HealthResponse health =
                 new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), health, false);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 
@@ -81,7 +81,8 @@ class DataSourceMapperTest {
                                         "primary", new HealthResponse.HealthComponent("UP", Map.of()),
                                         "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))));
 
-        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health);
+        List<DataSourceInfo> result =
+                mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health, false);
 
         assertThat(result)
                 .extracting(DataSourceInfo::name, DataSourceInfo::health)
@@ -98,20 +99,20 @@ class DataSourceMapperTest {
                         new HealthResponse.HealthComponent(
                                 "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))));
 
-        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health);
+        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health, false);
 
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 
     @Test
     void map_shouldHandleEmptyList() {
-        List<DataSourceInfo> result = mapper.map(List.of(), null);
+        List<DataSourceInfo> result = mapper.map(List.of(), null, false);
         assertThat(result).isEmpty();
     }
 
     @Test
     void map_shouldHandleNullList() {
-        List<DataSourceInfo> result = mapper.map(null, null);
+        List<DataSourceInfo> result = mapper.map(null, null, false);
         assertThat(result).isEmpty();
     }
 
@@ -120,7 +121,7 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL 15.1");
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
         assertThat(result.get(0).databaseProduct().name()).isEqualTo("POSTGRESQL");
     }
 
@@ -133,7 +134,7 @@ class DataSourceMapperTest {
                         "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
                         "server", new JdbcProperty(PropertySource.QUERY, "localhost")));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).properties()).containsEntry("apiKey", "******");
         assertThat(result.get(0).properties()).containsEntry("authToken", "******");
@@ -171,7 +172,7 @@ class DataSourceMapperTest {
         listWithNulls.add(metadata);
         listWithNulls.add(null);
 
-        List<DataSourceInfo> result = mapper.map(listWithNulls, null);
+        List<DataSourceInfo> result = mapper.map(listWithNulls, null, false);
         assertThat(result).hasSize(1);
     }
 
@@ -191,7 +192,7 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn(productName);
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).databaseProduct()).isEqualTo(expected);
     }
@@ -201,7 +202,7 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("ds");
         when(metadata.getDatabaseProductName()).thenReturn(null);
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.UNKNOWN);
     }

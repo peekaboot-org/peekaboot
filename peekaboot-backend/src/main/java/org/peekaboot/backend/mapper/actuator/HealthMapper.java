@@ -17,15 +17,6 @@ public class HealthMapper {
 
     private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
 
-    public HealthInfo map(HealthResponse health) {
-        return map(health, false);
-    }
-
-    /**
-     * Same as {@link #map(HealthResponse)}, except when {@code unmask} is true, in which
-     * case every component detail value is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
     public HealthInfo map(HealthResponse health, boolean unmask) {
         if (health == null) {
             return new HealthInfo(HealthStatus.UNKNOWN, List.of());

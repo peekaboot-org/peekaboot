@@ -20,7 +20,7 @@ class HealthMapperTest {
         HealthResponse health = new HealthResponse(
                 "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"))));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components()).hasSize(1);
@@ -36,7 +36,7 @@ class HealthMapperTest {
         HealthResponse health =
                 new HealthResponse("UP", Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of())));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         assertThat(result.status()).isEqualTo(HealthStatus.UP);
         assertThat(result.components().get(0).status()).isEqualTo(HealthStatus.DOWN);
@@ -57,7 +57,7 @@ class HealthMapperTest {
         HealthResponse health =
                 new HealthResponse("DOWN", Map.of("db", new HealthResponse.HealthComponent("DOWN", null, children)));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         assertThat(result.components())
                 .extracting(HealthComponent::name, HealthComponent::status)
@@ -71,7 +71,7 @@ class HealthMapperTest {
 
     @Test
     void map_shouldHandleNullInput() {
-        HealthInfo result = mapper.map(null);
+        HealthInfo result = mapper.map(null, false);
         assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(result.components()).isEmpty();
     }
@@ -79,7 +79,7 @@ class HealthMapperTest {
     @Test
     void map_shouldHandleAnEmptyDescriptor() {
         HealthResponse health = new HealthResponse(null, null);
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
         assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
         assertThat(result.components()).isEmpty();
     }
@@ -87,14 +87,14 @@ class HealthMapperTest {
     @Test
     void map_shouldHandleDownStatus() {
         HealthResponse health = new HealthResponse("DOWN", Map.of());
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
         assertThat(result.status()).isEqualTo(HealthStatus.DOWN);
     }
 
     @Test
     void map_shouldHandleOutOfServiceStatus() {
         HealthResponse health = new HealthResponse("OUT_OF_SERVICE", Map.of());
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
         assertThat(result.status()).isEqualTo(HealthStatus.OUT_OF_SERVICE);
     }
 
@@ -107,7 +107,7 @@ class HealthMapperTest {
                         new HealthResponse.HealthComponent(
                                 "UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"))));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         assertThat(result.components()).hasSize(1);
         assertThat(result.components().get(0).details()).containsEntry("database", "PostgreSQL");
@@ -127,7 +127,7 @@ class HealthMapperTest {
                                 "UP",
                                 Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         Map<String, Object> details = result.components().get(0).details();
         assertThat(details).containsEntry("apiKey", "******");
@@ -143,7 +143,7 @@ class HealthMapperTest {
                         new HealthResponse.HealthComponent(
                                 "UP", Map.of("endpoint", "https://admin:hunter2@internal.example.com/status"))));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         assertThat(result.components().get(0).details().get("endpoint"))
                 .isEqualTo("https://******@internal.example.com/status");
@@ -186,7 +186,7 @@ class HealthMapperTest {
                         "diskSpace",
                         new HealthResponse.HealthComponent("UP", Map.of("total", 500_000_000L, "free", 250_000_000L))));
 
-        HealthInfo result = mapper.map(health);
+        HealthInfo result = mapper.map(health, false);
 
         Map<String, Object> details = result.components().get(0).details();
         assertThat(details).containsEntry("total", 500_000_000L);
