@@ -21,6 +21,9 @@
 
     <properties>
         <java.version>25</java.version>
+        <!-- duplicated from peekaboot-parent (different parent pom) -->
+        <jacoco.version>0.8.15</jacoco.version>
+        <jacocoArgLine></jacocoArgLine>
         <!-- not a published artifact: it exists to host the sample app and its UI tests -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
@@ -182,7 +185,7 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-javaagent:${org.mockito:mockito-core:jar}</argLine>
+                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
             </plugin>
             <plugin>
@@ -312,6 +315,29 @@
                         <goals>
                             <goal>check</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- duplicated from peekaboot-parent: this module intentionally has a
+                 different parent, so the shared build config cannot be inherited -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Not the default `argLine`: every module with tests sets that
+                                 property itself for the Mockito agent, and a literal <argLine>
+                                 in surefire wins over the one prepare-agent injects. Naming the
+                                 property lets those modules late-bind it with @{jacocoArgLine}
+                                 and keep both agents. -->
+                            <propertyName>jacocoArgLine</propertyName>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

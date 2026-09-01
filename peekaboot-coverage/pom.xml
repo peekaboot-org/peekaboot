@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.peekaboot</groupId>
+        <artifactId>peekaboot-parent</artifactId>
+        <version>0.0.4-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>peekaboot-coverage</artifactId>
+    <packaging>pom</packaging>
+
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>Peekaboot Coverage - reactor-wide coverage report and the coverage gate</description>
+
+    <properties>
+        <!-- not a published artifact: it exists to hold the reactor-wide coverage gate -->
+        <maven.deploy.skip>true</maven.deploy.skip>
+
+        <!-- Measured on the merged data at the time the gate landed: line 95.6%,
+             branch 81.8%. The floors sit well below that on purpose - they catch a
+             substantial regression, not a few uncovered lines. Raise them deliberately;
+             never lower one to make a build pass. -->
+        <jacoco.min.line>0.90</jacoco.min.line>
+        <jacoco.min.branch>0.75</jacoco.min.branch>
+    </properties>
+
+    <!-- Every module whose coverage counts. The dependencies do double duty: they give
+         report-aggregate the classes and sources to report on, and they force this module
+         to build last, once every jacoco.exec in the reactor has been written. -->
+    <dependencies>
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-backend</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-spring-boot-autoconfigure</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-spring-boot-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The sample app's own code is excluded from both the report and the gate, but its
+             tests run peekaboot in-process, so its exec data carries five points of backend
+             coverage that per-module reporting would throw away. -->
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-testing-app</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- jacoco:check only ever analyses the classes of the module it runs in, so the
+                 gated classes have to physically be here. Unpacking the published jars is what
+                 makes a reactor-wide check possible at all; JaCoCo matches exec data to classes
+                 by a hash of the bytecode, so the unpacked copies match what the tests ran. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>collect-gated-classes</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>unpack-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <includeGroupIds>org.peekaboot</includeGroupIds>
+                            <excludeArtifactIds>peekaboot-testing-app,peekaboot-frontend</excludeArtifactIds>
+                            <includes>**/*.class</includes>
+                            <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- jacoco:check passes silently when its data file is missing, so a broken
+                 merge, a renamed module or a -DskipTests build would read as a green gate.
+                 Fail loudly instead. The deliberate way out is -Djacoco.skip=true, which
+                 turns off the agent, the check and this guard together. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>require-coverage-data</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <skip>${jacoco.skip}</skip>
+                            <rules>
+                                <requireFilesExist>
+                                    <files>
+                                        <file>${project.build.directory}/jacoco-merged.exec</file>
+                                    </files>
+                                    <message>No merged coverage data - the gate cannot verify anything. Run a build that executes the tests, or pass -Djacoco.skip=true to skip coverage deliberately.</message>
+                                </requireFilesExist>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <!-- The parent binds prepare-agent to every module; this one runs no tests. -->
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <phase>none</phase>
+                    </execution>
+                    <execution>
+                        <id>coverage-merge</id>
+                        <phase>process-test-classes</phase>
+                        <goals>
+                            <goal>merge</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco-merged.exec</destFile>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${maven.multiModuleProjectDirectory}</directory>
+                                    <includes>
+                                        <include>*/target/jacoco.exec</include>
+                                    </includes>
+                                </fileSet>
+                            </fileSets>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>coverage-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report-aggregate</goal>
+                        </goals>
+                        <configuration>
+                            <title>Peekaboot coverage</title>
+                            <excludes>
+                                <exclude>org/peekaboot/testingapp/**</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>coverage-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.min.line}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.min.branch}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

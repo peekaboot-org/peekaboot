@@ -1,7 +1,7 @@
 # Building Peekaboot
 
-Plain Maven, one reactor, five static-analysis gates at `verify`. No wrapper, no Node
-toolchain, no codegen beyond annotation processing.
+Plain Maven, one reactor, six gates at `verify` - five static-analysis and one coverage
+floor. No wrapper, no Node toolchain, no codegen beyond annotation processing.
 
 ## Prerequisites
 
@@ -27,12 +27,18 @@ mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs D
 
 ### What each command actually checks
 
-Only Error Prone runs during compilation; the other four gates are bound to `verify`.
+Only Error Prone runs during compilation; the other five gates are bound to `verify`.
 So `mvn test` gives you Error Prone and nothing else, `mvn install`/`mvn verify` give
-you all five. Per module, `verify` runs:
+you all six. Per module, `verify` runs:
 
 ```
 tests → package → sources jar → spotless:check → spotbugs:check → checkstyle:check → pmd:check
+```
+
+`peekaboot-coverage` runs last and adds the sixth gate over the whole reactor:
+
+```
+jacoco:merge -> enforcer (coverage data present?) -> jacoco:check
 ```
 
 Gates run *after* the tests, so a failing test hides every gate failure behind it.
@@ -40,7 +46,7 @@ Gates run *after* the tests, so a failing test hides every gate failure behind i
 follows POM declaration order, and that module declares them itself (see below). It also
 adds `spring-boot:repackage`, so it is the only module producing an executable jar.
 
-A cold `mvn clean verify` takes roughly 8 minutes on a warm local repository; the Playwright
+A cold `mvn clean verify` takes roughly 6-8 minutes on a warm local repository; the Playwright
 suite is the bulk of it.
 
 ## The reactor
@@ -53,11 +59,12 @@ suite is the bulk of it.
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct |
 | `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
+| `peekaboot-coverage` | pom | **no** (`maven.deploy.skip`) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
 
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
-duplication: its POM re-declares the four verify-bound gates, the `spotless-apply-local`
-profile and the Error Prone compiler config by hand, and it picks up Spring Boot's plugin versions for
+duplication: its POM re-declares the four verify-bound static-analysis gates, the JaCoCo
+agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks up Spring Boot's plugin versions for
 everything else (`clean:3.5.0`, `resources:3.5.0`, `dependency:3.10.0` versus the parent's
 pins). **Any change to the parent's build config has to be mirrored there.**
 
@@ -81,6 +88,7 @@ pins). **Any change to the parent's build config has to be mirrored there.**
 | Bug patterns, bytecode | `spotbugs-maven-plugin` 4.10.4.0 | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.0.0) | `config/checkstyle.xml` | main only |
 | Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.26.0) | `config/pmd-ruleset.xml` | main Java |
+| Coverage floor | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all published classes, reactor-wide |
 
 Each config file explains its own exclusions; the short version:
 
@@ -105,6 +113,38 @@ Config paths resolve through `${maven.multiModuleProjectDirectory}`, which Maven
 directory holding `.mvn/`. That makes them work from the repo root and from inside a module
 directory alike.
 
+### The coverage gate
+
+`peekaboot-coverage` holds it: line >= 90%, branch >= 75% over every published class,
+measured on the merged data of the whole reactor. At the time the gate landed the real
+figures were **95.6% line, 81.8% branch** (97.3% of methods), so the floors sit well below
+today's value: they catch a substantial regression, not a few uncovered lines. Both are
+properties - `jacoco.min.line` and `jacoco.min.branch` - so raising the floor is a one-line
+commit. Lowering one to make a build pass is not a fix.
+
+Three things about that module are deliberate and worth knowing before changing it:
+
+- **It exists because `jacoco:check` only ever analyses the classes of the module it runs
+  in.** There is no `check-aggregate` goal. So the gated classes are physically collected
+  here: `maven-dependency-plugin:unpack-dependencies` unpacks the published jars into
+  `target/classes`, and `check` runs against those. JaCoCo matches execution data to
+  classes by a hash of the bytecode, so the unpacked copies are the same classes the tests
+  ran.
+- **It depends on every measured module, including the sample app.** That is what forces it
+  to build last, after every `jacoco.exec` has been written. `peekaboot-testing-app`'s own
+  code is excluded from both the report and the gate, but its tests run peekaboot in-process,
+  so its execution data carries about five points of backend coverage: measured on its own
+  tests alone, `peekaboot-backend` covers 90.3% of lines; merged, 95.6%. Per-module
+  reporting would throw that away.
+- **A missing data file makes `jacoco:check` pass silently**, which would turn the gate into
+  decoration the moment the merge broke. `maven-enforcer-plugin` fails the build first if
+  `target/jacoco-merged.exec` is absent. The consequence is that `mvn verify -DskipTests`
+  now fails on purpose; pass `-Djacoco.skip=true` to turn the agent, the check and the guard
+  off together.
+
+The aggregate HTML report lands at `peekaboot-coverage/target/site/jacoco-aggregate/index.html`,
+with per-module drill-down. Nothing publishes it.
+
 ### The Spotless ratchet
 
 `ratchetFrom` is pinned to commit `b1a96cc` (where formatting was introduced). Only files
@@ -128,7 +168,8 @@ mechanics.
 - Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
   `peekaboot-testing-app`. Those three resolve `${org.mockito:mockito-core:jar}` via
   `maven-dependency-plugin:properties` and pass it to Surefire as `-javaagent`, which avoids
-  Mockito's inline mock-maker self-attaching and warning about it.
+  Mockito's inline mock-maker self-attaching and warning about it. Their `argLine` starts
+  with `@{jacocoArgLine}` so the coverage agent survives alongside it - see below.
 - `peekaboot-testing-app`'s tests activate the `test` profile: H2 instead of PostgreSQL,
   Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
@@ -189,6 +230,8 @@ Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SE
 ## Things that will bite you
 
 - Local builds reformat your sources mid-build. Expect a dirty tree; that is by design.
+- `mvn verify -DskipTests` fails at the coverage guard, by design - there is no data to
+  gate on. Use `-Djacoco.skip=true` alongside it.
 - `git-commit-id-maven-plugin` is *managed but not bound* in the parent. `git.properties`
   lands at the classpath root and Spring resolves `classpath:git.properties` to a single
   resource, so a library shipping one can beat the host application's own file and make the
