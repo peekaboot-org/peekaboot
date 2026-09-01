@@ -93,9 +93,9 @@ stays around a minute.
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
 duplication: its POM re-declares the four verify-bound static-analysis gates, the JaCoCo
-agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks up Spring Boot's plugin versions for
-everything else (`clean:3.5.0`, `resources:3.5.0`, `dependency:3.10.0` versus the parent's
-pins). **Any change to the parent's build config has to be mirrored there.**
+agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by
+hand, and it picks up Spring Boot's plugin versions for everything else rather than the
+parent's pins. **Any change to the parent's build config has to be mirrored there.**
 
 ## The parallel Gradle build
 

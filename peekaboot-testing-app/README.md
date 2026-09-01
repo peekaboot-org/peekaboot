@@ -34,13 +34,15 @@ endpoints, not just what they returned.
 
 ## `src/test` — the automated UI suite
 
-The Playwright tests and every test that boots a Spring context live here. They activate the
-`test` profile, which swaps PostgreSQL for in-memory H2 and disables Docker Compose, so
-`mvn test` needs neither Docker nor network access — except for the Playwright browser
-described below.
+The Playwright tests and every test that boots a Spring context live here, all in `*IT`
+classes, so they run under failsafe at `verify` — `mvn test` runs nothing in this module.
+They activate the `test` profile, which swaps PostgreSQL for in-memory H2 and disables
+Docker Compose, so the suite needs neither Docker nor network access — except for the
+Playwright browser described below.
 
 ```bash
-mvn -pl peekaboot-testing-app -am test
+mvn -pl peekaboot-testing-app -am verify                       # the whole suite
+mvn -pl peekaboot-testing-app verify -Dit.test=<Class>         # one *IT class
 ```
 
 This module is not published to Maven Central (`maven.deploy.skip`).
@@ -50,9 +52,9 @@ This module is not published to Maven Central (`maven.deploy.skip`).
 The `PlaywrightTestBase`-derived tests drive a real headless Chromium instance. The first
 time `Playwright.create()` runs on a machine, the Playwright Java driver automatically
 downloads the Chromium build it needs into `~/.cache/ms-playwright` — no manual step is
-required as long as the machine has network access. That's what happened when this harness
-was first verified: `mvn -pl peekaboot-testing-app verify -Dit.test=DashboardShellIT` downloaded
-Chromium on its own and both tests passed.
+required as long as the machine has network access; a first
+`mvn -pl peekaboot-testing-app verify -Dit.test=DashboardShellIT` on a clean machine
+downloads Chromium on its own and then runs the tests.
 
 If the automatic download doesn't happen (e.g. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` is set, or
 the cache was wiped), install the browser explicitly with Playwright's own CLI, run through
