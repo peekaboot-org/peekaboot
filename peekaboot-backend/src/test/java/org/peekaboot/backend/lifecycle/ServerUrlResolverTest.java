@@ -39,6 +39,41 @@ class ServerUrlResolverTest {
         assertThat(url).contains("https://localhost:8443");
     }
 
+    /** Spring enables TLS when any server.ssl.* property is bound; server.ssl.enabled defaults to true then. */
+    @Test
+    void resolveServiceUrl_usesHttpsWhenAKeyStoreIsBoundWithoutAnExplicitEnabledFlag() {
+        var environment = new MockEnvironment();
+        environment.setProperty("server.ssl.key-store", "classpath:keystore.p12");
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8443));
+
+        assertThat(url).contains("https://localhost:8443");
+    }
+
+    @Test
+    void resolveServiceUrl_staysHttpWhenSslIsExplicitlyDisabledDespiteAKeyStore() {
+        var environment = new MockEnvironment();
+        environment.setProperty("server.ssl.key-store", "classpath:keystore.p12");
+        environment.setProperty("server.ssl.enabled", "false");
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
+
+        assertThat(url).contains("http://localhost:8080");
+    }
+
+    @Test
+    void resolveServiceUrl_substitutesLocalhostForTheIpv6WildcardAddress() {
+        var environment = new MockEnvironment();
+        environment.setProperty("server.address", "::");
+        var resolver = new ServerUrlResolver(environment, ServerUrlResolverTest::springdocAbsent);
+
+        Optional<String> url = resolver.resolveServiceUrl(ReadyEvents.webApplication(8080));
+
+        assertThat(url).contains("http://localhost:8080");
+    }
+
     @Test
     void resolveServiceUrl_substitutesLocalhostForWildcardAddress() {
         var environment = new MockEnvironment();

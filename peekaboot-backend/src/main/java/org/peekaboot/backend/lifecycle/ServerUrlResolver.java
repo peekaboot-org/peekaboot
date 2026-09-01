@@ -3,6 +3,8 @@ package org.peekaboot.backend.lifecycle;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.web.server.Ssl;
 import org.springframework.boot.web.server.WebServer;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationContext;
@@ -62,18 +64,27 @@ public class ServerUrlResolver {
     }
 
     private String buildBaseUrl(int port) {
-        String scheme = environment.getProperty("server.ssl.enabled", Boolean.class, false) ? "https" : "http";
+        String scheme = sslEnabled() ? "https" : "http";
         String host = resolveHost();
         String contextPath = normalizeContextPath(environment.getProperty("server.servlet.context-path", ""));
         return scheme + "://" + host + ":" + port + contextPath;
     }
 
-    // AvoidUsingHardCodedIP: "0.0.0.0" is compared against, not connected to - it is
-    // the wildcard bind address that must be rewritten to something browsable
+    /**
+     * Boot's own rule: TLS is on as soon as any {@code server.ssl.*} property is bound
+     * (a key store, a bundle), unless {@code server.ssl.enabled} says otherwise.
+     */
+    private boolean sslEnabled() {
+        return Ssl.isEnabled(
+                Binder.get(environment).bind("server.ssl", Ssl.class).orElse(null));
+    }
+
+    // AvoidUsingHardCodedIP: the wildcard bind addresses are compared against, not connected
+    // to - they must be rewritten to something browsable
     @SuppressWarnings("PMD.AvoidUsingHardCodedIP")
     private String resolveHost() {
         String host = environment.getProperty("server.address");
-        if (host == null || host.isBlank() || "0.0.0.0".equals(host)) {
+        if (host == null || host.isBlank() || "0.0.0.0".equals(host) || "::".equals(host)) {
             return "localhost";
         }
         return host;
