@@ -1,10 +1,9 @@
 package org.peekaboot.backend.tracing.store;
 
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-
 import java.util.List;
 import java.util.Optional;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /**
  * Central storage abstraction for all trace data. Implementations receive raw

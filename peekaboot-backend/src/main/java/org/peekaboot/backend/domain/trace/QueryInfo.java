@@ -9,8 +9,7 @@ public record QueryInfo(
         long durationMs,
         Instant timestamp,
         Long rowCount,
-        long creationOrder
-) {
+        long creationOrder) {
     /**
      * Convenience constructor without rowCount and creationOrder (for backwards compatibility).
      */

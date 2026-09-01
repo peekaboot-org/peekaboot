@@ -9,6 +9,5 @@ public record LogCapturedEvent(
         String level,
         String loggerName,
         String message,
-        String threadName
-) implements TraceDataEvent {
-}
+        String threadName)
+        implements TraceDataEvent {}

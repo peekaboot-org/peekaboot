@@ -21,13 +21,8 @@ public record RequestCompletedEvent(
         int status,
         Map<String, String> responseHeaders,
         // Timing
-        long durationMs
-) implements TraceDataEvent {
+        long durationMs)
+        implements TraceDataEvent {
 
-    public record UploadedFile(
-            String fieldName,
-            String originalFilename,
-            String contentType,
-            long size
-    ) {}
+    public record UploadedFile(String fieldName, String originalFilename, String contentType, long size) {}
 }
