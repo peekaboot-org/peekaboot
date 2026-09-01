@@ -1,7 +1,7 @@
 package org.peekaboot.backend.log;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.AppenderBase;
+import ch.qos.logback.core.UnsynchronizedAppenderBase;
 import java.time.Instant;
 import java.util.Map;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -17,7 +17,7 @@ import org.springframework.context.ApplicationEventPublisher;
  * disagree with the log file. Per-trace volume stays bounded by
  * {@code peekaboot.tracing.max-logs-per-trace}.
  */
-public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
+public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {
 
     private static final String TRACE_ID_KEY = "traceId";
     private static final String SPAN_ID_KEY = "spanId";
