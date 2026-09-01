@@ -21,9 +21,6 @@ dependencies {
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
-    compileOnly("org.springframework.boot:spring-boot-configuration-processor")
-    annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
