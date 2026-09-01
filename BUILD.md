@@ -33,6 +33,11 @@ mvn spotless:apply   # format (local builds already do this for you)
 mvn -pl <module> test -Dtest=<Class>              # one unit-test class — never add -am
 mvn -pl <module> verify -Dit.test=<Class>         # one *IT class (runs this module's
                                                   # gates too; that's inherent to verify)
+mvn -pl <module> -am verify -Dit.test=<Class> \
+    -Dtest=NoSuchTest -Dsurefire.failIfNoSpecifiedTests=false \
+    -Dfailsafe.failIfNoSpecifiedTests=false           # the same against uncommitted sibling-module
+                                                  # changes: both skip flags, or failsafe fails the
+                                                  # first upstream module with "No tests matching pattern"
 mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs Docker
                                                   # and an `mvn install` beforehand
 ```
