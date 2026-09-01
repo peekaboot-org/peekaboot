@@ -2,11 +2,10 @@ package org.peekaboot.backend.log;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.springframework.context.ApplicationEventPublisher;
-
 import java.time.Instant;
 import java.util.Map;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Logback appender that captures log events and publishes them via Spring events.
@@ -54,15 +53,8 @@ public class PeekabootLogbackAppender extends AppenderBase<ILoggingEvent> {
             String message = event.getFormattedMessage();
             String threadName = event.getThreadName();
 
-            eventPublisher.publishEvent(new LogCapturedEvent(
-                    traceId,
-                    spanId,
-                    timestamp,
-                    level,
-                    loggerName,
-                    message,
-                    threadName
-            ));
+            eventPublisher.publishEvent(
+                    new LogCapturedEvent(traceId, spanId, timestamp, level, loggerName, message, threadName));
         }
     }
 }

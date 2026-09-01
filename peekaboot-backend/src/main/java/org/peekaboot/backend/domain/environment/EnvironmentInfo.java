@@ -8,7 +8,4 @@ import java.util.List;
  * Pre-groups properties by source to move grouping logic
  * from frontend to backend.
  */
-public record EnvironmentInfo(
-    List<String> activeProfiles,
-    List<PropertySourceGroup> propertySources
-) {}
+public record EnvironmentInfo(List<String> activeProfiles, List<PropertySourceGroup> propertySources) {}

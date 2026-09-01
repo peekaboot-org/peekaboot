@@ -8,6 +8,4 @@ import java.util.List;
  * Pre-groups properties by prefix and masks sensitive values
  * to move this logic from frontend to backend.
  */
-public record ConfigInfo(
-    List<ConfigGroup> groups
-) {}
+public record ConfigInfo(List<ConfigGroup> groups) {}

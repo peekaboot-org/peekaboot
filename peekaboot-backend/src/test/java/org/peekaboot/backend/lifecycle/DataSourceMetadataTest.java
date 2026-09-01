@@ -1,17 +1,16 @@
 package org.peekaboot.backend.lifecycle;
 
-import ch.qos.logback.classic.Level;
-import org.peekaboot.backend.testsupport.LogCapture;
-import org.h2.jdbcx.JdbcDataSource;
-import org.junit.jupiter.api.Test;
-
-import javax.sql.DataSource;
-import java.sql.SQLException;
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import ch.qos.logback.classic.Level;
+import java.sql.SQLException;
+import java.util.Optional;
+import javax.sql.DataSource;
+import org.h2.jdbcx.JdbcDataSource;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.LogCapture;
 
 class DataSourceMetadataTest {
 
@@ -89,5 +88,4 @@ class DataSourceMetadataTest {
             });
         }
     }
-
 }

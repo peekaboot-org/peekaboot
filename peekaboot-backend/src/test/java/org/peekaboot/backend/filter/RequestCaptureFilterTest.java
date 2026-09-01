@@ -1,5 +1,13 @@
 package org.peekaboot.backend.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
@@ -7,8 +15,11 @@ import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.peekaboot.backend.testsupport.LogCapture;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,23 +30,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
-
-import java.util.Collections;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -72,13 +71,8 @@ class RequestCaptureFilterTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {
-            "/static/app.js",
-            "/webjars/jquery.js",
-            "/actuator/health",
-            "/peekaboot/api/traces",
-            "/error"
-    })
+    @ValueSource(
+            strings = {"/static/app.js", "/webjars/jquery.js", "/actuator/health", "/peekaboot/api/traces", "/error"})
     void shouldSkipExcludedPaths(String path) throws Exception {
         when(request.getRequestURI()).thenReturn(path);
 
@@ -149,9 +143,8 @@ class RequestCaptureFilterTest {
         when(request.getMethod()).thenReturn("GET");
         when(response.getStatus()).thenReturn(200);
 
-        Enumeration<String> headerNames = Collections.enumeration(java.util.List.of(
-                "authorization", "cookie", "x-api-key", "content-type"
-        ));
+        Enumeration<String> headerNames =
+                Collections.enumeration(java.util.List.of("authorization", "cookie", "x-api-key", "content-type"));
         when(request.getHeaderNames()).thenReturn(headerNames);
         when(request.getHeader("authorization")).thenReturn("Bearer secret-token");
         when(request.getHeader("cookie")).thenReturn("session=xyz");
@@ -210,8 +203,8 @@ class RequestCaptureFilterTest {
         when(response.getHeaderNames()).thenReturn(Collections.emptyList());
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("page", new String[]{"1"});
-        params.put("size", new String[]{"10"});
+        params.put("page", new String[] {"1"});
+        params.put("size", new String[] {"10"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -235,8 +228,8 @@ class RequestCaptureFilterTest {
         when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("api_key", new String[]{"xyz"});
-        params.put("q", new String[]{"widgets"});
+        params.put("api_key", new String[] {"xyz"});
+        params.put("q", new String[] {"widgets"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -260,8 +253,8 @@ class RequestCaptureFilterTest {
         when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("api_key", new String[]{"xyz"});
-        params.put("q", new String[]{"widgets"});
+        params.put("api_key", new String[] {"xyz"});
+        params.put("q", new String[] {"widgets"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -287,8 +280,8 @@ class RequestCaptureFilterTest {
         when(response.getHeaderNames()).thenReturn(Collections.emptyList());
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("username", new String[]{"alice"});
-        params.put("password", new String[]{"hunter2"});
+        params.put("username", new String[] {"alice"});
+        params.put("password", new String[] {"hunter2"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -312,8 +305,8 @@ class RequestCaptureFilterTest {
         when(request.getQueryString()).thenReturn("debug&q=widgets");
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("debug", new String[]{""});
-        params.put("q", new String[]{"widgets"});
+        params.put("debug", new String[] {""});
+        params.put("q", new String[] {"widgets"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -352,8 +345,8 @@ class RequestCaptureFilterTest {
         when(response.getHeaderNames()).thenReturn(Collections.emptyList());
 
         Map<String, String[]> params = new HashMap<>();
-        params.put("page", new String[]{"1"});
-        params.put("firstName", new String[]{"Bob"});
+        params.put("page", new String[] {"1"});
+        params.put("firstName", new String[] {"Bob"});
         when(request.getParameterMap()).thenReturn(params);
 
         filter.doFilter(request, response, chain);
@@ -375,7 +368,8 @@ class RequestCaptureFilterTest {
         HandlerMethod handlerMethod = mock(HandlerMethod.class);
         when(handlerMethod.getBeanType()).thenReturn((Class) TestController.class);
         when(handlerMethod.getMethod()).thenReturn(TestController.class.getMethod("getUsers"));
-        when(request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE)).thenReturn(handlerMethod);
+        when(request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE))
+                .thenReturn(handlerMethod);
 
         filter.doFilter(request, response, chain);
 
@@ -471,7 +465,8 @@ class RequestCaptureFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        verify(response).setHeader("Server-Timing", "trace;desc=\"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01\"");
+        verify(response)
+                .setHeader("Server-Timing", "trace;desc=\"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01\"");
     }
 
     @Test
@@ -530,7 +525,6 @@ class RequestCaptureFilterTest {
     }
 
     public static class TestController {
-        public void getUsers() {
-        }
+        public void getUsers() {}
     }
 }

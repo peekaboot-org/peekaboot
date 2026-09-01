@@ -8,7 +8,4 @@ import java.util.List;
  * Uses explicit typing because health data has complex nested structure
  * with status enums and component aggregation logic.
  */
-public record HealthInfo(
-    HealthStatus status,
-    List<HealthComponent> components
-) {}
+public record HealthInfo(HealthStatus status, List<HealthComponent> components) {}

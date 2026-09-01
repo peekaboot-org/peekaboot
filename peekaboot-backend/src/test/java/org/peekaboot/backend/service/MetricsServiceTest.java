@@ -1,19 +1,18 @@
 package org.peekaboot.backend.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
-import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.atomic.AtomicLong;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class MetricsServiceTest {
 
@@ -102,10 +101,7 @@ class MetricsServiceTest {
     void getMetrics_reportsActualStatisticValueForCounter() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
-        Counter.builder("http.requests")
-                .tag("method", "GET")
-                .register(registry)
-                .increment(42);
+        Counter.builder("http.requests").tag("method", "GET").register(registry).increment(42);
 
         MetricsService service = new MetricsService(registry);
 
@@ -154,9 +150,7 @@ class MetricsServiceTest {
 
         MetricsInfo result = service.getMetrics();
 
-        assertThat(result.metrics())
-                .extracting(MetricGroup::name)
-                .containsExactly("a.metric", "m.metric", "z.metric");
+        assertThat(result.metrics()).extracting(MetricGroup::name).containsExactly("a.metric", "m.metric", "z.metric");
     }
 
     @Test

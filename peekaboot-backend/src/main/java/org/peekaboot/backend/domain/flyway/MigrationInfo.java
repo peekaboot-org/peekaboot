@@ -9,11 +9,10 @@ import java.time.Instant;
  * and status mapping logic.
  */
 public record MigrationInfo(
-    String version,
-    String description,
-    String type,
-    MigrationState state,
-    Instant installedOn,
-    Integer executionTime,
-    String script
-) {}
+        String version,
+        String description,
+        String type,
+        MigrationState state,
+        Instant installedOn,
+        Integer executionTime,
+        String script) {}

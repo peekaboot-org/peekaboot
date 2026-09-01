@@ -11,10 +11,9 @@ import java.util.Map;
  * - Adding explicit typing would add maintenance burden without benefit
  */
 public record ApplicationInfo(
-    Map<String, Object> build,
-    Map<String, Object> git,
-    String springBootVersion,
-    String springFrameworkVersion,
-    String javaVersion,
-    String javaVendor
-) {}
+        Map<String, Object> build,
+        Map<String, Object> git,
+        String springBootVersion,
+        String springFrameworkVersion,
+        String javaVersion,
+        String javaVendor) {}

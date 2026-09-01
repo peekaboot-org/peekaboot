@@ -1,20 +1,17 @@
 package org.peekaboot.backend.tracing.interceptor;
 
+import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.micrometer.observation.Observation;
-import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.tck.TestObservationRegistry;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.ModelAndView;
-
-import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class TracingHandlerInterceptorTest {
 
@@ -131,8 +128,7 @@ class TracingHandlerInterceptorTest {
         // Simulate exception - postHandle is not called when exception occurs
         interceptor.afterCompletion(request, response, handler, exception);
 
-        assertThat(observationRegistry)
-                .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
     }
 
     @Test
@@ -161,7 +157,8 @@ class TracingHandlerInterceptorTest {
         org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
                 .as("handler observation should be current while the handler executes")
                 .isNotNull();
-        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation().getContext().getName())
+        org.assertj.core.api.Assertions.assertThat(
+                        observationRegistry.getCurrentObservation().getContext().getName())
                 .isEqualTo("spring.handler");
 
         interceptor.postHandle(request, response, handler, null);
@@ -179,13 +176,13 @@ class TracingHandlerInterceptorTest {
         interceptor.preHandle(request, response, handler);
         interceptor.afterConcurrentHandlingStarted(request, response, handler);
 
-        assertThat(observationRegistry)
-                .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
         assertThat(observationRegistry)
                 .hasObservationWithNameEqualTo("spring.handler")
                 .that()
                 .hasBeenStopped();
-        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation()).isNull();
+        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
+                .isNull();
     }
 
     @Test
@@ -202,8 +199,7 @@ class TracingHandlerInterceptorTest {
         interceptor.postHandle(request, response, handler, null);
         interceptor.afterCompletion(request, response, handler, null);
 
-        assertThat(observationRegistry)
-                .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
     }
 
     // Test controller for handler method resolution

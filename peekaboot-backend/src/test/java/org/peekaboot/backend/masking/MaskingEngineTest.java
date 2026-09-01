@@ -1,11 +1,11 @@
 package org.peekaboot.backend.masking;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 class MaskingEngineTest {
 
@@ -17,37 +17,38 @@ class MaskingEngineTest {
         // One realistic property/header-shaped key per compound key-name rule from the
         // design spec, each embedding the rule term at a separator boundary.
         @ParameterizedTest
-        @ValueSource(strings = {
-            "spring.datasource.password",
-            "app.passwd",
-            "db.pwd",
-            "app.security.passphrase",
-            "app.secret",
-            "spring.security.oauth2.client.registration.google.client-secret",
-            "app.token",
-            "spring.security.oauth2.client.registration.google.access-token",
-            "spring.security.oauth2.client.registration.google.refresh-token",
-            "spring.security.oauth2.client.registration.google.id-token",
-            "app.auth-token",
-            "app.bearer",
-            "app.credential",
-            "app.credentials",
-            "app.api-key",
-            "app.apikey",
-            "app.private-key",
-            "app.secret-key",
-            "app.signing-key",
-            "app.encryption-key",
-            "authorization",
-            "app.auth",
-            "Cookie",
-            "Set-Cookie",
-            "app.session-id",
-            "app.salt",
-            "app.signature",
-            "app.certificate-password",
-            "app.certificate-private-key",
-        })
+        @ValueSource(
+                strings = {
+                    "spring.datasource.password",
+                    "app.passwd",
+                    "db.pwd",
+                    "app.security.passphrase",
+                    "app.secret",
+                    "spring.security.oauth2.client.registration.google.client-secret",
+                    "app.token",
+                    "spring.security.oauth2.client.registration.google.access-token",
+                    "spring.security.oauth2.client.registration.google.refresh-token",
+                    "spring.security.oauth2.client.registration.google.id-token",
+                    "app.auth-token",
+                    "app.bearer",
+                    "app.credential",
+                    "app.credentials",
+                    "app.api-key",
+                    "app.apikey",
+                    "app.private-key",
+                    "app.secret-key",
+                    "app.signing-key",
+                    "app.encryption-key",
+                    "authorization",
+                    "app.auth",
+                    "Cookie",
+                    "Set-Cookie",
+                    "app.session-id",
+                    "app.salt",
+                    "app.signature",
+                    "app.certificate-password",
+                    "app.certificate-private-key",
+                })
         void isSensitiveKey_shouldMatchEachKeyNameRule(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
@@ -57,12 +58,13 @@ class MaskingEngineTest {
     class LegacyKeyPatternsPositive {
 
         @ParameterizedTest
-        @ValueSource(strings = {
-            "VCAP_SERVICES",
-            "vcap.services.my-service.credentials",
-            "sun.java.command",
-            "spring.application.json",
-        })
+        @ValueSource(
+                strings = {
+                    "VCAP_SERVICES",
+                    "vcap.services.my-service.credentials",
+                    "sun.java.command",
+                    "spring.application.json",
+                })
         void isSensitiveKey_shouldMatchEachLegacySpringPattern(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
@@ -73,24 +75,25 @@ class MaskingEngineTest {
 
         // Named in the design spec as cases the dashboard must not over-mask.
         @ParameterizedTest
-        @ValueSource(strings = {
-            "spring.jpa.key-generator",
-            "server.ssl.key-store",
-            "server.ssl.key-alias",
-            "server.port",
-            "spring.application.name",
-            "peekaboot.tracing.max-spans-per-trace",
-            // I3: server.ssl.certificate is a filesystem path, not a secret - identically
-            // shaped to server.ssl.key-store above. Actual key material is already caught
-            // by the PEM value pattern.
-            "server.ssl.certificate",
-            "server.ssl.trust-certificate",
-            // I4: PWD is set by every POSIX shell, so it hits every developer on the
-            // most-viewed property source (systemEnvironment). password/passwd already
-            // cover the real password case in practice.
-            "PWD",
-            "OLDPWD",
-        })
+        @ValueSource(
+                strings = {
+                    "spring.jpa.key-generator",
+                    "server.ssl.key-store",
+                    "server.ssl.key-alias",
+                    "server.port",
+                    "spring.application.name",
+                    "peekaboot.tracing.max-spans-per-trace",
+                    // I3: server.ssl.certificate is a filesystem path, not a secret - identically
+                    // shaped to server.ssl.key-store above. Actual key material is already caught
+                    // by the PEM value pattern.
+                    "server.ssl.certificate",
+                    "server.ssl.trust-certificate",
+                    // I4: PWD is set by every POSIX shell, so it hits every developer on the
+                    // most-viewed property source (systemEnvironment). password/passwd already
+                    // cover the real password case in practice.
+                    "PWD",
+                    "OLDPWD",
+                })
         void isSensitiveKey_shouldNotMatchNegativeCases(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
@@ -100,15 +103,16 @@ class MaskingEngineTest {
         // Session-cookie *configuration* is not a secret and is exactly what someone
         // opens the Environment tab to check when debugging a SameSite problem.
         @ParameterizedTest
-        @ValueSource(strings = {
-            "server.servlet.session.cookie.name",
-            "server.servlet.session.cookie.max-age",
-            "server.servlet.session.cookie.same-site",
-            "server.servlet.session.cookie.http-only",
-            "server.servlet.session.cookie.secure",
-            "server.servlet.session.cookie.path",
-            "server.servlet.session.cookie.domain",
-        })
+        @ValueSource(
+                strings = {
+                    "server.servlet.session.cookie.name",
+                    "server.servlet.session.cookie.max-age",
+                    "server.servlet.session.cookie.same-site",
+                    "server.servlet.session.cookie.http-only",
+                    "server.servlet.session.cookie.secure",
+                    "server.servlet.session.cookie.path",
+                    "server.servlet.session.cookie.domain",
+                })
         void isSensitiveKey_shouldNotMatchCookieConfigurationKeys(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
         }
@@ -126,8 +130,8 @@ class MaskingEngineTest {
         // followed by a separator, so a whole-token check must reject it.
         @Test
         void isSensitiveKey_shouldNotMatchAuthAsASubstringOfOauth2() {
-            assertThat(engine.isSensitiveKey(
-                "spring.security.oauth2.client.registration.google.client-id")).isFalse();
+            assertThat(engine.isSensitiveKey("spring.security.oauth2.client.registration.google.client-id"))
+                    .isFalse();
         }
     }
 
@@ -184,8 +188,8 @@ class MaskingEngineTest {
         @Test
         void maskValue_shouldMaskJwt() {
             String jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-                + ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0"
-                + ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+                    + ".eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0"
+                    + ".SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
             String value = "Authorization header carried: " + jwt;
 
             String result = engine.maskValue(value);
@@ -223,8 +227,8 @@ class MaskingEngineTest {
 
         @Test
         void maskValue_shouldMaskGithubFineGrainedToken() {
-            String value = "github_pat_11AAAAAAA0abcdefghijkl_"
-                + "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890AB";
+            String value =
+                    "github_pat_11AAAAAAA0abcdefghijkl_" + "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890AB";
 
             String result = engine.maskValue(value);
 
@@ -338,7 +342,9 @@ class MaskingEngineTest {
             String result = engine.maskValue(value);
 
             assertThat(result).isEqualTo("jdbc:mysql://localhost:3306/mydb?user=root&password=******");
-            assertThat(result).contains("localhost", "3306", "mydb", "user=root").doesNotContain("hunter2");
+            assertThat(result)
+                    .contains("localhost", "3306", "mydb", "user=root")
+                    .doesNotContain("hunter2");
         }
 
         @Test
@@ -351,7 +357,18 @@ class MaskingEngineTest {
         }
 
         @ParameterizedTest
-        @ValueSource(strings = {"password", "passwd", "pwd", "secret", "token", "api-key", "api_key", "access-key", "access_key"})
+        @ValueSource(
+                strings = {
+                    "password",
+                    "passwd",
+                    "pwd",
+                    "secret",
+                    "token",
+                    "api-key",
+                    "api_key",
+                    "access-key",
+                    "access_key"
+                })
         void maskValue_shouldMaskEachUrlQueryCredentialParameterName(String paramName) {
             String value = "https://example.com/callback?" + paramName + "=s3cr3t&ok=1";
 
