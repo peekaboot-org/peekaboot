@@ -3,12 +3,8 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.autoconfigure.LocalDevDetector.LaunchSignals;
@@ -168,47 +164,6 @@ class LocalDevDetectorTest {
         thread.join();
 
         assertThat(result).isTrue();
-    }
-
-    @Test
-    void containerMarkers_dockerEnvFile(@TempDir Path dir) throws Exception {
-        Path dockerEnv = Files.createFile(dir.resolve(".dockerenv"));
-
-        assertThat(LocalDevDetector.containerMarkersPresent(dockerEnv, Map.of(), dir.resolve("cgroup")))
-                .isTrue();
-    }
-
-    @Test
-    void containerMarkers_kubernetesServiceHost(@TempDir Path dir) {
-        assertThat(LocalDevDetector.containerMarkersPresent(
-                        dir.resolve(".dockerenv"),
-                        Map.of("KUBERNETES_SERVICE_HOST", "10.0.0.1"),
-                        dir.resolve("cgroup")))
-                .isTrue();
-    }
-
-    @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "0::/docker/3f4c2a\n",
-                "12:memory:/kubepods/burstable/pod1/abc\n",
-                "0::/system.slice/containerd.service\n"
-            })
-    void containerMarkers_cgroupNamingAContainerRuntime(String cgroup, @TempDir Path dir) throws Exception {
-        Path cgroupFile = Files.writeString(dir.resolve("cgroup"), cgroup);
-
-        assertThat(LocalDevDetector.containerMarkersPresent(dir.resolve(".dockerenv"), Map.of(), cgroupFile))
-                .isTrue();
-    }
-
-    @Test
-    void containerMarkers_absentOnAPlainHost(@TempDir Path dir) throws Exception {
-        Path cgroupFile = Files.writeString(dir.resolve("cgroup"), "0::/user.slice/user-1000.slice/session-2.scope\n");
-
-        assertThat(LocalDevDetector.containerMarkersPresent(dir.resolve(".dockerenv"), Map.of(), cgroupFile))
-                .isFalse();
-        assertThat(LocalDevDetector.containerMarkersPresent(dir.resolve(".dockerenv"), Map.of(), dir.resolve("none")))
-                .isFalse();
     }
 
     private static LaunchSignals signals(String... classPathEntries) {

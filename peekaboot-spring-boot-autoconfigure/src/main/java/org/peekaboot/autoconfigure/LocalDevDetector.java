@@ -1,13 +1,9 @@
 package org.peekaboot.autoconfigure;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.peekaboot.backend.domain.runtime.ContainerRuntime;
 import org.springframework.core.NativeDetector;
 
 /**
@@ -47,8 +43,6 @@ final class LocalDevDetector {
     /** IntelliJ's own builder: {@code out/production/<module>}. */
     private static final String INTELLIJ_OUTPUT_SEGMENT = "/out/production/";
 
-    private static final Set<String> CONTAINER_CGROUP_MARKERS = Set.of("docker", "kubepods", "containerd");
-
     private LocalDevDetector() {}
 
     /**
@@ -59,9 +53,10 @@ final class LocalDevDetector {
     record LaunchSignals(String classPath, boolean containerMarkers) {
 
         static LaunchSignals fromRuntime() {
+            // any detected runtime means the exploded class path is an image
+            // layout, not a developer's checkout
             return new LaunchSignals(
-                    System.getProperty("java.class.path", ""),
-                    containerMarkersPresent(Path.of("/.dockerenv"), System.getenv(), Path.of("/proc/1/cgroup")));
+                    System.getProperty("java.class.path", ""), ContainerRuntime.current() != ContainerRuntime.NONE);
         }
 
         boolean buildOutputOnClassPath() {
@@ -112,30 +107,5 @@ final class LocalDevDetector {
             }
         }
         return signals.buildOutputOnClassPath() && !signals.containerMarkers();
-    }
-
-    /**
-     * Docker's marker file, Kubernetes' service environment, or a cgroup path naming a
-     * container runtime. Any one of them means the exploded class path is an image layout,
-     * not a developer's checkout.
-     */
-    static boolean containerMarkersPresent(Path dockerEnv, Map<String, String> env, Path cgroup) {
-        if (Files.exists(dockerEnv) || env.containsKey("KUBERNETES_SERVICE_HOST")) {
-            return true;
-        }
-        if (!Files.isRegularFile(cgroup)) {
-            return false;
-        }
-        try {
-            String content = Files.readString(cgroup).toLowerCase(Locale.ROOT);
-            for (String marker : CONTAINER_CGROUP_MARKERS) {
-                if (content.contains(marker)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (IOException e) {
-            return false;
-        }
     }
 }
