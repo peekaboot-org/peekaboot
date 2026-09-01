@@ -5,6 +5,8 @@ import ch.qos.logback.classic.LoggerContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
@@ -22,17 +24,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Auto-configuration for the development toolbar.
  * Configures filters for toolbar injection and request/log capture.
  */
 @AutoConfiguration(
         after = PeekabootAutoConfiguration.class,
-        afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
-)
+        afterName =
+                "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
@@ -49,8 +48,7 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
-            ToolbarDataProvider toolbarDataProvider,
-            Tracer tracer) {
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");
@@ -63,8 +61,7 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
-            Tracer tracer,
-            ApplicationEventPublisher eventPublisher) {
+            Tracer tracer, ApplicationEventPublisher eventPublisher) {
         log.trace("Creating RequestCaptureFilter bean");
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher));

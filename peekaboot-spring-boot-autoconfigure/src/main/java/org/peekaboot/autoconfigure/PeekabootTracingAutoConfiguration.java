@@ -1,5 +1,6 @@
 package org.peekaboot.autoconfigure;
 
+import java.time.Duration;
 import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -9,8 +10,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
-
-import java.time.Duration;
 
 /**
  * Auto-configuration for Peekaboot tracing components.
@@ -32,8 +31,7 @@ public class PeekabootTracingAutoConfiguration {
                 properties.getMaxErrorTraces(),
                 properties.getMaxSlowTraces(),
                 properties.getSlowTraceThresholdMs(),
-                properties.getMaxLogsPerTrace()
-        );
+                properties.getMaxLogsPerTrace());
     }
 
     @Bean
