@@ -4,8 +4,8 @@ import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.info.BuildProperties;
@@ -19,7 +19,7 @@ import org.springframework.util.StringUtils;
  * non-web application too.
  */
 @AutoConfiguration(after = ProjectInfoAutoConfiguration.class)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @EnableConfigurationProperties(PeekabootProperties.class)
 public class PeekabootStorageAutoConfiguration {
 

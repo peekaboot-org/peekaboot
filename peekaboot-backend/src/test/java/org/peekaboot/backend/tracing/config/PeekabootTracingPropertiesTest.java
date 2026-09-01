@@ -1,8 +1,8 @@
-package org.peekaboot.backend.tracing.autoconfigure;
-
-import org.junit.jupiter.api.Test;
+package org.peekaboot.backend.tracing.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
+import org.junit.jupiter.api.Test;
 
 class PeekabootTracingPropertiesTest {
 

@@ -1,4 +1,4 @@
-package org.peekaboot.backend.tracing.autoconfigure;
+package org.peekaboot.backend.tracing.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

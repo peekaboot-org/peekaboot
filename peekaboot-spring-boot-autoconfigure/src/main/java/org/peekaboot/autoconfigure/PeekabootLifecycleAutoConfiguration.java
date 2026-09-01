@@ -1,16 +1,30 @@
 package org.peekaboot.autoconfigure;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
-import org.peekaboot.backend.lifecycle.*;
+import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
+import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
+import org.peekaboot.backend.lifecycle.BuildInfoProvider;
+import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.EnvironmentInfo;
+import org.peekaboot.backend.lifecycle.LifecycleEventFile;
+import org.peekaboot.backend.lifecycle.LifecycleEventLog;
+import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
+import org.peekaboot.backend.lifecycle.LifecycleEvents;
+import org.peekaboot.backend.lifecycle.LifecycleRuns;
+import org.peekaboot.backend.lifecycle.ServerUrlResolver;
 import org.peekaboot.backend.lifecycle.web.LifecycleController;
 import org.peekaboot.backend.storage.StorageDirectory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
 import org.springframework.context.annotation.Bean;
@@ -18,13 +32,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
 @AutoConfiguration(
-        after = {
-            org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration.class,
-            PeekabootStorageAutoConfiguration.class
-        },
+        after = {ProjectInfoAutoConfiguration.class, PeekabootStorageAutoConfiguration.class},
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot.lifecycle", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty(name = "peekaboot.lifecycle.enabled", matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean
@@ -73,7 +84,7 @@ public class PeekabootLifecycleAutoConfiguration {
         return new ApplicationStoppedListener(buildInfoProvider);
     }
 
-    @Configuration
+    @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(DataSource.class)
     static class DatabaseMetadataConfiguration {
 
@@ -91,7 +102,7 @@ public class PeekabootLifecycleAutoConfiguration {
      * Kept apart from the rest of this auto-configuration: the banner listeners above
      * must keep working in a context that has no storage bean at all.
      */
-    @Configuration
+    @Configuration(proxyBeanMethods = false)
     @ConditionalOnBean(StorageDirectory.class)
     static class LifecycleEventLogConfiguration {
 

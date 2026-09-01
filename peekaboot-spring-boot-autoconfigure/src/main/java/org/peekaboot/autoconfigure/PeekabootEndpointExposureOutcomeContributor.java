@@ -1,7 +1,6 @@
 package org.peekaboot.autoconfigure;
 
 import java.util.Set;
-
 import org.springframework.boot.actuate.autoconfigure.endpoint.condition.EndpointExposureOutcomeContributor;
 import org.springframework.boot.actuate.autoconfigure.endpoint.expose.EndpointExposure;
 import org.springframework.boot.actuate.endpoint.EndpointId;
@@ -19,7 +18,7 @@ import org.springframework.core.env.Environment;
  */
 public class PeekabootEndpointExposureOutcomeContributor implements EndpointExposureOutcomeContributor {
 
-    private static final String ENABLED_PROPERTY = "peekaboot.enabled";
+    private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
 
     private final Environment environment;
 
@@ -28,8 +27,8 @@ public class PeekabootEndpointExposureOutcomeContributor implements EndpointExpo
     }
 
     @Override
-    public ConditionOutcome getExposureOutcome(EndpointId endpointId, Set<EndpointExposure> exposures,
-            ConditionMessage.Builder message) {
+    public ConditionOutcome getExposureOutcome(
+            EndpointId endpointId, Set<EndpointExposure> exposures, ConditionMessage.Builder message) {
         if (!exposures.contains(EndpointExposure.WEB)) {
             return null;
         }

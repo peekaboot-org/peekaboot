@@ -5,6 +5,8 @@ import ch.qos.logback.classic.LoggerContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
@@ -13,8 +15,8 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,20 +24,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Auto-configuration for the development toolbar.
  * Configures filters for toolbar injection and request/log capture.
  */
 @AutoConfiguration(
         after = PeekabootAutoConfiguration.class,
-        afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
-)
+        afterName =
+                "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
 @ConditionalOnClass(TraceStore.class)
 public class DevToolbarAutoConfiguration {
 
@@ -49,29 +48,26 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
-            ToolbarDataProvider toolbarDataProvider,
-            Tracer tracer) {
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
-        log.info("DevToolbarFilter registered for all URLs");
+        log.debug("DevToolbarFilter registered for all URLs");
         return registration;
     }
 
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
-            Tracer tracer,
-            ApplicationEventPublisher eventPublisher) {
-        log.trace("Creating RequestCaptureFilter bean");
+            Tracer tracer, ApplicationEventPublisher eventPublisher) {
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");
-        log.info("RequestCaptureFilter registered for all URLs");
+        log.debug("RequestCaptureFilter registered for all URLs");
         return registration;
     }
 

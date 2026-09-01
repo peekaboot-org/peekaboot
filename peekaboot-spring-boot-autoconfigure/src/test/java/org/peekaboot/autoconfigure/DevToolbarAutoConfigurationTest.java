@@ -10,6 +10,7 @@ import ch.qos.logback.classic.util.ContextInitializer;
 import ch.qos.logback.core.Appender;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -17,7 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.log.PeekabootLogbackAppender;
-import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -219,13 +220,28 @@ class DevToolbarAutoConfigurationTest {
                         new StandardEnvironment()));
     }
 
-    /** Only events carrying a traceId in the MDC are captured. */
+    /**
+     * Only events carrying a traceId in the MDC are captured. The event has to travel up to
+     * the root logger, where the capture appender hangs, so root's other appenders - the
+     * console - are unhooked for the one statement rather than additivity switched off.
+     */
     private void logWithTraceId(String message) {
+        Logger root = ((LoggerContext) LoggerFactory.getILoggerFactory()).getLogger(Logger.ROOT_LOGGER_NAME);
+        List<Appender<ILoggingEvent>> unhooked = new ArrayList<>();
+        Iterator<Appender<ILoggingEvent>> it = root.iteratorForAppenders();
+        while (it.hasNext()) {
+            Appender<ILoggingEvent> appender = it.next();
+            if (!(appender instanceof PeekabootLogbackAppender)) {
+                unhooked.add(appender);
+            }
+        }
+        unhooked.forEach(root::detachAppender);
         MDC.put("traceId", "0123456789abcdef0123456789abcdef");
         try {
             LoggerFactory.getLogger(DevToolbarAutoConfigurationTest.class).error(message);
         } finally {
             MDC.remove("traceId");
+            unhooked.forEach(root::addAppender);
         }
     }
 

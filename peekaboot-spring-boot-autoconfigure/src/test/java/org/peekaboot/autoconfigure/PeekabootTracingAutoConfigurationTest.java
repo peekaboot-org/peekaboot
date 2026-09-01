@@ -1,14 +1,20 @@
 package org.peekaboot.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.micrometer.observation.ObservationRegistry;
-import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
-import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -18,20 +24,11 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.handler.MappedInterceptor;
 
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 class PeekabootTracingAutoConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(
-                    PeekabootTracingAutoConfiguration.class,
-                    OtelTracingAutoConfiguration.class
-            ))
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
+            .withConfiguration(
+                    AutoConfigurations.of(PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -51,19 +48,29 @@ class PeekabootTracingAutoConfigurationTest {
 
     @Test
     void shouldNotCreateBeansWhenDisabled() {
-        contextRunner
-                .withPropertyValues("peekaboot.tracing.enabled=false")
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(TraceStore.class);
-                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
-                });
+        contextRunner.withPropertyValues("peekaboot.tracing.enabled=false").run(context -> {
+            assertThat(context).doesNotHaveBean(TraceStore.class);
+            assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+        });
     }
 
     @Test
     void shouldNotCreateBeansWhenPeekabootGloballyDisabled() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=false")
+        contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
+            assertThat(context).doesNotHaveBean(TraceStore.class);
+            assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+        });
+    }
+
+    /** Everything that reads the store is servlet-only; a WebFlux or non-web app would fill it for nobody. */
+    @Test
+    void shouldNotCreateBeansWhenNotAServletApplication() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
+                    assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(TraceStore.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
                 });
@@ -73,11 +80,9 @@ class PeekabootTracingAutoConfigurationTest {
     void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
         // matchIfMissing = false: without the environment post-processor's detected
         // default the safe fallback is off
-        new ApplicationContextRunner()
+        new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootTracingAutoConfiguration.class,
-                        OtelTracingAutoConfiguration.class
-                ))
+                        PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(TraceStore.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
@@ -87,10 +92,7 @@ class PeekabootTracingAutoConfigurationTest {
     @Test
     void shouldApplyCustomProperties() {
         contextRunner
-                .withPropertyValues(
-                        "peekaboot.tracing.max-traces=500",
-                        "peekaboot.tracing.max-spans-per-trace=25"
-                )
+                .withPropertyValues("peekaboot.tracing.max-traces=500", "peekaboot.tracing.max-spans-per-trace=25")
                 .run(context -> {
                     assertThat(context).hasSingleBean(PeekabootTracingProperties.class);
                     PeekabootTracingProperties properties = context.getBean(PeekabootTracingProperties.class);
@@ -103,15 +105,28 @@ class PeekabootTracingAutoConfigurationTest {
     void bucketPropertiesReachTheStore() {
         contextRunner
                 .withPropertyValues(
-                        "peekaboot.tracing.max-error-traces=1",
-                        "peekaboot.tracing.slow-trace-threshold-ms=1")
+                        "peekaboot.tracing.max-error-traces=1", "peekaboot.tracing.slow-trace-threshold-ms=1")
                 .run(context -> {
                     TraceStore store = context.getBean(TraceStore.class);
                     // slow threshold 1ms: a 5ms span classifies as slow
                     Instant start = Instant.parse("2026-01-01T00:00:00Z");
-                    store.addSpan(new SpanData("t1", "s1", null, "op", null,
-                            start, start.plusMillis(5), Duration.ofMillis(5),
-                            Map.of(), List.of(), null, null, null, null, null, List.of(),
+                    store.addSpan(new SpanData(
+                            "t1",
+                            "s1",
+                            null,
+                            "op",
+                            null,
+                            start,
+                            start.plusMillis(5),
+                            Duration.ofMillis(5),
+                            Map.of(),
+                            List.of(),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            List.of(),
                             store.nextCreationOrder()));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
@@ -125,13 +140,11 @@ class PeekabootTracingAutoConfigurationTest {
 
     @Test
     void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {
-        webContextRunner
-                .withUserConfiguration(ObservationRegistryConfig.class)
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(TracingHandlerInterceptor.class);
-                    assertThat(context).hasSingleBean(WebMvcConfigurer.class);
-                });
+        webContextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(TracingHandlerInterceptor.class);
+            assertThat(context).hasSingleBean(WebMvcConfigurer.class);
+        });
     }
 
     @Test
@@ -180,21 +193,19 @@ class PeekabootTracingAutoConfigurationTest {
 
     @Test
     void shouldRegisterInterceptorWithExpectedPathPatterns() {
-        webContextRunner
-                .withUserConfiguration(ObservationRegistryConfig.class)
-                .run(context -> {
-                    WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
-                    RecordingInterceptorRegistry registry = new RecordingInterceptorRegistry();
-                    configurer.addInterceptors(registry);
+        webContextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
+            WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
+            RecordingInterceptorRegistry registry = new RecordingInterceptorRegistry();
+            configurer.addInterceptors(registry);
 
-                    List<Object> registered = registry.registered();
-                    assertThat(registered).hasSize(1);
-                    MappedInterceptor mapped = (MappedInterceptor) registered.getFirst();
+            List<Object> registered = registry.registered();
+            assertThat(registered).hasSize(1);
+            MappedInterceptor mapped = (MappedInterceptor) registered.getFirst();
 
-                    assertThat(mapped.getIncludePathPatterns()).containsExactly("/**");
-                    assertThat(mapped.getExcludePathPatterns()).containsExactlyInAnyOrder(
-                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
-                });
+            assertThat(mapped.getIncludePathPatterns()).containsExactly("/**");
+            assertThat(mapped.getExcludePathPatterns())
+                    .containsExactlyInAnyOrder("/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error");
+        });
     }
 
     /**

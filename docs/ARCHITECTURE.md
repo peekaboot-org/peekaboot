@@ -236,8 +236,8 @@ org.peekaboot.backend/
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── storage/                # StorageDirectory — resolves peekaboot.storage.dir (see Persisted state)
 ├── tracing/                # In-memory tracing
-│   ├── autoconfigure/      # PeekabootTracingProperties
 │   ├── bridge/otel/        # OtelSpanExporter
+│   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDataEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
@@ -431,13 +431,14 @@ the three hooks that run before or outside the application context are registere
 ### Conditional Loading
 
 Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
-`DevToolbarAutoConfiguration` and `TracingInterceptorAutoConfiguration` all carry the
-servlet guard:
+`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
+`InsightsAutoConfiguration` all carry the servlet guard:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnProperty(prefix = "peekaboot", name = "enabled", havingValue = "true")
-@ConditionalOnProperty(prefix = "peekaboot", name = "dev-toolbar", havingValue = "true")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
 @ConditionalOnClass(TraceStore.class)
 ```
 
@@ -450,9 +451,11 @@ mappers, just with nothing servlet-specific ever invoking them &mdash; dead bean
 wasted component-scan work, not a startup crash (`ApplicationContextRunner` confirms the
 context starts cleanly either way; only `WebMvcConfigurationSupport`, itself only wired up
 in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard prevents
-even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootStorageAutoConfiguration`,
-`PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry no such guard,
-since none of them touch anything servlet-specific.
+even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry it
+for the same reason: everything that reads the trace store is servlet-only, so a WebFlux or
+non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
+`PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no such
+guard, since neither touches anything servlet-specific.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
@@ -723,7 +726,7 @@ class DevToolbarAutoConfigurationIT {
 )
 ```
 
-The `afterName` attribute (string-based) is used instead of class reference to avoid compile-time dependency on the tracing autoconfigure module.
+The `afterName` attribute (string-based) is used instead of a class reference because Boot's OpenTelemetry auto-configuration is an optional dependency: a class literal would fail to load when it is absent. `InsightsAutoConfiguration` names `CompositeMeterRegistryAutoConfiguration` the same way.
 
 ## Known defects
 
