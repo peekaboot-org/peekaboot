@@ -61,21 +61,22 @@ public class DevToolbarFilter implements Filter {
         log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), uri);
         ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
 
+        // Deliberately not a finally: a handler that throws mid-render leaves a partial page
+        // in the buffer, and committing it as a 200 would take the container's error page
+        // away from the developer. The buffer is dropped and the exception propagates.
+        chain.doFilter(request, wrappedResponse);
+
         try {
-            chain.doFilter(request, wrappedResponse);
-        } finally {
-            try {
-                if (httpRequest.isAsyncStarted()) {
-                    // async handlers keep writing after this filter returns;
-                    // hand the response over and skip injection
-                    wrappedResponse.enablePassthrough();
-                } else if (!wrappedResponse.isPassthrough()) {
-                    processResponse(httpRequest, wrappedResponse, httpResponse);
-                }
-            } catch (Exception e) {
-                log.warn("Failed to inject dev toolbar, returning original response", e);
-                wrappedResponse.copyBodyToResponse();
+            if (httpRequest.isAsyncStarted()) {
+                // async handlers keep writing after this filter returns;
+                // hand the response over and skip injection
+                wrappedResponse.enablePassthrough();
+            } else if (!wrappedResponse.isPassthrough()) {
+                processResponse(httpRequest, wrappedResponse, httpResponse);
             }
+        } catch (Exception e) {
+            log.warn("Failed to inject dev toolbar, returning original response", e);
+            wrappedResponse.copyBodyToResponse();
         }
     }
 

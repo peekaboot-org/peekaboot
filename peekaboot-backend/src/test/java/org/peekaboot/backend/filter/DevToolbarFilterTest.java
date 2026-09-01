@@ -1,10 +1,13 @@
 package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,6 +16,7 @@ import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.HttpServletRequest;
@@ -257,6 +261,35 @@ class DevToolbarFilterTest {
                 assertThat(event.getThrowableProxy().getMessage()).isEqualTo("Provider error");
             });
         }
+    }
+
+    /**
+     * A template engine writes progressively, so a template that throws halfway leaves a
+     * partial page in the buffer. Committing that partial page as a 200 would take the
+     * container's error page - the one thing that tells the developer what broke - off the
+     * table; the buffer is dropped and the exception left to the container instead.
+     */
+    @Test
+    void shouldNotCommitAPartialPageWhenTheChainThrows() throws Exception {
+        when(request.getRequestURI()).thenReturn("/users/123");
+        when(request.getHeader("X-Requested-With")).thenReturn(null);
+
+        doAnswer(invocation -> {
+                    ContentBufferingResponseWrapper wrapper =
+                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    wrapper.setContentType("text/html");
+                    wrapper.getWriter().write("<html><body><h1>Half a page");
+                    throw new ServletException("template blew up");
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain))
+                .isInstanceOf(ServletException.class)
+                .hasMessage("template blew up");
+
+        verify(response, never()).getOutputStream();
+        verify(response, never()).setContentLength(anyInt());
     }
 
     @Test
