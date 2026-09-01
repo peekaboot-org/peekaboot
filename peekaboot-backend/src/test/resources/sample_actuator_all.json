@@ -24913,57 +24913,53 @@
     }
   },
   "health":{
-    "body":{
-      "components":{
-        "db":{
-          "details":{
-            "database":"PostgreSQL",
-            "validationQuery":"isValid()"
-          },
-          "status":"UP"
+    "components":{
+      "db":{
+        "details":{
+          "database":"PostgreSQL",
+          "validationQuery":"isValid()"
         },
-        "diskSpace":{
-          "details":{
-            "total":1995218165760,
-            "free":961848963072,
-            "threshold":10485760,
-            "path":"/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/.",
-            "exists":true
-          },
-          "status":"UP"
-        },
-        "livenessState":{
-          "status":"UP"
-        },
-        "ping":{
-          "status":"UP"
-        },
-        "readinessState":{
-          "status":"UP"
-        },
-        "ssl":{
-          "details":{
-            "expiringChains":[
-
-            ],
-            "invalidChains":[
-
-            ],
-            "validChains":[
-
-            ]
-          },
-          "status":"UP"
-        }
+        "status":"UP"
       },
-      "groups":[
-        "liveness",
-        "readiness"
-      ],
-      "status":"UP"
+      "diskSpace":{
+        "details":{
+          "total":1995218165760,
+          "free":961848963072,
+          "threshold":10485760,
+          "path":"/Users/xar/Documents/src-rv/peekaboot-org/peekaboot/.",
+          "exists":true
+        },
+        "status":"UP"
+      },
+      "livenessState":{
+        "status":"UP"
+      },
+      "ping":{
+        "status":"UP"
+      },
+      "readinessState":{
+        "status":"UP"
+      },
+      "ssl":{
+        "details":{
+          "expiringChains":[
+
+          ],
+          "invalidChains":[
+
+          ],
+          "validChains":[
+
+          ]
+        },
+        "status":"UP"
+      }
     },
-    "contentType":null,
-    "status":200
+    "groups":[
+      "liveness",
+      "readiness"
+    ],
+    "status":"UP"
   },
   "metrics":{
     "names":[

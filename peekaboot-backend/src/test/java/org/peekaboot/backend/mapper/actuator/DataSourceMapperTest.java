@@ -55,10 +55,8 @@ class DataSourceMapperTest {
     void map_shouldAggregateHealthStatus() {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
 
-        HealthResponse health = new HealthResponse(
-                new HealthResponse.HealthBody(
-                        "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of()),
-                200);
+        HealthResponse health =
+                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of());
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);

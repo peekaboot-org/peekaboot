@@ -313,6 +313,16 @@ its own `WebEndpointDiscoverer` with empty endpoint filters — bypassing
 READ operation directly (`operation.invoke(...)`). Data therefore flows without
 any actuator endpoint being reachable over the web.
 
+Health is the one exception to the discoverer path. The web operation the discoverer
+finds under `health` is `HealthEndpointWebExtension`, which applies the application's
+`management.endpoint.health.show-details` — a setting that belongs to the application's
+own public `/actuator/health` and that Peekaboot must not widen. The service therefore
+reads the `HealthEndpoint` bean itself: `HealthEndpoint.health()` always carries the
+components and their details, so the dashboard has full health while `/actuator/health`
+keeps answering anonymous callers with the aggregate status only.
+`ActuatorResponseParser` accordingly parses the bare `HealthDescriptor` shape (`status`,
+`components`, `groups`), not a `WebEndpointResponse` wrapper.
+
 Bypassing exposure filtering is not enough on its own: Spring Boot only
 *creates* an endpoint bean when `@ConditionalOnAvailableEndpoint` matches, i.e.
 the endpoint is accessible **and** exposed via web, JMX (only when

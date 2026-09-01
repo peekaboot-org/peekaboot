@@ -83,11 +83,11 @@ public class DataSourceMapper {
     }
 
     private HealthStatus extractDbHealth(HealthResponse health) {
-        if (health == null || health.body() == null || health.body().components() == null) {
+        if (health == null || health.components() == null) {
             return HealthStatus.UNKNOWN;
         }
 
-        HealthResponse.HealthComponent db = health.body().components().get("db");
+        HealthResponse.HealthComponent db = health.components().get("db");
         if (db == null) {
             return HealthStatus.UNKNOWN;
         }

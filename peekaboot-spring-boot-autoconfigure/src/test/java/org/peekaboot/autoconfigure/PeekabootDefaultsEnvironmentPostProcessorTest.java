@@ -43,8 +43,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
         assertThat(environment.getPropertySources().contains("peekabootDefaults"))
                 .isFalse();
-        assertThat(environment.getProperty("management.endpoint.health.show-details"))
-                .isNull();
+        assertThat(environment.getProperty("management.info.java.enabled")).isNull();
     }
 
     @Test
@@ -69,8 +68,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
         assertThat(environment.getPropertySources().contains("peekabootDefaults"))
                 .isFalse();
-        assertThat(environment.getProperty("management.endpoint.health.show-details"))
-                .isNull();
+        assertThat(environment.getProperty("management.info.java.enabled")).isNull();
     }
 
     @Test
@@ -110,11 +108,24 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
-        assertThat(environment.getProperty("management.endpoint.health.show-details"))
-                .isEqualTo("always");
         assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("true");
         assertThat(environment.getProperty("management.tracing.sampling.probability"))
                 .isEqualTo("1.0");
+    }
+
+    /**
+     * The dashboard reads health through the HealthEndpoint bean, which always carries the
+     * components, so Peekaboot has no reason to widen the application's own public
+     * /actuator/health - Spring's default (aggregate status only) stays in force.
+     */
+    @Test
+    void leavesTheHostsHealthShowDetailsAlone() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
+
+        assertThat(environment.getProperty("management.endpoint.health.show-details"))
+                .isNull();
     }
 
     @Test
@@ -199,14 +210,13 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         // Simulate app properties with higher priority
         MapPropertySource appProperties =
-                new MapPropertySource("appProperties", Map.of("management.endpoint.health.show-details", "never"));
+                new MapPropertySource("appProperties", Map.of("management.info.java.enabled", "false"));
         environment.getPropertySources().addFirst(appProperties);
 
         postProcessor(true).postProcessEnvironment(environment, new SpringApplication());
 
         // App property should win over starter default
-        assertThat(environment.getProperty("management.endpoint.health.show-details"))
-                .isEqualTo("never");
+        assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("false");
     }
 
     @Test

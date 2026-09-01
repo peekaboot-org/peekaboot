@@ -27,25 +27,24 @@ public class HealthMapper {
      * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
      */
     public HealthInfo map(HealthResponse health, boolean unmask) {
-        if (health == null || health.body() == null) {
+        if (health == null) {
             return new HealthInfo(HealthStatus.UNKNOWN, List.of());
         }
 
-        HealthResponse.HealthBody body = health.body();
-        HealthStatus status = HealthStatus.fromString(body.status());
-        List<HealthComponent> components = extractComponents(body, unmask);
+        HealthStatus status = HealthStatus.fromString(health.status());
+        List<HealthComponent> components = extractComponents(health, unmask);
 
         return new HealthInfo(status, components);
     }
 
-    private List<HealthComponent> extractComponents(HealthResponse.HealthBody body, boolean unmask) {
-        if (body.components() == null || body.components().isEmpty()) {
+    private List<HealthComponent> extractComponents(HealthResponse health, boolean unmask) {
+        if (health.components() == null || health.components().isEmpty()) {
             return List.of();
         }
 
         List<HealthComponent> result = new ArrayList<>();
         for (Map.Entry<String, HealthResponse.HealthComponent> entry :
-                body.components().entrySet()) {
+                health.components().entrySet()) {
             String name = entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
