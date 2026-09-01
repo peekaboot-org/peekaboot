@@ -65,7 +65,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * above (indices 1, 4, 5, 10, 15) on page 1, so the badge/dash assertions don't need to
  * page-navigate to find them - paging itself is proven separately.
  */
-class LifecycleTabTest extends PlaywrightTestBase {
+class LifecycleTabIT extends PlaywrightTestBase {
 
     private static final String ROWS = "#lifecycle-runs .pk-lifecycle-table tbody tr";
 
@@ -124,7 +124,7 @@ class LifecycleTabTest extends PlaywrightTestBase {
 
     // Charts and this table both fail invisibly (a swallowed script error leaves the
     // page mute in test output), so every browser-side signal is collected and dumped
-    // at teardown - copied verbatim from InsightsMarkersTest.
+    // at teardown - copied verbatim from InsightsMarkersIT.
     private final List<String> browserLog = new CopyOnWriteArrayList<>();
 
     @BeforeEach
@@ -139,13 +139,11 @@ class LifecycleTabTest extends PlaywrightTestBase {
         });
     }
 
-    /** A subclass @AfterEach runs before the base class's, so the stream is gone by teardown. */
     @AfterEach
-    void closeLifecycleStreams() {
+    void dumpBrowserLog() {
         if (!browserLog.isEmpty()) {
             System.out.println("[browser] " + String.join("\n[browser] ", new ArrayList<>(browserLog)));
         }
-        closeLiveStreams();
     }
 
     private void openLifecycle() {

@@ -26,7 +26,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-class LifecycleRunsApiIntegrationTest {
+class LifecycleRunsApiIT {
 
     @LocalServerPort
     private int port;

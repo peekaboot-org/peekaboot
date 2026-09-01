@@ -9,8 +9,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.annotation.DirtiesContext;
-import org.springframework.test.annotation.DirtiesContext.ClassMode;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * The markers are canvas drawing, so the assertions hang off the readback the layer
@@ -18,19 +17,27 @@ import org.springframework.test.annotation.DirtiesContext.ClassMode;
  * only part of the feature that is a DOM node - the same approach the zoom tests take.
  *
  * <p>{@code PlaywrightTestBase}'s {@code @SpringBootTest} configuration is shared
- * verbatim by every UI test class, so Spring caches and reuses one application
- * context across the whole suite - this class runs against an application that may
- * have started minutes earlier. {@code @DirtiesContext(BEFORE_CLASS)} forces a fresh
- * boot just for this class, so "the application started recently" - the precondition
- * every test here relies on - is actually true rather than an accident of test order.
- * A fresh boot alone is not enough on its own for a multi-test class, though: level
+ * verbatim by every UI test class, so Spring caches and reuses one application context
+ * across the whole suite - this class would otherwise run against an application that
+ * may have started minutes earlier, aging its start marker out of even level 1's 150s
+ * window. The {@code peekaboot.enabled=true} below restates the default every neighbour
+ * already gets from application-test.yml - it changes nothing at runtime - but it makes
+ * this class's {@code @TestPropertySource} differ from every other class's, which is
+ * part of Spring's context-cache key (see {@code MergedContextConfiguration}). That
+ * earns this class its own, separately cached context, booted fresh the first time this
+ * class runs, without an {@code @DirtiesContext} that would evict the shared context out
+ * from under whatever other class the parallel suite is running at the same moment. Do
+ * not delete this property as dead weight - doing so folds this class back into the
+ * shared context and reintroduces the aged-out marker failure.
+ *
+ * <p>A fresh boot alone is not enough on its own for a multi-test class, though: level
  * 0's window is only 22.5s (250ms x 90 samples, see application-test.yml), which the
  * class's own three tests can burn through before the last one runs. Every test
  * switches to level 1 (1.5s x 100 samples = 150s) before reading anything off the
  * chart, for headroom the class can't outrun.
  */
-@DirtiesContext(classMode = ClassMode.BEFORE_CLASS)
-class InsightsMarkersTest extends PlaywrightTestBase {
+@TestPropertySource(properties = "peekaboot.enabled=true")
+class InsightsMarkersIT extends PlaywrightTestBase {
 
     private static final String PANEL = "#insights-panels .pk-insight-panel";
 
@@ -51,13 +58,11 @@ class InsightsMarkersTest extends PlaywrightTestBase {
         });
     }
 
-    /** A subclass @AfterEach runs before the base class's, so the stream is gone by teardown. */
     @AfterEach
-    void closeInsightsStream() {
+    void dumpBrowserLog() {
         if (!browserLog.isEmpty()) {
             System.out.println("[browser] " + String.join("\n[browser] ", new ArrayList<>(browserLog)));
         }
-        closeLiveStreams();
     }
 
     private void openInsights() {
