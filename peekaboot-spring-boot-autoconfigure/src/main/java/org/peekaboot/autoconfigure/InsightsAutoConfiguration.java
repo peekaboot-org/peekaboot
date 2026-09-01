@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.web.InsightsController;
@@ -14,7 +15,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ResourceLoader;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Auto-configuration for the Peekaboot insights dashboard: the metrics
@@ -33,9 +33,10 @@ import tools.jackson.databind.ObjectMapper;
 @EnableConfigurationProperties(InsightsProperties.class)
 public class InsightsAutoConfiguration {
 
+    /** Peekaboot's own mapper, like the REST responses: the SSE payloads are read by the same dashboard. */
     @Bean
-    public InsightsSsePublisher insightsSsePublisher(ObjectMapper objectMapper) {
-        return new InsightsSsePublisher(objectMapper);
+    public InsightsSsePublisher insightsSsePublisher() {
+        return new InsightsSsePublisher(PeekabootJson.MAPPER);
     }
 
     @Bean

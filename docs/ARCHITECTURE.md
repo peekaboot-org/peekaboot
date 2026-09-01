@@ -214,7 +214,7 @@ Core module containing all business logic.
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
 ├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
-├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig
+├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig, PeekabootJson (+ its message converter)
 ├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
 ├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
 ├── domain/                 # Domain models, one sub-package per dashboard concern
@@ -304,6 +304,24 @@ The backend implements a Backend-for-Frontend pattern:
 Actuator Endpoints → Raw Beans → Domain Models → API Response
      (JSON)         (typed)      (clean DTOs)    (dashboard)
 ```
+
+### JSON on the wire
+
+Peekaboot's REST responses and its insights SSE events are serialised by
+`PeekabootJson.MAPPER`, a plain default Jackson mapper, never by the application's own
+Jackson bean. The dashboard reads camelCase names, tests some fields with `!== null`
+(`loggers.js`), and parses every `Instant` as an ISO-8601 string; an application that
+sets `spring.jackson.property-naming-strategy`, `default-property-inclusion=non_null` or
+`datatype.datetime.write-dates-as-timestamps` must not silently reshape that.
+`PeekabootJsonMessageConverter` (registered first by `PeekabootWebConfig`) claims every
+return value whose class lives under `org.peekaboot.backend.` — the scope has to be the
+value's type because Spring MVC picks converters per return value, not per controller —
+and `InsightsAutoConfiguration` hands the same mapper to `InsightsSsePublisher`. The
+default mapper writes byte for byte what an unconfigured Boot application already wrote,
+so nothing changed for hosts with default Jackson settings (`PeekabootJsonTest` pins that).
+`PeekabootController.getFeatures()` and `InsightsController`'s 400 body return plain
+`Map`s and therefore still go through the application's converter; naming strategies do
+not touch map keys, and neither map holds a null.
 
 ### In-Process Actuator Invocation
 
