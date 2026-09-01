@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    image: 'postgres:18'
     environment:
       - 'POSTGRES_DB=sample_app_db'
       - 'POSTGRES_USER=sample_app_db_user'

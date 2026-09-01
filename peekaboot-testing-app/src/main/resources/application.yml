@@ -4,8 +4,7 @@ server:
 spring:
   application:
     name: peekaboot-testing-app
-  datasource:
-  # is configured automatically by spring-boot's compose support
+  # spring.datasource is configured automatically by spring-boot's compose support
 
   jpa:
     open-in-view: false

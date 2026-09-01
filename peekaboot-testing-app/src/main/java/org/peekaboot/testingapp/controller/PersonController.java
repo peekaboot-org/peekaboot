@@ -27,7 +27,7 @@ public class PersonController {
         if (error) {
             log.error("An error occurred while trying to find all persons");
         }
-        return "index";
+        return "persons";
     }
 
     @GetMapping("/persons")
