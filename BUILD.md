@@ -87,8 +87,8 @@ stays around a minute.
 | `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct |
-| `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
-| `peekaboot-coverage` | pom | **no** (`maven.deploy.skip`) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
+| `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`, see [Releasing](#releasing)) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
+| `peekaboot-coverage` | pom | **no** (`skipPublishing`, see [Releasing](#releasing)) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
 
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
@@ -281,6 +281,14 @@ Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It
 javadoc jar (`doclint` off, `failOnError` false), GPG-signs with `raphael@peekaboot.org`, and
 publishes through `central-publishing-maven-plugin` (`autoPublish`, waits until published). A
 sources jar is attached on *every* build of the published modules, not just releases.
+
+Two modules stay out of the bundle, by two different switches. The publishing plugin binds
+itself to `deploy` in every module that inherits the profile and **ignores
+`maven.deploy.skip`**; `peekaboot-coverage` therefore opts out with `skipPublishing`, the
+plugin's per-module switch (it only filters that module's own artifacts — the bundle is still
+uploaded from there, the last module of the reactor). `peekaboot-testing-app` never sees the
+plugin at all: the profile is undefined in its `spring-boot-starter-parent` pom, so the plain
+`maven-deploy-plugin` runs for it, and `maven.deploy.skip` is what keeps the sample app out.
 
 `release:prepare` bumps the POMs to the release version, commits, tags, runs its
 `preparationGoals` (`clean verify`) against that tag and then commits the next

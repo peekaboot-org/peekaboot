@@ -39,7 +39,11 @@
              own runtime through CPU contention faster than the extra overlap pays back.
              Set to 1 to serialize when diagnosing a flaky test. -->
         <peekaboot.it.threads>2</peekaboot.it.threads>
-        <!-- not a published artifact: it exists to host the sample app and its UI tests -->
+        <!-- Not a published artifact: it exists to host the sample app and its UI tests.
+             This module does not inherit peekaboot-parent, so the peekaboot-release
+             profile - and with it central-publishing-maven-plugin - never applies here:
+             a release build runs the plain maven-deploy-plugin for this module, and
+             this property is that plugin's skip switch. -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
