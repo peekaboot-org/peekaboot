@@ -27,7 +27,9 @@ public class DevToolbarFilter implements Filter {
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
     private static final String SWAGGER_UI_PREFIX = "/swagger-ui/";
-    private static final String CLIENT_ABORT_EXCEPTION = "org.apache.catalina.connector.ClientAbortException";
+    // Recognised by name: this module depends on neither container.
+    private static final Set<String> CLIENT_ABORT_EXCEPTIONS =
+            Set.of("org.apache.catalina.connector.ClientAbortException", "org.eclipse.jetty.io.EofException");
     private static final Set<String> EXCLUDED_EXTENSIONS =
             Set.of(".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot");
 
@@ -91,14 +93,16 @@ public class DevToolbarFilter implements Filter {
 
     /**
      * Whether the write failed because the client hung up - a browser navigating away
-     * mid-response - rather than because of anything on this side. Tomcat wraps that in its
-     * own ClientAbortException (recognised by name, since this module does not depend on
-     * Tomcat); other containers surface the socket error itself.
+     * mid-response - rather than because of anything on this side. Tomcat wraps that in
+     * its own ClientAbortException, Jetty throws its EofException (both recognised by
+     * name, since this module depends on neither container); other containers surface
+     * the socket error itself.
      */
     private static boolean isClientAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof IOException
-                    && (CLIENT_ABORT_EXCEPTION.equals(t.getClass().getName()) || saysClientWentAway(t.getMessage()))) {
+                    && (CLIENT_ABORT_EXCEPTIONS.contains(t.getClass().getName())
+                            || saysClientWentAway(t.getMessage()))) {
                 return true;
             }
         }

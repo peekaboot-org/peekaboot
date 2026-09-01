@@ -281,6 +281,24 @@ class DevToolbarFilterTest {
         assertThat(aborted.writeAttempts).isEqualTo(1);
     }
 
+    /** Jetty's EofException carries no message; it is recognised by class name, like Tomcat's. */
+    @Test
+    void aJettyEofExceptionIsAClientAbortToo() throws Exception {
+        FailingWriteResponse aborted = new FailingWriteResponse(new org.eclipse.jetty.io.EofException(), false);
+        response = aborted;
+        chainWritesHtml("<html><body></body></html>");
+
+        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
+        assertThat(aborted.writeAttempts).isEqualTo(1);
+    }
+
     /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
     @Test
     void aBrokenPipeFromAnotherContainerIsAClientAbortToo() throws Exception {
