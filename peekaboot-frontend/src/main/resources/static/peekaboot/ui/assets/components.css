@@ -231,8 +231,8 @@
 }
 
 /* Data table: one row per record, for tabs that list uniform items. Shared so any
-   such tab reads the same. The trace-detail overlay layers its own narrower
-   key/value rules on top of this in trace-detail.css. */
+   such tab reads the same. --kv is the two-column, header-less key/value form the
+   trace-detail overlay's Request tab uses. */
 .pk-table { width: 100%; border-collapse: collapse; font-size: var(--pk-text-xs); }
 .pk-table th {
     padding: var(--pk-space-sm);
@@ -251,6 +251,8 @@
 /* Numeric columns line up on the decimal, so scanning a column does not jitter. */
 .pk-table__num { text-align: right; font-family: var(--pk-font-mono); font-variant-numeric: tabular-nums; }
 .pk-table__shrink { width: 1%; white-space: nowrap; }
+.pk-table--kv td:first-child { width: 200px; color: var(--pk-text-muted); }
+.pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 /* Wide tables scroll inside their own box rather than widening the page. */
 .pk-table-scroll { overflow-x: auto; }
 .pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }

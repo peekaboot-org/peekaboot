@@ -168,10 +168,6 @@
 /* Request tab styles */
 .pk-request-section { margin-bottom: 24px; }
 .pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-.pk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.pk-table td { padding: 6px 8px; border-bottom: 1px solid var(--pk-bg-alt); }
-.pk-table td:first-child { width: 200px; color: var(--pk-text-muted); }
-.pk-table td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 /* Two muted-italic notes that must not share a class: --masked marks a value the
    masking engine replaced, and the mask tests count those. --empty is the placeholder
    row a header section shows when nothing was captured, which is not a masked value. */

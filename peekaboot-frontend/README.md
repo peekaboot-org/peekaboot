@@ -16,10 +16,13 @@ No build step. Plain ES modules and CSS, served as-is.
 static/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
-├── shared/          api.js, components.js, format.js, markup.js, root-actions.js,
-│                    severity.js, shadow-styles.js, span-names.js, theme.js
-├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (9 tabs, plus the
-│                    Insights tab's own insights-chart.js)
+├── shared/          api.js, components.js, copyable.js, format.js, http-status.js,
+│                    markup.js, root-actions.js, severity.js, shadow-styles.js,
+│                    span-names.js, storage.js, theme.js, unmask-control.js,
+│                    url-filter.js, url-state.js
+├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (10 tabs, plus the
+│                    Insights tab's own insights-chart.js, insights-markers.js and
+│                    insights-colors.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/ — the only third-party code, loaded on demand (see below)
@@ -45,7 +48,9 @@ every surface:
 3. **`components.css`** — the `.pk-*` primitives (badge, group, kv row, meter, button,
    tab strip, empty state, spinner) that every surface's own CSS builds on. A surface's
    own stylesheet (`dashboard.css`, `toolbar.css`, `trace-detail.css`) never re-declares
-   one of these; it only adds surface-specific chrome.
+   one of these; it only adds surface-specific chrome. A variant one surface needs
+   becomes a modifier here (`.pk-table--kv`, the overlay's key/value table), so the
+   primitive stays the single definition.
 
 ### The doubled-selector mechanism
 
@@ -110,13 +115,16 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 |---|---|
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
-| `format.js` | `formatDurationMs`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`. |
+| `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables` — the click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
+| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
+| `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — the backend's masked-value literal (`"******"`), centralised here so a masked-value comparison only needs updating in one place. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)` — the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend no longer decides what's sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
 | `severity.js` | `SLOW_MS`, `VERY_SLOW_MS`, `durationSeverity`, `healthSeverity` — the one place duration and health thresholds are decided. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
+| `storage.js` | `readSetting`, `writeSetting` — guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
 | `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair). |
@@ -289,8 +297,12 @@ hadn't reached the `TraceStore` yet.
    - `export const id = '<id>';`
    - `export const label = 'Display Name';`
    - `export function render(container, data, context) { ... }` — `context` is
-     `{client, locale, timeZone, navigate, features, urlParams, urlIsAuthoritative,
-     setUrlParams, traceUrlState}`, built by `main.js`'s `currentContext()`:
+     `{client, locale, timeZone, navigate, features, unmaskRequested, toggleUnmask,
+     urlParams, urlIsAuthoritative, setUrlParams, traceUrlState}`, built by `main.js`'s
+     `currentContext()`:
+     - `unmaskRequested` / `toggleUnmask()` — whether the current payload was fetched
+       with real values instead of `"******"`, and the shared flip that re-fetches (see
+       `shared/unmask-control.js`); one state for every tab, never persisted.
      - `urlParams` — the active tab's own query params, freshly re-parsed from the hash.
      - `urlIsAuthoritative` — true only for a render triggered by a genuine hash change
        (deep link, Back/Forward, a hand-edited hash), as opposed to a programmatic tab
@@ -326,6 +338,3 @@ hadn't reached the `TraceStore` yet.
    its panel by `#<id>-tab`; without both existing in the HTML, the tab is registered but
    never rendered or shown, whatever `TABS` says.
 
-(Verified against `overview.js` — `id`/`label`/`render(container, data, {locale,
-timeZone})` — and `traces.js`/`meters.js`, which additionally export `isAvailable`;
-`traces.js` also exports `applyFilter`.)
