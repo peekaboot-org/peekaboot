@@ -274,12 +274,14 @@ opens need no configuration either. The `/actuator/` exclusion is a fixed prefix
 not follow `management.endpoints.web.base-path`. Both filters
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
-toolbar on, a trace can still carry a basic method/path/status summary read directly off the
-root span's own HTTP tags — but `TraceTreeMapper.extractRequestSummary` only recognises the
-OpenTelemetry-convention names (`http.request.method`/`http.method`, `url.path`/`http.target`,
-`http.response.status_code`/`http.status_code`), not the `method`/`uri`/`status` tags Spring
-Boot's own server-request observation puts on the span, so whether the summary is populated
-depends on which instrumentation named the root span's tags. Headers, query/form parameters
+toolbar on, a trace still carries a basic method/path/status summary (`summary.request`)
+read off the root span's own HTTP tags by `HttpSpanTags`, which knows all three naming
+schemes that reach the store: Spring Boot's default server-request observation (`method`,
+`status`, `uri` — the route pattern — and `http.url`, which is the request URI and therefore
+the path shown), the current OpenTelemetry names (`http.request.method`, `url.path`,
+`http.response.status_code`) and their superseded spelling (`http.method`, `http.target`,
+`http.status_code`). The overlay reads `summary.request` rather than the tags itself, so the
+browser never has to know those names. Headers, query/form parameters
 and the resolved controller class/method are never available without the toolbar;
 correlated logs are likewise unavailable (see *Log Capture* below). Request/response body
 content and uploaded file names have fields reserved for them on `HttpExchange` but aren't

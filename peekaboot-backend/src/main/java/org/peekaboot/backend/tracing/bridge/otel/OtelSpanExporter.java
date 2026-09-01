@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.mapper.trace.HttpSpanTags;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.context.ApplicationEventPublisher;
@@ -25,9 +26,6 @@ import org.springframework.context.ApplicationEventPublisher;
 public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
-    private static final AttributeKey<String> HTTP_URL_KEY = AttributeKey.stringKey("http.url");
-    private static final AttributeKey<String> HTTP_TARGET_KEY = AttributeKey.stringKey("http.target");
-    private static final AttributeKey<String> URL_PATH_KEY = AttributeKey.stringKey("url.path");
 
     private final TraceStore storage;
     private final ApplicationEventPublisher eventPublisher;
@@ -40,42 +38,24 @@ public class OtelSpanExporter implements SpanExporter {
     @Override
     public CompletableResultCode export(Collection<SpanData> spans) {
         for (SpanData otelSpan : spans) {
-            if (shouldSkipSpan(otelSpan)) {
+            Map<String, String> tags = extractAttributes(otelSpan);
+            if (shouldSkipSpan(otelSpan, tags)) {
                 continue;
             }
-            org.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan);
+            org.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan, tags);
             eventPublisher.publishEvent(new SpanDataEvent(spanData));
         }
         return CompletableResultCode.ofSuccess();
     }
 
-    private boolean shouldSkipSpan(SpanData span) {
-        String path = extractPath(span);
+    /** Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its name. */
+    private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
+        String path = HttpSpanTags.path(tags);
         if (path != null && PeekabootPaths.isExcluded(path)) {
             return true;
         }
         String name = span.getName();
         return name != null && name.contains(PeekabootPaths.BASE_PATH + "/");
-    }
-
-    private String extractPath(SpanData span) {
-        String urlPath = span.getAttributes().get(URL_PATH_KEY);
-        if (urlPath != null) {
-            return urlPath;
-        }
-        String httpTarget = span.getAttributes().get(HTTP_TARGET_KEY);
-        if (httpTarget != null) {
-            return httpTarget;
-        }
-        String httpUrl = span.getAttributes().get(HTTP_URL_KEY);
-        if (httpUrl != null) {
-            int pathStart = httpUrl.indexOf('/', httpUrl.indexOf("://") + 3);
-            if (pathStart > 0) {
-                int queryStart = httpUrl.indexOf('?', pathStart);
-                return queryStart > 0 ? httpUrl.substring(pathStart, queryStart) : httpUrl.substring(pathStart);
-            }
-        }
-        return null;
     }
 
     @Override
@@ -88,12 +68,12 @@ public class OtelSpanExporter implements SpanExporter {
         return CompletableResultCode.ofSuccess();
     }
 
-    private org.peekaboot.backend.tracing.store.SpanData convertToSpanData(SpanData otelSpan) {
+    private org.peekaboot.backend.tracing.store.SpanData convertToSpanData(
+            SpanData otelSpan, Map<String, String> tags) {
         Instant startTime = nanosToInstant(otelSpan.getStartEpochNanos());
         Instant endTime = nanosToInstant(otelSpan.getEndEpochNanos());
         Duration duration = Duration.between(startTime, endTime);
 
-        Map<String, String> tags = extractAttributes(otelSpan);
         List<org.peekaboot.backend.tracing.store.SpanData.Event> events = extractEvents(otelSpan);
 
         String parentId = otelSpan.getParentSpanContext().isValid()

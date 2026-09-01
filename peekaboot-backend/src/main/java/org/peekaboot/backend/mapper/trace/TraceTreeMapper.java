@@ -198,7 +198,7 @@ public class TraceTreeMapper {
      * HTTP request than anything else Peekaboot can name.
      */
     private static RootActionType detectServerActionType(Map<String, String> tags) {
-        if (hasTagPrefix(tags, "http.")) {
+        if (HttpSpanTags.describeHttpRequest(tags)) {
             return RootActionType.HTTP_REQUEST;
         }
         if (hasTagPrefix(tags, "rpc.")) {
@@ -314,29 +314,13 @@ public class TraceTreeMapper {
             return null;
         }
         Map<String, String> tags = rootSpanData.tags();
-        String method = firstTag(tags, "http.method", "http.request.method");
-        String path = firstTag(tags, "http.target", "url.path");
-        Integer statusCode = parseStatusCode(firstTag(tags, "http.status_code", "http.response.status_code"));
+        String method = HttpSpanTags.method(tags);
+        String path = HttpSpanTags.path(tags);
+        Integer statusCode = HttpSpanTags.statusCode(tags);
         if (method == null && path == null && statusCode == null) {
             return null;
         }
         return new TraceTabSummary.RequestSummary(method, path, statusCode);
-    }
-
-    private static String firstTag(Map<String, String> tags, String key, String fallbackKey) {
-        String value = tags.get(key);
-        return value != null ? value : tags.get(fallbackKey);
-    }
-
-    private static Integer parseStatusCode(String statusValue) {
-        if (statusValue == null) {
-            return null;
-        }
-        try {
-            return Integer.parseInt(statusValue);
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private TraceStatus determineStatus(List<SpanData> spans) {
