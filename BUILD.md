@@ -17,10 +17,13 @@ floor. No wrapper, no Node toolchain, no codegen beyond annotation processing.
 ```bash
 mvn clean verify     # compile + all tests + all five gates          <- the real build
 mvn clean install    # the same, plus install into ~/.m2
-mvn test             # tests only; see "What each command actually checks" below
+mvn test             # the fast gate: Error Prone + unit tests only (~1 min);
+                     # integration tests (*IT) don't run before `verify`
 mvn spotless:apply   # format (local builds already do this for you)
 
-mvn -pl <module> test -Dtest=<Class>              # one class — never add -am
+mvn -pl <module> test -Dtest=<Class>              # one unit-test class — never add -am
+mvn -pl <module> verify -Dit.test=<Class>         # one *IT class (runs this module's
+                                                  # gates too; that's inherent to verify)
 mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs Docker
                                                   # and an `mvn install` beforehand
 ```
@@ -28,12 +31,22 @@ mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs D
 ### What each command actually checks
 
 Only Error Prone runs during compilation; the other five gates are bound to `verify`.
-So `mvn test` gives you Error Prone and nothing else, `mvn install`/`mvn verify` give
-you all six. Per module, `verify` runs:
+Tests are split by lifecycle: plain unit tests live in `*Test` classes and run at `test`
+(surefire), while anything that boots a real application — every `@SpringBootTest`, the
+whole Playwright suite — lives in `*IT` classes and runs at `integration-test`
+(failsafe). So `mvn test` is the fast gate — Error Prone plus every unit test, nothing
+else — and `mvn install`/`mvn verify` give you all six gates plus the integration
+tests. Per module, `verify` runs:
 
 ```
-tests → package → sources jar → spotless:check → spotbugs:check → checkstyle:check → pmd:check
+unit tests → package → sources jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
 ```
+
+`peekaboot-testing-app` runs its `*IT` classes in **2 parallel forked JVMs**
+(`-Dpeekaboot.it.forks=N` to override; use `1` when diagnosing a flaky test, `3` only
+with RAM to spare — every fork boots its own Spring contexts and its own Chromium).
+Each fork appends to the module's `jacoco.exec`, so the coverage gate sees the same
+data it would from a serial run.
 
 `peekaboot-coverage` runs last and adds the sixth gate over the whole reactor:
 
@@ -41,13 +54,16 @@ tests → package → sources jar → spotless:check → spotbugs:check → chec
 jacoco:merge -> enforcer (coverage data present?) -> jacoco:check
 ```
 
-Gates run *after* the tests, so a failing test hides every gate failure behind it.
+Gates run *after* the tests, so a failing unit test hides every gate failure behind it.
+(A failing *IT* is reported by `failsafe:verify`, also bound to `verify` — in modules
+that inherit the gates from the parent it lands after them, so there the gates still run.)
 `peekaboot-testing-app` runs the same four in the reverse order — within a phase, Maven
 follows POM declaration order, and that module declares them itself (see below). It also
 adds `spring-boot:repackage`, so it is the only module producing an executable jar.
 
-A cold `mvn clean verify` takes roughly 6-8 minutes on a warm local repository; the Playwright
-suite is the bulk of it.
+A cold `mvn clean verify` takes roughly 3-5 minutes on a warm local repository (the
+Playwright suite is the bulk of it, parallel forks notwithstanding); `mvn test` alone
+stays around a minute.
 
 ## The reactor
 

@@ -1,5 +1,5 @@
 # Merged on top of the bundled panels under the "test" profile (see application-test.yml).
-# The meter deliberately does not exist in this app: it is how InsightsTabTest gets a panel
+# The meter deliberately does not exist in this app: it is how InsightsTabIT gets a panel
 # whose subsystem is absent - the situation of an app without a connection pool or Hibernate -
 # without stubbing anything.
 panels:

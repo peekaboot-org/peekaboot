@@ -4,8 +4,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Small navigation helpers shared by the HTTP-level masking tests
- * ({@code ActuatorMaskingIntegrationTest}, {@code UnmaskingDisabledIntegrationTest},
- * {@code UnmaskingEnabledIntegrationTest}) that need to find one specific property inside
+ * ({@code ActuatorMaskingIT}, {@code UnmaskingDisabledIT},
+ * {@code UnmaskingEnabledIT}) that need to find one specific property inside
  * the Config/Environment tabs' JSON shape.
  */
 final class ActuatorInsightsJson {

@@ -27,7 +27,7 @@ spring:
   # the running container, bypassing spring.datasource.* entirely - so without this,
   # neither the Environment nor the Config tab has a single masked property to
   # photograph. This mirrors application-test.yml's own fixture (see
-  # UnmaskingControlEnabledTest's doc comment): a real, secret-looking value that binds
+  # UnmaskingControlEnabledIT's doc comment): a real, secret-looking value that binds
   # into DataSourceProperties and gets masked like any other password, matching
   # compose.yml's own POSTGRES_PASSWORD so it stays honest about what it is.
   datasource:
@@ -53,7 +53,7 @@ management:
       show-details: always
     # Outside local development (which a JUnit-launched process, this one included, can
     # never be detected as - see PeekabootDefaultsEnvironmentPostProcessor's LocalDevDetector
-    # and ActuatorValuesMaskedOutsideLocalDevelopmentIntegrationTest), value visibility is
+    # and ActuatorValuesMaskedOutsideLocalDevelopmentIT), value visibility is
     # absent and resolves to Spring's own default of never - which blanket-masks every
     # property, not just sensitive-looking ones, before MaskingEngine's selective masking
     # ever runs. Without this, the fixture password below would be indistinguishable from

@@ -142,6 +142,15 @@
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
             </plugin>
+            <!-- Runs the *IT classes (they boot real applications) at integration-test;
+                 goals and version come from the parent's pluginManagement. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>

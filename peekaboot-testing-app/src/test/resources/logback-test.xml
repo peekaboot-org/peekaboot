@@ -5,7 +5,7 @@
     <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
 
     <!-- OrderController's deliberately failing /boom endpoint (populating Peekaboot's Errors
-         bucket in OrderTraceCaptureIntegrationTest) escapes as an unhandled exception, which
+         bucket in OrderTraceCaptureIT) escapes as an unhandled exception, which
          embedded Tomcat logs as a full stack trace. Spring Boot numbers each embedded Tomcat
          per JVM (Tomcat, Tomcat-1, ...), so an instance-specific logger name only matches an
          isolated run; Logback has no wildcard matching, and the numbered segment sits directly

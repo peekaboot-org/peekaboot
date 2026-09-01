@@ -1,14 +1,13 @@
 package org.peekaboot.testingapp.integration;
 
 import io.micrometer.tracing.Tracer;
+import java.time.Duration;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
-
-import java.time.Duration;
 
 /**
  * Shared test configuration for dev toolbar integration tests.
@@ -19,7 +18,7 @@ import java.time.Duration;
  * real sample app, so this config no longer redefines them.
  *
  * <p>A stand-in {@code Tracer} is used rather than the real, auto-configured one:
- * {@link DashboardTraceViewTest}'s exact trace-count assertions need the
+ * {@link DashboardTraceViewIT}'s exact trace-count assertions need the
  * {@code TraceStore} to contain only what the test put there, and the real tracer
  * would also capture the app's own spans (e.g. the JDBC calls each test's
  * {@code setUp()} makes) into the same store.

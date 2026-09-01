@@ -1,6 +1,6 @@
 spring:
   # spring-boot-starter-security is on this module's test classpath for
-  # SecuredPeekabootIntegrationTest and SecuredDashboardTest only (see pom.xml). Left
+  # SecuredPeekabootIT and SecuredDashboardIT only (see pom.xml). Left
   # auto-configured it would put `anyRequest().authenticated()` in front of every test in
   # this module. Those two tests run under the `security` profile instead, which excludes
   # nothing.
@@ -14,8 +14,8 @@ spring:
     driver-class-name: org.h2.Driver
     # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
     # tabs have a real, secret-looking property to prove the masking engine against
-    # (see DashboardTabsTest.configTabMasksSensitiveValues and
-    # ActuatorMaskingIntegrationTest).
+    # (see DashboardTabsIT.configTabMasksSensitiveValues and
+    # ActuatorMaskingIT).
     password: test-fixture-password
   jpa:
     hibernate:
@@ -44,7 +44,7 @@ peekaboot:
       - interval: 9s
         size: 50
 
-# Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIntegrationTest can prove
+# Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIT can prove
 # ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree (Known
 # Defect C1) - the shape a real spring.security.oauth2.client.registration bean has.
 nested-fixture:
@@ -61,7 +61,7 @@ management:
       # Peekaboot no longer defaults this outside local development (see
       # PeekabootDefaultsEnvironmentPostProcessor); the test profile is not a local-dev
       # launch context, so it has to opt in explicitly, exactly like a real application
-      # would, for UnmaskingEnabledIntegrationTest to have real values to unmask.
+      # would, for UnmaskingEnabledIT to have real values to unmask.
       show-values: always
     configprops:
       # Same reasoning as endpoint.env above, for the Config tab.

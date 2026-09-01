@@ -210,6 +210,23 @@
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.5.6</version>
                 </plugin>
+                <!-- Managed, not bound: only modules with *IT classes (tests that boot a
+                     real application) declare it. Everything in *Test stays a plain unit
+                     test under surefire, which keeps `mvn test` a fast gate. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.5.6</version>
+                    <executions>
+                        <execution>
+                            <id>failsafe-integration-tests</id>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-dependency-plugin</artifactId>

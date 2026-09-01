@@ -29,7 +29,7 @@ Peekaboot's trace view something worth looking at:
 | `GET /boom` | Always throws. Gives the Errors bucket, the error badge and the toolbar's error styling something real to render. |
 | `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, Spring's own scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation — its own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
 
-`OrderTraceCaptureIntegrationTest` asserts what Peekaboot actually captured from these
+`OrderTraceCaptureIT` asserts what Peekaboot actually captured from these
 endpoints, not just what they returned.
 
 ## `src/test` — the automated UI suite
@@ -51,7 +51,7 @@ The `PlaywrightTestBase`-derived tests drive a real headless Chromium instance. 
 time `Playwright.create()` runs on a machine, the Playwright Java driver automatically
 downloads the Chromium build it needs into `~/.cache/ms-playwright` — no manual step is
 required as long as the machine has network access. That's what happened when this harness
-was first verified: `mvn -pl peekaboot-testing-app -am test -Dtest=DashboardShellTest` downloaded
+was first verified: `mvn -pl peekaboot-testing-app verify -Dit.test=DashboardShellIT` downloaded
 Chromium on its own and both tests passed.
 
 If the automatic download doesn't happen (e.g. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` is set, or

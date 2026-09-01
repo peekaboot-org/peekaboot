@@ -60,7 +60,7 @@ scheduled task (e.g., `net.example.TaskService.processItems`), read from Actuato
 `matchesRootOperation` bridges that mismatch with a `Class.method` suffix fallback (the
 last two dot-segments of `target` matched against `rootOperation`), which is what lets
 the Scheduled Tasks tab's "View traces" link (`dashboard/tabs/scheduled-tasks.js`) filter
-correctly to a task's own runs; see `DashboardTabsTest.schedulerTracesLinkArrivesFiltered`
+correctly to a task's own runs; see `DashboardTabsIT.schedulerTracesLinkArrivesFiltered`
 for the end-to-end proof, and
 [peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/) for the trace-side
 vocabulary.

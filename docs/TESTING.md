@@ -23,7 +23,7 @@ collaborators being asked to compute something, not this pass-through shape.
 ## Pristine output
 Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN.
 - Browser-side errors are asserted where a test's subject is the JavaScript itself:
-  `page.onPageError` (and, in `InsightsTabTest`, `onConsoleMessage`/`onRequestFailed`/
+  `page.onPageError` (and, in `InsightsTabIT`, `onConsoleMessage`/`onRequestFailed`/
   `onResponse`) collects into a list the test then asserts on. There is no shared
   listener and no allow-list — the Chromium engine, unlike the HtmlUnit setup this
   replaced, has no incompatibilities of its own to excuse.
@@ -68,7 +68,7 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     start.
 
 ## Known flakes
-- `TraceOverlayTest` — a Playwright `TargetClosedError` was seen once from `@AfterEach`'s
+- `TraceOverlayIT` — a Playwright `TargetClosedError` was seen once from `@AfterEach`'s
   `page.context().close()`, in `closeButtonDismissesTheOverlayOnTheErrorPath`. Root-caused and
   fixed: the collapsed toolbar's own fetch ladder (`toolbar.js`) keeps polling
   `/api/traces/{id}/insights` for up to 4.75s after page load, independent of any one test's
@@ -78,14 +78,14 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   against a target that is already closing. `PlaywrightTestBase.closePage()` now catches
   `TargetClosedError` around `context().close()` as a benign teardown race, the same tolerance it
   already gives `TimeoutError` around the network-idle wait. Characterised by running `mvn -pl
-  peekaboot-testing-app test -Dtest=TraceOverlayTest` repeatedly before the fix (reproduced once
+  peekaboot-testing-app verify -Dit.test=TraceOverlayIT` repeatedly before the fix (reproduced once
   in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
   previously-failing method).
 
   Three tests share this route-and-never-unroute shape, which is why the fix lives in
-  `PlaywrightTestBase` rather than per-test `unroute()` calls: `TraceOverlayTest:222`;
-  `ToolbarTest:207` (identical pattern, and it deliberately waits out all four fetch-ladder
-  attempts before teardown runs); and `ToolbarTest:257`, which routes `trace-detail.js` and must
+  `PlaywrightTestBase` rather than per-test `unroute()` calls: `TraceOverlayIT:222`;
+  `ToolbarIT:207` (identical pattern, and it deliberately waits out all four fetch-ladder
+  attempts before teardown runs); and `ToolbarIT:257`, which routes `trace-detail.js` and must
   *not* unroute — its Javadoc explains the browser's module map caches the failed dynamic import,
   so a real reopen would require more than removing the route.
 
@@ -97,7 +97,7 @@ exact counts, never defensive `contains`.
 ## Spring Security on the testing-app classpath
 
 `peekaboot-testing-app` carries `spring-boot-starter-security` in test scope for two tests
-only: `SecuredPeekabootIntegrationTest` and `SecuredDashboardTest`, which prove the
+only: `SecuredPeekabootIT` and `SecuredDashboardIT`, which prove the
 `SecurityFilterChain` the website's security page publishes. Test scope keeps it out of the
 repackaged jar and out of `spring-boot:run`, so the sample app itself still starts
 unsecured.
@@ -113,7 +113,7 @@ instead, which excludes nothing, so neither has to undo a module-wide setting.
 One gotcha: an inlined `@SpringBootTest(properties = "spring.autoconfigure.exclude=...")`
 *replaces* the profile's value for that key rather than merging with it, so a context that
 sets its own exclusion list has to repeat the security exclusions too.
-`PeekabootActuatorServiceTest` is the one that does; anything added to the profile's list
+`PeekabootActuatorServiceIT` is the one that does; anything added to the profile's list
 belongs in its list as well. Symptom when it's missed: Boot logs `Using generated security
 password` for that context.
 
@@ -123,9 +123,14 @@ The example config itself, `PeekabootSecurityConfig`, lives in `org.peekaboot.ex
 auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
 
 ## Running
-- Full suite: `mvn test` (root). Single class: `mvn -pl <module> test -Dtest=<Class>`
-  — never combine `-am` with `-Dtest`.
-- Full reactor with the five static-analysis gates: `mvn clean verify` (1,123 tests).
+- Fast gate (unit tests + Error Prone only): `mvn test` (root). Single unit-test class:
+  `mvn -pl <module> test -Dtest=<Class>` — never combine `-am` with `-Dtest`.
+- Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
+  phase) and only runs under `verify`; `peekaboot-testing-app` runs them in 2 parallel
+  forks (`-Dpeekaboot.it.forks=1` to serialize while debugging). Single class:
+  `mvn -pl <module> verify -Dit.test=<Class>`.
+- Full reactor — unit tests, integration tests and the five static-analysis gates:
+  `mvn clean verify` (1,123 tests).
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):

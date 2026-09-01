@@ -97,7 +97,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * Where {@link #REVEAL_BUTTON_SELECTOR} and {@link #waitForRevealedRowValue} look for
      * the row that flips from masked to revealed - the container all of a tab's key/value
      * rows render into regardless of which group is expanded (rows exist in the DOM even
-     * inside a collapsed group; see {@code UnmaskingControlEnabledTest}'s own doc comment),
+     * inside a collapsed group; see {@code UnmaskingControlEnabledIT}'s own doc comment),
      * and the property key each tab renders that row under. Config renders the key relative
      * to its group prefix ({@code password}); Environment renders the full property key
      * ({@code spring.datasource.password}) since a property source has no prefix to strip.
@@ -267,7 +267,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
     /**
      * Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR}
      * to render {@code expected} as its value. Mirrors
-     * {@code UnmaskingControlEnabledTest.waitForConfigPasswordValue}'s own lookup-by-key
+     * {@code UnmaskingControlEnabledIT.waitForConfigPasswordValue}'s own lookup-by-key
      * approach rather than a CSS value selector, since {@code kvRow} renders both the key
      * and the value as plain text nodes with nothing to select the value by other than its
      * sibling key.

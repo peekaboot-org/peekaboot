@@ -24,6 +24,11 @@
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.15</jacoco.version>
         <jacocoArgLine></jacocoArgLine>
+        <!-- Forked JVMs running the *IT suite in parallel. Each fork boots its own
+             Spring contexts and Chromium, so memory is the ceiling: 2 fits the 8GB
+             dev VM and a GitHub runner; raise locally via -Dpeekaboot.it.forks=3
+             only on a machine with headroom, set to 1 to diagnose flaky ITs. -->
+        <peekaboot.it.forks>2</peekaboot.it.forks>
         <!-- not a published artifact: it exists to host the sample app and its UI tests -->
         <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
@@ -137,7 +142,7 @@
         </dependency>
         <!-- test scope only: the sample app itself ships unsecured, and spring-boot:repackage
              leaves test-scoped dependencies out of the executable jar. It exists so
-             SecuredPeekabootIntegrationTest and SecuredDashboardTest can prove the
+             SecuredPeekabootIT and SecuredDashboardIT can prove the
              SecurityFilterChain the website's security page tells readers to write. Every
              other test in this module runs with the servlet security auto-configuration
              excluded - see application-test.yml. -->
@@ -186,6 +191,22 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                </configuration>
+            </plugin>
+            <!-- Every test in this module boots the app (@SpringBootTest, most of them
+                 driving a real Chromium), so they all live in *IT classes and run here,
+                 at integration-test, in parallel forks. spring-boot-starter-parent's
+                 pluginManagement binds the integration-test/verify goals and points
+                 classesDirectory at target/classes - without that failsafe would try to
+                 run against the repackaged (BOOT-INF) jar and find no classes. Each fork
+                 appends its coverage to this module's jacoco.exec (the agent locks the
+                 file), which the reactor-wide gate in peekaboot-coverage then merges. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                    <forkCount>${peekaboot.it.forks}</forkCount>
                 </configuration>
             </plugin>
             <plugin>

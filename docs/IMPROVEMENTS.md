@@ -70,7 +70,7 @@ a span duplicating the folded one can duplicate the survivor.
 `SERVICE_IDENTIFIER_KEYS`, or making `isDuplicate` non-transitive. If either happens, the fix is a
 few lines in `TraceDataBundle` — **not** a second dedup implementation.
 
-### 2.2 `ToolbarLateSpanTest` depends on timing it does not own
+### 2.2 `ToolbarLateSpanIT` depends on timing it does not own
 
 `LateSpanFixture.LateSpanController.LATE_WORK` is 1500ms, chosen against the toolbar's fetch ladder
 (`toolbar.js`, cumulative 250ms / 750ms / 1750ms / 4750ms) and the test profile's 50ms span export
@@ -207,9 +207,9 @@ indistinguishable from absent. Verified against 3.1.0 bytecode — exactly three
 exist, all constructing the warning initialiser. Behaviourally a no-op. It lives in the sample app's
 *main* resources because the WARN fires on every launch, not only under test.
 
-**5.6 The `TraceOverlayTest` flake was root-caused.** The toolbar's fetch ladder polls
+**5.6 The `TraceOverlayIT` flake was root-caused.** The toolbar's fetch ladder polls
 `/api/traces/{id}/insights` for up to 4.75s regardless of test lifetime. Three tests route that
-endpoint and never unroute — `TraceOverlayTest:222`, `ToolbarTest:207`, and `ToolbarTest:257`, the
+endpoint and never unroute — `TraceOverlayIT:222`, `ToolbarIT:207`, and `ToolbarIT:257`, the
 last with a Javadoc explaining it *must not* unroute because the browser's module map caches the
 failed import. So a scheduled poll can fire during `context().close()`. The tolerance lives in
 `PlaywrightTestBase` rather than per-test because the condition is structural, and because `unroute`
