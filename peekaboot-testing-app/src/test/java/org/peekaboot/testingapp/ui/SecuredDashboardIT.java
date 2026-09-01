@@ -98,7 +98,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
 
             assertThat(response.status()).isEqualTo(200);
-            assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons List");
+            assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons");
             assertThat(toolbarScriptStatuses)
                     .as("the toolbar module is a /peekaboot/** request like any other")
                     .containsExactly(401);
