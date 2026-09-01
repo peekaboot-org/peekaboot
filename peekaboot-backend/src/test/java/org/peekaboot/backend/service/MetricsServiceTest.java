@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -94,7 +95,7 @@ class MetricsServiceTest {
         assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
-                .contains(org.assertj.core.groups.Tuple.tuple("VALUE", 1024.0));
+                .contains(tuple("VALUE", 1024.0));
     }
 
     @Test
@@ -111,7 +112,7 @@ class MetricsServiceTest {
         assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
-                .contains(org.assertj.core.groups.Tuple.tuple("COUNT", 42.0));
+                .contains(tuple("COUNT", 42.0));
     }
 
     @Test

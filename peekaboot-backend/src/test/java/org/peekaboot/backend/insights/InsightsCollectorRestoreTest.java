@@ -34,7 +34,9 @@ class InsightsCollectorRestoreTest {
                 .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), "value", null, null))
                 .toList();
         return new InsightsCollector(
-                List.of(level(Duration.ofSeconds(10), 90), level(Duration.ofMinutes(1), 60)),
+                List.of(
+                        level(Duration.ofSeconds(10), 90),
+                        level(Duration.ofMinutes(1), 60)),
                 series,
                 List.of(),
                 registry,
@@ -184,7 +186,7 @@ class InsightsCollectorRestoreTest {
     }
 
     @Test
-    void aSnapshotThatMissesTheBarrierIsNeverAppliedOverLiveSamples() throws Exception {
+    void aSourceWithNothingToRestoreLeavesLiveSamplesAlone() throws Exception {
         InsightsCollector collector = collector(1, timeout -> Optional.empty());
         collector.start();
         try {
@@ -206,7 +208,9 @@ class InsightsCollectorRestoreTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 1).register(registry);
         InsightsCollector collector = new InsightsCollector(
-                List.of(level(Duration.ofMillis(100), 20), level(Duration.ofMillis(500), 20)),
+                List.of(
+                        level(Duration.ofMillis(100), 20),
+                        level(Duration.ofMillis(500), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
                 List.of(),
                 registry,

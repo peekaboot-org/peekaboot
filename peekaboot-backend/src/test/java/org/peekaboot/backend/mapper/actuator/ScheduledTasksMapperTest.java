@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
-import org.peekaboot.backend.domain.scheduledtasks.*;
+import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
+import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
+import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.service.CronDescriptionService;
 
 class ScheduledTasksMapperTest {

@@ -1,11 +1,13 @@
 package org.peekaboot.backend.tracing.interceptor;
 
 import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.tck.TestObservationRegistry;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -28,7 +30,7 @@ class TracingHandlerInterceptorTest {
         response = new MockHttpServletResponse();
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void closeLeakedScopes() {
         // tests that call preHandle without a matching completion leave the
         // thread-local scope open; drain it so tests stay isolated
@@ -154,16 +156,15 @@ class TracingHandlerInterceptorTest {
 
         interceptor.preHandle(request, response, handler);
 
-        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
+        assertThat(observationRegistry.getCurrentObservation())
                 .as("handler observation should be current while the handler executes")
                 .isNotNull();
-        org.assertj.core.api.Assertions.assertThat(
-                        observationRegistry.getCurrentObservation().getContext().getName())
+        assertThat(observationRegistry.getCurrentObservation().getContext().getName())
                 .isEqualTo("spring.handler");
 
         interceptor.postHandle(request, response, handler, null);
 
-        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
+        assertThat(observationRegistry.getCurrentObservation())
                 .as("scope should be closed after postHandle")
                 .isNull();
     }
@@ -181,8 +182,7 @@ class TracingHandlerInterceptorTest {
                 .hasObservationWithNameEqualTo("spring.handler")
                 .that()
                 .hasBeenStopped();
-        org.assertj.core.api.Assertions.assertThat(observationRegistry.getCurrentObservation())
-                .isNull();
+        assertThat(observationRegistry.getCurrentObservation()).isNull();
     }
 
     @Test

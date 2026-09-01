@@ -409,7 +409,7 @@ class OtelSpanExporterTest {
         private final SpanContext parentSpanContext;
         private final List<EventData> events;
         private final String serviceName;
-        private final long startNanos = System.nanoTime();
+        private final long startNanos = Instant.parse("2026-01-01T00:00:00Z").getEpochSecond() * 1_000_000_000L;
         private final long endNanos = startNanos + 1_000_000_000L;
 
         TestSpanData(

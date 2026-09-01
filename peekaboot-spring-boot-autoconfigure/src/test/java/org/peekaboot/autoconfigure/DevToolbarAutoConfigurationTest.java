@@ -3,19 +3,27 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.util.ContextInitializer;
+import ch.qos.logback.core.Appender;
 import io.micrometer.tracing.Tracer;
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
-import org.peekaboot.backend.service.PeekabootActuatorService;
+import org.peekaboot.backend.log.PeekabootLogbackAppender;
 import org.peekaboot.backend.tracing.autoconfigure.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.bootstrap.DefaultBootstrapContext;
@@ -193,15 +201,14 @@ class DevToolbarAutoConfigurationTest {
     /**
      * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
      * the logger context (which drops every listener, reset-resistant ones included) and then
-     * resetting it - reloads {@code logback-test.xml} so the console appender the rest of the
-     * suite logs through is restored, and then fires the event that carries the repair.
+     * resetting it - restores Logback's default configuration through {@code autoConfig()}
+     * (this module has no logback-test.xml), and then fires the event that carries the repair.
      */
     private void reinitialiseLogback() throws Exception {
-        ch.qos.logback.classic.LoggerContext loggerContext =
-                (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         loggerContext.stop();
         loggerContext.reset();
-        new ch.qos.logback.classic.util.ContextInitializer(loggerContext).autoConfig();
+        new ContextInitializer(loggerContext).autoConfig();
         loggerContext.start();
 
         new LogbackCaptureReinstaller()
@@ -214,12 +221,11 @@ class DevToolbarAutoConfigurationTest {
 
     /** Only events carrying a traceId in the MDC are captured. */
     private void logWithTraceId(String message) {
-        org.slf4j.MDC.put("traceId", "0123456789abcdef0123456789abcdef");
+        MDC.put("traceId", "0123456789abcdef0123456789abcdef");
         try {
-            org.slf4j.LoggerFactory.getLogger(DevToolbarAutoConfigurationTest.class)
-                    .error(message);
+            LoggerFactory.getLogger(DevToolbarAutoConfigurationTest.class).error(message);
         } finally {
-            org.slf4j.MDC.remove("traceId");
+            MDC.remove("traceId");
         }
     }
 
@@ -259,7 +265,7 @@ class DevToolbarAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
-                .withClassLoader(new FilteredClassLoader(ch.qos.logback.classic.LoggerContext.class))
+                .withClassLoader(new FilteredClassLoader(LoggerContext.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
@@ -267,14 +273,12 @@ class DevToolbarAutoConfigurationTest {
     }
 
     private int peekabootAppenderCount() {
-        ch.qos.logback.classic.LoggerContext loggerContext =
-                (ch.qos.logback.classic.LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
-        ch.qos.logback.classic.Logger root = loggerContext.getLogger(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME);
+        LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
+        Logger root = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
         int count = 0;
-        java.util.Iterator<ch.qos.logback.core.Appender<ch.qos.logback.classic.spi.ILoggingEvent>> it =
-                root.iteratorForAppenders();
+        Iterator<Appender<ILoggingEvent>> it = root.iteratorForAppenders();
         while (it.hasNext()) {
-            if (it.next() instanceof org.peekaboot.backend.log.PeekabootLogbackAppender) {
+            if (it.next() instanceof PeekabootLogbackAppender) {
                 count++;
             }
         }
