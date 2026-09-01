@@ -10,7 +10,9 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Parses the raw Map response from PeekabootActuatorService into typed actuator beans.
  * An endpoint the service could not invoke is absent from that map and parses as null;
- * the others are unaffected.
+ * the others are unaffected. Properties the records do not declare are ignored here, for
+ * every record at once: the records bind only what the mappers read, and a Boot release
+ * adding a field must not break the parse.
  */
 @Component
 public class ActuatorResponseParser {

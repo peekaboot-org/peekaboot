@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -129,6 +130,20 @@ class ActuatorResponseParserTest {
         assertThat(db.components().get("reporting").details())
                 .containsEntry("error", "org.postgresql.util.PSQLException: Connection refused");
         assertThat(response.health().components().get("ping").components()).isNull();
+    }
+
+    /** The records declare only what the mappers read; whatever else an endpoint sends is dropped, not fatal. */
+    @Test
+    void ignoresPropertiesTheRecordsDoNotDeclare() {
+        Map<String, Object> data = Map.of(
+                "spring", Map.of("bootVersion", "4.1.1", "somethingNewer", "x"),
+                "loggers",
+                        Map.of("levels", List.of("INFO"), "loggers", Map.of("ROOT", Map.of("effectiveLevel", "INFO"))));
+
+        ActuatorParsedData response = parser.parse(data);
+
+        assertThat(response.spring().bootVersion()).isEqualTo("4.1.1");
+        assertThat(response.loggers().loggers()).containsOnlyKeys("ROOT");
     }
 
     @Test
