@@ -1,12 +1,11 @@
 package org.peekaboot.backend.service;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.SpringBootVersion;
 import org.springframework.boot.actuate.endpoint.ApiVersion;
@@ -29,6 +28,8 @@ import org.springframework.stereotype.Service;
 @Service
 public final class PeekabootActuatorService {
 
+    private static final Logger log = LoggerFactory.getLogger(PeekabootActuatorService.class);
+
     /**
      * The only actuator endpoints the insights mappers consume.
      */
@@ -37,16 +38,13 @@ public final class PeekabootActuatorService {
 
     private final WebEndpointDiscoverer discoverer;
 
-    private final List<DataSourceMetadata> dataSourceMetadataList;
-
     public PeekabootActuatorService(
             ApplicationContext context,
             ParameterValueMapper parameterMapper,
             EndpointMediaTypes mediaTypes,
             ObjectProvider<PathMapper> pathMappers,
             ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
-            ObjectProvider<OperationInvokerAdvisor> advisors,
-            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
+            ObjectProvider<OperationInvokerAdvisor> advisors) {
 
         this.discoverer = new WebEndpointDiscoverer(
                 context,
@@ -58,25 +56,17 @@ public final class PeekabootActuatorService {
                 List.of(), // Empty endpoint filters = no exposure filtering
                 List.of() // Empty operation filters
                 );
-        this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
     }
 
     /**
-     * Invokes only the actuator endpoints the insights mappers consume.
+     * Invokes each insights endpoint's root read operation, keyed by endpoint id, alongside
+     * the Spring versions under {@code spring}. An endpoint that fails is logged and left
+     * out, so one broken endpoint never hides the others.
      */
     public Map<String, Object> getInsightsData() {
-        return collectData(INSIGHTS_ENDPOINTS::contains);
-    }
-
-    private Map<String, Object> collectData(Predicate<String> endpointKeyFilter) {
 
         Map<String, Object> results = new LinkedHashMap<>();
-
-        // Add Spring version info
         results.put("spring", buildSpringInfo());
-
-        // Add DataSource metadata
-        results.put("dataSources", buildDataSourcesInfo());
 
         OperationArgumentResolver namespaceResolver =
                 OperationArgumentResolver.of(WebServerNamespace.class, () -> WebServerNamespace.SERVER);
@@ -85,7 +75,7 @@ public final class PeekabootActuatorService {
                 OperationArgumentResolver.of(ApiVersion.class, () -> ApiVersion.LATEST);
         for (ExposableWebEndpoint endpoint : discoverer.getEndpoints()) {
             String key = endpoint.getEndpointId().toLowerCaseString();
-            if (!endpointKeyFilter.test(key)) {
+            if (!INSIGHTS_ENDPOINTS.contains(key)) {
                 continue;
             }
             endpoint.getOperations().stream()
@@ -98,7 +88,7 @@ public final class PeekabootActuatorService {
                                     SecurityContext.NONE, Map.of(), namespaceResolver, apiVersionResolver));
                             results.put(key, result);
                         } catch (Exception e) {
-                            results.put(key, "Error: " + e.getMessage());
+                            log.warn("Actuator endpoint '{}' failed: {}", key, e.toString());
                         }
                     });
         }
@@ -112,53 +102,5 @@ public final class PeekabootActuatorService {
         springInfo.put("bootVersion", SpringBootVersion.getVersion());
         springInfo.put("frameworkVersion", SpringVersion.getVersion());
         return springInfo;
-    }
-
-    private List<Map<String, Object>> buildDataSourcesInfo() {
-
-        List<Map<String, Object>> dataSources = new ArrayList<>();
-
-        for (DataSourceMetadata metadata : dataSourceMetadataList) {
-            if (metadata == null) {
-                continue;
-            }
-
-            Map<String, Object> ds = new LinkedHashMap<>();
-            ds.put("name", metadata.getDataSourceName());
-            ds.put("databaseName", metadata.getDatabaseName());
-            ds.put("username", metadata.getUsername());
-
-            // Format hosts
-            List<String> hosts = new ArrayList<>();
-            if (metadata.getHosts() != null) {
-                metadata.getHosts().forEach(host -> hosts.add(host.toString()));
-            }
-            ds.put("hosts", hosts);
-
-            // Database product info
-            ds.put("productName", metadata.getDatabaseProductName());
-            ds.put("productVersion", metadata.getDatabaseProductVersion());
-
-            // Driver info
-            ds.put("driverName", metadata.getDriverName());
-            ds.put("driverVersion", metadata.getDriverVersion());
-
-            // Connection params
-            Map<String, Object> params = new LinkedHashMap<>();
-            if (metadata.getConnectionParams() != null) {
-                metadata.getConnectionParams().forEach((key, prop) -> {
-                    Map<String, Object> paramInfo = new LinkedHashMap<>();
-                    paramInfo.put("value", prop.value());
-                    paramInfo.put(
-                            "source", prop.source() != null ? prop.source().name() : null);
-                    params.put(key, paramInfo);
-                });
-            }
-            ds.put("connectionParams", params);
-
-            dataSources.add(ds);
-        }
-
-        return dataSources;
     }
 }

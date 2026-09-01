@@ -9,9 +9,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Parses the raw Map response from PeekabootActuatorService into typed actuator beans.
- * Entries that are not JSON objects (e.g. the "Error: ..." placeholders stored
- * for endpoints that failed to invoke) are treated as absent, so one broken
- * endpoint never breaks parsing of the others.
+ * An endpoint the service could not invoke is absent from that map and parses as null;
+ * the others are unaffected.
  */
 @Component
 public class ActuatorResponseParser {
@@ -30,19 +29,10 @@ public class ActuatorResponseParser {
         }
         Map<String, Object> sanitized = new LinkedHashMap<>();
         rawData.forEach((key, value) -> {
-            if (isConvertible(value)) {
+            if (value != null) {
                 sanitized.put(key, value);
             }
         });
         return objectMapper.convertValue(sanitized, ActuatorParsedData.class);
-    }
-
-    /**
-     * Endpoint results are Maps (from JSON) or POJOs (WebEndpointResponse,
-     * descriptor objects at runtime) - both convert; only the String error
-     * placeholders don't.
-     */
-    private static boolean isConvertible(Object value) {
-        return value != null && !(value instanceof String);
     }
 }
