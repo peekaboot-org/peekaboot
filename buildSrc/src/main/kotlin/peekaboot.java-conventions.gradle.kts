@@ -23,6 +23,12 @@ version = "0.0.5-SNAPSHOT"
 
 java {
     withSourcesJar()
+    withJavadocJar()
+}
+
+// Same doclint as the Maven javadoc plugin: every check except "missing" is an error.
+tasks.withType<Javadoc>().configureEach {
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:all,-missing", true)
 }
 
 // Reproducible archives: stable entry order, no timestamps - the Gradle counterpart

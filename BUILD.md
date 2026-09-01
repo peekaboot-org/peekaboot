@@ -48,7 +48,7 @@ else — and `mvn install`/`mvn verify` give you all six gates plus the integrat
 tests. Per module, `verify` runs:
 
 ```
-unit tests → package → sources jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
+unit tests → package → sources jar → javadoc jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
 ```
 
 `peekaboot-testing-app` runs its `*IT` classes **concurrently inside one JVM** — 2
@@ -84,11 +84,17 @@ stays around a minute.
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
-| `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources |
+| `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
-| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct |
+| `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct. Its `-sources` and `-javadoc` jars are empty on purpose (below) |
 | `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`, see [Releasing](#releasing)) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
 | `peekaboot-coverage` | pom | **no** (`skipPublishing`, see [Releasing](#releasing)) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
+
+Maven Central requires a `-sources` and a `-javadoc` jar for every jar component, and two of
+the published modules have no Java sources: `maven-source-plugin` would build nothing for the
+starter, and `javadoc:jar` builds nothing for the starter or the frontend. So the starter sets
+`maven.source.forceCreation`, and both modules package their empty `target/apidocs` as the
+`-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is the intended content.
 
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
@@ -277,10 +283,13 @@ which is how recursion is prevented) runs:
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
 messages since the last `x.y.z` tag, so **commit message discipline decides the version bump**.
-Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also attaches a
-javadoc jar (`doclint` off, `failOnError` false), GPG-signs with `raphael@peekaboot.org`, and
-publishes through `central-publishing-maven-plugin` (`autoPublish`, waits until published). A
-sources jar is attached on *every* build of the published modules, not just releases.
+Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
+GPG-signs with `raphael@peekaboot.org` and publishes through
+`central-publishing-maven-plugin` (`autoPublish`, waits until published). The sources and
+javadoc jars are *not* release-only: both are attached on every build of the published
+modules, and javadoc runs with `doclint` at `all,-missing` and fails the build on an error, so
+a broken `@link` surfaces at `mvn package` rather than after `release:prepare` has pushed the
+tag.
 
 Two modules stay out of the bundle, by two different switches. The publishing plugin binds
 itself to `deploy` in every module that inherits the profile and **ignores
@@ -314,4 +323,5 @@ Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SE
   `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
 - A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
   everywhere thanks to that `failOnNoGitDirectory=false`.
-- The empty `peekaboot-spring-boot-starter` jar is intentional. Do not "fix" the warning.
+- The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
+  `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.

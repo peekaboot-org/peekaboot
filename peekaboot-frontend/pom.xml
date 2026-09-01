@@ -20,5 +20,26 @@
                 <filtering>false</filtering>
             </resource>
         </resources>
+        <plugins>
+            <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
+                 -javadoc jar for every jar component. Package the empty javadoc output
+                 directory as that jar. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>empty-javadoc-jar</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <configuration>
+                            <classifier>javadoc</classifier>
+                            <classesDirectory>${project.build.directory}/apidocs</classesDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>
