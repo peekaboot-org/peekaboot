@@ -14,7 +14,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URLDecoder;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,20 +40,22 @@ public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final MaskingEngine maskingEngine;
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
     /** Epoch millis; the duration is the difference between two reads around the chain. */
     private final LongSupplier clock;
 
-    public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher) {
-        this(tracer, eventPublisher, System::currentTimeMillis);
+    public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine) {
+        this(tracer, eventPublisher, maskingEngine, System::currentTimeMillis);
     }
 
-    RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, LongSupplier clock) {
+    RequestCaptureFilter(
+            Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine, LongSupplier clock) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
+        this.maskingEngine = maskingEngine;
         this.clock = clock;
     }
 
@@ -187,7 +188,7 @@ public class RequestCaptureFilter implements Filter {
                 // Request
                 request.getMethod(),
                 request.getRequestURI(),
-                maskQueryString(request.getQueryString()),
+                maskingEngine.maskQueryString(request.getQueryString()),
                 requestHeaders,
                 null, // requestBody - not captured yet
                 false, // requestBodyTruncated
@@ -262,39 +263,5 @@ public class RequestCaptureFilter implements Filter {
             }
         }
         return keys;
-    }
-
-    /**
-     * Masks the raw query string per parameter rather than treating it as one opaque
-     * string - a whole-string regex could not tell a sensitive value from the rest of
-     * the string without false positives/negatives. Each pair is decoded, masked via the
-     * same {@link MaskingEngine#mask(String, String)} rule as everywhere else, and
-     * re-encoded; a bare flag with no "=" (e.g. "?debug") is passed through unchanged
-     * since it carries no value to mask.
-     */
-    private String maskQueryString(String queryString) {
-        if (queryString == null || queryString.isBlank()) {
-            return queryString;
-        }
-        String[] pairs = queryString.split("&", -1);
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < pairs.length; i++) {
-            if (i > 0) {
-                result.append('&');
-            }
-            String pair = pairs[i];
-            int equalsIndex = pair.indexOf('=');
-            if (equalsIndex < 0) {
-                result.append(pair);
-                continue;
-            }
-            String key = URLDecoder.decode(pair.substring(0, equalsIndex), StandardCharsets.UTF_8);
-            String value = URLDecoder.decode(pair.substring(equalsIndex + 1), StandardCharsets.UTF_8);
-            String maskedValue = maskingEngine.mask(key, value);
-            result.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
-                    .append('=')
-                    .append(URLEncoder.encode(maskedValue, StandardCharsets.UTF_8));
-        }
-        return result.toString();
     }
 }

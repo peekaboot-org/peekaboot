@@ -80,6 +80,9 @@ final class MaskingRules {
             "session-id",
             "salt",
             "signature",
+            // Azure SAS's abbreviated signature parameter (?sig=). Matched as an exact
+            // token like every rule here, so "design"/"signal" stay untouched.
+            "sig",
             "certificate-password",
             "certificate-private-key");
 

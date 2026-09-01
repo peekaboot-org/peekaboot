@@ -276,6 +276,24 @@ class DevToolbarAutoConfigurationTest {
         }
     }
 
+    /**
+     * The toolbar can be on while PeekabootAutoConfiguration - and with it the shared
+     * MaskingEngine bean - is backed off (no actuator endpoint classes on the host
+     * classpath); the capture filter then falls back to a private engine instead of
+     * failing the context.
+     */
+    @Test
+    void theCaptureFilterWorksWithoutTheDashboardsMaskingEngineBean() {
+        new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
+                .withUserConfiguration(MinimalPropertiesConfig.class, MockTracingConfig.class)
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasBean("requestCaptureFilter");
+                });
+    }
+
     @Test
     void shouldNotCreateLogbackRegistrarWhenLogbackMissing() {
         contextRunner

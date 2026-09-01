@@ -11,8 +11,10 @@ import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
 import org.peekaboot.backend.log.PeekabootLogbackAppender;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -34,7 +36,7 @@ import org.springframework.core.Ordered;
                 "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
 @ConditionalOnClass(TraceStore.class)
 public class DevToolbarAutoConfiguration {
 
@@ -61,9 +63,12 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
-            Tracer tracer, ApplicationEventPublisher eventPublisher) {
+            Tracer tracer, ApplicationEventPublisher eventPublisher, ObjectProvider<MaskingEngine> maskingEngine) {
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new RequestCaptureFilter(tracer, eventPublisher));
+        // The shared bean when the dashboard is up; a private instance when the toolbar
+        // runs without PeekabootAutoConfiguration (no actuator endpoint classes).
+        registration.setFilter(
+                new RequestCaptureFilter(tracer, eventPublisher, maskingEngine.getIfAvailable(MaskingEngine::new)));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");

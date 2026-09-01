@@ -14,7 +14,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class QueryExtractor {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final MaskingEngine maskingEngine;
+
+    public QueryExtractor(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
 
     public List<QueryInfo> extract(TraceData traceData) {
         if (traceData == null || traceData.spans() == null) {

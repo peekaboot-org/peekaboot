@@ -19,12 +19,13 @@ import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 class TraceTreeMapperTest {
 
-    private final TraceTreeMapper mapper = new TraceTreeMapper();
+    private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine());
 
     @Test
     void map_shouldBuildTreeFromFlatSpans() {
@@ -339,7 +340,8 @@ class TraceTreeMapperTest {
                         httpCall));
 
         TraceTree result = mapper.map(traceData, false);
-        int queriesListed = new QueryExtractor().extract(traceData).size();
+        int queriesListed =
+                new QueryExtractor(new MaskingEngine()).extract(traceData).size();
         long queryNodes =
                 result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
 

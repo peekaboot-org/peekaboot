@@ -47,6 +47,7 @@ class MaskingEngineTest {
                     "app.session-id",
                     "app.salt",
                     "app.signature",
+                    "sig",
                     "app.certificate-password",
                     "app.certificate-private-key",
                 })
@@ -94,6 +95,12 @@ class MaskingEngineTest {
                     // cover the real password case in practice.
                     "PWD",
                     "OLDPWD",
+                    // "sig" is an exact token (Azure SAS); it must not reach into words
+                    // that merely start with it.
+                    "design",
+                    "signal",
+                    "app.design.theme",
+                    "spring.signal.handler",
                 })
         void isSensitiveKey_shouldNotMatchNegativeCases(String key) {
             assertThat(engine.isSensitiveKey(key)).isFalse();
@@ -409,6 +416,7 @@ class MaskingEngineTest {
                     "id_token",
                     "client_secret",
                     "signature",
+                    "sig",
                     "auth",
                     "authorization"
                 })
@@ -460,6 +468,56 @@ class MaskingEngineTest {
             String value = "https://maps.example.com/geocode?key=abc123&address=Berlin";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+
+        /** The shape of an Azure SAS URL: only {@code sig} carries the secret. */
+        @Test
+        void maskValue_shouldMaskOnlyTheSigParameterOfAnAzureSasUrl() {
+            String value = "https://acct.blob.core.windows.net/c/blob.txt?sv=2024-11-04&se=2026-01-01&sig=s3cr3t";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result)
+                    .isEqualTo("https://acct.blob.core.windows.net/c/blob.txt?sv=2024-11-04&se=2026-01-01&sig=******");
+        }
+
+        // "sig" matches as an exact token only, never as a prefix of a longer word.
+        @Test
+        void maskValue_shouldNotMaskQueryParametersMerelyStartingWithSig() {
+            String value = "https://example.com/render?design=flat&signal=9&sigma=0.5";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+    }
+
+    /**
+     * A raw query string (no URL around it), masked pair by pair with the same key-name
+     * rules as everything else - the entry point {@code RequestCaptureFilter} uses for
+     * {@code request.getQueryString()}.
+     */
+    @Nested
+    class QueryStringMasking {
+
+        @Test
+        void maskQueryString_shouldMaskSensitivePairsAndLeaveTheRestAlone() {
+            assertThat(engine.maskQueryString("api_key=xyz&q=widgets")).isEqualTo("api_key=******&q=widgets");
+        }
+
+        @Test
+        void maskQueryString_shouldPreserveAPairWithNoValue() {
+            assertThat(engine.maskQueryString("debug&q=widgets")).isEqualTo("debug&q=widgets");
+        }
+
+        @Test
+        void maskQueryString_shouldReturnNullAndBlankInputUnchanged() {
+            assertThat(engine.maskQueryString(null)).isNull();
+            assertThat(engine.maskQueryString(" ")).isEqualTo(" ");
+        }
+
+        /** The key is judged decoded, so an encoded spelling of a sensitive name still masks. */
+        @Test
+        void maskQueryString_shouldDecodeTheKeyBeforeJudgingIt() {
+            assertThat(engine.maskQueryString("api%5Fkey=xyz&q=a%20b")).isEqualTo("api_key=******&q=a+b");
         }
     }
 

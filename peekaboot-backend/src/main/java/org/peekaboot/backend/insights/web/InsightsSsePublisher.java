@@ -10,6 +10,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
 import org.slf4j.Logger;
@@ -214,7 +215,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private static Map<String, Object> nullSafeMap(Map<String, Double> values) {
         Map<String, Object> result = new LinkedHashMap<>();
         for (Map.Entry<String, Double> entry : values.entrySet()) {
-            result.put(entry.getKey(), nullSafe(entry.getValue()));
+            result.put(entry.getKey(), PeekabootJson.nanToNull(entry.getValue()));
         }
         return result;
     }
@@ -306,10 +307,6 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         if (event != null) {
             broadcast(event.name(), event.json().get());
         }
-    }
-
-    static Double nullSafe(double value) {
-        return Double.isNaN(value) ? null : value;
     }
 
     private record SseEvent(String name, Supplier<String> json) {}

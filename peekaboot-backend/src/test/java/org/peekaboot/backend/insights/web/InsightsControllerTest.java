@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class InsightsControllerTest {
@@ -45,5 +46,15 @@ class InsightsControllerTest {
         SseEmitter emitter = new SseEmitter();
         when(publisher.subscribe()).thenReturn(emitter);
         assertThat(controller.stream()).isSameAs(emitter);
+    }
+
+    /** A record rather than a Map, so the body is a Peekaboot type the Peekaboot converter serves. */
+    @Test
+    void aBadRequestBodyIsAPeekabootTypeWithTheErrorMessage() {
+        ResponseEntity<InsightsController.ErrorResponse> response =
+                controller.badRequest(new IllegalArgumentException("Unknown insights level: 9"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(400);
+        assertThat(response.getBody().error()).isEqualTo("Unknown insights level: 9");
     }
 }

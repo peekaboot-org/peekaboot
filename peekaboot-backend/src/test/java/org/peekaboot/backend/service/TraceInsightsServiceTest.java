@@ -23,6 +23,7 @@ import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
 import org.peekaboot.backend.testsupport.TraceStores;
@@ -43,9 +44,9 @@ class TraceInsightsServiceTest {
     @BeforeEach
     void setUp() {
         store = TraceStores.withDefaults();
-        traceTreeMapper = new TraceTreeMapper();
+        traceTreeMapper = new TraceTreeMapper(new MaskingEngine());
         issueDetector = new IssueDetector(new UiTracingProperties());
-        queryExtractor = new QueryExtractor();
+        queryExtractor = new QueryExtractor(new MaskingEngine());
         service = newService(store);
     }
 
@@ -55,7 +56,7 @@ class TraceInsightsServiceTest {
      * which is about the trace's total duration.
      */
     @Test
-    void getInsights_flagsATraceSlowWhenAnySpanCarriesASlowOrVerySlowIssue() {
+    void aTraceIsFlaggedSlowWhenAnySpanCarriesASlowOrVerySlowIssue() {
         addTrace("fast", 50, false);
         addTrace("slow", 150, false);
         addTrace("very-slow", 500, false);
@@ -68,7 +69,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_flagsSlowTheSameWayTheListDoes() {
+    void theDetailFlagsSlowTheSameWayTheListDoes() {
         addTrace("slow", 150, false);
         addTrace("fast", 50, false);
 
@@ -77,19 +78,19 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldHandleEmptyTracesList() {
+    void anEmptyStoreYieldsAnEmptyTraceList() {
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         assertThat(response.traces()).isEmpty();
     }
 
     @Test
-    void isTracingAvailable_shouldBeTrueWhenTraceStoreIsPresent() {
+    void tracingIsAvailableWhenTraceStoreIsPresent() {
         assertThat(service.isTracingAvailable()).isTrue();
     }
 
     @Test
-    void isTracingAvailable_shouldBeFalseWithoutTraceStore() {
+    void tracingIsUnavailableWithoutTraceStore() {
         TraceInsightsService serviceWithNullStore = newService(null);
 
         assertThat(serviceWithNullStore.isTracingAvailable()).isFalse();
@@ -137,7 +138,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldReturnTransformedTrace() {
+    void theDetailReturnsTheTransformedTrace() {
         // Given
         addTrace("trace1", 100, false);
 
@@ -151,7 +152,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldDetectIssues() {
+    void theDetailDetectsIssues() {
         // Given: A trace with a slow span (200ms > 100ms threshold)
         addTrace("trace1", 200, false);
 
@@ -165,7 +166,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldReturnEmptyForUnknownTraceId() {
+    void anUnknownTraceIdYieldsAnEmptyDetail() {
         // When
         Optional<TraceTree> result = service.getTraceInsights("unknown");
 
@@ -174,7 +175,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldHandleNullTraceStore() {
+    void theDetailIsEmptyWithoutATraceStore() {
         // Given
         TraceInsightsService serviceWithNullStore = newService(null);
 
@@ -187,7 +188,7 @@ class TraceInsightsServiceTest {
 
     /** The list feeds the Traces tab's log badges; the counts come from the logs the bundle already holds. */
     @Test
-    void getInsights_shouldCountEachTracesLogsByLevel() {
+    void eachTracesLogsAreCountedByLevel() {
         addTrace("trace1", 100, false);
         addTrace("trace2", 100, false);
         store.addLog(logAt("trace1", "ERROR"));
@@ -204,7 +205,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldEnrichWithLogs() {
+    void theDetailIsEnrichedWithLogs() {
         // Given: a trace with an attached log
         addTrace("trace1", 100, false);
         store.addLog(new LogCapturedEvent(
@@ -223,7 +224,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldReturnEmptyLogsWhenNoLogsStored() {
+    void theDetailCarriesEmptyLogsWhenNoneAreStored() {
         // Given: no logs stored for this trace
         addTrace("trace1", 100, false);
 
@@ -237,7 +238,7 @@ class TraceInsightsServiceTest {
 
     /** The list has no detail to carry, but its trees still say "none" as a list, never as null. */
     @Test
-    void getInsights_carriesEmptyLogAndQueryListsRatherThanNulls() {
+    void theListCarriesEmptyLogAndQueryListsRatherThanNulls() {
         addTrace("trace1", 100, false);
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
@@ -248,7 +249,7 @@ class TraceInsightsServiceTest {
 
     /** A log captured outside any span (no spanId in the MDC) is listed but attached to no span. */
     @Test
-    void getTraceInsights_keepsALogWithoutASpanIdInTheFlatListOnly() {
+    void aLogWithoutASpanIdStaysInTheFlatListOnly() {
         addTrace("trace1", 100, false);
         store.addLog(new LogCapturedEvent("trace1", null, Instant.EPOCH, "INFO", "TestLogger", "spanless", "main"));
 
@@ -260,7 +261,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldExtractQueries() {
+    void theDetailExtractsQueries() {
         // Given: A trace with a DB span
         addTraceWithDbSpan("trace1", 100);
 
@@ -277,7 +278,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldReturnEmptyQueriesWhenNoDbSpans() {
+    void theDetailCarriesEmptyQueriesWhenThereAreNoDbSpans() {
         // Given: A trace without DB spans
         addTrace("trace1", 100, false);
 
@@ -290,7 +291,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldFilterByRootActionType() {
+    void theListFiltersByRootActionType() {
         addTrace("trace1", 100, false); // SERVER kind, no tags -> HTTP_REQUEST (default)
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
 
@@ -300,7 +301,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldIgnoreInvalidRootActionTypeFilter() {
+    void anInvalidRootActionTypeFilterIsIgnored() {
         addTrace("trace1", 100, false);
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "not-a-real-type", null);
@@ -310,7 +311,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldFilterByRootOperationPartialCaseInsensitiveMatch() {
+    void theListFiltersByRootOperationWithAPartialCaseInsensitiveMatch() {
         addTraceWithOperation("trace1", "GET /api/Users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
@@ -320,7 +321,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldFilterByMultipleCommaSeparatedRootActionTypes() {
+    void theListFiltersByMultipleCommaSeparatedRootActionTypes() {
         addTrace("trace1", 100, false); // SERVER kind -> HTTP_REQUEST
         addConsumerTrace("trace2", 100); // CONSUMER kind -> MESSAGE_CONSUMER
         addScheduledJobTrace("trace3", 100); // scheduled-task tags -> SCHEDULED_JOB
@@ -332,7 +333,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldIgnoreInvalidTypesInCommaSeparatedFilter() {
+    void invalidTypesInACommaSeparatedFilterAreIgnored() {
         addTrace("trace1", 100, false);
         addConsumerTrace("trace2", 100);
 
@@ -342,7 +343,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldReturnFilteredBucketCountsWhenTypeFilterActive() {
+    void filteredBucketCountsAreReturnedWhileATypeFilterIsActive() {
         addTrace("trace1", 100, false); // HTTP_REQUEST, ok
         addTrace("trace2", 100, true); // HTTP_REQUEST, error
         addConsumerTrace("trace3", 100); // MESSAGE_CONSUMER, ok
@@ -354,7 +355,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldReturnFilteredBucketCountsForRootOperationFilter() {
+    void filteredBucketCountsAreReturnedForARootOperationFilter() {
         addTraceWithOperation("trace1", "GET /api/users", 100);
         addTraceWithOperation("trace2", "POST /orders", 100);
 
@@ -364,7 +365,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldOmitFilteredBucketCountsWithoutFilter() {
+    void filteredBucketCountsAreOmittedWithoutAFilter() {
         addTrace("trace1", 100, false);
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
@@ -373,7 +374,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_shouldMatchRootOperationByFullyQualifiedTaskTarget() {
+    void theRootOperationFilterMatchesAFullyQualifiedTaskTarget() {
         addTraceWithOperation("trace1", "task scheduler.fixedDelay", 100);
         addTraceWithOperation("trace2", "task scheduler.fixedRate", 100);
 
@@ -384,7 +385,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_shouldEnrichWithHttpExchange() {
+    void theDetailIsEnrichedWithTheHttpExchange() {
         addTrace("trace1", 100, false);
         store.setRequest(RequestCompletedEvents.request("trace1")
                 .path("/users")
@@ -401,7 +402,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_attachesALogEmittedInAFoldedDuplicateSpanToTheSurvivingSpan() {
+    void aLogEmittedInAFoldedDuplicateSpanIsAttachedToTheSurvivingSpan() {
         // Given: a DB span whose duplicate is folded away on write, and a log emitted
         // while inside the folded-away duplicate's MDC scope - i.e. carrying the
         // duplicate's spanId, not the surviving span's
@@ -427,7 +428,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_returnsTheSameTreeWhetherOrNotTheDuplicateWasCaptured() {
+    void theSameTreeIsReturnedWhetherOrNotTheDuplicateWasCaptured() {
         // Given: one trace whose DB call was captured twice (real span + duplicate) and
         // an equivalent trace whose DB call was only ever captured once
         addTraceWithDuplicatedDbSpan("withDup", 100);
@@ -448,7 +449,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getTraceInsights_surfacesTheTruncatedFlagFromTheBundle() {
+    void theDetailSurfacesTheTruncatedFlagFromTheBundle() {
         InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
         for (int i = 1; i <= 3; i++) {
             cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s" + i, "op" + i));
@@ -462,7 +463,7 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void getInsights_surfacesTheTruncatedFlagInTheListToo() {
+    void theListSurfacesTheTruncatedFlagToo() {
         InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
         cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s1", "op1"));
         cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s2", "op2"));

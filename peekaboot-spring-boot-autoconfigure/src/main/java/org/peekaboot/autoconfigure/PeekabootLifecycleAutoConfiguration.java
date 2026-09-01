@@ -38,7 +38,7 @@ import org.springframework.core.env.Environment;
         after = {ProjectInfoAutoConfiguration.class, PeekabootStorageAutoConfiguration.class},
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty(name = "peekaboot.lifecycle.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.LIFECYCLE_ENABLED, matchIfMissing = true)
 public class PeekabootLifecycleAutoConfiguration {
 
     @Bean

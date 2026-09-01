@@ -1,6 +1,5 @@
 package org.peekaboot.backend.insights.web;
 
-import java.util.Map;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
@@ -41,7 +40,10 @@ public class InsightsController {
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    ResponseEntity<ErrorResponse> badRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
     }
+
+    /** A record rather than a Map, so the 400 body goes through the Peekaboot converter too. */
+    record ErrorResponse(String error) {}
 }
