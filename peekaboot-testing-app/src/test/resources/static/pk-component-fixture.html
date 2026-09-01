@@ -6,6 +6,8 @@
     <link rel="stylesheet" href="/peekaboot/ui/assets/tokens.css">
     <link rel="stylesheet" href="/peekaboot/ui/assets/base.css">
     <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
+    <!-- dashboard chrome, for the unmask toggle's pressed (danger) state below -->
+    <link rel="stylesheet" href="/peekaboot/ui/dashboard/dashboard.css">
 </head>
 <body>
     <span class="pk-badge pk-badge--ok" id="badge-ok">UP</span>
@@ -52,5 +54,12 @@
         <button class="pk-tab" id="tab-selected" aria-selected="true">Overview</button>
         <button class="pk-tab" id="tab-unselected" aria-selected="false">Details</button>
     </div>
+
+    <!-- the Environment/Config "Secrets shown" reveal toggle in its pressed (danger) state,
+         exactly as shared/unmask-control.js builds it -->
+    <button type="button" class="pk-btn pk-btn--small pk-unmask-toggle" id="unmask-pressed" aria-pressed="true">
+        <span class="pk-unmask-toggle__icon" aria-hidden="true">&#128065;</span>
+        <span class="pk-unmask-toggle__label">Secrets shown &mdash; click to hide</span>
+    </button>
 </body>
 </html>

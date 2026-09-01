@@ -33,6 +33,9 @@ const TABS = [
     {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => (t.logs || []).length}
 ];
 
+// How long a cross-link jump's highlight stays on its target (see jumpToElement).
+const JUMP_FLASH_MS = 2000;
+
 let escHandler = null;
 let onCloseCallback = null;
 let themeUnwatch = null;
@@ -249,14 +252,17 @@ function render(content, trace, urlState, display) {
     // that tab's filters empty - see url-state.js's push/replace rule. Only the tab
     // restored from the URL at open time seeds its filters from urlState.initial.params.
     //
-    // goToSpanLogs rides along on the same object every tab already receives, so the
-    // Spans tab can reach it without a hand-off channel of its own beside this one - as do
-    // the display settings (locale, timeZone, features) the tabs format and colour by.
+    // goToSpanLogs/goToSpan/goToQuery ride along on the same object every tab already
+    // receives, so the tabs can reach them without a hand-off channel of their own beside
+    // this one - as do the display settings (locale, timeZone, features) the tabs format
+    // and colour by.
     const tabView = (tabId, filters) => ({
         ...display,
         filters,
         setFilters: next => urlState?.update(tabId, next),
-        goToSpanLogs
+        goToSpanLogs,
+        goToSpan,
+        goToQuery
     });
 
     // tabStrip's click listener re-fires onSelect even when the clicked tab is already
@@ -280,6 +286,40 @@ function render(content, trace, urlState, display) {
         tabApi.select('logs', {silent: true, focus: true});
         urlState?.update('logs', {span: spanId});
         renderTabContent(tabContent, 'logs', trace, tabView('logs', {span: spanId}));
+    }
+
+    /**
+     * Cross-link jumps between the overlay's own tabs (Spans <-> Queries, Logs -> Spans):
+     * switch the tab exactly as the strip would (silent select, urlState.update with empty
+     * params - the target tab starts unfiltered, same as a manual switch), then scroll to
+     * the target row, move keyboard focus onto it (the clicked link's own markup was just
+     * replaced, so focus would otherwise fall back to the shadow host) and mark it with a
+     * temporary highlight so the eye lands where focus went.
+     */
+    function jumpToElement(tabId, selector) {
+        activeTabId = tabId;
+        tabApi.select(tabId, {silent: true});
+        urlState?.update(tabId, {});
+        renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
+        const target = tabContent.querySelector(selector);
+        if (!target) {
+            // nothing to land on (e.g. a truncated trace) - focus the tab button instead
+            tabApi.select(tabId, {silent: true, focus: true});
+            return;
+        }
+        target.scrollIntoView({block: 'center'});
+        target.tabIndex = -1;
+        target.focus({preventScroll: true});
+        target.classList.add('pk-jump-flash');
+        setTimeout(() => target.classList.remove('pk-jump-flash'), JUMP_FLASH_MS);
+    }
+
+    function goToSpan(spanId) {
+        jumpToElement('spans', `.pk-gantt-row[data-span-id="${CSS.escape(spanId)}"]`);
+    }
+
+    function goToQuery(spanId) {
+        jumpToElement('queries', `.pk-query-item[data-span-id="${CSS.escape(spanId)}"]`);
     }
 
     tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({

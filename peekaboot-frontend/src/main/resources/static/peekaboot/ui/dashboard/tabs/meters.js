@@ -1,137 +1,71 @@
 /**
  * The "Meters" tab: Micrometer meters, filterable by name or tag, each expandable to
- * its measurements. Fetched from its own endpoint (not part of the main dashboard
- * payload). render() is called on every 30s auto-refresh cycle for every available tab
- * regardless of which is visible (see main.js's renderData()), so the actual network
- * fetch is skipped here unless this tab's container is the active one - main.js's
- * renderTabById() calls render() again the moment this tab becomes active, so switching
- * to it never waits on the next cycle.
+ * its measurements. Built on shared/filtered-group-tab.js like the other filterable
+ * group tabs, using its fetchData hook: the metrics come from their own endpoint (not
+ * the main dashboard payload) and are fetched only while this tab's container is the
+ * active one - see the hook's doc comment in the shell.
  */
-import {groupList, expandedKeys, badge} from '../../shared/components.js';
-import {escapeHtml, highlightText} from '../../shared/markup.js';
+import {badge} from '../../shared/components.js';
+import {highlightText} from '../../shared/markup.js';
 import {formatBytes} from '../../shared/format.js';
-import {reconcileTextFilter, writeTextFilter} from '../../shared/url-filter.js';
+import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
 export const label = 'Meters';
 
-let latestMetrics = null;
-
-// The most recent render() call's container/context - read by the persistent filter
-// input listener below (wired once, see wireFilter) so a later locale change, or a
-// later fetch, always uses fresh values instead of whatever was current the first time
-// this tab was rendered.
-let currentContainer = null;
-let currentContext = null;
+const tab = filteredGroupTab({
+    inputId: 'meters-filter',
+    listId: 'meters-list',
+    fetchData: async context => {
+        const result = await context.client.get('/api/metrics');
+        return result === null ? null : result.metrics || [];
+    },
+    loadingMessage: 'Loading metrics...',
+    fetchErrorMessage: error => `Failed to load metrics: ${error.message}`,
+    select: metrics => metrics,
+    // a metric either matches as a whole or not at all - its measurements are never narrowed
+    filterGroup: (metric, query) => (!query || matchesMetricFilter(metric, query) ? metric : null),
+    key: metric => metric.name,
+    header: (metric, query) => ({
+        name: metric.name,
+        count: `${metric.measurements.length} measurement${metric.measurements.length !== 1 ? 's' : ''}`,
+        highlight: query
+    }),
+    items: (metric, list, query, context) => {
+        if (metric.description) {
+            const descEl = document.createElement('div');
+            descEl.className = 'pk-metric__description';
+            descEl.textContent = metric.description;
+            list.appendChild(descEl);
+        }
+        metric.measurements.forEach(measurement =>
+            list.appendChild(renderMeasurement(measurement, query, metric.baseUnit, context.locale)));
+    },
+    emptyMessage: 'No metrics available',
+    noMatchMessage: query => `No metrics matching "${query}"`,
+    decorate: decorateGroupHeaders,
+    afterRender: updateCount
+});
 
 export function isAvailable(data, features) {
     return Boolean(features?.metrics);
 }
 
 export function render(container, data, context) {
-    currentContainer = container;
-    currentContext = context;
-    wireFilter(container);
-    // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so reconciling during a background
-    // auto-refresh render of a hidden meters tab would read another tab's params (or
-    // none) and clobber whatever the user already typed here.
-    if (container.classList.contains('active')) reconcileTextFilter(container.querySelector('#meters-filter'), context);
-    fetchAndRender();
+    tab.render(container, data, context);
 }
 
-function wireFilter(container) {
-    const input = container.querySelector('#meters-filter');
-    if (!input || input.dataset.wired) return;
-    input.dataset.wired = 'true';
-    input.addEventListener('input', () => {
-        writeTextFilter(input, currentContext);
-        renderList(input.value.trim());
-    });
-}
-
-function currentFilterValue(container) {
-    return container.querySelector('#meters-filter')?.value.trim() || '';
-}
-
-async function fetchAndRender() {
-    const container = currentContainer;
-    const context = currentContext;
-    // Not the active tab - skip the network round trip. main.js's renderTabById() calls
-    // render() (and so this) again the instant this tab is switched to.
-    if (!container.classList.contains('active')) return;
-
-    const listEl = container.querySelector('#meters-list');
-    // Only show the loading state on the very first fetch - a background refresh of an
-    // already-populated, currently visible list must not blank it for the round trip's
-    // duration (renderList replaces the content once the response is in hand).
-    if (latestMetrics === null) {
-        listEl.innerHTML = '<div class="pk-loading"><div class="pk-spinner"></div><p>Loading metrics...</p></div>';
-    }
-
-    let result;
-    try {
-        result = await context.client.get('/api/metrics');
-    } catch (error) {
-        listEl.innerHTML = `<p class="pk-empty">Failed to load metrics: ${escapeHtml(error.message)}</p>`;
-        return;
-    }
-    if (result === null) return; // superseded by a newer request
-
-    latestMetrics = result?.metrics || [];
-    renderList(currentFilterValue(container));
-}
-
-function renderList(filterQuery) {
-    const container = currentContainer;
-    const context = currentContext;
-    const listEl = container.querySelector('#meters-list');
+/** The "N / M metrics" readout beside the filter input, updated on every render. */
+function updateCount(container, {groups, filtered, query}) {
     const countEl = container.querySelector('#meters-count');
-    // Must run before the container is cleared below - see environment.js.
-    const expanded = expandedKeys(listEl);
-    listEl.innerHTML = '';
-
-    const metrics = latestMetrics;
-    if (!metrics || metrics.length === 0) {
-        listEl.innerHTML = '<p class="pk-empty">No metrics available</p>';
-        if (countEl) countEl.textContent = '';
-        return;
+    if (!countEl) return;
+    if (groups.length === 0) {
+        countEl.textContent = '';
+    } else {
+        countEl.textContent = query
+            ? `${filtered.length} / ${groups.length} metrics`
+            : `${groups.length} metrics`;
     }
-
-    const filteredMetrics = filterQuery ? metrics.filter(m => matchesMetricFilter(m, filterQuery)) : metrics;
-
-    if (countEl) {
-        countEl.textContent = filterQuery
-            ? `${filteredMetrics.length} / ${metrics.length} metrics`
-            : `${metrics.length} metrics`;
-    }
-
-    if (filteredMetrics.length === 0) {
-        listEl.innerHTML = `<p class="pk-empty">No metrics matching "${escapeHtml(filterQuery)}"</p>`;
-        return;
-    }
-
-    groupList(listEl, filteredMetrics, {
-        key: metric => metric.name,
-        header: metric => ({
-            name: metric.name,
-            count: `${metric.measurements.length} measurement${metric.measurements.length !== 1 ? 's' : ''}`,
-            highlight: filterQuery
-        }),
-        items: (metric, list) => {
-            if (metric.description) {
-                const descEl = document.createElement('div');
-                descEl.className = 'pk-metric__description';
-                descEl.textContent = metric.description;
-                list.appendChild(descEl);
-            }
-            metric.measurements.forEach(measurement =>
-                list.appendChild(renderMeasurement(measurement, filterQuery, metric.baseUnit, context.locale)));
-        },
-        expandedKeys: expanded
-    });
-
-    decorateGroupHeaders(listEl, filteredMetrics);
 }
 
 /**

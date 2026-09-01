@@ -171,7 +171,12 @@
     cursor: pointer;
     transition: background-color var(--pk-transition);
 }
-.pk-btn:not(:disabled):hover { background: var(--pk-bg-hover); }
+/* Pressed buttons are excluded: their fill IS their state (the green selection fill
+   below, the unmask toggle's danger fill in dashboard.css), each paired with its own
+   --pk-on-* ink. This rule outranks those pairings by specificity, so without the
+   guard a hover swaps the fill for the neutral --pk-bg-hover under ink tuned for a
+   saturated fill - white on near-white light, dark-on-dark dark. */
+.pk-btn:not(:disabled):not([aria-pressed="true"]):hover { background: var(--pk-bg-hover); }
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 /* 0.65 opacity, not the more common 0.5: this button's own text sits on --pk-bg/
    --pk-bg-alt at well over 10:1 (see tokens.css), and WCAG exempts disabled controls

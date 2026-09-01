@@ -11,12 +11,22 @@ import {LOG_LEVELS} from '../../shared/severity.js';
 import {buildSpanNames} from '../../shared/span-names.js';
 import {copyableIdHtml} from '../../shared/copyable.js';
 
-function renderLogRows(logs, spanNames, dateOptions) {
+function renderLogRows(logs, spanNames, dateOptions, canJumpToSpan) {
     return logs.map(log => {
         const spanId = log.spanId || '';
+        // Cross-link to the span's row in the Spans tab tree - distinct from the name
+        // button beside it, which filters this list (see trace-detail.js's goToSpan).
+        const treeLink = canJumpToSpan && spanId
+            ? `<button type="button" class="pk-log__goto-span" data-span-id="${escapeHtml(spanId)}"`
+                + ` title="Show this span in the span tree"`
+                + ` aria-label="Show span ${escapeHtml(spanId)} in the span tree">&#10550;</button>`
+            : '';
         const spanCell = `<span class="pk-log__span-cell">`
+            + `<span class="pk-log__span-row">`
             + `<button type="button" class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}" aria-label="Filter logs to span ${escapeHtml(spanId)}">`
             + `${escapeHtml(spanNames?.get(spanId) || spanId)}</button>`
+            + treeLink
+            + `</span>`
             + copyableIdHtml(spanId, {label: 'spanId', truncate: true})
             + `</span>`;
         return `<div class="pk-log" data-level="${escapeHtml(log.level)}" data-span-id="${escapeHtml(spanId)}">`
@@ -96,7 +106,7 @@ export function render(container, trace, view = {}) {
                 + `<button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>`;
         }
         html += '</div>';
-        html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames, {locale: view.locale, timeZone: view.timeZone})}</div>`;
+        html += `<div id="pk-logs-list">${renderLogRows(logs, spanNames, {locale: view.locale, timeZone: view.timeZone}, Boolean(view.goToSpan))}</div>`;
         container.innerHTML = html;
 
         // Filter controls
@@ -152,6 +162,11 @@ export function render(container, trace, view = {}) {
                     renderView();
                 }
             });
+        });
+
+        // Cross-link to the span tree (see renderLogRows)
+        container.querySelectorAll('.pk-log__goto-span').forEach(el => {
+            el.addEventListener('click', () => view.goToSpan?.(el.dataset.spanId));
         });
     }
 

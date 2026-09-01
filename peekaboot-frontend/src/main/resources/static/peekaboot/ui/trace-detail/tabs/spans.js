@@ -35,6 +35,13 @@ export function render(container, trace, context = {}) {
             return;
         }
 
+        // Cross-link: hands off to the Queries tab, scrolled to this span's entry.
+        const queryLink = e.target.closest('.pk-span-query-link');
+        if (queryLink) {
+            context.goToQuery?.(queryLink.dataset.spanId);
+            return;
+        }
+
         // Handle SQL toggle clicks
         const sqlToggle = e.target.closest('.pk-span-query-toggle');
         if (sqlToggle) {
@@ -136,9 +143,12 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
         nameHtml += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
     }
 
-    // Add query toggle for query spans with SQL
+    // Add query toggle for query spans with SQL, plus the cross-link to the same
+    // query's entry in the Queries tab (see trace-detail.js's goToQuery)
     if (hasQuery) {
         nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${escapeHtml(span.spanId)}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
+        nameHtml += `<button type="button" class="pk-span-query-link" data-span-id="${escapeHtml(span.spanId)}"`
+            + ` title="Show in Queries tab" aria-label="Show this query in the Queries tab">&#10551;</button>`;
     }
 
     // Add logs toggle for spans with logs - switches the overlay to the Logs tab,

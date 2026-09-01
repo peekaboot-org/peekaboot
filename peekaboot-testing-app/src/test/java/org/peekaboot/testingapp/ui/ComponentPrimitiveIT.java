@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
@@ -86,6 +87,100 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         String overflow = (String) page.evalOnSelector("#meter-danger", "el => getComputedStyle(el).overflow");
         assertThat(overflow).isEqualTo("hidden");
+    }
+
+    /** WCAG contrast ratio between an element's computed color and background-color. */
+    private double contrastRatio(String selector) {
+        return ((Number) page.evaluate("""
+                (sel) => {
+                    const style = getComputedStyle(document.querySelector(sel));
+                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).slice(0, 3).map(Number);
+                    const luminance = ([r, g, b]) => {
+                        const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+                    };
+                    const text = luminance(parse(style.color));
+                    const fill = luminance(parse(style.backgroundColor));
+                    const [hi, lo] = text > fill ? [text, fill] : [fill, text];
+                    return (hi + 0.05) / (lo + 0.05);
+                }
+                """, selector)).doubleValue();
+    }
+
+    /** The theme's --pk-danger, resolved to the same rgb() form computed styles use. */
+    private String resolvedDangerFill() {
+        return (String) page.evaluate("""
+                () => {
+                    const probe = document.createElement('div');
+                    probe.style.backgroundColor = 'var(--pk-danger)';
+                    document.body.appendChild(probe);
+                    const resolved = getComputedStyle(probe).backgroundColor;
+                    probe.remove();
+                    return resolved;
+                }
+                """);
+    }
+
+    private String backgroundColor(String selector) {
+        return (String) page.evalOnSelector(selector, "el => getComputedStyle(el).backgroundColor");
+    }
+
+    /**
+     * Waits until the element's background-color holds still across consecutive reads -
+     * .pk-btn transitions it over 0.2s, so a read right after a theme flip or hover/
+     * un-hover would otherwise catch a mid-blend value and assert against noise.
+     */
+    private void awaitSettledBackground(String selector) {
+        page.evalOnSelector(selector, """
+                async el => {
+                    const read = () => getComputedStyle(el).backgroundColor;
+                    let previous = read();
+                    for (let i = 0; i < 60; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        const current = read();
+                        if (current === previous) return;
+                        previous = current;
+                    }
+                    throw new Error('background-color never settled: ' + read());
+                }
+                """);
+    }
+
+    /**
+     * The Environment/Config "Secrets shown" pressed state pairs the --pk-danger fill
+     * with the --pk-on-danger ink (dashboard.css, per the palette's fill/ink rule). That
+     * pairing must hold in every state the button can be in - resting AND hovered, light
+     * AND dark: components.css's generic .pk-btn hover rule outranks the pressed rule by
+     * specificity, so an unguarded hover swaps the danger fill for the neutral
+     * --pk-bg-hover while the ink stays --pk-on-danger - white on near-white in the
+     * light theme, dark-on-dark in the dark one.
+     */
+    @Test
+    void pressedSecretsToggleKeepsItsDangerFillAndReadableInkInEveryState() {
+        openFixture();
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            page.mouse().move(0, 0); // make sure nothing is hovered
+            awaitSettledBackground("#unmask-pressed");
+
+            assertThat(backgroundColor("#unmask-pressed"))
+                    .as("resting fill is --pk-danger (%s theme)", theme)
+                    .isEqualTo(resolvedDangerFill());
+            assertThat(contrastRatio("#unmask-pressed"))
+                    .as("resting ink/fill contrast (%s theme)", theme)
+                    .isGreaterThanOrEqualTo(4.5);
+
+            page.hover("#unmask-pressed");
+            awaitSettledBackground("#unmask-pressed");
+
+            assertThat(backgroundColor("#unmask-pressed"))
+                    .as("hovered fill stays --pk-danger (%s theme)", theme)
+                    .isEqualTo(resolvedDangerFill());
+            assertThat(contrastRatio("#unmask-pressed"))
+                    .as("hovered ink/fill contrast (%s theme)", theme)
+                    .isGreaterThanOrEqualTo(4.5);
+        }
     }
 
     @Test

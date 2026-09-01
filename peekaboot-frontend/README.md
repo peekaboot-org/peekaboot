@@ -116,7 +116,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH` — the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
 | `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables` — the click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
-| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate})` — the shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js` and `loggers.js` are built on it and supply only what differs. |
+| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})` — the shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js`, `loggers.js` and `meters.js` are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`) — called only while the tab is active, with loading/error states handled by the shell. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). |
@@ -129,7 +129,49 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
 | `trace-stats.js` | `traceStatParts(trace, features)` — a trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
-| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair). |
+| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair, insights.js for its level and lifecycle.js for its page). |
+
+## URL state (deep links)
+
+Every dashboard view is addressable: `#<tab>[/<detail>[/<subview>]][?<params>]`
+(`shared/url-state.js`). Structural segments (tab, detail) push a history entry;
+subview and params are written with `replaceState`, so a filter keystroke or an
+overlay tab switch never adds a Back stop of its own. Opening a URL restores the
+state below, and changing that state rewrites the URL in place —
+`shared/url-filter.js` holds the shared "URL vs. current state" direction rule every
+tab applies (a tab-strip click's own bare hash push must not clear a filter; a
+hand-edited bare hash must).
+
+| View | URL params | Restored / written state |
+|---|---|---|
+| `#overview` | — | no view state of its own |
+| `#insights` | `level` | the global aggregation level (a configured level index; the first level is the default and stays out of the URL — per-panel overrides are not URL state) |
+| `#lifecycle` | `page` | the pager's 1-based page; page one stays out of the URL, an out-of-range value clamps to the last page and the URL is corrected |
+| `#traces` | `bucket`, `type`, `op` | bucket (`all`/`errors`/`slow`), comma-separated root action types, root operation |
+| `#traces/<traceId>` | — | opens the trace overlay on its Spans tab |
+| `#traces/<traceId>/<subview>` | the overlay tab's own filters | `request`/`spans`/`queries`/`logs`; the Logs tab carries `q`, `level`, `span` |
+| `#meters` | `q` | the text filter |
+| `#environment` | `q` | the text filter |
+| `#flyway` | — | no filter |
+| `#loggers` | `q`, `configured` | the text filter and the configured-only checkbox (`configured=1`) |
+| `#config` | `q` | the text filter |
+| `#scheduled-tasks` | — | no filter (group expansion is deliberately not URL state, on any tab) |
+
+Theme, locale and timezone are per-browser settings (`localStorage`), never URL
+state — a shared link must not impose the sender's display preferences on the
+reader. An invalid param value (an unknown bucket, level, log level or page) falls
+back to its default instead of reaching the backend or filtering invisibly.
+
+### Cross-links in the trace overlay
+
+The overlay's tabs link into each other: a log row links to the span that wrote it,
+a query span's gantt row links to its entry in the Queries tab, and each Queries
+entry links back to its span row (`trace-detail.js`'s `goToSpan`/`goToQuery`; the
+Logs tab's span-name button is the older third link, filtering the log list to a
+span). A jump switches the overlay tab the way the strip would (`replaceState`,
+params reset), scrolls to the target, moves keyboard focus onto it and marks it with
+the temporary `.pk-jump-flash` highlight. The anchors are `data-span-id` on the
+gantt rows and on `.pk-query-item` (the backend's `QueryInfo.spanId`).
 
 ## Thresholds and the SLOW badge
 

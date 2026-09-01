@@ -123,6 +123,59 @@ class LifecycleTabIT extends PlaywrightTestBase {
         assertThat(pagerButton(1).isDisabled()).as("Next on page 3").isTrue();
     }
 
+    /**
+     * The pager's current page is URL state (url-state.js): a deep link must land on
+     * that page, not on page one with the reader left to click their own way back.
+     * The URL carries the 1-based page the readout shows; page one is the default and
+     * carries no param at all.
+     */
+    @Test
+    void deepLinkRestoresThePagerPage() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#lifecycle?page=2");
+        page.waitForFunction(
+                "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 2 of 3'");
+
+        assertThat(page.querySelectorAll(ROWS)).hasSize(20);
+    }
+
+    /**
+     * Paging writes the page to the URL via replaceState (url-state.js's push/replace
+     * rule - a view change never adds a Back stop of its own), and walking back to page
+     * one - the default - takes the param out so the clean state yields a clean
+     * "#lifecycle" hash.
+     */
+    @Test
+    void pagingWritesThePageToTheUrlWithoutPushingHistory() {
+        openLifecycle();
+        int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        pagerButton(1).click();
+        page.waitForFunction("() => window.location.hash.includes('page=2')");
+
+        int historyLengthAfter = ((Number) page.evaluate("() => window.history.length")).intValue();
+        assertThat(historyLengthAfter).isEqualTo(historyLengthBefore);
+
+        pagerButton(0).click();
+        page.waitForFunction(
+                "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 1 of 3'");
+        assertThat(page.url()).endsWith("#lifecycle");
+    }
+
+    /**
+     * A page number past the end (a stale link against a shrunken history) clamps to
+     * the real last page - the same clamp the 30s refresh already applies - and the
+     * URL is corrected to the page actually shown rather than left claiming one that
+     * does not exist.
+     */
+    @Test
+    void overflowingPageInTheUrlClampsToTheLastPageAndCorrectsTheUrl() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#lifecycle?page=99");
+        page.waitForFunction(
+                "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 3 of 3'");
+
+        page.waitForFunction("() => window.location.hash.includes('page=3')");
+    }
+
     @Test
     void newestRunIsTheApplicationsOwnAndCarriesTheRunningBadge() {
         openLifecycle();

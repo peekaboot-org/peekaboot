@@ -152,10 +152,12 @@
 
 .pk-span-row-count { font-size: 10px; padding: 1px 5px; background: var(--pk-success); color: var(--pk-on-success); border-radius: 3px; margin-left: 4px; }
 
-.pk-span-query-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
-.pk-span-query-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
-.pk-span-query-toggle:active { background: var(--pk-bg-alt); }
-.pk-span-query-toggle:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+/* The SQL toggle plus the two query cross-links (spans.js's jump to the Queries tab,
+   queries.js's jump back to the span tree) share one small-button treatment. */
+.pk-span-query-toggle, .pk-span-query-link, .pk-query-span-link { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
+.pk-span-query-toggle:hover, .pk-span-query-link:hover, .pk-query-span-link:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
+.pk-span-query-toggle:active, .pk-span-query-link:active, .pk-query-span-link:active { background: var(--pk-bg-alt); }
+.pk-span-query-toggle:focus-visible, .pk-span-query-link:focus-visible, .pk-query-span-link:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 .pk-span-query-detail { padding: 8px 12px; margin: 4px 0 4px 36px; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; display: none; }
 .pk-span-query-detail.expanded { display: block; }
@@ -215,9 +217,26 @@
    dozen pixels of height. Density loses to a click target a person can actually hit. */
 .pk-log__span-cell .pk-copy { padding: 0 2px; gap: 3px; max-width: 100%; }
 .pk-log__span-cell .pk-copy__label, .pk-log__span-cell .pk-copy__value { font-size: 9px; }
+/* The row's cross-link to the span tree sits beside the name button, inside the cell's
+   column flow, so the copyable id below keeps its own line. */
+.pk-log__span-row { display: flex; align-items: center; gap: 4px; }
+.pk-log__span-row .pk-log__span { flex: 1; min-width: 0; width: auto; }
+.pk-log__goto-span { flex: none; background: none; border: none; padding: 0; color: var(--pk-primary-text); font-size: 10px; cursor: pointer; }
+.pk-log__goto-span:hover { color: var(--pk-text); }
+.pk-log__goto-span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+
 .pk-log__level { width: 50px; font-weight: 600; }
 .pk-log__level--trace, .pk-log__level--debug { color: var(--pk-text-muted); }
 .pk-log__level--info { color: var(--pk-info-text); }
 .pk-log__level--warn { color: var(--pk-warning-text); }
 .pk-log__level--error { color: var(--pk-danger); }
 .pk-log__message { flex: 1; word-break: break-word; }
+
+/* Cross-link jump target (trace-detail.js's jumpToElement): briefly tinted and
+   ring-marked - design tokens only, visible in both themes - so the eye lands where
+   focus just moved; the class is removed again after a moment. Declared last so it
+   wins over .pk-gantt-row:hover / .pk-query-item's own background. */
+.pk-jump-flash { background: var(--pk-primary-light); box-shadow: inset 0 0 0 2px var(--pk-primary-text); }
+/* Focus lands on the row/entry itself (tabindex=-1, programmatic focus); the flash
+   ring above is the visible indicator, so the UA's default outline is redundant. */
+.pk-gantt-row:focus, .pk-query-item:focus { outline: none; }

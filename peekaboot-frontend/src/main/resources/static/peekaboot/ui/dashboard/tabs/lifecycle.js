@@ -21,6 +21,7 @@
  */
 import {badge} from '../../shared/components.js';
 import {formatDateTime, formatLongDuration} from '../../shared/format.js';
+import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
 export const id = 'lifecycle';
 export const label = 'Lifecycle';
@@ -37,7 +38,42 @@ let currentPage = 0;    // 0-indexed, survives across render() calls - see doc c
 export function render(container, data, context) {
     currentContainer = container;
     currentContext = context;
+    // Only while this tab is the one the hash currently points at - context.urlParams
+    // reflects whatever tab is active in the URL (see the same guard on every other
+    // tab's reconcile).
+    if (container.classList.contains('active')) reconcileWithUrl(context);
     fetchAndRender();
+}
+
+/**
+ * The URL's 1-based page param as this module's 0-based page index; anything
+ * unparseable, fractional or below 1 is page one. Exported for SharedModuleIT.
+ */
+export function pageFromUrl(params) {
+    const page = Number(params?.page);
+    return Number.isInteger(page) && page >= 1 ? page - 1 : 0;
+}
+
+/**
+ * Reconciles the pager's page with the URL - the same two-direction rule every filter
+ * tab applies (see shared/url-filter.js's doc comment), with page one as the default
+ * that stays out of the URL. The seeded page may still overshoot the run list (a stale
+ * link) - renderTable's clamp corrects both the page and the URL once the list is known.
+ */
+function reconcileWithUrl(context) {
+    reconcileFilterWithUrl(context, ['page'], {
+        seed: params => {
+            currentPage = pageFromUrl(params);
+        },
+        hasNonDefaultState: () => currentPage !== 0,
+        writeBack: writePageParam
+    });
+}
+
+/** Writes the current page to the URL (1-based, matching the readout), omitting it on
+    page one so the default yields a clean "#lifecycle" hash. A replace, never a push. */
+function writePageParam() {
+    currentContext.setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
 }
 
 async function fetchAndRender() {
@@ -85,7 +121,12 @@ function renderTable(container, context) {
     // Clamp rather than reset - a shrinking list (unlikely, but the log is a ring
     // buffer) must not maroon the reader past the new last page; a growing one must
     // not move them off the page they were reading.
-    currentPage = Math.min(Math.max(currentPage, 0), totalPages - 1);
+    const clamped = Math.min(Math.max(currentPage, 0), totalPages - 1);
+    if (clamped !== currentPage) {
+        currentPage = clamped;
+        // the URL must name the page actually shown, not the out-of-range one it asked for
+        writePageParam();
+    }
 
     const start = currentPage * PAGE_SIZE;
     const {locale, timeZone} = context;
@@ -237,6 +278,7 @@ function renderPager(totalPages) {
     prevBtn.disabled = currentPage === 0;
     prevBtn.addEventListener('click', () => {
         currentPage -= 1;
+        writePageParam();
         renderTable(currentContainer, currentContext);
     });
 
@@ -251,6 +293,7 @@ function renderPager(totalPages) {
     nextBtn.disabled = currentPage >= totalPages - 1;
     nextBtn.addEventListener('click', () => {
         currentPage += 1;
+        writePageParam();
         renderTable(currentContainer, currentContext);
     });
 

@@ -1,21 +1,35 @@
 /**
  * The shell shared by the dashboard tabs that show a filterable list of collapsible groups
- * (config.js, environment.js, loggers.js): the module-level data/context, the filter input
- * wired once, the URL <-> filter reconciliation, the expansion state that survives a
- * re-render, and the empty states. A tab supplies only what differs - where its groups come
- * from, how one group is filtered, and how a group's header and items look.
+ * (config.js, environment.js, loggers.js, meters.js): the module-level data/context, the
+ * filter input wired once, the URL <-> filter reconciliation, the expansion state that
+ * survives a re-render, and the empty states. A tab supplies only what differs - where its
+ * groups come from, how one group is filtered, and how a group's header and items look.
  *
  *   select(data)                -> the groups array, or nothing when the payload has none
  *   filterGroup(group, query)   -> the group narrowed to the query, or null when nothing
  *                                  in it matches; called with '' when no filter is set
- *   key/header/items            -> groupList()'s callbacks; header also receives the query
+ *   key/header/items            -> groupList()'s callbacks; header also receives the
+ *                                  query, items the query and the current context
  *   extraTop(data)              -> optional element rendered above the groups, or null
  *   emptyMessage                -> shown when the payload has no groups at all
  *   noMatchMessage(query)       -> shown when the filter narrows everything away
  *   urlFilter                   -> optional {reconcile(input, container, context),
  *                                  write(input, container, context)} for a tab whose URL
  *                                  state is more than the single "q" the default handles
- *   decorate(listEl)            -> optional post-processing of the rendered groups
+ *   decorate(listEl, filtered)  -> optional post-processing of the rendered groups
+ *   afterRender(container, {groups, filtered, query})
+ *                               -> optional hook run after every (re-)render, the empty
+ *                                  states included - meters.js's match-count readout
+ *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
+ *                                  instead of the shared payload render() receives. Called
+ *                                  only while the tab's container is the active one - a
+ *                                  background auto-refresh render of a hidden tab skips
+ *                                  the round trip, and main.js's renderTabById() renders
+ *                                  again the moment the tab becomes active. Resolves to
+ *                                  the data select() reads, or null when superseded (see
+ *                                  shared/api.js); a rejection renders fetchErrorMessage.
+ *   loadingMessage              -> shown while the very first fetchData() is in flight
+ *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
  * The returned tab exposes render(container, data, context) - the tab-module contract - and
  * refresh(container), which re-renders with the current filter for a control the tab wires
@@ -27,7 +41,8 @@ import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
 
 export function filteredGroupTab({
     inputId, listId, select, filterGroup, key, header, items, extraTop,
-    emptyMessage, noMatchMessage, urlFilter, decorate
+    emptyMessage, noMatchMessage, urlFilter, decorate, afterRender,
+    fetchData, loadingMessage = 'Loading...', fetchErrorMessage = error => `Failed to load: ${error.message}`
 }) {
     let currentData = null;
     // The most recent render() call's context - read by the persistent filter listener
@@ -41,7 +56,7 @@ export function filteredGroupTab({
     const write = urlFilter?.write ?? ((input, container, context) => writeTextFilter(input, context));
 
     function render(container, data, context) {
-        currentData = data;
+        if (!fetchData) currentData = data;
         currentContext = context;
         wireFilter(container);
         // Only while this tab is the one the hash currently points at - context.urlParams
@@ -49,10 +64,37 @@ export function filteredGroupTab({
         // auto-refresh render of a hidden tab would read another tab's params (or none)
         // and clobber whatever the user already typed here.
         if (container.classList.contains('active')) reconcile(input(container), container, context);
-        renderGroups(container);
+        if (fetchData) fetchAndRender(container, context);
+        else renderGroups(container);
     }
 
     function refresh(container) {
+        renderGroups(container);
+    }
+
+    async function fetchAndRender(container, context) {
+        // Not the active tab - skip the network round trip (see fetchData's doc above).
+        if (!container.classList.contains('active')) return;
+
+        const target = container.querySelector(`#${listId}`);
+        // Only before the very first data arrives - a background refresh of an
+        // already-populated, currently visible list must not blank it for the round
+        // trip's duration (renderGroups replaces the content once the response is in).
+        if (currentData === null) {
+            target.innerHTML =
+                `<div class="pk-loading"><div class="pk-spinner"></div><p>${escapeHtml(loadingMessage)}</p></div>`;
+        }
+
+        let result;
+        try {
+            result = await fetchData(context);
+        } catch (error) {
+            target.innerHTML = `<p class="pk-empty">${escapeHtml(fetchErrorMessage(error))}</p>`;
+            return;
+        }
+        if (result === null) return; // superseded by a newer request
+
+        currentData = result;
         renderGroups(container);
     }
 
@@ -85,6 +127,7 @@ export function filteredGroupTab({
         const groups = select(currentData);
         if (!groups || groups.length === 0) {
             target.innerHTML = `<p class="pk-empty">${escapeHtml(emptyMessage)}</p>`;
+            afterRender?.(container, {groups: [], filtered: [], query});
             return;
         }
 
@@ -95,16 +138,18 @@ export function filteredGroupTab({
         if (filtered.length === 0) {
             const message = query ? noMatchMessage(query) : emptyMessage;
             target.insertAdjacentHTML('beforeend', `<p class="pk-empty">${escapeHtml(message)}</p>`);
+            afterRender?.(container, {groups, filtered, query});
             return;
         }
 
         groupList(target, filtered, {
             key,
             header: group => header(group, query),
-            items: (group, list) => items(group, list, query),
+            items: (group, list) => items(group, list, query, currentContext),
             expandedKeys: expanded
         });
-        if (decorate) decorate(target);
+        if (decorate) decorate(target, filtered);
+        afterRender?.(container, {groups, filtered, query});
     }
 
     return {render, refresh};
