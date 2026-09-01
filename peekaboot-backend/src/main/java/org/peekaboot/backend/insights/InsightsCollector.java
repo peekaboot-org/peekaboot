@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -330,14 +331,17 @@ public final class InsightsCollector implements SmartLifecycle {
      * Everything persistence needs: every level of every series, including the
      * {@code samples} column the API's {@link #snapshot(int)} deliberately omits.
      * Ring contents and {@code endEpochMs} are read without a common lock, exactly as
-     * the API reads them - a tick landing mid-capture can date the newest sample one
-     * interval early, once, in a cache.
+     * the API reads them, so a tick or roll-up landing mid-capture can leave the series
+     * read after it one sample longer than those read before. The snapshot is made
+     * self-consistent instead: every level's count is what all of its series have, and
+     * a series that is longer loses its newest sample - the tick that produced it is
+     * not yet complete, and the next capture carries it. What remains is that the newest
+     * sample can be dated one interval early, once, in a cache.
      */
     InsightsSnapshot capture() {
-        List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
+        long[] endEpochMs = new long[intervalMillis.length];
         for (int level = 0; level < intervalMillis.length; level++) {
-            levels.add(new InsightsSnapshot.Level(
-                    intervalMillis[level], levelSizes[level], levelEndEpochMs.get(level), filled(level)));
+            endEpochMs[level] = levelEndEpochMs.get(level);
         }
         Map<String, List<double[][]>> series = new LinkedHashMap<>();
         for (Map.Entry<String, DoubleRing> entry : level0Rings.entrySet()) {
@@ -349,7 +353,45 @@ public final class InsightsCollector implements SmartLifecycle {
             }
             series.put(entry.getKey(), byLevel);
         }
+        int[] counts = sharedCounts(series);
+        for (List<double[][]> byLevel : series.values()) {
+            for (int level = 0; level < intervalMillis.length; level++) {
+                byLevel.set(level, trimmed(byLevel.get(level), counts[level]));
+            }
+        }
+        List<InsightsSnapshot.Level> levels = new ArrayList<>(intervalMillis.length);
+        for (int level = 0; level < intervalMillis.length; level++) {
+            levels.add(new InsightsSnapshot.Level(
+                    intervalMillis[level], levelSizes[level], endEpochMs[level], counts[level]));
+        }
         return new InsightsSnapshot(System.currentTimeMillis(), levels, series);
+    }
+
+    /** Per level, the sample count every series has; 0 when no series is configured at all. */
+    private int[] sharedCounts(Map<String, List<double[][]>> series) {
+        int[] counts = new int[intervalMillis.length];
+        if (series.isEmpty()) {
+            return counts;
+        }
+        Arrays.fill(counts, Integer.MAX_VALUE);
+        for (List<double[][]> byLevel : series.values()) {
+            for (int level = 0; level < intervalMillis.length; level++) {
+                counts[level] = Math.min(counts[level], byLevel.get(level)[0].length);
+            }
+        }
+        return counts;
+    }
+
+    /** Columns are oldest first, so cutting at {@code count} drops the newest samples. */
+    private static double[][] trimmed(double[][] columns, int count) {
+        if (columns[0].length == count) {
+            return columns;
+        }
+        double[][] cut = new double[columns.length][];
+        for (int i = 0; i < columns.length; i++) {
+            cut[i] = Arrays.copyOf(columns[i], count);
+        }
+        return cut;
     }
 
     /**
@@ -402,18 +444,6 @@ public final class InsightsCollector implements SmartLifecycle {
      */
     boolean hasRestoredHistory() {
         return restoreBarrier.hasApplied();
-    }
-
-    /** How much of a level's ring is filled; 0 when no series is configured at all. */
-    private int filled(int level) {
-        if (level == 0) {
-            return level0Rings.isEmpty()
-                    ? 0
-                    : level0Rings.values().iterator().next().size();
-        }
-        return statsRings.isEmpty()
-                ? 0
-                : statsRings.values().iterator().next()[level].size();
     }
 
     /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */

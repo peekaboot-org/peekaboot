@@ -3,11 +3,15 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -187,5 +191,65 @@ class InsightsCollectorTest {
                 InsightsProperties.Level.of(Duration.ofMinutes(1), 1440),
                 InsightsProperties.Level.of(Duration.ofHours(1), 720));
         assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 8 + 720 * 8) * 8);
+    }
+
+    /**
+     * The snapshot writer wakes on the persistence-interval boundary, which is a level-0
+     * boundary too, so a capture can land while a tick is still appending series one at a
+     * time. The codec refuses a column longer than its level's count, so a snapshot taken
+     * mid-tick has to trim itself to what every series has rather than fail the write and
+     * burn the store's one-shot failure log. Reproduced by parking the tick inside the
+     * second series' gauge, once the first series' ring already holds the new sample.
+     */
+    @Test
+    void captureTakenMidTickTrimsEverySeriesToTheSampleCountTheyAllHave() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AtomicLong first = new AtomicLong(1);
+        AtomicBoolean parkSecond = new AtomicBoolean();
+        CountDownLatch tickParked = new CountDownLatch(1);
+        CountDownLatch captureDone = new CountDownLatch(1);
+        Gauge.builder("first", first::get).register(registry);
+        Gauge.builder("second", () -> {
+                    if (parkSecond.get()) {
+                        tickParked.countDown();
+                        awaitQuietly(captureDone);
+                    }
+                    return 2;
+                })
+                .register(registry);
+        InsightsCollector midTick = new InsightsCollector(
+                levels,
+                List.of(seriesOf("first"), seriesOf("second")),
+                List.of(),
+                registry,
+                InsightsCollector.Listener.NO_OP);
+        midTick.tick(10_000);
+        first.set(5);
+        parkSecond.set(true);
+        Thread tick = new Thread(() -> midTick.tick(20_000), "tick");
+        tick.start();
+        tickParked.await();
+
+        InsightsSnapshot snapshot = midTick.capture();
+        captureDone.countDown();
+        tick.join();
+
+        assertThat(snapshot.levels().get(0).count()).isEqualTo(1);
+        // the first series had the newer sample already; it is the one dropped
+        assertThat(snapshot.series().get("first").get(0)[0]).containsExactly(1.0);
+        assertThat(snapshot.series().get("second").get(0)[0]).containsExactly(2.0);
+        InsightsSnapshotCodec.write(OutputStream.nullOutputStream(), snapshot);
+    }
+
+    private static SeriesDef seriesOf(String meter) {
+        return new SeriesDef(meter, meter, meter, Map.of(), "value", null, null);
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }
