@@ -5,8 +5,9 @@
 spring:
   jpa:
     properties:
-      # Hibernate statistics for query performance insights
-      # Spring default: false | We enable to expose query counts, cache stats, slow queries
+      # Needed by the hibernate.* meter panels in peekaboot-insights-defaults.yml, which
+      # sample Hibernate's Micrometer meters - and those only exist with statistics on.
+      # Spring default: false
       "[hibernate.generate_statistics]": true
 
 management:
@@ -38,10 +39,6 @@ management:
       # Exposes PID, uptime, CPU count, memory usage
       # Spring default: false | We enable for process metrics in dashboard
       enabled: true
-    git:
-      # Exposes git commit, branch info from git.properties
-      # Spring default: true | We keep enabled for build traceability
-      enabled: true
 
   tracing:
     sampling:
@@ -57,31 +54,3 @@ management:
 
   # No OTLP push defaults here: those live in peekaboot-no-push-defaults.yml,
   # which is applied unconditionally (even when peekaboot is disabled)
-
-# Third-party library defaults (only apply if dependency present)
-
-decorator:
-  datasource:
-    datasource-proxy:
-      # Pretty-print SQL for readability in logs
-      # Library default: false | We enable for debugging SQL queries
-      format-sql: true
-      query:
-        # Log level for SQL query logging
-        # Library default: DEBUG | We use TRACE for detailed query capture
-        log-level: TRACE
-
-logbook:
-  predicate:
-    include:
-      # Paths to log HTTP requests/responses for
-      # Library default: all paths | We limit to /api/** to reduce noise
-      - path: /api/**
-  format:
-    # Output format for logged requests
-    # Library default: json | We use http for human-readable format
-    style: http
-  # When to log response bodies
-  # Library default: default (every body is logged) | We log body only on errors for debugging
-  strategy: body-only-if-status-at-least
-  minimum-status: 400

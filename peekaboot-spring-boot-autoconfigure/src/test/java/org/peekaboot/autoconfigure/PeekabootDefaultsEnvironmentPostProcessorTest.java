@@ -126,6 +126,28 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     }
 
     /**
+     * Peekaboot reads no Logbook output and no datasource-proxy log lines (query text comes
+     * from span tags), so it configures neither library; and it does not restate Spring's
+     * own defaults. Only what the dashboard consumes is defaulted.
+     */
+    @Test
+    void configuresNoThirdPartyLoggingAndRestatesNoSpringDefault() {
+        MockEnvironment environment = new MockEnvironment();
+
+        postProcessor(true).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("spring.jpa.properties[hibernate.generate_statistics]"))
+                .isEqualTo("true");
+        assertThat(environment.getProperty("decorator.datasource.datasource-proxy.format-sql"))
+                .isNull();
+        assertThat(environment.getProperty("decorator.datasource.datasource-proxy.query.log-level"))
+                .isNull();
+        assertThat(environment.getProperty("logbook.format.style")).isNull();
+        assertThat(environment.getProperty("logbook.strategy")).isNull();
+        assertThat(environment.getProperty("management.info.git.enabled")).isNull();
+    }
+
+    /**
      * The dashboard reads health through the HealthEndpoint bean, which always carries the
      * components, so Peekaboot has no reason to widen the application's own public
      * /actuator/health - Spring's default (aggregate status only) stays in force.
