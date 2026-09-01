@@ -468,7 +468,10 @@ even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration
 for the same reason: everything that reads the trace store is servlet-only, so a WebFlux or
 non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
 `PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no such
-guard, since neither touches anything servlet-specific.
+guard, since neither touches anything servlet-specific. `OtelTracingAutoConfiguration` and
+`TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled`
+(default on): handler and view observations are tracing, and with it off there is no store
+for them to land in.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,

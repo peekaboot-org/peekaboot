@@ -23,6 +23,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
+@ConditionalOnBooleanProperty(name = "peekaboot.tracing.enabled", matchIfMissing = true)
 public class TracingInterceptorAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);

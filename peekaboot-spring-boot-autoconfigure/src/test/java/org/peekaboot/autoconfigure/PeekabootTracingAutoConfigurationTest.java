@@ -191,6 +191,18 @@ class PeekabootTracingAutoConfigurationTest {
                 });
     }
 
+    /** Handler and view observations are tracing; with tracing off there is no store to land in. */
+    @Test
+    void shouldNotRegisterInterceptorWhenTracingDisabled() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .withPropertyValues("peekaboot.tracing.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
+                });
+    }
+
     @Test
     void shouldRegisterInterceptorWithExpectedPathPatterns() {
         webContextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
