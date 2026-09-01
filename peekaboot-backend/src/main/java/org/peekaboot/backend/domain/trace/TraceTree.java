@@ -2,11 +2,17 @@ package org.peekaboot.backend.domain.trace;
 
 import java.util.List;
 
+/**
+ * @param slow whether any span carries a SLOW or VERY_SLOW issue - the Traces tab's SLOW
+ *             badge. A per-span judgement at the span thresholds, distinct from the Slow
+ *             bucket, which admits a trace by its total duration.
+ */
 public record TraceTree(
         String traceId,
         long startTimeMs,
         long durationMs,
         TraceStatus status,
+        boolean slow,
         RootActionType rootActionType,
         String rootOperation,
         SpanNode rootSpan,

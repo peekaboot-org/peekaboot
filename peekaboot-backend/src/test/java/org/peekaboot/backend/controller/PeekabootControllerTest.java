@@ -25,7 +25,6 @@ import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceListSummary;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -141,7 +140,7 @@ class PeekabootControllerTest {
         }
 
         private TraceInsightsResponse emptyInsightsResponse() {
-            return new TraceInsightsResponse(List.of(), new TraceListSummary(0, 0, 0, 0.0), BucketCounts.empty());
+            return new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
         }
     }
 
@@ -346,6 +345,7 @@ class PeekabootControllerTest {
                 0L,
                 100L,
                 TraceStatus.OK,
+                false,
                 RootActionType.HTTP_REQUEST,
                 "test-operation",
                 rootSpan,

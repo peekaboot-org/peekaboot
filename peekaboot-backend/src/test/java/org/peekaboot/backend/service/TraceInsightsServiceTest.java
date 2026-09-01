@@ -49,47 +49,38 @@ class TraceInsightsServiceTest {
         service = newService(store);
     }
 
+    /**
+     * The list's SLOW badge means "some span in this trace carries a SLOW or VERY_SLOW
+     * issue" - a per-span judgement at the span thresholds, distinct from the Slow bucket,
+     * which is about the trace's total duration.
+     */
     @Test
-    void getInsights_shouldTransformTracesAndCalculateSummary() {
-        // Given: Two traces - one OK (100ms) and one with error (200ms)
-        addTrace("trace1", 100, false);
-        addTrace("trace2", 200, true);
+    void getInsights_flagsATraceSlowWhenAnySpanCarriesASlowOrVerySlowIssue() {
+        addTrace("fast", 50, false);
+        addTrace("slow", 150, false);
+        addTrace("very-slow", 500, false);
 
-        // When
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
-        // Then
-        assertThat(response.traces()).hasSize(2);
-        assertThat(response.summary().traceCount()).isEqualTo(2);
-        assertThat(response.summary().errorCount()).isEqualTo(1);
-        assertThat(response.summary().avgDurationMs()).isEqualTo(150.0);
+        assertThat(response.traces())
+                .extracting(TraceTree::traceId, TraceTree::slow)
+                .containsExactlyInAnyOrder(tuple("fast", false), tuple("slow", true), tuple("very-slow", true));
     }
 
     @Test
-    void getInsights_shouldCountSlowTraces() {
-        // Given: Three traces - one slow (150ms > 100ms threshold)
-        addTrace("fast", 50, false);
+    void getTraceInsights_flagsSlowTheSameWayTheListDoes() {
         addTrace("slow", 150, false);
-        addTrace("normal", 80, false);
+        addTrace("fast", 50, false);
 
-        // When
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
-
-        // Then: slowTrace has a span with 150ms duration, which triggers SLOW issue
-        assertThat(response.summary().slowCount()).isEqualTo(1);
+        assertThat(service.getTraceInsights("slow").orElseThrow().slow()).isTrue();
+        assertThat(service.getTraceInsights("fast").orElseThrow().slow()).isFalse();
     }
 
     @Test
     void getInsights_shouldHandleEmptyTracesList() {
-        // When
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
-        // Then
         assertThat(response.traces()).isEmpty();
-        assertThat(response.summary().traceCount()).isEqualTo(0);
-        assertThat(response.summary().errorCount()).isEqualTo(0);
-        assertThat(response.summary().slowCount()).isEqualTo(0);
-        assertThat(response.summary().avgDurationMs()).isEqualTo(0.0);
     }
 
     @Test
@@ -195,33 +186,6 @@ class TraceInsightsServiceTest {
 
         // Then
         assertThat(result).isEmpty();
-    }
-
-    @Test
-    void getInsights_shouldCalculateAverageDurationCorrectly() {
-        // Given: Three traces with durations 100, 200, 300 -> avg = 200
-        addTrace("trace1", 100, false);
-        addTrace("trace2", 200, false);
-        addTrace("trace3", 300, false);
-
-        // When
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
-
-        // Then
-        assertThat(response.summary().avgDurationMs()).isEqualTo(200.0);
-    }
-
-    @Test
-    void getInsights_shouldCountTracesWithSlowOrVerySlowStatus() {
-        // Given: one trace with VERY_SLOW status (500ms), one normal
-        addTrace("slow", 500, false);
-        addTrace("normal", 50, false);
-
-        // When
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
-
-        // Then: slowTrace has VERY_SLOW issue, so slowCount should be 1
-        assertThat(response.summary().slowCount()).isEqualTo(1);
     }
 
     /** The list feeds the Traces tab's log badges; the counts come from the logs the bundle already holds. */

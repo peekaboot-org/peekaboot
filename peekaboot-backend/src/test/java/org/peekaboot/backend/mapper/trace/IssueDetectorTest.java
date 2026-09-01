@@ -279,6 +279,27 @@ class IssueDetectorTest {
     }
 
     @Test
+    void detectIssues_marksTheTraceSlowWhenAnySpanIsSlowOrVerySlow() {
+        SpanNode slowChild = createSpan("child", 150, SpanStatus.OK, Map.of(), List.of());
+        SpanNode root = createSpan("root", 50, SpanStatus.OK, Map.of(), List.of(slowChild));
+
+        assertThat(detector.detectIssues(createTrace(root, createSummary(2, 0, 0L, 0)))
+                        .slow())
+                .isTrue();
+    }
+
+    @Test
+    void detectIssues_leavesTheTraceNotSlowWhenNoSpanReachesTheSlowThreshold() {
+        // a slow query or an error is not what the SLOW badge reports
+        SpanNode child = querySpan("child", 80, Map.of("db.system", "postgresql"));
+        SpanNode root = createSpan("root", 50, SpanStatus.ERROR, Map.of(), List.of(child));
+
+        assertThat(detector.detectIssues(createTrace(root, createSummary(2, 1, 80L, 1)))
+                        .slow())
+                .isFalse();
+    }
+
+    @Test
     void detectIssues_shouldDetectMultipleIssuesOnSameSpan() {
         SpanNode span = node("span1")
                 .kind("CLIENT")
@@ -368,6 +389,7 @@ class IssueDetectorTest {
                 0,
                 0,
                 TraceStatus.OK,
+                false,
                 RootActionType.UNKNOWN,
                 null,
                 null,
@@ -391,6 +413,7 @@ class IssueDetectorTest {
                 0,
                 50,
                 TraceStatus.OK,
+                false,
                 RootActionType.UNKNOWN,
                 "test-op",
                 span,
@@ -428,6 +451,7 @@ class IssueDetectorTest {
                 0,
                 rootSpan != null ? rootSpan.durationMs() : 0,
                 TraceStatus.OK,
+                false,
                 RootActionType.UNKNOWN,
                 rootSpan != null ? rootSpan.name() : null,
                 rootSpan,

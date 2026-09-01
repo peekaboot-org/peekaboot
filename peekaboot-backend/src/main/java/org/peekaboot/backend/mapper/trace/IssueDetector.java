@@ -35,6 +35,7 @@ public class IssueDetector {
                 trace.startTimeMs(),
                 trace.durationMs(),
                 trace.status(),
+                hasSlowIssue(processedRoot),
                 trace.rootActionType(),
                 trace.rootOperation(),
                 processedRoot,
@@ -124,6 +125,12 @@ public class IssueDetector {
                 span.remoteServiceName(),
                 span.query(),
                 span.logs());
+    }
+
+    private static boolean hasSlowIssue(SpanNode span) {
+        return span.issues().stream()
+                        .anyMatch(issue -> issue.type() == IssueType.SLOW || issue.type() == IssueType.VERY_SLOW)
+                || span.children().stream().anyMatch(IssueDetector::hasSlowIssue);
     }
 
     private String getErrorMessage(SpanNode span) {

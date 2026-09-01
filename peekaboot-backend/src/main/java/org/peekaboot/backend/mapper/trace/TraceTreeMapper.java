@@ -41,6 +41,7 @@ public class TraceTreeMapper {
                     0L,
                     0L,
                     TraceStatus.OK,
+                    false,
                     RootActionType.UNKNOWN,
                     null,
                     null,
@@ -87,6 +88,7 @@ public class TraceTreeMapper {
                 startTimeMs,
                 durationMs,
                 status,
+                false, // decided by IssueDetector once the issues exist
                 rootActionType,
                 rootOperation,
                 rootSpan,

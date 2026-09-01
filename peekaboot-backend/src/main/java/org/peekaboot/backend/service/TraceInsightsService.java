@@ -11,14 +11,11 @@ import java.util.Set;
 import java.util.stream.Stream;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
-import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceListSummary;
 import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
@@ -37,7 +34,7 @@ import org.springframework.stereotype.Service;
 public class TraceInsightsService {
 
     private static final TraceInsightsResponse EMPTY_RESPONSE =
-            new TraceInsightsResponse(List.of(), new TraceListSummary(0, 0, 0, 0.0), BucketCounts.empty());
+            new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
 
     @Nullable
     private final TraceStore traceStore;
@@ -93,8 +90,7 @@ public class TraceInsightsService {
                     countMatching(TraceBucket.SLOW, actionTypeFilter, operationFilter));
         }
 
-        return new TraceInsightsResponse(
-                traceTrees, calculateListSummary(traceTrees), bucketCounts, filteredBucketCounts);
+        return new TraceInsightsResponse(traceTrees, bucketCounts, filteredBucketCounts);
     }
 
     /**
@@ -132,6 +128,7 @@ public class TraceInsightsService {
                 tree.startTimeMs(),
                 tree.durationMs(),
                 tree.status(),
+                tree.slow(),
                 tree.rootActionType(),
                 tree.rootOperation(),
                 tree.rootSpan(),
@@ -214,6 +211,7 @@ public class TraceInsightsService {
                 tree.startTimeMs(),
                 tree.durationMs(),
                 tree.status(),
+                tree.slow(),
                 tree.rootActionType(),
                 tree.rootOperation(),
                 attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)),
@@ -264,42 +262,5 @@ public class TraceInsightsService {
         }
 
         return span;
-    }
-
-    private TraceListSummary calculateListSummary(List<TraceTree> traces) {
-        if (traces.isEmpty()) {
-            return new TraceListSummary(0, 0, 0, 0.0);
-        }
-
-        int totalTraces = traces.size();
-        int errorCount = 0;
-        int slowCount = 0;
-        long totalDurationMs = 0;
-
-        for (TraceTree trace : traces) {
-            totalDurationMs += trace.durationMs();
-
-            if (trace.status() == TraceStatus.HAS_ERRORS) {
-                errorCount++;
-            }
-
-            if (hasSlowIssues(trace.rootSpan())) {
-                slowCount++;
-            }
-        }
-
-        double avgDurationMs = (double) totalDurationMs / totalTraces;
-        return new TraceListSummary(totalTraces, errorCount, slowCount, avgDurationMs);
-    }
-
-    private boolean hasSlowIssues(SpanNode span) {
-        if (span == null) {
-            return false;
-        }
-
-        boolean hasSlowIssue = span.issues().stream()
-                .anyMatch(issue -> issue.type() == IssueType.SLOW || issue.type() == IssueType.VERY_SLOW);
-
-        return hasSlowIssue || span.children().stream().anyMatch(this::hasSlowIssues);
     }
 }
