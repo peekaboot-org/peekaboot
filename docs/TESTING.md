@@ -2,9 +2,13 @@
 
 ## Structure
 - JUnit 5 + AssertJ everywhere; no JUnit `assertEquals` in new code.
-- One behavior per test. Helpers/fixtures at the bottom of the class.
+- One behavior per test. Helpers/fixtures either all above or all below the tests, never
+  interleaved with them.
 - Deterministic time: fixed `Instant.parse(...)` values, never bare `Instant.now()`
   when the assertion depends on ordering or duration.
+- Micrometer gauges in tests: never `registry.gauge(name, obj)` with the result discarded —
+  the registry holds `obj` weakly and samples become NaN after a GC; use
+  `Gauge.builder(name, supplier)` or keep the returned object in a field.
 
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external
@@ -27,9 +31,10 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   `onResponse`) collects into a list the test then asserts on. There is no shared
   listener and no allow-list — the Chromium engine, unlike the HtmlUnit setup this
   replaced, has no incompatibilities of its own to excuse.
-- Tests that trigger error paths capture the log event (logback `ListAppender`, via
-  the shared `org.peekaboot.backend.testsupport.LogCapture` helper in
-  `peekaboot-backend`) and assert it instead of letting it print.
+- Tests that trigger error paths capture the log event (logback `ListAppender`) and assert
+  it instead of letting it print. `peekaboot-backend` shares one helper for this,
+  `org.peekaboot.backend.testsupport.LogCapture`; it is test-scoped to that module, so
+  `peekaboot-spring-boot-autoconfigure`'s tests attach their own `ListAppender`.
 - `peekaboot-testing-app`'s `logback-test.xml` sets `org.apache.catalina.core.ContainerBase`
   to `OFF`: `OrderController`'s deliberately failing `/boom` endpoint escapes as an unhandled
   exception, which embedded Tomcat logs as a full stack trace under a per-JVM
@@ -75,21 +80,22 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   lifetime. That test routes the same endpoint (`page.route("**/api/traces/*/insights", route ->
   route.abort())`) and never unroutes it, so a scheduled poll can still fire while teardown's
   `context().close()` is mid-flight, and Playwright's client tries to sync interception patterns
-  against a target that is already closing. `PlaywrightTestBase.closePage()` now catches
-  `TargetClosedError` around `context().close()` as a benign teardown race. (Teardown has since
-  also started navigating to `about:blank` first, which stops the pollers before the close and
-  replaced the network-idle drain that used to run here — the tolerance stays as insurance.)
+  against a target that is already closing. `PlaywrightTestBase.closePage()` navigates to
+  `about:blank` first, which stops the pollers before the close, and catches
+  `TargetClosedError` around `context().close()` as insurance against the same race.
   Characterised by running `mvn -pl
   peekaboot-testing-app verify -Dit.test=TraceOverlayIT` repeatedly before the fix (reproduced once
   in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
   previously-failing method).
 
   Three tests share this route-and-never-unroute shape, which is why the fix lives in
-  `PlaywrightTestBase` rather than per-test `unroute()` calls: `TraceOverlayIT:222`;
-  `ToolbarIT:207` (identical pattern, and it deliberately waits out all four fetch-ladder
-  attempts before teardown runs); and `ToolbarIT:257`, which routes `trace-detail.js` and must
-  *not* unroute — its Javadoc explains the browser's module map caches the failed dynamic import,
-  so a real reopen would require more than removing the route.
+  `PlaywrightTestBase` rather than per-test `unroute()` calls:
+  `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
+  `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails` (identical pattern, and it
+  deliberately waits out all four fetch-ladder attempts before teardown runs); and
+  `ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, which routes
+  `trace-detail.js` and must *not* unroute — its Javadoc explains the browser's module map
+  caches the failed dynamic import, so a real reopen would require more than removing the route.
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
@@ -139,8 +145,8 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
   app-global state shared with other classes must either pin to its own traceId or take
   a `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
   Single class: `mvn -pl <module> verify -Dit.test=<Class>`.
-- Full reactor — unit tests, integration tests and the five static-analysis gates:
-  `mvn clean verify` (1,123 tests).
+- Full reactor — unit tests, integration tests, the five static-analysis gates and the
+  coverage floor: `mvn clean verify`.
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker — real PostgreSQL and Flyway):
