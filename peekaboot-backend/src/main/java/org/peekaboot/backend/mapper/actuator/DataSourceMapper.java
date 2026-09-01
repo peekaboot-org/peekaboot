@@ -48,9 +48,7 @@ public class DataSourceMapper {
                 metadata.getDriverName(),
                 hosts,
                 metadata.getDatabaseName(),
-                null,
                 metadata.getUsername(),
-                null,
                 dbHealth,
                 maskedProperties);
     }

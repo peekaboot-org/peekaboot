@@ -22,10 +22,9 @@ class ConfigMapperTest {
                                 "spring.datasource-DataSourceProperties",
                                         new ConfigPropsResponse.ConfigBean(
                                                 "spring.datasource",
-                                                Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver"),
-                                                Map.of()),
+                                                Map.of("url", "jdbc:h2:mem:test", "driverClassName", "org.h2.Driver")),
                                 "server-ServerProperties",
-                                        new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"), Map.of())),
+                                        new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -43,7 +42,7 @@ class ConfigMapperTest {
                 new ConfigPropsResponse.ConfigContext(
                         Map.of(
                                 "mystery-MysteryProperties",
-                                new ConfigPropsResponse.ConfigBean(null, Map.of("value", "1"), Map.of())),
+                                new ConfigPropsResponse.ConfigBean(null, Map.of("value", "1"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -60,9 +59,7 @@ class ConfigMapperTest {
                         Map.of(
                                 "datasource",
                                 new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource",
-                                        Map.of("password", "secret123", "username", "admin"),
-                                        Map.of())),
+                                        "spring.datasource", Map.of("password", "secret123", "username", "admin"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -80,8 +77,7 @@ class ConfigMapperTest {
                 new ConfigPropsResponse.ConfigContext(
                         Map.of(
                                 "jpa",
-                                new ConfigPropsResponse.ConfigBean(
-                                        "spring.jpa", Map.of("key-generator", "sequence"), Map.of())),
+                                new ConfigPropsResponse.ConfigBean("spring.jpa", Map.of("key-generator", "sequence"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -98,8 +94,7 @@ class ConfigMapperTest {
                                 "datasource",
                                 new ConfigPropsResponse.ConfigBean(
                                         "spring.datasource",
-                                        Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"),
-                                        Map.of())),
+                                        Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -126,9 +121,7 @@ class ConfigMapperTest {
         ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
                 "application",
                 new ConfigPropsResponse.ConfigContext(
-                        Map.of(
-                                "aws",
-                                new ConfigPropsResponse.ConfigBean("aws", Map.of("credentials", "AKIA..."), Map.of())),
+                        Map.of("aws", new ConfigPropsResponse.ConfigBean("aws", Map.of("credentials", "AKIA..."))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -149,9 +142,7 @@ class ConfigMapperTest {
                         Map.of(
                                 "oauth2",
                                 new ConfigPropsResponse.ConfigBean(
-                                        "spring.security.oauth2.client",
-                                        Map.of("registration", registration),
-                                        Map.of())),
+                                        "spring.security.oauth2.client", Map.of("registration", registration))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops);
@@ -170,7 +161,7 @@ class ConfigMapperTest {
                         Map.of(
                                 "datasource",
                                 new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource", Map.of("password", "secret123"), Map.of())),
+                                        "spring.datasource", Map.of("password", "secret123"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops, true);
@@ -185,7 +176,7 @@ class ConfigMapperTest {
                         Map.of(
                                 "datasource",
                                 new ConfigPropsResponse.ConfigBean(
-                                        "spring.datasource", Map.of("password", "secret123"), Map.of())),
+                                        "spring.datasource", Map.of("password", "secret123"))),
                         null)));
 
         ConfigInfo result = mapper.map(configprops, false);

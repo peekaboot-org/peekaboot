@@ -65,6 +65,6 @@ public class ConfigMapper {
     private ConfigProperty mapProperty(String key, Object rawValue, boolean unmask) {
         Object maskedValue = rawValue != null ? treeMasker.mask(key, rawValue, unmask) : null;
         String value = maskedValue != null ? maskedValue.toString() : null;
-        return new ConfigProperty(key, value, null);
+        return new ConfigProperty(key, value);
     }
 }

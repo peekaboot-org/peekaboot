@@ -13,8 +13,6 @@ public record DataSourceInfo(
         String driver,
         List<Host> hosts,
         String databaseName,
-        String schema,
         String username,
-        PoolMetrics pool,
         HealthStatus health,
         Map<String, String> properties) {}

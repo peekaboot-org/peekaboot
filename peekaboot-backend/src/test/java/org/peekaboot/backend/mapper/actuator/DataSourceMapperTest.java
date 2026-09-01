@@ -57,7 +57,7 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
 
         HealthResponse health =
-                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of());
+                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())));
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
@@ -79,8 +79,7 @@ class DataSourceMapperTest {
                                 null,
                                 Map.of(
                                         "primary", new HealthResponse.HealthComponent("UP", Map.of()),
-                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))),
-                List.of());
+                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))));
 
         List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health);
 
@@ -97,8 +96,7 @@ class DataSourceMapperTest {
                 Map.of(
                         "db",
                         new HealthResponse.HealthComponent(
-                                "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))),
-                List.of());
+                                "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))));
 
         List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health);
 

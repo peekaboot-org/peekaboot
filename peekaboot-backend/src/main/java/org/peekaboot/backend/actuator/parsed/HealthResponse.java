@@ -1,7 +1,6 @@
 package org.peekaboot.backend.actuator.parsed;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -9,7 +8,7 @@ import java.util.Map;
  * the top and one entry per health contributor under {@code components}.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record HealthResponse(String status, Map<String, HealthComponent> components, List<String> groups) {
+public record HealthResponse(String status, Map<String, HealthComponent> components) {
 
     /**
      * One contributor: an indicator carries {@code details}, a composite (Spring's

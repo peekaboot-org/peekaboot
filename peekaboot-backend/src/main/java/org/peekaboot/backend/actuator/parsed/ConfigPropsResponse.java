@@ -10,5 +10,5 @@ public record ConfigPropsResponse(Map<String, ConfigContext> contexts) {
     public record ConfigContext(Map<String, ConfigBean> beans, String parentId) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ConfigBean(String prefix, Map<String, Object> properties, Map<String, Object> inputs) {}
+    public record ConfigBean(String prefix, Map<String, Object> properties) {}
 }

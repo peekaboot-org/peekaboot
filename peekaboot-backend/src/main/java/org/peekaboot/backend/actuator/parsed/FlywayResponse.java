@@ -15,12 +15,9 @@ public record FlywayResponse(Map<String, FlywayContext> contexts) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Migration(
-            Long checksum,
             String description,
             Integer executionTime,
-            String installedBy,
             String installedOn,
-            Integer installedRank,
             String script,
             String state,
             String type,

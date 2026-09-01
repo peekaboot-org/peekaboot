@@ -4,8 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record ScheduledTasksResponse(
-        List<CronTask> cron, List<FixedTask> fixedDelay, List<FixedTask> fixedRate, List<Object> custom) {
+public record ScheduledTasksResponse(List<CronTask> cron, List<FixedTask> fixedDelay, List<FixedTask> fixedRate) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record CronTask(
@@ -13,11 +12,7 @@ public record ScheduledTasksResponse(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record FixedTask(
-            Long initialDelay,
-            Long interval,
-            TaskExecution lastExecution,
-            TaskExecution nextExecution,
-            RunnableTarget runnable) {}
+            Long interval, TaskExecution lastExecution, TaskExecution nextExecution, RunnableTarget runnable) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record TaskExecution(TaskExceptionInfo exception, String status, String time) {}

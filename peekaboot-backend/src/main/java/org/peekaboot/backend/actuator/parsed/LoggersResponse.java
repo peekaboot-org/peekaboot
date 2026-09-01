@@ -1,15 +1,11 @@
 package org.peekaboot.backend.actuator.parsed;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import java.util.List;
 import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
-public record LoggersResponse(List<String> levels, Map<String, LoggerInfo> loggers, Map<String, GroupInfo> groups) {
+public record LoggersResponse(Map<String, LoggerInfo> loggers) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LoggerInfo(String configuredLevel, String effectiveLevel) {}
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record GroupInfo(String configuredLevel, List<String> members) {}
 }

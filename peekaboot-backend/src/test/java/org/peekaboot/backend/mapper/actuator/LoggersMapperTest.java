@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.LoggersResponse;
@@ -23,7 +22,7 @@ class LoggersMapperTest {
         loggers.put("com.example.controller.UserController", new LoggersResponse.LoggerInfo(null, "DEBUG"));
         loggers.put("org.springframework.boot.Application", new LoggersResponse.LoggerInfo(null, "WARN"));
 
-        LoggersResponse loggersData = new LoggersResponse(List.of(), loggers, Map.of());
+        LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
 
         assertThat(result.packages()).hasSize(2);
@@ -46,7 +45,7 @@ class LoggersMapperTest {
         loggers.put("com.example.Foo", new LoggersResponse.LoggerInfo("DEBUG", "INFO"));
         loggers.put("com.example.Bar", new LoggersResponse.LoggerInfo(null, "INFO"));
 
-        LoggersResponse loggersData = new LoggersResponse(List.of(), loggers, Map.of());
+        LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
 
         assertThat(result.configuredCount()).isEqualTo(1);
@@ -77,7 +76,7 @@ class LoggersMapperTest {
 
     @Test
     void map_shouldHandleEmptyLoggers() {
-        LoggersResponse loggersData = new LoggersResponse(List.of(), Map.of(), Map.of());
+        LoggersResponse loggersData = new LoggersResponse(Map.of());
         LoggersInfo result = mapper.map(loggersData);
         assertThat(result.packages()).isEmpty();
     }
@@ -85,7 +84,7 @@ class LoggersMapperTest {
     @Test
     void map_shouldHandleSinglePartPackageName() {
         Map<String, LoggersResponse.LoggerInfo> loggers = Map.of("ROOT", new LoggersResponse.LoggerInfo(null, "INFO"));
-        LoggersResponse loggersData = new LoggersResponse(List.of(), loggers, Map.of());
+        LoggersResponse loggersData = new LoggersResponse(loggers);
         LoggersInfo result = mapper.map(loggersData);
 
         assertThat(result.packages()).hasSize(1);

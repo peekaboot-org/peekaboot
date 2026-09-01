@@ -13,13 +13,7 @@ public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record JavaInfo(JvmInfo jvm, RuntimeInfo runtime, VendorInfo vendor, String version) {
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record JvmInfo(String name, String vendor, String version) {}
-
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record RuntimeInfo(String name, String version) {}
-
+    public record JavaInfo(VendorInfo vendor, String version) {
         @JsonIgnoreProperties(ignoreUnknown = true)
         public record VendorInfo(String name, String version) {}
     }
@@ -28,11 +22,11 @@ public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java
     public record OsInfo(String arch, String name, String version) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProcessInfo(Integer cpus, MemoryInfo memory, String owner, Long parentPid, Long pid) {
+    public record ProcessInfo(MemoryInfo memory) {
         @JsonIgnoreProperties(ignoreUnknown = true)
         public record MemoryInfo(HeapInfo heap, HeapInfo nonHeap) {
             @JsonIgnoreProperties(ignoreUnknown = true)
-            public record HeapInfo(Long committed, Long init, Long max, Long used) {}
+            public record HeapInfo(Long max, Long used) {}
         }
     }
 }

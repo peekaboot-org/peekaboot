@@ -101,7 +101,6 @@ class ActuatorResponseParserTest {
         ActuatorParsedData response = parser.parse(rawData);
 
         assertThat(response.health().status()).isEqualTo("UP");
-        assertThat(response.health().groups()).containsExactly("liveness", "readiness");
         assertThat(response.health().components()).containsKeys("db", "diskSpace", "ping");
         assertThat(response.health().components().get("db").status()).isEqualTo("UP");
         assertThat(response.health().components().get("db").details()).containsEntry("database", "PostgreSQL");
