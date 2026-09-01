@@ -278,7 +278,7 @@
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
-                <version>3.10.0</version>
+                <version>3.10.1</version>
                 <configuration>
                     <ratchetFrom>${spotless.ratchetFrom}</ratchetFrom>
                     <java>
@@ -350,12 +350,12 @@
                     <dependency>
                         <groupId>net.sourceforge.pmd</groupId>
                         <artifactId>pmd-core</artifactId>
-                        <version>7.26.0</version>
+                        <version>7.27.0</version>
                     </dependency>
                     <dependency>
                         <groupId>net.sourceforge.pmd</groupId>
                         <artifactId>pmd-java</artifactId>
-                        <version>7.26.0</version>
+                        <version>7.27.0</version>
                     </dependency>
                 </dependencies>
                 <configuration>
