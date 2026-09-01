@@ -1,15 +1,13 @@
+import {readSetting, writeSetting} from './storage.js';
+
 /** The key the dashboard toggle writes. Shared across surfaces via same-origin storage. */
 export const THEME_STORAGE_KEY = 'peekaboot-theme';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 function storedTheme() {
-    try {
-        const stored = localStorage.getItem(THEME_STORAGE_KEY);
-        return stored === 'light' || stored === 'dark' ? stored : null;
-    } catch {
-        return null;   // storage can be blocked; fall through to the OS preference
-    }
+    const stored = readSetting(THEME_STORAGE_KEY);
+    return stored === 'light' || stored === 'dark' ? stored : null;
 }
 
 /** The stored preference if there is one, otherwise the OS preference. */
@@ -23,11 +21,7 @@ export function applyTheme(target, theme) {
 }
 
 export function storeTheme(theme) {
-    try {
-        localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-        /* preference simply will not persist */
-    }
+    writeSetting(THEME_STORAGE_KEY, theme);
 }
 
 /**
