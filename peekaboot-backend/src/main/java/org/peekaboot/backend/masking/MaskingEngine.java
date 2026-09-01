@@ -31,6 +31,13 @@ import java.util.regex.Pattern;
  */
 public final class MaskingEngine {
 
+    /**
+     * The literal every masked value is replaced with - Spring's own {@code Sanitizer}
+     * mask. Published to the frontend as {@code Features.maskLiteral}; markup.js carries
+     * a fallback copy for the surfaces that never load /api/features.
+     */
+    public static final String MASK_LITERAL = MaskingRules.MASK;
+
     private static final List<List<String>> KEY_NAME_TOKEN_RULES = MaskingRules.KEY_NAME_RULES.stream()
             .map(rule -> tokenize(rule, true))
             .toList();

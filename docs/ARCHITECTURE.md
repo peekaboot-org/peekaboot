@@ -415,7 +415,7 @@ static/peekaboot/ui/
 │   ├── filtered-group-tab.js   # filteredGroupTab() — the shell of a filterable collapsible-group tab (config/environment/loggers)
 │   ├── format.js              # Duration/byte/date formatting
 │   ├── http-status.js          # statusLabel()/statusVariant() — IANA reason phrases and badge colouring
-│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL
+│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL (fallback for Features.maskLiteral)
 │   ├── root-actions.js         # Root action type -> icon/label map
 │   ├── severity.js             # Duration/issue/log-level/health colouring; thresholds read from /api/features
 │   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root

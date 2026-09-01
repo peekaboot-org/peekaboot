@@ -1,9 +1,11 @@
 const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'};
 
 /**
- * The backend's mask literal - must match MaskingRules.MASK (which mirrors Spring's
- * own Sanitizer) exactly, or every masked-value comparison silently stops matching.
- * A single source of truth here so a literal change only needs updating in one place.
+ * Fallback for the backend's mask literal, for the surfaces that never load
+ * /api/features - the dev toolbar and the overlay it opens. Everywhere else
+ * Features.maskLiteral is authoritative; this copy must match MaskingEngine.MASK_LITERAL
+ * (which mirrors Spring's own Sanitizer) exactly, or a masked-value comparison on those
+ * surfaces silently stops matching (SharedModuleIT pins the two together).
  */
 export const MASK_LITERAL = '******';
 

@@ -14,6 +14,7 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
 /**
@@ -69,6 +70,16 @@ class SharedModuleIT extends PlaywrightTestBase {
     void escapeHtmlTreatsUndefinedAsEmptyButPreservesFalsyZero() {
         assertThat(evalModule("markup.js", "m.escapeHtml(undefined)")).isEqualTo("");
         assertThat(evalModule("markup.js", "m.escapeHtml(0)")).isEqualTo("0");
+    }
+
+    /**
+     * markup.js's MASK_LITERAL is only the fallback for surfaces that never load
+     * /api/features (the dev toolbar and the overlay it opens); everywhere else the
+     * published Features.maskLiteral wins. Both must spell the literal identically.
+     */
+    @Test
+    void maskLiteralFallbackMirrorsTheBackendConstant() {
+        assertThat(evalModule("markup.js", "m.MASK_LITERAL")).isEqualTo(MaskingEngine.MASK_LITERAL);
     }
 
     @Test
@@ -182,7 +193,7 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .map(RecordComponent::getName)
                 .toList();
 
-        assertThat(published).contains("tracing", "metrics", "insights", "unmaskingEnabled");
+        assertThat(published).contains("tracing", "metrics", "insights", "unmaskingEnabled", "maskLiteral");
         @SuppressWarnings("unchecked")
         List<String> thresholdKeys = (List<String>) evalModule("severity.js", "Object.keys(m.DEFAULT_THRESHOLDS)");
         assertThat(published).containsAll(thresholdKeys);
