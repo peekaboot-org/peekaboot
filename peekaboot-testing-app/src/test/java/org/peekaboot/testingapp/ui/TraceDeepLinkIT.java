@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.Scheduler;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -60,18 +59,11 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=ERROR&q=failed");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-log-level')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-log-level");
 
-        String selectedTab = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
-        String levelValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-level').value");
-        String textValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-filter').value");
+        String selectedTab = overlay.selectedTab();
+        String levelValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-level').value");
+        String textValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-filter').value");
 
         assertThat(selectedTab).isEqualTo("logs");
         assertThat(levelValue).isEqualTo("ERROR");
@@ -81,8 +73,8 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // that matches must be visible - the same check applyFilters() itself enforces,
         // proven here via the real rendered pk-log--hidden classes on real fixture data
         // (one matching ERROR row, one non-matching INFO row - see the fixture's javadoc).
-        Boolean everyRowConsistentWithTheFilters = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean everyRowConsistentWithTheFilters = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .every(row => {
                         const matches = row.dataset.level === 'ERROR'
                             && row.querySelector('.pk-log__message').textContent.toLowerCase().includes('failed');
@@ -91,12 +83,12 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
                 """);
         assertThat(everyRowConsistentWithTheFilters).isTrue();
 
-        Boolean atLeastOneRowVisible = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean atLeastOneRowVisible = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => !row.classList.contains('pk-log--hidden'))
                 """);
-        Boolean atLeastOneRowHidden = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean atLeastOneRowHidden = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => row.classList.contains('pk-log--hidden'))
                 """);
         assertThat(atLeastOneRowVisible)
@@ -121,13 +113,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // filter correctness, only that changing a filter rewrites the URL without pushing
         // a new history entry.
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        // #pk-trace's own textContent is "traceId<hex><copy-icon>" (a labelled copy-button,
-        // see shared/copyable.js) - the bare id lives in its .pk-copy__value child.
-        String traceId = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace .pk-copy__value').textContent.trim()");
+        String traceId = toolbar.traceId();
 
         openDashboard();
         // Establishes a real pushed '#traces' history entry - the state Back below must
@@ -143,26 +129,17 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", traceId);
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.openTab("logs");
+        overlay.waitFor("#pk-log-level");
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-level')");
-
-        page.evaluate("() => { const select = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-level'); select.value = 'ERROR';"
-                + " select.dispatchEvent(new Event('change', {bubbles: true})); }");
+        overlay.evaluate(
+                "root => { const select = root.querySelector('#pk-log-level'); select.value = 'ERROR'; select.dispatchEvent(new Event('change', {bubbles: true})); }");
 
         assertThat(page.url()).contains("level=");
 
         page.goBack();
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.url()).endsWith("#traces");
     }
 
@@ -182,18 +159,13 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=BOGUS");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-log-level')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-log-level");
 
-        String levelValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-level').value");
+        String levelValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-level').value");
         assertThat(levelValue).isEqualTo("");
 
-        Boolean anyRowHidden = (Boolean) page.evaluate("""
-                () => [...document.getElementById('peekaboot-trace-overlay').shadowRoot.querySelectorAll('.pk-log')]
+        Boolean anyRowHidden = (Boolean) overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-log')]
                     .some(row => row.classList.contains('pk-log--hidden'))
                 """);
         assertThat(anyRowHidden)
@@ -230,19 +202,12 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         page.click("#traces-list .pk-trace-item__open");
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"request\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"request\"]').click()");
+        overlay.openTab("request");
 
         assertThat(page.url()).endsWith("#traces/" + traceId + "/request");
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
 
         assertThat(page.url()).endsWith("#traces");
     }
@@ -257,36 +222,16 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        toolbar.openOverlay();
+        overlay.openLogsTab();
 
-        page.evaluate("() => { const input = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-filter'); input.value = 'persons';"
-                + " input.dispatchEvent(new Event('input', {bubbles: true})); }");
+        overlay.evaluate(
+                "root => { const input = root.querySelector('#pk-log-filter'); input.value = 'persons'; input.dispatchEvent(new Event('input', {bubbles: true})); }");
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String textValue = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('#pk-log-filter').value");
+        String textValue = (String) overlay.evaluate("root => root.querySelector('#pk-log-filter').value");
         assertThat(textValue).isEqualTo("persons");
     }
 }

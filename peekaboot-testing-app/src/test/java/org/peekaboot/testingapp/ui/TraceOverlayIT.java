@@ -30,7 +30,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     private void openOverlayFromToolbar() {
         openPersonsPage();
-        openOverlayFromLoadedToolbar();
+        toolbar.openOverlay();
     }
 
     /**
@@ -44,14 +44,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * separate fetch could race the trace's eviction from a bounded store.
      */
     private String waitForMultiSpanLogTraceId() {
-        return (String) page.evaluate("""
-                async () => {
+        return (String) toolbar.evaluate("""
+                async root => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
                           + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
                     for (let attempt = 0; attempt < 150; attempt++) {
-                        const copyEl = document.getElementById('peekaboot-toolbar-host')
-                            .shadowRoot.querySelector('#pk-trace .pk-copy');
+                        const copyEl = root.querySelector('#pk-trace .pk-copy');
                         const id = copyEl ? copyEl.dataset.pkCopy : null;
                         if (id) {
                             const response = await fetch('/peekaboot/api/traces/' + id + '/insights');
@@ -82,45 +81,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     private String openOverlayForTheMultiSpanLogTrace() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
 
         String traceId = waitForMultiSpanLogTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('#pk-gantt-rows')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor("#pk-gantt-rows");
         return traceId;
-    }
-
-    private void openOverlayFromLoadedToolbar() {
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // #peekaboot-trace-overlay (the host) exists as soon as openTraceDetail() creates
-        // it - well before fetchAndRender() replaces the loading placeholder with either
-        // the success render() (which registers the ESC handler) or the error state. This
-        // helper is used by both paths (see closeButtonDismissesTheOverlayOnTheErrorPath),
-        // so it waits for the loading placeholder to be gone rather than for a
-        // success-only element, and cannot race either outcome.
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-    }
-
-    private String overlayVar(String property) {
-        return (String) page.evaluate(
-                "prop => getComputedStyle(document.getElementById('peekaboot-trace-overlay')"
-                        + ".shadowRoot.querySelector('.pk-overlay')).getPropertyValue(prop).trim()",
-                property);
     }
 
     /**
@@ -141,7 +108,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         emulateOppositeOsPreference(ColorScheme.DARK);
         openOverlayFromToolbar();
 
-        assertThat(overlayVar("--pk-bg")).isEqualTo("#ffffff");
+        assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#ffffff");
     }
 
     @Test
@@ -150,7 +117,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         emulateOppositeOsPreference(ColorScheme.LIGHT);
         openOverlayFromToolbar();
 
-        assertThat(overlayVar("--pk-bg")).isEqualTo("#0d1117");
+        assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#0d1117");
     }
 
     /**
@@ -181,36 +148,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void logsFilterChipUsesTheContrastTunedForeground() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // #peekaboot-trace-overlay exists as soon as openTraceDetail() creates the host -
-        // well before render() builds the tab strip, which only happens once the trace
-        // fetch and the shared stylesheets have both resolved. Wait for the real tab
-        // before clicking it.
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String color = (String)
-                page.evaluate("() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-logs-filter-span')).color");
+        String color =
+                (String) overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-logs-filter-span')).color");
 
         assertThat(color).isEqualTo("rgb(13, 17, 23)");
     }
@@ -225,31 +169,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void logsFilterChipShowsTheSpanNameWithItsShortenedId() {
         setStoredTheme("light");
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-log__span')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-log__span').click()");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+        overlay.click(".pk-log__span");
+        overlay.waitFor(".pk-logs-filter-span");
 
-        String chipText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span').textContent");
+        String chipText = overlay.text(".pk-logs-filter-span");
 
         assertThat(chipText.trim()).matches("^Span: .+\\([0-9a-f]{8}\\)\\s*×?$");
     }
@@ -258,8 +183,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void overlayShowsSpansTabByDefault() {
         openOverlayFromToolbar();
 
-        String selected = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String selected = overlay.selectedTab();
         assertThat(selected).isEqualTo("spans");
     }
 
@@ -269,7 +193,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.keyboard().press("Escape");
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
 
@@ -278,15 +202,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void overlayExposesDialogSemantics() {
         openOverlayFromToolbar();
 
-        String role = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay').getAttribute('role')");
-        String ariaModal = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay').getAttribute('aria-modal')");
+        String role = (String) overlay.evaluate("root => root.querySelector('.pk-overlay').getAttribute('role')");
+        String ariaModal =
+                (String) overlay.evaluate("root => root.querySelector('.pk-overlay').getAttribute('aria-modal')");
         String accessibleName = (String)
-                page.evaluate("() => { const el = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay'); const labelledBy = el.getAttribute('aria-labelledby');"
-                        + " return labelledBy ? el.getRootNode().getElementById(labelledBy).textContent.trim()"
-                        + " : el.getAttribute('aria-label'); }");
+                overlay.evaluate(
+                        "root => { const el = root.querySelector('.pk-overlay'); const labelledBy = el.getAttribute('aria-labelledby'); return labelledBy ? el.getRootNode().getElementById(labelledBy).textContent.trim() : el.getAttribute('aria-label'); }");
 
         assertThat(role).isEqualTo("dialog");
         assertThat(ariaModal).isEqualTo("true");
@@ -301,31 +222,23 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void focusMovesIntoTheOverlayOnOpenAndReturnsToTheInvokerOnClose() {
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar__open').focus()");
+        toolbar.traceId();
+        toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
         page.waitForSelector("#peekaboot-trace-overlay");
         // container.focus() only happens once render() actually runs (after the trace
         // fetch and shared stylesheets both resolve) - wait for real content so the
         // assertion below cannot race a still-loading overlay.
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".querySelector('.pk-tab')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor(".pk-tab");
 
-        boolean focusIsInsideOverlay =
-                (Boolean) page.evaluate("() => { const host = document.getElementById('peekaboot-trace-overlay');"
-                        + " return host.shadowRoot.activeElement !== null; }");
+        boolean focusIsInsideOverlay = (Boolean) overlay.evaluate("root => root.activeElement !== null");
         assertThat(focusIsInsideOverlay).isTrue();
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
 
         boolean focusIsBackOnTheInvoker = (Boolean)
-                page.evaluate("() => document.getElementById('peekaboot-toolbar-host').shadowRoot.activeElement"
-                        + "?.classList.contains('pk-toolbar__open') ?? false");
+                toolbar.evaluate("root => root.activeElement?.classList.contains('pk-toolbar__open') ?? false");
         assertThat(focusIsBackOnTheInvoker).isTrue();
     }
 
@@ -340,12 +253,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.route("**/api/traces/*/insights", route -> route.abort());
         openOverlayFromToolbar();
 
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__error')");
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__error button').click()");
+        overlay.waitFor(".pk-overlay__error");
+        overlay.click(".pk-overlay__error button");
 
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
     }
 
@@ -357,22 +268,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void overlayTabStripIsKeyboardNavigable() {
         openOverlayFromToolbar();
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"spans\"]').focus()");
+        overlay.evaluate("root => root.querySelector('.pk-tab[data-tab=\"spans\"]').focus()");
 
         page.keyboard().press("ArrowRight");
 
-        String focused =
-                (String) page.evaluate("() => { const host = document.getElementById('peekaboot-trace-overlay');"
-                        + " return host.shadowRoot.activeElement?.dataset.tab; }");
-        String selected = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String focused = (String) overlay.evaluate("root => root.activeElement?.dataset.tab");
+        String selected = overlay.selectedTab();
 
         assertThat(focused).isEqualTo("queries");
         assertThat(selected).isEqualTo("queries");
 
-        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content').innerHTML");
+        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
         assertThat(content).isNotEmpty();
     }
 
@@ -381,10 +287,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void onlyTheSelectedOverlayTabIsInTheTabOrder() {
         openOverlayFromToolbar();
 
-        Object selectedTabIndex = page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
-        Object otherTabIndex = page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
+        Object selectedTabIndex =
+                overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').tabIndex");
+        Object otherTabIndex =
+                overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"false\"]').tabIndex");
 
         assertThat(selectedTabIndex).isEqualTo(0);
         assertThat(otherTabIndex).isEqualTo(-1);
@@ -414,8 +320,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // backend to actually serve the query before opening the overlay - the same
         // endpoint and field the overlay's TABS.count reads (trace.queries).
         openPersonsPage();
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
         // Polls (inside one evaluate(), not a separate waitForFunction + a later re-fetch)
         // until the query span lands, then returns the span count from that very same
         // response - both to dodge the ingestion race documented above, and to read the
@@ -425,10 +330,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // own background scheduler). Reads the id from the copy button's data-pk-copy
         // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon baked
         // in by copyableIdHtml), not the bare id a URL path segment needs.
-        int spanCount = ((Number) page.evaluate("async () => {"
+        int spanCount = ((Number) toolbar.evaluate("async root => {"
                         + "for (let i = 0; i < 150; i++) {"
-                        + "  const copyEl = document.getElementById('peekaboot-toolbar-host')"
-                        + ".shadowRoot.querySelector('#pk-trace .pk-copy');"
+                        + "  const copyEl = root.querySelector('#pk-trace .pk-copy');"
                         + "  const id = copyEl ? copyEl.dataset.pkCopy : null;"
                         + "  if (id) {"
                         + "    const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
@@ -447,16 +351,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+        toolbar.openOverlay();
+        overlay.openTab("queries");
 
         Locator tablist = page.locator("#peekaboot-trace-overlay .pk-overlay__container > .pk-tabs");
         String snapshot = tablist.ariaSnapshot();
@@ -477,8 +373,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void theHeaderStatusPillSpellsOutTheReasonPhrase() {
         openOverlayFromToolbar();
 
-        String status = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__meta .pk-badge').textContent.trim()");
+        String status = (String)
+                overlay.evaluate("root => root.querySelector('.pk-overlay__meta .pk-badge').textContent.trim()");
 
         assertThat(status).isEqualTo("200 OK");
     }
@@ -488,14 +384,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
         openOverlayFromToolbar();
 
         for (String tab : java.util.List.of("request", "spans", "queries", "logs")) {
-            page.evaluate(
-                    "id => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                            + ".querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()",
-                    tab);
+            overlay.evaluate("(root, id) => root.querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
 
-            String content =
-                    (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                            + ".querySelector('#pk-tab-content').innerHTML");
+            String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
             assertThat(content).as("tab %s renders something", tab).isNotEmpty();
         }
     }
@@ -513,8 +404,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         openOverlayFromToolbar();
 
         boolean anyRowHasACopyControl =
-                (boolean) page.evaluate("() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('#pk-gantt-rows .pk-copy')");
+                (boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-copy')");
 
         assertThat(anyRowHasACopyControl).isFalse();
     }
@@ -557,21 +447,18 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
 
-        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
         assertThat(page.url())
                 .as("the hand-off is a real location, not just a DOM change - the same hash shape a "
                         + "deep link into this filtered view would use")
                 .contains("#traces/" + traceId + "/logs?span=" + spanId);
-        String focusedTab = (String) page.evaluate(
-                "() => document.getElementById('peekaboot-trace-overlay').shadowRoot" + ".activeElement?.dataset.tab");
+        String focusedTab = (String) overlay.evaluate("root => root.activeElement?.dataset.tab");
         assertThat(focusedTab)
                 .as("the clicked toggle belonged to the Spans tab's markup, which the tab switch just "
                         + "replaced, destroying it - focus must move deliberately to the Logs tab's own "
                         + "button rather than falling back to the shadow host")
                 .isEqualTo("logs");
-        String content = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-tab-content').innerHTML");
+        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
         assertThat(content).as("no popup - the Logs tab itself rendered").contains("pk-logs-list");
 
         page.waitForSelector(".pk-log:not(.pk-log--hidden)");
@@ -587,8 +474,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click("#pk-clear-span-filter");
 
-        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-logs-filter-span')");
+        overlay.waitForGone(".pk-logs-filter-span");
         @SuppressWarnings("unchecked")
         List<String> visibleAfterClear = (List<String>)
                 page.evalOnSelectorAll(".pk-log:not(.pk-log--hidden)", "els => els.map(el => el.dataset.spanId)");
@@ -614,12 +500,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @DisplayName("a span's \"N logs\" toggle opens the Logs tab filtered to that span when opened from the toolbar")
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
+        toolbar.traceId();
         waitForMultiSpanLogTraceId();
 
-        openOverlayFromLoadedToolbar();
+        toolbar.openOverlay();
 
         @SuppressWarnings("unchecked")
         List<String> spansOfferingLogs = (List<String>)
@@ -629,8 +513,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         page.click(".pk-span-logs-toggle[data-span-id='" + spanId + "']");
 
-        page.waitForFunction("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'logs'");
 
         page.waitForSelector(".pk-log:not(.pk-log--hidden)");
         @SuppressWarnings("unchecked")
@@ -644,11 +527,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
         openOverlayFromToolbar();
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"queries\"]').click()");
+        overlay.click(".pk-tab[data-tab=\"queries\"]");
 
-        String sql = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-query__sql')?.textContent ?? ''");
+        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-query__sql')?.textContent ?? ''");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 
@@ -662,10 +543,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
         openOverlayFromToolbar();
 
-        Object allDurationsMatchPattern =
-                page.evaluate("() => Array.from(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelectorAll('.pk-gantt-duration'))"
-                        + ".every(el => /^\\d+ms \u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+        Object allDurationsMatchPattern = overlay.evaluate(
+                "root => Array.from(root.querySelectorAll('.pk-gantt-duration')).every(el => /^\\d+ms \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
         assertThat((Boolean) allDurationsMatchPattern)
                 .as("every duration cell reads '<ms>ms \u00B7 <pct>%'")
                 .isTrue();
@@ -731,13 +610,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
         openOverlayFromToolbar();
 
-        assertThat((String) page.evaluate(
-                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                                + ".querySelector('.pk-overlay__back')).position"))
+        assertThat((String)
+                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__back')).position"))
                 .isEqualTo("static");
-        assertThat((String) page.evaluate(
-                        "() => getComputedStyle(document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                                + ".querySelector('.pk-overlay__close')).position"))
+        assertThat((String)
+                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__close')).position"))
                 .isEqualTo("static");
 
         BoundingBox backBox =
@@ -813,21 +690,15 @@ class TraceOverlayIT extends PlaywrightTestBase {
         String traceId = waitForScheduledJobTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('.pk-overlay__title-method')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.waitFor(".pk-overlay__title-method");
 
-        String methodText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__title-method').textContent");
+        String methodText = overlay.text(".pk-overlay__title-method");
         assertThat(methodText)
                 .as("no HTTP method exists for a scheduled job, so the header must fall back to "
                         + "the root-action label rather than a fake method")
                 .isEqualTo("Scheduled Job");
 
-        String metaText = (String) page.evaluate("() => document.getElementById('peekaboot-trace-overlay')"
-                + ".shadowRoot.querySelector('.pk-overlay__meta').textContent");
+        String metaText = overlay.text(".pk-overlay__meta");
         assertThat(metaText)
                 .as("reconcileOrders() issues exactly one query (CustomerOrder is a flat entity, so "
                         + "findAll() is a single SELECT regardless of row count) - the count is "

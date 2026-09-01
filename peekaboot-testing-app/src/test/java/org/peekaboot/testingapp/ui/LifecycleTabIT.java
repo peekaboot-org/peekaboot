@@ -13,8 +13,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -122,28 +120,9 @@ class LifecycleTabIT extends PlaywrightTestBase {
         return git;
     }
 
-    // Charts and this table both fail invisibly (a swallowed script error leaves the
-    // page mute in test output), so every browser-side signal is collected and dumped
-    // at teardown - copied verbatim from InsightsMarkersIT.
-    private final List<String> browserLog = new CopyOnWriteArrayList<>();
-
     @BeforeEach
     void captureBrowserConsole() {
-        page.onConsoleMessage(msg -> browserLog.add("console." + msg.type() + ": " + msg.text()));
-        page.onPageError(error -> browserLog.add("pageerror: " + error));
-        page.onRequestFailed(request -> browserLog.add("requestfailed: " + request.url() + " -> " + request.failure()));
-        page.onResponse(response -> {
-            if (response.status() >= 400) {
-                browserLog.add("http" + response.status() + ": " + response.url());
-            }
-        });
-    }
-
-    @AfterEach
-    void dumpBrowserLog() {
-        if (!browserLog.isEmpty()) {
-            System.out.println("[browser] " + String.join("\n[browser] ", new ArrayList<>(browserLog)));
-        }
+        captureBrowserSignals();
     }
 
     private void openLifecycle() {

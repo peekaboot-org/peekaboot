@@ -161,16 +161,14 @@ class AccessibilityIT extends PlaywrightTestBase {
     @Test
     void overlayMakesTheRestOfThePageInert() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        overlay.waitFor(".pk-overlay__error");
 
         boolean siblingsInert = (boolean) page.evaluate("() => Array.from(document.body.children)"
                 + ".filter(el => el.id !== 'peekaboot-trace-overlay').every(el => el.inert)");
         assertThat(siblingsInert).isTrue();
 
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-overlay__error button').click()");
-        page.waitForFunction("() => !document.getElementById('peekaboot-trace-overlay')");
+        overlay.click(".pk-overlay__error button");
+        overlay.awaitClosed();
 
         boolean anyStillInert =
                 (boolean) page.evaluate("() => Array.from(document.body.children).some(el => el.inert)");
@@ -189,18 +187,8 @@ class AccessibilityIT extends PlaywrightTestBase {
     @Test
     void logRowCopyControlsKeepTheMinimumHitTarget() {
         page.navigate(baseUrl + "/?error=true");
-        page.waitForSelector("#peekaboot-toolbar-host");
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-trace').textContent.trim() !== '-'");
-        page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('.pk-toolbar').click()");
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay')?.shadowRoot"
-                        + "?.querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
         page.waitForSelector(".pk-log__span-cell .pk-copy");
 
         BoundingBox box = page.locator(".pk-log__span-cell .pk-copy").first().boundingBox();
