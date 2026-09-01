@@ -3,14 +3,13 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Proves the other required row of spec §2 end to end through the real HTTP API: outside
@@ -47,22 +46,17 @@ class ActuatorValuesMaskedOutsideLocalDevelopmentIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi api;
 
-    private JsonNode getJson(String uri) {
-        String body = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
-        return jsonMapper.readTree(body);
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     @Test
     void insightsEndpointMasksANonSensitivePropertyWhenValuesAreNotShown() {
-        JsonNode environment = getJson("/peekaboot/api/actuator/all/insights").path("environment");
+        JsonNode environment =
+                api.getJson("/peekaboot/api/actuator/all/insights").path("environment");
 
         JsonNode portValue = findEnvironmentPropertyValue(environment, "server.port");
         assertThat(portValue)

@@ -22,7 +22,6 @@ import org.springframework.http.MediaType;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * The demo endpoints exist to make Peekaboot's trace view worth looking at. These tests
@@ -38,9 +37,6 @@ class OrderTraceCaptureIT {
 
     @LocalServerPort
     private int port;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @Autowired
     private OrderRepository orderRepository;
@@ -75,7 +71,7 @@ class OrderTraceCaptureIT {
             line.setUnitPrice(new BigDecimal("19.99"));
             orderLineRepository.save(line);
         }
-        traces = new TraceApiClient(port, objectMapper);
+        traces = new TraceApiClient(port);
     }
 
     @Test

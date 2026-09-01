@@ -3,14 +3,13 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Proves the security-critical half of the two-independent-opt-ins design end to end
@@ -30,17 +29,11 @@ class UnmaskingDisabledIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi api;
 
-    private JsonNode getJson(String uri) {
-        String body = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
-        return jsonMapper.readTree(body);
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     /**
@@ -51,7 +44,7 @@ class UnmaskingDisabledIT {
     @Test
     void insightsEndpointIgnoresUnmaskTrueWhenUnmaskingIsDisabled() {
         JsonNode config =
-                getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
+                api.getJson("/peekaboot/api/actuator/all/insights?unmask=true").path("config");
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty)
@@ -62,7 +55,7 @@ class UnmaskingDisabledIT {
 
     @Test
     void insightsEndpointStaysMaskedWithoutTheUnmaskParameter() {
-        JsonNode config = getJson("/peekaboot/api/actuator/all/insights").path("config");
+        JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
 
         JsonNode passwordProperty = findConfigInfoProperty(config, "password");
         assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
@@ -70,7 +63,7 @@ class UnmaskingDisabledIT {
 
     @Test
     void featuresReportsUnmaskingAsDisabled() {
-        JsonNode features = getJson("/peekaboot/api/features");
+        JsonNode features = api.getJson("/peekaboot/api/features");
 
         assertThat(features.path("unmaskingEnabled").asBoolean()).isFalse();
     }

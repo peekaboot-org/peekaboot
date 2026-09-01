@@ -11,7 +11,6 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Drives the testing app and reads back what Peekaboot captured, through the same public
@@ -29,13 +28,12 @@ class TraceApiClient {
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final long POLL_INTERVAL_MS = 50;
 
+    private final PeekabootApi api;
     private final RestClient restClient;
-    private final ObjectMapper objectMapper;
 
-    TraceApiClient(int port, ObjectMapper objectMapper) {
-        this.restClient =
-                RestClient.builder().baseUrl("http://localhost:" + port).build();
-        this.objectMapper = objectMapper;
+    TraceApiClient(int port) {
+        this.api = new PeekabootApi(port);
+        this.restClient = api.restClient();
     }
 
     RestClient restClient() {
@@ -103,7 +101,7 @@ class TraceApiClient {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
         List<String> seen = new ArrayList<>();
         while (System.nanoTime() < deadline) {
-            JsonNode response = fetch("/peekaboot/api/traces/insights?bucket=" + bucket);
+            JsonNode response = api.getJson("/peekaboot/api/traces/insights?bucket=" + bucket);
             seen.clear();
             for (JsonNode trace : response.path("traces")) {
                 String rootOperation = trace.path("rootOperation").asString("");
@@ -119,14 +117,9 @@ class TraceApiClient {
                 + "; the bucket held: " + seen);
     }
 
-    private JsonNode fetch(String uri) {
-        String body = restClient.get().uri(uri).retrieve().body(String.class);
-        return body == null ? null : objectMapper.readTree(body);
-    }
-
     private JsonNode fetchOrNull(String uri) {
         try {
-            return fetch(uri);
+            return api.getJson(uri);
         } catch (HttpClientErrorException.NotFound notYetAvailable) {
             // single-trace endpoint returns 404 until the first span for the trace is exported
             return null;

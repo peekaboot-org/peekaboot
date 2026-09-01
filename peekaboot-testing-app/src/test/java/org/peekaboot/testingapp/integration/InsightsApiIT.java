@@ -16,7 +16,6 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatusCode;
@@ -24,7 +23,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Contract tests for the insights REST/SSE API against the real, auto-configured
@@ -41,19 +39,18 @@ class InsightsApiIT {
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
+    private PeekabootApi api;
     private RestClient restClient;
 
     @BeforeEach
-    void setUp() {
-        restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+    void connect() {
+        api = new PeekabootApi(port);
+        restClient = api.restClient();
     }
 
     @Test
     void configServesPanelsAndLevels() {
-        JsonNode config = getJson("/peekaboot/api/insights/config");
+        JsonNode config = api.getJson("/peekaboot/api/insights/config");
 
         assertThat(config.get("levels")).hasSize(3);
 
@@ -68,7 +65,7 @@ class InsightsApiIT {
     void dataReturnsGrowingTickSeries() throws InterruptedException {
         Thread.sleep(1000); // >= 4 ticks at the test profile's 250ms level-0 interval
 
-        JsonNode data = getJson("/peekaboot/api/insights/data?level=0");
+        JsonNode data = api.getJson("/peekaboot/api/insights/data?level=0");
 
         assertThat(data.get("count").asInt()).isGreaterThanOrEqualTo(2);
         // cpu.process (process.cpu.usage) resolves in a real JVM app
@@ -116,15 +113,5 @@ class InsightsApiIT {
                 assertThat(sawTick).as("received a tick SSE event").isTrue();
             }
         }
-    }
-
-    private JsonNode getJson(String path) {
-        String json = restClient
-                .get()
-                .uri(path)
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String.class);
-        return objectMapper.readTree(json);
     }
 }

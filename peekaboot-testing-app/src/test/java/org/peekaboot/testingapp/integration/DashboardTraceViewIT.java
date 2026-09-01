@@ -25,9 +25,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Asserts on the dashboard's trace API against a {@link TraceStore} that holds only
@@ -55,13 +53,9 @@ class DashboardTraceViewIT {
     private PersonRepository personRepository;
 
     @Autowired
-    private ObjectMapper objectMapper;
-
-    @Autowired
     private TraceStore traceStore;
 
-    private RestClient restClient;
-    private String baseUrl;
+    private PeekabootApi api;
     private String testTraceId;
     private String testSpanId;
 
@@ -69,8 +63,7 @@ class DashboardTraceViewIT {
     void setUp(TestInfo testInfo) {
         traceStore.clear();
 
-        baseUrl = "http://localhost:" + port;
-        restClient = RestClient.builder().baseUrl(baseUrl).build();
+        api = new PeekabootApi(port);
 
         personRepository.deleteAll();
         Person person = new Person();
@@ -88,7 +81,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceFromToolbarShouldBeVisibleInDashboardApi() throws Exception {
-        JsonNode response = getJson("/peekaboot/api/traces/insights");
+        JsonNode response = api.getJson("/peekaboot/api/traces/insights");
         JsonNode traces = response.get("traces");
 
         assertThat(traces).isNotNull();
@@ -101,7 +94,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceDetailsShouldContainSpans() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode rootSpan = trace.get("rootSpan");
 
         assertThat(rootSpan).as("Trace should contain rootSpan").isNotNull();
@@ -112,7 +105,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceDetailsShouldContainHttpAttributes() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode inheritedAttributes = trace.get("inheritedAttributes");
 
         boolean hasHttpMethod = inheritedAttributes != null && inheritedAttributes.has("http.method");
@@ -127,7 +120,7 @@ class DashboardTraceViewIT {
 
     @Test
     void traceShouldContainDatabaseSpansWhenQueryExecuted() throws Exception {
-        JsonNode trace = getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode summary = trace.get("summary");
 
         assertThat(summary).isNotNull();
@@ -141,7 +134,7 @@ class DashboardTraceViewIT {
 
     @Test
     void dashboardShouldBeAccessible() {
-        Map<String, Object> response = restClient
+        Map<String, Object> response = api.restClient()
                 .get()
                 .uri("/peekaboot/ui/dashboard/index.html")
                 .accept(MediaType.TEXT_HTML)
@@ -211,8 +204,8 @@ class DashboardTraceViewIT {
                 List.of(),
                 traceStore.nextCreationOrder()));
 
-        JsonNode errors = getJson("/peekaboot/api/traces/insights?bucket=errors");
-        JsonNode all = getJson("/peekaboot/api/traces/insights?bucket=all");
+        JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
+        JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
 
         assertThat(errors.get("traces")).hasSize(1);
         assertThat(errors.get("traces").get(0).get("traceId").asString()).isEqualTo("berr");
@@ -233,7 +226,7 @@ class DashboardTraceViewIT {
 
     @Test
     void featuresShouldIndicateTracingEnabled() throws Exception {
-        JsonNode features = getJson("/peekaboot/api/features");
+        JsonNode features = api.getJson("/peekaboot/api/features");
 
         assertThat(features.get("tracing").asBoolean())
                 .as("Tracing feature should be enabled")
@@ -244,18 +237,13 @@ class DashboardTraceViewIT {
                 .isTrue();
     }
 
-    private JsonNode getJson(String path, Object... uriVariables) {
-        String json = restClient
+    private String getHtml(String path) {
+        return api.restClient()
                 .get()
-                .uri(path, uriVariables)
-                .accept(MediaType.APPLICATION_JSON)
+                .uri(path)
+                .accept(MediaType.TEXT_HTML)
                 .retrieve()
                 .body(String.class);
-        return objectMapper.readTree(json);
-    }
-
-    private String getHtml(String path) {
-        return restClient.get().uri(path).accept(MediaType.TEXT_HTML).retrieve().body(String.class);
     }
 
     private void injectTestSpan() {
