@@ -17,6 +17,9 @@ public final class HikariPoolInfo {
     public record PoolSettings(int minimumIdle, int maximumPoolSize, long connectionTimeoutMs) {}
 
     /** Empty for a DataSource that is not a Hikari pool. */
+    // CloseResource: the pool is the application's own Spring bean, merely borrowed here
+    // to read its settings - closing it would break the app
+    @SuppressWarnings("PMD.CloseResource")
     public Optional<PoolSettings> settingsOf(DataSource dataSource) {
         if (!(dataSource instanceof HikariDataSource hikariDataSource)) {
             return Optional.empty();
