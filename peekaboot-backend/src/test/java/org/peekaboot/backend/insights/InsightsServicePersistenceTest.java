@@ -124,7 +124,9 @@ class InsightsServicePersistenceTest {
     void nothingIsWrittenWhileStorageIsSwitchedOff() throws Exception {
         InsightsService service = service(false);
         service.start();
-        Thread.sleep(300);
+        await().atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(20))
+                .until(() -> service.data(0).count() >= 1); // a tick has landed, so there was something to write
         service.stop();
 
         try (var files = Files.list(directory)) {
