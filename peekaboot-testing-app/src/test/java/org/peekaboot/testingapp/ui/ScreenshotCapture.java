@@ -9,7 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.lifecycle.LifecycleEventFile;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * Captures the screenshots the peekaboot.org website ships. A tool, not a test: it asserts
@@ -24,7 +29,15 @@ import org.springframework.test.context.ActiveProfiles;
  *
  * <p>Runs under the {@code screenshots} profile (real Postgres via Docker Compose, Flyway
  * on) so every dashboard tab has genuine content. Docker must be running.
+ *
+ * <p>The Lifecycle tab gets a seeded run history the same way {@link LifecycleTabIT} does
+ * (storage on, pointed at a temp directory holding a {@link LifecycleHistoryFixture}): a
+ * JUnit launch is never a local run, so storage is off under this profile and the tab
+ * would otherwise photograph the application's own run as its only row. The context is
+ * closed with the class for the reason {@code LifecycleTabIT} gives: the storage
+ * directory dies with the class, and a cached context would keep writing into it.
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 // inheritProfiles = false: PlaywrightTestBase carries @ActiveProfiles("test") - merging
 // that in (the default) would activate both "test" and "screenshots" and, since Spring
 // Boot's last-profile-wins rule applies to the *resolved* order rather than declaration
@@ -38,13 +51,24 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final int VIEWPORT_WIDTH = 1440;
     private static final int VIEWPORT_HEIGHT = 900;
 
-    // Insights is deliberately not in this list: its SSE-driven charts are a separate
-    // capture concern from this tool's simple "render() has produced real data" wait,
-    // and it was never part of this tool's captured surface even before the Overview/
-    // Meters rename - out of scope here. The remaining tabs are ordered to match the
-    // tab strip's own order (see dashboard/main.js's TABS array).
-    private static final List<String> DASHBOARD_TABS =
-            List.of("overview", "traces", "meters", "environment", "flyway", "loggers", "config", "scheduled-tasks");
+    // Insights is deliberately not in this list: its charts fill from a ring the server
+    // samples on a fixed cadence, so it is captured last, once that ring holds enough
+    // history to draw a line (see captureInsights) - not in strip order between Overview
+    // and Lifecycle, which would photograph a chart with one or two points. The tabs
+    // here are ordered to match the tab strip's own order (see dashboard/main.js's TABS
+    // array).
+    private static final List<String> DASHBOARD_TABS = List.of(
+            "overview",
+            "lifecycle",
+            "traces",
+            "meters",
+            "environment",
+            "flyway",
+            "loggers",
+            "config",
+            "scheduled-tasks");
+
+    private static final String INSIGHTS_TAB = "insights";
 
     /**
      * The selector each tab waits for beyond "panel active" before it counts as rendered
@@ -54,6 +78,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
      */
     private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
             "overview", "#memory-info .pk-meter__fill",
+            "lifecycle", "#lifecycle-runs .pk-lifecycle-table tbody tr",
             "environment", "#property-sources .pk-group__header",
             "flyway", "#flyway-timeline .pk-table tbody tr",
             "loggers", "#loggers-list .pk-group",
@@ -120,12 +145,39 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final String MASKED_VALUE = "******";
 
     /**
+     * Seven seeded runs plus the application's own fit on the Lifecycle tab's first page
+     * of 20, and between them show every badge the tab has: Running (the application's
+     * own run), Unclean exit with a dash duration (run 2) and the dash downtime after
+     * it, and Deployment for a version change (run 4) and a branch-and-commit change
+     * (run 6). See {@link LifecycleHistoryFixture} for what each index means.
+     */
+    private static final LifecycleHistoryFixture LIFECYCLE_HISTORY = new LifecycleHistoryFixture(7, 2, 4, 6);
+
+    /**
+     * How many level-0 samples the Insights ring must hold before its charts are
+     * photographed. The tab renders a chart as soon as any sample exists, but one or two
+     * points on a full-width axis read as a broken chart; a dozen at the profile's level-0
+     * interval (the defaults' 10 s, so about two minutes of history) draws a real line.
+     */
+    private static final int MIN_INSIGHTS_SAMPLES = 12;
+
+    /**
      * The traceId of the flagship /orders N+1 request, captured straight from that
      * response's own toolbar payload in {@link #generateTraffic()} - see the field's use
      * in {@link #captureDashboardTabs} for why this is not simply "click the first item
      * in the traces list".
      */
     private String flagshipTraceId;
+
+    @TempDir
+    static Path storageDir;
+
+    @DynamicPropertySource
+    static void lifecycleStorage(DynamicPropertyRegistry registry) {
+        LIFECYCLE_HISTORY.writeTo(storageDir.resolve(LifecycleEventFile.FILE_NAME));
+        registry.add("peekaboot.storage.enabled", () -> "true");
+        registry.add("peekaboot.storage.dir", () -> storageDir.toString());
+    }
 
     @Override
     protected Page browserContextPage() {
@@ -138,9 +190,16 @@ class ScreenshotCapture extends PlaywrightTestBase {
     void captureEverySurfaceInBothThemes() throws Exception {
         Path outputDir = resolveOutputDir();
 
-        for (String theme : List.of("light", "dark")) {
+        List<String> themes = List.of("light", "dark");
+        for (String theme : themes) {
             captureDashboardTabs(outputDir, theme);
             captureToolbar(outputDir, theme);
+        }
+        // last on purpose: everything above is history for the Insights ring to chart
+        // (see MIN_INSIGHTS_SAMPLES), and the traffic it generated is what the HTTP and
+        // datasource panels have to show
+        for (String theme : themes) {
+            captureInsights(outputDir, theme);
         }
 
         assertThat(outputDir).isDirectoryContaining(path -> path.toString().endsWith(".png"));
@@ -206,19 +265,90 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
     /**
      * Fails loudly, naming every missing/hidden tab, rather than letting a later
-     * page.click() time out on a selector that quietly never existed. meters and traces
-     * are gated on GET /api/features; a silently absent button would otherwise look like an
-     * ordinary Playwright timeout with no clue which tab caused it.
+     * page.click() time out on a selector that quietly never existed. insights, meters
+     * and traces are gated on GET /api/features; a silently absent button would otherwise
+     * look like an ordinary Playwright timeout with no clue which tab caused it.
      */
     private void assertAllTabButtonsVisible() {
         List<String> missing = new ArrayList<>();
-        for (String tabId : DASHBOARD_TABS) {
+        List<String> expected = new ArrayList<>(DASHBOARD_TABS);
+        expected.add(INSIGHTS_TAB);
+        for (String tabId : expected) {
             if (!page.isVisible(".pk-tab[data-tab=\"" + tabId + "\"]")) {
                 missing.add(tabId);
             }
         }
         if (!missing.isEmpty()) {
             throw new IllegalStateException("dashboard tab button(s) missing or hidden, cannot capture: " + missing);
+        }
+    }
+
+    /**
+     * Photographs the Insights tab once its ring holds {@link #MIN_INSIGHTS_SAMPLES}
+     * level-0 samples and every panel in the viewport has either drawn its chart or
+     * declared itself empty. A chart exists as soon as uPlot has built it, so the wait is
+     * for a canvas with a real width, not merely for the element; below-the-fold panels
+     * are created lazily on scroll and are not part of the shot.
+     */
+    private void captureInsights(Path outputDir, String theme) {
+        newThemedPage(theme);
+        openDashboard();
+        waitForInsightsHistory();
+
+        page.click(".pk-tab[data-tab=\"" + INSIGHTS_TAB + "\"]");
+        page.waitForSelector("#" + INSIGHTS_TAB + "-tab.active");
+        page.waitForFunction("""
+                () => {
+                    const inViewport = el => {
+                        const box = el.getBoundingClientRect();
+                        return box.bottom > 0 && box.top < window.innerHeight;
+                    };
+                    const panels = Array.from(document.querySelectorAll('#insights-panels .pk-insight-panel'))
+                        .filter(inViewport);
+                    return panels.length > 0 && panels.every(panel =>
+                        panel.querySelector('.pk-insight-empty')
+                            || Array.from(panel.querySelectorAll('canvas')).some(canvas => canvas.width > 0));
+                }
+                """, null, new Page.WaitForFunctionOptions().setTimeout(15000));
+        shoot(outputDir, "dashboard-" + INSIGHTS_TAB + "-" + theme);
+    }
+
+    /**
+     * Blocks until level 0 of the Insights ring holds {@link #MIN_INSIGHTS_SAMPLES}
+     * samples, asking the same endpoint the tab itself loads its history from. The budget
+     * is derived from the configured level-0 interval rather than assumed: a dozen ticks
+     * plus one for the one in flight, so a profile with a slower cadence waits
+     * proportionally longer instead of failing.
+     *
+     * <p>Polled with {@code page.evaluate} in a plain loop, not {@code waitForFunction}:
+     * the predicate has to await a fetch, and waitForFunction does not await an async
+     * predicate's result - the pending Promise itself is truthy, so such a wait "passes"
+     * on its first poll (verified on a first attempt at this, which photographed charts
+     * holding three points).
+     */
+    private void waitForInsightsHistory() {
+        Number intervalMs = (Number) page.evaluate("""
+                async () => {
+                    const response = await fetch('/peekaboot/api/insights/config');
+                    return (await response.json()).levels[0].intervalMs;
+                }
+                """);
+        long deadline = System.currentTimeMillis() + intervalMs.longValue() * (MIN_INSIGHTS_SAMPLES + 1);
+        while (true) {
+            Number count = (Number) page.evaluate("""
+                    async () => {
+                        const response = await fetch('/peekaboot/api/insights/data?level=0');
+                        return (await response.json()).count;
+                    }
+                    """);
+            if (count.intValue() >= MIN_INSIGHTS_SAMPLES) {
+                return;
+            }
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("insights level 0 still holds only " + count + " of the "
+                        + MIN_INSIGHTS_SAMPLES + " samples required for a chart worth photographing");
+            }
+            page.waitForTimeout(1000);
         }
     }
 
