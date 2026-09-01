@@ -51,6 +51,28 @@ class InsightsSnapshotStoreTest {
         assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
     }
 
+    /**
+     * An Error escaping the load - an OutOfMemoryError from a pathological file, say - must
+     * not leave awaitSnapshot parked for the full timeout; the future has to be released
+     * regardless.
+     */
+    @Test
+    void anErrorEscapingTheLoadStillReleasesTheWaiters() {
+        InsightsSnapshotStore store = store(Duration.ofDays(30));
+
+        try {
+            store.completeLoaded(() -> {
+                throw new OutOfMemoryError("simulated");
+            });
+        } catch (OutOfMemoryError expected) {
+            // completeLoaded's finally already released awaitSnapshot before rethrowing
+        }
+
+        long startNanos = System.nanoTime();
+        assertThat(store.awaitSnapshot(Duration.ofSeconds(5))).isEmpty();
+        assertThat(Duration.ofNanos(System.nanoTime() - startNanos)).isLessThan(Duration.ofSeconds(1));
+    }
+
     @Test
     void whatOneRunWritesTheNextRunReads() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));

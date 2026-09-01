@@ -84,7 +84,22 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
 
     /** Submits the parse; returns immediately, so no context refresh ever waits on a file. */
     public void beginLoad() {
-        Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> loaded.complete(load()));
+        Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> completeLoaded(this::load));
+    }
+
+    /**
+     * Runs {@code source} and completes {@link #loaded} with what it returns, or with empty
+     * however it ends. An Error {@code load()} does not catch - an OutOfMemoryError from a
+     * pathological file, say - would otherwise leave every waiter parked for the full
+     * {@link #awaitSnapshot} timeout, on a collector level thread the host application is
+     * paying for. Package-private so a test can hand in a source that throws.
+     */
+    void completeLoaded(Supplier<Optional<InsightsSnapshot>> source) {
+        try {
+            loaded.complete(source.get());
+        } finally {
+            loaded.complete(Optional.empty());
+        }
     }
 
     /**
