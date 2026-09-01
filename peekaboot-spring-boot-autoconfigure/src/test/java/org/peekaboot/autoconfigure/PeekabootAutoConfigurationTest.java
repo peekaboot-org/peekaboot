@@ -25,14 +25,6 @@ class PeekabootAutoConfigurationTest {
             .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
             .withUserConfiguration(MockActuatorConfig.class);
 
-    /** Off without the post-processor's launch-context detection - the metadata must advertise that. */
-    @Test
-    void propertiesDefaultToOff() {
-        PeekabootProperties properties = new PeekabootProperties();
-        assertThat(properties.isEnabled()).isFalse();
-        assertThat(properties.isDevToolbar()).isFalse();
-    }
-
     /**
      * The lifecycle switch is read by {@code PeekabootLifecycleAutoConfiguration}'s condition
      * before any Peekaboot bean exists, but it also binds here so it carries configuration
@@ -52,16 +44,6 @@ class PeekabootAutoConfigurationTest {
                                 .getLifecycle()
                                 .isEnabled())
                         .isFalse());
-    }
-
-    @Test
-    void propertiesCanBeModified() {
-        PeekabootProperties properties = new PeekabootProperties();
-        properties.setEnabled(true);
-        properties.setDevToolbar(true);
-
-        assertThat(properties.isEnabled()).isTrue();
-        assertThat(properties.isDevToolbar()).isTrue();
     }
 
     @Test

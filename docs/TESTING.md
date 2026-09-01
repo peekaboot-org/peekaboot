@@ -4,6 +4,13 @@
 - JUnit 5 + AssertJ everywhere; no JUnit `assertEquals` in new code.
 - One behavior per test. Helpers/fixtures either all above or all below the tests, never
   interleaved with them.
+- Test names are sentences about behaviour (`aSnapshotDatedInTheFutureIsDeletedUnread`);
+  `method_shouldX` is legacy — keep a class internally consistent, use the sentence form for
+  new classes.
+- No getter/setter round-trips for `@ConfigurationProperties` classes: they prove Java field
+  assignment. Assert a default only where it protects something (a safe fallback, parity with
+  a constant in main code), or that a bound property reaches the bean that consumes it
+  (`PeekabootTracingAutoConfigurationTest.bucketPropertiesReachTheStore`).
 - Deterministic time: fixed `Instant.parse(...)` values, never bare `Instant.now()`
   when the assertion depends on ordering or duration.
 - Micrometer gauges in tests: never `registry.gauge(name, obj)` with the result discarded —
@@ -29,14 +36,17 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
 - Browser-side errors are asserted where a test's subject is the JavaScript itself:
   `page.onPageError` collects into a list the test then asserts on. Classes whose subject
   fails invisibly (the charts, the lifecycle table) opt into
-  `PlaywrightTestBase.captureBrowserSignals()`, which prints every console message, page
-  error, failed request and error response at teardown. There is no shared listener that
-  filters, and no allow-list — the Chromium engine has no incompatibilities of its own to
-  excuse.
+  `PlaywrightTestBase.captureBrowserSignals()`, which collects every console message, page
+  error, failed request and error response the test provokes and prints them only when the
+  test fails (a `TestWatcher`; a green run prints nothing). Collection stops when teardown
+  starts, so the `about:blank` navigation aborting the Insights tab's EventSource is not
+  recorded. There is no shared listener that filters, and no allow-list — the Chromium
+  engine has no incompatibilities of its own to excuse.
 - Tests that trigger error paths capture the log event (logback `ListAppender`) and assert
   it instead of letting it print. `peekaboot-backend` shares one helper for this,
-  `org.peekaboot.backend.testsupport.LogCapture`; it is test-scoped to that module, so
-  `peekaboot-spring-boot-autoconfigure`'s tests attach their own `ListAppender`.
+  `org.peekaboot.backend.testsupport.LogCapture`, published to the other modules as the
+  backend's `-tests` jar / Gradle test fixtures (see [`BUILD.md`](../BUILD.md)), so
+  `peekaboot-spring-boot-autoconfigure`'s tests use it too.
 - `peekaboot-testing-app`'s `logback-test.xml` sets `org.apache.catalina.core.ContainerBase`
   to `OFF`: `OrderController`'s deliberately failing `/boom` endpoint escapes as an unhandled
   exception, which embedded Tomcat logs as a full stack trace under a per-JVM

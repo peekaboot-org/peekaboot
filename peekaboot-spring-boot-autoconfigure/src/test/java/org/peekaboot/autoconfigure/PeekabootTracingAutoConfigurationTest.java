@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
-import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -86,18 +85,6 @@ class PeekabootTracingAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(TraceStore.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
-                });
-    }
-
-    @Test
-    void shouldApplyCustomProperties() {
-        contextRunner
-                .withPropertyValues("peekaboot.tracing.max-traces=500", "peekaboot.tracing.max-spans-per-trace=25")
-                .run(context -> {
-                    assertThat(context).hasSingleBean(PeekabootTracingProperties.class);
-                    PeekabootTracingProperties properties = context.getBean(PeekabootTracingProperties.class);
-                    assertThat(properties.getMaxTraces()).isEqualTo(500);
-                    assertThat(properties.getMaxSpansPerTrace()).isEqualTo(25);
                 });
     }
 

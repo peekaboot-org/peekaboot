@@ -5,9 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -23,7 +20,7 @@ import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
-import org.slf4j.LoggerFactory;
+import org.peekaboot.backend.testsupport.LogCapture;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;
@@ -171,56 +168,30 @@ class PeekabootLifecycleAutoConfigurationTest {
 
     @Test
     void brokenDataSourceDoesNotFailStartup() {
-        ListAppender<ILoggingEvent> appender = attachListAppender(DataSourceMetadata.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
             contextRunner.withUserConfiguration(BrokenDataSourceConfig.class).run(context -> {
                 assertThat(context).hasNotFailed();
                 assertThat(context).hasBean("databaseMetadataList");
                 assertThat(context.getBean("databaseMetadataList", List.class)).isEmpty();
             });
 
-            assertThat(appender.list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Failed to extract metadata from DataSource 'brokenDataSource': db down");
             });
-        } finally {
-            detachListAppender(DataSourceMetadata.class, appender);
         }
     }
 
     /** Fires the ApplicationReadyEvent at the context's listener and returns the banner it logs. */
     private static String readyBanner(AssertableApplicationContext context) {
-        ListAppender<ILoggingEvent> appender = attachListAppender(ApplicationReadyListener.class);
-        try {
+        try (LogCapture capture = LogCapture.attach(ApplicationReadyListener.class)) {
             ApplicationReadyEvent event = new ApplicationReadyEvent(
                     new SpringApplication(), new String[0], context.getSourceApplicationContext(), Duration.ZERO);
             context.getBean(ApplicationReadyListener.class).onApplicationEvent(event);
-            assertThat(appender.list).hasSize(1);
-            return appender.list.get(0).getFormattedMessage();
-        } finally {
-            detachListAppender(ApplicationReadyListener.class, appender);
+            assertThat(capture.appender().list).hasSize(1);
+            return capture.appender().list.get(0).getFormattedMessage();
         }
-    }
-
-    /**
-     * Captures a class's log events instead of letting them reach the console, so a test can
-     * assert on them ({@link #brokenDataSourceDoesNotFailStartup()} on a WARN, the banner tests
-     * on the INFO banner itself).
-     */
-    private static ListAppender<ILoggingEvent> attachListAppender(Class<?> loggerClass) {
-        Logger logger = (Logger) LoggerFactory.getLogger(loggerClass);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        logger.setAdditive(false);
-        return appender;
-    }
-
-    private static void detachListAppender(Class<?> loggerClass, ListAppender<ILoggingEvent> appender) {
-        Logger logger = (Logger) LoggerFactory.getLogger(loggerClass);
-        logger.detachAppender(appender);
-        logger.setAdditive(true);
     }
 
     @Configuration

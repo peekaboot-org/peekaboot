@@ -181,6 +181,27 @@
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
             </plugin>
+            <!-- Test support (LogCapture) for the other modules' tests, as a -tests jar
+                 holding only the testsupport package: the tests themselves and the test
+                 resources stay out of every other module's classpath. Gradle publishes
+                 the same package as this module's test fixtures. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>test-support-jar</id>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                        <configuration>
+                            <includes>
+                                <include>org/peekaboot/backend/testsupport/**</include>
+                            </includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

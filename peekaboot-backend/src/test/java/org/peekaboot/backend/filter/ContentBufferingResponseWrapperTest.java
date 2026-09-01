@@ -2,31 +2,24 @@ package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockHttpServletResponse;
 
-@ExtendWith(MockitoExtension.class)
 class ContentBufferingResponseWrapperTest {
 
-    @Mock
-    HttpServletResponse originalResponse;
-
+    MockHttpServletResponse originalResponse;
     ContentBufferingResponseWrapper wrapper;
 
     @BeforeEach
     void setUp() {
+        originalResponse = new MockHttpServletResponse();
         wrapper = new ContentBufferingResponseWrapper(originalResponse);
     }
 
@@ -37,6 +30,7 @@ class ContentBufferingResponseWrapperTest {
 
         byte[] content = wrapper.getContentAsByteArray();
         assertThat(new String(content, StandardCharsets.UTF_8)).isEqualTo("Hello World");
+        assertThat(originalResponse.getContentAsByteArray()).isEmpty();
     }
 
     @Test
@@ -59,28 +53,22 @@ class ContentBufferingResponseWrapperTest {
 
     @Test
     void shouldCopyBufferedContentToOriginalResponse() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(originalResponse.getOutputStream()).thenReturn(servletOutputStream);
-
         wrapper.getWriter().write("Buffered Content");
         wrapper.flushBuffer();
         wrapper.copyBodyToResponse();
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("Buffered Content");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("Buffered Content");
+        assertThat(originalResponse.getContentLength()).isEqualTo("Buffered Content".length());
         assertThat(wrapper.isCommitted()).isTrue();
     }
 
     @Test
     void shouldCopyModifiedContentToResponse() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(originalResponse.getOutputStream()).thenReturn(servletOutputStream);
-
         byte[] modifiedContent = "Modified Content".getBytes(StandardCharsets.UTF_8);
         wrapper.copyBodyToResponse(modifiedContent);
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("Modified Content");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("Modified Content");
+        assertThat(originalResponse.getContentLength()).isEqualTo(modifiedContent.length);
         assertThat(wrapper.isCommitted()).isTrue();
     }
 
@@ -134,27 +122,21 @@ class ContentBufferingResponseWrapperTest {
 
     @Test
     void nonHtmlContentTypeSwitchesToPassthrough() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
-
         wrapper.setContentType("application/json");
         wrapper.getOutputStream().write("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
 
         assertThat(wrapper.isPassthrough()).isTrue();
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("{\"id\":1}");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("{\"id\":1}");
     }
 
     @Test
     void eventStreamContentTypeSwitchesToPassthrough() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
-
         wrapper.setContentType("text/event-stream");
         wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
         wrapper.flushBuffer();
 
         assertThat(wrapper.isPassthrough()).isTrue();
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("data: tick\n\n");
     }
 
     @Test
@@ -164,60 +146,87 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(wrapper.isPassthrough()).isFalse();
         assertThat(wrapper.getContentAsString()).isEqualTo("<html>");
+        assertThat(originalResponse.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
+     * Spring's message converters declare the type as a plain header (ServletServerHttpResponse
+     * writes every header with addHeader), so a JSON API response never reaches setContentType;
+     * it has to be recognised there or it is buffered up to the cap for nothing.
+     */
+    @Test
+    void nonHtmlContentTypeAddedAsAHeaderSwitchesToPassthrough() throws IOException {
+        wrapper.addHeader("Content-Type", "application/json");
+        wrapper.getOutputStream().write("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalResponse.getContentAsString()).isEqualTo("{\"id\":1}");
+    }
+
+    @Test
+    void nonHtmlContentTypeSetAsAHeaderSwitchesToPassthrough() throws IOException {
+        wrapper.setHeader("content-type", "application/octet-stream");
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+    }
+
+    @Test
+    void htmlContentTypeSetAsAHeaderKeepsBuffering() throws IOException {
+        wrapper.addHeader("Content-Type", "text/html;charset=UTF-8");
+        wrapper.getOutputStream().write("<html>".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(wrapper.isPassthrough()).isFalse();
+        assertThat(originalResponse.getContentAsByteArray()).isEmpty();
     }
 
     @Test
     void enablePassthroughFlushesBufferAndRoutesLaterWrites() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
-
         wrapper.getOutputStream().write("early".getBytes(StandardCharsets.UTF_8));
         wrapper.enablePassthrough();
         wrapper.getOutputStream().write("-late".getBytes(StandardCharsets.UTF_8));
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
         // buffered content was handed off; nothing left to copy
         wrapper.copyBodyToResponse();
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
     }
 
     @Test
     void passthroughRoutesWriterContent() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
-
         PrintWriter writer = wrapper.getWriter();
         writer.write("early");
         wrapper.enablePassthrough();
         writer.write("-late");
         writer.flush();
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
     }
 
     @Test
-    void resetBufferDelegatesOnceInPassthrough() throws IOException {
+    void resetBufferResetsTheRealResponseInPassthrough() throws IOException {
         wrapper.enablePassthrough();
+        wrapper.getOutputStream().write("streamed".getBytes(StandardCharsets.UTF_8));
 
         wrapper.resetBuffer();
 
-        verify(originalResponse).resetBuffer();
+        assertThat(originalResponse.getContentAsByteArray()).isEmpty();
     }
 
     /** reset() clears status and headers on the real response; the buffered body has to go with them. */
     @Test
     void resetClearsTheBufferAlongWithTheRealResponse() throws IOException {
+        wrapper.setHeader("X-Stale", "yes");
         wrapper.getOutputStream().write("stale".getBytes(StandardCharsets.UTF_8));
 
         wrapper.reset();
 
-        verify(originalResponse).reset();
+        assertThat(originalResponse.containsHeader("X-Stale")).isFalse();
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
     @Test
     void isCommittedFollowsTheRealResponse() {
-        when(originalResponse.isCommitted()).thenReturn(true);
+        originalResponse.setCommitted(true);
 
         assertThat(wrapper.isCommitted()).isTrue();
     }
@@ -229,7 +238,8 @@ class ContentBufferingResponseWrapperTest {
 
         wrapper.sendError(500, "boom");
 
-        verify(originalResponse).sendError(500, "boom");
+        assertThat(originalResponse.getStatus()).isEqualTo(500);
+        assertThat(originalResponse.getErrorMessage()).isEqualTo("boom");
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
@@ -239,18 +249,16 @@ class ContentBufferingResponseWrapperTest {
 
         wrapper.sendRedirect("/elsewhere");
 
-        verify(originalResponse).sendRedirect("/elsewhere");
+        assertThat(originalResponse.getRedirectedUrl()).isEqualTo("/elsewhere");
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
     /** An HTML body past the cap streams through rather than being held in heap; it gets no toolbar. */
     @Test
     void htmlBodyBeyondTheCapSwitchesToPassthrough() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
         wrapper.setContentType("text/html");
         byte[] chunk = new byte[64 * 1024];
-        java.util.Arrays.fill(chunk, (byte) 'x');
+        Arrays.fill(chunk, (byte) 'x');
         int chunks = ContentBufferingResponseWrapper.MAX_BUFFERED_BYTES / chunk.length + 1;
 
         ServletOutputStream out = wrapper.getOutputStream();
@@ -260,28 +268,7 @@ class ContentBufferingResponseWrapperTest {
         out.write('!');
 
         assertThat(wrapper.isPassthrough()).isTrue();
-        assertThat(originalOutput.size()).isEqualTo(chunks * chunk.length + 1);
+        assertThat(originalResponse.getContentAsByteArray()).hasSize(chunks * chunk.length + 1);
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
-    }
-
-    private static class TestServletOutputStream extends ServletOutputStream {
-        private final ByteArrayOutputStream output;
-
-        TestServletOutputStream(ByteArrayOutputStream output) {
-            this.output = output;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            output.write(b);
-        }
-
-        @Override
-        public boolean isReady() {
-            return true;
-        }
-
-        @Override
-        public void setWriteListener(jakarta.servlet.WriteListener listener) {}
     }
 }

@@ -14,8 +14,9 @@ import java.nio.charset.StandardCharsets;
 /**
  * Buffers the response body so the dev toolbar can be injected into HTML
  * pages. Only text/html responses stay buffered, and only up to
- * {@link #MAX_BUFFERED_BYTES}: as soon as a non-HTML content type is set (JSON
- * APIs, downloads, text/event-stream), the buffer outgrows the cap, or
+ * {@link #MAX_BUFFERED_BYTES}: as soon as a non-HTML content type is declared (JSON
+ * APIs, downloads, text/event-stream - via {@code setContentType} or, as Spring's
+ * message converters do it, the {@code Content-Type} header), the buffer outgrows the cap, or
  * {@link #enablePassthrough()} is called explicitly (async requests), the
  * wrapper hands the buffered bytes to the real response and delegates all
  * further writes directly, so streaming and async responses work and no large
@@ -29,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
+    private static final String CONTENT_TYPE_HEADER = "Content-Type";
 
     /** Past this an HTML body streams through uninjected rather than being held in heap. */
     static final int MAX_BUFFERED_BYTES = 2 * 1024 * 1024;
@@ -46,7 +48,27 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     @Override
     public void setContentType(String type) {
         super.setContentType(type);
-        if (type != null && !type.contains(CONTENT_TYPE_HTML)) {
+        passThroughUnlessHtml(type);
+    }
+
+    @Override
+    public void setHeader(String name, String value) {
+        super.setHeader(name, value);
+        if (CONTENT_TYPE_HEADER.equalsIgnoreCase(name)) {
+            passThroughUnlessHtml(value);
+        }
+    }
+
+    @Override
+    public void addHeader(String name, String value) {
+        super.addHeader(name, value);
+        if (CONTENT_TYPE_HEADER.equalsIgnoreCase(name)) {
+            passThroughUnlessHtml(value);
+        }
+    }
+
+    private void passThroughUnlessHtml(String contentType) {
+        if (contentType != null && !contentType.contains(CONTENT_TYPE_HTML)) {
             try {
                 enablePassthrough();
             } catch (IOException e) {

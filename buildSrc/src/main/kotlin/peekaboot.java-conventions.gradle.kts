@@ -76,6 +76,12 @@ tasks.withType<Test>().configureEach {
     jvmArgumentProviders.add(CommandLineArgumentProvider {
         listOf("-javaagent:${mockitoAgentJar.singleFile}")
     })
+    // jsqlparser's generated token manager has a method too large to instrument
+    // (MethodTooLargeException at every testing-app JVM start); third-party, not measured.
+    // Same exclusion as the Maven agents' prepare-agent configuration.
+    extensions.configure(JacocoTaskExtension::class) {
+        excludes = listOf("net.sf.jsqlparser.*")
+    }
 }
 
 // Lifecycle split, same naming convention as surefire/failsafe: *Test at `test`,
@@ -121,8 +127,9 @@ spotbugs {
 }
 
 // Main sources only, like the Maven gates: test data builders legitimately mirror the
-// wide domain records they construct (checkstyle), and PMD/SpotBugs gate main too.
-tasks.matching { it.name == "checkstyleTest" || it.name == "pmdTest" || it.name == "spotbugsTest" }
+// wide domain records they construct (checkstyle), and PMD/SpotBugs gate main too. The
+// test fixtures source set (java-test-fixtures) is test code as well.
+tasks.matching { it.name.matches(Regex("(checkstyle|pmd|spotbugs)Test(Fixtures)?")) }
     .configureEach { enabled = false }
 
 spotless {
