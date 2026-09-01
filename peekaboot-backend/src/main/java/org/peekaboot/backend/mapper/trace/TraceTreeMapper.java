@@ -22,8 +22,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class TraceTreeMapper {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
-    private final TagMasker tagMasker = new TagMasker(maskingEngine);
+    private final MaskingEngine maskingEngine;
+    private final TagMasker tagMasker;
+
+    public TraceTreeMapper(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+        this.tagMasker = new TagMasker(maskingEngine);
+    }
 
     /**
      * Builds the {@link TraceTree} for a captured trace.

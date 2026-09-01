@@ -8,12 +8,13 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.QueryInfo;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
 class QueryExtractorTest {
 
-    private final QueryExtractor extractor = new QueryExtractor();
+    private final QueryExtractor extractor = new QueryExtractor(new MaskingEngine());
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {

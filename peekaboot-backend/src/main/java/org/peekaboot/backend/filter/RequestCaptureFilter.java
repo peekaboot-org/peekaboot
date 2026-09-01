@@ -40,20 +40,22 @@ public class RequestCaptureFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final MaskingEngine maskingEngine;
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
     /** Epoch millis; the duration is the difference between two reads around the chain. */
     private final LongSupplier clock;
 
-    public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher) {
-        this(tracer, eventPublisher, System::currentTimeMillis);
+    public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine) {
+        this(tracer, eventPublisher, maskingEngine, System::currentTimeMillis);
     }
 
-    RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, LongSupplier clock) {
+    RequestCaptureFilter(
+            Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine, LongSupplier clock) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
+        this.maskingEngine = maskingEngine;
         this.clock = clock;
     }
 

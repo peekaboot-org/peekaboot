@@ -27,6 +27,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.LogCapture;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -54,7 +55,7 @@ class RequestCaptureFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RequestCaptureFilter(tracer, eventPublisher);
+        filter = new RequestCaptureFilter(tracer, eventPublisher, new MaskingEngine());
         request = get("/api/users");
         response = new MockHttpServletResponse();
     }
@@ -308,7 +309,7 @@ class RequestCaptureFilterTest {
     void shouldCalculateDuration() throws Exception {
         setupTraceContext("trace1");
         PrimitiveIterator.OfLong clock = LongStream.of(1_000, 1_250).iterator();
-        filter = new RequestCaptureFilter(tracer, eventPublisher, clock::nextLong);
+        filter = new RequestCaptureFilter(tracer, eventPublisher, new MaskingEngine(), clock::nextLong);
 
         filter.doFilter(request, response, chain);
 
