@@ -3,6 +3,13 @@ package org.peekaboot.backend.service;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
 import org.peekaboot.backend.domain.metrics.MetricStatistic;
@@ -12,19 +19,12 @@ import org.peekaboot.backend.masking.TagMasker;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-
 @Service
 public class MetricsService {
 
     @Nullable
     private final MeterRegistry meterRegistry;
+
     private final TagMasker tagMasker = new TagMasker(new MaskingEngine());
 
     public MetricsService(@Nullable MeterRegistry meterRegistry) {
@@ -42,10 +42,7 @@ public class MetricsService {
 
         Map<String, List<Meter>> metersByName = meterRegistry.getMeters().stream()
                 .collect(Collectors.groupingBy(
-                        meter -> meter.getId().getName(),
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
+                        meter -> meter.getId().getName(), LinkedHashMap::new, Collectors.toList()));
 
         List<MetricGroup> groups = new ArrayList<>();
         int totalMeasurements = 0;
@@ -66,18 +63,12 @@ public class MetricsService {
             List<MetricMeasurement> measurements = new ArrayList<>();
             for (Meter meter : meters) {
                 Map<String, String> tags = tagMasker.mask(meter.getId().getTags().stream()
-                        .collect(Collectors.toMap(
-                                Tag::getKey,
-                                Tag::getValue,
-                                (v1, v2) -> v1,
-                                LinkedHashMap::new
-                        )));
+                        .collect(Collectors.toMap(Tag::getKey, Tag::getValue, (v1, v2) -> v1, LinkedHashMap::new)));
 
-                List<MetricStatistic> statistics = StreamSupport.stream(meter.measure().spliterator(), false)
-                        .map(measurement -> new MetricStatistic(
-                                measurement.getStatistic().name(),
-                                measurement.getValue()
-                        ))
+                List<MetricStatistic> statistics = StreamSupport.stream(
+                                meter.measure().spliterator(), false)
+                        .map(measurement ->
+                                new MetricStatistic(measurement.getStatistic().name(), measurement.getValue()))
                         .toList();
 
                 measurements.add(new MetricMeasurement(tags, statistics));
