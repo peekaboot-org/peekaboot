@@ -146,11 +146,11 @@ and CI wiring - CI still runs Maven only.
 
 | Gate | Plugin (tool version) | Config | Scope |
 | --- | --- | --- | --- |
-| Formatting | `spotless-maven-plugin` 3.10.0 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
+| Formatting | `spotless-maven-plugin` 3.10.1 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
 | Bug patterns, compile-time | `error_prone_core` 2.50.0 via the compiler plugin | defaults | main + test |
 | Bug patterns, bytecode | `spotbugs-maven-plugin` 4.10.4.0 | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.0.0) | `config/checkstyle.xml` | main only |
-| Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.26.0) | `config/pmd-ruleset.xml` | main Java |
+| Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.27.0) | `config/pmd-ruleset.xml` | main Java |
 | Coverage floor | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all published classes, reactor-wide |
 
 Each config file explains its own exclusions; the short version:
