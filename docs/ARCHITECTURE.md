@@ -35,6 +35,13 @@ belong to the stores themselves: each creates its parent directory on first writ
 on `IOException`, logs once and continues in memory rather than taking the host
 application down over an unwritable `$HOME`.
 
+Both stores assume one application instance per directory. Two instances pointed at the
+same `peekaboot.storage.dir` overwrite each other's files: the loser's history is lost,
+and a half-written file is discarded on the next read like any other unusable one, so the
+cost is lost history rather than corruption. Peekaboot is a development tool, and
+coordinating instances is out of its scope — give each instance its own
+`peekaboot.storage.dir` if you run several against one home directory.
+
 ### `insights.snapshot`
 
 The insights ring buffers' contents: every level's geometry (`intervalMs`, `size`,
