@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
@@ -241,20 +240,14 @@ class OrderTraceCaptureIT {
     }
 
     /**
-     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes every
-     * {@code fixedDelay}, instead of waiting on the timer: {@code reconcileOrders()} is
-     * scheduled every 2 minutes, far past what an integration test should block on. The
-     * {@link ScheduledTaskHolder} bean (Spring's {@code ScheduledAnnotationBeanPostProcessor})
-     * exposes the {@link ScheduledTask} registered for every {@code @Scheduled} method;
-     * running its {@code Runnable} here is the real production code path, not a stand-in
-     * for it - it builds the same {@code ScheduledTaskObservationContext}, sets the same
-     * {@code code.function}/{@code code.namespace} tags, and names the root span
-     * {@code task orderReconciler.reconcileOrders}, exactly as a live scheduler firing it
-     * would.
+     * Fires {@code reconcileOrders()} through the scheduler's own {@link Runnable} (see
+     * {@link ScheduledJobs}), so the trace root is Spring's scheduled-task observation
+     * with its {@code code.function}/{@code code.namespace} tags - the same tree a live
+     * timer produces.
      */
     @Test
     void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
-        runScheduledReconciliation();
+        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
 
         JsonNode trace = traces.awaitTraceInBucket("all", "task orderReconciler.reconcileOrders");
 
@@ -263,22 +256,6 @@ class OrderTraceCaptureIT {
                         + "trace root when the scheduler fires it; that root span's "
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
-    }
-
-    private void runScheduledReconciliation() {
-        // Task#toString() delegates down to the underlying ScheduledMethodRunnable's
-        // toString() ("<declaringClass>.<method>"); getTask() itself wraps the runnable
-        // in an outcome-tracking decorator, so matching on the runnable's type directly
-        // isn't an option.
-        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
-        scheduledTaskHolder.getScheduledTasks().stream()
-                .map(ScheduledTask::getTask)
-                .filter(task -> taskDescription.equals(task.toString()))
-                .findFirst()
-                .orElseThrow(() ->
-                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
-                .getRunnable()
-                .run();
     }
 
     private static List<String> spanNames(JsonNode trace) {

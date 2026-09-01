@@ -11,9 +11,9 @@ import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
@@ -763,35 +763,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Runs the exact {@link Runnable} Spring's {@code TaskScheduler} invokes for
-     * {@link OrderReconciler#reconcileOrders()}, rather than waiting on its own
-     * {@code fixedDelay} (2 minutes - far past what this test should block on, and
-     * Scheduler's own jobs are hourly/multi-minute on top of that). Same technique, same
-     * reasoning as OrderTraceCaptureIT's runScheduledReconciliation(): the
-     * {@link ScheduledTaskHolder} bean exposes the {@link ScheduledTask} Spring registered
-     * for the method, and running its {@code Runnable} here is the real production code
-     * path - it builds the same {@code ScheduledTaskObservationContext} and sets the same
-     * {@code code.function}/{@code code.namespace} tags that classify the trace root
-     * SCHEDULED_JOB, not a hand-built stand-in for that classification.
-     */
-    private void runScheduledReconciliation() {
-        String taskDescription = OrderReconciler.class.getName() + ".reconcileOrders";
-        scheduledTaskHolder.getScheduledTasks().stream()
-                .map(ScheduledTask::getTask)
-                .filter(task -> taskDescription.equals(task.toString()))
-                .findFirst()
-                .orElseThrow(() ->
-                        new AssertionError("OrderReconciler#reconcileOrders is not registered as a scheduled task"))
-                .getRunnable()
-                .run();
-    }
-
-    /**
      * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
      * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
      * anything this test constructed. Whichever trace turns up first is fair game: the
      * assertions below hold for any correctly-captured scheduled-job trace, not
-     * specifically the one runScheduledReconciliation() just fired, so a trace left behind
+     * specifically the one the test just fired, so a trace left behind
      * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
      */
     private String waitForScheduledJobTraceId() {
@@ -821,7 +797,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * label instead (root-actions.js).
      *
      * <p>Drives a real {@link OrderReconciler#reconcileOrders()} run through Spring's own
-     * scheduled-task observation (see runScheduledReconciliation()) rather than stubbing
+     * scheduled-task observation (see {@link ScheduledJobs}) rather than stubbing
      * the insights endpoint with a canned response - the fix is about what real
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
@@ -833,7 +809,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        runScheduledReconciliation();
+        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
         String traceId = waitForScheduledJobTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);

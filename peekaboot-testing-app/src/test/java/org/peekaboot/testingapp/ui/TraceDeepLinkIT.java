@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.Scheduler;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 
 /**
  * Exercises the trace-detail overlay's URL-driven tab + filter state: deep-linking straight
@@ -15,40 +19,45 @@ import org.junit.jupiter.api.Test;
  */
 class TraceDeepLinkIT extends PlaywrightTestBase {
 
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
+
     /**
-     * Scheduler#fixedRate (peekaboot-testing-app) is a purpose-built fixture already relied
-     * on elsewhere (see DashboardTabsIT.tracesTabListsTracesAndBucketsThem's javadoc): a
-     * {@code fixedRate} job with no initial delay, so it runs once right at app boot, and
-     * logs an INFO ("fixedRate start") followed by an ERROR ("fixedRate failed") in the same
-     * trace - real data with both a row that matches a level=ERROR&q=failed filter and one
-     * that doesn't, so this proves both the restore AND the actual hide/show, not just one
-     * of the two. (OrderReconciler's WARN-per-stale-order logs would have made a more
-     * on-the-nose fixture for this test, but the test profile runs with flyway.enabled=false
-     * - see application-test.yml - so V4__order-data.sql never seeds the orders it needs and
-     * it logs "reconciling 0 orders"; confirmed empirically before choosing this fixture
-     * instead.) Searching the real traces-list API for it (rather than depending on test
-     * execution order) is what makes this robust regardless of which test class runs first.
+     * Scheduler#fixedRate (peekaboot-testing-app) is a purpose-built fixture: it logs an
+     * INFO ("fixedRate start") followed by an ERROR ("fixedRate failed") in the same trace -
+     * real data with both a row that matches a level=ERROR&q=failed filter and one that
+     * doesn't, so this proves both the restore AND the actual hide/show, not just one of
+     * the two. (OrderReconciler's WARN-per-stale-order logs would be a more on-the-nose
+     * fixture, but the test profile runs with flyway.enabled=false - see
+     * application-test.yml - so V4__order-data.sql never seeds the orders it needs and it
+     * logs "reconciling 0 orders".)
+     *
+     * <p>Fired per test through the scheduler's own runnable rather than relying on the
+     * boot-time run: every /?error=true and /boom the concurrent classes issue pushes an
+     * older error trace further down the list, so only a freshly minted one is guaranteed
+     * to be found. The poll matches on the root span's name, which is what proves the
+     * trace's spans - exported asynchronously, unlike its logs - have landed.
      */
-    private String findFixedRateSchedulerTraceId() {
+    private String freshFixedRateSchedulerTraceId() {
+        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
         openDashboard();
-        String traceId = (String) page.evaluate("""
+        return (String) page.evaluate("""
                 async () => {
-                    const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
-                    const result = await response.json();
-                    const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
-                    return match ? match.traceId : null;
+                    for (let attempt = 0; attempt < 150; attempt++) {
+                        const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
+                        const result = await response.json();
+                        const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
+                        if (match) return match.traceId;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    throw new Error('no scheduler.fixedRate trace reached the errors bucket within 15s');
                 }
                 """);
-        assertThat(traceId)
-                .as("expected a real scheduler.fixedRate trace (INFO 'fixedRate start' + ERROR 'fixedRate "
-                        + "failed') - Scheduler#fixedRate runs once at boot with no initial delay")
-                .isNotNull();
-        return traceId;
     }
 
     @Test
     void deepLinkToATraceLogsTabRestoresTabAndFilters() {
-        String traceId = findFixedRateSchedulerTraceId();
+        String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=ERROR&q=failed");
         page.waitForFunction(
@@ -170,7 +179,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void deepLinkWithAnUnrecognizedLevelFallsBackToAllLevelsAndShowsEveryRow() {
-        String traceId = findFixedRateSchedulerTraceId();
+        String traceId = freshFixedRateSchedulerTraceId();
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId + "/logs?level=BOGUS");
         page.waitForFunction(
