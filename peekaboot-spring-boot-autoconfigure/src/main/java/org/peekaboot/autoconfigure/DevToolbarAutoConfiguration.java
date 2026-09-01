@@ -36,7 +36,7 @@ import org.springframework.core.Ordered;
                 "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
+@ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
 @ConditionalOnClass(TraceStore.class)
 public class DevToolbarAutoConfiguration {
 
