@@ -2,6 +2,7 @@ package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import jakarta.servlet.ServletOutputStream;
@@ -192,6 +193,75 @@ class ContentBufferingResponseWrapperTest {
         writer.flush();
 
         assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("early-late");
+    }
+
+    @Test
+    void resetBufferDelegatesOnceInPassthrough() throws IOException {
+        wrapper.enablePassthrough();
+
+        wrapper.resetBuffer();
+
+        verify(originalResponse).resetBuffer();
+    }
+
+    /** reset() clears status and headers on the real response; the buffered body has to go with them. */
+    @Test
+    void resetClearsTheBufferAlongWithTheRealResponse() throws IOException {
+        wrapper.getOutputStream().write("stale".getBytes(StandardCharsets.UTF_8));
+
+        wrapper.reset();
+
+        verify(originalResponse).reset();
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    @Test
+    void isCommittedFollowsTheRealResponse() {
+        when(originalResponse.isCommitted()).thenReturn(true);
+
+        assertThat(wrapper.isCommitted()).isTrue();
+    }
+
+    /** After sendError the container renders its error page; a body buffered before it must not be written over it. */
+    @Test
+    void sendErrorDropsTheBufferedBody() throws IOException {
+        wrapper.getOutputStream().write("<html><body>half".getBytes(StandardCharsets.UTF_8));
+
+        wrapper.sendError(500, "boom");
+
+        verify(originalResponse).sendError(500, "boom");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    @Test
+    void sendRedirectDropsTheBufferedBody() throws IOException {
+        wrapper.getOutputStream().write("<html><body>half".getBytes(StandardCharsets.UTF_8));
+
+        wrapper.sendRedirect("/elsewhere");
+
+        verify(originalResponse).sendRedirect("/elsewhere");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /** An HTML body past the cap streams through rather than being held in heap; it gets no toolbar. */
+    @Test
+    void htmlBodyBeyondTheCapSwitchesToPassthrough() throws IOException {
+        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
+        when(originalResponse.getOutputStream()).thenReturn(new TestServletOutputStream(originalOutput));
+        wrapper.setContentType("text/html");
+        byte[] chunk = new byte[64 * 1024];
+        java.util.Arrays.fill(chunk, (byte) 'x');
+        int chunks = ContentBufferingResponseWrapper.MAX_BUFFERED_BYTES / chunk.length + 1;
+
+        ServletOutputStream out = wrapper.getOutputStream();
+        for (int i = 0; i < chunks; i++) {
+            out.write(chunk);
+        }
+        out.write('!');
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalOutput.size()).isEqualTo(chunks * chunk.length + 1);
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
     private static class TestServletOutputStream extends ServletOutputStream {
