@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 
 class LifecycleEventRecorderTest {
@@ -39,8 +40,8 @@ class LifecycleEventRecorderTest {
     @Test
     void aReadyApplicationIsRecordedWithEveryBuildAndGitProperty() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder =
-                new LifecycleEventRecorder(log, new BuildInfoProvider(buildProperties()), gitProperties());
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
+                log, new BuildInfoProvider(buildProperties()), gitProperties(), mock(ApplicationContext.class));
         ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
         when(event.getTimestamp()).thenReturn(1_756_000_000_000L);
 
@@ -59,7 +60,8 @@ class LifecycleEventRecorderTest {
     @Test
     void anApplicationWithoutBuildOrGitInfoStillRecordsItsStart() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null);
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, mock(ApplicationContext.class));
         ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
         when(event.getTimestamp()).thenReturn(1L);
 
@@ -73,10 +75,33 @@ class LifecycleEventRecorderTest {
     @Test
     void aClosingContextIsRecordedAsAStop() {
         LifecycleEventLog log = log();
-        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null);
+        ApplicationContext context = mock(ApplicationContext.class);
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, context);
 
-        recorder.onClosed(mock(ContextClosedEvent.class));
+        recorder.onClosed(closing(context));
 
         assertThat(log.events()).extracting(LifecycleEvent::type).containsExactly(LifecycleEvent.Type.STOP);
+    }
+
+    /**
+     * With a separate management port, Boot closes the child management context as the
+     * parent closes and forwards its ContextClosedEvent to the parent; recording that too
+     * would put two stops in the log for one shutdown.
+     */
+    @Test
+    void anotherContextsCloseIsNotRecorded() {
+        LifecycleEventLog log = log();
+        LifecycleEventRecorder recorder =
+                new LifecycleEventRecorder(log, new BuildInfoProvider(null), null, mock(ApplicationContext.class));
+
+        recorder.onClosed(closing(mock(ApplicationContext.class)));
+
+        assertThat(log.events()).isEmpty();
+    }
+
+    private static ContextClosedEvent closing(ApplicationContext context) {
+        ContextClosedEvent event = mock(ContextClosedEvent.class);
+        when(event.getApplicationContext()).thenReturn(context);
+        return event;
     }
 }

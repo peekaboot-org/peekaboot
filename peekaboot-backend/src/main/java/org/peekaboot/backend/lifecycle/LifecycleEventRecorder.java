@@ -2,6 +2,7 @@ package org.peekaboot.backend.lifecycle;
 
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.GitProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 
@@ -16,12 +17,17 @@ public class LifecycleEventRecorder {
     private final LifecycleEventLog log;
     private final BuildInfoProvider buildInfoProvider;
     private final GitProperties gitProperties;
+    private final ApplicationContext ownContext;
 
     public LifecycleEventRecorder(
-            LifecycleEventLog log, BuildInfoProvider buildInfoProvider, GitProperties gitProperties) {
+            LifecycleEventLog log,
+            BuildInfoProvider buildInfoProvider,
+            GitProperties gitProperties,
+            ApplicationContext ownContext) {
         this.log = log;
         this.buildInfoProvider = buildInfoProvider;
         this.gitProperties = gitProperties;
+        this.ownContext = ownContext;
     }
 
     @EventListener
@@ -35,6 +41,11 @@ public class LifecycleEventRecorder {
 
     @EventListener
     public void onClosed(ContextClosedEvent event) {
+        // A child context's close (Boot's management context on a separate port) is
+        // forwarded to the parent too; only this recorder's own context is the application.
+        if (event.getApplicationContext() != ownContext) {
+            return;
+        }
         log.recordAndPersist(LifecycleEvent.stop(
                 System.currentTimeMillis(), ProcessHandle.current().pid()));
     }

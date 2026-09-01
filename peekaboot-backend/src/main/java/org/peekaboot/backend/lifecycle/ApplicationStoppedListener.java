@@ -6,6 +6,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.event.ContextClosedEvent;
 
@@ -26,13 +27,20 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
     private final BuildInfoProvider buildInfoProvider;
+    private final ApplicationContext ownContext;
 
-    public ApplicationStoppedListener(BuildInfoProvider buildInfoProvider) {
+    public ApplicationStoppedListener(BuildInfoProvider buildInfoProvider, ApplicationContext ownContext) {
         this.buildInfoProvider = buildInfoProvider;
+        this.ownContext = ownContext;
     }
 
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {
+        // A child context's close (Boot's management context on a separate port) is
+        // forwarded to the parent too; only this listener's own context is the application.
+        if (event.getApplicationContext() != ownContext) {
+            return;
+        }
 
         Instant started = Instant.ofEpochMilli(event.getApplicationContext().getStartupDate());
         Instant stopped = Instant.now();
