@@ -1,16 +1,25 @@
 # Building Peekaboot
 
-Plain Maven, one reactor, six gates at `verify` - five static-analysis and one coverage
-floor. No wrapper, no Node toolchain, no codegen beyond annotation processing.
+Maven is the system of record: one reactor, six gates at `verify` - five static-analysis
+and one coverage floor. No Node toolchain, no codegen beyond annotation processing.
+A parallel **Gradle build** covers the same modules, tests and gates (see
+[the Gradle build](#the-parallel-gradle-build) below); until it is proven equivalent in
+CI, every Maven statement in this document is authoritative and the Gradle build must be
+kept in lockstep.
+
+Both builds ship wrapper scripts, each pinned by SHA-256 checksum: `./mvnw` (downloads
+Maven 3.9.9, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
+9.7.0, `gradle/wrapper/gradle-wrapper.properties`). A locally installed Maven 3.9+ works
+exactly the same.
 
 ## Prerequisites
 
 | | |
 | --- | --- |
-| JDK | **25** — `maven.compiler.release=25`, no toolchains, no fallback |
-| Maven | 3.9+ (verified on 3.9.9). No `mvnw` is checked in |
+| JDK | **25** — `maven.compiler.release=25` / Gradle `options.release = 25`, no toolchains, no fallback |
+| Maven / Gradle | via the checked-in wrappers (`./mvnw`, `./gradlew`); a local Maven 3.9+ (verified on 3.9.9) also works |
 | Docker | Only for running the sample app and for `ScreenshotCapture`. **Not** needed by `mvn verify` |
-| Network | First run only, to let Playwright download Chromium into `~/.cache/ms-playwright` |
+| Network | First run only: the wrappers download their build tool, and Playwright downloads Chromium into `~/.cache/ms-playwright` |
 
 ## Commands
 
@@ -87,6 +96,40 @@ duplication: its POM re-declares the four verify-bound static-analysis gates, th
 agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks up Spring Boot's plugin versions for
 everything else (`clean:3.5.0`, `resources:3.5.0`, `dependency:3.10.0` versus the parent's
 pins). **Any change to the parent's build config has to be mirrored there.**
+
+## The parallel Gradle build
+
+`settings.gradle.kts` mirrors the reactor module for module. `./gradlew build` is the
+`mvn clean verify` equivalent: unit tests (`test`, `*Test` only), integration tests
+(`integrationTest`, `*IT`, concurrent classes exactly like failsafe —
+`peekaboot.it.threads` in `gradle.properties`), all five static-analysis gates at the
+same tool versions reading the same `config/` files, and the reactor-wide coverage gate
+(`:peekaboot-coverage:coverageGate`, same 90%/75% floors on merged execution data).
+`./gradlew test` is the fast gate, `./gradlew assemble` just builds the jars.
+
+Structure: `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the
+role of `peekaboot-parent` (shared compiler, gate, JaCoCo, and test-split config); each
+module's `build.gradle.kts` declares only its dependencies. `peekaboot-testing-app`
+applies the same convention plus the Spring Boot and git-properties plugins — the
+consume-the-starter-as-a-published-artifact proof stays with Maven, which is why the
+Maven module keeps its `spring-boot-starter-parent` parent.
+
+**Reproducibility and artifact parity** (verified by building each system twice and
+cross-diffing): both builds are self-reproducible - byte-identical jars across
+rebuilds - via `project.build.outputTimestamp` (Maven) and
+`preserveFileTimestamps=false` + `reproducibleFileOrder=true` (Gradle), with the
+testing-app's `build-info.properties`/`git.properties` build times pinned to the same
+instant on both sides. Across systems, every class file and resource in the published
+jars is byte-identical; the remaining, expected differences are `META-INF/MANIFEST.MF`
+(Maven adds `Created-By`/`Build-Jdk-Spec` lines) and Maven's `META-INF/maven/**`
+metadata. The testing-app boot jar additionally differs in dependency resolution:
+Maven's nearest-wins picks Jackson 2.21.x for springdoc's transitives where Gradle's
+highest-wins picks 2.22.0 (and includes `aopalliance-1.0`); acceptable for the
+unpublished sample app, but it is the first thing to reconcile if the Gradle build is
+ever promoted.
+
+Not ported (deliberately, local-first): the `peekaboot-release` profile, publishing,
+and CI wiring - CI still runs Maven only.
 
 ## Compilation
 

@@ -21,6 +21,9 @@
 
     <properties>
         <java.version>25</java.version>
+        <!-- duplicated from peekaboot-parent (different parent pom): reproducible
+             archives - spring-boot-starter-parent does not set this -->
+        <project.build.outputTimestamp>2025-04-23T12:21:37Z</project.build.outputTimestamp>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.15</jacoco.version>
         <jacocoArgLine></jacocoArgLine>
