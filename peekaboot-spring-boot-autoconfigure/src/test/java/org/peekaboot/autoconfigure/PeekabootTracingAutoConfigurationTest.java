@@ -26,7 +26,7 @@ import org.springframework.web.servlet.handler.MappedInterceptor;
 
 class PeekabootTracingAutoConfigurationTest {
 
-    private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+    private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(
                     AutoConfigurations.of(PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
@@ -62,11 +62,25 @@ class PeekabootTracingAutoConfigurationTest {
         });
     }
 
+    /** Everything that reads the store is servlet-only; a WebFlux or non-web app would fill it for nobody. */
+    @Test
+    void shouldNotCreateBeansWhenNotAServletApplication() {
+        new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TraceStore.class);
+                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
+                });
+    }
+
     @Test
     void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
         // matchIfMissing = false: without the environment post-processor's detected
         // default the safe fallback is off
-        new ApplicationContextRunner()
+        new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
                 .run(context -> {

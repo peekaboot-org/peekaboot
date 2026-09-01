@@ -431,8 +431,9 @@ the three hooks that run before or outside the application context are registere
 ### Conditional Loading
 
 Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
-`DevToolbarAutoConfiguration` and `TracingInterceptorAutoConfiguration` all carry the
-servlet guard:
+`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
+`InsightsAutoConfiguration` all carry the servlet guard:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -450,9 +451,11 @@ mappers, just with nothing servlet-specific ever invoking them &mdash; dead bean
 wasted component-scan work, not a startup crash (`ApplicationContextRunner` confirms the
 context starts cleanly either way; only `WebMvcConfigurationSupport`, itself only wired up
 in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard prevents
-even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootStorageAutoConfiguration`,
-`PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry no such guard,
-since none of them touch anything servlet-specific.
+even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry it
+for the same reason: everything that reads the trace store is servlet-only, so a WebFlux or
+non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
+`PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no such
+guard, since neither touches anything servlet-specific.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
