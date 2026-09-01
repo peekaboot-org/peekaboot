@@ -124,7 +124,8 @@ class SharedModuleIT extends PlaywrightTestBase {
     void healthSeverityMapsActuatorStatuses() {
         assertThat(evalModule("severity.js", "m.healthSeverity('UP')")).isEqualTo("ok");
         assertThat(evalModule("severity.js", "m.healthSeverity('DOWN')")).isEqualTo("error");
-        assertThat(evalModule("severity.js", "m.healthSeverity('OUT_OF_SERVICE')")).isEqualTo("error");
+        assertThat(evalModule("severity.js", "m.healthSeverity('OUT_OF_SERVICE')"))
+                .isEqualTo("error");
         assertThat(evalModule("severity.js", "m.healthSeverity('WHATEVER')")).isEqualTo("muted");
     }
 
