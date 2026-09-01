@@ -74,6 +74,21 @@ class LifecycleRunsTest {
         assertThat(second.downForMs()).isEqualTo(5_000);
     }
 
+    /**
+     * The cap trims oldest-first, so a long-lived application eventually has a log whose
+     * first retained event is a stop whose own start fell off the front - not a bug. That
+     * stop's timestamp is still real, so the gap to the next start is still knowable.
+     */
+    @Test
+    void aLeadingStopOrphanedByCapTrimmingStillMeasuresTheGapToTheNextStart() {
+        LifecycleRunsResponse response =
+                runsFor(List.of(LifecycleEvent.stop(500, 1), start(9_000, "1.0.0", "dev", "abc1234")));
+
+        Run run = response.runs().get(0);
+
+        assertThat(run.downForMs()).isEqualTo(8_500);
+    }
+
     @Test
     void backToBackStartsMeanTheFirstRunDiedWithoutRecordingAStop() {
         LifecycleRunsResponse response =

@@ -21,9 +21,10 @@ public record LifecycleRunsResponse(List<Run> runs) {
      *
      * <p>{@code stoppedAtEpochMs} and {@code ranForMs} are both null when the run ended
      * without a matching stop - a crash or a kill - because {@code uncleanExit} is true and
-     * we genuinely do not know when it died. {@code downForMs} is null whenever the gap
-     * before this run is unknowable: the oldest run in the log, or a run that follows an
-     * unclean exit.
+     * we genuinely do not know when it died. {@code downForMs} is the gap to the event
+     * immediately before this run's start, but only when that event is a stop - it is null
+     * when there is no preceding event at all, or when the preceding event is itself a
+     * start, meaning the previous run ended uncleanly and the downtime is unknowable.
      */
     public record Run(
             long startedAtEpochMs,

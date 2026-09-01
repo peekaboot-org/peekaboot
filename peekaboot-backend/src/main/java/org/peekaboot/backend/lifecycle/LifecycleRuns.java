@@ -34,11 +34,10 @@ public class LifecycleRuns {
             if (event.type() != LifecycleEvent.Type.START) {
                 continue;
             }
-            boolean isOldest = carried == null;
             LifecycleEvents.Build effective = carryForward(LifecycleEvents.Build.of(event), carried);
             LifecycleEvent previous = i == 0 ? null : events.get(i - 1);
             LifecycleEvent next = i + 1 < events.size() ? events.get(i + 1) : null;
-            runs.add(toRun(event, previous, next, effective, changed(effective, carried), isOldest));
+            runs.add(toRun(event, previous, next, effective, changed(effective, carried)));
             carried = effective;
         }
         Collections.reverse(runs);
@@ -92,10 +91,9 @@ public class LifecycleRuns {
             LifecycleEvent previous,
             LifecycleEvent next,
             LifecycleEvents.Build effective,
-            List<String> changed,
-            boolean isOldest) {
+            List<String> changed) {
         Timing timing = Timing.of(start, next);
-        Long downForMs = downForMs(start, previous, isOldest);
+        Long downForMs = downForMs(start, previous);
         return new LifecycleRunsResponse.Run(
                 start.epochMs(),
                 timing.stoppedAtEpochMs,
@@ -112,12 +110,13 @@ public class LifecycleRuns {
 
     /**
      * The gap before a run is only knowable when the preceding event is a stop the log
-     * actually recorded: an unclean exit leaves no stop to measure from, and the oldest
-     * run's predecessor - if the log even retains one - was itself never seen ending, so
-     * the moment recorded before it, if any, is not necessarily a gap this application caused.
+     * actually recorded: no preceding event at all, or one that is itself a start - the
+     * previous run ended uncleanly - leaves no stop to measure from. A stop that opens the
+     * retained log because the cap trimmed its own start still carries a real timestamp,
+     * so the gap to the next start is still genuinely knowable and reported, not null.
      */
-    private static Long downForMs(LifecycleEvent start, LifecycleEvent previous, boolean isOldest) {
-        if (isOldest || previous == null || previous.type() != LifecycleEvent.Type.STOP) {
+    private static Long downForMs(LifecycleEvent start, LifecycleEvent previous) {
+        if (previous == null || previous.type() != LifecycleEvent.Type.STOP) {
             return null;
         }
         return start.epochMs() - previous.epochMs();
