@@ -149,12 +149,14 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
         report.append(String.format(
-                " Heap Memory: used=%s, max=%s\n",
-                formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())));
+                        " Heap Memory: used=%s, max=%s",
+                        formatBytes(heapMemory.getUsed()), formatBytes(heapMemory.getMax())))
+                .append("\n");
         report.append(String.format(
-                " Non-Heap Memory: used=%s, max=%s\n",
-                formatBytes(nonHeapMemory.getUsed()),
-                formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)));
+                        " Non-Heap Memory: used=%s, max=%s",
+                        formatBytes(nonHeapMemory.getUsed()),
+                        formatBytes(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)))
+                .append("\n");
         report.append(LifecycleBanner.LINE).append("\n");
     }
 
@@ -168,11 +170,12 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
             report.append(String.format(
-                    " DB Connection [%s]: %s on %s (user: %s)\n\n",
-                    metadata.getDataSourceName(),
-                    metadata.getDatabaseName(),
-                    metadata.getHosts(),
-                    metadata.getUsername()));
+                            " DB Connection [%s]: %s on %s (user: %s)",
+                            metadata.getDataSourceName(),
+                            metadata.getDatabaseName(),
+                            metadata.getHosts(),
+                            metadata.getUsername()))
+                    .append("\n\n");
 
             if (!metadata.getConnectionParams().isEmpty()) {
                 String params = connectionParamsMasker.mask(metadata.getConnectionParams()).entrySet().stream()
@@ -184,7 +187,9 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             }
 
             report.append(String.format(
-                    " DB Version: %s %s\n", metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
+                            " DB Version: %s %s",
+                            metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()))
+                    .append("\n");
             report.append(LifecycleBanner.LINE).append("\n");
 
             appendPoolInfo(report, metadata.getDataSourceName());
@@ -204,8 +209,9 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         if (dataSource instanceof HikariDataSource hikariDataSource) {
             HikariConfigMXBean config = hikariDataSource.getHikariConfigMXBean();
             report.append(String.format(
-                    " DB Pool: minimumIdle=%d, maximumPoolSize=%d\n\n",
-                    config.getMinimumIdle(), config.getMaximumPoolSize()));
+                            " DB Pool: minimumIdle=%d, maximumPoolSize=%d",
+                            config.getMinimumIdle(), config.getMaximumPoolSize()))
+                    .append("\n\n");
 
             report.append(" Connection Timeout: ")
                     .append(config.getConnectionTimeout())
