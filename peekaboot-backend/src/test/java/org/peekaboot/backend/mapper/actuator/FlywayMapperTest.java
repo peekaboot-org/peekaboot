@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import ch.qos.logback.classic.Level;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -11,7 +10,6 @@ import org.peekaboot.backend.actuator.parsed.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
 import org.peekaboot.backend.domain.flyway.MigrationInfo;
 import org.peekaboot.backend.domain.flyway.MigrationState;
-import org.peekaboot.backend.testsupport.LogCapture;
 
 class FlywayMapperTest {
 
@@ -33,9 +31,21 @@ class FlywayMapperTest {
     void map_shouldExtractMigrations() {
         FlywayResponse flywayData = flyway(
                 new FlywayResponse.Migration(
-                        "Initial schema", 100, "2024-01-01T10:00:00Z", "V1__Initial_schema.sql", "SUCCESS", "SQL", "1"),
+                        "Initial schema",
+                        100,
+                        Instant.parse("2024-01-01T10:00:00Z"),
+                        "V1__Initial_schema.sql",
+                        "SUCCESS",
+                        "SQL",
+                        "1"),
                 new FlywayResponse.Migration(
-                        "Add users", 50, "2024-01-02T10:00:00Z", "V2__Add_users.sql", "SUCCESS", "SQL", "2"));
+                        "Add users",
+                        50,
+                        Instant.parse("2024-01-02T10:00:00Z"),
+                        "V2__Add_users.sql",
+                        "SUCCESS",
+                        "SQL",
+                        "2"));
 
         FlywayInfo result = mapper.map(flywayData);
 
@@ -94,27 +104,11 @@ class FlywayMapperTest {
 
     @Test
     void map_shouldParseInstalledOnDate() {
-        FlywayResponse flywayData =
-                flyway(new FlywayResponse.Migration(null, null, "2024-01-01T10:00:00Z", null, "SUCCESS", null, "1"));
+        FlywayResponse flywayData = flyway(new FlywayResponse.Migration(
+                null, null, Instant.parse("2024-01-01T10:00:00Z"), null, "SUCCESS", null, "1"));
 
         FlywayInfo result = mapper.map(flywayData);
 
         assertThat(result.migrations().get(0).installedOn()).isEqualTo(Instant.parse("2024-01-01T10:00:00Z"));
-    }
-
-    @Test
-    void map_shouldTolerateMalformedInstalledOnDate() {
-        FlywayResponse flywayData =
-                flyway(new FlywayResponse.Migration(null, null, "not-a-date", null, "SUCCESS", null, "1"));
-
-        try (LogCapture capture = LogCapture.attach(FlywayMapper.class, Level.DEBUG)) {
-            FlywayInfo result = mapper.map(flywayData);
-
-            assertThat(result.migrations().get(0).installedOn()).isNull();
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                assertThat(event.getFormattedMessage()).isEqualTo("Failed to parse installedOn date: not-a-date");
-            });
-        }
     }
 }

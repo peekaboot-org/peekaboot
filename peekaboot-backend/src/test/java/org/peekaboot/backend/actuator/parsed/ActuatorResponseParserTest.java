@@ -3,6 +3,7 @@ package org.peekaboot.backend.actuator.parsed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,6 +91,26 @@ class ActuatorResponseParserTest {
 
         assertThat(response.health()).isNotNull();
         assertThat(response.health().status()).isEqualTo("UP");
+    }
+
+    /**
+     * The endpoint descriptors carry {@link Instant}s (Flyway's {@code installedOn}, a
+     * scheduled task's execution {@code time}), and the records bind them as such - so the
+     * conversion has to round-trip an Instant, not a string somebody parsed by hand.
+     */
+    @Test
+    void bindsTheDescriptorsInstantsAsInstants() {
+        record ExecutionPojo(Instant time) {}
+        record FixedTaskPojo(long interval, ExecutionPojo lastExecution) {}
+        record TasksPojo(List<FixedTaskPojo> fixedRate) {}
+        Instant ranAt = Instant.parse("2026-01-11T06:49:20.123456Z");
+        Map<String, Object> data =
+                Map.of("scheduledtasks", new TasksPojo(List.of(new FixedTaskPojo(5000, new ExecutionPojo(ranAt)))));
+
+        ActuatorParsedData response = parser.parse(data);
+
+        assertThat(response.scheduledtasks().fixedRate().get(0).lastExecution().time())
+                .isEqualTo(ranAt);
     }
 
     /**

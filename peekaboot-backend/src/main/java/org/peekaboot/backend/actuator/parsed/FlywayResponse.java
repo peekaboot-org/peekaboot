@@ -1,5 +1,6 @@
 package org.peekaboot.backend.actuator.parsed;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +13,7 @@ public record FlywayResponse(Map<String, FlywayContext> contexts) {
     public record Migration(
             String description,
             Integer executionTime,
-            String installedOn,
+            Instant installedOn,
             String script,
             String state,
             String type,

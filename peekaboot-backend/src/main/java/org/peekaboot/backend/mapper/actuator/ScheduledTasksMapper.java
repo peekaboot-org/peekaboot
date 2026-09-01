@@ -55,10 +55,10 @@ public class ScheduledTasksMapper {
                 cron.expression(),
                 cronDescriptionService.describe(cron.expression(), locale),
                 null,
-                parseTime(cron.lastExecution()),
+                timeOf(cron.lastExecution()),
                 parseStatus(cron.lastExecution()),
                 parseException(cron.lastExecution()),
-                parseTime(cron.nextExecution()));
+                timeOf(cron.nextExecution()));
     }
 
     private ScheduledTaskInfo mapFixedTask(ScheduledTasksResponse.FixedTask fixed, TaskType type) {
@@ -68,25 +68,18 @@ public class ScheduledTasksMapper {
                 formatInterval(fixed.interval()),
                 null,
                 fixed.interval(),
-                parseTime(fixed.lastExecution()),
+                timeOf(fixed.lastExecution()),
                 parseStatus(fixed.lastExecution()),
                 parseException(fixed.lastExecution()),
-                parseTime(fixed.nextExecution()));
+                timeOf(fixed.nextExecution()));
     }
 
     private String extractTarget(ScheduledTasksResponse.RunnableTarget runnable) {
         return runnable != null ? runnable.target() : "unknown";
     }
 
-    private Instant parseTime(ScheduledTasksResponse.TaskExecution execution) {
-        if (execution == null || execution.time() == null) {
-            return null;
-        }
-        try {
-            return Instant.parse(execution.time());
-        } catch (Exception e) {
-            return null;
-        }
+    private Instant timeOf(ScheduledTasksResponse.TaskExecution execution) {
+        return execution != null ? execution.time() : null;
     }
 
     private TaskExecutionStatus parseStatus(ScheduledTasksResponse.TaskExecution execution) {
