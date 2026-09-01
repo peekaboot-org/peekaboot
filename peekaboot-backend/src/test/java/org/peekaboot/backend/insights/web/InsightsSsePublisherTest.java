@@ -232,12 +232,19 @@ class InsightsSsePublisherTest {
         };
 
         publisher.subscribe();
-        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
-        publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
+            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+            publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
 
-        assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
-                .as("the loop keeps running after a step threw")
-                .isEqualTo("tick");
+            assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                    .as("the loop keeps running after a step threw")
+                    .isEqualTo("tick");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Insights SSE loop peekaboot-insights-sse-dispatch step failed; continuing");
+            });
+        }
     }
 
     @Test
