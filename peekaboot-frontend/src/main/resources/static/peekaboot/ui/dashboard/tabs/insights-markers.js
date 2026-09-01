@@ -37,6 +37,11 @@ const TIMESTAMP_OPTIONS = {
     hour: '2-digit', minute: '2-digit', second: '2-digit'
 };
 
+/**
+ * Resolves the marker colours from the theme tokens. Called once per chart, at
+ * construction: getComputedStyle forces a style recalc, and a theme switch rebuilds
+ * every chart from scratch anyway, so there is nothing a per-draw reread could catch.
+ */
 function ink() {
     const styles = getComputedStyle(document.documentElement);
     const stroke = styles.getPropertyValue('--pk-text-muted').trim() || FALLBACK_INK;
@@ -67,6 +72,7 @@ function downtimes(events) {
  */
 export function createMarkerLayer({intervalMs}) {
     const intervalSeconds = intervalMs / 1000;
+    const colors = ink();
     let events = [];
     let visible = true;
     let tooltip = null;
@@ -107,7 +113,6 @@ export function createMarkerLayer({intervalMs}) {
             publish(u);
             return;
         }
-        const colors = ink();
         // pxRatio is a static on the uPlot class (window.uPlot.pxRatio), not a
         // property of a chart instance - u.pxRatio is always undefined, and reading
         // it would silently draw every stroke at half its intended device-pixel
