@@ -11,6 +11,9 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.TestWatcher;
 import org.peekaboot.testingapp.TestingApp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +56,22 @@ abstract class PlaywrightTestBase {
     protected String baseUrl;
 
     private final List<String> browserSignals = new CopyOnWriteArrayList<>();
+    private volatile boolean tearingDown;
+
+    /**
+     * Prints what {@link #captureBrowserSignals()} collected, for a failing test only - a green
+     * run has nothing to explain. A TestWatcher runs after {@link #closePage()}, which is why
+     * the signals are buffered rather than printed as they arrive.
+     */
+    @RegisterExtension
+    final TestWatcher browserSignalReport = new TestWatcher() {
+        @Override
+        public void testFailed(ExtensionContext context, Throwable cause) {
+            if (!browserSignals.isEmpty()) {
+                System.out.println("[browser] " + String.join("\n[browser] ", browserSignals));
+            }
+        }
+    };
 
     protected static Browser browser() {
         return WORKER_BROWSER.get();
@@ -83,19 +102,29 @@ abstract class PlaywrightTestBase {
 
     /**
      * Opt-in for tests whose subject fails invisibly - a swallowed script error leaves the
-     * page mute in test output - so every browser-side signal is collected and printed at
-     * teardown, the only way to see what headless Chromium actually did on a CI runner.
+     * page mute in test output - so every browser-side signal is collected and printed when
+     * the test fails, the only way to see what headless Chromium actually did on a CI runner.
      */
     protected void captureBrowserSignals() {
-        page.onConsoleMessage(msg -> browserSignals.add("console." + msg.type() + ": " + msg.text()));
-        page.onPageError(error -> browserSignals.add("pageerror: " + error));
+        page.onConsoleMessage(msg -> recordBrowserSignal("console." + msg.type() + ": " + msg.text()));
+        page.onPageError(error -> recordBrowserSignal("pageerror: " + error));
         page.onRequestFailed(
-                request -> browserSignals.add("requestfailed: " + request.url() + " -> " + request.failure()));
+                request -> recordBrowserSignal("requestfailed: " + request.url() + " -> " + request.failure()));
         page.onResponse(response -> {
             if (response.status() >= 400) {
-                browserSignals.add("http" + response.status() + ": " + response.url());
+                recordBrowserSignal("http" + response.status() + ": " + response.url());
             }
         });
+    }
+
+    /**
+     * What the teardown itself provokes - the navigation to {@code about:blank} aborting the
+     * Insights tab's EventSource, say - is not the test's doing and is not recorded.
+     */
+    private void recordBrowserSignal(String signal) {
+        if (!tearingDown) {
+            browserSignals.add(signal);
+        }
     }
 
     /** Overridable so a subclass can fix the viewport without changing every test's context. */
@@ -116,9 +145,7 @@ abstract class PlaywrightTestBase {
 
     @AfterEach
     void closePage() {
-        if (!browserSignals.isEmpty()) {
-            System.out.println("[browser] " + String.join("\n[browser] ", browserSignals));
-        }
+        tearingDown = true;
         if (page != null) {
             try {
                 // Ends everything the page still has in flight - the toolbar's fetch ladder
