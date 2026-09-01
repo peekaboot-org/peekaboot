@@ -2,60 +2,63 @@
  * The "Loggers" tab: logger levels grouped by package, filterable by name and
  * restrictable to loggers with an explicit configured level.
  */
-import {groupList, expandedKeys, badge} from '../../shared/components.js';
+import {badge} from '../../shared/components.js';
+import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
+import {logLevelVariant} from '../../shared/severity.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
 export const id = 'loggers';
 export const label = 'Loggers';
 
-let currentData = null;
+const tab = filteredGroupTab({
+    inputId: 'loggers-filter',
+    listId: 'loggers-list',
+    select: data => data?.loggers?.packages,
+    filterGroup: (group, query) => {
+        const loggers = group.loggers.filter(logger => matches(logger, query));
+        return loggers.length > 0 ? {packageName: group.packageName, loggers} : null;
+    },
+    key: group => group.packageName,
+    header: (group, query) => ({
+        name: group.packageName,
+        count: `${group.loggers.length} loggers`,
+        highlight: query
+    }),
+    items: (group, list, query) => group.loggers.forEach(logger =>
+        list.appendChild(renderLoggerRow(logger, query))),
+    extraTop: data => renderSummary(data.loggers),
+    emptyMessage: 'No loggers available',
+    noMatchMessage: () => 'No loggers matching criteria',
+    urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams},
+    // pk-group__name defaults to the primary-coloured style; logger package names use
+    // the text-strong modifier instead (see the modifier's doc comment in components.css).
+    decorate: listEl => listEl.querySelectorAll('.pk-group__name')
+        .forEach(el => el.classList.add('pk-group__name--strong'))
+});
 
-// The most recent render() call's context - read by the persistent filter/checkbox
-// listeners below (wired once, see wireControls) so a later render's context (its
-// setUrlParams closes over the URL's tab/detail/subview at *that* call - see main.js's
-// currentContext()) is always what a later change writes through, not whatever was
-// current the first time this tab was rendered.
-let currentContext = null;
+// The checkbox is this tab's own second filter control: wired once here, its state
+// read by matches() below and written to the URL beside the text filter's "q".
+let configuredOnly = false;
 
 export function isAvailable(data) {
     return Boolean(data?.loggers?.packages?.length);
 }
 
 export function render(container, data, context) {
-    currentData = data;
-    currentContext = context;
-    wireControls(container);
-    // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so reconciling during a background
-    // auto-refresh render of a hidden loggers tab would read another tab's params (or
-    // none) and clobber whatever the user already set here.
-    if (container.classList.contains('active')) reconcileWithUrl(container);
-    renderGroups(container, currentFilterValue(container));
+    wireCheckbox(container, context);
+    tab.render(container, data, context);
 }
 
-function wireControls(container) {
-    const input = container.querySelector('#loggers-filter');
-    if (input && !input.dataset.wired) {
-        input.dataset.wired = 'true';
-        input.addEventListener('input', () => {
-            writeUrlParams(container);
-            renderGroups(container, input.value.trim());
-        });
-    }
-
+function wireCheckbox(container, context) {
     const checkbox = container.querySelector('#loggers-configured-only');
-    if (checkbox && !checkbox.dataset.wired) {
-        checkbox.dataset.wired = 'true';
-        checkbox.addEventListener('change', () => {
-            writeUrlParams(container);
-            renderGroups(container, currentFilterValue(container));
-        });
-    }
-}
-
-function currentFilterValue(container) {
-    return container.querySelector('#loggers-filter')?.value.trim() || '';
+    if (!checkbox || checkbox.dataset.wired) return;
+    checkbox.dataset.wired = 'true';
+    checkbox.addEventListener('change', () => {
+        configuredOnly = checkbox.checked;
+        writeUrlParams(container.querySelector('#loggers-filter'), container, context);
+        tab.refresh(container);
+    });
 }
 
 /**
@@ -67,30 +70,30 @@ function currentFilterValue(container) {
  * writeUrlParams always decides both keys together, so their presence/absence is never
  * ambiguous.
  */
-function reconcileWithUrl(container) {
-    const input = container.querySelector('#loggers-filter');
+function reconcileWithUrl(input, container, context) {
     const checkbox = container.querySelector('#loggers-configured-only');
 
-    reconcileFilterWithUrl(currentContext, ['q', 'configured'], {
+    reconcileFilterWithUrl(context, ['q', 'configured'], {
         seed: params => {
             const urlQuery = params.q || '';
             const urlConfiguredOnly = params.configured === '1';
             if (input && urlQuery !== input.value.trim()) input.value = urlQuery;
             if (checkbox && urlConfiguredOnly !== checkbox.checked) checkbox.checked = urlConfiguredOnly;
+            configuredOnly = urlConfiguredOnly;
         },
-        hasNonDefaultState: () => Boolean(currentFilterValue(container) || checkbox?.checked),
-        writeBack: () => writeUrlParams(container)
+        hasNonDefaultState: () => Boolean(input?.value.trim() || configuredOnly),
+        writeBack: () => writeUrlParams(input, container, context)
     });
 }
 
 /** Writes the current filter/configured-only state back to the URL, omitting each key
     that's at its default so a clean filter yields a clean "#loggers" hash. */
-function writeUrlParams(container) {
+function writeUrlParams(input, container, context) {
     const params = {};
-    const value = currentFilterValue(container);
+    const value = input?.value.trim();
     if (value) params.q = value;
-    if (container.querySelector('#loggers-configured-only')?.checked) params.configured = '1';
-    currentContext.setUrlParams(params);
+    if (configuredOnly) params.configured = '1';
+    context.setUrlParams(params);
 }
 
 /** A logger with an explicitly configured level, as opposed to one merely inheriting its parent's. */
@@ -98,78 +101,28 @@ function isConfigured(logger) {
     return logger.configuredLevel != null;
 }
 
-/** ERROR/WARN/INFO map to their badge variant; DEBUG/TRACE/unset fall back to muted. */
-function levelVariant(level) {
-    if (level === 'ERROR') return 'error';
-    if (level === 'WARN') return 'warn';
-    if (level === 'INFO') return 'info';
-    return 'muted';
+function matches(logger, query) {
+    if (configuredOnly && !isConfigured(logger)) return false;
+    return !query || logger.name.toLowerCase().includes(query.toLowerCase());
 }
 
-function renderGroups(container, filterQuery) {
-    const loggersInfo = currentData?.loggers;
-    const target = container.querySelector('#loggers-list');
-    // Must run before the container is cleared below - see environment.js.
-    const expanded = expandedKeys(target);
-    target.innerHTML = '';
-
-    const packages = loggersInfo?.packages;
-    if (!packages || packages.length === 0) {
-        target.innerHTML = '<p class="pk-empty">No loggers available</p>';
-        return;
-    }
-
-    const configuredOnly = container.querySelector('#loggers-configured-only')?.checked || false;
-
+function renderSummary(loggersInfo) {
     const summaryEl = document.createElement('div');
     summaryEl.className = 'pk-loggers-summary';
     summaryEl.appendChild(badge(`Total: ${loggersInfo.totalCount}`, 'muted'));
     summaryEl.appendChild(badge(`Configured: ${loggersInfo.configuredCount}`, 'muted'));
-    target.appendChild(summaryEl);
-
-    // Pre-filter packages and their loggers
-    const filteredPackages = packages
-        .map(group => ({
-            packageName: group.packageName,
-            loggers: group.loggers.filter(logger => {
-                if (configuredOnly && !isConfigured(logger)) return false;
-                if (filterQuery && !logger.name.toLowerCase().includes(filterQuery.toLowerCase())) return false;
-                return true;
-            })
-        }))
-        .filter(group => group.loggers.length > 0);
-
-    if (filteredPackages.length === 0 && filterQuery) {
-        target.innerHTML = '<p class="pk-empty">No loggers matching criteria</p>';
-        return;
-    }
-
-    groupList(target, filteredPackages, {
-        key: group => group.packageName,
-        header: group => ({
-            name: group.packageName,
-            count: `${group.loggers.length} loggers`,
-            highlight: filterQuery
-        }),
-        items: (group, list) => group.loggers.forEach(logger =>
-            list.appendChild(renderLoggerRow(logger, filterQuery))),
-        expandedKeys: expanded
-    });
-
-    // pk-group__name defaults to the primary-coloured style; logger package names use
-    // the text-strong modifier instead (see the modifier's doc comment in components.css).
-    target.querySelectorAll('.pk-group__name').forEach(el => el.classList.add('pk-group__name--strong'));
+    return summaryEl;
 }
 
-function renderLoggerRow(logger, filterQuery) {
+function renderLoggerRow(logger, query) {
     const row = document.createElement('div');
     row.className = 'pk-kv';
 
     const nameEl = document.createElement('span');
     nameEl.className = 'pk-kv__key' + (isConfigured(logger) ? ' pk-kv__key--configured' : '');
-    nameEl.innerHTML = highlightText(logger.name, filterQuery);
+    nameEl.innerHTML = highlightText(logger.name, query);
     row.appendChild(nameEl);
 
-    row.appendChild(badge(logger.effectiveLevel || '-', levelVariant(logger.effectiveLevel)));
+    row.appendChild(badge(logger.effectiveLevel || '-', logLevelVariant(logger.effectiveLevel)));
     return row;
 }

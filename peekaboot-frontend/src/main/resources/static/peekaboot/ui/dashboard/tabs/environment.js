@@ -2,94 +2,41 @@
  * The "Environment" tab: property sources grouped and filterable, each expandable to
  * its key/value pairs, with the active Spring profiles shown as a banner above them.
  */
-import {groupList, expandedKeys, kvRow, badge} from '../../shared/components.js';
-import {escapeHtml} from '../../shared/markup.js';
+import {kvRow, badge} from '../../shared/components.js';
+import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {renderUnmaskControl} from '../../shared/unmask-control.js';
-import {reconcileTextFilter, writeTextFilter} from '../../shared/url-filter.js';
 
 export const id = 'environment';
 export const label = 'Environment';
 
-let currentData = null;
-
-// The most recent render() call's context - read by the persistent filter input
-// listener below (wired once, see wireFilter) so a later render's context (its
-// setUrlParams closes over the URL's tab/detail/subview at *that* call - see main.js's
-// currentContext()) is always what a later keystroke writes through, not whatever was
-// current the first time this tab was rendered.
-let currentContext = null;
+const tab = filteredGroupTab({
+    inputId: 'env-filter',
+    listId: 'property-sources',
+    select: data => data?.environment?.propertySources,
+    filterGroup: (source, query) => {
+        const properties = (source.properties || []).filter(prop => matches(prop, query));
+        return properties.length > 0 ? {name: source.name || 'Unknown Source', properties} : null;
+    },
+    key: source => source.name,
+    header: (source, query) => ({
+        name: source.name,
+        count: `${source.properties.length} properties`,
+        highlight: query
+    }),
+    items: (source, list, query) => source.properties.forEach(prop =>
+        list.appendChild(kvRow(prop.key, formatValue(prop.value), {highlight: query}))),
+    extraTop: data => renderActiveProfiles(data.environment.activeProfiles),
+    emptyMessage: 'No environment properties available',
+    noMatchMessage: query => `No properties matching "${query}"`
+});
 
 export function render(container, data, context) {
-    currentData = data;
-    currentContext = context;
-    wireFilter(container);
-    // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so reconciling during a background
-    // auto-refresh render of a hidden environment tab would read another tab's params
-    // (or none) and clobber whatever the user already typed here.
-    if (container.classList.contains('active')) reconcileTextFilter(container.querySelector('#env-filter'), context);
     renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
-    renderGroups(container, currentFilterValue(container));
-}
-
-function wireFilter(container) {
-    const input = container.querySelector('#env-filter');
-    if (!input || input.dataset.wired) return;
-    input.dataset.wired = 'true';
-    input.addEventListener('input', () => {
-        writeTextFilter(input, currentContext);
-        renderGroups(container, input.value.trim());
-    });
-}
-
-function currentFilterValue(container) {
-    return container.querySelector('#env-filter')?.value.trim() || '';
-}
-
-function renderGroups(container, filterQuery) {
-    const env = currentData?.environment;
-    const target = container.querySelector('#property-sources');
-    // Must run before the container is cleared below - it reads the DOM's current
-    // aria-expanded state so a re-render (e.g. the 30s auto-refresh) can restore it.
-    const expanded = expandedKeys(target);
-    target.innerHTML = '';
-
-    if (!env?.propertySources || env.propertySources.length === 0) {
-        target.innerHTML = '<p class="pk-empty">No environment properties available</p>';
-        return;
-    }
-
-    if (env.activeProfiles && env.activeProfiles.length > 0) {
-        target.appendChild(renderActiveProfiles(env.activeProfiles));
-    }
-
-    // Pre-filter sources and their properties
-    const filteredSources = env.propertySources
-        .map(source => ({
-            name: source.name || 'Unknown Source',
-            properties: (source.properties || []).filter(prop => matchesFilter(prop.key, prop.value, filterQuery))
-        }))
-        .filter(source => source.properties.length > 0);
-
-    if (filteredSources.length === 0 && filterQuery) {
-        target.innerHTML = `<p class="pk-empty">No properties matching "${escapeHtml(filterQuery)}"</p>`;
-        return;
-    }
-
-    groupList(target, filteredSources, {
-        key: source => source.name,
-        header: source => ({
-            name: source.name,
-            count: `${source.properties.length} properties`,
-            highlight: filterQuery
-        }),
-        items: (source, list) => source.properties.forEach(prop =>
-            list.appendChild(kvRow(prop.key, formatValue(prop.value), {highlight: filterQuery}))),
-        expandedKeys: expanded
-    });
+    tab.render(container, data, context);
 }
 
 function renderActiveProfiles(activeProfiles) {
+    if (!activeProfiles || activeProfiles.length === 0) return null;
     const profilesEl = document.createElement('div');
     profilesEl.className = 'pk-profiles';
 
@@ -101,11 +48,10 @@ function renderActiveProfiles(activeProfiles) {
     return profilesEl;
 }
 
-function matchesFilter(key, value, filter) {
-    if (!filter) return true;
-    const filterLower = filter.toLowerCase();
-    return key.toLowerCase().includes(filterLower) ||
-        String(value).toLowerCase().includes(filterLower);
+function matches(prop, query) {
+    if (!query) return true;
+    const needle = query.toLowerCase();
+    return prop.key.toLowerCase().includes(needle) || String(prop.value).toLowerCase().includes(needle);
 }
 
 function formatValue(value) {
