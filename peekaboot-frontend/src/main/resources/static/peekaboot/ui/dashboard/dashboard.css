@@ -538,6 +538,25 @@
 @keyframes pk-insight-blink { from { background-color: var(--pk-primary-light); } to { background-color: transparent; } }
 .pk-blink { animation: pk-insight-blink 0.6s ease-out; }
 
+/* Lifecycle - a table of runs; see .pk-table in components.css for the shared shape.
+   Row accents mirror .pk-flyway-row--failed's box-shadow-on-first-cell treatment. */
+.pk-lifecycle-table { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
+.pk-lifecycle-row--running td:first-child { box-shadow: inset 3px 0 0 var(--pk-primary); }
+.pk-lifecycle-row--unclean td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
+.pk-lifecycle-row__build { min-width: 14ch; }
+.pk-lifecycle-row__version { font-weight: 600; color: var(--pk-text-strong); font-family: var(--pk-font-mono); }
+/* Branch and commit, muted beneath the version - same demotion .pk-group__count uses
+   for secondary metadata beside a primary name. */
+.pk-lifecycle-row__meta { color: var(--pk-text-muted); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
+.pk-lifecycle-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-space-md);
+    padding: var(--pk-space-md);
+}
+.pk-lifecycle-pager__readout { color: var(--pk-text-muted); font-size: var(--pk-text-sm); font-variant-numeric: tabular-nums; }
+
 /* Tab panels — the frozen #<tabId>-tab section ids, shown/hidden with a
    plain .active class (asserted verbatim by DashboardTabsTest). */
 .pk-tab-panel { display: none; }
