@@ -177,6 +177,21 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isNotEqualTo("-");
     }
 
+    /**
+     * The dashboard header's "Updated ..." readout passes hour/minute/second only; a
+     * date-first formatter would still prepend the day, which that one-line readout has
+     * no room for.
+     */
+    @Test
+    void formatDateTimeWithTimeOnlyOptionsRendersNoDate() {
+        String time = (String) evalModule(
+                "format.js",
+                "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC',"
+                        + " hour: '2-digit', minute: '2-digit', second: '2-digit'})");
+        assertThat(time).contains("12:00:00");
+        assertThat(time).doesNotContain("1970").doesNotContain("Jan");
+    }
+
     @Test
     void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
