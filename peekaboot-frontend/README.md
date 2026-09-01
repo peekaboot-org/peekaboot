@@ -16,10 +16,11 @@ No build step. Plain ES modules and CSS, served as-is.
 static/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
-├── shared/          api.js, components.js, format.js, markup.js, root-actions.js,
-│                    severity.js, shadow-styles.js, span-names.js, theme.js
-├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (9 tabs, plus the
-│                    Insights tab's own insights-chart.js)
+├── shared/          api.js, components.js, copyable.js, format.js, http-status.js,
+│                    markup.js, root-actions.js, severity.js, shadow-styles.js,
+│                    span-names.js, theme.js, unmask-control.js, url-filter.js, url-state.js
+├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (10 tabs, plus the
+│                    Insights tab's own insights-chart.js and insights-markers.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/ — the only third-party code, loaded on demand (see below)
@@ -110,7 +111,9 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 |---|---|
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. |
 | `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
+| `copyable.js` | `copyableId`, `copyableIdHtml`, `bindCopyables` — a labelled, click-to-copy trace/span id, in DOM and HTML-string form over one piece of markup, with one delegated click listener per root. |
 | `format.js` | `formatDurationMs`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`. |
+| `http-status.js` | `statusLabel`, `statusVariant` — IANA reason phrases and badge colouring for HTTP status codes; an unknown code renders as its bare number. |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL` — the backend's masked-value literal (`"******"`), centralised here so a masked-value comparison only needs updating in one place. |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)` — the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend no longer decides what's sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel` — the icon/label map for a trace's root action type (HTTP request, scheduled job, …). |
@@ -178,8 +181,7 @@ lets you match a condition on the host from inside its own shadow tree.
 
 ## Accessibility invariants
 
-These were learned the hard way — several contrast and ARIA regressions shipped during
-this refactor and were only caught in review. Keep them true:
+Each of these has been broken at least once and caught only in review. Keep them true:
 
 - **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text color
   on the page background.** All four are tuned as fill colors; as text on `--pk-bg` they
@@ -193,11 +195,10 @@ this refactor and were only caught in review. Keep them true:
 - **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`,
   `--pk-info`) needs its own on-colour token as foreground** — `--pk-on-success`,
   `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info` respectively.
-  **Never `--pk-text-strong` or literal `white`/`#fff` on one of these fills** — both have
-  shipped as regressions (`white`/`--pk-text-strong` measured 2.53:1 and, in another spot,
-  ~2.3:1 in dark mode; the `--pk-on-*` tokens clear 4.5:1+ in both themes by
-  construction). Since the brand turned green every `--pk-on-*` is now dark ink, in both
-  themes — white on the green fill is 2.61:1.
+  **Never `--pk-text-strong` or literal `white`/`#fff` on one of these fills** —
+  `white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode; the
+  `--pk-on-*` tokens clear 4.5:1+ in both themes by construction. With a green brand every
+  `--pk-on-*` is dark ink, in both themes — white on the green fill is 2.61:1.
 - **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a
   blue. With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~47° (light)
@@ -208,16 +209,16 @@ this refactor and were only caught in review. Keep them true:
   tech can prune the nested control right out of the accessibility tree, even though nothing
   looks wrong visually. The fix is always the same shape: the container stays a plain
   element, a real `<button>` carries the primary action, and the other interactive element
-  becomes the button's **sibling**, not its descendant. This exact mistake was made and
-  corrected twice in this refactor (the toolbar's open button, then the traces tab's trace
-  item header) — watch for it in any future "make this row clickable" change.
+  becomes the button's **sibling**, not its descendant. The toolbar's open button and the
+  traces tab's trace item header are the two places this shape was needed — watch for it
+  in any "make this row clickable" change.
 
-  The trace-detail overlay violated this in seven places until 2026-08-22 — the gantt
-  expand/collapse triangle, the SQL and logs toggles, the gantt event markers, the
-  "show logs for all spans" link, the log span-filter cell and the span-filter clear —
-  all `<span>`s with click handlers, unreachable by keyboard. They are `<button>`s now,
-  each with the browser's button chrome reset away so nothing changed visually. If a new
-  control needs `cursor: pointer`, that is the smell: make it a `<button>` first.
+  The trace-detail overlay's small controls — the gantt expand/collapse triangle, the SQL
+  and logs toggles, the gantt event markers, the "show logs for all spans" link, the log
+  span-filter cell and the span-filter clear — are all `<button>`s with the browser's
+  button chrome reset away, not `<span>`s with click handlers, so each is reachable by
+  keyboard. If a new control needs `cursor: pointer`, that is the smell: make it a
+  `<button>` first.
 
 - **A control whose only content is an icon needs an explicit `aria-label`, and the icon
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title
