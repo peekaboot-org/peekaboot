@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.lifecycle.LifecycleEvent;
 import org.peekaboot.backend.lifecycle.LifecycleEventFile;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -35,6 +36,13 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code @BeforeAll} would race that read. {@code storageDir} has to be a static
  * {@code @TempDir} field for the same reason: the dynamic-property method is static and
  * runs before any instance (or {@code @BeforeAll}) exists.
+ *
+ * <p>The context is closed with the class ({@code @DirtiesContext}): storage is on, so its
+ * insights snapshot writer keeps writing into {@code storageDir} on a cadence and once more
+ * at shutdown, and a context left in the cache would outlive the temp directory - every
+ * later write, the shutdown one included, would land in a deleted directory and WARN. The
+ * context is this class's own anyway (the property source names a directory nobody else
+ * gets), so closing it costs no other class a re-boot.
  *
  * <p>45 seeded runs plus the application's own start is 46 runs = 3 pages of 20, so
  * paging is real rather than a single page pretending to be several. Chronologically
@@ -63,6 +71,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * above (indices 1, 4, 5, 10, 15) on page 1, so the badge/dash assertions don't need to
  * page-navigate to find them - paging itself is proven separately.
  */
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LifecycleTabIT extends PlaywrightTestBase {
 
     private static final String ROWS = "#lifecycle-runs .pk-lifecycle-table tbody tr";
