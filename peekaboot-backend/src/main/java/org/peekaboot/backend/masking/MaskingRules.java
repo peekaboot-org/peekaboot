@@ -121,8 +121,15 @@ final class MaskingRules {
             new ValuePattern("Legacy OpenAI key", Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
             // The upstream regex has no capturing group; group 1 is added here so
             // MaskingEngine can mask the userinfo only, leaving scheme://host:port/path intact.
+            // The user may be empty: redis://:secret@host is the common Redis shape.
             new ValuePattern(
-                    "Credentials in a URL", 1, Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]+:[^/\\s:@]+)@")),
+                    "Credentials in a URL", 1, Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
+            // Oracle's thin URL (jdbc:oracle:thin:user/password@host) has no "://" ahead of
+            // the credentials, so the rule above never sees it. Group 2 is the password.
+            new ValuePattern(
+                    "Credentials in an Oracle thin URL",
+                    2,
+                    Pattern.compile("(?i)jdbc:oracle:thin:([^/@\\s]+/)([^@\\s]+)@")),
             // Distinct from "Credentials in a URL" above and not subsumed by it: this is the
             // query-parameter shape (scheme://host/db?password=...), the more common of the
             // two for JDBC. Group 2 (the value only) is masked, leaving the parameter name

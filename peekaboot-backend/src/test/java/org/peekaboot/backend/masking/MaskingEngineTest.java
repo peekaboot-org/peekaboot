@@ -330,6 +330,30 @@ class MaskingEngineTest {
             assertThat(result).contains("localhost", "5432", "mydb").doesNotContain("dbuser", "S3cr3tPassw0rd");
         }
 
+        /** The common Redis shape: no user at all, only a password in front of the '@'. */
+        @Test
+        void maskValue_shouldMaskUserinfoWithAnEmptyUser() {
+            String value = "redis://:S3cr3tPassw0rd@cache.example.com:6379/0";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("redis://******@cache.example.com:6379/0");
+        }
+
+        /**
+         * Oracle's thin URL puts user/password in front of the '@' with no "://" ahead of
+         * them, so the generic userinfo rule never sees it; only the password is masked.
+         */
+        @Test
+        void maskValue_shouldMaskOnlyThePasswordInAnOracleThinUrl() {
+            assertThat(engine.maskValue("jdbc:oracle:thin:scott/S3cr3tPassw0rd@//db.example.com:1521/ORCL"))
+                    .isEqualTo("jdbc:oracle:thin:scott/******@//db.example.com:1521/ORCL");
+            assertThat(engine.maskValue("jdbc:oracle:thin:scott/S3cr3tPassw0rd@db.example.com:1521:ORCL"))
+                    .isEqualTo("jdbc:oracle:thin:scott/******@db.example.com:1521:ORCL");
+            assertThat(engine.maskValue("jdbc:oracle:thin:@//db.example.com:1521/ORCL"))
+                    .isEqualTo("jdbc:oracle:thin:@//db.example.com:1521/ORCL");
+        }
+
         /**
          * The query-parameter credential shape (spring.datasource.url containing
          * "?password=..."), distinct from the userinfo shape above and not covered by
