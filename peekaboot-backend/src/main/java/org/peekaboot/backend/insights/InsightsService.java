@@ -2,7 +2,6 @@ package org.peekaboot.backend.insights;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -178,39 +177,7 @@ public final class InsightsService implements SmartLifecycle {
         if (level < 0 || level >= properties.getLevels().size()) {
             throw new IllegalArgumentException("Unknown insights level: " + level);
         }
-        return toResponse(collector.snapshot(level));
-    }
-
-    /**
-     * The snapshot's {@code double[]} columns boxed to {@code List<Double>} with NaN mapped to
-     * null - Jackson would emit invalid JSON ({@code NaN}) otherwise.
-     */
-    private static LevelDataResponse toResponse(LevelSnapshot snapshot) {
-        Map<String, LevelDataResponse.SeriesData> series = new LinkedHashMap<>();
-        if (snapshot.level() == 0) {
-            for (Map.Entry<String, double[]> entry : snapshot.tickValues().entrySet()) {
-                series.put(entry.getKey(), new LevelDataResponse.SeriesData(boxed(entry.getValue()), null));
-            }
-        } else {
-            for (Map.Entry<String, Map<String, double[]>> entry :
-                    snapshot.statValues().entrySet()) {
-                Map<String, List<Double>> stats = new LinkedHashMap<>();
-                for (Map.Entry<String, double[]> statEntry : entry.getValue().entrySet()) {
-                    stats.put(statEntry.getKey(), boxed(statEntry.getValue()));
-                }
-                series.put(entry.getKey(), new LevelDataResponse.SeriesData(null, stats));
-            }
-        }
-        return new LevelDataResponse(
-                snapshot.level(), snapshot.intervalMs(), snapshot.endEpochMs(), snapshot.count(), series);
-    }
-
-    private static List<Double> boxed(double[] values) {
-        List<Double> boxed = new ArrayList<>(values.length);
-        for (double value : values) {
-            boxed.add(Double.isNaN(value) ? null : value);
-        }
-        return boxed;
+        return collector.snapshot(level).toResponse();
     }
 
     public int seriesCount() {
