@@ -39,7 +39,7 @@ export function render(container, trace, context = {}) {
         const sqlToggle = e.target.closest('.pk-span-query-toggle');
         if (sqlToggle) {
             const spanId = sqlToggle.dataset.spanId;
-            const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${spanId}"]`);
+            const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${CSS.escape(spanId)}"]`);
             if (queryDetail) {
                 queryDetail.classList.toggle('expanded');
                 sqlToggle.title = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'Show SQL';
@@ -136,7 +136,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
 
     // Add query toggle for query spans with SQL
     if (hasQuery) {
-        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${span.spanId}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
+        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${escapeHtml(span.spanId)}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
     }
 
     // Add logs toggle for spans with logs - switches the overlay to the Logs tab,
