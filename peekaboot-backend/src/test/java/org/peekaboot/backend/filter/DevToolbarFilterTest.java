@@ -3,12 +3,9 @@ package org.peekaboot.backend.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,22 +15,21 @@ import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.WriteListener;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
+import jakarta.servlet.ServletResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.testsupport.LogCapture;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 @ExtendWith(MockitoExtension.class)
 class DevToolbarFilterTest {
@@ -44,19 +40,17 @@ class DevToolbarFilterTest {
     Tracer tracer;
 
     @Mock
-    HttpServletRequest request;
-
-    @Mock
-    HttpServletResponse response;
-
-    @Mock
     FilterChain chain;
 
+    MockHttpServletRequest request;
+    MockHttpServletResponse response;
     DevToolbarFilter filter;
 
     @BeforeEach
     void setUp() {
         filter = new DevToolbarFilter(toolbarDataProvider, tracer);
+        request = get("/users/123");
+        response = new MockHttpServletResponse();
     }
 
     @ParameterizedTest
@@ -72,7 +66,7 @@ class DevToolbarFilterTest {
                 "/error"
             })
     void shouldSkipExcludedPaths(String path) throws Exception {
-        when(request.getServletPath()).thenReturn(path);
+        request = get(path);
 
         filter.doFilter(request, response, chain);
 
@@ -84,7 +78,7 @@ class DevToolbarFilterTest {
             strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
             })
     void shouldSkipStaticFileExtensions(String extension) throws Exception {
-        when(request.getServletPath()).thenReturn("/app/file" + extension);
+        request = get("/app/file" + extension);
 
         filter.doFilter(request, response, chain);
 
@@ -93,8 +87,7 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldSkipAjaxRequests() throws Exception {
-        when(request.getServletPath()).thenReturn("/users/123");
-        when(request.getHeader("X-Requested-With")).thenReturn("XMLHttpRequest");
+        request.addHeader("X-Requested-With", "XMLHttpRequest");
 
         filter.doFilter(request, response, chain);
 
@@ -108,9 +101,9 @@ class DevToolbarFilterTest {
      */
     @Test
     void shouldSkipPeekabootPathsBehindAContextPath() throws Exception {
-        lenient().when(request.getContextPath()).thenReturn("/app");
-        lenient().when(request.getRequestURI()).thenReturn("/app/peekaboot/ui/dashboard/index.html");
-        when(request.getServletPath()).thenReturn("/peekaboot/ui/dashboard/index.html");
+        request.setContextPath("/app");
+        request.setRequestURI("/app/peekaboot/ui/dashboard/index.html");
+        request.setServletPath("/peekaboot/ui/dashboard/index.html");
 
         filter.doFilter(request, response, chain);
 
@@ -120,19 +113,14 @@ class DevToolbarFilterTest {
     /** Every URL the bar carries - script, sheets, links, API base - has to sit behind the context path. */
     @Test
     void shouldPrefixTheBarsUrlsWithTheContextPath() throws Exception {
-        when(request.getContextPath()).thenReturn("/app");
-        when(request.getRequestURI()).thenReturn("/app/users/123");
-        when(request.getServletPath()).thenReturn("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        stubHtmlResponse("<html><body></body></html>");
+        request.setContextPath("/app");
+        request.setRequestURI("/app/users/123");
+        request.setServletPath("/users/123");
+        chainWritesHtml("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).contains("<script src=\"/app/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
         assertThat(result).contains("href=\"/app/peekaboot/ui/assets/tokens.css\"");
         assertThat(result).contains("\"basePath\":\"/app/peekaboot\"");
@@ -141,42 +129,21 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldSkipNonHtmlResponses() throws Exception {
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
-        doAnswer(invocation -> {
-                    ContentBufferingResponseWrapper wrapper =
-                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
-                    wrapper.setContentType("application/json");
-                    wrapper.getWriter().write("{\"id\":1}");
-                    return null;
-                })
-                .when(chain)
-                .doFilter(eq(request), any());
+        request = get("/api/users");
+        chainWrites("application/json", "{\"id\":1}");
 
         filter.doFilter(request, response, chain);
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("{\"id\":1}");
+        assertThat(response.getContentAsString()).isEqualTo("{\"id\":1}");
     }
 
     @Test
     void shouldInjectToolbarIntoHtmlResponse() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
-        String htmlContent = "<html><body><h1>Hello</h1></body></html>";
-        stubHtmlResponse(htmlContent);
+        chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
         assertThat(result).contains("peekaboot-toolbar-data");
         assertThat(result).contains("<h1>Hello</h1>");
@@ -185,115 +152,74 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldResolveTraceIdFromCurrentSpanWhenPresent() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
         Span span = mock(Span.class);
         TraceContext context = mock(TraceContext.class);
         when(context.traceId()).thenReturn("abc123traceid");
         when(span.context()).thenReturn(context);
         when(tracer.currentSpan()).thenReturn(span);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
-        String htmlContent = "<html><body><h1>Hello</h1></body></html>";
-        stubHtmlResponse(htmlContent);
+        chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
 
         filter.doFilter(request, response, chain);
 
         // resolved traceId must reach the real, injected toolbar JSON
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).contains("abc123traceid");
+        assertThat(response.getContentAsString()).contains("abc123traceid");
     }
 
     @Test
     void shouldInjectBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
         // 'İ' (U+0130) lowercases to two characters; the </body> index must be
         // computed on the original string, not a lowercased copy
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
-        String htmlContent = "<html><BODY>İİİ</BODY></html>";
-        stubHtmlResponse(htmlContent);
+        chainWrites("text/html;charset=UTF-8", "<html><BODY>İİİ</BODY></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
         assertThat(result.indexOf("<!-- Peekaboot Dev Toolbar -->"))
-                .isLessThan(result.toLowerCase(java.util.Locale.ROOT).indexOf("</body>"));
+                .isLessThan(result.toLowerCase(Locale.ROOT).indexOf("</body>"));
         assertThat(result).endsWith("</BODY></html>");
     }
 
     @Test
     void shouldPreserveResponseCharsetWhenInjecting() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-        when(response.getCharacterEncoding()).thenReturn("ISO-8859-1");
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
-        String htmlContent = "<html><body>Käse</body></html>";
-        stubResponse("text/html;charset=ISO-8859-1", htmlContent);
+        chainWrites("text/html;charset=ISO-8859-1", "<html><body>Käse</body></html>");
 
         filter.doFilter(request, response, chain);
 
         // the declared charset stays ISO-8859-1, so the body must be encoded with it
-        String result = originalOutput.toString(java.nio.charset.Charset.forName("ISO-8859-1"));
+        String result = new String(response.getContentAsByteArray(), StandardCharsets.ISO_8859_1);
         assertThat(result).contains("Käse");
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
     }
 
     @Test
     void shouldHandleResponseWithoutBodyTag() throws Exception {
-        stubPath("/fragment");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
+        request = get("/fragment");
         String htmlFragment = "<div>Just a fragment</div>";
-        stubHtmlResponse(htmlFragment);
+        chainWritesHtml(htmlFragment);
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).isEqualTo(htmlFragment);
         assertThat(result).doesNotContain("Peekaboot");
     }
 
     @Test
     void shouldHandleToolbarGenerationError() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
         // ToolbarDataProvider is a plain, real class with no injectable failure point;
         // a locally-scoped mock is needed here to force the error path this test targets.
         ToolbarDataProvider throwingProvider = mock(ToolbarDataProvider.class);
         when(throwingProvider.getToolbarSummaryJson(any(), any(), any(), any(Integer.class), any()))
                 .thenThrow(new RuntimeException("Provider error"));
         DevToolbarFilter throwingFilter = new DevToolbarFilter(throwingProvider, tracer);
-
         String htmlContent = "<html><body><h1>Hello</h1></body></html>";
-        stubHtmlResponse(htmlContent);
+        chainWritesHtml(htmlContent);
 
         try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class)) {
             throwingFilter.doFilter(request, response, chain);
 
-            String result = originalOutput.toString(StandardCharsets.UTF_8);
-            assertThat(result).isEqualTo(htmlContent);
+            assertThat(response.getContentAsString()).isEqualTo(htmlContent);
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage()).isEqualTo("Failed to generate toolbar HTML");
@@ -310,12 +236,8 @@ class DevToolbarFilterTest {
      */
     @Test
     void shouldNotCommitAPartialPageWhenTheChainThrows() throws Exception {
-        stubPath("/users/123");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-
         doAnswer(invocation -> {
-                    ContentBufferingResponseWrapper wrapper =
-                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
                     wrapper.setContentType("text/html");
                     wrapper.getWriter().write("<html><body><h1>Half a page");
                     throw new ServletException("template blew up");
@@ -327,48 +249,37 @@ class DevToolbarFilterTest {
                 .isInstanceOf(ServletException.class)
                 .hasMessage("template blew up");
 
-        verify(response, never()).getOutputStream();
-        verify(response, never()).setContentLength(anyInt());
+        assertThat(response.getContentAsByteArray()).isEmpty();
+        assertThat(response.containsHeader("Content-Length")).isFalse();
     }
 
     @Test
     void shouldPassthroughAsyncResponsesWithoutInjection() throws Exception {
-        stubPath("/sse/stream");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(request.isAsyncStarted()).thenReturn(true);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
+        request = get("/sse/stream");
+        request.setAsyncStarted(true);
 
         filter.doFilter(request, response, chain);
 
         // The async handler keeps writing through the wrapper after doFilter
         // returned; the bytes must reach the real response.
-        org.mockito.ArgumentCaptor<jakarta.servlet.ServletResponse> captor =
-                org.mockito.ArgumentCaptor.forClass(jakarta.servlet.ServletResponse.class);
+        ArgumentCaptor<ServletResponse> captor = ArgumentCaptor.forClass(ServletResponse.class);
         verify(chain).doFilter(eq(request), captor.capture());
         ContentBufferingResponseWrapper wrapper = (ContentBufferingResponseWrapper) captor.getValue();
         wrapper.getOutputStream().write("async data".getBytes(StandardCharsets.UTF_8));
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("async data");
+        assertThat(response.getContentAsString()).isEqualTo("async data");
     }
 
     @Test
     void shouldStreamNonHtmlResponsesDuringRequest() throws Exception {
-        stubPath("/api/stream");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-
+        request = get("/api/stream");
         doAnswer(invocation -> {
-                    ContentBufferingResponseWrapper wrapper =
-                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
                     wrapper.setContentType("text/event-stream");
                     wrapper.getOutputStream().write("data: tick\n\n".getBytes(StandardCharsets.UTF_8));
                     wrapper.flushBuffer();
                     // must be visible to the client while the handler is still running
-                    assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+                    assertThat(response.getContentAsString()).isEqualTo("data: tick\n\n");
                     return null;
                 })
                 .when(chain)
@@ -376,38 +287,28 @@ class DevToolbarFilterTest {
 
         filter.doFilter(request, response, chain);
 
-        assertThat(originalOutput.toString(StandardCharsets.UTF_8)).isEqualTo("data: tick\n\n");
+        assertThat(response.getContentAsString()).isEqualTo("data: tick\n\n");
     }
 
     @Test
     void shouldInjectExternalToolbarScriptLoader() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        stubHtmlResponse("<html><body></body></html>");
+        chainWritesHtml("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
         assertThat(result).contains("id=\"peekaboot-toolbar-data\"");
     }
 
     @Test
     void shouldInjectIdleModeToolbarForSwaggerUi() throws Exception {
-        stubPage("/swagger-ui/index.html");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        stubHtmlResponse("<html><body><div id=\"swagger-ui\"></div></body></html>");
+        request = get("/swagger-ui/index.html");
+        chainWritesHtml("<html><body><div id=\"swagger-ui\"></div></body></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
+        String result = response.getContentAsString();
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
         assertThat(result).contains("\"idle\":true");
         assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
@@ -415,89 +316,37 @@ class DevToolbarFilterTest {
 
     @Test
     void shouldNotUseIdleModeForRegularPages() throws Exception {
-        stubPage("/users/123");
-        when(request.getMethod()).thenReturn("GET");
-        when(request.getHeader("X-Requested-With")).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-
-        ByteArrayOutputStream originalOutput = stubResponseOutputStream();
-        stubHtmlResponse("<html><body></body></html>");
+        chainWritesHtml("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
 
-        String result = originalOutput.toString(StandardCharsets.UTF_8);
-        assertThat(result).doesNotContain("\"idle\":true");
+        assertThat(response.getContentAsString()).doesNotContain("\"idle\":true");
+    }
+
+    /** A GET without a context path: the request URI and the container's mapped path coincide. */
+    private static MockHttpServletRequest get(String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+        request.setServletPath(path);
+        return request;
+    }
+
+    /** {@code chainWrites("text/html", content)} — the common case for the tests above. */
+    private void chainWritesHtml(String content) throws Exception {
+        chainWrites("text/html", content);
     }
 
     /**
-     * Stubs {@code response.getOutputStream()} with a buffer-backed {@link TestServletOutputStream}
-     * and returns the buffer so the test can read back whatever the filter ultimately wrote.
+     * Makes {@code chain.doFilter} write {@code content} with the given content type through
+     * the {@link ContentBufferingResponseWrapper} the filter passes down.
      */
-    private ByteArrayOutputStream stubResponseOutputStream() throws IOException {
-        ByteArrayOutputStream originalOutput = new ByteArrayOutputStream();
-        TestServletOutputStream servletOutputStream = new TestServletOutputStream(originalOutput);
-        when(response.getOutputStream()).thenReturn(servletOutputStream);
-        return originalOutput;
-    }
-
-    /** A request without a context path: the request URI and the container's mapped path coincide. */
-    private void stubPath(String path) {
-        when(request.getRequestURI()).thenReturn(path);
-        when(request.getServletPath()).thenReturn(path);
-    }
-
-    /** {@link #stubPath} for a page the bar gets rendered into, which also needs the (empty) context path. */
-    private void stubPage(String path) {
-        stubPath(path);
-        when(request.getContextPath()).thenReturn("");
-    }
-
-    /** {@code stubResponse("text/html", content)} — the common case for the tests below. */
-    private void stubHtmlResponse(String content) throws Exception {
-        stubResponse("text/html", content);
-    }
-
-    /**
-     * Makes {@code chain.doFilter} write {@code content} through the {@link ContentBufferingResponseWrapper}
-     * the filter passes down, with the given content type, and stubs {@code response.getContentType()}
-     * to match so the filter's own content-type check (whether to inject the toolbar at all) sees it.
-     */
-    private void stubResponse(String contentType, String content) throws Exception {
+    private void chainWrites(String contentType, String content) throws Exception {
         doAnswer(invocation -> {
-                    ContentBufferingResponseWrapper wrapper =
-                            (ContentBufferingResponseWrapper) invocation.getArgument(1);
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
                     wrapper.setContentType(contentType);
                     wrapper.getWriter().write(content);
-                    when(response.getContentType()).thenReturn(contentType);
                     return null;
                 })
                 .when(chain)
                 .doFilter(eq(request), any());
-    }
-
-    private static class TestServletOutputStream extends ServletOutputStream {
-        private final ByteArrayOutputStream output;
-
-        TestServletOutputStream(ByteArrayOutputStream output) {
-            this.output = output;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            output.write(b);
-        }
-
-        @Override
-        public void write(byte[] b, int off, int len) throws IOException {
-            output.write(b, off, len);
-        }
-
-        @Override
-        public boolean isReady() {
-            return true;
-        }
-
-        @Override
-        public void setWriteListener(WriteListener listener) {}
     }
 }

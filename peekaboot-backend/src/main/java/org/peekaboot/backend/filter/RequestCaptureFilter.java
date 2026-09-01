@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.LongSupplier;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -44,10 +45,17 @@ public class RequestCaptureFilter implements Filter {
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
+    /** Epoch millis; the duration is the difference between two reads around the chain. */
+    private final LongSupplier clock;
 
     public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher) {
+        this(tracer, eventPublisher, System::currentTimeMillis);
+    }
+
+    RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, LongSupplier clock) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
+        this.clock = clock;
     }
 
     @Override
@@ -67,7 +75,7 @@ public class RequestCaptureFilter implements Filter {
 
         setServerTimingHeader(httpResponse);
 
-        long startTime = System.currentTimeMillis();
+        long startTime = clock.getAsLong();
 
         try {
             chain.doFilter(request, response);
@@ -157,7 +165,7 @@ public class RequestCaptureFilter implements Filter {
 
     private void captureRequest(
             HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
-        long durationMs = System.currentTimeMillis() - startTime;
+        long durationMs = clock.getAsLong() - startTime;
 
         Map<String, String> requestHeaders = maskedRequestHeaders(request);
         Map<String, String> responseHeaders = maskedResponseHeaders(response);

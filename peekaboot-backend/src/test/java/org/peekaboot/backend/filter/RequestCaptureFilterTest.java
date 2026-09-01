@@ -2,7 +2,7 @@ package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,17 +12,13 @@ import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
-import jakarta.servlet.AsyncContext;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.PrimitiveIterator;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,16 +27,16 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.peekaboot.backend.testsupport.LogCapture;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.mock.web.MockAsyncContext;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerMapping;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class RequestCaptureFilterTest {
 
     @Mock
@@ -50,19 +46,17 @@ class RequestCaptureFilterTest {
     ApplicationEventPublisher eventPublisher;
 
     @Mock
-    HttpServletRequest request;
-
-    @Mock
-    HttpServletResponse response;
-
-    @Mock
     FilterChain chain;
 
+    MockHttpServletRequest request;
+    MockHttpServletResponse response;
     RequestCaptureFilter filter;
 
     @BeforeEach
     void setUp() {
         filter = new RequestCaptureFilter(tracer, eventPublisher);
+        request = get("/api/users");
+        response = new MockHttpServletResponse();
     }
 
     private void setupTraceContext(String traceId) {
@@ -77,7 +71,7 @@ class RequestCaptureFilterTest {
     @ValueSource(
             strings = {"/static/app.js", "/webjars/jquery.js", "/actuator/health", "/peekaboot/api/traces", "/error"})
     void shouldSkipExcludedPaths(String path) throws Exception {
-        stubPath(path);
+        request = get(path);
 
         filter.doFilter(request, response, chain);
 
@@ -87,7 +81,6 @@ class RequestCaptureFilterTest {
 
     @Test
     void shouldNotPublishEventWithoutTraceId() throws Exception {
-        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
@@ -99,15 +92,11 @@ class RequestCaptureFilterTest {
     @Test
     void shouldPublishEventWithTraceId() throws Exception {
         setupTraceContext("abc123");
-        setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
         verify(chain).doFilter(request, response);
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.traceId()).isEqualTo("abc123");
         assertThat(event.method()).isEqualTo("GET");
         assertThat(event.path()).isEqualTo("/api/users");
@@ -117,56 +106,33 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureRequestHeaders() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("POST");
-        when(response.getStatus()).thenReturn(201);
-
-        Enumeration<String> headerNames = Collections.enumeration(java.util.List.of("content-type", "accept"));
-        when(request.getHeaderNames()).thenReturn(headerNames);
-        when(request.getHeader("content-type")).thenReturn("application/json");
-        when(request.getHeader("accept")).thenReturn("application/json");
-
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getParameterMap()).thenReturn(Map.of());
+        request.setMethod("POST");
+        request.addHeader("Content-Type", "application/json");
+        request.addHeader("Accept", "application/json");
+        response.setStatus(201);
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
-        assertThat(event.requestHeaders()).containsEntry("content-type", "application/json");
-        assertThat(event.requestHeaders()).containsEntry("accept", "application/json");
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders()).containsEntry("Content-Type", "application/json");
+        assertThat(event.requestHeaders()).containsEntry("Accept", "application/json");
     }
 
     @Test
     void shouldMaskSensitiveHeaders() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-
-        Enumeration<String> headerNames =
-                Collections.enumeration(java.util.List.of("authorization", "cookie", "x-api-key", "content-type"));
-        when(request.getHeaderNames()).thenReturn(headerNames);
-        when(request.getHeader("authorization")).thenReturn("Bearer secret-token");
-        when(request.getHeader("cookie")).thenReturn("session=xyz");
-        when(request.getHeader("x-api-key")).thenReturn("api-key-123");
-        when(request.getHeader("content-type")).thenReturn("application/json");
-
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getParameterMap()).thenReturn(Map.of());
+        request.addHeader("Authorization", "Bearer secret-token");
+        request.addHeader("Cookie", "session=xyz");
+        request.addHeader("X-Api-Key", "api-key-123");
+        request.addHeader("Content-Type", "application/json");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
-        assertThat(event.requestHeaders()).containsEntry("authorization", "******");
-        assertThat(event.requestHeaders()).containsEntry("cookie", "******");
-        assertThat(event.requestHeaders()).containsEntry("x-api-key", "******");
-        assertThat(event.requestHeaders()).containsEntry("content-type", "application/json");
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders()).containsEntry("Authorization", "******");
+        assertThat(event.requestHeaders()).containsEntry("Cookie", "******");
+        assertThat(event.requestHeaders()).containsEntry("X-Api-Key", "******");
+        assertThat(event.requestHeaders()).containsEntry("Content-Type", "application/json");
     }
 
     /**
@@ -177,45 +143,22 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskProxyAuthorizationHeader() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-
-        Enumeration<String> headerNames = Collections.enumeration(java.util.List.of("proxy-authorization"));
-        when(request.getHeaderNames()).thenReturn(headerNames);
-        when(request.getHeader("proxy-authorization")).thenReturn("Basic dXNlcjpwYXNz");
-
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getParameterMap()).thenReturn(Map.of());
+        request.addHeader("Proxy-Authorization", "Basic dXNlcjpwYXNz");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        assertThat(captor.getValue().requestHeaders()).containsEntry("proxy-authorization", "******");
+        assertThat(publishedEvent().requestHeaders()).containsEntry("Proxy-Authorization", "******");
     }
 
     @Test
     void shouldCaptureQueryParameters() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("page", new String[] {"1"});
-        params.put("size", new String[] {"10"});
-        when(request.getParameterMap()).thenReturn(params);
+        request.setParameter("page", "1");
+        request.setParameter("size", "10");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.queryParams()).containsEntry("page", List.of("1"));
         assertThat(event.queryParams()).containsEntry("size", List.of("10"));
     }
@@ -223,24 +166,14 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskSensitiveQueryParameterValues() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/search");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("api_key", new String[] {"xyz"});
-        params.put("q", new String[] {"widgets"});
-        when(request.getParameterMap()).thenReturn(params);
+        request = get("/search");
+        request.setQueryString("api_key=xyz&q=widgets");
+        request.setParameter("api_key", "xyz");
+        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.queryParams()).containsEntry("api_key", List.of("******"));
         assertThat(event.queryParams()).containsEntry("q", List.of("widgets"));
     }
@@ -248,24 +181,14 @@ class RequestCaptureFilterTest {
     @Test
     void shouldMaskTheRawQueryStringPerParameter() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/search");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getQueryString()).thenReturn("api_key=xyz&q=widgets");
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("api_key", new String[] {"xyz"});
-        params.put("q", new String[] {"widgets"});
-        when(request.getParameterMap()).thenReturn(params);
+        request = get("/search");
+        request.setQueryString("api_key=xyz&q=widgets");
+        request.setParameter("api_key", "xyz");
+        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        assertThat(captor.getValue().queryString()).isEqualTo("api_key=******&q=widgets");
+        assertThat(publishedEvent().queryString()).isEqualTo("api_key=******&q=widgets");
     }
 
     @Test
@@ -274,25 +197,15 @@ class RequestCaptureFilterTest {
         // query-string keys belong in queryParams and only body keys in formParams -
         // "password" here has no query-string counterpart, so it lands in formParams.
         setupTraceContext("trace1");
-        stubPath("/login");
-        when(request.getMethod()).thenReturn("POST");
-        when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
-        when(request.getQueryString()).thenReturn(null);
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("username", new String[] {"alice"});
-        params.put("password", new String[] {"hunter2"});
-        when(request.getParameterMap()).thenReturn(params);
+        request = get("/login");
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("username", "alice");
+        request.setParameter("password", "hunter2");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.formParams()).containsEntry("username", List.of("alice"));
         assertThat(event.formParams()).containsEntry("password", List.of("******"));
     }
@@ -300,37 +213,23 @@ class RequestCaptureFilterTest {
     @Test
     void shouldPreserveAQueryStringPairWithNoValue() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/search");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getQueryString()).thenReturn("debug&q=widgets");
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("debug", new String[] {""});
-        params.put("q", new String[] {"widgets"});
-        when(request.getParameterMap()).thenReturn(params);
+        request = get("/search");
+        request.setQueryString("debug&q=widgets");
+        request.setParameter("debug", "");
+        request.setParameter("q", "widgets");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        assertThat(captor.getValue().queryString()).isEqualTo("debug&q=widgets");
+        assertThat(publishedEvent().queryString()).isEqualTo("debug&q=widgets");
     }
 
     @Test
     void shouldReturnNullQueryStringWhenThereIsNone() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        assertThat(captor.getValue().queryString()).isNull();
+        assertThat(publishedEvent().queryString()).isNull();
     }
 
     @Test
@@ -339,25 +238,16 @@ class RequestCaptureFilterTest {
         // only actual query-string keys belong in queryParams and only
         // body keys in formParams
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("POST");
-        when(request.getContentType()).thenReturn("application/x-www-form-urlencoded");
-        when(request.getQueryString()).thenReturn("page=1");
-        when(response.getStatus()).thenReturn(201);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-
-        Map<String, String[]> params = new HashMap<>();
-        params.put("page", new String[] {"1"});
-        params.put("firstName", new String[] {"Bob"});
-        when(request.getParameterMap()).thenReturn(params);
+        request.setMethod("POST");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setQueryString("page=1");
+        request.setParameter("page", "1");
+        request.setParameter("firstName", "Bob");
+        response.setStatus(201);
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.queryParams()).containsOnlyKeys("page");
         assertThat(event.formParams()).containsOnlyKeys("firstName");
         assertThat(event.formParams()).containsEntry("firstName", List.of("Bob"));
@@ -366,20 +256,13 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureControllerInfo() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
-
-        HandlerMethod handlerMethod = mock(HandlerMethod.class);
-        when(handlerMethod.getBeanType()).thenReturn((Class) TestController.class);
-        when(handlerMethod.getMethod()).thenReturn(TestController.class.getMethod("getUsers"));
-        when(request.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE))
-                .thenReturn(handlerMethod);
+        request.setAttribute(
+                HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE,
+                new HandlerMethod(new TestController(), TestController.class.getMethod("getUsers")));
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
+        RequestCompletedEvent event = publishedEvent();
         assertThat(event.controllerClass()).endsWith("TestController");
         assertThat(event.controllerMethod()).isEqualTo("getUsers");
     }
@@ -387,52 +270,31 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureResponseHeaders() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(request.getParameterMap()).thenReturn(Map.of());
-
-        when(response.getHeaderNames()).thenReturn(java.util.List.of("content-type", "x-request-id"));
-        when(response.getHeader("content-type")).thenReturn("application/json");
-        when(response.getHeader("x-request-id")).thenReturn("req-123");
+        response.addHeader("Content-Type", "application/json");
+        response.addHeader("X-Request-Id", "req-123");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
-        assertThat(event.responseHeaders()).containsEntry("content-type", "application/json");
-        assertThat(event.responseHeaders()).containsEntry("x-request-id", "req-123");
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.responseHeaders()).containsEntry("Content-Type", "application/json");
+        assertThat(event.responseHeaders()).containsEntry("X-Request-Id", "req-123");
     }
 
     @Test
     void shouldMaskSensitiveResponseHeaders() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(request.getParameterMap()).thenReturn(Map.of());
-
-        when(response.getHeaderNames()).thenReturn(java.util.List.of("set-cookie", "content-type"));
-        when(response.getHeader("set-cookie")).thenReturn("session=abc123");
-        when(response.getHeader("content-type")).thenReturn("application/json");
+        response.addHeader("Set-Cookie", "session=abc123");
+        response.addHeader("Content-Type", "application/json");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
-        assertThat(event.responseHeaders()).containsEntry("set-cookie", "******");
-        assertThat(event.responseHeaders()).containsEntry("content-type", "application/json");
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.responseHeaders()).containsEntry("Set-Cookie", "******");
+        assertThat(event.responseHeaders()).containsEntry("Content-Type", "application/json");
     }
 
     @Test
     void shouldStillExecuteFilterChainEvenWhenNoTraceId() throws Exception {
-        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
@@ -441,18 +303,16 @@ class RequestCaptureFilterTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    /** The duration spans the chain: the clock is read once before it and once after. */
     @Test
     void shouldCalculateDuration() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
+        PrimitiveIterator.OfLong clock = LongStream.of(1_000, 1_250).iterator();
+        filter = new RequestCaptureFilter(tracer, eventPublisher, clock::nextLong);
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-
-        RequestCompletedEvent event = captor.getValue();
-        assertThat(event.durationMs()).isGreaterThanOrEqualTo(0);
+        assertThat(publishedEvent().durationMs()).isEqualTo(250);
     }
 
     @Test
@@ -464,12 +324,11 @@ class RequestCaptureFilterTest {
         when(context.sampled()).thenReturn(true);
         when(span.context()).thenReturn(context);
         when(tracer.currentSpan()).thenReturn(span);
-        setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
-        verify(response)
-                .setHeader("Server-Timing", "trace;desc=\"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01\"");
+        assertThat(response.getHeader("Server-Timing"))
+                .isEqualTo("trace;desc=\"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01\"");
     }
 
     @Test
@@ -481,30 +340,31 @@ class RequestCaptureFilterTest {
         when(context.sampled()).thenReturn(false);
         when(span.context()).thenReturn(context);
         when(tracer.currentSpan()).thenReturn(span);
-        setupBasicRequestResponse();
 
         filter.doFilter(request, response, chain);
 
-        verify(response).setHeader("Server-Timing", "trace;desc=\"00-abc123-def456-00\"");
+        assertThat(response.getHeader("Server-Timing")).isEqualTo("trace;desc=\"00-abc123-def456-00\"");
     }
 
     @Test
     void shouldNotSetServerTimingHeaderWhenNoSpan() throws Exception {
-        stubPath("/api/users");
         when(tracer.currentSpan()).thenReturn(null);
 
         filter.doFilter(request, response, chain);
 
-        verify(response, never()).setHeader(eq("Server-Timing"), any());
+        assertThat(response.containsHeader("Server-Timing")).isFalse();
     }
 
     @Test
     void shouldLogWarningAndNotPublishEventWhenCaptureFails() throws Exception {
         setupTraceContext("trace1");
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenThrow(new RuntimeException("boom"));
+        request = new MockHttpServletRequest("GET", "/api/users") {
+            @Override
+            public Enumeration<String> getHeaderNames() {
+                throw new IllegalStateException("boom");
+            }
+        };
+        request.setServletPath("/api/users");
 
         try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
             filter.doFilter(request, response, chain);
@@ -525,10 +385,9 @@ class RequestCaptureFilterTest {
      */
     @Test
     void shouldSkipPeekabootPathsBehindAContextPath() throws Exception {
-        when(request.getContextPath()).thenReturn("/app");
-        when(request.getRequestURI()).thenReturn("/app/peekaboot/api/traces");
-        when(request.getServletPath()).thenReturn("/peekaboot/api/traces");
-        setupTraceContext("trace1");
+        request.setContextPath("/app");
+        request.setRequestURI("/app/peekaboot/api/traces");
+        request.setServletPath("/peekaboot/api/traces");
 
         filter.doFilter(request, response, chain);
 
@@ -540,16 +399,13 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureTheRequestUriWithItsContextPath() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
-        when(request.getContextPath()).thenReturn("/app");
-        when(request.getRequestURI()).thenReturn("/app/api/users");
-        when(request.getServletPath()).thenReturn("/api/users");
+        request.setContextPath("/app");
+        request.setRequestURI("/app/api/users");
+        request.setServletPath("/api/users");
 
         filter.doFilter(request, response, chain);
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().path()).isEqualTo("/app/api/users");
+        assertThat(publishedEvent().path()).isEqualTo("/app/api/users");
     }
 
     /**
@@ -560,76 +416,64 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureAnAsyncRequestOnCompletionRatherThanOnHandOff() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
-        when(request.isAsyncStarted()).thenReturn(true);
-        AsyncContext asyncContext = mock(AsyncContext.class);
-        when(request.getAsyncContext()).thenReturn(asyncContext);
+        MockAsyncContext asyncContext = startAsync();
 
         filter.doFilter(request, response, chain);
 
         verify(eventPublisher, never()).publishEvent(any());
-        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
-        verify(asyncContext).addListener(listener.capture());
+        assertThat(asyncContext.getListeners()).hasSize(1);
 
-        when(response.getStatus()).thenReturn(500);
-        listener.getValue().onComplete(new AsyncEvent(asyncContext));
+        response.setStatus(500);
+        asyncContext.complete();
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().status()).isEqualTo(500);
+        assertThat(publishedEvent().status()).isEqualTo(500);
     }
 
     /** The completion callback runs on a container thread with no current span; the id comes from the request thread. */
     @Test
     void asyncCaptureKeepsTheTraceIdResolvedOnTheRequestThread() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
-        when(request.isAsyncStarted()).thenReturn(true);
-        AsyncContext asyncContext = mock(AsyncContext.class);
-        when(request.getAsyncContext()).thenReturn(asyncContext);
+        MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
-        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
-        verify(asyncContext).addListener(listener.capture());
+        clearInvocations(tracer);
 
-        when(tracer.currentSpan()).thenReturn(null);
-        listener.getValue().onComplete(new AsyncEvent(asyncContext));
+        asyncContext.complete();
 
-        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
-        verify(eventPublisher).publishEvent(captor.capture());
-        assertThat(captor.getValue().traceId()).isEqualTo("trace1");
+        verify(tracer, never()).currentSpan();
+        assertThat(publishedEvent().traceId()).isEqualTo("trace1");
     }
 
     /** A listener is dropped when a new async cycle starts unless it re-registers itself. */
     @Test
     void asyncCaptureFollowsARestartedAsyncCycle() throws Exception {
         setupTraceContext("trace1");
-        setupBasicRequestResponse();
-        when(request.isAsyncStarted()).thenReturn(true);
-        AsyncContext asyncContext = mock(AsyncContext.class);
-        when(request.getAsyncContext()).thenReturn(asyncContext);
+        MockAsyncContext asyncContext = startAsync();
         filter.doFilter(request, response, chain);
-        ArgumentCaptor<AsyncListener> listener = ArgumentCaptor.forClass(AsyncListener.class);
-        verify(asyncContext).addListener(listener.capture());
+        AsyncListener listener = asyncContext.getListeners().get(0);
 
-        AsyncContext restarted = mock(AsyncContext.class);
-        listener.getValue().onStartAsync(new AsyncEvent(restarted));
+        MockAsyncContext restarted = new MockAsyncContext(request, response);
+        listener.onStartAsync(new AsyncEvent(restarted));
 
-        verify(restarted).addListener(listener.getValue());
+        assertThat(restarted.getListeners()).containsExactly(listener);
     }
 
-    private void setupBasicRequestResponse() {
-        stubPath("/api/users");
-        when(request.getMethod()).thenReturn("GET");
-        when(response.getStatus()).thenReturn(200);
-        when(request.getHeaderNames()).thenReturn(Collections.emptyEnumeration());
-        when(response.getHeaderNames()).thenReturn(Collections.emptyList());
-        when(request.getParameterMap()).thenReturn(Map.of());
+    private RequestCompletedEvent publishedEvent() {
+        ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        return captor.getValue();
     }
 
-    /** Without a context path the request URI and the container's mapped path coincide. */
-    private void stubPath(String path) {
-        when(request.getRequestURI()).thenReturn(path);
-        when(request.getServletPath()).thenReturn(path);
+    /** A GET without a context path: the request URI and the container's mapped path coincide. */
+    private static MockHttpServletRequest get(String path) {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", path);
+        request.setServletPath(path);
+        return request;
+    }
+
+    /** Puts the request into the state a handler leaves it in after handing off asynchronously. */
+    private MockAsyncContext startAsync() {
+        request.setAsyncSupported(true);
+        return (MockAsyncContext) request.startAsync(request, response);
     }
 
     public static class TestController {
