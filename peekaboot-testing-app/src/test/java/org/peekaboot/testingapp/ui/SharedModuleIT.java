@@ -316,6 +316,37 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo(true);
     }
 
+    /** lifecycle.js's page param is 1-based in the URL; anything unparseable, fractional or below 1 is page one. */
+    @Test
+    void lifecyclePageFromUrlParsesOneBasedAndRejectsGarbage() {
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '3'})"))
+                .isEqualTo(2);
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '1'})"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '0'})"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: '2.5'})"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({page: 'x'})"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/lifecycle.js", "m.pageFromUrl({})"))
+                .isEqualTo(0);
+    }
+
+    /** insights.js's level param must name a configured level index; anything else falls back. */
+    @Test
+    void insightsLevelFromUrlAcceptsOnlyConfiguredLevels() {
+        String levels = "[{index: 0}, {index: 1}, {index: 2}]";
+        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '1'}, " + levels + ", 0)"))
+                .isEqualTo(1);
+        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: '9'}, " + levels + ", 0)"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({level: 'abc'}, " + levels + ", 0)"))
+                .isEqualTo(0);
+        assertThat(evalUiModule("dashboard/tabs/insights.js", "m.levelFromUrl({}, " + levels + ", 0)"))
+                .isEqualTo(0);
+    }
+
     @Test
     void formatDateTimeHandlesUnparseableValueWithoutSayingInvalidDate() {
         Object result = evalModule("format.js", "m.formatDateTime('not-a-timestamp')");

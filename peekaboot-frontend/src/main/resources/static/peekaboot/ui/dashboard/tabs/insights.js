@@ -16,6 +16,7 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatInterval, formatMetricValue} from '../../shared/format.js';
+import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {createChart, ensureUplot} from './insights-chart.js';
 
 export const id = 'insights';
@@ -61,10 +62,46 @@ export function isAvailable(data, features) {
 
 export function render(container, data, context) {
     currentContext = context;
-    if (initialized) return;   // SSE keeps this tab live; the 30s cycle must not rebuild it
+    if (initialized) {
+        // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the global
+        // level is reconciled with the URL - and only while this tab is the one the
+        // hash currently points at, for the same reason every other tab guards its
+        // reconcile (context.urlParams reflects whatever tab is active in the URL).
+        if (config && container.classList.contains('active')) reconcileLevelWithUrl(context);
+        return;
+    }
     if (!container.classList.contains('active')) return;
     initialized = true;
     init(container, context);
+}
+
+/**
+ * The URL's level param as a configured level index, or `fallback` for anything else -
+ * a stale link, a typo, a level from an older config. Exported for SharedModuleIT.
+ */
+export function levelFromUrl(params, configuredLevels, fallback) {
+    const level = Number(params?.level);
+    return configuredLevels.some(configured => configured.index === level) ? level : fallback;
+}
+
+/**
+ * Reconciles the global aggregation level with the URL - the same two-direction rule
+ * every filter tab applies (see shared/url-filter.js's doc comment), with the first
+ * configured level as the default that stays out of the URL.
+ */
+function reconcileLevelWithUrl(context) {
+    reconcileFilterWithUrl(context, ['level'], {
+        seed: params => setGlobalLevel(levelFromUrl(params, config.levels, config.levels[0].index)),
+        hasNonDefaultState: () => globalLevel !== config.levels[0].index,
+        writeBack: writeLevelParam
+    });
+}
+
+/** Writes the global level to the URL, omitting it at the default so a clean state
+    yields a clean "#insights" hash. A replace, never a push - see url-state.js. */
+function writeLevelParam() {
+    currentContext.setUrlParams(
+            globalLevel === config.levels[0].index ? {} : {level: String(globalLevel)});
 }
 
 async function init(container, context) {
@@ -74,7 +111,8 @@ async function init(container, context) {
         // tab's tile row carries its own dedupe key); the next refresh cycle retries
         // from scratch
         if (!config) throw new Error('insights config request was superseded');
-        globalLevel = config.levels[0].index;
+        // a deep link may name the level to start at (validated - see levelFromUrl)
+        globalLevel = levelFromUrl(context.urlParams, config.levels, config.levels[0].index);
         renderToolbar(container);
         renderPanels(container);
         initPanels(container);
@@ -201,6 +239,7 @@ function setGlobalLevel(level) {
         if (panel.level === previous) selectPanelLevel(panel, level);
         markOverride(panel);
     });
+    writeLevelParam();
 }
 
 /** Restarts the CSS blink animation, which only replays if the class is re-added. */

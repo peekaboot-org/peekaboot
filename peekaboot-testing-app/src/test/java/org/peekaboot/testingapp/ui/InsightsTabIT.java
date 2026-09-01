@@ -403,6 +403,60 @@ class InsightsTabIT extends PlaywrightTestBase {
                 .isNotEqualTo("0px");
     }
 
+    /**
+     * The toolbar's global aggregation level is URL state like any other tab filter
+     * (url-state.js): a deep link must restore it, not just land on the tab at the
+     * default level - and the panels must actually chart at it, not merely have the
+     * toolbar highlight moved.
+     */
+    @Test
+    void deepLinkRestoresTheGlobalAggregationLevel() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights?level=1");
+        page.waitForSelector("#insights-level .pk-insight-level[data-level='1'][aria-pressed='true']");
+
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("false");
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+    }
+
+    /**
+     * Level values from the URL are validated against the configured levels (same rule
+     * as traces.js's bucket fallback): a stale or hand-mangled level must fall back to
+     * the first configured level instead of pinning every panel to a level that has no
+     * data endpoint behind it.
+     */
+    @Test
+    void bogusLevelInTheUrlFallsBackToTheFirstConfiguredLevel() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights?level=99");
+        page.waitForSelector("#insights-level .pk-insight-level");
+
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
+    }
+
+    /**
+     * Switching the global level writes it to the URL via replaceState (url-state.js's
+     * push/replace rule - a filter change never adds a Back stop), and switching back to
+     * the first configured level - the default - takes the param out again so a clean
+     * state yields a clean "#insights" hash.
+     */
+    @Test
+    void switchingTheGlobalLevelWritesItToTheUrlWithoutPushingHistory() {
+        openInsights();
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+        int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        page.click("#insights-level .pk-insight-level[data-level='1']");
+        page.waitForFunction("() => window.location.hash.includes('level=1')");
+
+        int historyLengthAfter = ((Number) page.evaluate("() => window.history.length")).intValue();
+        assertThat(historyLengthAfter).isEqualTo(historyLengthBefore);
+
+        page.click("#insights-level .pk-insight-level[data-level='0']");
+        page.waitForFunction("() => !window.location.hash.includes('level=')");
+        assertThat(page.url()).endsWith("#insights");
+    }
+
     @Test
     void rapidLevelSwitchingLeavesEveryPanelCharted() {
         openInsights();
