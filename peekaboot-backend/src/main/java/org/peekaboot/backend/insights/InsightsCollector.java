@@ -203,7 +203,7 @@ public final class InsightsCollector implements SmartLifecycle {
         }
     }
 
-    /** Samples every series into level 0, samples tiles, and notifies the listener. */
+    /** Samples every series into level 0 and notifies the listener. */
     void tick(long epochMs) {
         long elapsedMs = elapsedSince(0, epochMs);
         fillMissed(0, epochMs);
@@ -215,8 +215,6 @@ public final class InsightsCollector implements SmartLifecycle {
             values.put(entry.getKey(), value);
         }
         levelEndEpochMs.set(0, epochMs);
-
-        tiles.sample(elapsedMs);
 
         listener.onTick(epochMs, values, tileValues());
     }
@@ -445,7 +443,7 @@ public final class InsightsCollector implements SmartLifecycle {
         return restoreBarrier.hasApplied();
     }
 
-    /** Current tile values; NaN when a tile is not yet (or no longer) resolvable. */
+    /** Current tile values, sampled by this read (see {@link TileTracker}); NaN when a tile is not resolvable. */
     Map<String, Double> tileValues() {
         return tiles.values();
     }
