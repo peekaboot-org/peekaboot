@@ -152,21 +152,7 @@ public final class MaskingEngine {
             return value;
         }
 
-        List<int[]> spans = new ArrayList<>();
-        for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
-            Matcher matcher = rule.pattern().matcher(value);
-            while (matcher.find()) {
-                if (rule.keyGroup() > 0 && !isSensitiveKey(matcher.group(rule.keyGroup()))) {
-                    continue;
-                }
-                int group = rule.maskGroup();
-                if (group > 0 && matcher.start(group) >= 0) {
-                    spans.add(new int[] {matcher.start(group), matcher.end(group)});
-                } else {
-                    spans.add(new int[] {matcher.start(), matcher.end()});
-                }
-            }
-        }
+        List<int[]> spans = sensitiveSpans(value);
         if (spans.isEmpty()) {
             return value;
         }
@@ -185,6 +171,26 @@ public final class MaskingEngine {
         }
         result.append(value, cursor, value.length());
         return result.toString();
+    }
+
+    /** Every [start, end) span of {@code value} some value rule wants masked, in rule order, unmerged. */
+    private List<int[]> sensitiveSpans(String value) {
+        List<int[]> spans = new ArrayList<>();
+        for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
+            Matcher matcher = rule.pattern().matcher(value);
+            while (matcher.find()) {
+                if (rule.keyGroup() > 0 && !isSensitiveKey(matcher.group(rule.keyGroup()))) {
+                    continue;
+                }
+                int group = rule.maskGroup();
+                if (group > 0 && matcher.start(group) >= 0) {
+                    spans.add(new int[] {matcher.start(group), matcher.end(group)});
+                } else {
+                    spans.add(new int[] {matcher.start(), matcher.end()});
+                }
+            }
+        }
+        return spans;
     }
 
     /**
