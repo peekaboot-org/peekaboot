@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,8 +12,6 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Drives the testing app and reads back what Peekaboot captured, through the same public
@@ -33,7 +33,8 @@ class TraceApiClient {
     private final ObjectMapper objectMapper;
 
     TraceApiClient(int port, ObjectMapper objectMapper) {
-        this.restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+        this.restClient =
+                RestClient.builder().baseUrl("http://localhost:" + port).build();
         this.objectMapper = objectMapper;
     }
 
@@ -42,7 +43,8 @@ class TraceApiClient {
     }
 
     String triggerAndCaptureTraceId(String path) {
-        String html = restClient.get()
+        String html = restClient
+                .get()
                 .uri(path)
                 .accept(MediaType.TEXT_HTML)
                 .retrieve()
@@ -50,8 +52,10 @@ class TraceApiClient {
 
         Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
         assertThat(matcher.find())
-                .as("dev toolbar must embed a trace id for %s - without one the request was "
-                  + "never traced and any capture assertion would be meaningless", path)
+                .as(
+                        "dev toolbar must embed a trace id for %s - without one the request was "
+                                + "never traced and any capture assertion would be meaningless",
+                        path)
                 .isTrue();
         return matcher.group(1);
     }
@@ -72,7 +76,8 @@ class TraceApiClient {
             JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
             if (trace != null) {
                 lastSeen = trace;
-                int spanCount = trace.path("summary").path("spans").path("count").asInt();
+                int spanCount =
+                        trace.path("summary").path("spans").path("count").asInt();
                 // A trace with an outbound call is exported in more than one BatchSpanProcessor
                 // flush, so a single non-zero read can be a partial snapshot. Requiring the count
                 // to hold steady across two consecutive polls confirms the flushes have caught up.
@@ -90,8 +95,8 @@ class TraceApiClient {
             }
             sleepBriefly();
         }
-        throw new AssertionError("trace " + traceId + " never had a stable exported span count within "
-                + TIMEOUT + "; last response: " + lastSeen);
+        throw new AssertionError("trace " + traceId + " never had a stable exported span count within " + TIMEOUT
+                + "; last response: " + lastSeen);
     }
 
     JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
