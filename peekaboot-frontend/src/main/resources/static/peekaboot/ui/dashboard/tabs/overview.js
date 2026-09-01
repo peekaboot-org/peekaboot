@@ -1,7 +1,7 @@
 /**
- * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/JVM info
- * cards, the DataSources grid, the memory/storage usage meters and the health banner +
- * component grid.
+ * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/machine/JVM
+ * info cards, the DataSources grid, the memory/storage usage meters and the health
+ * banner + component grid.
  */
 import {kvRow, badge, meter} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
@@ -21,6 +21,7 @@ export function render(container, data, context = {}) {
     renderSpringInfo(container, application);
     renderJavaInfo(container, application);
     renderOsInfo(container, runtime);
+    renderMachineInfo(container, runtime);
     renderJvmDefaults(container, data.server, {locale, timeZone});
     renderDataSourcesInfo(container, dataSources);
     renderMemoryInfo(container, runtime);
@@ -186,6 +187,29 @@ function renderOsInfo(container, runtime) {
     }
 }
 
+/**
+ * The deployment environment: CPU, physical memory, the JVM's max heap and the
+ * container runtime the backend detected ("none" outside one). cpuCount and
+ * totalMemory come from the JDK, which is container-aware - inside a limited
+ * container they report the container's share, not the host's.
+ */
+function renderMachineInfo(container, runtime) {
+    const el = container.querySelector('#machine-info');
+    el.innerHTML = '';
+
+    const machine = runtime?.machine;
+    if (!machine) {
+        el.innerHTML = '<p class="pk-empty">No machine info available</p>';
+        return;
+    }
+
+    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', machine.cpuCount));
+    if (machine.cpuModel) el.appendChild(kvRow('CPU Model', machine.cpuModel));
+    if (machine.totalMemory) el.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
+    if (machine.maxHeap) el.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
+    el.appendChild(kvRow('Container', machine.container || 'none'));
+}
+
 function renderJvmDefaults(container, server, {locale, timeZone}) {
     const el = container.querySelector('#jvm-defaults-info');
     el.innerHTML = '';
@@ -208,7 +232,6 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
             formatDateTime(server.currentTime, {locale, timeZone, dateStyle: 'medium', timeStyle: 'medium'})));
     }
     if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
-    if (server.availableProcessors) el.appendChild(kvRow('CPU Cores', server.availableProcessors));
 }
 
 function renderDataSourcesInfo(container, dataSources) {

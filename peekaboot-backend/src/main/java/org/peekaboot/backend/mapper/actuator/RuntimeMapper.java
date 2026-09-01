@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
+import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.MemoryInfo;
 import org.peekaboot.backend.domain.runtime.OsInfo;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
@@ -20,7 +21,7 @@ public class RuntimeMapper {
         MemoryInfo memoryInfo = extractMemoryInfo(info);
         List<StorageInfo> storageInfo = extractStorageInfo(health);
 
-        return new RuntimeInfo(osInfo, memoryInfo, storageInfo, ProcessInfo.current());
+        return new RuntimeInfo(osInfo, memoryInfo, storageInfo, ProcessInfo.current(), MachineInfo.current());
     }
 
     private OsInfo extractOsInfo(InfoResponse info) {
