@@ -76,6 +76,12 @@ tasks.withType<Test>().configureEach {
     jvmArgumentProviders.add(CommandLineArgumentProvider {
         listOf("-javaagent:${mockitoAgentJar.singleFile}")
     })
+    // jsqlparser's generated token manager has a method too large to instrument
+    // (MethodTooLargeException at every testing-app JVM start); third-party, not measured.
+    // Same exclusion as the Maven agents' prepare-agent configuration.
+    extensions.configure(JacocoTaskExtension::class) {
+        excludes = listOf("net.sf.jsqlparser.*")
+    }
 }
 
 // Lifecycle split, same naming convention as surefire/failsafe: *Test at `test`,

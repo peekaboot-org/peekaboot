@@ -295,6 +295,12 @@
                                  property lets those modules late-bind it with @{jacocoArgLine}
                                  and keep both agents. -->
                             <propertyName>jacocoArgLine</propertyName>
+                            <!-- jsqlparser's generated token manager has a method too large to
+                                 instrument (MethodTooLargeException at every testing-app JVM
+                                 start); third-party, not measured. -->
+                            <excludes>
+                                <exclude>net.sf.jsqlparser.*</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                 </executions>
