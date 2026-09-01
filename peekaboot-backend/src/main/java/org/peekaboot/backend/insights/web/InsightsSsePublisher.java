@@ -232,7 +232,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 return;
             }
             queue.poll();
-            queue.offer(event);
+            queue.add(event);
             if (!queueOverflowWarned) {
                 queueOverflowWarned = true;
                 log.warn("Insights SSE dispatch queue full ({}); dropping oldest events", QUEUE_CAPACITY);
