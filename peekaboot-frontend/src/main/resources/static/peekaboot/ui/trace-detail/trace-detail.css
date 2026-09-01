@@ -125,12 +125,13 @@
 .pk-gantt-kind.server { background: var(--pk-primary); color: var(--pk-on-primary); }
 .pk-gantt-kind.client { background: var(--pk-purple); color: var(--pk-bg); }
 .pk-gantt-kind.internal { background: var(--pk-border); color: var(--pk-text); }
+.pk-gantt-kind.producer, .pk-gantt-kind.consumer { background: var(--pk-info); color: var(--pk-on-info); }
 
 .pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 8px; }
-.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; }
+.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-text-muted); }
 .pk-gantt-bar.kind-server { background: var(--pk-primary); }
 .pk-gantt-bar.kind-client { background: var(--pk-purple); }
-.pk-gantt-bar.kind-internal, .pk-gantt-bar.kind-unknown { background: var(--pk-text-muted); }
+.pk-gantt-bar.kind-producer, .pk-gantt-bar.kind-consumer { background: var(--pk-info); }
 .pk-gantt-bar.has-error { background: var(--pk-danger); }
 
 .pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }

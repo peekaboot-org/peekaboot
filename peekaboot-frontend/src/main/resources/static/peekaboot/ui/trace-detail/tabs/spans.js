@@ -125,7 +125,7 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     } else {
         nameHtml += `<span style="width:16px"></span>`;
     }
-    if (kind !== 'internal' && kind !== 'unknown' && kind !== 'null') {
+    if (kind !== 'internal' && kind !== 'unknown') {
         nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
     }
     nameHtml += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
