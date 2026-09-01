@@ -502,8 +502,8 @@ keys on the same local-development detection as `peekaboot.enabled`, not on
 explicitly in a shared environment does not get the toolbar injected into every page, or
 its own `/actuator/env` widened, as a side effect.
 
-`LocalDevDetector` mirrors the heuristics Spring Boot DevTools itself uses, checked in
-order:
+`LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds
+two signals of its own, checked in order:
 
 1. Running as a native image always resolves to `false`, before anything else is checked.
 2. Otherwise, if the current thread's context class loader is DevTools' `RestartClassLoader`
@@ -518,14 +518,24 @@ order:
    `cucumber.runtime.` frames. This is also why a `@SpringBootTest` run resolves `false`
    despite sharing the same thread name and class loader as a genuine local launch — the
    stack-trace check tells the two apart.
+4. Those three hold for *every* exploded-classpath launch, so two more signals decide
+   (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests):
+   `java.class.path` must contain a build tool's output directory — an entry ending in
+   `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main` or `bin/main`, or
+   containing `out/production/` — which an IDE, `spring-boot:run` and `bootRun` always put
+   there and a Jib image (`/app/classes`) or Boot's `extract` layout (a thin jar with a
+   `Class-Path` manifest) never do; and the process must show no container marker —
+   `/.dockerenv`, a `KUBERNETES_SERVICE_HOST` variable, or `/proc/1/cgroup` naming `docker`,
+   `kubepods` or `containerd`. A build-output classpath inside a container still resolves
+   `false`.
 
-In practice: an IDE run, `mvn spring-boot:run`, and `gradle bootRun` all default to on. A
-`java -jar` of the packaged artifact (Boot's `LaunchedClassLoader`), a war in a servlet
-container, a native image, an AOT-processed build, and a test all default to off. The rule
-is the class loader and the thread, not the environment: any exploded-classpath launch on
-the `main` thread — `java -cp … MainClass`, a Jib image, Spring Boot's `extract` layout —
-counts as local, container or not, and needs an explicit `peekaboot.enabled=false` (or
-`peekaboot.dev-toolbar=false`) if that is not wanted.
+In practice: an IDE run, `mvn spring-boot:run`, and `gradle bootRun` on a developer's machine
+default to on. A `java -jar` of the packaged artifact (Boot's `LaunchedClassLoader`), a war in
+a servlet container, a native image, an AOT-processed build, a test, a Jib image, the
+`extract` layout, a plain `java -cp` of jars, and anything running inside a container all
+default to off. What is left for an explicit `peekaboot.enabled=false` is the one shape the
+signals cannot separate: a build output directory mounted into a non-container process that
+is not a developer's own launch.
 
 `peekaboot.lifecycle.enabled` (`PeekabootLifecycleAutoConfiguration`'s own switch) is read
 by a `@ConditionalOnBooleanProperty` condition, since it has to be evaluated before any
