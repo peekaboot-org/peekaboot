@@ -15,13 +15,6 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 
 class InsightsCollectorLifecycleTest {
 
-    private static InsightsProperties.Level level(Duration interval, int size) {
-        InsightsProperties.Level l = new InsightsProperties.Level();
-        l.setInterval(interval);
-        l.setSize(size);
-        return l;
-    }
-
     @Test
     void startTicksAndRollsUpOnSchedule() throws Exception {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -41,8 +34,8 @@ class InsightsCollectorLifecycleTest {
         };
         InsightsCollector collector = new InsightsCollector(
                 List.of(
-                        level(Duration.ofMillis(100), 20),
-                        level(Duration.ofMillis(500), 10)),
+                        InsightsProperties.Level.of(Duration.ofMillis(100), 20),
+                        InsightsProperties.Level.of(Duration.ofMillis(500), 10)),
                 List.of(new SeriesDef("g", "G", "g", Map.of(), "value", null, null)),
                 List.of(),
                 registry,
@@ -62,9 +55,9 @@ class InsightsCollectorLifecycleTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         InsightsCollector collector = new InsightsCollector(
                 List.of(
-                        level(Duration.ofSeconds(10), 9),
-                        level(Duration.ofMinutes(1), 9),
-                        level(Duration.ofHours(1), 9)),
+                        InsightsProperties.Level.of(Duration.ofSeconds(10), 9),
+                        InsightsProperties.Level.of(Duration.ofMinutes(1), 9),
+                        InsightsProperties.Level.of(Duration.ofHours(1), 9)),
                 List.of(),
                 List.of(),
                 registry,

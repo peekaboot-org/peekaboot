@@ -20,13 +20,6 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 
 class InsightsCollectorRestoreTest {
 
-    private static InsightsProperties.Level level(Duration interval, int size) {
-        InsightsProperties.Level level = new InsightsProperties.Level();
-        level.setInterval(interval);
-        level.setSize(size);
-        return level;
-    }
-
     private static InsightsCollector collector(String... seriesIds) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 7).register(registry);
@@ -35,8 +28,8 @@ class InsightsCollectorRestoreTest {
                 .toList();
         return new InsightsCollector(
                 List.of(
-                        level(Duration.ofSeconds(10), 90),
-                        level(Duration.ofMinutes(1), 60)),
+                        InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
+                        InsightsProperties.Level.of(Duration.ofMinutes(1), 60)),
                 series,
                 List.of(),
                 registry,
@@ -153,7 +146,7 @@ class InsightsCollectorRestoreTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> gaugeValue).register(registry);
         return new InsightsCollector(
-                List.of(level(Duration.ofMillis(100), 20)),
+                List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
                 List.of(),
                 registry,
@@ -209,8 +202,8 @@ class InsightsCollectorRestoreTest {
         Gauge.builder("g", () -> 1).register(registry);
         InsightsCollector collector = new InsightsCollector(
                 List.of(
-                        level(Duration.ofMillis(100), 20),
-                        level(Duration.ofMillis(500), 20)),
+                        InsightsProperties.Level.of(Duration.ofMillis(100), 20),
+                        InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
                 List.of(),
                 registry,

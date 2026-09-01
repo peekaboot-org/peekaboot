@@ -295,14 +295,6 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Configuration
-    static class MockActuatorConfig {
-        @Bean
-        PeekabootActuatorService peekabootActuatorService() {
-            return mock(PeekabootActuatorService.class);
-        }
-    }
-
-    @Configuration
     @EnableConfigurationProperties(PeekabootTracingProperties.class)
     static class MockTracingConfig {
         @Bean

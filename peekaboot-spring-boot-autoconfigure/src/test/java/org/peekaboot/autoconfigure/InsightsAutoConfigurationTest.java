@@ -2,7 +2,6 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.mock;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
@@ -13,7 +12,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
-import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -133,14 +131,6 @@ class InsightsAutoConfigurationTest {
         @Bean
         SimpleMeterRegistry meterRegistry() {
             return new SimpleMeterRegistry();
-        }
-    }
-
-    @Configuration
-    static class MockActuatorConfig {
-        @Bean
-        PeekabootActuatorService peekabootActuatorService() {
-            return mock(PeekabootActuatorService.class);
         }
     }
 }

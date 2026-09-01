@@ -161,7 +161,7 @@ public class InsightsProperties {
         /** Ring buffer entries kept per series at this level; interval x size is how far back the charts reach. */
         private int size;
 
-        static Level of(Duration interval, int size) {
+        public static Level of(Duration interval, int size) {
             Level level = new Level();
             level.interval = interval;
             level.size = size;
