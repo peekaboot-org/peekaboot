@@ -206,7 +206,7 @@ function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
         nameEl.textContent = stat.name;
         const valueEl = document.createElement('span');
         valueEl.className = 'pk-metric__stat-value';
-        valueEl.textContent = formatMetricValue(stat.value, baseUnit, locale);
+        valueEl.textContent = formatMeasurementValue(stat.value, baseUnit, locale);
         statEl.append(nameEl, valueEl);
         statsEl.appendChild(statEl);
     });
@@ -215,7 +215,7 @@ function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
     return el;
 }
 
-function formatMetricValue(value, unit, locale) {
+function formatMeasurementValue(value, unit, locale) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     if (unit === 'bytes') return formatBytes(value);
