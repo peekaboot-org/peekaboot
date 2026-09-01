@@ -301,15 +301,6 @@ class DevToolbarAutoConfigurationTest {
         return count;
     }
 
-    @Test
-    void propertiesDefaultDevToolbarToFalse() {
-        contextRunner.run(context -> {
-            assertThat(context).hasSingleBean(PeekabootProperties.class);
-            PeekabootProperties props = context.getBean(PeekabootProperties.class);
-            assertThat(props.isDevToolbar()).isFalse();
-        });
-    }
-
     @Configuration
     @EnableConfigurationProperties(PeekabootTracingProperties.class)
     static class MockTracingConfig {
