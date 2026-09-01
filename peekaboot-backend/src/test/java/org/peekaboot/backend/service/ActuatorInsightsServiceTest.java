@@ -171,7 +171,7 @@ class ActuatorInsightsServiceTest {
                 new LoggersMapper(),
                 new FlywayMapper(),
                 new ConfigMapper(maskingEngine),
-                new ScheduledTasksMapper(new CronDescriptionService()),
+                new ScheduledTasksMapper(),
                 dataSourceProvider);
     }
 }

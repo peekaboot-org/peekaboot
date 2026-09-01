@@ -10,11 +10,10 @@ import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
-import org.peekaboot.backend.service.CronDescriptionService;
 
 class ScheduledTasksMapperTest {
 
-    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper(new CronDescriptionService());
+    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper();
 
     @Test
     void map_shouldExtractCronTasks() {

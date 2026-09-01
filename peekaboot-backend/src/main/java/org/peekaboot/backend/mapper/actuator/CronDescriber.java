@@ -1,4 +1,4 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.mapper.actuator;
 
 import com.cronutils.descriptor.CronDescriptor;
 import com.cronutils.model.Cron;
@@ -8,21 +8,21 @@ import com.cronutils.parser.CronParser;
 import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
 
-@Service
-public class CronDescriptionService {
+/** Puts a cron expression into words for the Scheduled Tasks tab ("every hour"), in the reader's locale. */
+final class CronDescriber {
 
-    private static final Logger logger = LoggerFactory.getLogger(CronDescriptionService.class);
+    private static final Logger logger = LoggerFactory.getLogger(CronDescriber.class);
 
     private final CronParser parser;
 
-    public CronDescriptionService() {
+    CronDescriber() {
         // SPRING53 matches @Scheduled syntax since Spring 5.3 (L, W, # etc.)
         this.parser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(CronType.SPRING53));
     }
 
-    public String describe(String cronExpression, Locale locale) {
+    /** Null for a blank or unparseable expression; the tab then shows the raw expression alone. */
+    String describe(String cronExpression, Locale locale) {
         if (cronExpression == null || cronExpression.isBlank()) {
             return null;
         }

@@ -7,17 +7,12 @@ import java.util.List;
 import java.util.Locale;
 import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
 import org.peekaboot.backend.domain.scheduledtasks.*;
-import org.peekaboot.backend.service.CronDescriptionService;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ScheduledTasksMapper {
 
-    private final CronDescriptionService cronDescriptionService;
-
-    public ScheduledTasksMapper(CronDescriptionService cronDescriptionService) {
-        this.cronDescriptionService = cronDescriptionService;
-    }
+    private final CronDescriber cronDescriber = new CronDescriber();
 
     public ScheduledTasksInfo map(ScheduledTasksResponse response, Locale locale) {
         if (response == null) {
@@ -53,7 +48,7 @@ public class ScheduledTasksMapper {
                 extractTarget(cron.runnable()),
                 TaskType.CRON,
                 cron.expression(),
-                cronDescriptionService.describe(cron.expression(), locale),
+                cronDescriber.describe(cron.expression(), locale),
                 null,
                 timeOf(cron.lastExecution()),
                 parseStatus(cron.lastExecution()),
