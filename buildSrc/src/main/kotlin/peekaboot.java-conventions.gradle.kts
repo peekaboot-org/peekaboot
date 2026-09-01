@@ -1,4 +1,5 @@
 import net.ltgt.gradle.errorprone.errorprone
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 
 /*
  * The Gradle counterpart of peekaboot-parent: compiler setup (release 25, Error Prone,
@@ -19,7 +20,8 @@ plugins {
 }
 
 group = "org.peekaboot"
-version = "0.0.5-SNAPSHOT"
+// version comes from gradle.properties, next to the Spring Boot line read below.
+val springBootVersion: String by project
 
 java {
     withSourcesJar()
@@ -49,22 +51,30 @@ configurations.testImplementation.get().extendsFrom(configurations.compileOnly.g
 
 // Resolves the plain mockito-core jar so Test JVMs can register it as a Java agent,
 // avoiding the inline-mock-maker's self-attach warning (mirrors the Maven argLine).
-val mockitoAgent = configurations.create("mockitoAgent") {
-    isTransitive = false
-}
+// Its version comes from the Spring Boot BOM, so the configuration has to resolve
+// transitively - a non-transitive one ignores the platform's constraints - and the
+// artifact view then keeps only the mockito-core jar out of the resolved graph.
+val mockitoAgent = configurations.create("mockitoAgent")
+val mockitoAgentJar = mockitoAgent.incoming.artifactView {
+    componentFilter { it is ModuleComponentIdentifier && it.module == "mockito-core" }
+}.files
 
 dependencies {
+    // The Spring Boot BOM on every module, like peekaboot-parent's dependencyManagement
+    // import: modules name managed artifacts without a version.
+    api(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
+    annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
+    "mockitoAgent"(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     errorprone("com.google.errorprone:error_prone_core:2.50.0")
-    "mockitoAgent"("org.mockito:mockito-core:5.23.0")
-    // Gradle 9 no longer puts the launcher on the test runtime classpath itself; the
-    // version comes from the Spring Boot BOM each module imports.
+    "mockitoAgent"("org.mockito:mockito-core")
+    // Gradle 9 no longer puts the launcher on the test runtime classpath itself.
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
     jvmArgumentProviders.add(CommandLineArgumentProvider {
-        listOf("-javaagent:${mockitoAgent.singleFile}")
+        listOf("-javaagent:${mockitoAgentJar.singleFile}")
     })
 }
 

@@ -120,6 +120,18 @@ applies the same convention plus the Spring Boot and git-properties plugins — 
 consume-the-starter-as-a-published-artifact proof stays with Maven, which is why the
 Maven module keeps its `spring-boot-starter-parent` parent.
 
+**Lockstep.** Two values live once, in `gradle.properties`: `version` (the six poms'
+`<version>` — `maven-release-plugin` rewrites only the poms, so **the release commit must
+carry the matching one-line edit here**, or `./gradlew build` keeps producing pre-release
+jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
+parent version), which the convention plugin turns into the BOM import every module gets
+and `buildSrc` reads for the Boot plugin. Mockito's agent jar takes its version from that
+BOM, as Maven does. Every other shared literal — Error Prone, palantir, the ratchet SHA,
+Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors, the build timestamp, Playwright,
+springdoc and the testing-app's direct dependencies — is written on both sides and has to
+change on both. Dependabot watches the `gradle` ecosystem next to `maven`, so version bumps
+arrive as paired PRs.
+
 **Reproducibility and artifact parity** (verified by building each system twice and
 cross-diffing): both builds are self-reproducible - byte-identical jars across
 rebuilds - via `project.build.outputTimestamp` (Maven) and
@@ -263,7 +275,7 @@ plain `exec:java` call resolves against the local repo afterwards.
 the only branch on the remote, so no release has ever run.
 
 **`dependabot-pr-auto-merge.yml`** — auto-approves and auto-merges Dependabot PRs targeting
-`dev`. Dependabot watches Maven daily and GitHub Actions weekly.
+`dev`. Dependabot watches Maven and Gradle daily and GitHub Actions weekly.
 
 Branch model: `dev` is the default and integration branch; `main` is the release trunk, and
 pushing to it releases. Branch protection on `dev` is configured but not enforcing — see

@@ -8,3 +8,9 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+  # The parallel Gradle build must stay in lockstep with Maven (BUILD.md); it reads
+  # buildSrc, every build.gradle.kts and gradle.properties.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "daily"

@@ -5,8 +5,6 @@ plugins {
 description = "Peekaboot Backend - Spring Boot controllers, services, and lifecycle listeners"
 
 dependencies {
-    api(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
-
     api("org.springframework.boot:spring-boot")
     api("org.springframework.boot:spring-boot-actuator")
     api("tools.jackson.core:jackson-databind")
@@ -25,7 +23,6 @@ dependencies {
     compileOnly("com.zaxxer:HikariCP")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
     compileOnly("org.springframework.boot:spring-boot-configuration-processor")
-    annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     // The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off

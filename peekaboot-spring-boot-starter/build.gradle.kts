@@ -6,8 +6,6 @@ description = "Peekaboot Spring Boot Starter - Dependency aggregator for easy in
 
 // No sources - the jar is deliberately empty, exactly like the Maven artifact.
 dependencies {
-    api(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
-
     api(project(":peekaboot-spring-boot-autoconfigure"))
     api("org.springframework.boot:spring-boot-starter")
     api("org.springframework.boot:spring-boot-starter-actuator")
