@@ -6,9 +6,8 @@ Everything here was found deliberately — in review, in verification, or by tri
 item says what it costs to leave alone. When one is closed it either leaves this file or moves to
 §5 with the reasoning that closed it, so the record survives the work.
 
-The backlog this file opened with was worked through on 2026-08-24; §5 records what came of it.
-
-Sections 1 and 2 need a person. Section 3 is settled.
+Sections 1 and 2 need a person. Section 3 is settled. §5 holds what earlier backlog items
+turned into, with the reasoning.
 
 ---
 
@@ -47,9 +46,9 @@ Leaving it advertises a gate the branch does not have.
 
 ### 2.1 Latent duplicate-span residue in `TraceDataBundle`, currently unreachable
 
-Found while proving the read-time dedup pass removable (§5.1). Full analysis, including the
-harness output for all 14 arrival permutations:
-[`analysis/span-dedup-arrival-orders.md`](analysis/span-dedup-arrival-orders.md).
+Found while proving the read-time dedup pass removable: a harness drove the real
+`TraceDataBundle` through all 14 arrival permutations of the relevant span shapes, and §5.1
+summarises the result.
 
 On a **triple**-nested mutually-duplicate chain `R←D←X`, arrival orders `R,X,D` and `X,R,D` leave a
 duplicate: `isDuplicateOfStoredParent` (`TraceDataBundle.java:91-99`) returns early without running
@@ -96,8 +95,6 @@ for f in <module>/target/surefire-reports/TEST-*.xml; do
 done | paste -sd+ | bc
 ```
 
-Current: backend 649, autoconfigure 90, testing-app 203 — **942**.
-
 ### 2.4 The trace LIST endpoint's `summary.logs` is always `0/0/0`
 
 `TraceInsightsService.getInsights()` (`peekaboot-backend/.../service/TraceInsightsService.java:68-98`, backing
@@ -113,11 +110,9 @@ straight from `trace.summary.logs`, and `toolbar/toolbar.js`'s own equivalent re
 the *detail* endpoint, not the list. So every trace in the dashboard's Traces tab shows no log-count badges at all,
 regardless of how many errors or warnings it actually logged.
 
-**Pre-existing** (predates this branch), **out of scope for this branch**. The fix belongs in
-`TraceInsightsService.getInsights()` — either call the same enrichment the detail path uses per trace (cost:
-N extra lookups for a list of N), or compute the three log counts directly from whatever the bucket/list query
-already touches, whichever `TraceInsightsService`'s existing data-access shape makes cheaper. Needs a backend fix
-later.
+The fix belongs in `TraceInsightsService.getInsights()` — either call the same enrichment the detail path uses
+per trace (cost: N extra lookups for a list of N), or compute the three log counts directly from whatever the
+bucket/list query already touches, whichever `TraceInsightsService`'s existing data-access shape makes cheaper.
 
 ---
 
@@ -208,13 +203,15 @@ exist, all constructing the warning initialiser. Behaviourally a no-op. It lives
 *main* resources because the WARN fires on every launch, not only under test.
 
 **5.6 The `TraceOverlayIT` flake was root-caused.** The toolbar's fetch ladder polls
-`/api/traces/{id}/insights` for up to 4.75s regardless of test lifetime. Three tests route that
-endpoint and never unroute — `TraceOverlayIT:222`, `ToolbarIT:207`, and `ToolbarIT:257`, the
-last with a Javadoc explaining it *must not* unroute because the browser's module map caches the
-failed import. So a scheduled poll can fire during `context().close()`. The tolerance lives in
-`PlaywrightTestBase` rather than per-test because the condition is structural, and because `unroute`
-is itself an interception update over the same wire and would not close the race. Reproduced once in
-7 runs before; 0 in 14 after.
+`/api/traces/{id}/insights` for up to 4.75s regardless of test lifetime. Three tests route and
+never unroute — `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`,
+`ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails`, and
+`ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, the last with a Javadoc
+explaining it *must not* unroute because the browser's module map caches the failed import. So a
+scheduled poll can fire during `context().close()`. The tolerance lives in `PlaywrightTestBase`
+rather than per-test because the condition is structural, and because `unroute` is itself an
+interception update over the same wire and would not close the race. Reproduced once in 7 runs
+before; 0 in 14 after.
 
 **5.7 Both screenshot gaps are closed.** `ScreenshotCapture` now clicks into the trace overlay's
 Queries tab and expands a masked property group on Environment and Config. `trace-detail-queries-*`
@@ -224,8 +221,3 @@ visible values, demonstrating *selective* masking rather than the blanket kind. 
 profile needed `enable-unmasking` and `show-values: always` for that: a JUnit-launched process is
 never a local run, so without them Spring's own `Sanitizer` masks everything and the image would
 prove the wrong thing.
-
-**5.8 Hygiene.** `ActuatorInsightsService`'s field is no
-longer named `rawService`; the parser fixture is no longer `sample_actuator_all_raw.json`;
-`findDbSystem`'s comment matches `findSql`'s standard; `DEV_TOOLBAR_PROPERTY_SOURCE_NAME` is grouped
-with its peers; `tracing.md` no longer cross-references the dev-toolbar page twice in one paragraph.

@@ -14,7 +14,8 @@ peekaboot/
 ├── peekaboot-frontend/                   # Static web resources
 ├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
 ├── peekaboot-spring-boot-starter/        # Dependency aggregator
-└── peekaboot-testing-app/                # Sample app + UI tests
+├── peekaboot-testing-app/                # Sample app + UI tests
+└── peekaboot-coverage/                   # JaCoCo aggregate report + coverage floor
 ```
 
 ## Persisted state
@@ -212,26 +213,35 @@ Core module containing all business logic.
 ```
 org.peekaboot.backend/
 ├── actuator/parsed/        # Typed beans for actuator responses (ActuatorResponseParser)
-├── api/insights/           # API response DTOs
-├── config/                 # Configuration properties
-├── controller/             # REST endpoints
-├── devtoolbar/             # Toolbar data extraction
-├── domain/                 # Domain models (health, trace, etc.)
-├── filter/                 # Servlet filters
-├── lifecycle/              # Application startup hooks
-├── log/                    # Logback appender
+├── api/insights/           # ActuatorInsightsResponse — the dashboard's aggregate DTO
+├── config/                 # PeekabootProperties, UiTracingProperties, PeekabootWebConfig
+├── controller/             # PeekabootController — /peekaboot/api/* (actuator data, metrics, traces, features)
+├── devtoolbar/             # ToolbarShell (server-rendered markup), ToolbarDataProvider
+├── domain/                 # Domain models, one sub-package per dashboard concern
+│   ├── application/, config/, datasource/, environment/, flyway/, health/,
+│   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
+│   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, ...
+├── filter/                 # DevToolbarFilter, RequestCaptureFilter, FilterPathMatcher
+├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store
+│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
+│   └── web/                # InsightsController, InsightsSsePublisher — /peekaboot/api/insights/*
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info
+│   └── web/                # LifecycleController — /peekaboot/api/lifecycle/*
+├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers
-│   └── trace/              # Trace processing
+│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor
 ├── masking/                # MaskingEngine, MaskingRules, TagMasker, TreeMasker — the one place
 │                           # "is this key/value sensitive" is decided; see peekaboot.org/docs/security
-├── service/                # Business services
+├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
+├── storage/                # StorageDirectory — resolves peekaboot.storage.dir (see Persisted state)
 ├── tracing/                # In-memory tracing
-│   ├── autoconfigure/      # Tracing auto-configuration
-│   ├── bridge/otel/        # OpenTelemetry span exporter
-│   ├── event/              # Spring application events
-│   ├── interceptor/        # Tracing handler interceptor
-│   └── store/              # TraceStore, InMemoryTraceStore, TraceBucket, TraceStoreEventListener
+│   ├── autoconfigure/      # PeekabootTracingProperties
+│   ├── bridge/otel/        # OtelSpanExporter
+│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDataEvent
+│   ├── interceptor/        # TracingHandlerInterceptor
+│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
+│                           # TraceBucket, TraceStoreEventListener
 ```
 
 ### Tracing Flow
@@ -239,7 +249,7 @@ org.peekaboot.backend/
 1. **Span Capture**: `OtelSpanExporter` receives spans from OpenTelemetry SDK
 2. **Event Publishing**: Publishes `SpanDataEvent` via Spring's `ApplicationEventPublisher`
 3. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), which stores in a Caffeine cache (All bucket) plus bounded maps for the Errors and Slow buckets
-4. **Log Correlation**: `PeekabootLogbackAppender` captures logs using Micrometer's `Tracer.currentSpan()` for trace ID
+4. **Log Correlation**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span), and drops events without a `traceId`
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 6. **Query**: `TraceInsightsService` queries `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
 
@@ -253,12 +263,17 @@ org.peekaboot.backend/
 Both use `FilterPathMatcher` to skip static resources and peekaboot's own endpoints. Both
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
-toolbar on, a trace still carries a basic method/path/status summary read directly off the
-root span's own HTTP tags, but not headers, query/form parameters, or the resolved
-controller class/method; correlated logs are likewise unavailable (see *Log Capture*
-below). Request/response body content and uploaded file names have fields reserved for
-them on `HttpExchange` but aren't populated by `RequestCaptureFilter` yet — not captured,
-regardless of dev-toolbar.
+toolbar on, a trace can still carry a basic method/path/status summary read directly off the
+root span's own HTTP tags — but `TraceTreeMapper.extractRequestSummary` only recognises the
+OpenTelemetry-convention names (`http.request.method`/`http.method`, `url.path`/`http.target`,
+`http.response.status_code`/`http.status_code`), not the `method`/`uri`/`status` tags Spring
+Boot's own server-request observation puts on the span, so whether the summary is populated
+depends on which instrumentation named the root span's tags. Headers, query/form parameters
+and the resolved controller class/method are never available without the toolbar;
+correlated logs are likewise unavailable (see *Log Capture* below). Request/response body
+content and uploaded file names have fields reserved for them on `HttpExchange` but aren't
+populated by `RequestCaptureFilter` — not captured, regardless of dev-toolbar (see
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
 
 ### Server-Timing Header
 
@@ -316,7 +331,7 @@ reachable via HTTP while the dashboard has full data.
 
 Whether the `env` and `configprops` beans' own values are visible to this in-process
 invocation, rather than masked, is a separate question from whether the beans exist at
-all: see *Default Properties* below — value visibility now comes from the
+all: see *Default Properties* below — value visibility comes from the
 `peekabootDetection` property source and applies only on a local run, not from a blanket
 default in `peekaboot-defaults.yml`.
 
@@ -343,20 +358,25 @@ static/peekaboot/ui/
 ├── shared/
 │   ├── api.js                # createClient() — fetch wrapper with per-path generation guards
 │   ├── components.js         # JS builders behind the .pk-* primitives
+│   ├── copyable.js             # copyableId()/copyableIdHtml()/bindCopyables() — click-to-copy trace/span ids
 │   ├── format.js              # Duration/byte/date formatting
+│   ├── http-status.js          # statusLabel()/statusVariant() — IANA reason phrases and badge colouring
 │   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL
 │   ├── root-actions.js         # Root action type -> icon/label map
 │   ├── severity.js             # Duration/health severity thresholds (SLOW_MS, VERY_SLOW_MS)
 │   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
 │   ├── span-names.js           # spanId -> name lookup, shared by overlay tabs
 │   ├── theme.js                # localStorage-backed theme resolution shared across surfaces
-│   └── unmask-control.js       # renderUnmaskControl() — the Environment/Config "Show secrets" toggle,
-│                                # rendered only when /api/features reports unmaskingEnabled
+│   ├── unmask-control.js       # renderUnmaskControl() — the Environment/Config "Show secrets" toggle,
+│   │                            # rendered only when /api/features reports unmaskingEnabled
+│   ├── url-filter.js           # reconcileFilterWithUrl() — URL-vs-current-state direction for tab filters
+│   └── url-state.js            # parseAppHash()/buildAppHash()/pushAppHash()/replaceAppHash() — hash routing
 ├── dashboard/
 │   ├── index.html            # Dashboard document
 │   ├── dashboard.css         # Dashboard-only chrome
 │   ├── main.js                # Bootstrap: tab registry, hash routing, auto-refresh
-│   └── tabs/*.js               # One module per tab (8), each exporting id/label/render
+│   └── tabs/*.js               # One module per tab (10), each exporting id/label/render, plus the
+│                                # Insights tab's own insights-chart.js and insights-markers.js
 ├── trace-detail/
 │   ├── trace-detail.css      # Overlay chrome
 │   ├── trace-detail.js        # Shell: open()/close(), tab wiring (shadow-rooted)
@@ -373,9 +393,8 @@ static/peekaboot/ui/
 - **Shared design system, three surfaces**: `assets/tokens.css`/`base.css`/`components.css`
   are consumed by the dashboard document directly and by the toolbar's and overlay's
   shadow roots via `attachSharedStyles()` — a "doubled selector" (`:root, :host { ... }`)
-  lets the identical stylesheet apply in both contexts. Before this, all three surfaces
-  duplicated palettes, `escapeHtml`, duration thresholds, and the collapsible-group CSS
-  independently.
+  lets the identical stylesheet apply in both contexts, so no surface carries its own
+  palette, `escapeHtml`, duration thresholds or collapsible-group CSS.
 - **Shadow DOM**: Toolbar and trace-detail overlay isolated from host app styles
 - **Mobile-first**: Responsive design
 - **Lazy loading**: Trace-detail overlay JS loaded only on first use (dynamic `import()`
@@ -389,18 +408,25 @@ application overrides `tokens.css` to re-theme all three surfaces.
 
 ## peekaboot-spring-boot-autoconfigure
 
-Auto-configuration classes that wire everything together.
+Auto-configuration classes that wire everything together. The eight `@AutoConfiguration`
+classes are registered in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`;
+the three hooks that run before or outside the application context are registered in
+`META-INF/spring.factories`.
 
-| Class | Purpose |
-|-------|---------|
-| `PeekabootAutoConfiguration` | Core beans, component scan |
-| `DevToolbarAutoConfiguration` | Toolbar filter registration |
-| `PeekabootLifecycleAutoConfiguration` | Startup listeners |
-| `PeekabootTracingAutoConfiguration` | Tracing properties and store |
-| `OtelTracingAutoConfiguration` | OpenTelemetry span exporter |
-| `TracingInterceptorAutoConfiguration` | Tracing handler interceptor |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `peekaboot.enabled`/`peekaboot.dev-toolbar` local-dev detection + default property values (via `spring.factories`) |
-| `PeekabootEndpointExposureOutcomeContributor` | Makes actuator endpoint beans available without web/JMX exposure (via `spring.factories`) |
+| Class | Registered via | Purpose |
+|-------|----------------|---------|
+| `PeekabootAutoConfiguration` | `.imports` | Core beans, component scan |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration, `LogbackAppenderRegistrar` |
+| `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
+| `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory` — where the insights snapshot and lifecycle log are kept; no web/actuator conditions |
+| `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out and the insights controller; requires a `MeterRegistry` bean |
+| `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
+| `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
+| `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | `peekaboot.enabled`/`peekaboot.dev-toolbar` local-dev detection + default property values |
+| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes actuator endpoint beans available without web/JMX exposure |
+| `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Spring Boot's `LoggingApplicationListener` re-initialises Logback |
+| `LocalDevDetector` | — (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
 ### Conditional Loading
 
@@ -423,10 +449,10 @@ without the guard, a non-servlet application (WebFlux, or no web application at 
 mappers, just with nothing servlet-specific ever invoking them &mdash; dead beans and
 wasted component-scan work, not a startup crash (`ApplicationContextRunner` confirms the
 context starts cleanly either way; only `WebMvcConfigurationSupport`, itself only wired up
-in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard now prevents
-even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootTracingAutoConfiguration` and
-`OtelTracingAutoConfiguration` still carry no such guard, since none of them touch anything
-servlet-specific.
+in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard prevents
+even that. `PeekabootLifecycleAutoConfiguration`, `PeekabootStorageAutoConfiguration`,
+`PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry no such guard,
+since none of them touch anything servlet-specific.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
@@ -456,8 +482,12 @@ order:
    stack-trace check tells the two apart.
 
 In practice: an IDE run, `mvn spring-boot:run`, and `gradle bootRun` all default to on. A
-`java -jar` of the packaged artifact, a container, a native image, an AOT-processed build,
-and a test all default to off.
+`java -jar` of the packaged artifact (Boot's `LaunchedClassLoader`), a war in a servlet
+container, a native image, an AOT-processed build, and a test all default to off. The rule
+is the class loader and the thread, not the environment: any exploded-classpath launch on
+the `main` thread — `java -cp … MainClass`, a Jib image, Spring Boot's `extract` layout —
+counts as local, container or not, and needs an explicit `peekaboot.enabled=false` (or
+`peekaboot.dev-toolbar=false`) if that is not wanted.
 
 `peekaboot.lifecycle.enabled` (`PeekabootLifecycleAutoConfiguration`'s own switch) is a
 real `@ConditionalOnProperty`, but there is no `@ConfigurationProperties` class behind it
@@ -515,7 +545,8 @@ The exporter:
 
 ### Micrometer Tracer Integration
 
-Peekaboot uses Micrometer's `Tracer` API (not MDC) for trace correlation:
+On the request path — `RequestCaptureFilter` and `DevToolbarFilter` — Peekaboot reads the
+trace context from Micrometer's `Tracer` API:
 
 ```java
 // Get current trace context
@@ -526,7 +557,11 @@ if (currentSpan != null) {
 }
 ```
 
-This ensures compatibility with Spring Boot's tracing auto-configuration and works correctly regardless of whether MDC propagation is enabled.
+That keeps the filters compatible with Spring Boot's tracing auto-configuration whether or
+not MDC propagation is enabled. Log capture is the exception: `PeekabootLogbackAppender`
+runs inside Logback, where the only trace context available is the event's frozen MDC map,
+so it reads `traceId`/`spanId` from there and depends on Micrometer's MDC propagation
+(Spring Boot's default) being on.
 
 ### Log Capture
 
@@ -579,10 +614,10 @@ value-patterns only, not column-aware literal masking — see the class Javadoc 
 directly — OpenTelemetry's own span-name summary, e.g. `SELECT customer_order` — which is
 correct and expected for a span tree. The Queries tab (`trace-detail/tabs/queries.js`)
 renders `query.sql`, which is what `QueryExtractor` populates; this is where the tag
-`findSql` picks actually shows up. `ScreenshotCapture` only ever photographs the Spans tab
-— the overlay opens there by default (`trace-detail.js`'s `initial: 'spans'`) and the tool
-never clicks Queries — so no shipped screenshot demonstrates `QueryExtractor`'s behaviour
-at all.
+`findSql` picks actually shows up. The overlay opens on Spans by default
+(`trace-detail.js`'s `initial: 'spans'`); `ScreenshotCapture` photographs both views, so
+`trace-detail-queries-*` is the shipped image that demonstrates `QueryExtractor`'s output
+(see [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.7).
 
 ## Data Models
 
@@ -627,11 +662,10 @@ ActuatorInsightsResponse
 
 ### Test Categories
 
-| Type | Location | Purpose |
-|------|----------|---------|
-| Unit | `*Test.java` | Pure logic, no Spring context |
-| Integration | `*IntegrationTest.java` | Spring Boot context |
-| AutoConfig | `*AutoConfigurationTest.java` | Conditional bean loading |
+Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
+
+- `*Test` — plain unit tests, run by surefire at `test`.
+- `*IT` — anything that boots a real application, run by failsafe at `integration-test`.
 
 Any test that boots a Spring context — `@SpringBootTest`, including the Playwright UI
 suite under `org.peekaboot.testingapp.ui` — lives in `peekaboot-testing-app`, not
@@ -665,7 +699,7 @@ class DevToolbarAutoConfigurationIT {
 ## Key Design Decisions
 
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
-2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context, not MDC
+2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
 4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). Errors and Slow are independently capped and evicted oldest-first once full, not tied to All's 30-minute TTL — once a trace qualifies it's copied into its bucket and can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
@@ -693,8 +727,6 @@ The `afterName` attribute (string-based) is used instead of class reference to a
 
 ## Known defects
 
-Recorded here so a maintainer sees them without having to rediscover them. Each entry
-names the class at fault, the remedy, and the site page that carries the user-visible
-symptom.
-
-None are currently open.
+Open defects live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2, each naming the class at
+fault and the remedy. The one open at the time of writing: the trace-list endpoint's
+`summary.logs` is always `0/0/0` (§2.4).

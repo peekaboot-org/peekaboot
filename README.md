@@ -18,14 +18,14 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 <dependency>
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
+    <version>0.0.5-SNAPSHOT</version>
 </dependency>
 ```
 
 **Gradle**
 
 ```groovy
-implementation("org.peekaboot:peekaboot-spring-boot-starter:0.0.4-SNAPSHOT")
+implementation("org.peekaboot:peekaboot-spring-boot-starter:0.0.5-SNAPSHOT")
 ```
 
 Run your app the way you already do. Peekaboot detects local development and turns itself
@@ -67,20 +67,23 @@ peekaboot/
 ├── peekaboot-frontend/                   # Static web resources
 ├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
 ├── peekaboot-spring-boot-starter/        # Dependency aggregator
-└── peekaboot-testing-app/                # Sample app + UI tests
+├── peekaboot-testing-app/                # Sample app + UI tests
+└── peekaboot-coverage/                   # JaCoCo aggregate report + coverage floor
 ```
 
 ```bash
 mvn clean install   # full build, all modules
 mvn test             # test suite only
 
-cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app
+cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app; needs a prior
+                                                  # `mvn install` and a running Docker
 ```
 
-`mvn verify` also enforces the static-analysis gates: Spotless (palantir-java-format,
-ratcheted to files changed since its introduction - run `mvn spotless:apply` to format),
-Error Prone (during compilation), SpotBugs, Checkstyle (complexity metrics from
-`config/checkstyle.xml`), and PMD (quickstart rules from `config/pmd-ruleset.xml`).
+`mvn verify` also enforces six gates: Spotless (palantir-java-format, ratcheted to files
+changed since its introduction - run `mvn spotless:apply` to format), Error Prone (during
+compilation), SpotBugs, Checkstyle (complexity metrics from `config/checkstyle.xml`), PMD
+(quickstart rules from `config/pmd-ruleset.xml`), and the reactor-wide JaCoCo coverage
+floor in `peekaboot-coverage`.
 
 See [`BUILD.md`](BUILD.md) for the full build: reactor layout, compiler and gate
 configuration, CI and the release pipeline.

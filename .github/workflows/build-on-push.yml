@@ -5,9 +5,14 @@ on:
     branches-ignore:
       - main
 
+concurrency:
+  group: build-on-push-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-on-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     permissions:
       contents: read

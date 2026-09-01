@@ -24,7 +24,7 @@ exactly the same.
 ## Commands
 
 ```bash
-mvn clean verify     # compile + all tests + all five gates          <- the real build
+mvn clean verify     # compile + all tests + all six gates           <- the real build
 mvn clean install    # the same, plus install into ~/.m2
 mvn test             # the fast gate: Error Prone + unit tests only (~1 min);
                      # integration tests (*IT) don't run before `verify`
@@ -93,9 +93,9 @@ stays around a minute.
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, not to
 `peekaboot-parent`, so it consumes the starter exactly as a real user would. The cost is
 duplication: its POM re-declares the four verify-bound static-analysis gates, the JaCoCo
-agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks up Spring Boot's plugin versions for
-everything else (`clean:3.5.0`, `resources:3.5.0`, `dependency:3.10.0` versus the parent's
-pins). **Any change to the parent's build config has to be mirrored there.**
+agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by
+hand, and it picks up Spring Boot's plugin versions for everything else rather than the
+parent's pins. **Any change to the parent's build config has to be mirrored there.**
 
 ## The parallel Gradle build
 
@@ -146,11 +146,11 @@ and CI wiring - CI still runs Maven only.
 
 | Gate | Plugin (tool version) | Config | Scope |
 | --- | --- | --- | --- |
-| Formatting | `spotless-maven-plugin` 3.10.0 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
+| Formatting | `spotless-maven-plugin` 3.10.1 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
 | Bug patterns, compile-time | `error_prone_core` 2.50.0 via the compiler plugin | defaults | main + test |
 | Bug patterns, bytecode | `spotbugs-maven-plugin` 4.10.4.0 | `config/spotbugs-exclude.xml` | main classes |
 | Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.0.0) | `config/checkstyle.xml` | main only |
-| Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.26.0) | `config/pmd-ruleset.xml` | main Java |
+| Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.27.0) | `config/pmd-ruleset.xml` | main Java |
 | Coverage floor | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all published classes, reactor-wide |
 
 Each config file explains its own exclusions; the short version:
@@ -270,7 +270,7 @@ signs or publishes anything. A push to `main` (whose message does not contain `[
 which is how recursion is prevented) runs:
 
 1. `mvn --batch-mode verify`
-2. `mvn -P peekaboot-release release:prepare -DskipStaging=true`
+2. `mvn -P peekaboot-release release:prepare`
 3. `mvn -P peekaboot-release release:perform`
 4. GitHub release notes from the new tag, then an auto-merge of `main` back into `dev`
 
@@ -282,10 +282,13 @@ javadoc jar (`doclint` off, `failOnError` false), GPG-signs with `raphael@peekab
 publishes through `central-publishing-maven-plugin` (`autoPublish`, waits until published). A
 sources jar is attached on *every* build of the published modules, not just releases.
 
-`prepare` and `perform` are deliberately separate, with `-DskipStaging=true` on `prepare`:
-combined, the artifact would already be uploaded during `prepare` and the build would not be
-reproducible. Reproducibility also depends on `project.build.outputTimestamp` being pinned in
-the parent POM and on every plugin version being explicit.
+`release:prepare` bumps the POMs to the release version, commits, tags, runs its
+`preparationGoals` (`clean verify`) against that tag and then commits the next
+`-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
+`target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where signing
+and the upload to Maven Central happen. Reproducibility depends on
+`project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
+being explicit.
 
 Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SECRET_KEY`,
 `OSSRH_GPG_SECRET_KEY_PASSWORD`.
