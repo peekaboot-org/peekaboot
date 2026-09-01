@@ -3,7 +3,9 @@ package org.peekaboot.backend.actuator.parsed;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
+import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -92,6 +94,26 @@ class ActuatorResponseParserTest {
     }
 
     /**
+     * The endpoint descriptors carry {@link Instant}s (Flyway's {@code installedOn}, a
+     * scheduled task's execution {@code time}), and the records bind them as such - so the
+     * conversion has to round-trip an Instant, not a string somebody parsed by hand.
+     */
+    @Test
+    void bindsTheDescriptorsInstantsAsInstants() {
+        record ExecutionPojo(Instant time) {}
+        record FixedTaskPojo(long interval, ExecutionPojo lastExecution) {}
+        record TasksPojo(List<FixedTaskPojo> fixedRate) {}
+        Instant ranAt = Instant.parse("2026-01-11T06:49:20.123456Z");
+        Map<String, Object> data =
+                Map.of("scheduledtasks", new TasksPojo(List.of(new FixedTaskPojo(5000, new ExecutionPojo(ranAt)))));
+
+        ActuatorParsedData response = parser.parse(data);
+
+        assertThat(response.scheduledtasks().fixedRate().get(0).lastExecution().time())
+                .isEqualTo(ranAt);
+    }
+
+    /**
      * The fixture's health entry is the bare descriptor {@code HealthEndpoint.health()}
      * returns - aggregate status at the top, indicators under {@code components} - not the
      * {@code WebEndpointResponse} the web extension wraps it in.
@@ -101,7 +123,6 @@ class ActuatorResponseParserTest {
         ActuatorParsedData response = parser.parse(rawData);
 
         assertThat(response.health().status()).isEqualTo("UP");
-        assertThat(response.health().groups()).containsExactly("liveness", "readiness");
         assertThat(response.health().components()).containsKeys("db", "diskSpace", "ping");
         assertThat(response.health().components().get("db").status()).isEqualTo("UP");
         assertThat(response.health().components().get("db").details()).containsEntry("database", "PostgreSQL");
@@ -130,6 +151,20 @@ class ActuatorResponseParserTest {
         assertThat(db.components().get("reporting").details())
                 .containsEntry("error", "org.postgresql.util.PSQLException: Connection refused");
         assertThat(response.health().components().get("ping").components()).isNull();
+    }
+
+    /** The records declare only what the mappers read; whatever else an endpoint sends is dropped, not fatal. */
+    @Test
+    void ignoresPropertiesTheRecordsDoNotDeclare() {
+        Map<String, Object> data = Map.of(
+                "spring", Map.of("bootVersion", "4.1.1", "somethingNewer", "x"),
+                "loggers",
+                        Map.of("levels", List.of("INFO"), "loggers", Map.of("ROOT", Map.of("effectiveLevel", "INFO"))));
+
+        ActuatorParsedData response = parser.parse(data);
+
+        assertThat(response.spring().bootVersion()).isEqualTo("4.1.1");
+        assertThat(response.loggers().loggers()).containsOnlyKeys("ROOT");
     }
 
     @Test

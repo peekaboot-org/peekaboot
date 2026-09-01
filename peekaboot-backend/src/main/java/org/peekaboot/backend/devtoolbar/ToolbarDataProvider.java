@@ -1,58 +1,62 @@
 package org.peekaboot.backend.devtoolbar;
 
+import org.peekaboot.backend.config.PeekabootJson;
+import tools.jackson.core.SerializableString;
+import tools.jackson.core.io.CharacterEscapes;
+import tools.jackson.core.io.SerializedString;
+import tools.jackson.databind.ObjectWriter;
+
+/** The JSON blob {@link ToolbarShell} embeds in the page for toolbar.js to read before it calls home. */
 public class ToolbarDataProvider {
+
+    /**
+     * The blob sits verbatim inside a script element, so beyond JSON's own escapes {@code <}
+     * and {@code >} are written as {@code \u003c}/{@code \u003e}: a literal
+     * {@code </script>} in a request path would otherwise end the element and inject markup.
+     */
+    private static final ObjectWriter WRITER = PeekabootJson.MAPPER.writer().with(new ScriptSafeEscapes());
+
+    /** What toolbar.js shows for the request the page came from. */
+    record ToolbarSummary(String method, String path, int status, String traceId, String basePath) {}
+
+    /** The page came from outside a traced request; the bar waits for the next one. */
+    record IdleMode(boolean idle, String basePath) {}
 
     /**
      * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
      *     prefix behind the request's context path
      */
     public String getToolbarSummaryJson(String basePath, String method, String path, int status, String traceId) {
-        return String.format(
-                "{\"method\":\"%s\",\"path\":\"%s\",\"status\":%d,\"traceId\":%s,\"basePath\":\"%s\"}",
-                escapeJson(method),
-                escapeJson(path),
-                status,
-                traceId != null ? "\"" + escapeJson(traceId) + "\"" : "null",
-                escapeJson(basePath));
+        return WRITER.writeValueAsString(new ToolbarSummary(method, path, status, traceId, basePath));
     }
 
     public String getIdleModeJson(String basePath) {
-        return String.format("{\"idle\":true,\"basePath\":\"%s\"}", escapeJson(basePath));
+        return WRITER.writeValueAsString(new IdleMode(true, basePath));
     }
 
-    /**
-     * Escapes a string for a JSON string literal that is embedded verbatim
-     * inside a &lt;script&gt; tag: besides the JSON-mandated escapes, '&lt;' and '&gt;'
-     * are escaped to prevent script-tag breakout and all remaining control
-     * characters become \\uXXXX sequences to keep the JSON valid.
-     */
-    private String escapeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            appendEscaped(sb, value.charAt(i));
-        }
-        return sb.toString();
-    }
+    private static final class ScriptSafeEscapes extends CharacterEscapes {
 
-    private static void appendEscaped(StringBuilder sb, char c) {
-        switch (c) {
-            case '\\' -> sb.append("\\\\");
-            case '"' -> sb.append("\\\"");
-            case '\n' -> sb.append("\\n");
-            case '\r' -> sb.append("\\r");
-            case '\t' -> sb.append("\\t");
-            case '<' -> sb.append("\\u003c");
-            case '>' -> sb.append("\\u003e");
-            default -> {
-                if (c < 0x20) {
-                    sb.append(String.format("\\u%04x", (int) c));
-                } else {
-                    sb.append(c);
-                }
-            }
+        private static final long serialVersionUID = 1L;
+
+        private static final int[] ASCII_ESCAPES = standardAsciiEscapesForJSON();
+
+        static {
+            ASCII_ESCAPES['<'] = ESCAPE_CUSTOM;
+            ASCII_ESCAPES['>'] = ESCAPE_CUSTOM;
+        }
+
+        @Override
+        public int[] getEscapeCodesForAscii() {
+            return ASCII_ESCAPES;
+        }
+
+        @Override
+        public SerializableString getEscapeSequence(int ch) {
+            return switch (ch) {
+                case '<' -> new SerializedString("\\u003c");
+                case '>' -> new SerializedString("\\u003e");
+                default -> null;
+            };
         }
     }
 }

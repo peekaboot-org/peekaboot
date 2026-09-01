@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
@@ -29,8 +28,7 @@ class RuntimeMapperTest {
                 Map.of(
                         "diskSpace",
                         new HealthResponse.HealthComponent(
-                                "UP", Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"))),
-                List.of());
+                                "UP", Map.of("total", 500_000_000_000L, "free", 200_000_000_000L, "path", "/"))));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).usedPercent()).isEqualTo(60.0);
@@ -53,16 +51,9 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(
-                        4,
-                        new InfoResponse.ProcessInfo.MemoryInfo(
-                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(
-                                        200_000_000L, 100_000_000L, 500_000_000L, 100_000_000L),
-                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(
-                                        60_000_000L, 50_000_000L, -1L, 50_000_000L)),
-                        "user",
-                        1L,
-                        12345L));
+                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
+                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(500_000_000L, 100_000_000L),
+                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 50_000_000L))));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNotNull();
         assertThat(result.memory().heapUsed()).isEqualTo(100_000_000L);
@@ -88,8 +79,7 @@ class RuntimeMapperTest {
     void map_shouldUseFallbackPathForDiskSpace() {
         HealthResponse health = new HealthResponse(
                 "UP",
-                Map.of("diskSpace", new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L))),
-                List.of());
+                Map.of("diskSpace", new HealthResponse.HealthComponent("UP", Map.of("total", 1000L, "free", 500L))));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).hasSize(1);
         assertThat(result.storage().get(0).path()).isEqualTo("/");
@@ -102,13 +92,8 @@ class RuntimeMapperTest {
                 null,
                 null,
                 null,
-                new InfoResponse.ProcessInfo(
-                        4,
-                        new InfoResponse.ProcessInfo.MemoryInfo(
-                                new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L, 0L, 0L), null),
-                        "user",
-                        1L,
-                        12345L));
+                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
+                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(0L, 0L), null)));
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.memory()).isNull();
     }
@@ -119,8 +104,7 @@ class RuntimeMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"))),
-                List.of());
+                        new HealthResponse.HealthComponent("UP", Map.of("total", 0L, "free", 0L, "path", "/"))));
         RuntimeInfo result = mapper.map(null, health);
         assertThat(result.storage()).isEmpty();
     }

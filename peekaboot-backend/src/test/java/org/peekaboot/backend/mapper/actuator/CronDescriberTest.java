@@ -1,17 +1,17 @@
-package org.peekaboot.backend.service;
+package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
-class CronDescriptionServiceTest {
+class CronDescriberTest {
 
-    private final CronDescriptionService service = new CronDescriptionService();
+    private final CronDescriber describer = new CronDescriber();
 
     @Test
     void describe_everyHour_englishLocale() {
-        String result = service.describe("0 0 * * * *", Locale.ENGLISH);
+        String result = describer.describe("0 0 * * * *", Locale.ENGLISH);
 
         assertThat(result).isNotNull();
         assertThat(result.toLowerCase(Locale.ROOT)).contains("hour");
@@ -19,7 +19,7 @@ class CronDescriptionServiceTest {
 
     @Test
     void describe_everyMinute_germanLocale() {
-        String result = service.describe("0 * * * * *", Locale.GERMAN);
+        String result = describer.describe("0 * * * * *", Locale.GERMAN);
 
         assertThat(result).isNotNull();
         assertThat(result.toLowerCase(Locale.ROOT)).contains("minute");
@@ -28,35 +28,35 @@ class CronDescriptionServiceTest {
     @Test
     void describe_spring53LastDayOfMonth_isSupported() {
         // 'L' (last day of month) is valid @Scheduled syntax since Spring 5.3
-        String result = service.describe("0 0 0 L * *", Locale.ENGLISH);
+        String result = describer.describe("0 0 0 L * *", Locale.ENGLISH);
 
-        assertThat(result).isNotNull();
+        assertThat(result).containsIgnoringCase("last day");
     }
 
     @Test
     void describe_nullExpression_returnsNull() {
-        String result = service.describe(null, Locale.ENGLISH);
+        String result = describer.describe(null, Locale.ENGLISH);
 
         assertThat(result).isNull();
     }
 
     @Test
     void describe_blankExpression_returnsNull() {
-        String result = service.describe("   ", Locale.ENGLISH);
+        String result = describer.describe("   ", Locale.ENGLISH);
 
         assertThat(result).isNull();
     }
 
     @Test
     void describe_invalidExpression_returnsNull() {
-        String result = service.describe("invalid cron expression", Locale.ENGLISH);
+        String result = describer.describe("invalid cron expression", Locale.ENGLISH);
 
         assertThat(result).isNull();
     }
 
     @Test
     void describe_nullLocale_defaultsToEnglish() {
-        String result = service.describe("0 0 * * * *", null);
+        String result = describer.describe("0 0 * * * *", null);
 
         assertThat(result).isNotNull();
         assertThat(result.toLowerCase(Locale.ROOT)).contains("hour");

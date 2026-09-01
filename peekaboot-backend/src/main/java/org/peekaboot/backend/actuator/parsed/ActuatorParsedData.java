@@ -1,11 +1,8 @@
 package org.peekaboot.backend.actuator.parsed;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-
 /**
  * Typed container for parsed actuator data used by insights mappers.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public record ActuatorParsedData(
         SpringInfo spring,
         HealthResponse health,

@@ -168,7 +168,7 @@ class Javadoc's "stays bounded by the `maxSpans` cap" is now true of the code. A
 500 triples against a cap of 10 and asserts the table stays within `cap * 2`.
 
 **5.3 `info.build` is masked.** It was the one actuator field on the read path skipping masking. Now
-routed through `TreeMasker(new MaskingEngine())` — the idiom `ConfigMapper` and `HealthMapper` use —
+routed through a `TreeMasker` over the shared `MaskingEngine` bean — the idiom `ConfigMapper` and `HealthMapper` use —
 with `unmask` threaded from `ActuatorInsightsService` like every other masking-aware mapper.
 
 **5.4 The Mockito self-attach WARN is gone.** `peekaboot-testing-app` configures the `-javaagent` via

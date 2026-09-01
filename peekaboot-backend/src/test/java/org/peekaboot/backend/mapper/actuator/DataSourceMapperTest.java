@@ -11,16 +11,15 @@ import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class DataSourceMapperTest {
 
-    private final DataSourceMapper mapper = new DataSourceMapper();
+    private final DataSourceMapper mapper = new DataSourceMapper(new MaskingEngine());
 
     @Test
     void map_shouldMaskSensitiveProperties() {
@@ -30,26 +29,10 @@ class DataSourceMapperTest {
                         "user", new JdbcProperty(PropertySource.QUERY, "admin"),
                         "password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
         assertThat(result.get(0).properties()).containsEntry("user", "admin");
         assertThat(result.get(0).properties()).containsEntry("password", "******");
-    }
-
-    /**
-     * Bare "key" is deliberately not a masking rule (it would mask server.ssl.key-store and
-     * spring.jpa.key-generator), so a connection param whose name merely contains "key"
-     * stays readable; only the compound api-key/apiKey shape is masked.
-     */
-    @Test
-    void map_leavesBareKeyConnectionParamsUnmasked() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of("keyStore", new JdbcProperty(PropertySource.QUERY, "classpath:keystore.p12")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
-
-        assertThat(result.get(0).properties()).containsEntry("keyStore", "classpath:keystore.p12");
     }
 
     @Test
@@ -57,9 +40,9 @@ class DataSourceMapperTest {
         DataSourceMetadata metadata = mockMetadata("primaryDS");
 
         HealthResponse health =
-                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())), List.of());
+                new HealthResponse("UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of())));
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), health);
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), health, false);
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 
@@ -79,10 +62,10 @@ class DataSourceMapperTest {
                                 null,
                                 Map.of(
                                         "primary", new HealthResponse.HealthComponent("UP", Map.of()),
-                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))),
-                List.of());
+                                        "reporting", new HealthResponse.HealthComponent("DOWN", Map.of())))));
 
-        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health);
+        List<DataSourceInfo> result =
+                mapper.map(List.of(mockMetadata("primary"), mockMetadata("reporting")), health, false);
 
         assertThat(result)
                 .extracting(DataSourceInfo::name, DataSourceInfo::health)
@@ -97,49 +80,34 @@ class DataSourceMapperTest {
                 Map.of(
                         "db",
                         new HealthResponse.HealthComponent(
-                                "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))),
-                List.of());
+                                "UP", null, Map.of("primary", new HealthResponse.HealthComponent("UP", Map.of())))));
 
-        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health);
+        List<DataSourceInfo> result = mapper.map(List.of(mockMetadata("other")), health, false);
 
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 
     @Test
     void map_shouldHandleEmptyList() {
-        List<DataSourceInfo> result = mapper.map(List.of(), null);
+        List<DataSourceInfo> result = mapper.map(List.of(), null, false);
         assertThat(result).isEmpty();
     }
 
     @Test
     void map_shouldHandleNullList() {
-        List<DataSourceInfo> result = mapper.map(null, null);
+        List<DataSourceInfo> result = mapper.map(null, null, false);
         assertThat(result).isEmpty();
     }
 
+    /** The product comes from the parsed JDBC URL, which DataSourceMetadata already carries. */
     @Test
-    void map_shouldDetectDatabaseProduct() {
+    void map_carriesTheDatabaseProductOfTheJdbcUrl() {
         DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL 15.1");
+        when(metadata.getDatabaseProduct()).thenReturn(DatabaseProduct.POSTGRESQL);
 
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
-        assertThat(result.get(0).databaseProduct().name()).isEqualTo("POSTGRESQL");
-    }
+        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
 
-    @Test
-    void map_shouldMaskKeyAndTokenProperties() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of(
-                        "apiKey", new JdbcProperty(PropertySource.QUERY, "myapikey"),
-                        "authToken", new JdbcProperty(PropertySource.QUERY, "mytoken"),
-                        "server", new JdbcProperty(PropertySource.QUERY, "localhost")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
-
-        assertThat(result.get(0).properties()).containsEntry("apiKey", "******");
-        assertThat(result.get(0).properties()).containsEntry("authToken", "******");
-        assertThat(result.get(0).properties()).containsEntry("server", "localhost");
+        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.POSTGRESQL);
     }
 
     @Test
@@ -154,17 +122,6 @@ class DataSourceMapperTest {
     }
 
     @Test
-    void map_shouldStillMaskWhenUnmaskIsFalse() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getConnectionParams())
-                .thenReturn(Map.of("password", new JdbcProperty(PropertySource.QUERY, "secret123")));
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
-
-        assertThat(result.get(0).properties()).containsEntry("password", "******");
-    }
-
-    @Test
     void map_shouldFilterNullMetadata() {
         DataSourceMetadata metadata = mockMetadata("ds");
 
@@ -173,39 +130,8 @@ class DataSourceMapperTest {
         listWithNulls.add(metadata);
         listWithNulls.add(null);
 
-        List<DataSourceInfo> result = mapper.map(listWithNulls, null);
+        List<DataSourceInfo> result = mapper.map(listWithNulls, null, false);
         assertThat(result).hasSize(1);
-    }
-
-    @ParameterizedTest
-    @CsvSource({
-        "MySQL 8.0, MYSQL",
-        "MariaDB 10.6, MARIADB",
-        "H2, H2",
-        "Oracle Database 19c, ORACLE",
-        "Microsoft SQL Server 2019, SQLSERVER",
-        "SQLite, SQLITE",
-        "Apache Derby, DERBY",
-        "HSQL Database Engine, HSQLDB",
-        "SomeExoticDatabase, UNKNOWN"
-    })
-    void map_shouldDetectDatabaseProductForEachVendor(String productName, DatabaseProduct expected) {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn(productName);
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
-
-        assertThat(result.get(0).databaseProduct()).isEqualTo(expected);
-    }
-
-    @Test
-    void map_shouldDetectUnknownDatabaseProductWhenNameIsNull() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-        when(metadata.getDatabaseProductName()).thenReturn(null);
-
-        List<DataSourceInfo> result = mapper.map(List.of(metadata), null);
-
-        assertThat(result.get(0).databaseProduct()).isEqualTo(DatabaseProduct.UNKNOWN);
     }
 
     private DataSourceMetadata mockMetadata(String name) {

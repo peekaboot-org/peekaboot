@@ -11,7 +11,11 @@ import net.osslabz.jdbc.JdbcProperty;
  */
 public final class ConnectionParamsMasker {
 
-    private final MaskingEngine maskingEngine = new MaskingEngine();
+    private final MaskingEngine maskingEngine;
+
+    public ConnectionParamsMasker(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
 
     public Map<String, String> mask(Map<String, JdbcProperty> properties) {
         return mask(properties, false);

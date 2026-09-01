@@ -13,17 +13,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class ApplicationMapper {
 
-    private final TreeMasker treeMasker = new TreeMasker(new MaskingEngine());
+    private final TreeMasker treeMasker;
 
-    public ApplicationInfo map(InfoResponse info, SpringInfo spring) {
-        return map(info, spring, false);
+    public ApplicationMapper(MaskingEngine maskingEngine) {
+        this.treeMasker = new TreeMasker(maskingEngine);
     }
 
-    /**
-     * Same as {@link #map(InfoResponse, SpringInfo)}, except when {@code unmask} is true, in
-     * which case {@code info.build()} is returned verbatim. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
     public ApplicationInfo map(InfoResponse info, SpringInfo spring, boolean unmask) {
         Map<String, Object> build = Collections.emptyMap();
         Map<String, Object> git = Collections.emptyMap();

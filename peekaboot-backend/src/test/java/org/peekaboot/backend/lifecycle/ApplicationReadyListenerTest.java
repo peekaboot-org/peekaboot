@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
 import net.osslabz.jdbc.JdbcProperty;
@@ -32,6 +33,22 @@ class ApplicationReadyListenerTest {
         String report = report(ReadyEvents.webApplication(8083));
 
         assertThat(report).contains(" Service URL:").doesNotContain("Peekaboot Dashboard");
+    }
+
+    /** The banner is read by people in every locale; "1,5 MB" under a German default is not a number to a log parser. */
+    @Test
+    void banner_reportsMemoryInLocaleIndependentHumanUnits() {
+        Locale defaultLocale = Locale.getDefault();
+        Locale.setDefault(Locale.GERMANY);
+        try {
+            String report = report(ReadyEvents.webApplication(8083));
+
+            assertThat(report)
+                    .containsPattern(" Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=\\d+(\\.\\d)? [KMG]?B\n")
+                    .containsPattern(" Non-Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=\\d+(\\.\\d)? [KMG]?B\n");
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
     }
 
     @Test

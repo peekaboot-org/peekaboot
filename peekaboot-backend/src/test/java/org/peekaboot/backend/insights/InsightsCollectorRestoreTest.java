@@ -1,7 +1,9 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
@@ -17,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.testsupport.LogCapture;
 
 class InsightsCollectorRestoreTest {
 
@@ -166,7 +169,7 @@ class InsightsCollectorRestoreTest {
         InsightsCollector collector = collector(1, timeout -> Optional.of(persisted));
         collector.start();
         try {
-            Thread.sleep(500);
+            awaitLevel0Samples(collector, 2); // the restored 7 and at least one live tick
         } finally {
             collector.stop();
         }
@@ -183,7 +186,7 @@ class InsightsCollectorRestoreTest {
         InsightsCollector collector = collector(1, timeout -> Optional.empty());
         collector.start();
         try {
-            Thread.sleep(500);
+            awaitLevel0Samples(collector, 1);
         } finally {
             collector.stop();
         }
@@ -219,7 +222,11 @@ class InsightsCollectorRestoreTest {
                 });
         collector.start();
         try {
-            Thread.sleep(700); // long enough for both the 100ms and the 500ms level thread to arrive
+            // both level threads have been through the barrier once each has written
+            await().atMost(Duration.ofSeconds(5))
+                    .pollInterval(Duration.ofMillis(20))
+                    .until(() -> collector.snapshot(0).count() >= 1
+                            && collector.snapshot(1).count() >= 1);
         } finally {
             collector.stop();
         }
@@ -234,15 +241,28 @@ class InsightsCollectorRestoreTest {
             asked.incrementAndGet();
             throw new RuntimeException("boom");
         });
-        collector.start();
-        try {
-            Thread.sleep(500);
-        } finally {
-            collector.stop();
-        }
+        try (LogCapture logs = LogCapture.attach(InsightsCollector.class)) {
+            collector.start();
+            try {
+                awaitLevel0Samples(collector, 2);
+            } finally {
+                collector.stop();
+            }
 
-        assertThat(asked).hasValue(1);
-        // the failed attempt cost one tick, not the collector's ability to keep ticking
-        assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
+            assertThat(asked).hasValue(1);
+            // the failed attempt cost one tick, not the collector's ability to keep ticking
+            assertThat(collector.snapshot(0).tickValues().get("cpu.process")).hasSizeGreaterThan(1);
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo("Insights tick failed for level 0");
+            });
+        }
+    }
+
+    /** Level 0 holds at least {@code count} samples, restored or ticked live. */
+    private static void awaitLevel0Samples(InsightsCollector collector, int count) {
+        await().atMost(Duration.ofSeconds(5))
+                .pollInterval(Duration.ofMillis(20))
+                .until(() -> collector.snapshot(0).count() >= count);
     }
 }

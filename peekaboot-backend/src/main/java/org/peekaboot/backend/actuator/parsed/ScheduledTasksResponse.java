@@ -1,30 +1,19 @@
 package org.peekaboot.backend.actuator.parsed;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import java.time.Instant;
 import java.util.List;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-public record ScheduledTasksResponse(
-        List<CronTask> cron, List<FixedTask> fixedDelay, List<FixedTask> fixedRate, List<Object> custom) {
+public record ScheduledTasksResponse(List<CronTask> cron, List<FixedTask> fixedDelay, List<FixedTask> fixedRate) {
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record CronTask(
             String expression, TaskExecution lastExecution, TaskExecution nextExecution, RunnableTarget runnable) {}
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record FixedTask(
-            Long initialDelay,
-            Long interval,
-            TaskExecution lastExecution,
-            TaskExecution nextExecution,
-            RunnableTarget runnable) {}
+            Long interval, TaskExecution lastExecution, TaskExecution nextExecution, RunnableTarget runnable) {}
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record TaskExecution(TaskExceptionInfo exception, String status, String time) {}
+    public record TaskExecution(TaskExceptionInfo exception, String status, Instant time) {}
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record TaskExceptionInfo(String message, String type) {}
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record RunnableTarget(String target) {}
 }

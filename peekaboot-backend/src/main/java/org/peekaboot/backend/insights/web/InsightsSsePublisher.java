@@ -204,16 +204,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
         Map<String, Object> entryPayloads = new LinkedHashMap<>();
         for (Map.Entry<String, AggregateStats> entry : entries.entrySet()) {
-            AggregateStats stats = entry.getValue();
-            Map<String, Object> statsPayload = new LinkedHashMap<>();
-            statsPayload.put("min", nullSafe(stats.min()));
-            statsPayload.put("max", nullSafe(stats.max()));
-            statsPayload.put("avg", nullSafe(stats.avg()));
-            statsPayload.put("median", nullSafe(stats.median()));
-            statsPayload.put("p90", nullSafe(stats.p90()));
-            statsPayload.put("p95", nullSafe(stats.p95()));
-            statsPayload.put("p99", nullSafe(stats.p99()));
-            entryPayloads.put(entry.getKey(), statsPayload);
+            entryPayloads.put(entry.getKey(), nullSafeMap(entry.getValue().byName()));
         }
         payload.put("entries", entryPayloads);
 
@@ -277,7 +268,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 emitter.send(SseEmitter.event().name(eventName).data(json));
                 onDelivered(eventName);
             } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after send failure", e);
+                log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
                 emitter.completeWithError(e);
             }
         }
@@ -298,7 +289,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             try {
                 emitter.send(SseEmitter.event().comment("hb"));
             } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after heartbeat failure", e);
+                log.debug("Dropping insights SSE subscriber after heartbeat failure: {}", e.toString());
                 emitter.completeWithError(e);
             }
         }

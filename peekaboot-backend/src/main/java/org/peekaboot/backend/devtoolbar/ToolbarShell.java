@@ -59,28 +59,12 @@ public class ToolbarShell {
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
 
-    private final String inlinedCss;
-
-    public ToolbarShell() {
-        this.inlinedCss = loadInlinedCss();
-    }
-
     /**
-     * The complete fragment DevToolbarFilter injects before {@code </body>}.
-     *
-     * <p>A real {@code <button>} carries the "open trace details" action so keyboard users
-     * get it for free (Enter/Space produces a native click) and assistive tech gets a proper
-     * control - not a {@code role="button"} div, which ARIA defines as
-     * children-presentational and could flatten the dashboard link right out of the
-     * accessibility tree. The dashboard link, the sign-in notice and the copyable trace id
-     * are siblings of that button rather than descendants, so each stays independently
-     * reachable - and a link nested inside a button would be invalid HTML the parser moves.
-     *
-     * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
-     *     prefix behind the request's context path
+     * The bar's markup with placeholders for everything that varies: the inlined CSS and the
+     * stylesheet links, folded in once at construction, and the base path and data blob,
+     * filled in per page.
      */
-    public String render(String basePath, String dataJson) {
-        return """
+    private static final String TEMPLATE = """
             <!-- Peekaboot Dev Toolbar -->
             <div id="peekaboot-toolbar-host">
                 <template shadowrootmode="open">
@@ -106,10 +90,31 @@ public class ToolbarShell {
             </div>
             <script id="peekaboot-toolbar-data" type="application/json">{{DATA}}</script>
             <script src="{{BASE}}/ui/toolbar/toolbar.js" type="module"></script>
-            """.replace("{{CSS}}", inlinedCss)
-                .replace("{{LINKS}}", stylesheetLinks())
-                .replace(BASE_TOKEN, basePath)
-                .replace("{{DATA}}", dataJson);
+            """;
+
+    /** {@link #TEMPLATE} with the stylesheets already in place; only the base path and the data blob remain. */
+    private final String shell;
+
+    public ToolbarShell() {
+        this.shell = TEMPLATE.replace("{{CSS}}", loadInlinedCss()).replace("{{LINKS}}", stylesheetLinks());
+    }
+
+    /**
+     * The complete fragment DevToolbarFilter injects before {@code </body>}.
+     *
+     * <p>A real {@code <button>} carries the "open trace details" action so keyboard users
+     * get it for free (Enter/Space produces a native click) and assistive tech gets a proper
+     * control - not a {@code role="button"} div, which ARIA defines as
+     * children-presentational and could flatten the dashboard link right out of the
+     * accessibility tree. The dashboard link, the sign-in notice and the copyable trace id
+     * are siblings of that button rather than descendants, so each stays independently
+     * reachable - and a link nested inside a button would be invalid HTML the parser moves.
+     *
+     * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
+     *     prefix behind the request's context path
+     */
+    public String render(String basePath, String dataJson) {
+        return shell.replace(BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
     }
 
     private static String stylesheetLinks() {

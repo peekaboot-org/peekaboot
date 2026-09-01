@@ -13,6 +13,9 @@
   (`PeekabootTracingAutoConfigurationTest.bucketPropertiesReachTheStore`).
 - Deterministic time: fixed `Instant.parse(...)` values, never bare `Instant.now()`
   when the assertion depends on ordering or duration.
+- Live threads: wait for the condition the assertion needs (Awaitility, e.g. a sample count),
+  never a fixed `Thread.sleep`. Where a test would otherwise sit out a production timeout, the
+  class offers a package-private seam instead (`LifecycleEventLog(file, loadWait)`).
 - Micrometer gauges in tests: never `registry.gauge(name, obj)` with the result discarded —
   the registry holds `obj` weakly and samples become NaN after a GC; use
   `Gauge.builder(name, supplier)` or keep the returned object in a field.

@@ -8,6 +8,7 @@ import ch.qos.logback.classic.Level;
 import java.sql.SQLException;
 import java.util.Optional;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.LogCapture;
@@ -24,6 +25,7 @@ class DataSourceMetadataTest {
         assertThat(metadata).isPresent();
         assertThat(metadata.get().getDataSourceName()).isEqualTo("primary");
         assertThat(metadata.get().getDatabaseProductName()).isEqualTo("H2");
+        assertThat(metadata.get().getDatabaseProduct()).isEqualTo(DatabaseProduct.H2);
         assertThat(metadata.get().getUrl()).contains("metadata-test");
     }
 

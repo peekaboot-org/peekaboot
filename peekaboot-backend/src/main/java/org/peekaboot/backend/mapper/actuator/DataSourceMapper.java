@@ -1,30 +1,24 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import net.osslabz.jdbc.DatabaseProduct;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.stereotype.Component;
 
 @Component
 public class DataSourceMapper {
 
-    private final ConnectionParamsMasker connectionParamsMasker = new ConnectionParamsMasker();
+    private final ConnectionParamsMasker connectionParamsMasker;
 
-    public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health) {
-        return map(metadataList, health, false);
+    public DataSourceMapper(MaskingEngine maskingEngine) {
+        this.connectionParamsMasker = new ConnectionParamsMasker(maskingEngine);
     }
 
-    /**
-     * Same as {@link #map(List, HealthResponse)}, except when {@code unmask} is true, in
-     * which case every connection property value is returned verbatim. See
-     * {@link ConnectionParamsMasker#mask(Map, boolean)} for why this shape.
-     */
     public List<DataSourceInfo> map(List<DataSourceMetadata> metadataList, HealthResponse health, boolean unmask) {
         if (metadataList == null || metadataList.isEmpty()) {
             return List.of();
@@ -40,45 +34,16 @@ public class DataSourceMapper {
         HealthStatus dbHealth = extractDbHealth(health, metadata.getDataSourceName());
         List<net.osslabz.jdbc.Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
         Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
-        DatabaseProduct product = detectDatabaseProduct(metadata);
 
         return new DataSourceInfo(
                 metadata.getDataSourceName(),
-                product,
+                metadata.getDatabaseProduct(),
                 metadata.getDriverName(),
                 hosts,
                 metadata.getDatabaseName(),
-                null,
                 metadata.getUsername(),
-                null,
                 dbHealth,
                 maskedProperties);
-    }
-
-    private static final List<Map.Entry<String, DatabaseProduct>> PRODUCT_KEYWORDS = List.of(
-            Map.entry("postgresql", DatabaseProduct.POSTGRESQL),
-            Map.entry("mysql", DatabaseProduct.MYSQL),
-            Map.entry("mariadb", DatabaseProduct.MARIADB),
-            Map.entry("h2", DatabaseProduct.H2),
-            Map.entry("oracle", DatabaseProduct.ORACLE),
-            Map.entry("sql server", DatabaseProduct.SQLSERVER),
-            Map.entry("sqlite", DatabaseProduct.SQLITE),
-            Map.entry("derby", DatabaseProduct.DERBY),
-            Map.entry("hsql", DatabaseProduct.HSQLDB));
-
-    private DatabaseProduct detectDatabaseProduct(DataSourceMetadata metadata) {
-        String productName = metadata.getDatabaseProductName();
-        if (productName == null) {
-            return DatabaseProduct.UNKNOWN;
-        }
-
-        String lower = productName.toLowerCase(Locale.ROOT);
-        for (Map.Entry<String, DatabaseProduct> keyword : PRODUCT_KEYWORDS) {
-            if (lower.contains(keyword.getKey())) {
-                return keyword.getValue();
-            }
-        }
-        return DatabaseProduct.UNKNOWN;
     }
 
     /**

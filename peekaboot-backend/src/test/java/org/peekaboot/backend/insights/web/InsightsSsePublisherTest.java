@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -231,12 +232,19 @@ class InsightsSsePublisherTest {
         };
 
         publisher.subscribe();
-        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
-        publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
+            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+            publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
 
-        assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
-                .as("the loop keeps running after a step threw")
-                .isEqualTo("tick");
+            assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
+                    .as("the loop keeps running after a step threw")
+                    .isEqualTo("tick");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Insights SSE loop peekaboot-insights-sse-dispatch step failed; continuing");
+            });
+        }
     }
 
     @Test
@@ -320,6 +328,38 @@ class InsightsSsePublisherTest {
                 .count();
     }
 
+    /**
+     * A peer that went away is routine, not an incident: the reason is logged at DEBUG as
+     * one line, without the stack trace of the servlet container's broken pipe.
+     */
+    @Test
+    void aSubscriberWhoseSendFailsIsDroppedWithAOneLineDebugMessage() {
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            SseEmitter newEmitter() {
+                return new SseEmitter(0L) {
+                    @Override
+                    public void send(SseEventBuilder builder) throws IOException {
+                        throw new IOException("Broken pipe");
+                    }
+                };
+            }
+        };
+        publisher.subscribe();
+
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class, Level.DEBUG)) {
+            publisher.broadcast("tick", "{}");
+
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo(
+                                "Dropping insights SSE subscriber after send failure: java.io.IOException: Broken pipe");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        }
+    }
+
     @Test
     void stopCompletesSubscribers() {
         publisher.start();
@@ -355,10 +395,13 @@ class InsightsSsePublisherTest {
         assertThat(json).isEqualTo("{\"epochMs\":7000,\"values\":{\"a\":1.5,\"b\":null},\"tiles\":{}}");
     }
 
+    /** The seven statistics the dashboard charts, by name; the sample count stays server-side. */
     @Test
-    void rollupPayloadCarriesAllStats() {
+    void rollupPayloadCarriesTheSevenStatsAndNotTheSampleCount() {
         var entry = AggregateStats.of(new double[] {2.0});
         String json = publisher.rollupJson(1, 60_000, Map.of("a", entry));
-        assertThat(json).contains("\"level\":1").contains("\"avg\":2.0").contains("\"p99\":2.0");
+        assertThat(json)
+                .isEqualTo("{\"level\":1,\"epochMs\":60000,\"entries\":{\"a\":"
+                        + "{\"min\":2.0,\"max\":2.0,\"avg\":2.0,\"median\":2.0,\"p90\":2.0,\"p95\":2.0,\"p99\":2.0}}}");
     }
 }

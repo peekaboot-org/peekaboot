@@ -3,6 +3,9 @@ package org.peekaboot.backend.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -14,6 +17,7 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.mapper.actuator.*;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.beans.factory.ObjectProvider;
 
 class ActuatorInsightsServiceTest {
@@ -128,10 +132,13 @@ class ActuatorInsightsServiceTest {
 
         ActuatorInsightsResponse response = insightsService.getInsights(Locale.ENGLISH, false);
 
-        assertThat(response.server()).isNotNull();
-        assertThat(response.server().timezone()).isNotNull();
-        assertThat(response.server().timezoneOffset()).isNotNull();
-        assertThat(response.server().timezoneDisplay()).isNotNull();
+        ZoneId zone = ZoneId.systemDefault();
+        assertThat(response.server().timezone()).isEqualTo(zone.getId());
+        assertThat(response.server().timezoneOffset())
+                .isEqualTo(zone.getRules().getOffset(Instant.now()).toString());
+        assertThat(response.server().timezoneDisplay()).isEqualTo(zone.getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+        assertThat(response.server().availableProcessors())
+                .isEqualTo(Runtime.getRuntime().availableProcessors());
     }
 
     @Test
@@ -158,18 +165,19 @@ class ActuatorInsightsServiceTest {
     }
 
     private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
+        MaskingEngine maskingEngine = new MaskingEngine();
         return new ActuatorInsightsService(
                 actuatorService,
                 new ActuatorResponseParser(),
-                new HealthMapper(),
+                new HealthMapper(maskingEngine),
                 new RuntimeMapper(),
-                new DataSourceMapper(),
-                new ApplicationMapper(),
-                new EnvironmentMapper(),
+                new DataSourceMapper(maskingEngine),
+                new ApplicationMapper(maskingEngine),
+                new EnvironmentMapper(maskingEngine),
                 new LoggersMapper(),
                 new FlywayMapper(),
-                new ConfigMapper(),
-                new ScheduledTasksMapper(new CronDescriptionService()),
+                new ConfigMapper(maskingEngine),
+                new ScheduledTasksMapper(),
                 dataSourceProvider);
     }
 }
