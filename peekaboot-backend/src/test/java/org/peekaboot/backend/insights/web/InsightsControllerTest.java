@@ -2,14 +2,16 @@ package org.peekaboot.backend.insights.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class InsightsControllerTest {
 
@@ -33,13 +35,15 @@ class InsightsControllerTest {
 
     @Test
     void configDelegatesToService() {
-        controller.config();
-        verify(service).config();
+        InsightsConfigResponse response = new InsightsConfigResponse(List.of(), List.of(), List.of());
+        when(service.config()).thenReturn(response);
+        assertThat(controller.config()).isSameAs(response);
     }
 
     @Test
-    void streamSubscribes() {
-        controller.stream();
-        verify(publisher).subscribe();
+    void streamHandsOutThePublishersEmitter() {
+        SseEmitter emitter = new SseEmitter();
+        when(publisher.subscribe()).thenReturn(emitter);
+        assertThat(controller.stream()).isSameAs(emitter);
     }
 }
