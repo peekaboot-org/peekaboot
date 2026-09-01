@@ -5,10 +5,15 @@ on:
     branches:
       - main
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   build-release-on-main-push:
     if: ${{ !contains(github.event.head_commit.message, '[release]') }} # prevent recursive releases
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     permissions:
       contents: write
@@ -33,6 +38,34 @@ jobs:
           server-password: MAVEN_PASSWORD
           gpg-private-key: ${{ secrets.OSSRH_GPG_SECRET_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
+      # download happening to work mid-test-run.
+      #
+      # Two steps, not one: `exec:java` ad-hoc goal invocations ignore -pl scoping when
+      # combined with -am (verified locally: it runs the goal against every upstream
+      # reactor module too, and fails on the first one that doesn't have playwright on
+      # its classpath). So the reactor's own SNAPSHOT jars must already be resolvable from
+      # the local repo before the plain (no -am) exec:java call below can resolve
+      # peekaboot-testing-app's own dependency graph.
+      - name: install-reactor-snapshots
+        run: mvn --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+
+      # classpathScope=test is required because the playwright dependency is test-scoped;
+      # without it exec:java can't find com.microsoft.playwright.CLI.
+      - name: install-playwright-browser
+        run: >
+          mvn --batch-mode -pl peekaboot-testing-app exec:java
+          -Dexec.mainClass=com.microsoft.playwright.CLI
+          -Dexec.classpathScope=test
+          -Dexec.args="install chromium"
 
       - name: maven-build-verify
         run: mvn --batch-mode verify
