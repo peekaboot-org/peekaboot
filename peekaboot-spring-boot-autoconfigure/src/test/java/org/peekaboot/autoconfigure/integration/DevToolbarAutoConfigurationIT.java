@@ -2,11 +2,13 @@ package org.peekaboot.autoconfigure.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
+import org.peekaboot.backend.insights.InsightsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -45,6 +47,17 @@ class DevToolbarAutoConfigurationIT {
     @Test
     void tracerBeanShouldBeCreatedByOpenTelemetryAutoConfiguration() {
         assertThat(context.getBean(Tracer.class)).isNotNull();
+    }
+
+    /**
+     * Insights backs off without a MeterRegistry bean, and that bean comes from Boot's own
+     * metrics auto-configuration - so the auto-configuration order has to put Peekaboot after
+     * it, which nothing on this test classpath does by accident.
+     */
+    @Test
+    void insightsServiceShouldBeCreatedAfterBootsMeterRegistry() {
+        assertThat(context.getBean(MeterRegistry.class)).isNotNull();
+        assertThat(context.getBean(InsightsService.class)).isNotNull();
     }
 
     @Test
