@@ -2,13 +2,13 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
@@ -25,7 +25,7 @@ class InsightsCollectorLifecycleTest {
     @Test
     void startTicksAndRollsUpOnSchedule() throws Exception {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        registry.gauge("g", new AtomicLong(1));
+        Gauge.builder("g", () -> 1).register(registry);
         CountDownLatch ticks = new CountDownLatch(3);
         CountDownLatch rollups = new CountDownLatch(1);
         InsightsCollector.Listener listener = new InsightsCollector.Listener() {
@@ -40,7 +40,9 @@ class InsightsCollectorLifecycleTest {
             }
         };
         InsightsCollector collector = new InsightsCollector(
-                List.of(level(Duration.ofMillis(100), 20), level(Duration.ofMillis(500), 10)),
+                List.of(
+                        level(Duration.ofMillis(100), 20),
+                        level(Duration.ofMillis(500), 10)),
                 List.of(new SeriesDef("g", "G", "g", Map.of(), "value", null, null)),
                 List.of(),
                 registry,
