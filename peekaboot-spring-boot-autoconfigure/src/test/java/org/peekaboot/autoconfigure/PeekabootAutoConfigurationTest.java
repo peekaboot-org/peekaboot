@@ -1,9 +1,12 @@
 package org.peekaboot.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+
+import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.service.PeekabootActuatorService;
-import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -16,9 +19,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 class PeekabootAutoConfigurationTest {
 
@@ -48,26 +48,22 @@ class PeekabootAutoConfigurationTest {
 
     @Test
     void shouldRegisterBeansWhenEnabledAndEndpointClassesPresent() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=true")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).hasSingleBean(PeekabootProperties.class);
-                    // Proves the @ComponentScan actually pulls in the controller/service/
-                    // mapper/config/actuator packages, not just the properties beans.
-                    assertThat(context).hasSingleBean(PeekabootController.class);
-                });
+        contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(PeekabootProperties.class);
+            // Proves the @ComponentScan actually pulls in the controller/service/
+            // mapper/config/actuator packages, not just the properties beans.
+            assertThat(context).hasSingleBean(PeekabootController.class);
+        });
     }
 
     @Test
     void shouldNotRegisterBeansWhenPeekabootDisabled() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=false")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(PeekabootController.class);
-                    assertThat(context).doesNotHaveBean(PeekabootProperties.class);
-                });
+        contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).doesNotHaveBean(PeekabootController.class);
+            assertThat(context).doesNotHaveBean(PeekabootProperties.class);
+        });
     }
 
     @Test
