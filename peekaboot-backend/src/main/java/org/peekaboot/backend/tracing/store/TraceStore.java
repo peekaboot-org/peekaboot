@@ -1,10 +1,9 @@
 package org.peekaboot.backend.tracing.store;
 
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-
 import java.util.List;
 import java.util.Optional;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /**
  * Central storage abstraction for all trace data. Implementations receive raw
@@ -26,7 +25,10 @@ public interface TraceStore {
 
     int getTraceCount(TraceBucket bucket);
 
+    /**
+     * Test hook: drops every trace from every bucket. Nothing in production calls it; the
+     * integration suite's classes that share one application context reset the store with
+     * it before each test so they can assert exact counts.
+     */
     void clear();
-
-    void cleanUp();
 }

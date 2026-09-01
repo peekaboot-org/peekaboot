@@ -21,7 +21,9 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
- * OpenTelemetry SpanExporter that captures spans and publishes them via Spring events.
+ * Copies every span the host's OpenTelemetry SDK exports into Peekaboot's own store, as a
+ * {@link SpanDataEvent} per span, leaving out the spans of Peekaboot's own requests. Runs
+ * beside whatever other exporter the application has configured, never instead of it.
  */
 public class OtelSpanExporter implements SpanExporter {
 

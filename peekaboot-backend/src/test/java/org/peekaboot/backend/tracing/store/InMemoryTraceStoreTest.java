@@ -1,18 +1,23 @@
 package org.peekaboot.backend.tracing.store;
 
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
-import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.testsupport.RequestCompletedEvents;
+import org.peekaboot.backend.testsupport.TraceStores;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class InMemoryTraceStoreTest {
+
+    private static final Instant START = Instant.parse("2026-01-01T00:00:00Z");
 
     private InMemoryTraceStore storage;
 
@@ -23,9 +28,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void addSpan_storesSpan() {
-        var spanData = createSpanData("trace1", "span1", null, "test");
-
-        storage.addSpan(spanData);
+        storage.addSpan(spanIn("trace1", "span1"));
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -35,9 +38,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void addLog_storesLog() {
-        var event = new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", "test message", "main");
-
-        storage.addLog(event);
+        storage.addLog(log("trace1", "INFO", "test message"));
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -47,15 +48,11 @@ class InMemoryTraceStoreTest {
 
     @Test
     void setRequest_storesRequest() {
-        var event = new RequestCompletedEvent(
-                "trace1", "GET", "/api/test", null,
-                Map.of(), null, false,
-                "TestController", "test",
-                Map.of(), Map.of(), List.of(),
-                200, Map.of(), 50
-        );
-
-        storage.setRequest(event);
+        storage.setRequest(RequestCompletedEvents.request("trace1")
+                .path("/api/test")
+                .controller("TestController", "test")
+                .durationMs(50)
+                .build());
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -65,16 +62,15 @@ class InMemoryTraceStoreTest {
 
     @Test
     void aggregatesMultipleEventsForSameTrace() {
-        storage.addSpan(createSpanData("trace1", "span1", null, "root"));
-        storage.addSpan(createSpanData("trace1", "span2", "span1", "child"));
-        storage.addLog(new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "Test", "log1", "main"));
-        storage.setRequest(new RequestCompletedEvent(
-                "trace1", "GET", "/test", null,
-                Map.of(), null, false,
-                null, null,
-                Map.of(), Map.of(), List.of(),
-                200, Map.of(), 100
-        ));
+        storage.addSpan(spanIn("trace1", "span1"));
+        storage.addSpan(span("span2")
+                .in("trace1")
+                .parent("span1")
+                .named("child")
+                .order(storage.nextCreationOrder())
+                .build());
+        storage.addLog(log("trace1", "INFO", "log1"));
+        storage.setRequest(RequestCompletedEvents.minimal("trace1"));
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -88,15 +84,20 @@ class InMemoryTraceStoreTest {
         // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
         // would overflow a cap enforced before deduplication but not one enforced after.
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
-        Instant now = Instant.now();
-        SpanData root = new SpanData("t1", "root", null, "GET /orders", null, now, now, Duration.ZERO,
-                Map.of(), List.of(), null, null, null, null, null, List.of(), capped.nextCreationOrder());
-        SpanData duplicate = new SpanData("t1", "dup1", "query1", "query", null, now, now, Duration.ZERO,
-                Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "dataSource"), List.of(),
-                null, null, null, null, null, List.of(), capped.nextCreationOrder());
-        SpanData realQuery = new SpanData("t1", "query1", "root", "query", null, now, now, Duration.ZERO,
-                Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "sample_app_db"), List.of(),
-                null, null, null, null, null, List.of(), capped.nextCreationOrder());
+        SpanData root = span("root")
+                .in("t1")
+                .named("GET /orders")
+                .order(capped.nextCreationOrder())
+                .build();
+        SpanData duplicate = jdbcDuplicate("dup1", "query1", "SELECT 1")
+                .in("t1")
+                .order(capped.nextCreationOrder())
+                .build();
+        SpanData realQuery = jdbcQuery("query1", "SELECT 1")
+                .in("t1")
+                .parent("root")
+                .order(capped.nextCreationOrder())
+                .build();
 
         capped.addSpan(root);
         capped.addSpan(duplicate);
@@ -110,10 +111,12 @@ class InMemoryTraceStoreTest {
     @Test
     void addSpan_marksTheBundleTruncatedOnceRealSpansExceedTheCap() {
         InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
-        Instant now = Instant.now();
         for (int i = 1; i <= 3; i++) {
-            capped.addSpan(new SpanData("t1", "s" + i, null, "op" + i, null, now, now, Duration.ZERO,
-                    Map.of(), List.of(), null, null, null, null, null, List.of(), capped.nextCreationOrder()));
+            capped.addSpan(span("s" + i)
+                    .in("t1")
+                    .named("op" + i)
+                    .order(capped.nextCreationOrder())
+                    .build());
         }
 
         var bundle = capped.getTrace("t1").orElseThrow();
@@ -128,39 +131,9 @@ class InMemoryTraceStoreTest {
         assertThat(bundle).isEmpty();
     }
 
-    private SpanData createSpanData(String traceId, String spanId, String parentId, String name) {
-        return new SpanData(
-                traceId,
-                spanId,
-                parentId,
-                name,
-                null,
-                Instant.now(),
-                Instant.now().plusMillis(100),
-                Duration.ofMillis(100),
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                storage.nextCreationOrder()
-        );
-    }
-
-    private SpanData createSpanData(String traceId, String spanId, Instant start, Instant end, String errorClass) {
-        return new SpanData(traceId, spanId, null, "op", null,
-                start, end,
-                (start != null && end != null) ? Duration.between(start, end) : null,
-                Map.of(), List.of(), null, errorClass,
-                null, null, null, List.of(), storage.nextCreationOrder());
-    }
-
     @Test
     void errorSpanClassifiesTraceIntoErrorBucket() {
-        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.addSpan(errorSpan(storage, "t1"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -169,7 +142,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void errorLogClassifiesTraceIntoErrorBucket() {
-        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "ERROR", "Logger", "boom", "main"));
+        storage.addLog(log("t1", "ERROR", "boom"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -178,19 +151,19 @@ class InMemoryTraceStoreTest {
 
     @Test
     void infoLogDoesNotClassifyTraceIntoErrorBucket() {
-        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "fine", "main"));
+        storage.addLog(log("t1", "INFO", "fine"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
     }
 
     @Test
     void slowTraceClassifiedWhenTotalDurationReachesThreshold() {
-        // threshold in setUp fixture: use a store with slowTraceThresholdMs = 100
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
-        Instant start = Instant.parse("2026-01-01T00:00:00Z");
-        store.addSpan(new SpanData("t1", "s1", null, "op", null,
-                start, start.plusMillis(150), Duration.ofMillis(150),
-                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+        InMemoryTraceStore store = storeWithSlowThreshold(100);
+        store.addSpan(span("s1")
+                .in("t1")
+                .at(START, Duration.ofMillis(150))
+                .order(store.nextCreationOrder())
+                .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -199,11 +172,12 @@ class InMemoryTraceStoreTest {
 
     @Test
     void fastTraceNotClassifiedAsSlow() {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
-        Instant start = Instant.parse("2026-01-01T00:00:00Z");
-        store.addSpan(new SpanData("t1", "s1", null, "op", null,
-                start, start.plusMillis(50), Duration.ofMillis(50),
-                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+        InMemoryTraceStore store = storeWithSlowThreshold(100);
+        store.addSpan(span("s1")
+                .in("t1")
+                .at(START, Duration.ofMillis(50))
+                .order(store.nextCreationOrder())
+                .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
     }
@@ -211,15 +185,20 @@ class InMemoryTraceStoreTest {
     @Test
     void slowDurationSpansMultipleSpans() {
         // two 60ms spans 60ms apart: total window 120ms >= 100ms threshold
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 10, 10, 100);
-        Instant start = Instant.parse("2026-01-01T00:00:00Z");
-        store.addSpan(new SpanData("t1", "s1", null, "op", null,
-                start, start.plusMillis(60), Duration.ofMillis(60),
-                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+        InMemoryTraceStore store = storeWithSlowThreshold(100);
+        store.addSpan(span("s1")
+                .in("t1")
+                .at(START, Duration.ofMillis(60))
+                .order(store.nextCreationOrder())
+                .build());
         assertThat(store.getTraces(TraceBucket.SLOW, 10)).isEmpty();
-        store.addSpan(new SpanData("t1", "s2", "s1", "op2", null,
-                start.plusMillis(60), start.plusMillis(120), Duration.ofMillis(60),
-                Map.of(), List.of(), null, null, null, null, null, List.of(), store.nextCreationOrder()));
+        store.addSpan(span("s2")
+                .in("t1")
+                .parent("s1")
+                .named("op2")
+                .at(START.plusMillis(60), Duration.ofMillis(60))
+                .order(store.nextCreationOrder())
+                .build());
 
         assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -228,18 +207,22 @@ class InMemoryTraceStoreTest {
 
     @Test
     void classificationIsIdempotent() {
-        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
-        storage.addSpan(createSpanData("t1", "s2", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
-        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "ERROR", "Logger", "boom", "main"));
+        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(span("s2")
+                .in("t1")
+                .error("boom", "java.lang.RuntimeException")
+                .order(storage.nextCreationOrder())
+                .build());
+        storage.addLog(log("t1", "ERROR", "boom"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
     }
 
     @Test
     void getTracesAllReturnsNewestFirst() throws InterruptedException {
-        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), null));
-        Thread.sleep(5);  // createdAt has millisecond resolution; sleep to order deterministically
-        storage.addSpan(createSpanData("t2", "s2", Instant.now(), Instant.now(), null));
+        storage.addSpan(spanIn("t1", "s1"));
+        Thread.sleep(5); // createdAt has millisecond resolution; sleep to order deterministically
+        storage.addSpan(spanIn("t2", "s2"));
 
         List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
         assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
@@ -248,7 +231,7 @@ class InMemoryTraceStoreTest {
     @Test
     void getTracesAllBucketRespectsLimit() {
         for (int i = 0; i < 5; i++) {
-            storage.addSpan(createSpanData("trace-" + i, "span-" + i, null, "op-" + i));
+            storage.addSpan(spanIn("trace-" + i, "span-" + i));
         }
 
         assertThat(storage.getTraces(TraceBucket.ALL, 3)).hasSize(3);
@@ -257,7 +240,7 @@ class InMemoryTraceStoreTest {
     @Test
     void getTracesErrorsBucketRespectsLimit() {
         for (int i = 0; i < 5; i++) {
-            storage.addSpan(createSpanData("trace-" + i, "span-" + i, Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+            storage.addSpan(errorSpan(storage, "trace-" + i));
         }
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 3)).hasSize(3);
@@ -265,8 +248,8 @@ class InMemoryTraceStoreTest {
 
     @Test
     void getTraceCountPerBucket() {
-        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
-        storage.addSpan(createSpanData("t2", "s2", Instant.now(), Instant.now(), null));
+        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(spanIn("t2", "s2"));
 
         assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(2);
         assertThat(storage.getTraceCount(TraceBucket.ERRORS)).isEqualTo(1);
@@ -274,16 +257,11 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void bucketFromParamIsLenient() {
-        assertThat(TraceBucket.fromParam("errors")).isEqualTo(TraceBucket.ERRORS);
-        assertThat(TraceBucket.fromParam("SLOW")).isEqualTo(TraceBucket.SLOW);
-        assertThat(TraceBucket.fromParam(null)).isEqualTo(TraceBucket.ALL);
-        assertThat(TraceBucket.fromParam("bogus")).isEqualTo(TraceBucket.ALL);
-    }
-
-    @Test
     void lastNEvictionDropsOldestErrorTrace() {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), 2, 2, 1000);
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxErrorTraces(2);
+            p.setMaxSlowTraces(2);
+        });
         store.addSpan(errorSpan(store, "t1"));
         store.addSpan(errorSpan(store, "t2"));
         store.addSpan(errorSpan(store, "t3"));
@@ -296,7 +274,7 @@ class InMemoryTraceStoreTest {
     @Test
     void errorTraceSurvivesAllCacheEviction() throws InterruptedException {
         // TTL-based eviction is deterministic, size-based (W-TinyLFU) is not
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
         store.addSpan(errorSpan(store, "t1"));
         Thread.sleep(10);
         store.cleanUp();
@@ -308,22 +286,22 @@ class InMemoryTraceStoreTest {
 
     @Test
     void lateEventAfterCacheEvictionReusesBucketBundle() throws InterruptedException {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMillis(1), 10, 10, 1000);
+        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
         store.addSpan(errorSpan(store, "t1"));
         Thread.sleep(10);
         store.cleanUp();
 
-        store.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "late", "main"));
+        store.addLog(log("t1", "INFO", "late"));
 
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
-        assertThat(bundle.spans()).hasSize(1);   // original span still there — no fresh bundle
+        assertThat(bundle.spans()).hasSize(1); // original span still there - no fresh bundle
         assertThat(bundle.logs()).hasSize(1);
         assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
     }
 
     @Test
     void clearEmptiesAllBuckets() {
-        storage.addSpan(createSpanData("t1", "s1", Instant.now(), Instant.now(), "java.lang.RuntimeException"));
+        storage.addSpan(errorSpan(storage, "t1"));
         storage.clear();
 
         assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
@@ -334,33 +312,79 @@ class InMemoryTraceStoreTest {
 
     @Test
     void logsAreCappedPerTrace() {
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5),
-                10, 10, 1000, 3);
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxLogsPerTrace(3));
         for (int i = 1; i <= 5; i++) {
-            store.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "log" + i, "main"));
+            store.addLog(log("t1", "INFO", "log" + i));
         }
 
         var bundle = store.getTrace("t1");
         assertThat(bundle).isPresent();
-        assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message)
-                .containsExactly("log3", "log4", "log5");
+        assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
+    }
+
+    /**
+     * The three-argument constructor - the one the autoconfigure and testing-app fixtures
+     * use - takes every limit it is not given from {@link PeekabootTracingProperties}, so
+     * those defaults have exactly one owner. Checked through behaviour at the two limits a
+     * test can reach cheaply: the slow-trace threshold and the per-trace log cap.
+     */
+    @Test
+    void threeArgumentConstructorTakesTheRemainingLimitsFromTheTracingPropertiesDefaults() {
+        PeekabootTracingProperties defaults = new PeekabootTracingProperties();
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        long threshold = defaults.getSlowTraceThresholdMs();
+        store.addSpan(span("s1")
+                .in("just-under")
+                .at(START, Duration.ofMillis(threshold - 1))
+                .order(store.nextCreationOrder())
+                .build());
+        store.addSpan(span("s2")
+                .in("at-threshold")
+                .at(START, Duration.ofMillis(threshold))
+                .order(store.nextCreationOrder())
+                .build());
+        for (int i = 0; i <= defaults.getMaxLogsPerTrace(); i++) {
+            store.addLog(log("logged", "INFO", "log" + i));
+        }
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("at-threshold");
+        assertThat(store.getTrace("logged").orElseThrow().logs()).hasSize(defaults.getMaxLogsPerTrace());
     }
 
     @Test
     void lowercaseErrorLogAfterNonErrorLogClassifiesTraceIntoErrorBucket() {
-        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "INFO", "Logger", "fine", "main"));
-        storage.addLog(new LogCapturedEvent("t1", "s1", Instant.now(), "error", "Logger", "boom", "main"));
+        storage.addLog(log("t1", "INFO", "fine"));
+        storage.addLog(log("t1", "error", "boom"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
                 .containsExactly("t1");
     }
 
-    private SpanData errorSpan(InMemoryTraceStore store, String traceId) {
-        Instant now = Instant.now();
-        return new SpanData(traceId, traceId + "-s", null, "op", null,
-                now, now, Duration.ZERO, Map.of(), List.of(),
-                "boom", "java.lang.RuntimeException",
-                null, null, null, List.of(), store.nextCreationOrder());
+    private static InMemoryTraceStore storeWithSlowThreshold(long slowTraceThresholdMs) {
+        return TraceStores.with(p -> p.setSlowTraceThresholdMs(slowTraceThresholdMs));
+    }
+
+    /** A 100ms span with nothing else about it, numbered by the fixture store. */
+    private SpanData spanIn(String traceId, String spanId) {
+        return span(spanId)
+                .in(traceId)
+                .at(START, Duration.ofMillis(100))
+                .order(storage.nextCreationOrder())
+                .build();
+    }
+
+    private static SpanData errorSpan(InMemoryTraceStore store, String traceId) {
+        return span(traceId + "-s")
+                .in(traceId)
+                .error("boom", "java.lang.RuntimeException")
+                .order(store.nextCreationOrder())
+                .build();
+    }
+
+    private static LogCapturedEvent log(String traceId, String level, String message) {
+        return new LogCapturedEvent(traceId, "s1", START, level, "Logger", message, "main");
     }
 }

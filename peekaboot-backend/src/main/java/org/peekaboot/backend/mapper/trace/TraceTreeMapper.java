@@ -3,13 +3,13 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanEvent;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
@@ -24,10 +24,6 @@ public class TraceTreeMapper {
 
     private final MaskingEngine maskingEngine = new MaskingEngine();
     private final TagMasker tagMasker = new TagMasker(maskingEngine);
-
-    public TraceTree map(TraceData traceData) {
-        return map(traceData, false);
-    }
 
     /**
      * Builds the {@link TraceTree} for a captured trace.
@@ -44,6 +40,7 @@ public class TraceTreeMapper {
                     0L,
                     0L,
                     TraceStatus.OK,
+                    false,
                     RootActionType.UNKNOWN,
                     null,
                     null,
@@ -52,10 +49,9 @@ public class TraceTreeMapper {
                             new TraceTabSummary.SpansSummary(0, 0L, 0),
                             new TraceTabSummary.QueriesSummary(0, 0L),
                             new TraceTabSummary.LogsSummary(0, 0, 0)),
-                    Map.of(),
                     null,
-                    null,
-                    null,
+                    List.of(),
+                    List.of(),
                     truncated);
         }
 
@@ -79,7 +75,6 @@ public class TraceTreeMapper {
         // Determine trace status
         TraceStatus status = determineStatus(spans);
 
-        // Build tree directly (no hoisting - keep all tags per span)
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
 
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
@@ -92,14 +87,14 @@ public class TraceTreeMapper {
                 startTimeMs,
                 durationMs,
                 status,
+                false, // decided by IssueDetector once the issues exist
                 rootActionType,
                 rootOperation,
                 rootSpan,
                 summary,
-                Map.of(), // No inherited attributes - all tags stay on spans
                 null,
-                null,
-                null,
+                List.of(),
+                List.of(),
                 truncated);
     }
 
@@ -232,27 +227,10 @@ public class TraceTreeMapper {
                 .map(child -> buildSpanTree(child, childrenByParentId))
                 .toList();
 
-        String status = spanData.hasError() ? "ERROR" : "OK";
+        SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
         String kind = spanData.kind() != null ? spanData.kind().name() : null;
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
-
-        // Copy tags directly (no hoisting), masked - db.statement, http.url etc. may
-        // carry a credential the key name alone can't catch. errorMessage below is masked
-        // the same way - it can carry the same kind of credential, e.g. an exception
-        // message that echoes back the failing request's URL.
-        Map<String, Object> tags = new HashMap<>();
-        if (spanData.tags() != null) {
-            tags.putAll(tagMasker.mask(spanData.tags()));
-        }
-
-        // Map events
-        List<SpanEvent> events = List.of();
-        if (spanData.events() != null && !spanData.events().isEmpty()) {
-            events = spanData.events().stream()
-                    .map(e -> new SpanEvent(e.name(), e.timestamp()))
-                    .toList();
-        }
 
         return new SpanNode(
                 spanData.spanId(),
@@ -262,13 +240,37 @@ public class TraceTreeMapper {
                 durationMs,
                 status,
                 children,
-                Map.copyOf(tags),
-                events,
+                maskedTags(spanData),
+                mapEvents(spanData),
                 List.of(), // issues added by IssueDetector
                 spanData.creationOrder(),
                 maskingEngine.maskValue(spanData.errorMessage()),
                 spanData.errorClass(),
-                spanData.remoteServiceName());
+                spanData.remoteServiceName(),
+                queryText(spanData),
+                null);
+    }
+
+    /**
+     * Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
+     * credential the key name alone can't catch. A span's errorMessage and query text are
+     * masked the same way: an exception message can echo back the failing request's URL.
+     */
+    private Map<String, Object> maskedTags(SpanData spanData) {
+        return spanData.tags() == null ? Map.of() : Map.<String, Object>copyOf(tagMasker.mask(spanData.tags()));
+    }
+
+    private static List<SpanEvent> mapEvents(SpanData spanData) {
+        if (spanData.events() == null) {
+            return List.of();
+        }
+        return spanData.events().stream()
+                .map(e -> new SpanEvent(e.name(), e.timestamp()))
+                .toList();
+    }
+
+    private String queryText(SpanData spanData) {
+        return DbSpans.isQuery(spanData) ? maskingEngine.maskValue(DbSpans.sql(spanData)) : null;
     }
 
     private TraceTabSummary calculateSummary(List<SpanData> spans, SpanData rootSpanData) {
@@ -283,7 +285,7 @@ public class TraceTreeMapper {
             }
             long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
             totalDurationMs += durationMs;
-            if (isDbQuery(span)) {
+            if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
                 dbTotalDurationMs += durationMs;
             }
@@ -295,18 +297,6 @@ public class TraceTreeMapper {
                 new TraceTabSummary.QueriesSummary(dbQueryCount, dbTotalDurationMs),
                 new TraceTabSummary.LogsSummary(0, 0, 0) // Logs populated later by TraceInsightsService
                 );
-    }
-
-    /**
-     * An actual DB query is a CLIENT span carrying db.* tags (standard OpenTelemetry) or
-     * jdbc.query* tags (datasource-proxy/Micrometer - not just jdbc.* to avoid counting
-     * connection/result-set spans).
-     */
-    private static boolean isDbQuery(SpanData span) {
-        if (span.kind() != Span.Kind.CLIENT || span.tags() == null) {
-            return false;
-        }
-        return span.tags().keySet().stream().anyMatch(k -> k.startsWith("db.") || k.startsWith("jdbc.query"));
     }
 
     private static TraceTabSummary.RequestSummary extractRequestSummary(SpanData rootSpanData) {

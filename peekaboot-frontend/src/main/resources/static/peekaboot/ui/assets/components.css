@@ -33,6 +33,13 @@
 .pk-badge--info    { background: var(--pk-info); color: var(--pk-on-info); }
 .pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text); }
 
+/* A trace's stat line (shared/trace-stats.js): a count with a mono duration beside it,
+   coloured by the duration's severity. Rendered by the toolbar and the Traces tab alike. */
+.pk-stat { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
+.pk-stat__duration { font-family: var(--pk-font-mono); }
+.pk-stat--slow .pk-stat__duration { color: var(--pk-warning-text); }
+.pk-stat--very-slow .pk-stat__duration { color: var(--pk-danger); }
+
 /* Collapsible group. State is aria-expanded + [hidden], not a class. */
 .pk-group {
     margin-bottom: var(--pk-space-md);

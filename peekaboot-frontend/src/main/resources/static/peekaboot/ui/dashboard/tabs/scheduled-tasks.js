@@ -20,8 +20,11 @@ export function render(container, data, context) {
     renderGroups(container, context);
 }
 
+/** Every TaskType the backend emits, in the order the groups render. */
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
 const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate'};
+
+export const TASK_TYPES = Object.keys(TYPE_LABELS);
 
 /** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
 function taskSeverity(status) {
@@ -45,7 +48,7 @@ function renderGroups(container, context) {
 
     renderSummary(container, scheduledTasks, tasks.length);
 
-    const groups = ['CRON', 'FIXED_DELAY', 'FIXED_RATE']
+    const groups = TASK_TYPES
         .map(type => ({type, tasks: tasks.filter(t => t.type === type)}))
         .filter(group => group.tasks.length > 0);
 
@@ -91,10 +94,11 @@ function renderTaskRow(task, type, context) {
     const scheduleEl = document.createElement('span');
     scheduleEl.className = 'pk-task__schedule';
     // the description truncates when the row is narrow, so the tooltip has to carry it
-    // as well as the raw expression it was derived from
-    scheduleEl.title = scheduleDisplay === task.schedule
-        ? task.schedule
-        : `${scheduleDisplay} (${task.schedule})`;
+    // as well as the raw expression it was derived from - when the backend shipped one;
+    // a fixed-interval task may carry no schedule string at all
+    scheduleEl.title = task.schedule && scheduleDisplay !== task.schedule
+        ? `${scheduleDisplay} (${task.schedule})`
+        : scheduleDisplay;
     scheduleEl.textContent = scheduleDisplay;
     left.appendChild(scheduleEl);
 

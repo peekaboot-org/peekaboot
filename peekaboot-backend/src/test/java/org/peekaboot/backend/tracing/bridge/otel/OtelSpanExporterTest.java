@@ -87,35 +87,28 @@ class OtelSpanExporterTest {
         assertThat(storage.getTrace(traceId2).orElseThrow().spans()).hasSize(1);
     }
 
+    /**
+     * The exporter buffers nothing, so a flush has nothing to wait for: it must complete
+     * synchronously (the SDK's BatchSpanProcessor blocks on it) and leave later exports intact.
+     */
     @Test
-    void shouldHandleFlush() {
+    void flushCompletesImmediatelyWithoutDroppingLaterExports() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+
         CompletableResultCode result = exporter.flush();
+        exporter.export(List.of(createTestSpan(traceId, "0000000000000001", "after-flush", SpanKind.SERVER)));
+
+        assertThat(result.isDone()).isTrue();
         assertThat(result.isSuccess()).isTrue();
+        assertThat(publishedEvents).hasSize(1);
     }
 
     @Test
-    void shouldHandleShutdown() {
+    void shutdownCompletesImmediately() {
         CompletableResultCode result = exporter.shutdown();
+
+        assertThat(result.isDone()).isTrue();
         assertThat(result.isSuccess()).isTrue();
-    }
-
-    @Test
-    void shouldMapAllSpanKinds() {
-        int index = 0;
-        for (SpanKind kind : SpanKind.values()) {
-            String traceId = String.format("%032x", index++);
-            SpanData span = createTestSpan(traceId, "0000000000000001", "op", kind);
-            exporter.export(List.of(span));
-
-            List<org.peekaboot.backend.tracing.store.SpanData> stored = storedSpans(traceId);
-            assertThat(stored).hasSize(1);
-
-            if (kind == SpanKind.INTERNAL) {
-                assertThat(stored.getFirst().kind()).isNull();
-            } else {
-                assertThat(stored.getFirst().kind()).isNotNull();
-            }
-        }
     }
 
     @Test

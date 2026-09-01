@@ -11,7 +11,7 @@
  */
 import {escapeHtml} from '../shared/markup.js';
 import {durationSeverity} from '../shared/severity.js';
-import {formatCount} from '../shared/format.js';
+import {formatCount, formatDurationMs} from '../shared/format.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
@@ -74,6 +74,13 @@ function deepActiveElement() {
     return element;
 }
 
+/**
+ * options: basePath (the toolbar's server-provided one; the dashboard's own by default),
+ * urlState (see main.js's buildTraceUrlState), onClose, and the dashboard's display
+ * settings - locale, timeZone and the /api/features payload - which the toolbar has no
+ * way to supply and which then fall back to the browser locale and the shared default
+ * thresholds.
+ */
 export function openTraceDetail(traceId, options = {}) {
     // Captured before closeTraceDetail() below, which restores focus to whatever a prior
     // open() left behind - that would otherwise clobber the element we want to return to.
@@ -116,7 +123,8 @@ export function openTraceDetail(traceId, options = {}) {
     shadow.appendChild(content);
     content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
 
-    fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState});
+    const display = {locale: options.locale, timeZone: options.timeZone, features: options.features};
+    fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState, display});
 }
 
 export function closeTraceDetail() {
@@ -149,13 +157,13 @@ export function closeTraceDetail() {
     }
 }
 
-async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState}) {
+async function fetchAndRender(content, traceId, {basePath, session, styleReady, urlState, display}) {
     const client = createClient({basePath});
     try {
         const [trace] = await Promise.all([client.get(`/api/traces/${traceId}/insights`), styleReady]);
         // A newer open() superseded this one while the request was in flight.
         if (session !== currentSession) return;
-        render(content, trace, urlState);
+        render(content, trace, urlState, display);
     } catch (error) {
         if (session !== currentSession) return;
         // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
@@ -170,7 +178,7 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
     }
 }
 
-function render(content, trace, urlState) {
+function render(content, trace, urlState, display) {
     // delegated once on the container, which outlives every innerHTML swap below
     bindCopyables(content);
 
@@ -186,7 +194,7 @@ function render(content, trace, urlState) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-    const durationClass = durationSeverity(trace.durationMs);
+    const durationClass = durationSeverity(trace.durationMs, display.features);
 
     const queryCount = (trace.queries || []).length;
     const logCount = (trace.logs || []).length;
@@ -205,7 +213,7 @@ function render(content, trace, urlState) {
                             <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
                         </h2>
                         <div class="pk-overlay__meta">
-                            <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${trace.durationMs}ms</span>
+                            <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
                             <span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>
                             <span>${formatCount(spanCount, 'span')}</span>
                             <span>${formatCount(queryCount, 'query', 'queries')}</span>
@@ -242,8 +250,10 @@ function render(content, trace, urlState) {
     // restored from the URL at open time seeds its filters from urlState.initial.params.
     //
     // goToSpanLogs rides along on the same object every tab already receives, so the
-    // Spans tab can reach it without a hand-off channel of its own beside this one.
+    // Spans tab can reach it without a hand-off channel of its own beside this one - as do
+    // the display settings (locale, timeZone, features) the tabs format and colour by.
     const tabView = (tabId, filters) => ({
+        ...display,
         filters,
         setFilters: next => urlState?.update(tabId, next),
         goToSpanLogs

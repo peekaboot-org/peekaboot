@@ -1,10 +1,10 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +17,13 @@ import org.junit.jupiter.api.Test;
  * <p>Deduplicating inside {@link TraceDataBundle#addSpan} puts extra work on every
  * exported span's hot write path. This measures that cost directly rather than asserting a
  * number with nothing behind it: it replays the same large, N+1-shaped synthetic trace
- * through two implementations of the write path -
+ * through two write paths -
  *
  * <ul>
- *   <li>{@code timeOldPath} - a plain list append plus a trim once the cap is exceeded, no
- *       deduplication;</li>
- *   <li>{@code timeNewPath} - {@link TraceDataBundle#addSpan}, which folds duplicates away
- *       before the cap is ever checked.</li>
+ *   <li>{@code timeAppendAndTrim} - the baseline: a plain list append plus a trim once the
+ *       cap is exceeded, no deduplication;</li>
+ *   <li>{@code timeFoldOnInsertion} - {@link TraceDataBundle#addSpan}, which folds duplicates
+ *       away before the cap is ever checked.</li>
  * </ul>
  *
  * <p>Both run against the identical raw span sequence and the identical cap, isolating the
@@ -48,14 +48,15 @@ class TraceWritePathBenchmark {
     private static final int CAP = 600;
     private static final int WARMUP_ITERATIONS = 20;
     private static final int MEASURED_ITERATIONS = 50;
+    private static final String TRACE_ID = "bench-trace";
 
     @Test
-    void reportsWritePathThroughputBeforeAndAfterWriteTimeDeduplication() {
+    void reportsWritePathThroughputWithAndWithoutWriteTimeDeduplication() {
         List<SpanData> rawSpans = buildNPlusOneShapedTrace(REAL_QUERY_COUNT);
         assertThat(rawSpans).hasSize(REAL_QUERY_COUNT * 2 + 1);
 
-        // Correctness sanity check alongside the timing: the new path must still fold every
-        // duplicate away, leaving exactly the real spans (TraceDataBundleTest and
+        // Correctness sanity check alongside the timing: the fold must still remove every
+        // duplicate, leaving exactly the real spans (TraceDataBundleTest and
         // InMemoryTraceStoreTest cover this in depth; this is a cheap guard against the
         // benchmark silently drifting from what the fold logic actually does).
         TraceDataBundle sanityBundle = new TraceDataBundle("bench-sanity");
@@ -64,36 +65,37 @@ class TraceWritePathBenchmark {
         assertThat(sanityBundle.truncated()).isFalse();
 
         for (int i = 0; i < WARMUP_ITERATIONS; i++) {
-            timeOldPath(rawSpans, CAP);
-            timeNewPath(rawSpans, CAP);
+            timeAppendAndTrim(rawSpans, CAP);
+            timeFoldOnInsertion(rawSpans, CAP);
         }
 
-        long oldTotalNanos = 0;
-        long newTotalNanos = 0;
+        long baselineTotalNanos = 0;
+        long foldTotalNanos = 0;
         for (int i = 0; i < MEASURED_ITERATIONS; i++) {
-            oldTotalNanos += timeOldPath(rawSpans, CAP);
-            newTotalNanos += timeNewPath(rawSpans, CAP);
+            baselineTotalNanos += timeAppendAndTrim(rawSpans, CAP);
+            foldTotalNanos += timeFoldOnInsertion(rawSpans, CAP);
         }
 
-        double oldAvgMs = (oldTotalNanos / (double) MEASURED_ITERATIONS) / 1_000_000.0;
-        double newAvgMs = (newTotalNanos / (double) MEASURED_ITERATIONS) / 1_000_000.0;
-        double oldNsPerSpan = oldTotalNanos / (double) (MEASURED_ITERATIONS * rawSpans.size());
-        double newNsPerSpan = newTotalNanos / (double) (MEASURED_ITERATIONS * rawSpans.size());
+        double baselineAvgMs = (baselineTotalNanos / (double) MEASURED_ITERATIONS) / 1_000_000.0;
+        double foldAvgMs = (foldTotalNanos / (double) MEASURED_ITERATIONS) / 1_000_000.0;
+        double baselineNsPerSpan = baselineTotalNanos / (double) (MEASURED_ITERATIONS * rawSpans.size());
+        double foldNsPerSpan = foldTotalNanos / (double) (MEASURED_ITERATIONS * rawSpans.size());
 
         System.out.println("=== TraceWritePathBenchmark (" + rawSpans.size() + " raw spans/trace, "
                 + MEASURED_ITERATIONS + " measured iterations, cap=" + CAP + ") ===");
         System.out.printf(
-                "old path (append + trim, no dedup):        %.3f ms/trace, %.1f ns/span%n", oldAvgMs, oldNsPerSpan);
+                "append + trim, no dedup:                   %.3f ms/trace, %.1f ns/span%n",
+                baselineAvgMs, baselineNsPerSpan);
         System.out.printf(
-                "new path (fold-on-insertion dedup):        %.3f ms/trace, %.1f ns/span%n", newAvgMs, newNsPerSpan);
+                "fold-on-insertion dedup:                   %.3f ms/trace, %.1f ns/span%n", foldAvgMs, foldNsPerSpan);
         System.out.printf(
                 "overhead added by write-time dedup:        %.3f ms/trace (%.2fx)%n",
-                newAvgMs - oldAvgMs, newAvgMs / oldAvgMs);
+                foldAvgMs - baselineAvgMs, foldAvgMs / baselineAvgMs);
     }
 
-    private static long timeOldPath(List<SpanData> spans, int cap) {
-        // Reconstructs pre-fix TraceDataBundle.addSpan: unconditional append, trim the
-        // oldest entries once the cap is exceeded, no deduplication.
+    private static long timeAppendAndTrim(List<SpanData> spans, int cap) {
+        // The baseline a cap without deduplication costs: unconditional append, trim the
+        // oldest entries once the cap is exceeded.
         List<SpanData> store = new ArrayList<>();
         long start = System.nanoTime();
         for (SpanData span : spans) {
@@ -109,8 +111,8 @@ class TraceWritePathBenchmark {
         return elapsed;
     }
 
-    private static long timeNewPath(List<SpanData> spans, int cap) {
-        TraceDataBundle bundle = new TraceDataBundle("bench-trace");
+    private static long timeFoldOnInsertion(List<SpanData> spans, int cap) {
+        TraceDataBundle bundle = new TraceDataBundle(TRACE_ID);
         long start = System.nanoTime();
         for (SpanData span : spans) {
             bundle.addSpan(span, cap);
@@ -136,47 +138,25 @@ class TraceWritePathBenchmark {
             spans.add(jdbcSpan(
                     realId, rootId, "SELECT * FROM order_line WHERE order_id = " + i, "sample_app_db", order++));
         }
-        spans.add(new SpanData(
-                "bench-trace",
-                rootId,
-                null,
-                "GET /orders",
-                Span.Kind.SERVER,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(realQueryCount),
-                Duration.ofMillis(realQueryCount),
-                Map.of("http.method", "GET", "http.target", "/orders"),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                order));
+        spans.add(span(rootId)
+                .in(TRACE_ID)
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, realQueryCount)
+                .tags(Map.of("http.method", "GET", "http.target", "/orders"))
+                .order(order)
+                .build());
         return spans;
     }
 
     private static SpanData jdbcSpan(
             String spanId, String parentId, String query, String peerService, long creationOrder) {
-        Instant start = Instant.EPOCH.plusMillis(creationOrder);
-        return new SpanData(
-                "bench-trace",
-                spanId,
-                parentId,
-                "query",
-                Span.Kind.CLIENT,
-                start,
-                start.plusMillis(1),
-                Duration.ofMillis(1),
-                Map.of("jdbc.query[0]", query, "peer.service", peerService),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return jdbcQuery(spanId, query)
+                .in(TRACE_ID)
+                .parent(parentId)
+                .tag("peer.service", peerService)
+                .at(creationOrder, 1)
+                .order(creationOrder)
+                .build();
     }
 }

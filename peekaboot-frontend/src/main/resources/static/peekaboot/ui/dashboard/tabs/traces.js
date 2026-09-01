@@ -16,9 +16,9 @@
 import {badge} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
-import {durationSeverity} from '../../shared/severity.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
+import {traceStatParts} from '../../shared/trace-stats.js';
 import {parseAppHash} from '../../shared/url-state.js';
 import {open as openTraceDetail} from '../../trace-detail/trace-detail.js';
 
@@ -319,12 +319,6 @@ function updateFilterIndicator(container) {
     }
 }
 
-function hasSlowIssues(span) {
-    if (!span) return false;
-    if ((span.issues || []).some(issue => issue.type === 'SLOW' || issue.type === 'VERY_SLOW')) return true;
-    return (span.children || []).some(hasSlowIssues);
-}
-
 function renderTraceItem(trace, context) {
     const item = document.createElement('div');
     item.className = 'pk-trace-item';
@@ -332,7 +326,6 @@ function renderTraceItem(trace, context) {
 
     const actionType = trace.rootActionType || 'UNKNOWN';
     const hasErrors = trace.status === 'HAS_ERRORS';
-    const hasSlow = hasSlowIssues(trace.rootSpan);
     const rootOperation = trace.rootOperation || '';
 
     const header = document.createElement('div');
@@ -350,7 +343,7 @@ function renderTraceItem(trace, context) {
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
     openBtn.className = 'pk-trace-item__open';
-    openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation));
+    openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
     openBtn.appendChild(renderStats(trace, context));
     if (trace.traceId) {
         openBtn.addEventListener('click', () => openTrace(trace.traceId, context));
@@ -363,7 +356,7 @@ function renderTraceItem(trace, context) {
     return item;
 }
 
-function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
+function renderMainLine(trace, actionType, hasErrors, rootOperation) {
     const mainLine = document.createElement('div');
     mainLine.className = 'pk-trace-item__main-line';
 
@@ -396,8 +389,10 @@ function renderMainLine(trace, actionType, hasErrors, hasSlow, rootOperation) {
     durationEl.textContent = formatDurationMs(trace.durationMs);
     mainLine.appendChild(durationEl);
 
+    // trace.slow is the backend's verdict: some span carries a SLOW or VERY_SLOW issue.
+    // Not the Slow bucket - that admits a trace by its total duration.
     if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
-    else if (hasSlow) mainLine.appendChild(badge('SLOW', 'warn'));
+    else if (trace.slow) mainLine.appendChild(badge('SLOW', 'warn'));
 
     if (trace.truncated) {
         const truncatedBadge = badge('TRUNCATED', 'warn');
@@ -443,8 +438,7 @@ function renderStats(trace, context) {
         : '-';
     stats.appendChild(timeEl);
 
-    const statParts = buildStatParts(trace);
-    statParts.forEach((part, index) => {
+    traceStatParts(trace, context.features).forEach((part, index) => {
         if (index > 0) {
             const separator = document.createElement('span');
             separator.className = 'pk-trace-item__stat-separator';
@@ -457,44 +451,6 @@ function renderStats(trace, context) {
     return stats;
 }
 
-function buildStatParts(trace) {
-    const parts = [];
-
-    const queryCount = trace.summary?.queries?.count || 0;
-    const queryDuration = trace.summary?.queries?.totalDurationMs || 0;
-    if (queryCount > 0) {
-        const severity = durationSeverity(queryDuration);
-        const group = document.createElement('span');
-        group.className = 'pk-trace-item__stat-group' + (severity ? ` pk-trace-item__stat-group--${severity}` : '');
-
-        const countEl = document.createElement('span');
-        countEl.className = 'pk-trace-item__stat-count';
-        countEl.textContent = String(queryCount);
-        group.append(countEl, document.createTextNode(' ' + (queryCount === 1 ? 'query' : 'queries') + ' '));
-
-        const durationEl = document.createElement('span');
-        durationEl.className = 'pk-trace-item__stat-duration';
-        durationEl.textContent = formatDurationMs(queryDuration);
-        group.appendChild(durationEl);
-
-        parts.push(group);
-    }
-
-    const errorCount = trace.summary?.logs?.errorCount || 0;
-    const warnCount = trace.summary?.logs?.warnCount || 0;
-    if (errorCount > 0) parts.push(logCountEl(errorCount, 'error', 'error', 'errors'));
-    if (warnCount > 0) parts.push(logCountEl(warnCount, 'warn', 'warning', 'warnings'));
-
-    return parts;
-}
-
-function logCountEl(count, modifier, singular, plural) {
-    const el = document.createElement('span');
-    el.className = `pk-trace-item__log-count pk-trace-item__log-count--${modifier}`;
-    el.textContent = `${count} ${count === 1 ? singular : plural}`;
-    return el;
-}
-
 function openTrace(traceId, context) {
     context.navigate('traces', traceId);
     openTraceDetail(traceId, {
@@ -503,6 +459,11 @@ function openTrace(traceId, context) {
         // anyone opens one - gets its tab switches and filter changes synced to the URL
         // too, not just a trace reached via a deep link or Back/Forward.
         urlState: context.traceUrlState(traceId),
+        // The overlay formats its timestamps and colours its durations the way this
+        // dashboard does - by the reader's locale/timezone choice and the published thresholds.
+        locale: context.locale,
+        timeZone: context.timeZone,
+        features: context.features,
         // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
         // reload would unexpectedly reopen the trace - mirrors main.js's expandTraceById.
         // Parses the hash and compares only tab/detail (not the exact string) since a tab

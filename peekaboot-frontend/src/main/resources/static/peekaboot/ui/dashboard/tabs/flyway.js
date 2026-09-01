@@ -18,7 +18,14 @@ export function isAvailable(data) {
     return Boolean(data?.flyway?.migrations?.length);
 }
 
-export function render(container, data, {locale, timeZone} = {}) {
+/** Every MigrationState the backend collapses Flyway's states onto, and the badge tier each gets. */
+const MIGRATION_STATE_VARIANTS = Object.freeze({
+    SUCCESS: 'ok', PENDING: 'muted', FAILED: 'error', IGNORED: 'muted', UNKNOWN: 'muted'
+});
+
+export const MIGRATION_STATES = Object.keys(MIGRATION_STATE_VARIANTS);
+
+export function render(container, data, {locale, timeZone, features} = {}) {
     const migrations = data?.flyway?.migrations || [];
     const target = container.querySelector('#flyway-timeline');
     target.innerHTML = '';
@@ -32,7 +39,7 @@ export function render(container, data, {locale, timeZone} = {}) {
 
     const table = document.createElement('table');
     table.className = 'pk-table pk-flyway-table';
-    table.append(renderHead(), renderBody(migrations, {locale, timeZone}));
+    table.append(renderHead(), renderBody(migrations, {locale, timeZone, features}));
 
     scroll.appendChild(table);
     target.appendChild(scroll);
@@ -51,19 +58,13 @@ function renderHead() {
     return head;
 }
 
-function renderBody(migrations, dateOptions) {
+function renderBody(migrations, context) {
     const body = document.createElement('tbody');
-    migrations.forEach(migration => body.appendChild(renderRow(migration, dateOptions)));
+    migrations.forEach(migration => body.appendChild(renderRow(migration, context)));
     return body;
 }
 
-function statusVariant(state) {
-    if (state === 'SUCCESS') return 'ok';
-    if (state === 'FAILED') return 'error';
-    return 'muted';
-}
-
-function renderRow(migration, dateOptions) {
+function renderRow(migration, {locale, timeZone, features}) {
     const row = document.createElement('tr');
     if (migration.state === 'FAILED') row.classList.add('pk-flyway-row--failed');
     if (migration.state === 'PENDING') row.classList.add('pk-flyway-row--pending');
@@ -73,8 +74,8 @@ function renderRow(migration, dateOptions) {
         cell(migration.description, 'pk-flyway-row__description'),
         cell(migration.script, 'pk-table__mono pk-flyway-row__script'),
         cell(migration.type, 'pk-table__shrink'),
-        durationCell(migration.executionTime),
-        cell(formatDateTime(migration.installedOn, dateOptions), 'pk-table__shrink'),
+        durationCell(migration.executionTime, features),
+        cell(formatDateTime(migration.installedOn, {locale, timeZone}), 'pk-table__shrink'),
         statusCell(migration.state)
     );
     return row;
@@ -90,14 +91,14 @@ function cell(text, className) {
     return td;
 }
 
-function durationCell(executionTime) {
+function durationCell(executionTime, features) {
     const td = document.createElement('td');
     td.className = 'pk-table__num pk-table__shrink';
     if (executionTime == null) {
         td.textContent = '';
         return td;
     }
-    const severity = durationSeverity(executionTime);
+    const severity = durationSeverity(executionTime, features);
     if (severity) td.classList.add(`pk-flyway-row__time--${severity}`);
     td.textContent = formatDurationMs(executionTime);
     return td;
@@ -106,6 +107,6 @@ function durationCell(executionTime) {
 function statusCell(state) {
     const td = document.createElement('td');
     td.className = 'pk-table__shrink';
-    td.appendChild(badge(state, statusVariant(state)));
+    td.appendChild(badge(state, MIGRATION_STATE_VARIANTS[state] || 'muted'));
     return td;
 }

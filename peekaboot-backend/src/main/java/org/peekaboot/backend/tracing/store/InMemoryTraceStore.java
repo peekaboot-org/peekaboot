@@ -11,23 +11,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
 /** In-memory {@link TraceStore} backed by a bounded Caffeine cache. */
 public class InMemoryTraceStore implements TraceStore {
 
-    private static final int DEFAULT_MAX_TRACES = 1000;
-    // keep in sync with PeekabootTracingProperties.maxSpansPerTrace
-    private static final int DEFAULT_MAX_SPANS_PER_TRACE = 500;
     /** How long a trace stays in the All bucket; not configurable, owned here and reused by the auto-configuration. */
     public static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
-    // keep in sync with PeekabootTracingProperties defaults
-    private static final int DEFAULT_MAX_ERROR_TRACES = 100;
-    private static final int DEFAULT_MAX_SLOW_TRACES = 100;
-    private static final long DEFAULT_SLOW_TRACE_THRESHOLD_MS = 1000;
-    // keep in sync with PeekabootTracingProperties.maxLogsPerTrace
-    private static final int DEFAULT_MAX_LOGS_PER_TRACE = 500;
 
     private final Cache<String, TraceDataBundle> cache;
     private final int maxSpansPerTrace;
@@ -37,35 +29,21 @@ public class InMemoryTraceStore implements TraceStore {
     private final Map<String, TraceDataBundle> slowTraces;
     private final AtomicLong spanCounter = new AtomicLong(0);
 
-    public InMemoryTraceStore() {
-        this(DEFAULT_MAX_TRACES, DEFAULT_MAX_SPANS_PER_TRACE, DEFAULT_EXPIRE);
-    }
-
+    /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
     public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
-        this(
-                maxTraces,
-                maxSpansPerTrace,
-                expireAfter,
-                DEFAULT_MAX_ERROR_TRACES,
-                DEFAULT_MAX_SLOW_TRACES,
-                DEFAULT_SLOW_TRACE_THRESHOLD_MS);
+        this(maxTraces, maxSpansPerTrace, expireAfter, new PeekabootTracingProperties());
     }
 
-    public InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            Duration expireAfter,
-            int maxErrorTraces,
-            int maxSlowTraces,
-            long slowTraceThresholdMs) {
+    private InMemoryTraceStore(
+            int maxTraces, int maxSpansPerTrace, Duration expireAfter, PeekabootTracingProperties defaults) {
         this(
                 maxTraces,
                 maxSpansPerTrace,
                 expireAfter,
-                maxErrorTraces,
-                maxSlowTraces,
-                slowTraceThresholdMs,
-                DEFAULT_MAX_LOGS_PER_TRACE);
+                defaults.getMaxErrorTraces(),
+                defaults.getMaxSlowTraces(),
+                defaults.getSlowTraceThresholdMs(),
+                defaults.getMaxLogsPerTrace());
     }
 
     public InMemoryTraceStore(
@@ -114,7 +92,7 @@ public class InMemoryTraceStore implements TraceStore {
         bundle.addLog(log, maxLogsPerTrace);
         // logs never affect slow classification and can only ever add a trace to
         // errorTraces, never remove it — so a full classify() pass is unnecessary here.
-        if (!errorTraces.containsKey(bundle.traceId()) && "ERROR".equalsIgnoreCase(log.level())) {
+        if (!errorTraces.containsKey(bundle.traceId()) && log.isError()) {
             errorTraces.putIfAbsent(bundle.traceId(), bundle);
         }
     }
@@ -202,7 +180,7 @@ public class InMemoryTraceStore implements TraceStore {
 
     private boolean hasError(TraceDataBundle bundle) {
         return bundle.spans().stream().anyMatch(SpanData::hasError)
-                || bundle.logs().stream().anyMatch(log -> "ERROR".equalsIgnoreCase(log.level()));
+                || bundle.logs().stream().anyMatch(LogCapturedEvent::isError);
     }
 
     private boolean isSlow(TraceDataBundle bundle) {
@@ -217,7 +195,10 @@ public class InMemoryTraceStore implements TraceStore {
         slowTraces.clear();
     }
 
-    @Override
+    /**
+     * Test hook: runs the All cache's pending maintenance so that a TTL eviction becomes
+     * observable synchronously instead of on Caffeine's own schedule.
+     */
     public void cleanUp() {
         cache.cleanUp();
     }

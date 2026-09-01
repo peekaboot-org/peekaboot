@@ -5,10 +5,7 @@ import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.springframework.context.event.EventListener;
 
-/**
- * Receives trace data via Spring's event mechanism and forwards it to the
- * {@link TraceStore}.
- */
+/** The store's single write entry point: one {@code @EventListener} per event type the capture side publishes. */
 public class TraceStoreEventListener {
 
     private final TraceStore store;

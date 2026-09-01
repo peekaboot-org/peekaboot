@@ -1,10 +1,9 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -55,8 +54,8 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldDetectSqlFromSpanName() {
-        // Note: span must have at least one tag for the extractor to process it
-        var querySpan = createSpan("span1", "SELECT * FROM products", 30, Map.of("peer.service", "db"), 30);
+        // a query span (db.* tagged) whose instrumentation put the statement in the name only
+        var querySpan = createSpan("span1", "SELECT * FROM products", 30, Map.of("db.system", "postgresql"), 30);
 
         var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
 
@@ -165,10 +164,39 @@ class QueryExtractorTest {
         var httpSpan =
                 createSpan("span1", "GET /api/users", 200, Map.of("http.method", "GET", "http.url", "/api/users"), 10);
         var internalSpan = createSpan("span2", "processUser", 50, Map.of("custom.tag", "value"), 20);
+        // SQL-shaped name, but nothing marks it as a database span
+        var sqlNamedSpan = createSpan("span3", "SELECT * FROM products", 30, Map.of("peer.service", "db"), 30);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(httpSpan, internalSpan));
+        var traceData = TraceData.fromSpans("trace1", List.of(httpSpan, internalSpan, sqlNamedSpan));
 
         List<QueryInfo> queries = extractor.extract(traceData);
+
+        assertThat(queries).isEmpty();
+    }
+
+    /**
+     * A query span whose instrumentation recorded no statement at all still is a query - the
+     * summary counts it and the Queries tab lists it, with nothing to show for its text.
+     */
+    @Test
+    void extract_shouldListAQuerySpanWithoutAStatementWithNullSql() {
+        var querySpan = createSpan("span1", "query", 30, Map.of("db.system", "postgresql"), 10);
+
+        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(querySpan)));
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.getFirst().sql()).isNull();
+        assertThat(queries.getFirst().dbSystem()).isEqualTo("postgresql");
+    }
+
+    @Test
+    void extract_shouldIgnoreTheServerSideOfADbTaggedExchange() {
+        var serverSpan = span("span1")
+                .kind(Span.Kind.SERVER)
+                .tags(Map.of("db.statement", "SELECT 1"))
+                .build();
+
+        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(serverSpan)));
 
         assertThat(queries).isEmpty();
     }
@@ -388,25 +416,12 @@ class QueryExtractorTest {
 
     private SpanData createSpan(
             String spanId, String name, long durationMs, Map<String, String> tags, long creationOrder) {
-        Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                "trace1",
-                spanId,
-                null,
-                name,
-                Span.Kind.CLIENT,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return span(spanId)
+                .named(name)
+                .kind(Span.Kind.CLIENT)
+                .at(creationOrder * 100, durationMs)
+                .tags(tags)
+                .order(creationOrder)
+                .build();
     }
 }

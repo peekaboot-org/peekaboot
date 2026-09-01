@@ -224,7 +224,8 @@ org.peekaboot.backend/
 ├── domain/                 # Domain models, one sub-package per dashboard concern
 │   ├── application/, config/, datasource/, environment/, flyway/, health/,
 │   ├── insights/, lifecycle/, loggers/, metrics/, runtime/, scheduledtasks/, server/
-│   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, ...
+│   ├── features/           # Features — the /api/features payload: flags plus the effective slow thresholds
+│   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share)
 │   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
@@ -234,7 +235,7 @@ org.peekaboot.backend/
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
-│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor
+│   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate)
 ├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker — the one place "is this key/value sensitive" is decided; see peekaboot.org/docs/security
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
@@ -242,7 +243,7 @@ org.peekaboot.backend/
 ├── tracing/                # In-memory tracing
 │   ├── bridge/otel/        # OtelSpanExporter
 │   ├── config/             # PeekabootTracingProperties
-│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent, TraceDataEvent
+│   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
 │   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
 │                           # TraceBucket, TraceStoreEventListener
@@ -256,6 +257,10 @@ org.peekaboot.backend/
 4. **Log Correlation**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span), and drops events without a `traceId`
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 6. **Query**: `TraceInsightsService` queries `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
+7. **Thresholds**: `IssueDetector` raises SLOW/VERY_SLOW/SLOW_QUERY at `UiTracingProperties`' thresholds and sets each
+   `TraceTree.slow` (some span carries SLOW or VERY_SLOW — the Traces tab's badge); `GET /peekaboot/api/features`
+   publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the
+   same numbers instead of keeping a copy
 
 ### Servlet Filters
 
@@ -408,14 +413,16 @@ static/peekaboot/ui/
 │   ├── api.js                # createClient() — fetch wrapper with per-path generation guards
 │   ├── components.js         # JS builders behind the .pk-* primitives
 │   ├── copyable.js             # copyableId()/copyableIdHtml()/bindCopyables() — click-to-copy trace/span ids
+│   ├── filtered-group-tab.js   # filteredGroupTab() — the shell of a filterable collapsible-group tab (config/environment/loggers)
 │   ├── format.js              # Duration/byte/date formatting
 │   ├── http-status.js          # statusLabel()/statusVariant() — IANA reason phrases and badge colouring
 │   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL
 │   ├── root-actions.js         # Root action type -> icon/label map
-│   ├── severity.js             # Duration/health severity thresholds (SLOW_MS, VERY_SLOW_MS)
+│   ├── severity.js             # Duration/issue/log-level/health colouring; thresholds read from /api/features
 │   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
 │   ├── span-names.js           # spanId -> name lookup, shared by overlay tabs
 │   ├── theme.js                # localStorage-backed theme resolution shared across surfaces
+│   ├── trace-stats.js          # traceStatParts() — a trace's query/error/warning stat line, shared by list and toolbar
 │   ├── unmask-control.js       # renderUnmaskControl() — the Environment/Config "Show secrets" toggle,
 │   │                            # rendered only when /api/features reports unmaskingEnabled
 │   ├── url-filter.js           # reconcileFilterWithUrl() — URL-vs-current-state direction for tab filters
@@ -672,14 +679,25 @@ trace list and the trace-detail overlay.
 
 Database queries aren't captured specially: a query shows up in a trace because the
 JDBC/datasource instrumentation on the classpath already emits a span for it, tagged with
-`db.*` or `jdbc.query*` attributes. `QueryExtractor` builds each trace's `queries` list
-(and their `query.sql` text) from those tags, independently of the span tree's own names.
-Its `findSql` checks tags in priority order: `db.query.text` (the current OpenTelemetry
-semantic convention, emitted by `datasource-micrometer-opentelemetry` — the default stack
-`peekaboot-testing-app` itself uses) ahead of `db.statement` (that convention's superseded
-spelling, so when a library emits both, the current one is authoritative); then
-`jdbc.query[N]` (datasource-proxy/Micrometer); then, only if nothing tagged the span, the
-span's own name if it looks like SQL. `findDbSystem` mirrors this priority for
+`db.*` or `jdbc.query*` attributes. **`DbSpans.isQuery` is the one definition of a query
+span** — the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag
+(`jdbc.*` alone is not enough: datasource-proxy's connection and result-set spans carry
+`jdbc.datasource.name`/`jdbc.row-count` and are not queries) — shared by
+`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY and the
+HIGH_QUERY_COUNT children count) and `QueryExtractor` (the `queries` list), so the three
+numbers a trace reports about its queries are one number; `TraceTreeMapperTest` pins the
+equality.
+
+`QueryExtractor` builds each trace's `queries` list from those spans, independently of the
+span tree's own names, one entry per query span — a span whose instrumentation recorded no
+statement is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
+`db.query.text` (the current OpenTelemetry semantic convention, emitted by
+`datasource-micrometer-opentelemetry` — the default stack `peekaboot-testing-app` itself
+uses) ahead of `db.statement` (that convention's superseded spelling, so when a library
+emits both, the current one is authoritative); then `jdbc.query[N]`
+(datasource-proxy/Micrometer); then, only if nothing tagged the span, the span's own name
+if it looks like SQL. The same masked text is put on the span itself as `SpanNode.query`,
+which is what the Spans tab's SQL toggle shows. `findDbSystem` mirrors this priority for
 `db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Matching is
 value-patterns only, not column-aware literal masking — see the class Javadoc for why.
 

@@ -6,6 +6,7 @@
  */
 import {escapeHtml} from '../../shared/markup.js';
 import {formatCount} from '../../shared/format.js';
+import {issueSeverity} from '../../shared/severity.js';
 
 export function render(container, trace, context = {}) {
     const totalDuration = trace.durationMs || 1;
@@ -100,12 +101,14 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     const events = span.events || [];
     const tags = span.tags || {};
 
-    // Check for query spans and result-set spans
+    // The backend decides what a query span is (DbSpans) and ships its masked statement as
+    // span.query; a datasource-proxy result-set span carries the row count as a tag.
     const spanName = (span.name || '').toLowerCase();
     const isResultSetSpan = spanName === 'result-set' || spanName.includes('result-set');
-    const queryTags = Object.entries(tags).filter(([k]) => k.startsWith('jdbc.query'));
-    const hasQuery = queryTags.length > 0;
+    const hasQuery = Boolean(span.query);
     const rowCount = tags['jdbc.row-count'];
+    // the backend's own verdict on this span's latency, where it raised an issue
+    const durationClass = issueSeverity(span.issues);
 
     // Logs are attached to the span by the backend
     const spanLogs = span.logs || [];
@@ -163,7 +166,8 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
     });
     trackHtml += `</div>`;
 
-    row.innerHTML = nameHtml + trackHtml + `<span class="pk-gantt-duration">${spanDuration}ms · ${pct}%</span>`;
+    row.innerHTML = nameHtml + trackHtml
+        + `<span class="pk-gantt-duration${durationClass ? ' pk-gantt-duration--' + durationClass : ''}">${spanDuration}ms · ${pct}%</span>`;
 
     container.appendChild(row);
 
@@ -177,18 +181,14 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
         queryDetail.dataset.depth = depth + 1;
         queryDetail.style.marginLeft = (indent + 20) + 'px';
 
-        let queryHtml = '';
-        queryTags.forEach(([key, value]) => {
-            const label = key.replace('jdbc.query', 'Query').replace('[', ' ').replace(']', '');
-            queryHtml += `<div class="pk-query-label">${escapeHtml(label)}</div>`;
-            queryHtml += `<div class="pk-query-text">${escapeHtml(value)}</div>`;
-        });
-        queryDetail.innerHTML = queryHtml;
+        queryDetail.innerHTML = '<div class="pk-query-label">Query</div>'
+            + `<div class="pk-query-text">${escapeHtml(span.query)}</div>`;
         container.appendChild(queryDetail);
     }
 
-    // Add tags row if present (events are shown as markers on the timeline)
-    const tagEntries = Object.entries(tags).filter(([k]) => !k.startsWith('jdbc.query'));
+    // Add tags row if present (events are shown as markers on the timeline); the
+    // statement tags already show in the query detail above
+    const tagEntries = Object.entries(tags).filter(([k]) => !isStatementTag(k));
     const hasTags = tagEntries.length > 0;
 
     if (hasTags) {
@@ -215,4 +215,9 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration, paren
             renderSpanRows(container, child, depth + 1, traceStart, totalDuration, span.spanId);
         });
     }
+}
+
+/** The tags DbSpans.sql reads the statement from - shown once, in the query detail, not again as a badge. */
+function isStatementTag(key) {
+    return key.startsWith('jdbc.query') || key === 'db.query.text' || key === 'db.statement';
 }

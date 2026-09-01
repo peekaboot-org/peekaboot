@@ -5,6 +5,7 @@
  * into one helper each.
  */
 import {escapeHtml, MASK_LITERAL} from '../../shared/markup.js';
+import {formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
 function renderTable(rows) {
@@ -51,7 +52,7 @@ function renderRequestDetails(req, res, trace) {
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
         tableRowHtml('Status', statusBadgeHtml(res?.status)),
         tableRow('Content-Type', contentType),
-        tableRow('Duration', (trace.durationMs || '-') + 'ms')
+        tableRow('Duration', formatDurationMs(trace.durationMs))
     ];
     return section('Request', renderTable(rows));
 }

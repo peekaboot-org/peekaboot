@@ -1,14 +1,12 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
-import io.micrometer.tracing.Span;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -269,45 +267,20 @@ class TraceDataBundleTest {
 
     private SpanData jdbcSpan(
             String spanId, String parentId, String name, String query, String peerService, long creationOrder) {
-        Instant start = Instant.EPOCH.plusMillis(creationOrder * 100);
-        return new SpanData(
-                "trace1",
-                spanId,
-                parentId,
-                name,
-                Span.Kind.CLIENT,
-                start,
-                start.plusMillis(50),
-                Duration.ofMillis(50),
-                new HashMap<>(Map.of("jdbc.query[0]", query, "peer.service", peerService)),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return jdbcQuery(spanId, query)
+                .parent(parentId)
+                .named(name)
+                .tag("peer.service", peerService)
+                .at(creationOrder * 100, 50)
+                .order(creationOrder)
+                .build();
     }
 
     private SpanData createSpan(String spanId, long creationOrder) {
-        return new SpanData(
-                "trace1",
-                spanId,
-                null,
-                "span-" + spanId,
-                null,
-                Instant.now(),
-                Instant.now().plusMillis(10),
-                Duration.ofMillis(10),
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                creationOrder);
+        return span(spanId)
+                .named("span-" + spanId)
+                .at(0, 10)
+                .order(creationOrder)
+                .build();
     }
 }

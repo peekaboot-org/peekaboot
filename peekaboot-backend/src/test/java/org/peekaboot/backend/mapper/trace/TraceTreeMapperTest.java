@@ -1,6 +1,8 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
+import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
 import java.time.Duration;
@@ -14,6 +16,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
+import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -59,7 +62,7 @@ class TraceTreeMapperTest {
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan, child1, child2, grandchild));
 
         // When
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         // Then
         assertThat(result.traceId()).isEqualTo("trace1");
@@ -89,7 +92,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, orphan, orphanChild));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan().spanId()).isEqualTo("root");
         assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).contains("orphan");
@@ -107,7 +110,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(childSpan, rootSpan)); // Intentionally reversed
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("root-id");
@@ -141,9 +144,9 @@ class TraceTreeMapperTest {
         var traceData = TraceData.fromSpans("trace1", List.of(parent, child1, child2));
 
         // When
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
-        // Then: All spans keep their own tags (no hoisting)
+        // Then: every span keeps its own tags
         SpanNode parentNode = result.rootSpan();
         assertThat(parentNode.tags()).containsEntry("service.name", "api");
         assertThat(parentNode.tags()).doesNotContainKey("db.system");
@@ -169,7 +172,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan().tags()).containsEntry("http.request.header.authorization", "******");
     }
@@ -188,7 +191,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan().tags()).containsEntry("http.method", "GET");
         assertThat(result.rootSpan().tags()).containsEntry("http.status_code", "200");
@@ -208,67 +211,9 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan().tags().get("http.url")).isEqualTo("https://******@example.com/api");
-    }
-
-    @Test
-    void map_shouldPreserveDifferentTagsOnChildren() {
-        // Given: Children with different values for db.name
-        var parent = createSpan("trace1", "parent", null, "parent-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var child1 = createSpan(
-                "trace1",
-                "child1",
-                "parent",
-                "child1-op",
-                Span.Kind.CLIENT,
-                10,
-                30,
-                Map.of("db.system", "postgresql", "db.name", "db1"));
-        var child2 = createSpan(
-                "trace1",
-                "child2",
-                "parent",
-                "child2-op",
-                Span.Kind.CLIENT,
-                50,
-                30,
-                Map.of("db.system", "postgresql", "db.name", "db2"));
-
-        var traceData = TraceData.fromSpans("trace1", List.of(parent, child1, child2));
-
-        // When
-        TraceTree result = mapper.map(traceData);
-
-        // Then: Each span keeps its own tags
-        SpanNode parentNode = result.rootSpan();
-        assertThat(parentNode.tags()).isEmpty();
-
-        // Children keep their individual tags
-        assertThat(parentNode.children().get(0).tags()).containsEntry("db.system", "postgresql");
-        assertThat(parentNode.children().get(0).tags()).containsEntry("db.name", "db1");
-        assertThat(parentNode.children().get(1).tags()).containsEntry("db.system", "postgresql");
-        assertThat(parentNode.children().get(1).tags()).containsEntry("db.name", "db2");
-    }
-
-    @Test
-    void map_shouldNotHoistToInheritedAttributes() {
-        // Given: All spans have the same service.name
-        var root = createSpan(
-                "trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of("service.name", "api-service"));
-        var child = createSpan(
-                "trace1", "child", "root", "child-op", Span.Kind.CLIENT, 10, 30, Map.of("service.name", "api-service"));
-
-        var traceData = TraceData.fromSpans("trace1", List.of(root, child));
-
-        // When
-        TraceTree result = mapper.map(traceData);
-
-        // Then: No hoisting - inheritedAttributes is empty, tags stay on spans
-        assertThat(result.inheritedAttributes()).isEmpty();
-        assertThat(result.rootSpan().tags()).containsEntry("service.name", "api-service");
-        assertThat(result.rootSpan().children().get(0).tags()).containsEntry("service.name", "api-service");
     }
 
     @Test
@@ -293,7 +238,7 @@ class TraceTreeMapperTest {
         var traceData = TraceData.fromSpans("trace1", List.of(root, dbQuery1, dbQuery2, httpCall));
 
         // When
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         // Then
         assertThat(result.summary().spans().count()).isEqualTo(4);
@@ -331,11 +276,112 @@ class TraceTreeMapperTest {
         var traceData = TraceData.fromSpans("trace1", List.of(root, connection, query, resultSet));
 
         // When
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         // Then: Only the query span with jdbc.query* tag should be counted, not connection or result-set
         assertThat(result.summary().queries().count()).isEqualTo(1);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(30L);
+    }
+
+    /**
+     * One predicate, {@link DbSpans#isQuery}, decides what a query is for the summary count,
+     * for the Queries tab and for the issue detector's per-span children count - so a trace
+     * mixing every span shape the JDBC instrumentations emit reports one number, not three.
+     */
+    @Test
+    void map_countsExactlyTheSpansTheQueriesTabListsAndTheIssueDetectorInspects() {
+        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
+        var otelQuery = createSpan(
+                "trace1",
+                "q1",
+                "root",
+                "SELECT orders",
+                Span.Kind.CLIENT,
+                10,
+                20,
+                Map.of("db.query.text", "select * from orders", "db.system.name", "h2"));
+        var proxyQuery = createSpan(
+                "trace1",
+                "q2",
+                "root",
+                "query",
+                Span.Kind.CLIENT,
+                40,
+                20,
+                Map.of("jdbc.query[0]", "select * from lines"));
+        var untaggedStatement =
+                createSpan("trace1", "q3", "root", "SELECT users", Span.Kind.CLIENT, 70, 20, Map.of("db.system", "h2"));
+        var connection = createSpan(
+                "trace1",
+                "conn",
+                "root",
+                "connection",
+                Span.Kind.CLIENT,
+                5,
+                100,
+                Map.of("jdbc.datasource.name", "primary"));
+        var resultSet = createSpan(
+                "trace1", "rs", "root", "result-set", Span.Kind.CLIENT, 60, 5, Map.of("jdbc.row-count", "3"));
+        var serverWithDbTag = createSpan(
+                "trace1", "srv", "root", "handle", Span.Kind.SERVER, 90, 5, Map.of("db.statement", "SELECT 1"));
+        var httpCall = createSpan(
+                "trace1", "http", "root", "GET /ext", Span.Kind.CLIENT, 100, 50, Map.of("http.url", "http://x"));
+        var traceData = TraceData.fromSpans(
+                "trace1",
+                List.of(
+                        root,
+                        otelQuery,
+                        proxyQuery,
+                        untaggedStatement,
+                        connection,
+                        resultSet,
+                        serverWithDbTag,
+                        httpCall));
+
+        TraceTree result = mapper.map(traceData, false);
+        int queriesListed = new QueryExtractor().extract(traceData).size();
+        long queryNodes =
+                result.rootSpan().children().stream().filter(DbSpans::isQuery).count();
+
+        assertThat(result.summary().queries().count()).isEqualTo(3);
+        assertThat(queriesListed).isEqualTo(result.summary().queries().count());
+        assertThat(queryNodes).isEqualTo(result.summary().queries().count());
+    }
+
+    @Test
+    void map_putsTheMaskedStatementOnQuerySpansOnly() {
+        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
+        var query = createSpan(
+                "trace1",
+                "q1",
+                "root",
+                "query",
+                Span.Kind.CLIENT,
+                10,
+                20,
+                Map.of("db.query.text", "INSERT INTO hooks VALUES ('https://admin:hunter2@example.com/x')"));
+        var statementless =
+                createSpan("trace1", "q2", "root", "query", Span.Kind.CLIENT, 40, 20, Map.of("db.system", "h2"));
+        var connection = createSpan(
+                "trace1",
+                "conn",
+                "root",
+                "connection",
+                Span.Kind.CLIENT,
+                5,
+                100,
+                Map.of("jdbc.datasource.name", "primary"));
+
+        TraceTree result =
+                mapper.map(TraceData.fromSpans("trace1", List.of(root, query, statementless, connection)), false);
+
+        assertThat(result.rootSpan().query()).isNull();
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId, SpanNode::query)
+                .containsExactly(
+                        tuple("conn", null),
+                        tuple("q1", "INSERT INTO hooks VALUES ('https://******@example.com/x')"),
+                        tuple("q2", null));
     }
 
     @Test
@@ -355,7 +401,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, errorSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.summary().spans().errorCount()).isEqualTo(1);
         assertThat(result.status()).isEqualTo(TraceStatus.HAS_ERRORS);
@@ -381,7 +427,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, errorSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         SpanNode maskedErrorSpan = result.rootSpan().children().getFirst();
         assertThat(maskedErrorSpan.errorMessage()).doesNotContain("SECRET").contains("api_key=******");
@@ -393,7 +439,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.status()).isEqualTo(TraceStatus.OK);
     }
@@ -402,7 +448,7 @@ class TraceTreeMapperTest {
     void map_shouldHandleEmptyTrace() {
         var traceData = new TraceData("trace1", null, null, null, 0, List.of());
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.traceId()).isEqualTo("trace1");
         assertThat(result.rootSpan()).isNull();
@@ -419,7 +465,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(singleSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("only-span");
@@ -432,7 +478,7 @@ class TraceTreeMapperTest {
     void map_defaultsTruncatedToFalseWhenOmitted() {
         var singleSpan = createSpan("trace1", "only-span", null, "single-op", Span.Kind.SERVER, 0, 100, Map.of());
 
-        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)));
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)), false);
 
         assertThat(result.truncated()).isFalse();
     }
@@ -458,28 +504,14 @@ class TraceTreeMapperTest {
     @Test
     void map_shouldConvertTimesToMilliseconds() {
         var baseTime = Instant.parse("2024-01-15T10:00:00Z");
-        var span = new SpanData(
-                "trace1",
-                "span1",
-                null,
-                "op",
-                Span.Kind.SERVER,
-                baseTime,
-                baseTime.plusMillis(150),
-                Duration.ofMillis(150),
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                0);
+        var span = span("span1")
+                .kind(Span.Kind.SERVER)
+                .at(baseTime, Duration.ofMillis(150))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(span));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.startTimeMs()).isEqualTo(baseTime.toEpochMilli());
         assertThat(result.durationMs()).isEqualTo(150L);
@@ -495,10 +527,10 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(okSpan, errorChild));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
-        assertThat(result.rootSpan().status()).isEqualTo("OK");
-        assertThat(result.rootSpan().children().get(0).status()).isEqualTo("ERROR");
+        assertThat(result.rootSpan().status()).isEqualTo(SpanStatus.OK);
+        assertThat(result.rootSpan().children().get(0).status()).isEqualTo(SpanStatus.ERROR);
     }
 
     @Test
@@ -509,7 +541,7 @@ class TraceTreeMapperTest {
         var traceData = TraceData.fromSpans("trace1", List.of(orphan));
 
         // When: The orphan should become a root
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         // Then
         assertThat(result.rootSpan()).isNotNull();
@@ -538,7 +570,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootActionType()).isEqualTo(expected);
     }
@@ -596,7 +628,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.SCHEDULED_JOB);
     }
@@ -610,7 +642,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
@@ -624,7 +656,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.INTERNAL);
     }
@@ -650,7 +682,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
@@ -669,7 +701,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.summary().request()).isNotNull();
         assertThat(result.summary().request().method()).isEqualTo("GET");
@@ -691,7 +723,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.summary().request().method()).isEqualTo("POST");
         assertThat(result.summary().request().path()).isEqualTo("/api/orders");
@@ -723,7 +755,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.summary().request().method()).isEqualTo("GET");
         assertThat(result.summary().request().path()).isEqualTo("/api/users/42");
@@ -745,7 +777,7 @@ class TraceTreeMapperTest {
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.summary().request().method()).isEqualTo("GET");
         assertThat(result.summary().request().statusCode()).isNull();
@@ -754,35 +786,21 @@ class TraceTreeMapperTest {
     @Test
     void map_shouldMapSpanEventsFromNonEmptyEventsList() {
         var eventTime = Instant.parse("2024-01-15T10:00:00.500Z");
-        var span = new SpanData(
-                "trace1",
-                "span1",
-                null,
-                "op",
-                Span.Kind.SERVER,
-                Instant.EPOCH,
-                Instant.EPOCH.plusMillis(100),
-                Duration.ofMillis(100),
-                Map.of(),
-                List.of(new SpanData.Event("cache-miss", eventTime)),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                0);
+        var span = span("span1")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .events(List.of(new SpanData.Event("cache-miss", eventTime)))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(span));
 
-        TraceTree result = mapper.map(traceData);
+        TraceTree result = mapper.map(traceData, false);
 
         assertThat(result.rootSpan().events()).hasSize(1);
         assertThat(result.rootSpan().events().getFirst().name()).isEqualTo("cache-miss");
         assertThat(result.rootSpan().events().getFirst().timestamp()).isEqualTo(eventTime);
     }
 
-    // Helper methods to create test data
     private SpanData createSpan(
             String traceId,
             String spanId,
@@ -792,26 +810,14 @@ class TraceTreeMapperTest {
             long startOffsetMs,
             long durationMs,
             Map<String, String> tags) {
-        Instant start = Instant.EPOCH.plusMillis(startOffsetMs);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                traceId,
-                spanId,
-                parentId,
-                name,
-                kind,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(),
-                startOffsetMs);
+        return span(spanId)
+                .in(traceId)
+                .parent(parentId)
+                .named(name)
+                .kind(kind)
+                .at(startOffsetMs, durationMs)
+                .tags(tags)
+                .build();
     }
 
     private SpanData createSpanWithError(
@@ -825,25 +831,14 @@ class TraceTreeMapperTest {
             Map<String, String> tags,
             String errorMessage,
             String errorClass) {
-        Instant start = Instant.EPOCH.plusMillis(startOffsetMs);
-        Instant end = start.plusMillis(durationMs);
-        return new SpanData(
-                traceId,
-                spanId,
-                parentId,
-                name,
-                kind,
-                start,
-                end,
-                Duration.ofMillis(durationMs),
-                tags,
-                List.of(),
-                errorMessage,
-                errorClass,
-                null,
-                null,
-                null,
-                List.of(),
-                startOffsetMs);
+        return span(spanId)
+                .in(traceId)
+                .parent(parentId)
+                .named(name)
+                .kind(kind)
+                .at(startOffsetMs, durationMs)
+                .tags(tags)
+                .error(errorMessage, errorClass)
+                .build();
     }
 }

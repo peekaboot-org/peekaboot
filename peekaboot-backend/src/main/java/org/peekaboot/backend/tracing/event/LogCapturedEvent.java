@@ -9,6 +9,13 @@ public record LogCapturedEvent(
         String level,
         String loggerName,
         String message,
-        String threadName
-) implements TraceDataEvent {
+        String threadName) {
+
+    public boolean isError() {
+        return "ERROR".equalsIgnoreCase(level);
+    }
+
+    public boolean isWarn() {
+        return "WARN".equalsIgnoreCase(level);
+    }
 }

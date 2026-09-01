@@ -20,6 +20,24 @@
   the registry holds `obj` weakly and samples become NaN after a GC; use
   `Gauge.builder(name, supplier)` or keep the returned object in a field.
 
+## Fixtures
+`peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`:
+`Spans.span(id)` (a `SpanData` with neutral defaults, plus the `jdbcQuery`/`jdbcDuplicate`
+presets for the double-instrumented pair), `SpanNodes.node(id)` (an already-mapped
+`SpanNode`), `RequestCompletedEvents.request(traceId)`/`minimal(traceId)`, and
+`TraceStores.withDefaults()`/`with(customizer)` (an `InMemoryTraceStore` built the way the
+auto-configuration builds it, from `PeekabootTracingProperties`). A test names only what it
+asserts on; a new record component is added to the builder once, not to every test class.
+The domain records carry no test-only constructors.
+
+## Backend <-> frontend contracts
+The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
+`SharedModuleIT`'s `*MirrorTheBackend*` tests pin `ROOT_ACTION_TYPES`, `TASK_TYPES`,
+`MIGRATION_STATES`, `ISSUE_TYPES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
+`MigrationState`, `IssueType` and Logback's levels, the keys the frontend reads off
+`/api/features` to the `Features` record, and `severity.js`'s `DEFAULT_THRESHOLDS` to the
+properties' defaults. A vocabulary that gains a JS mirror gets a row there.
+
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external
 (servlet machinery, Micrometer `Tracer`/`Span`, Spring container callbacks, JDBC
