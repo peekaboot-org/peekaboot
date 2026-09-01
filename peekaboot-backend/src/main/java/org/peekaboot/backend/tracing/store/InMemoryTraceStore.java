@@ -20,7 +20,8 @@ public class InMemoryTraceStore implements TraceStore {
     private static final int DEFAULT_MAX_TRACES = 1000;
     // keep in sync with PeekabootTracingProperties.maxSpansPerTrace
     private static final int DEFAULT_MAX_SPANS_PER_TRACE = 500;
-    private static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
+    /** How long a trace stays in the All bucket; not configurable, owned here and reused by the auto-configuration. */
+    public static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
     // keep in sync with PeekabootTracingProperties defaults
     private static final int DEFAULT_MAX_ERROR_TRACES = 100;
     private static final int DEFAULT_MAX_SLOW_TRACES = 100;

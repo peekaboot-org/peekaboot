@@ -527,10 +527,11 @@ the `main` thread — `java -cp … MainClass`, a Jib image, Spring Boot's `extr
 counts as local, container or not, and needs an explicit `peekaboot.enabled=false` (or
 `peekaboot.dev-toolbar=false`) if that is not wanted.
 
-`peekaboot.lifecycle.enabled` (`PeekabootLifecycleAutoConfiguration`'s own switch) is a
-real `@ConditionalOnProperty`, but there is no `@ConfigurationProperties` class behind it
-— it will not show up on the dashboard's own Config tab, even though it controls real
-behaviour.
+`peekaboot.lifecycle.enabled` (`PeekabootLifecycleAutoConfiguration`'s own switch) is read
+by a `@ConditionalOnBooleanProperty` condition, since it has to be evaluated before any
+Peekaboot bean exists, and is also bound as `PeekabootProperties.Lifecycle.enabled` so it
+carries configuration metadata and shows up on the dashboard's own Config tab like every
+other switch.
 
 ### Default Properties
 
@@ -742,7 +743,7 @@ class DevToolbarAutoConfigurationIT {
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). Errors and Slow are independently capped and evicted oldest-first once full, not tied to All's 30-minute TTL — once a trace qualifies it's copied into its bucket and can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). Errors and Slow are independently capped and evicted oldest-first once full, not tied to All's 30-minute TTL (`InMemoryTraceStore.DEFAULT_EXPIRE`, not configurable) — once a trace qualifies it's copied into its bucket and can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Caffeine for storage**: Bounded memory with automatic eviction
 7. **Shadow DOM**: Toolbar cannot interfere with host application

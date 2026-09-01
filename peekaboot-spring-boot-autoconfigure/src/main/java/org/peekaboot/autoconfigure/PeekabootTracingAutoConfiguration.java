@@ -1,6 +1,5 @@
 package org.peekaboot.autoconfigure;
 
-import java.time.Duration;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -30,7 +29,7 @@ public class PeekabootTracingAutoConfiguration {
         return new InMemoryTraceStore(
                 properties.getMaxTraces(),
                 properties.getMaxSpansPerTrace(),
-                Duration.ofMinutes(30),
+                InMemoryTraceStore.DEFAULT_EXPIRE,
                 properties.getMaxErrorTraces(),
                 properties.getMaxSlowTraces(),
                 properties.getSlowTraceThresholdMs(),

@@ -29,6 +29,8 @@ public class PeekabootProperties {
 
     private Storage storage = new Storage();
 
+    private Lifecycle lifecycle = new Lifecycle();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -59,6 +61,14 @@ public class PeekabootProperties {
 
     public void setStorage(Storage storage) {
         this.storage = storage;
+    }
+
+    public Lifecycle getLifecycle() {
+        return lifecycle;
+    }
+
+    public void setLifecycle(Lifecycle lifecycle) {
+        this.lifecycle = lifecycle;
     }
 
     /**
@@ -94,6 +104,25 @@ public class PeekabootProperties {
 
         public void setDir(String dir) {
             this.dir = dir;
+        }
+    }
+
+    /**
+     * The switch PeekabootLifecycleAutoConfiguration reads through its condition before
+     * any Peekaboot bean exists; bound here as well so it carries configuration metadata
+     * and appears on the dashboard's own Config tab.
+     */
+    public static class Lifecycle {
+
+        /** Enables the application-ready startup summary, the matching shutdown summary and the run history behind the Lifecycle tab. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }
