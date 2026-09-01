@@ -69,7 +69,6 @@ jobs:
 
       - name: merge-main-to-dev
         run: |
-          git fetch --unshallow
           git checkout dev
           git pull
           git merge --no-ff main -m "[release] auto-merge released main back to dev"
