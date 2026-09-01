@@ -331,13 +331,9 @@ function normalizeStats(stats) {
     return result;
 }
 
-/**
- * The query string is part of the path handed to client.get() on purpose: the
- * client de-duplicates concurrent calls per path, so passing the level as a
- * param would make a level-1 load cancel an in-flight level-0 load.
- */
+/** One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js). */
 async function loadLevel(level) {
-    const body = await currentContext.client.get(`/api/insights/data?level=${level}`);
+    const body = await currentContext.client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
     if (body) levels.set(level, normalizeLevel(body));
 }
 
