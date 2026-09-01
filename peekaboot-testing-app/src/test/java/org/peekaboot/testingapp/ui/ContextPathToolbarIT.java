@@ -103,7 +103,7 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
         // assertion below is made against a store that demonstrably captures.
         openPersonsPageBehindTheContextPath();
 
-        openDashboardBehindTheContextPath("");
+        openDashboardBehindTheContextPath("", "#build-info > *");
 
         assertThat(page.locator("#peekaboot-toolbar-host").count()).isZero();
         assertThat(failedPeekabootRequests).isEmpty();
@@ -121,7 +121,9 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
         String traceId = (String) page.evaluate(
                 "() => JSON.parse(document.getElementById('peekaboot-toolbar-data').textContent).traceId");
 
-        openDashboardBehindTheContextPath("#traces/" + traceId);
+        // the hash lands on the Traces tab, so its list - not the Overview's build info - is
+        // the proof that the dashboard rendered
+        openDashboardBehindTheContextPath("#traces/" + traceId, "#traces-list .pk-trace-item");
         page.waitForFunction(OVERLAY_HAS_TABS, null, new Page.WaitForFunctionOptions().setTimeout(15000));
 
         assertThat(failedPeekabootRequests).isEmpty();
@@ -139,12 +141,14 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
         page.navigate(baseUrl + CONTEXT_PATH + "/swagger-ui/index.html");
         page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
 
-        page.evaluate("() => fetch('" + CONTEXT_PATH + "/v3/api-docs')");
+        // evaluate() awaits the promise: the response, Server-Timing header and all, is in
+        // before the absence check starts, and nothing is left in flight for teardown to cut off
+        page.evaluate("() => fetch('" + CONTEXT_PATH + "/v3/api-docs').then(r => r.text())");
         assertThatThrownBy(() ->
                         page.waitForFunction(traceIdShown(), null, new Page.WaitForFunctionOptions().setTimeout(1000)))
                 .isInstanceOf(TimeoutError.class);
 
-        page.evaluate("() => fetch('" + CONTEXT_PATH + "/api/person/all')");
+        page.evaluate("() => fetch('" + CONTEXT_PATH + "/api/person/all').then(r => r.text())");
         page.waitForFunction(traceIdShown(), null, new Page.WaitForFunctionOptions().setTimeout(10000));
 
         assertThat(pageErrors).isEmpty();
@@ -168,13 +172,14 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
     /**
      * Waits for the dashboard's own readiness signal even when a test only cares about the
      * overlay a hash opens: a test that returns while the data fetch is still streaming has
-     * teardown's navigation abort it, and the server logs the broken pipe.
+     * teardown's navigation abort it, and the server logs the broken pipe. {@code rendered}
+     * is the positive proof of a render on whichever tab the hash lands on - #loading also
+     * hides on the failure path.
      */
-    private void openDashboardBehindTheContextPath(String hash) {
+    private void openDashboardBehindTheContextPath(String hash, String rendered) {
         page.navigate(baseUrl + CONTEXT_PATH + "/peekaboot/ui/dashboard/index.html" + hash);
-        page.waitForSelector("#overview-tab.active, #traces-tab.active");
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
-        page.waitForSelector("#build-info > *, #error:not(.hidden)");
+        page.waitForSelector(rendered + ", #error:not(.hidden)");
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
