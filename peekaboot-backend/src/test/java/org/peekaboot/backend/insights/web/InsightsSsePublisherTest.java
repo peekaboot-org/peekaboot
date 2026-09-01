@@ -1,6 +1,8 @@
 package org.peekaboot.backend.insights.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -14,6 +16,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.testsupport.LogCapture;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,6 +33,43 @@ class InsightsSsePublisherTest {
         emitter.complete();
         // completion callback runs synchronously for SseEmitter.complete()
         assertThat(publisher.subscriberCount()).isZero();
+    }
+
+    /**
+     * An emitter that never times out holds its async request until the peer goes away;
+     * a bounded one is reclaimed on its own, and EventSource reconnects transparently.
+     */
+    @Test
+    void emittersTimeOutInsteadOfLivingForever() {
+        SseEmitter emitter = publisher.subscribe();
+
+        assertThat(emitter.getTimeout()).isEqualTo(InsightsSsePublisher.EMITTER_TIMEOUT.toMillis());
+    }
+
+    @Test
+    void refusesSubscribersBeyondTheCapWithServiceUnavailable() {
+        for (int i = 0; i < InsightsSsePublisher.MAX_SUBSCRIBERS; i++) {
+            publisher.subscribe();
+        }
+
+        assertThatThrownBy(publisher::subscribe)
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        assertThat(publisher.subscriberCount()).isEqualTo(InsightsSsePublisher.MAX_SUBSCRIBERS);
+    }
+
+    @Test
+    void aSeatFreedByADepartingSubscriberIsHandedOutAgain() {
+        SseEmitter first = publisher.subscribe();
+        for (int i = 1; i < InsightsSsePublisher.MAX_SUBSCRIBERS; i++) {
+            publisher.subscribe();
+        }
+
+        first.complete();
+
+        assertThatCode(publisher::subscribe).doesNotThrowAnyException();
+        assertThat(publisher.subscriberCount()).isEqualTo(InsightsSsePublisher.MAX_SUBSCRIBERS);
     }
 
     @Test

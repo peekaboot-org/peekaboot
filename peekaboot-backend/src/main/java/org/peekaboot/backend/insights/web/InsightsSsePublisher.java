@@ -15,6 +15,8 @@ import org.peekaboot.backend.insights.InsightsCollector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -32,6 +34,17 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
     private static final Duration DISPATCH_POLL_TIMEOUT = Duration.ofSeconds(1);
     private static final int QUEUE_CAPACITY = 256;
+    /**
+     * Each emitter pins one of the container's async requests, so the number a single
+     * client can open is bounded; a handful of dashboards on one app is the use case.
+     */
+    static final int MAX_SUBSCRIBERS = 32;
+    /**
+     * A stream that outlives this is completed server-side and the browser's
+     * EventSource reconnects on its own, so no emitter is held open indefinitely on
+     * behalf of a peer that has silently gone away.
+     */
+    static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(5);
 
     private final ObjectMapper objectMapper;
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
@@ -103,11 +116,19 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         return running;
     }
 
+    /**
+     * Hands out a stream, or a 503 once {@link #MAX_SUBSCRIBERS} are open - a client
+     * that gets it simply retries later; nothing is lost since there is no replay anyway.
+     */
     public SseEmitter subscribe() {
         SseEmitter emitter = newEmitter();
         boolean accepted;
         synchronized (lock) {
             accepted = running;
+            if (accepted && emitters.size() >= MAX_SUBSCRIBERS) {
+                throw new ResponseStatusException(
+                        HttpStatus.SERVICE_UNAVAILABLE, "Insights stream subscriber limit reached");
+            }
             if (accepted) {
                 // Anything still queued belongs to a subscriber that has since left;
                 // delivering it would burst stale history into this fresh client.
@@ -139,7 +160,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * emitter's send behavior.
      */
     SseEmitter newEmitter() {
-        return new SseEmitter(0L) {
+        return new SseEmitter(EMITTER_TIMEOUT.toMillis()) {
             @Override
             public void complete() {
                 super.complete();
