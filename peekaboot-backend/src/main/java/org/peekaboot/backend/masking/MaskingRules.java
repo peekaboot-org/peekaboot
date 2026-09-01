@@ -26,14 +26,14 @@ import java.util.regex.Pattern;
  * (server.servlet.session.cookie.same-site and siblings), which is not a secret and is
  * exactly what someone opens the Environment tab to check.
  *
- * <p>{@link #KEY_NAME_EXCEPTIONS} lists single-token keys that would otherwise match a
- * {@link #KEY_NAME_RULES} entry exactly but are well-known non-secrets under that exact
- * spelling - "PWD", the POSIX shell's current-working-directory variable, happens to be
- * spelled identically to the "pwd" password abbreviation once lowercased, and PWD is set
- * by every shell, so it hits every developer on the most-viewed property source
- * (systemEnvironment). "password"/"passwd" already cover the real password case in
- * practice, so this exception applies only when a key's entire name equals the rule word -
- * a compound like "db.pwd" is untouched and still masks.
+ * <p>{@link #KEY_NAME_EXCEPTIONS} lists whole keys that would otherwise match a
+ * {@link #KEY_NAME_RULES} entry but are well-known non-secrets under that exact,
+ * case-sensitive spelling - "PWD", the POSIX shell's current-working-directory variable,
+ * is the "pwd" password abbreviation in upper case, and PWD is set by every shell, so it
+ * hits every developer on the most-viewed property source (systemEnvironment). The
+ * exception is that one spelling and nothing wider: a lower-case "pwd" is how a SQL
+ * Server JDBC URL (";pwd=") or a login form ("?pwd=") names a password and still masks,
+ * as does a compound like "db.pwd".
  *
  * <p>{@link #LEGACY_KEY_PATTERNS} carries a handful of Spring Boot 2.x's removed
  * {@code Sanitizer} defaults that don't fit that compound-name shape - they are matched
@@ -43,7 +43,10 @@ import java.util.regex.Pattern;
  * catch a credential sitting inside a value under an innocuous key (a JDBC URL's
  * password, a bearer token in a header, a key pasted into SQL text). Deliberately does
  * not include entropy-based detection - see the design spec's "Explicitly rejected"
- * section for why.
+ * section for why. Two of them are key/value pairs embedded in a value - a URL's query
+ * parameters, a command line's {@code -Dname=value} options - and carry no vocabulary
+ * of their own: {@link MaskingEngine} judges the captured key with the key-name rules
+ * above, so a name that masks as a property masks as a query parameter too.
  */
 final class MaskingRules {
 
@@ -67,6 +70,7 @@ final class MaskingRules {
             "credentials",
             "api-key",
             "apikey",
+            "access-key",
             "private-key",
             "secret-key",
             "signing-key",
@@ -81,7 +85,7 @@ final class MaskingRules {
 
     static final List<String> WHOLE_KEY_NAME_RULES = List.of("cookie", "set-cookie");
 
-    static final List<String> KEY_NAME_EXCEPTIONS = List.of("pwd");
+    static final List<String> KEY_NAME_EXCEPTIONS = List.of("PWD");
 
     static final List<Pattern> LEGACY_KEY_PATTERNS = List.of(
             Pattern.compile("vcap_services", Pattern.CASE_INSENSITIVE),
@@ -132,24 +136,41 @@ final class MaskingRules {
                     Pattern.compile("(?i)jdbc:oracle:thin:([^/@\\s]+/)([^@\\s]+)@")),
             // Distinct from "Credentials in a URL" above and not subsumed by it: this is the
             // query-parameter shape (scheme://host/db?password=...), the more common of the
-            // two for JDBC. Group 2 (the value only) is masked, leaving the parameter name
-            // and the rest of the URL intact.
-            new ValuePattern(
-                    "Credentials in a URL query",
+            // two for JDBC; ";" covers SQL Server's property separator. Every pair is a
+            // candidate - group 1 is judged by the key-name rules, and only group 2 (the
+            // value) is masked, leaving the parameter name and the rest of the URL intact.
+            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;\\s]+)=([^&;\\s]+)")),
+            // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
+            // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
+            // is masked by its own key, but not the option string it was set from unless
+            // the option's name is judged the same way. Starts on a word boundary so a
+            // "-D" glued onto a preceding token is not mistaken for a flag.
+            ValuePattern.keyed(
+                    "Credentials in a command-line option",
+                    1,
                     2,
-                    Pattern.compile(
-                            "(?i)([?&;](?:password|passwd|pwd|secret|token|api[-_]?key|access[-_]?key)=)([^&;\\s]+)")));
+                    Pattern.compile("(?<=\\s|^)(?:-D|--)([\\w.-]+)=(\\S+)")));
 
     private MaskingRules() {}
 
     /**
      * One value-shape rule. When {@code maskGroup} is 0 the whole match is masked;
      * otherwise only that capturing group is masked, keeping the rest of the match
-     * (a URL's scheme and trailing "@", for instance) intact.
+     * (a URL's scheme and trailing "@", for instance) intact. When {@code keyGroup} is
+     * above 0 the match counts only if that group, read as a key, is sensitive by the
+     * key-name rules - the pattern then finds candidate pairs and the key rules decide.
      */
-    record ValuePattern(String name, int maskGroup, Pattern pattern) {
+    record ValuePattern(String name, int maskGroup, int keyGroup, Pattern pattern) {
         ValuePattern(String name, Pattern pattern) {
-            this(name, 0, pattern);
+            this(name, 0, 0, pattern);
+        }
+
+        ValuePattern(String name, int maskGroup, Pattern pattern) {
+            this(name, maskGroup, 0, pattern);
+        }
+
+        static ValuePattern keyed(String name, int keyGroup, int maskGroup, Pattern pattern) {
+            return new ValuePattern(name, maskGroup, keyGroup, pattern);
         }
     }
 }

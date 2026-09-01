@@ -39,10 +39,6 @@ public final class MaskingEngine {
             .map(rule -> tokenize(rule, true))
             .toList();
 
-    private static final List<List<String>> KEY_NAME_EXCEPTION_TOKENS = MaskingRules.KEY_NAME_EXCEPTIONS.stream()
-            .map(rule -> tokenize(rule, true))
-            .toList();
-
     /**
      * True if {@code key} names something structurally sensitive - matched
      * case-insensitively, anywhere in the key, on a separator boundary (dot, hyphen,
@@ -63,9 +59,10 @@ public final class MaskingEngine {
      * "passwordless" staying a distinct token from "password" either way).
      *
      * <p>Three refinements sit on top of that token-anywhere check, in order:
-     * {@link MaskingRules#KEY_NAME_EXCEPTIONS} short-circuits a single-token key to
-     * "not sensitive" even though it would otherwise match a rule word exactly (see
-     * {@link MaskingRules} for why "PWD" needs this and "db.pwd" doesn't); then the
+     * {@link MaskingRules#KEY_NAME_EXCEPTIONS} short-circuits a key spelled exactly,
+     * case included, like one of its entries to "not sensitive" even though it would
+     * otherwise match a rule word (see {@link MaskingRules} for why "PWD" needs this
+     * and neither "pwd" nor "db.pwd" does); then the
      * ordinary {@link MaskingRules#KEY_NAME_RULES} match anywhere in the key,
      * subsequence-style, same as always; then {@link MaskingRules#WHOLE_KEY_NAME_RULES}
      * match only when the rule's tokens are the *entire* key, not merely present in it -
@@ -76,11 +73,11 @@ public final class MaskingEngine {
         if (key == null || key.isBlank()) {
             return false;
         }
-        List<String> camelAwareTokens = tokenize(key, true);
-        List<String> separatorOnlyTokens = tokenize(key, false);
-        if (matchesAnyRuleExactly(KEY_NAME_EXCEPTION_TOKENS, camelAwareTokens, separatorOnlyTokens)) {
+        if (MaskingRules.KEY_NAME_EXCEPTIONS.contains(key)) {
             return false;
         }
+        List<String> camelAwareTokens = tokenize(key, true);
+        List<String> separatorOnlyTokens = tokenize(key, false);
         return matchesAnyRuleSubsequence(camelAwareTokens, separatorOnlyTokens)
                 || matchesAnyRuleExactly(WHOLE_KEY_NAME_TOKEN_RULES, camelAwareTokens, separatorOnlyTokens)
                 || matchesAnyLegacyPattern(key);
@@ -159,6 +156,9 @@ public final class MaskingEngine {
         for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
             Matcher matcher = rule.pattern().matcher(value);
             while (matcher.find()) {
+                if (rule.keyGroup() > 0 && !isSensitiveKey(matcher.group(rule.keyGroup()))) {
+                    continue;
+                }
                 int group = rule.maskGroup();
                 if (group > 0 && matcher.start(group) >= 0) {
                     spans.add(new int[] {matcher.start(group), matcher.end(group)});

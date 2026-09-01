@@ -35,6 +35,7 @@ class MaskingEngineTest {
                     "app.credentials",
                     "app.api-key",
                     "app.apikey",
+                    "app.access-key",
                     "app.private-key",
                     "app.secret-key",
                     "app.signing-key",
@@ -151,6 +152,15 @@ class MaskingEngineTest {
         @Test
         void isSensitiveKey_shouldMatchACamelCaseCompoundNameWithNoSeparator() {
             assertThat(engine.isSensitiveKey("clientSecret")).isTrue();
+        }
+
+        // The PWD exception is for the shell's variable, which is upper-case by POSIX
+        // convention; a bare lower-case "pwd" is the JDBC/form-field spelling of a
+        // password (";pwd=" on a SQL Server URL, "?pwd=" on a login form) and masks.
+        @Test
+        void isSensitiveKey_shouldExemptOnlyTheShellsUpperCaseSpellingOfPwd() {
+            assertThat(engine.isSensitiveKey("PWD")).isFalse();
+            assertThat(engine.isSensitiveKey("pwd")).isTrue();
         }
 
         @Test
@@ -378,6 +388,9 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("https://api.example.com/v1/data?api_key=******&format=json");
         }
 
+        // The query rule judges each parameter name with the key-name rules, so every
+        // spelling those accept - OAuth's token names, a camelCase apiKey, a bare auth -
+        // is caught here too, not just the handful a separate word list happened to name.
         @ParameterizedTest
         @ValueSource(
                 strings = {
@@ -388,8 +401,16 @@ class MaskingEngineTest {
                     "token",
                     "api-key",
                     "api_key",
+                    "apiKey",
                     "access-key",
-                    "access_key"
+                    "access_key",
+                    "access_token",
+                    "refresh_token",
+                    "id_token",
+                    "client_secret",
+                    "signature",
+                    "auth",
+                    "authorization"
                 })
         void maskValue_shouldMaskEachUrlQueryCredentialParameterName(String paramName) {
             String value = "https://example.com/callback?" + paramName + "=s3cr3t&ok=1";
@@ -399,9 +420,94 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("https://example.com/callback?" + paramName + "=******&ok=1");
         }
 
+        /** The shape a client span's {@code http.url} tag carries for a token exchange. */
+        @Test
+        void maskValue_shouldMaskOnlyTheSensitivePairsInAUrlWithSeveralParameters() {
+            String value =
+                    "https://oauth.example.com/token?client_id=abc&client_secret=s3cr3t&grant_type=client_credentials";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result)
+                    .isEqualTo(
+                            "https://oauth.example.com/token?client_id=abc&client_secret=******&grant_type=client_credentials");
+        }
+
+        /** SQL Server's JDBC URL separates its properties with semicolons rather than ?/&. */
+        @Test
+        void maskValue_shouldMaskASemicolonDelimitedJdbcProperty() {
+            String value =
+                    "jdbc:sqlserver://db.example.com:1433;databaseName=orders;user=app;password=hunter2;encrypt=true";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result)
+                    .isEqualTo(
+                            "jdbc:sqlserver://db.example.com:1433;databaseName=orders;user=app;password=******;encrypt=true");
+        }
+
         @Test
         void maskValue_shouldNotMaskAnOrdinaryQueryParameter() {
             String value = "https://example.com/search?query=widgets&page=2";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+
+        // Bare "key" is deliberately not a key-name rule (see MaskingRules); the query
+        // rule inherits that decision rather than keeping a vocabulary of its own.
+        @Test
+        void maskValue_shouldLeaveABareKeyQueryParameterAlone() {
+            String value = "https://maps.example.com/geocode?key=abc123&address=Berlin";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+    }
+
+    /**
+     * Container platforms hand secrets to a JVM as {@code -Dspring.datasource.password=...}
+     * inside JAVA_TOOL_OPTIONS and friends; the option's key decides, with the same
+     * key-name rules as a property of that name.
+     */
+    @Nested
+    class CommandLineOptionValues {
+
+        @Test
+        void maskValue_shouldMaskTheValueOfASystemPropertyOptionWithASensitiveKey() {
+            String value = "-Xmx1g -Dspring.datasource.password=hunter2 -Dserver.port=8080";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("-Xmx1g -Dspring.datasource.password=****** -Dserver.port=8080");
+        }
+
+        @Test
+        void maskValue_shouldMaskTheValueOfADoubleDashOptionWithASensitiveKey() {
+            String value = "--spring.datasource.password=hunter2 --server.port=8080";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("--spring.datasource.password=****** --server.port=8080");
+        }
+
+        @Test
+        void mask_shouldMaskOptionValuesInsideAnInnocuouslyNamedEnvironmentVariable() {
+            String result = engine.mask("JAVA_TOOL_OPTIONS", "-Dapp.api-key=abc123 -Dspring.profiles.active=prod");
+
+            assertThat(result).isEqualTo("-Dapp.api-key=****** -Dspring.profiles.active=prod");
+        }
+
+        @Test
+        void maskValue_shouldLeaveOptionsWithInnocuousKeysAlone() {
+            String value = "-Dserver.port=8080 -Dspring.profiles.active=local --debug=true";
+
+            assertThat(engine.maskValue(value)).isEqualTo(value);
+        }
+
+        // An option only starts at a word boundary: "-D" glued onto a preceding token is
+        // part of that token (a path segment, an identifier), not a JVM flag.
+        @Test
+        void maskValue_shouldNotTreatADashDInsideAWordAsAnOption() {
+            String value = "build-Dpassword=1";
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
