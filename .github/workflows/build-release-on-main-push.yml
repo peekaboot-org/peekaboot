@@ -17,6 +17,7 @@ jobs:
 
     permissions:
       contents: write
+      pull-requests: write
 
     steps:
       - name: checkout
@@ -97,9 +98,18 @@ jobs:
           generate_release_notes: true
           tag_name: ${{ steps.get-latest-tag.outputs.tag }}
 
+      # A direct push would be refused: the ruleset on dev requires the build-on-push
+      # status check, and a merge commit pushed here has none. A pull request with
+      # auto-merge is the path that ruleset accepts. An open one from an earlier release
+      # is reused; new commits on main land on it automatically.
       - name: merge-main-to-dev
         run: |
-          git checkout dev
-          git pull
-          git merge --no-ff main -m "[release] auto-merge released main back to dev"
-          git push
+          pr_url="$(gh pr list --base dev --head main --state open --json url --jq '.[0].url')"
+          if [ -z "$pr_url" ]; then
+            pr_url="$(gh pr create --base dev --head main \
+              --title "[release] merge released main back to dev" \
+              --body "Carries the version commits of release ${{ steps.get-latest-tag.outputs.tag }} back to dev.")"
+          fi
+          gh pr merge --auto --merge "$pr_url"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

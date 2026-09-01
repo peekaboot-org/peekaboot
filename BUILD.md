@@ -278,7 +278,14 @@ which is how recursion is prevented) runs:
 1. `mvn --batch-mode verify`
 2. `mvn -P peekaboot-release release:prepare`
 3. `mvn -P peekaboot-release release:perform`
-4. GitHub release notes from the new tag, then an auto-merge of `main` back into `dev`
+4. GitHub release notes from the new tag, then a pull request `main` → `dev` with auto-merge
+   enabled (`gh pr create` + `gh pr merge --auto`), carrying the two `[release]` version
+   commits back. It is a PR and not a push because the `green-default-branch` ruleset on
+   `dev` requires the `build-on-push` status check and only admins may bypass it; a merge
+   commit pushed by `GITHUB_TOKEN` has no such check and is refused. Note the PR itself does
+   not get that check either — `build-on-push` ignores `main`, and events raised with
+   `GITHUB_TOKEN` trigger no workflows — so until the job runs with a token that does, the
+   PR waits for a human merge (an open one is reused by the next release)
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
