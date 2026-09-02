@@ -13,7 +13,7 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/peekaboot/ui/**")
-                .addResourceLocations("classpath:/static/peekaboot/ui/")
+                .addResourceLocations("classpath:" + PeekabootPaths.CLASSPATH_ROOT + "/ui/")
                 .setCacheControl(CacheControl.noCache());
     }
 

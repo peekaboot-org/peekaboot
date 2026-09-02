@@ -29,6 +29,12 @@ public final class PeekabootPaths {
     /** Peekaboot's UI/API prefix, relative to the context path; also the controllers' request mapping. */
     public static final String BASE_PATH = "/peekaboot";
 
+    /**
+     * Where the frontend jar ships the UI. Outside every default static location, so a
+     * consumer with Peekaboot off serves none of it.
+     */
+    public static final String CLASSPATH_ROOT = "/META-INF" + BASE_PATH;
+
     /** Spring Boot's default {@code management.endpoints.web.base-path}. */
     private static final String DEFAULT_MANAGEMENT_BASE_PATH = "/actuator";
 

@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark-dark.png">
-    <img src="peekaboot-frontend/src/main/resources/static/peekaboot/ui/assets/logo-mark.png" width="64" height="64" alt="Peekaboot">
+    <source media="(prefers-color-scheme: dark)" srcset="peekaboot-frontend/src/main/resources/META-INF/peekaboot/ui/assets/logo-mark-dark.png">
+    <img src="peekaboot-frontend/src/main/resources/META-INF/peekaboot/ui/assets/logo-mark.png" width="64" height="64" alt="Peekaboot">
   </picture>
 </p>
 

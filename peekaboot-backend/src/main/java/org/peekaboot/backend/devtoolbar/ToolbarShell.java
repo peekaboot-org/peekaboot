@@ -31,8 +31,7 @@ public class ToolbarShell {
 
     private static final Logger log = LoggerFactory.getLogger(ToolbarShell.class);
 
-    /** Where the sheets live on the classpath; mirrors the base path they are served under. */
-    private static final String CLASSPATH_ROOT = "/static" + PeekabootPaths.BASE_PATH;
+    private static final String CLASSPATH_ROOT = PeekabootPaths.CLASSPATH_ROOT;
 
     /** Stands in for the base path until {@link #render} knows it; also survives into the inlined CSS. */
     private static final String BASE_TOKEN = "{{BASE}}";

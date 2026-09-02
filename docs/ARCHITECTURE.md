@@ -419,7 +419,7 @@ only the file layout and the headline decisions.
 ### File Structure
 
 ```
-static/peekaboot/ui/
+META-INF/peekaboot/ui/
 ├── assets/
 │   ├── tokens.css          # Design tokens (--pk-* custom properties) — the re-theme point
 │   ├── base.css             # Reset + bare element defaults
