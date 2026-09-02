@@ -82,7 +82,7 @@ public class ToolbarShell {
                                 </span>
                             </span>
                         </button>
-                        <span class="pk-toolbar__auth" id="pk-auth"><a href="{{BASE}}/" target="_blank" title="Peekaboot's data is behind an authorization gate on this deployment">Peekaboot toolbar could not start — sign in, or check that its script is allowed to load</a></span>
+                        <span class="pk-toolbar__auth" id="pk-auth"><a href="{{BASE}}/" target="_blank" title="The toolbar's script or data did not load — an authorization gate or a strict Content-Security-Policy usually explains it.">Peekaboot toolbar could not start — sign in, or check that its script is allowed to load</a></span>
                         <span class="pk-toolbar__trace" id="pk-trace">-</span>
                         <a class="pk-toolbar__link" href="{{BASE}}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
                     </div>

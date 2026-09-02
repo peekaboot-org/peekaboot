@@ -143,4 +143,18 @@ class ToolbarShellTest {
         assertThat(buttonEnd).isPositive();
         assertThat(noticeStart).isGreaterThan(buttonEnd);
     }
+
+    /**
+     * The tooltip names the same two suspects as the visible text: the notice shows
+     * whenever script or data failed to load, and an authorization gate is only one of
+     * the ways that happens - a strict CSP is the other.
+     */
+    @Test
+    void theNoticeTooltipCoversTheGateAndTheBlockedScript() {
+        String html = shell.render(BASE_PATH, DATA_JSON);
+
+        assertThat(html)
+                .contains("title=\"The toolbar's script or data did not load — "
+                        + "an authorization gate or a strict Content-Security-Policy usually explains it.\"");
+    }
 }
