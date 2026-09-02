@@ -1,11 +1,14 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 import static org.awaitility.Awaitility.await;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -14,6 +17,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
@@ -101,19 +107,31 @@ class InsightsApiIT {
 
             assertThat(response.statusCode()).isEqualTo(200);
 
-            try (BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-                long deadline = System.currentTimeMillis() + 5000;
-                boolean sawTick = false;
-                String line;
-                while (System.currentTimeMillis() < deadline && (line = reader.readLine()) != null) {
-                    if (line.startsWith("event:") && line.contains("tick")) {
-                        sawTick = true;
-                        break;
-                    }
-                }
-                assertThat(sawTick).as("received a tick SSE event").isTrue();
+            // The JDK client has no read timeout, so a stream that stays open but silent
+            // would block readLine() indefinitely; the read runs off-thread and the wait
+            // is bounded here. Closing the body on the way out unblocks the reader.
+            try (InputStream body = response.body()) {
+                CompletableFuture<Boolean> sawTick = CompletableFuture.supplyAsync(() -> containsTickEvent(body));
+                assertThat(sawTick.get(5, TimeUnit.SECONDS))
+                        .as("received a tick SSE event")
+                        .isTrue();
+            } catch (TimeoutException silentStream) {
+                fail("no tick SSE event within 5 seconds");
             }
+        }
+    }
+
+    private static boolean containsTickEvent(InputStream body) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(body, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("event:") && line.contains("tick")) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 }

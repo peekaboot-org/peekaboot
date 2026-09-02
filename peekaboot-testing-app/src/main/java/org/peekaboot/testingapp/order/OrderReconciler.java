@@ -19,15 +19,11 @@ import org.springframework.stereotype.Component;
  * after the annotated method ({@code OrderReconciler#reconcileOrders}) unless
  * {@code contextualName} overrides it.
  *
- * <p>{@code detectRootActionType()} classifies a trace as {@code SCHEDULED_JOB} from the
- * root span's {@code code.function}/{@code code.namespace} tags, which Spring's
- * {@code DefaultScheduledTaskObservationConvention} sets when its scheduler actually
- * fires this method - Spring's own scheduled-task observation wraps the call and becomes
- * the root span (named {@code task orderReconciler.reconcileOrders}) in that case. A
- * <em>direct</em> call to {@link #reconcileOrders()} does not go through that
- * observation: this method's own {@code @Observed} span becomes the trace root instead,
- * carrying only its own {@code class}/{@code method} tags, so it classifies
- * {@code INTERNAL}.
+ * <p>Only a run fired by Spring's scheduler classifies {@code SCHEDULED_JOB}: its
+ * scheduled-task observation becomes the root span and carries the
+ * {@code code.function}/{@code code.namespace} tags the classifier reads. A direct call to
+ * {@link #reconcileOrders()} makes this method's own {@code @Observed} span the root, which
+ * classifies {@code INTERNAL}.
  */
 @Component
 public class OrderReconciler {
@@ -36,12 +32,10 @@ public class OrderReconciler {
 
     private final OrderRepository orderRepository;
 
-
     public OrderReconciler(OrderRepository orderRepository) {
 
         this.orderRepository = orderRepository;
     }
-
 
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
     @Observed(name = "order.reconcile.job", contextualName = "order.reconcile.job")

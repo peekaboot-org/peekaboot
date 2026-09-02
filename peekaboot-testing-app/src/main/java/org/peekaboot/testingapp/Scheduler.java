@@ -6,6 +6,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/**
+ * Demo signals for the dashboard's Errors bucket and the trace overlay's log filters:
+ * {@link #fixedRate()} logs an ERROR without failing (a trace with INFO and ERROR rows on
+ * one span), {@link #fixedDelay()} throws (a scheduled-job trace with an exception). Both
+ * are asserted on in the UI suite; the cron methods only give the Scheduled Tasks tab
+ * schedules to render.
+ */
 @Component
 public class Scheduler {
 

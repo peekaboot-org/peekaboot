@@ -79,17 +79,20 @@ browser binary and does not need root. On a fresh machine missing an OS library
 validation warning" at the start of the test run; it does not affect headless Chromium runs.
 
 CI (`.github/workflows/build-on-push.yml`) caches `~/.cache/ms-playwright` keyed on the
-`pom.xml` files so the download only happens once per dependency change. GitHub-hosted
-Ubuntu runners have passwordless `sudo`, so `--with-deps` would be available there if a
-missing OS library ever turns a "Host validation warning" into an actual failure — that has
-not been necessary so far.
+`playwright.version` property in this module's pom, so the download only happens when
+Playwright — and with it Chromium — changes. GitHub-hosted Ubuntu runners have
+passwordless `sudo`, so `--with-deps` would be available there if a missing OS library ever
+turns a "Host validation warning" into an actual failure — that has not been necessary so
+far.
 
 ## Screenshot capture (`ScreenshotCapture`)
 
 `src/test/java/.../ui/ScreenshotCapture.java` photographs every dashboard tab, the trace-detail
 overlay and the dev toolbar, in both light and dark themes, for the peekaboot.org website. It
 is a tool, not a test - deliberately not named `*Test`, so surefire's default includes never
-pick it up and a normal `mvn test` never runs it or touches Docker.
+pick it up and a normal `mvn test` never runs it or touches Docker. It is Maven-only: the
+Gradle build has no task that includes it, because Gradle's `--tests` filter cannot widen
+the `*Test`/`*IT` includes the way surefire's `-Dtest` does.
 
 It runs under the `screenshots` profile (`application-screenshots.yml`), which points at the
 real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,

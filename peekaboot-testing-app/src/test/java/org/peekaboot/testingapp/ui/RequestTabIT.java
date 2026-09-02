@@ -65,7 +65,7 @@ class RequestTabIT extends PlaywrightTestBase {
     }
 
     @Test
-    void requestHeadersDoNotHighlightTheStaleEightStarLiteral() {
+    void requestHeadersDoNotHighlightAValueThatMerelyLooksMasked() {
         // The backend masks with six stars, so an eight-star value reaching the frontend
         // would be a backend bug, not a masked value - it must NOT be highlighted. A
         // highlight keyed on '********' would also silently never fire for a real masked

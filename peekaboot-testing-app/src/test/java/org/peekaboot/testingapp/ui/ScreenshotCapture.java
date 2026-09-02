@@ -39,11 +39,9 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 // inheritProfiles = false: PlaywrightTestBase carries @ActiveProfiles("test") - merging
-// that in (the default) would activate both "test" and "screenshots" and, since Spring
-// Boot's last-profile-wins rule applies to the *resolved* order rather than declaration
-// order, "test"'s H2/Flyway-disabled settings silently won over this profile's real
-// Postgres config. Confirmed empirically: with inheritProfiles left at its default, the
-// app started against the test profile's in-memory H2 rather than the Postgres compose service.
+// that in (the default) would activate both "test" and "screenshots", and Spring Boot's
+// last-profile-wins rule applies to the *resolved* order rather than declaration order,
+// so "test"'s H2/Flyway-disabled settings would override this profile's Postgres config.
 @ActiveProfiles(profiles = "screenshots", inheritProfiles = false)
 class ScreenshotCapture extends PlaywrightTestBase {
 
@@ -235,11 +233,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // regardless of which tab the loop above left active), rather than clicking the
         // list's first (most recent) entry: the Flyway tab's own migration-info lookup
         // opens a JDBC connection outside any request context, which Peekaboot captures
-        // as its own root-level "connection" trace - created after generateTraffic()
-        // finishes and clicking through the Flyway tab above, so it consistently sorts
-        // above /orders by the time this runs. Confirmed by inspection of a first attempt
-        // at this that screenshotted that connection trace instead of the intended N+1
-        // example.
+        // as its own root-level "connection" trace, and that trace sorts above /orders by
+        // the time this runs.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", flagshipTraceId);
         page.waitForSelector("#peekaboot-trace-overlay");
         // The host element exists as soon as openTraceDetail() creates it, well before
@@ -322,9 +317,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
      *
      * <p>Polled with {@code page.evaluate} in a plain loop, not {@code waitForFunction}:
      * the predicate has to await a fetch, and waitForFunction does not await an async
-     * predicate's result - the pending Promise itself is truthy, so such a wait "passes"
-     * on its first poll (verified on a first attempt at this, which photographed charts
-     * holding three points).
+     * predicate - the pending Promise itself is truthy, so such a wait "passes" on its
+     * first poll.
      */
     private void waitForInsightsHistory() {
         Number intervalMs = (Number) page.evaluate("""
