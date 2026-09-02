@@ -34,10 +34,20 @@ class SharedModuleIT extends PlaywrightTestBase {
         return evalUiModule("shared/" + module, expression);
     }
 
-    private Object evalUiModule(String path, String expression) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+    /**
+     * The blank same-origin host page these tests import their modules from. Its status is
+     * asserted because a 404 whitelabel page hosts an {@code import()} just as well as the
+     * fixture does - the suite would stay green with the fixture unreachable.
+     */
+    private void openBlankFixture() {
+        String url = baseUrl + "/peekaboot/ui/pk-blank.html";
+        if (!page.url().equals(url)) {
+            assertThat(page.navigate(url).status()).as("GET %s", url).isEqualTo(200);
         }
+    }
+
+    private Object evalUiModule(String path, String expression) {
+        openBlankFixture();
         return page.evaluate(
                 "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
                 List.of("/peekaboot/ui/" + path, expression));
