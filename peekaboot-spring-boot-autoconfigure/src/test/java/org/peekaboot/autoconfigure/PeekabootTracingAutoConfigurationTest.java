@@ -33,6 +33,12 @@ class PeekabootTracingAutoConfigurationTest {
                     PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
+    /** The interceptor auto-configuration is covered here as well; it shares the paths bean. */
+    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
+            .withPropertyValues("peekaboot.enabled=true");
+
     @Test
     void shouldCreateCoreBeans() {
         contextRunner.run(context -> {
@@ -124,11 +130,6 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     // --- TracingInterceptorAutoConfiguration ---
-
-    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(
-                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
-            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {

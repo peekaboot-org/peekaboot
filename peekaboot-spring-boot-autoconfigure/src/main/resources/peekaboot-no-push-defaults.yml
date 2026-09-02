@@ -1,4 +1,3 @@
-# peekaboot-no-push-defaults.yml
 # Applied unconditionally, even when peekaboot itself is disabled: the starter
 # puts Micrometer's OTLP registry on the classpath, and without any
 # configuration it would push metrics to http://localhost:4318. Telemetry must

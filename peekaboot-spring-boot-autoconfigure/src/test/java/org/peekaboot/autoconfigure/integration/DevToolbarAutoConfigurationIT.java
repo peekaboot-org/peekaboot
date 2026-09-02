@@ -44,7 +44,7 @@ class DevToolbarAutoConfigurationIT {
 
     @Test
     void tracerBeanShouldBeCreatedByOpenTelemetryAutoConfiguration() {
-        assertThat(context.getBean(Tracer.class)).isNotNull();
+        assertThat(context.getBeanNamesForType(Tracer.class)).hasSize(1);
     }
 
     /**
@@ -54,26 +54,23 @@ class DevToolbarAutoConfigurationIT {
      */
     @Test
     void insightsServiceShouldBeCreatedAfterBootsMeterRegistry() {
-        assertThat(context.getBean(MeterRegistry.class)).isNotNull();
-        assertThat(context.getBean(InsightsService.class)).isNotNull();
+        assertThat(context.getBeanNamesForType(MeterRegistry.class)).hasSize(1);
+        assertThat(context.getBeanNamesForType(InsightsService.class)).hasSize(1);
     }
 
     @Test
     void toolbarDataProviderShouldBeCreated() {
-        assertThat(context.getBean(ToolbarDataProvider.class)).isNotNull();
+        assertThat(context.getBeanNamesForType(ToolbarDataProvider.class)).hasSize(1);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void devToolbarFilterShouldBeRegistered() {
-        FilterRegistrationBean<DevToolbarFilter> filter =
-                (FilterRegistrationBean<DevToolbarFilter>) context.getBean("devToolbarFilter");
-        assertThat(filter).isNotNull();
+        FilterRegistrationBean<?> filter = context.getBean("devToolbarFilter", FilterRegistrationBean.class);
         assertThat(filter.getFilter()).isInstanceOf(DevToolbarFilter.class);
     }
 
     @Test
-    void toolbarShouldBeInjectedIntoHtmlResponse() {
+    void toolbarShouldBeInjectedIntoHtmlResponseWithARealTraceId() {
         String response = restClient
                 .get()
                 .uri("/test")
@@ -83,6 +80,7 @@ class DevToolbarAutoConfigurationIT {
 
         assertThat(response).contains("<!-- Peekaboot Dev Toolbar -->");
         assertThat(response).contains("peekaboot-toolbar-data");
+        assertThat(response).matches("(?s).*\"traceId\":\"[a-f0-9]{32}\".*");
     }
 
     @Test
@@ -95,18 +93,5 @@ class DevToolbarAutoConfigurationIT {
                 .body(String.class);
 
         assertThat(response).doesNotContain("Peekaboot");
-    }
-
-    @Test
-    void toolbarShouldContainTraceId() {
-        String response = restClient
-                .get()
-                .uri("/test")
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
-
-        // With real OpenTelemetry tracing, we should get a real trace ID
-        assertThat(response).matches("(?s).*\"traceId\":\"[a-f0-9]{32}\".*");
     }
 }

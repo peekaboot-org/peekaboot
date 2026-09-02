@@ -15,5 +15,11 @@ final class PeekabootPropertyKeys {
     /** The lifecycle-feature switch; on unless set to false. */
     static final String LIFECYCLE_ENABLED = "peekaboot.lifecycle.enabled";
 
+    /** The tracing-feature switch; on unless set to false. */
+    static final String TRACING_ENABLED = "peekaboot.tracing.enabled";
+
+    /** The insights-feature switch; on unless set to false. */
+    static final String INSIGHTS_ENABLED = "peekaboot.insights.enabled";
+
     private PeekabootPropertyKeys() {}
 }
