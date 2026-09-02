@@ -208,16 +208,6 @@ class InsightsCollectorTest {
         assertThat(collector.tileValues().get("startup")).isEqualTo(42.0);
     }
 
-    @Test
-    void memoryEstimateMatchesFormula() {
-        // 2 series x (90 + 1440*8 + 720*8) x 8 bytes
-        List<InsightsProperties.Level> spec = List.of(
-                InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
-                InsightsProperties.Level.of(Duration.ofMinutes(1), 1440),
-                InsightsProperties.Level.of(Duration.ofHours(1), 720));
-        assertThat(InsightsCollector.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 8 + 720 * 8) * 8);
-    }
-
     /**
      * The snapshot writer wakes on the persistence-interval boundary, which is a level-0
      * boundary too, so a capture can land while a tick is still appending series one at a
