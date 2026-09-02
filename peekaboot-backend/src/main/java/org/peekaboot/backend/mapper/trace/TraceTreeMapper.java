@@ -130,7 +130,7 @@ public class TraceTreeMapper {
                 return span;
             }
         }
-        return spans.isEmpty() ? null : spans.get(0);
+        return spans.getFirst();
     }
 
     public RootActionType detectRootActionType(SpanData rootSpan) {
