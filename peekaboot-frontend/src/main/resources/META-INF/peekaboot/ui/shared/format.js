@@ -1,8 +1,7 @@
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
 export function formatDurationMs(ms) {
-    if (ms == null) return '-';
-    if (ms < 0) return '-';
+    if (ms == null || ms < 0) return '-';
     if (ms < 1) return '<1ms';
     if (ms < 1000) return Math.round(ms) + 'ms';
     if (ms < 60000) return (ms / 1000).toFixed(2) + 's';

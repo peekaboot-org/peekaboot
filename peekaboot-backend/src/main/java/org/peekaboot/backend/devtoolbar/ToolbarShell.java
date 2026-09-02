@@ -59,6 +59,9 @@ public class ToolbarShell {
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
 
+    /** A CSS comment block; the sheets carry their design rationale in them, which a host page need not download. */
+    private static final Pattern CSS_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+
     /**
      * The bar's markup with placeholders for everything that varies: the inlined CSS and the
      * stylesheet links, folded in once at construction, and the base path and data blob,
@@ -112,6 +115,7 @@ public class ToolbarShell {
      *
      * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
      *     prefix behind the request's context path
+     * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
     public String render(String basePath, String dataJson) {
         return shell.replace(BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
@@ -128,10 +132,15 @@ public class ToolbarShell {
         for (String servedPath : INLINED_SHEETS) {
             String sheet = readSheet(servedPath);
             if (sheet != null) {
-                css.append(resolveRelativeUrls(sheet, servedPath)).append('\n');
+                css.append(resolveRelativeUrls(stripComments(sheet), servedPath))
+                        .append('\n');
             }
         }
         return css.toString();
+    }
+
+    private static String stripComments(String css) {
+        return CSS_COMMENT.matcher(css).replaceAll("");
     }
 
     private static String readSheet(String servedPath) {

@@ -2,9 +2,9 @@
  * Peekaboot trace-detail overlay.
  *
  * Loaded two ways:
- *  - lazily, via toolbar.js's `await import('../trace-detail/trace-detail.js')`, calling
- *    the named `open`/`close` exports;
- *  - eagerly, via dashboard/main.js's `import {open, close} from '../trace-detail/trace-detail.js'`.
+ *  - lazily, via toolbar.js's `await import('../trace-detail/trace-detail.js')`;
+ *  - eagerly, via dashboard/main.js's static import.
+ * Both call the named `openTraceDetail`/`closeTraceDetail` exports.
  *
  * This file holds only the shell (open/close, the chrome, tab wiring); each tab's
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
@@ -17,14 +17,14 @@ import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
-import {tabStrip} from '../shared/components.js';
+import {badgeHtml, tabStrip} from '../shared/components.js';
 import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
 import * as logs from './tabs/logs.js';
 
-// label/count feed the tab strip built in render() below - label becomes each
+// label/count feed the tab strip built in wireTabs() below - label becomes each
 // button's text, count (when present) the small badge next to it.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
@@ -103,12 +103,9 @@ export function openTraceDetail(traceId, options = {}) {
     // this module's two entry points (main.js's hash routing, traces.js's click-to-open)
     // can check "is this trace already open?" without either of them having to track it.
     overlayHost.dataset.traceId = traceId;
-    // Decision: size the host with an inline style set synchronously here (matching
-    // toolbar.js's host), not a `:host{position:fixed;inset:0}` rule in trace-detail.css.
-    // attachSharedStyles() links that stylesheet asynchronously, so a CSS-only :host rule
-    // would leave the host collapsed to zero size - and Playwright's isVisible() reporting
-    // false - for the whole load window. An inline style applies the instant this element
-    // exists, no network round trip required.
+    // An inline style, not a `:host` rule in trace-detail.css: attachSharedStyles() links
+    // that sheet asynchronously, and a CSS-only rule would leave the host collapsed to
+    // zero size until it lands. The CSSOM write applies the instant the element exists.
     overlayHost.style.cssText = 'position:fixed;inset:0;';
     document.body.appendChild(overlayHost);
     setBackgroundInert(overlayHost);
@@ -185,6 +182,45 @@ function render(content, trace, urlState, display) {
     // delegated once on the container, which outlives every innerHTML swap below
     bindCopyables(content);
 
+    content.innerHTML = `
+        <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
+            <div class="pk-overlay__container">
+                ${headerHtml(trace, display)}
+                <div class="pk-tabs"></div>
+                <div class="pk-overlay__content" id="pk-tab-content"></div>
+            </div>
+        </div>
+    `;
+
+    const container = content.querySelector('.pk-overlay');
+    container.querySelector('.pk-overlay__title-icon').textContent = rootActionIcon(trace.rootActionType);
+
+    container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
+    container.addEventListener('click', (e) => {
+        if (e.target === container) closeTraceDetail();
+    });
+
+    wireTabs(container, trace, urlState, display);
+
+    // ESC key to close; closeTraceDetail removes the listener however
+    // the overlay is dismissed (buttons, overlay click, ESC)
+    if (escHandler) {
+        document.removeEventListener('keydown', escHandler);
+    }
+    escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeTraceDetail();
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+
+    // Move focus into the dialog. No single interior control is the obvious "first" one
+    // given the tab strip + header controls, so the dialog itself (a real ARIA APG
+    // fallback) takes focus; closeTraceDetail() restores it to the invoker.
+    container.focus();
+}
+
+function headerHtml(trace, display) {
     const rootSpan = trace.rootSpan || {};
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
@@ -203,44 +239,36 @@ function render(content, trace, urlState, display) {
     const logCount = (trace.logs || []).length;
     const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
 
-    content.innerHTML = `
-        <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
-            <div class="pk-overlay__container">
-                <div class="pk-overlay__header">
-                    <button type="button" class="pk-overlay__back" title="Back" aria-label="Back">&#8592;</button>
-                    <div class="pk-overlay__header-main">
-                        <h2 class="pk-overlay__title" id="pk-overlay-title">
-                            <span class="pk-overlay__title-icon" aria-hidden="true"></span>
-                            <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
-                            <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                            <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                        </h2>
-                        <div class="pk-overlay__meta">
-                            <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
-                            <span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>
-                            <span>${formatCount(spanCount, 'span')}</span>
-                            <span>${formatCount(queryCount, 'query', 'queries')}</span>
-                            <span>${formatCount(logCount, 'log')}</span>
-                            ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
-                        </div>
-                    </div>
-                    <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
+    return `
+        <div class="pk-overlay__header">
+            <div class="pk-overlay__header-main">
+                <h2 class="pk-overlay__title" id="pk-overlay-title">
+                    <span class="pk-overlay__title-icon" aria-hidden="true"></span>
+                    <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
+                    <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
+                    <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
+                </h2>
+                <div class="pk-overlay__meta">
+                    <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
+                    ${badgeHtml(statusLabel(status), statusVariant(status))}
+                    <span>${formatCount(spanCount, 'span')}</span>
+                    <span>${formatCount(queryCount, 'query', 'queries')}</span>
+                    <span>${formatCount(logCount, 'log')}</span>
+                    ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
                 </div>
-                <div class="pk-tabs"></div>
-                <div class="pk-overlay__content" id="pk-tab-content"></div>
             </div>
+            <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
         </div>
     `;
+}
 
-    const container = content.querySelector('.pk-overlay');
-    container.querySelector('.pk-overlay__title-icon').textContent = rootActionIcon(trace.rootActionType);
-
-    container.querySelector('.pk-overlay__back').addEventListener('click', closeTraceDetail);
-    container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
-    container.addEventListener('click', (e) => {
-        if (e.target === container) closeTraceDetail();
-    });
-
+/**
+ * Builds the tab strip and renders the initial tab. The three cross-link jumps ride
+ * along on the view object every tab receives, so the tabs can reach them without a
+ * hand-off channel of their own - as do the display settings (locale, timeZone,
+ * features) the tabs format and colour by.
+ */
+function wireTabs(container, trace, urlState, display) {
     const tabContent = container.querySelector('#pk-tab-content');
 
     // Deep-linked into a specific subview (e.g. "#traces/<id>/logs?level=WARN") when the
@@ -251,11 +279,6 @@ function render(content, trace, urlState, display) {
     // Params are scoped to the deepest view (this tab), so a tab switch always starts
     // that tab's filters empty - see url-state.js's push/replace rule. Only the tab
     // restored from the URL at open time seeds its filters from urlState.initial.params.
-    //
-    // goToSpanLogs/goToSpan/goToQuery ride along on the same object every tab already
-    // receives, so the tabs can reach them without a hand-off channel of their own beside
-    // this one - as do the display settings (locale, timeZone, features) the tabs format
-    // and colour by.
     const tabView = (tabId, filters) => ({
         ...display,
         filters,
@@ -270,16 +293,12 @@ function render(content, trace, urlState, display) {
     // this guard, re-clicking the active tab would wipe its own filters/URL for nothing.
     let activeTabId = initialTab;
 
-    // The Spans tab's "N logs" toggle has nowhere of its own to show a span's logs, so it
-    // asks to switch to the Logs tab with that span already applied. It seeds the very
-    // same `span` filter a "?span=..." deep link would, so the resulting view is as
-    // linkable as any other - hence the urlState.update alongside the render. `select`
-    // with silent:true only moves the tab strip's own selection state; the render call
-    // is what seeds logs.js, since onSelect's default render deliberately starts empty.
-    // `focus: true` moves keyboard focus onto the Logs tab button - the toggle that was
-    // clicked belongs to the Spans tab's markup, which renderTabContent below replaces,
-    // destroying it and leaving focus to fall back to the shadow host with nowhere
-    // sensible to land.
+    /**
+     * The Spans tab's "N logs" toggle: switches to the Logs tab with that span's filter
+     * seeded - the same `span` filter a "?span=..." deep link restores, hence the
+     * urlState.update. `focus: true` because the toggle just clicked belongs to the
+     * markup the switch replaces; focus would otherwise fall back to the shadow host.
+     */
     let tabApi;
     function goToSpanLogs(spanId) {
         activeTabId = 'logs';
@@ -333,27 +352,11 @@ function render(content, trace, urlState, display) {
             urlState?.update(tabId, {});
             renderTabContent(tabContent, tabId, trace, tabView(tabId, {}));
         },
-        initial: initialTab
+        initial: initialTab,
+        panel: tabContent
     });
 
     renderTabContent(tabContent, initialTab, trace, tabView(initialTab, urlState?.initial?.params || {}));
-
-    // ESC key to close; closeTraceDetail removes the listener however
-    // the overlay is dismissed (buttons, overlay click, ESC)
-    if (escHandler) {
-        document.removeEventListener('keydown', escHandler);
-    }
-    escHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeTraceDetail();
-        }
-    };
-    document.addEventListener('keydown', escHandler);
-
-    // Move focus into the dialog. No single interior control is the obvious "first" one
-    // given the tab strip + header controls, so the dialog itself (a real ARIA APG
-    // fallback) takes focus; closeTraceDetail() restores it to the invoker.
-    container.focus();
 }
 
 function renderTabContent(container, tabId, trace, view) {
@@ -369,6 +372,3 @@ function countSpans(span) {
     });
     return count;
 }
-
-export const open = openTraceDetail;
-export const close = closeTraceDetail;

@@ -4,6 +4,7 @@
  * what the API gives it, with no sensitivity decision of its own.
  */
 import {kvRow} from '../../shared/components.js';
+import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {renderUnmaskControl} from '../../shared/unmask-control.js';
 
@@ -21,7 +22,7 @@ const tab = filteredGroupTab({
     key: group => group.prefix,
     header: (group, query) => ({
         name: group.prefix,
-        count: `${group.properties.length} properties`,
+        count: formatCount(group.properties.length, 'property', 'properties'),
         highlight: query
     }),
     items: (group, list, query) => group.properties.forEach(prop =>

@@ -1,9 +1,24 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
     <title>peekaboot</title>
+    <!-- Stamps the theme before the stylesheets apply, so a dark-theme reader never sees
+         the light palette painted first. The same resolution as shared/theme.js's
+         resolveTheme(), which cannot run this early: a module script is deferred past
+         first paint. -->
+    <script>
+        (function () {
+            var stored = null;
+            try { stored = localStorage.getItem('peekaboot-theme'); } catch (e) { /* storage blocked */ }
+            var theme = stored === 'light' || stored === 'dark'
+                ? stored
+                : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
     <link rel="stylesheet" href="../assets/tokens.css">
@@ -31,7 +46,6 @@
                         <span id="timezone-label">Browser</span>
                     </button>
                     <span class="pk-header__tz-info" id="tz-info"></span>
-                    <!-- Locale Selector -->
                     <select class="pk-btn pk-btn--select" id="locale-select" title="Language" aria-label="Language">
                         <option value="en-US">EN</option>
                         <option value="de-DE">DE</option>
@@ -53,7 +67,8 @@
     </header>
 
     <main class="pk-container">
-        <nav class="pk-tabs" id="main-tabs" role="tablist">
+        <nav aria-label="Dashboard sections">
+        <div class="pk-tabs" id="main-tabs" role="tablist">
             <button class="pk-tab" role="tab" id="overview-tab-btn" data-tab="overview" aria-controls="overview-tab" aria-selected="true">Overview</button>
             <button class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
             <button class="pk-tab" role="tab" id="lifecycle-tab-btn" data-tab="lifecycle" aria-controls="lifecycle-tab" aria-selected="false">Lifecycle</button>
@@ -64,8 +79,12 @@
             <button class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
             <button class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
             <button class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
+        </div>
         </nav>
 
+        <!-- Static rather than built by shared/components.js's loadingBlock(): it is on
+             screen before main.js has run, and the browser tests read it as the
+             dashboard's readiness signal. -->
         <div id="loading" class="pk-loading">
             <div class="pk-spinner"></div>
             <p>Loading data...</p>
@@ -142,8 +161,7 @@
                 </div>
             </div>
 
-            <!-- Memory Card with Disk Health -->
-            <div class="pk-card pk-grid--full pk-section" id="memory-card">
+            <div class="pk-card pk-section" id="memory-card">
                 <div class="pk-card__header">
                     <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
                     <h2 class="pk-card__title">Memory &amp; Storage</h2>
@@ -153,7 +171,7 @@
             </div>
 
             <!-- Health Banner (a real button so it is keyboard operable; expands the details region below) -->
-            <button type="button" class="pk-health pk-grid--full pk-section" id="health-banner"
+            <button type="button" class="pk-health pk-section" id="health-banner"
                     aria-expanded="false" aria-controls="health-components">
                 <span class="pk-health__status">
                     <span class="pk-health__dot" id="health-dot"></span>
@@ -184,10 +202,8 @@
 
         <!-- Traces Tab -->
         <section class="pk-tab-panel" id="traces-tab" role="tabpanel" aria-labelledby="traces-tab-btn">
-            <div id="traces-loading" class="pk-loading hidden">
-                <div class="pk-spinner"></div>
-                <p>Loading traces...</p>
-            </div>
+            <!-- filled by traces.js's loadingBlock() -->
+            <div id="traces-loading" class="hidden"></div>
             <div id="traces-bucket" class="pk-filter-row">
                 <button class="pk-btn pk-btn--bucket" data-bucket="all" aria-pressed="true">All</button>
                 <button class="pk-btn pk-btn--bucket" data-bucket="errors" aria-pressed="false">Errors</button>
@@ -203,7 +219,7 @@
             </div>
             <div id="traces-list"></div>
             <div id="no-traces" class="pk-empty hidden">
-                <p>No error traces recorded</p>
+                <p>No traces recorded</p>
             </div>
         </section>
 
@@ -211,7 +227,7 @@
         <section class="pk-tab-panel" id="meters-tab" role="tabpanel" aria-labelledby="meters-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
-                <input class="pk-filter__input" type="text" id="meters-filter" placeholder="Filter metrics...">
+                <input class="pk-filter__input" type="text" id="meters-filter" placeholder="Filter metrics..." aria-label="Filter metrics">
                 <span class="pk-filter__count" id="meters-count"></span>
             </div>
             <div id="meters-list"></div>
@@ -221,7 +237,7 @@
         <section class="pk-tab-panel" id="environment-tab" role="tabpanel" aria-labelledby="environment-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
-                <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties...">
+                <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties..." aria-label="Filter properties">
                 <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
                      is true - empty, not hidden, when the backend gate is off. -->
                 <span id="env-unmask-slot"></span>
@@ -241,10 +257,10 @@
         <section class="pk-tab-panel" id="loggers-tab" role="tabpanel" aria-labelledby="loggers-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
-                <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers...">
+                <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers..." aria-label="Filter loggers">
             </div>
-            <div class="loggers-controls">
-                <label class="checkbox-label">
+            <div class="pk-loggers-controls">
+                <label class="pk-checkbox-label">
                     <input type="checkbox" id="loggers-configured-only">
                     Show only configured loggers
                 </label>
@@ -256,7 +272,7 @@
         <section class="pk-tab-panel" id="config-tab" role="tabpanel" aria-labelledby="config-tab-btn">
             <div class="pk-filter">
                 <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
-                <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties...">
+                <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties..." aria-label="Filter config properties">
                 <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
                      is true - empty, not hidden, when the backend gate is off. -->
                 <span id="config-unmask-slot"></span>

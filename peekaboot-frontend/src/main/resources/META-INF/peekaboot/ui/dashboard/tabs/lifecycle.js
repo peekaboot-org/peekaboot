@@ -4,11 +4,8 @@
  * Paired with Insights in main.js's TABS order - both are views of the application over
  * time, Insights on what it measured, this on when it existed.
  *
- * render() is called on every 30s auto-refresh cycle for every available tab regardless
- * of which is visible (see main.js's renderData()), so the actual network fetch is
- * skipped here unless this tab's container is the active one - same guard meters.js
- * uses, and for the same reason (main.js's renderTabById() calls render() again the
- * moment this tab becomes active, so switching to it never waits on the next cycle).
+ * Fetched from its own endpoint; a background render skips the round trip (active-tab
+ * guard, see main.js's renderTab).
  *
  * The current page is module-level state, not derived from the fetch response, so it
  * survives across those 30s re-renders - a reader on page 3 is not bounced back to page
@@ -19,7 +16,7 @@
  * removes the endpoint outright, and an operator who set that flag will not be
  * surprised; failedFetch below renders an honest "unavailable" line instead.
  */
-import {badge} from '../../shared/components.js';
+import {badge, emptyState, table} from '../../shared/components.js';
 import {formatDateTime, formatLongDuration} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
@@ -38,16 +35,13 @@ let currentPage = 0;    // 0-indexed, survives across render() calls - see doc c
 export function render(container, data, context) {
     currentContainer = container;
     currentContext = context;
-    // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL (see the same guard on every other
-    // tab's reconcile).
-    if (container.classList.contains('active')) reconcileWithUrl(context);
+    if (context.active) reconcileWithUrl(context);
     fetchAndRender();
 }
 
 /**
  * The URL's 1-based page param as this module's 0-based page index; anything
- * unparseable, fractional or below 1 is page one. Exported for SharedModuleIT.
+ * unparseable, fractional or below 1 is page one. Exported for the browser tests.
  */
 export function pageFromUrl(params) {
     const page = Number(params?.page);
@@ -70,8 +64,10 @@ function reconcileWithUrl(context) {
     });
 }
 
-/** Writes the current page to the URL (1-based, matching the readout), omitting it on
-    page one so the default yields a clean "#lifecycle" hash. A replace, never a push. */
+/**
+ * Writes the current page to the URL (1-based, matching the readout), omitting it on
+ * page one so the default yields a clean "#lifecycle" hash. A replace, never a push.
+ */
 function writePageParam() {
     currentContext.setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
 }
@@ -79,9 +75,7 @@ function writePageParam() {
 async function fetchAndRender() {
     const container = currentContainer;
     const context = currentContext;
-    // Not the active tab - skip the round trip. main.js's renderTabById() calls
-    // render() (and so this) again the instant this tab is switched to.
-    if (!container.classList.contains('active')) return;
+    if (!context.active) return;
 
     let result;
     try {
@@ -108,12 +102,12 @@ function renderTable(container, context) {
     target.innerHTML = '';
 
     if (fetchFailed) {
-        target.innerHTML = '<p class="pk-empty">Lifecycle history is unavailable</p>';
+        target.appendChild(emptyState('Lifecycle history is unavailable'));
         return;
     }
 
     if (!runs || runs.length === 0) {
-        target.innerHTML = '<p class="pk-empty">No runs recorded yet</p>';
+        target.appendChild(emptyState('No runs recorded yet'));
         return;
     }
 
@@ -131,37 +125,11 @@ function renderTable(container, context) {
     const start = currentPage * PAGE_SIZE;
     const {locale, timeZone} = context;
 
-    const scroll = document.createElement('div');
-    scroll.className = 'pk-table-scroll';
-
-    const table = document.createElement('table');
-    table.className = 'pk-table pk-lifecycle-table';
-    table.append(renderHead(), renderBody(runs.slice(start, start + PAGE_SIZE), {locale, timeZone}));
-
-    scroll.appendChild(table);
-    target.appendChild(scroll);
+    const rows = runs.slice(start, start + PAGE_SIZE).map(run => renderRow(run, {locale, timeZone}));
+    target.appendChild(table(COLUMNS, rows, {className: 'pk-lifecycle-table'}));
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
     target.appendChild(renderPager(totalPages));
-}
-
-function renderHead() {
-    const head = document.createElement('thead');
-    const row = document.createElement('tr');
-    COLUMNS.forEach(label => {
-        const th = document.createElement('th');
-        th.scope = 'col';
-        th.textContent = label;
-        row.appendChild(th);
-    });
-    head.appendChild(row);
-    return head;
-}
-
-function renderBody(pageRuns, dateOptions) {
-    const body = document.createElement('tbody');
-    pageRuns.forEach(run => body.appendChild(renderRow(run, dateOptions)));
-    return body;
 }
 
 function renderRow(run, dateOptions) {

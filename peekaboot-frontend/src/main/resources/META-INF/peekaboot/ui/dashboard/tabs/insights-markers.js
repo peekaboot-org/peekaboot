@@ -14,9 +14,9 @@
  *
  * uPlot's canvas spans the whole chart, axis gutters included, so its 2D context draws
  * in canvas-pixel space with the origin at the canvas's own corner - not at the
- * plotting area's corner. u.valToPos(val, 'x', true) returns a position in that space
- * (it is what uPlot's own series paths use internally); the CSS-pixel form (no third
- * argument, or false) instead returns a position relative to the plotting area itself,
+ * plotting area's corner. u.valToPos(val, 'x', true) returns a position in that space;
+ * the CSS-pixel form (no third argument, or false) instead returns a position relative
+ * to the plotting area itself,
  * which is the space u.cursor.left and every DOM node inside u.over live in. The two
  * are not related by a plain *pxRatio - the plotting area is also offset from the
  * canvas corner by the axis gutters (u.bbox.left/top) - so this module always asks
@@ -114,11 +114,8 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
             publish(u);
             return;
         }
-        // pxRatio is a static on the uPlot class (window.uPlot.pxRatio), not a
-        // property of a chart instance - u.pxRatio is always undefined, and reading
-        // it would silently draw every stroke at half its intended device-pixel
-        // width on a HiDPI screen. devicePixelRatio is the fallback if uPlot is
-        // somehow not the global that set it.
+        // pxRatio is a static on the uPlot class, not on the instance; devicePixelRatio
+        // is the fallback if uPlot is somehow not the global that set it.
         const ratio = window.uPlot?.pxRatio || window.devicePixelRatio || 1;
         const {left, top, width, height} = u.bbox;
         const ctx = u.ctx;
@@ -146,7 +143,7 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
             const val = clamp(u, event.epochMs / 1000);
             if (val === null) continue;
             // CSS-pixel space: this is what the tooltip's hit test and the panel's
-            // data-marker-x (a later browser test hovers in this same space) both use
+            // data-marker-x both use
             placed.push({left: u.valToPos(val, 'x'), event});
 
             // half the (device-px) line width, so the 1-CSS-px stroke centers on a

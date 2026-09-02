@@ -3,6 +3,7 @@
  * its key/value pairs, with the active Spring profiles shown as a banner above them.
  */
 import {kvRow, badge} from '../../shared/components.js';
+import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {renderUnmaskControl} from '../../shared/unmask-control.js';
 
@@ -20,7 +21,7 @@ const tab = filteredGroupTab({
     key: source => source.name,
     header: (source, query) => ({
         name: source.name,
-        count: `${source.properties.length} properties`,
+        count: formatCount(source.properties.length, 'property', 'properties'),
         highlight: query
     }),
     items: (source, list, query) => source.properties.forEach(prop =>

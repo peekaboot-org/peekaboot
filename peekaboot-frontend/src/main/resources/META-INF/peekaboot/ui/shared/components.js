@@ -1,13 +1,72 @@
-import {highlightText} from './markup.js';
+import {escapeHtml, highlightText} from './markup.js';
 
 let groupSequence = 0;
 
-/** A semantic pill. Variant is one of ok, warn, error, info, muted. */
+/** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted. */
 export function badge(text, variant = 'muted') {
     const element = document.createElement('span');
     element.className = `pk-badge pk-badge--${variant}`;
     element.textContent = text == null ? '' : String(text);
     return element;
+}
+
+/** badge() as an HTML string, for the surfaces that build their markup as strings. */
+export function badgeHtml(text, variant = 'muted') {
+    return `<span class="pk-badge pk-badge--${variant}">${escapeHtml(text == null ? '' : String(text))}</span>`;
+}
+
+/** The centred, muted placeholder a list shows when it has nothing to list. */
+export function emptyState(message) {
+    const element = document.createElement('p');
+    element.className = 'pk-empty';
+    element.textContent = message;
+    return element;
+}
+
+/** emptyState() as an HTML string. */
+export function emptyStateHtml(message) {
+    return `<p class="pk-empty">${escapeHtml(message)}</p>`;
+}
+
+/** The spinner with its caption that every loading state shows. */
+export function loadingBlock(message) {
+    const element = document.createElement('div');
+    element.className = 'pk-loading';
+    const spinner = document.createElement('div');
+    spinner.className = 'pk-spinner';
+    const caption = document.createElement('p');
+    caption.textContent = message;
+    element.append(spinner, caption);
+    return element;
+}
+
+/**
+ * A data table in its own scroll box: `columns` are the header labels, `rows` ready-made
+ * <tr> elements. `className` is added to the table's own, for a surface's row accents.
+ */
+export function table(columns, rows, {className} = {}) {
+    const scroll = document.createElement('div');
+    scroll.className = 'pk-table-scroll';
+
+    const element = document.createElement('table');
+    element.className = 'pk-table' + (className ? ` ${className}` : '');
+
+    const head = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    columns.forEach(label => {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = label;
+        headRow.appendChild(th);
+    });
+    head.appendChild(headRow);
+
+    const body = document.createElement('tbody');
+    body.append(...rows);
+
+    element.append(head, body);
+    scroll.appendChild(element);
+    return scroll;
 }
 
 function setKvText(element, text, highlight) {
@@ -126,7 +185,7 @@ export function expandedKeys(container) {
 }
 
 /**
- * tabStrip(container, tabs, {onSelect, initial}) -> {select(id, {focus, silent})}
+ * tabStrip(container, tabs, {onSelect, initial, panel}) -> {select(id, {focus, silent})}
  *
  * An ARIA tab strip with roving tabindex: only the selected tab stays in the tab
  * order (tabIndex 0; every other tab -1), and Arrow/Home/End move between tabs,
@@ -136,15 +195,18 @@ export function expandedKeys(container) {
  * A `.pk-tab[data-tab="<id>"]` button already present in `container` is reused
  * as-is - callers whose markup already carries aria-controls/id wiring (e.g. the
  * dashboard's static tab buttons) keep that wiring untouched. Only when no such
- * button exists yet does this build one from `label`/`count`.
+ * button exists yet does this build one from `label`/`count`, and `panel` - the one
+ * element every tab switches the content of - is what the built buttons point at: it
+ * becomes the tabpanel, each button controls it, and its label follows the selection.
  *
  * `select(id)` (also returned to the caller) always updates the DOM; it invokes
  * `onSelect` too unless called with `{silent: true}` - the escape hatch a caller
  * needs to sync the strip's visual selection (e.g. from hash-driven routing)
  * without re-triggering the side effects `onSelect` runs for real user activation.
  */
-export function tabStrip(container, tabs, {onSelect, initial} = {}) {
+export function tabStrip(container, tabs, {onSelect, initial, panel} = {}) {
     container.setAttribute('role', 'tablist');
+    if (panel) panel.setAttribute('role', 'tabpanel');
 
     const buttons = tabs.map(tab => {
         let button = container.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
@@ -154,6 +216,10 @@ export function tabStrip(container, tabs, {onSelect, initial} = {}) {
             button.className = 'pk-tab';
             button.dataset.tab = tab.id;
             button.setAttribute('role', 'tab');
+            if (panel) {
+                button.id = `pk-tab-${tab.id}`;
+                button.setAttribute('aria-controls', panel.id);
+            }
             button.append(tab.label);
             if (tab.count != null) {
                 const count = document.createElement('span');
@@ -174,6 +240,7 @@ export function tabStrip(container, tabs, {onSelect, initial} = {}) {
             button.setAttribute('aria-selected', String(active));
             button.tabIndex = active ? 0 : -1;
             if (active && focus) button.focus();
+            if (active && panel && button.id) panel.setAttribute('aria-labelledby', button.id);
         });
         if (onSelect && !silent) onSelect(id);
     }

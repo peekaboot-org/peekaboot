@@ -1,35 +1,33 @@
 /* Trace-detail overlay. Tokens come from ../assets/tokens.css; tabs, the status pill
    and the empty-state message reuse .pk-tabs/.pk-tab, .pk-badge and .pk-empty from
    ../assets/components.css. The host's own fixed-fullscreen sizing is set inline by
-   trace-detail.js rather than here - see the comment at that call site. */
+   trace-detail.js (see the comment at that call site); .pk-overlay simply fills it. */
 
 .pk-overlay {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: var(--pk-bg);
-    z-index: 2147483647;
     display: flex;
     flex-direction: column;
 }
 .pk-overlay:focus-visible { outline: none; }
 
 .pk-overlay__container {
-    width: 100vw;
-    height: 100vh;
+    flex: 1;
+    min-height: 0;
     background: var(--pk-bg);
     display: flex;
     flex-direction: column;
     overflow: hidden;
     color: var(--pk-text);
-    font: 13px/1.5 var(--pk-font);
     position: relative;
 }
 
 .pk-overlay__header {
     display: flex;
     align-items: flex-start;
-    gap: 12px;
-    padding: 16px 20px;
+    gap: var(--pk-space-md);
+    padding: var(--pk-space-md) var(--pk-space-lg);
     background: var(--pk-bg-alt);
     border-bottom: 1px solid var(--pk-border);
 }
@@ -39,37 +37,26 @@
     min-width: 0;
 }
 
-.pk-overlay__back {
-    background: transparent;
-    border: none;
-    color: var(--pk-text-muted);
-    font-size: 20px;
-    cursor: pointer;
-    padding: 4px 8px;
-    line-height: 1;
-}
-.pk-overlay__back:hover { color: var(--pk-primary-text); }
-
 .pk-overlay__title {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin: 0 0 8px;
+    gap: var(--pk-space-md);
+    margin: 0 0 var(--pk-space-sm);
 }
 
 .pk-overlay__title-icon { font-size: 24px; }
-.pk-overlay__title-method { font-weight: 600; color: var(--pk-text-strong); font-size: 16px; }
-.pk-overlay__title-path { font-family: var(--pk-font-mono); color: var(--pk-text); font-size: 14px; max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-overlay__title-traceid { font-family: var(--pk-font-mono); color: var(--pk-text-muted); font-size: 11px; background: var(--pk-bg); padding: 2px 8px; border-radius: 3px; }
+.pk-overlay__title-method { font-weight: 600; color: var(--pk-text-strong); font-size: var(--pk-text-base); }
+.pk-overlay__title-path { font-family: var(--pk-font-mono); color: var(--pk-text); font-size: var(--pk-text-sm); min-width: 0; max-width: 600px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-overlay__title-traceid { font-family: var(--pk-font-mono); color: var(--pk-text-muted); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: 2px var(--pk-space-sm); border-radius: 3px; }
 
 .pk-overlay__meta {
     display: flex;
     align-items: center;
-    gap: 16px;
-    font-size: 12px;
+    gap: var(--pk-space-md);
+    font-size: var(--pk-text-xs);
 }
 
-.pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: 16px; }
+.pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: var(--pk-text-base); }
 .pk-overlay__duration--slow { color: var(--pk-warning-text); }
 .pk-overlay__duration--very-slow { color: var(--pk-danger); }
 
@@ -79,123 +66,124 @@
     color: var(--pk-text-muted);
     font-size: 28px;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: var(--pk-space-xs) var(--pk-space-sm);
     line-height: 1;
 }
 .pk-overlay__close:hover { color: var(--pk-danger); }
+.pk-overlay__close:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 /* The overlay's tab strip reuses shared .pk-tabs/.pk-tab and adds its own chrome
    (padding, alt background). The direct-child selector keeps that chrome off any strip
    a tab might one day render inside .pk-overlay__content. */
 .pk-overlay__container > .pk-tabs {
-    padding: 0 20px;
+    padding: 0 var(--pk-space-lg);
     background: var(--pk-bg-alt);
 }
 
-/* Explicit ink: inherited from .pk-tab this would be --pk-text-muted, which is only
-   3.6:1 on the --pk-border fill - body ink clears AA on it in both themes. */
-.pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); color: var(--pk-text); border-radius: 10px; font-size: 11px; }
+.pk-overlay__content { flex: 1; overflow: auto; padding: var(--pk-space-md) var(--pk-space-lg); }
 
-.pk-overlay__content { flex: 1; overflow: auto; padding: 16px 20px; }
-
-.pk-overlay__loading, .pk-overlay__error { padding: 40px; text-align: center; color: var(--pk-text-muted); }
+.pk-overlay__loading, .pk-overlay__error { padding: var(--pk-space-xl); text-align: center; color: var(--pk-text-muted); }
 .pk-overlay__error { color: var(--pk-danger); }
 
 /* Gantt view styles */
-.pk-gantt { display: flex; flex-direction: column; gap: 2px; --pk-gantt-duration-width: 90px; }
-.pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: 8px; margin-bottom: 8px; }
-.pk-gantt-header-name { width: 350px; color: var(--pk-text-muted); font-size: 11px; text-transform: uppercase; }
-/* Same 8px side margin as .pk-gantt-track below, so the ticks land right above the
-   start/end of the bars they describe instead of 8px further out. */
-.pk-gantt-header-timeline { flex: 1; display: flex; justify-content: space-between; font-size: 11px; color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 8px; }
-.pk-gantt-header-spacer { width: var(--pk-gantt-duration-width); }
+.pk-gantt { display: flex; flex-direction: column; gap: 2px; --pk-gantt-name-width: 350px; --pk-gantt-duration-width: 90px; }
+.pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
+.pk-gantt-header__name { width: var(--pk-gantt-name-width); color: var(--pk-text-muted); font-size: var(--pk-text-xs); text-transform: uppercase; }
+/* Same side margin as .pk-gantt-track below, so the ticks land right above the
+   start/end of the bars they describe instead of further out. */
+.pk-gantt-header__timeline { flex: 1; display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
+.pk-gantt-header__spacer { width: var(--pk-gantt-duration-width); }
 
-.pk-gantt-row { display: flex; align-items: center; padding: 4px 0; border-radius: 4px; }
+.pk-gantt-row { display: flex; align-items: center; padding: var(--pk-space-xs) 0; border-radius: var(--pk-space-xs); }
 .pk-gantt-row:hover { background: var(--pk-bg-alt); }
 
 /* Real <button>s with the browser's button chrome reset away and a focus ring added -
-   they look like the plain glyphs they are; the keyboard reachability is the point. */
-.pk-gantt-toggle { width: 16px; cursor: pointer; user-select: none; color: var(--pk-text-muted);
+   they look like the plain glyphs they are; the keyboard reachability is the point. The
+   24px box is WCAG 2.2's target-size floor (2.5.8) - the glyph stays small, the target does not. */
+.pk-gantt-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 24px; min-height: 24px;
+    cursor: pointer; user-select: none; color: var(--pk-text-muted);
     background: none; border: none; padding: 0; font: inherit; line-height: inherit; }
 .pk-gantt-toggle:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-gantt-toggle:hover { color: var(--pk-text); }
+/* Holds the toggle's column on a row with no children, so sibling names line up. */
+.pk-gantt-toggle-spacer { flex: none; width: 24px; }
 
-.pk-gantt-name { width: 350px; display: flex; align-items: center; gap: 4px; font-size: 12px; overflow: hidden; }
-.pk-gantt-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-gantt-kind { font-size: 10px; padding: 1px 4px; border-radius: 3px; text-transform: uppercase; }
-.pk-gantt-kind.server { background: var(--pk-primary); color: var(--pk-on-primary); }
-.pk-gantt-kind.client { background: var(--pk-purple); color: var(--pk-on-purple); }
-.pk-gantt-kind.internal { background: var(--pk-border); color: var(--pk-text); }
-.pk-gantt-kind.producer, .pk-gantt-kind.consumer { background: var(--pk-info); color: var(--pk-on-info); }
+.pk-gantt-name { width: var(--pk-gantt-name-width); display: flex; align-items: center; gap: var(--pk-space-xs); font-size: var(--pk-text-xs); overflow: hidden; }
+.pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-gantt-kind { font-size: var(--pk-text-xs); padding: 1px var(--pk-space-xs); border-radius: 3px; text-transform: uppercase; }
+.pk-gantt-kind--server { background: var(--pk-primary); color: var(--pk-on-primary); }
+.pk-gantt-kind--client { background: var(--pk-purple); color: var(--pk-on-purple); }
+.pk-gantt-kind--internal { background: var(--pk-border); color: var(--pk-text); }
+.pk-gantt-kind--producer, .pk-gantt-kind--consumer { background: var(--pk-info); color: var(--pk-on-info); }
 
-.pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 8px; }
+.pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 var(--pk-space-sm); }
 .pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-text-muted); }
-.pk-gantt-bar.kind-server { background: var(--pk-primary); }
-.pk-gantt-bar.kind-client { background: var(--pk-purple); }
-.pk-gantt-bar.kind-producer, .pk-gantt-bar.kind-consumer { background: var(--pk-info); }
-.pk-gantt-bar.has-error { background: var(--pk-danger); }
+.pk-gantt-bar--server { background: var(--pk-primary); }
+.pk-gantt-bar--client { background: var(--pk-purple); }
+.pk-gantt-bar--producer, .pk-gantt-bar--consumer { background: var(--pk-info); }
+.pk-gantt-bar--error { background: var(--pk-danger); }
 
-.pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: 11px; font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
+.pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
 .pk-gantt-duration--slow { color: var(--pk-warning-text); }
 .pk-gantt-duration--very-slow { color: var(--pk-danger); }
 
+/* A 2px line is the visible marker; the ::before box around it is the click target,
+   sized to the same 24px floor as the other overlay controls. */
 .pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; cursor: pointer;
     border: none; padding: 0; }
+.pk-gantt-event-marker::before { content: ''; position: absolute; inset: -1px -11px; }
 .pk-gantt-event-marker:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 2px; }
 .pk-gantt-event-marker::after { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; background: var(--pk-success); border-radius: 50%; border: 1px solid var(--pk-bg); }
 .pk-gantt-event-marker:hover::after { transform: scale(1.3); }
-.pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: 4px 8px; font-size: 10px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 10; }
+.pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
 .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
 
-.pk-gantt-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; padding-left: 20px; }
-.pk-tag-badge { font-size: 9px; padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-tag-badge .key { color: var(--pk-primary-text); }
-.pk-tag-badge .value { color: var(--pk-text); }
+.pk-gantt-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+.pk-tag-badge { font-size: var(--pk-text-xs); padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-tag-badge__key { color: var(--pk-primary-text); }
+.pk-tag-badge__value { color: var(--pk-text); }
 
-.pk-span-row-count { font-size: 10px; padding: 1px 5px; background: var(--pk-success); color: var(--pk-on-success); border-radius: 3px; margin-left: 4px; }
+.pk-span-row-count { font-size: var(--pk-text-xs); padding: 1px 5px; background: var(--pk-success); color: var(--pk-on-success); border-radius: 3px; margin-left: var(--pk-space-xs); }
 
-/* The SQL toggle plus the two query cross-links (spans.js's jump to the Queries tab,
-   queries.js's jump back to the span tree) share one small-button treatment. */
-.pk-span-query-toggle, .pk-span-query-link, .pk-query-span-link { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
-.pk-span-query-toggle:hover, .pk-span-query-link:hover, .pk-query-span-link:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
-.pk-span-query-toggle:active, .pk-span-query-link:active, .pk-query-span-link:active { background: var(--pk-bg-alt); }
-.pk-span-query-toggle:focus-visible, .pk-span-query-link:focus-visible, .pk-query-span-link:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+/* One small-button treatment for the row's actions - the SQL toggle, the logs toggle
+   and the two query cross-links (spans.js's jump to the Queries tab, queries.js's jump
+   back to the span tree); each keeps its own class only as the JS hook. */
+.pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; margin-left: var(--pk-space-xs); user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
+.pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
+.pk-span-action:active { background: var(--pk-bg-alt); }
+.pk-span-action:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
-.pk-span-query-detail { padding: 8px 12px; margin: 4px 0 4px 36px; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; display: none; }
-.pk-span-query-detail.expanded { display: block; }
-.pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: 10px; text-transform: uppercase; margin-bottom: 4px; }
+/* Indented by spans.js to its row's own depth. */
+.pk-span-query-detail { padding: var(--pk-space-sm) var(--pk-space-md); margin: var(--pk-space-xs) 0; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); white-space: pre-wrap; word-break: break-all; display: none; }
+.pk-span-query-detail--expanded { display: block; }
+.pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: var(--pk-text-xs); text-transform: uppercase; margin-bottom: var(--pk-space-xs); }
 .pk-span-query-detail .pk-query-text { color: var(--pk-text-strong); }
 
-.pk-span-logs-toggle { display: inline-flex; align-items: center; justify-content: center; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: 10px; cursor: pointer; margin-left: 4px; user-select: none; transition: all 0.15s ease; }
-.pk-span-logs-toggle:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
-.pk-span-logs-toggle:active { background: var(--pk-bg-alt); }
-.pk-span-logs-toggle:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
-
 /* Request tab styles */
-.pk-request-section { margin-bottom: 24px; }
-.pk-request-section h3 { font-size: 11px; color: var(--pk-text-muted); margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+.pk-request-section { margin-bottom: var(--pk-space-lg); }
+.pk-request-section h3 { font-size: var(--pk-text-xs); color: var(--pk-text-muted); margin: 0 0 var(--pk-space-sm) 0; text-transform: uppercase; letter-spacing: 0.5px; }
 /* Two muted-italic notes that must not share a class: --masked marks a value the
    masking engine replaced, and the mask tests count those. --empty is the placeholder
    row a header section shows when nothing was captured, which is not a masked value. */
 .pk-request-masked, .pk-request-empty { color: var(--pk-text-muted); font-style: italic; }
-.pk-controller-info { font-family: var(--pk-font-mono); font-size: 13px; color: var(--pk-text); padding: 8px 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
+.pk-controller-info { font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
 /* Queries tab styles */
-.pk-query-item { margin-bottom: 16px; padding: 12px; background: var(--pk-bg-alt); border-radius: var(--pk-radius); border-left: 3px solid var(--pk-purple); }
-.pk-query-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+.pk-query-item { margin-bottom: var(--pk-space-md); padding: var(--pk-space-md); background: var(--pk-bg-alt); border-radius: var(--pk-radius); border-left: 3px solid var(--pk-purple); }
+.pk-query-header { display: flex; justify-content: space-between; margin-bottom: var(--pk-space-sm); font-size: var(--pk-text-xs); }
 .pk-query-system { color: var(--pk-text-muted); }
-.pk-query-meta { display: flex; gap: 12px; align-items: center; }
+.pk-query-meta { display: flex; gap: var(--pk-space-md); align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
 .pk-query__duration--slow { color: var(--pk-warning-text); }
-.pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: 11px; }
-.pk-query__sql { font-family: var(--pk-font-mono); font-size: 12px; background: var(--pk-bg); padding: 10px; border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
+.pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: var(--pk-text-xs); }
+.pk-query__sql { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 
 /* Logs tab styles */
-.pk-logs-filter { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-.pk-logs-filter input, .pk-logs-filter select { padding: 6px 10px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text); font-size: 12px; }
+.pk-logs-filter { display: flex; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); align-items: center; flex-wrap: wrap; }
+.pk-logs-filter input, .pk-logs-filter select { padding: 6px 10px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text); font-size: var(--pk-text-xs); }
 .pk-logs-filter input { flex: 1; max-width: 300px; }
 .pk-logs-filter input::placeholder { color: var(--pk-text-muted); }
-.pk-logs-filter-span { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--pk-primary); color: var(--pk-on-primary); border-radius: var(--pk-radius); font-size: 11px; }
+.pk-logs-filter-span { display: flex; align-items: center; gap: 6px; padding: var(--pk-space-xs) 10px; background: var(--pk-primary); color: var(--pk-on-primary); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); }
 .pk-logs-filter-span-clear { cursor: pointer; font-weight: bold;
     background: none; border: none; padding: 0 2px; font-size: inherit; color: inherit;
     border-radius: 2px; }
@@ -206,28 +194,27 @@
 .pk-logs-filter-span-clear:focus-visible { outline: 2px solid var(--pk-on-primary); outline-offset: 1px; }
 
 /* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). */
-.pk-log { display: flex; gap: 12px; padding: 6px 12px; font-family: var(--pk-font-mono); font-size: 11px; border-bottom: 1px solid var(--pk-bg-alt); }
+.pk-log { display: flex; gap: var(--pk-space-md); padding: 6px var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); border-bottom: 1px solid var(--pk-bg-alt); }
 .pk-log:hover { background: var(--pk-bg-alt); }
 .pk-log--hidden { display: none; }
 .pk-log__time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
 /* Name button (filters to the span) stacked over its copyable full id - the span tree
    shows no ids (too crowded with one on every row), so this is the id's only home. */
 .pk-log__span-cell { width: 140px; flex: none; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-.pk-log__span { width: 100%; color: var(--pk-primary-text); cursor: pointer; font-family: var(--pk-font-mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.pk-log__span { width: 100%; color: var(--pk-primary-text); cursor: pointer; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     background: none; border: none; padding: 0; text-align: left; flex: none; }
 .pk-log__span:hover { text-decoration: underline; }
 .pk-log__span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 /* Trimmed down from the default .pk-copy chrome (components.css), but only as far as the
-   horizontal padding and the gap: components.css's 24px min-height is a deliberate hit-target
-   floor from the 2026-08-22 audit, not chrome, so it stays even though it costs this row a
-   dozen pixels of height. Density loses to a click target a person can actually hit. */
+   horizontal padding and the gap: components.css's 24px min-height is a deliberate
+   hit-target floor (WCAG 2.2 §2.5.8), not chrome, so it stays even though it costs this
+   row a dozen pixels of height. Density loses to a click target a person can actually hit. */
 .pk-log__span-cell .pk-copy { padding: 0 2px; gap: 3px; max-width: 100%; }
-.pk-log__span-cell .pk-copy__label, .pk-log__span-cell .pk-copy__value { font-size: 9px; }
 /* The row's cross-link to the span tree sits beside the name button, inside the cell's
    column flow, so the copyable id below keeps its own line. */
-.pk-log__span-row { display: flex; align-items: center; gap: 4px; }
+.pk-log__span-row { display: flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-log__span-row .pk-log__span { flex: 1; min-width: 0; width: auto; }
-.pk-log__goto-span { flex: none; background: none; border: none; padding: 0; color: var(--pk-primary-text); font-size: 10px; cursor: pointer; }
+.pk-log__goto-span { display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 24px; min-height: 24px; background: none; border: none; padding: 0; color: var(--pk-primary-text); font-size: var(--pk-text-xs); cursor: pointer; }
 .pk-log__goto-span:hover { color: var(--pk-text); }
 .pk-log__goto-span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
@@ -246,3 +233,15 @@
 /* Focus lands on the row/entry itself (tabindex=-1, programmatic focus); the flash
    ring above is the visible indicator, so the UA's default outline is redundant. */
 .pk-gantt-row:focus, .pk-query-item:focus { outline: none; }
+
+/* Narrow viewports: the fixed name column would otherwise leave the track no room and
+   push every row past the right edge. The name shares the row proportionally instead
+   and the header tightens; the log rows keep their columns and scroll if they must. */
+@media (max-width: 767px) {
+    .pk-overlay__header, .pk-overlay__content { padding: var(--pk-space-sm) var(--pk-space-md); }
+    .pk-overlay__container > .pk-tabs { padding: 0 var(--pk-space-md); }
+    .pk-overlay__title { flex-wrap: wrap; gap: var(--pk-space-sm); }
+    .pk-overlay__title-path { max-width: none; }
+    .pk-gantt { --pk-gantt-name-width: 40%; }
+    .pk-gantt-name, .pk-gantt-header__name { flex: none; min-width: 0; }
+}

@@ -3,7 +3,7 @@
  * info + datasource cards, the memory/storage usage meters and the health banner +
  * component grid.
  */
-import {kvRow, badge, meter, tabStrip} from '../../shared/components.js';
+import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
@@ -67,19 +67,20 @@ async function renderInsightTiles(container, {client, features, locale, timeZone
     try {
         // own dedupe key: the Insights tab loads this same path on its own schedule,
         // and on a "#insights" deep link both fire in the same cycle - sharing the
-        // default per-path counter left whichever called first with a null and this
-        // row hidden until the next refresh (see shared/api.js)
+        // default per-path counter would leave whichever called first with a null and
+        // this row hidden until the next refresh (see shared/api.js)
         config = await client.get('/api/insights/config', {dedupeKey: 'insight-tiles'});
     } catch (error) {
         console.warn('Insight tiles unavailable:', error);
         row.classList.add('hidden');
         return;
     }
-    // null now only means this row's own previous call is still in flight and a newer
-    // one has taken over - that newer response is about to render the very same row
+    // null means this row's own previous call is still in flight and a newer one has
+    // taken over - that newer response is about to render the very same row
     if (!config) return;
 
-    row.innerHTML = config.tiles.map(tile => `
+    const tiles = config.tiles ?? [];
+    row.innerHTML = tiles.map(tile => `
         <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
             ${tileIcon(tile.id)}
             <div class="pk-insight-tile__text">
@@ -88,101 +89,85 @@ async function renderInsightTiles(container, {client, features, locale, timeZone
             </div>
         </div>
     `).join('');
-    row.classList.toggle('hidden', config.tiles.length === 0);
+    row.classList.toggle('hidden', tiles.length === 0);
+}
+
+/**
+ * Fills a card body from `value`, or shows `emptyMessage` when there is nothing to show
+ * (null, or an object with no entries).
+ */
+function fillCard(container, selector, value, emptyMessage, fill) {
+    const el = container.querySelector(selector);
+    if (!el) return;
+    el.innerHTML = '';
+    if (!value || Object.keys(value).length === 0) {
+        el.appendChild(emptyState(emptyMessage));
+        return;
+    }
+    fill(el, value);
 }
 
 function renderBuildInfo(container, build, dateOptions) {
-    const el = container.querySelector('#build-info');
-    el.innerHTML = '';
-
-    if (!build || Object.keys(build).length === 0) {
-        el.innerHTML = '<p class="pk-empty">No build info available</p>';
-        return;
-    }
-
-    if (build.name) el.appendChild(kvRow('Name', build.name));
-    if (build.version) el.appendChild(kvRow('Version', build.version));
-    if (build.group) el.appendChild(kvRow('Group', build.group));
-    if (build.artifact) el.appendChild(kvRow('Artifact', build.artifact));
-    if (build.time) el.appendChild(kvRow('Built', formatDateTime(build.time, dateOptions)));
+    fillCard(container, '#build-info', build, 'No build info available', el => {
+        if (build.name) el.appendChild(kvRow('Name', build.name));
+        if (build.version) el.appendChild(kvRow('Version', build.version));
+        if (build.group) el.appendChild(kvRow('Group', build.group));
+        if (build.artifact) el.appendChild(kvRow('Artifact', build.artifact));
+        if (build.time) el.appendChild(kvRow('Built', formatDateTime(build.time, dateOptions)));
+    });
 }
 
 function renderGitInfo(container, git, dateOptions) {
-    const el = container.querySelector('#git-info');
-    el.innerHTML = '';
-
-    if (!git || Object.keys(git).length === 0) {
-        el.innerHTML = '<p class="pk-empty">No git info available</p>';
-        return;
-    }
-
-    if (git.branch) el.appendChild(kvRow('Branch', git.branch));
-    if (git.commit?.id) {
-        const commitId = git.commit.id.abbrev || git.commit.id;
-        el.appendChild(kvRow('Commit', commitId, {mono: true}));
-    }
-    if (git.commit?.time) el.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
-    if (git.dirty !== undefined) el.appendChild(kvRow('Dirty', git.dirty ? 'Yes' : 'No'));
+    fillCard(container, '#git-info', git, 'No git info available', el => {
+        if (git.branch) el.appendChild(kvRow('Branch', git.branch));
+        if (git.commit?.id) {
+            const commitId = git.commit.id.abbrev || git.commit.id;
+            el.appendChild(kvRow('Commit', commitId, {mono: true}));
+        }
+        if (git.commit?.time) el.appendChild(kvRow('Commit Time', formatDateTime(git.commit.time, dateOptions)));
+        if (git.dirty !== undefined) el.appendChild(kvRow('Dirty', git.dirty ? 'Yes' : 'No'));
+    });
 }
 
 function renderSpringInfo(container, application) {
-    const el = container.querySelector('#spring-info');
-    if (!el) return;
-    el.innerHTML = '';
-
-    if (!application) {
-        el.innerHTML = '<p class="pk-empty">No Spring info available</p>';
-        return;
-    }
-
-    if (application.springBootVersion) el.appendChild(kvRow('Boot', application.springBootVersion));
-    if (application.springFrameworkVersion) el.appendChild(kvRow('Framework', application.springFrameworkVersion));
+    fillCard(container, '#spring-info', application, 'No Spring info available', el => {
+        if (application.springBootVersion) el.appendChild(kvRow('Boot', application.springBootVersion));
+        if (application.springFrameworkVersion) el.appendChild(kvRow('Framework', application.springFrameworkVersion));
+    });
 }
 
 function renderJavaInfo(container, application) {
-    const el = container.querySelector('#java-info');
-    el.innerHTML = '';
-
-    if (!application) {
-        el.innerHTML = '<p class="pk-empty">No Java info available</p>';
-        return;
-    }
-
-    if (application.javaVersion) el.appendChild(kvRow('Version', application.javaVersion));
-    if (application.javaVendor) el.appendChild(kvRow('Vendor', application.javaVendor));
+    fillCard(container, '#java-info', application, 'No Java info available', el => {
+        if (application.javaVersion) el.appendChild(kvRow('Version', application.javaVersion));
+        if (application.javaVendor) el.appendChild(kvRow('Vendor', application.javaVendor));
+    });
 }
 
 function renderOsInfo(container, runtime) {
-    const el = container.querySelector('#os-info');
-    el.innerHTML = '';
-
     const os = runtime?.os;
     const process = runtime?.process;
 
-    if (!os && !process) {
-        el.innerHTML = '<p class="pk-empty">No system info available</p>';
-        return;
-    }
-
-    if (os) {
-        if (os.name) el.appendChild(kvRow('OS', `${os.name} ${os.version || ''}`));
-        if (os.arch) el.appendChild(kvRow('Architecture', os.arch));
-    }
-
-    if (process) {
-        let userDisplay = process.username || '';
-        if (process.uid != null) userDisplay += ` (uid=${process.uid}, gid=${process.gid})`;
-        el.appendChild(kvRow('User', userDisplay));
-        el.appendChild(kvRow('PID', process.pid, {mono: true}));
-
-        if (process.parentProcesses && process.parentProcesses.length > 0) {
-            const tree = process.parentProcesses
-                .map(p => p.command ? `${p.command}(${p.pid})` : String(p.pid))
-                .reverse()
-                .join(' → ');
-            el.appendChild(kvRow('Process Tree', tree, {mono: true}));
+    fillCard(container, '#os-info', os || process ? {os, process} : null, 'No system info available', el => {
+        if (os) {
+            if (os.name) el.appendChild(kvRow('OS', `${os.name} ${os.version || ''}`));
+            if (os.arch) el.appendChild(kvRow('Architecture', os.arch));
         }
-    }
+
+        if (process) {
+            let userDisplay = process.username || '';
+            if (process.uid != null) userDisplay += ` (uid=${process.uid}, gid=${process.gid})`;
+            el.appendChild(kvRow('User', userDisplay));
+            el.appendChild(kvRow('PID', process.pid, {mono: true}));
+
+            if (process.parentProcesses && process.parentProcesses.length > 0) {
+                const tree = process.parentProcesses
+                    .map(p => p.command ? `${p.command}(${p.pid})` : String(p.pid))
+                    .reverse()
+                    .join(' → ');
+                el.appendChild(kvRow('Process Tree', tree, {mono: true}));
+            }
+        }
+    });
 }
 
 /**
@@ -200,7 +185,7 @@ function renderMachineInfo(container, runtime) {
 
     const machine = runtime?.machine;
     if (!machine) {
-        el.innerHTML = '<p class="pk-empty">No machine info available</p>';
+        el.appendChild(emptyState('No machine info available'));
         return;
     }
 
@@ -288,27 +273,21 @@ function cpuCoresValue(machine) {
 }
 
 function renderJvmDefaults(container, server, {locale, timeZone}) {
-    const el = container.querySelector('#jvm-defaults-info');
-    el.innerHTML = '';
-
-    if (!server) {
-        el.innerHTML = '<p class="pk-empty">No JVM defaults available</p>';
-        return;
-    }
-
-    if (server.locale) {
-        const localeDisplay = server.localeDisplay ? ` (${server.localeDisplay})` : '';
-        el.appendChild(kvRow('Locale', `${server.locale}${localeDisplay}`));
-    }
-    if (server.timezone) {
-        const tzDisplay = server.timezoneOffset ? ` (UTC${server.timezoneOffset})` : '';
-        el.appendChild(kvRow('Timezone', `${server.timezone}${tzDisplay}`));
-    }
-    if (server.currentTime) {
-        el.appendChild(kvRow('Server Time',
-            formatDateTime(server.currentTime, {locale, timeZone, dateStyle: 'medium', timeStyle: 'medium'})));
-    }
-    if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
+    fillCard(container, '#jvm-defaults-info', server, 'No JVM defaults available', el => {
+        if (server.locale) {
+            const localeDisplay = server.localeDisplay ? ` (${server.localeDisplay})` : '';
+            el.appendChild(kvRow('Locale', `${server.locale}${localeDisplay}`));
+        }
+        if (server.timezone) {
+            const tzDisplay = server.timezoneOffset ? ` (UTC${server.timezoneOffset})` : '';
+            el.appendChild(kvRow('Timezone', `${server.timezone}${tzDisplay}`));
+        }
+        if (server.currentTime) {
+            el.appendChild(kvRow('Server Time',
+                formatDateTime(server.currentTime, {locale, timeZone, dateStyle: 'medium', timeStyle: 'medium'})));
+        }
+        if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
+    });
 }
 
 /**
@@ -396,7 +375,7 @@ function renderMemoryInfo(container, runtime) {
     const storage = runtime?.storage;
 
     if (!memory && (!storage || storage.length === 0)) {
-        el.innerHTML = '<p class="pk-empty">No memory info available</p>';
+        el.appendChild(emptyState('No memory info available'));
         processInfo.textContent = '';
         return;
     }
@@ -450,7 +429,7 @@ function renderHealthBanner(container, health) {
     statusContainer.appendChild(pill);
 
     // classList, not className - a full reassignment would also wipe out the layout
-    // classes (pk-grid--full pk-section) the static markup put on #health-banner.
+    // class (pk-section) the static markup put on #health-banner.
     dot.classList.remove('pk-health__dot--down', 'pk-health__dot--unknown');
     banner.classList.remove('pk-health--down', 'pk-health--unknown');
     if (modifier) {
@@ -475,7 +454,7 @@ function renderHealthComponents(container, components) {
     grid.innerHTML = '';
 
     if (!components || components.length === 0) {
-        grid.innerHTML = '<p class="pk-empty">No health components available</p>';
+        grid.appendChild(emptyState('No health components available'));
         return;
     }
 

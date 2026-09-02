@@ -44,4 +44,19 @@ class ThemeTokenIT extends PlaywrightTestBase {
         assertThat(cssVar(":root", "--pk-success")).isEqualTo("#3fb950");
         assertThat(cssVar(":root", "--pk-warning")).isEqualTo("#d29922");
     }
+
+    /**
+     * Without color-scheme the UA paints scrollbars, the <select> popup, checkboxes and
+     * the text caret with its light palette on top of the dark page.
+     */
+    @Test
+    void nativeWidgetsFollowTheTheme() {
+        setStoredTheme("dark");
+        openDashboard();
+        assertThat(cssVar(":root", "color-scheme")).isEqualTo("dark");
+
+        setStoredTheme("light");
+        openDashboard();
+        assertThat(cssVar(":root", "color-scheme")).isEqualTo("light");
+    }
 }

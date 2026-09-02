@@ -3,6 +3,7 @@
  * restrictable to loggers with an explicit configured level.
  */
 import {badge} from '../../shared/components.js';
+import {formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
 import {logLevelVariant} from '../../shared/severity.js';
@@ -22,7 +23,7 @@ const tab = filteredGroupTab({
     key: group => group.packageName,
     header: (group, query) => ({
         name: group.packageName,
-        count: `${group.loggers.length} loggers`,
+        count: formatCount(group.loggers.length, 'logger'),
         highlight: query
     }),
     items: (group, list, query) => group.loggers.forEach(logger =>
@@ -86,8 +87,10 @@ function reconcileWithUrl(input, container, context) {
     });
 }
 
-/** Writes the current filter/configured-only state back to the URL, omitting each key
-    that's at its default so a clean filter yields a clean "#loggers" hash. */
+/**
+ * Writes the current filter/configured-only state back to the URL, omitting each key
+ * that's at its default so a clean filter yields a clean "#loggers" hash.
+ */
 function writeUrlParams(input, container, context) {
     const params = {};
     const value = input?.value.trim();

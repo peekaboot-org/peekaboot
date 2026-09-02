@@ -21,8 +21,8 @@ META-INF/peekaboot/ui/
 │                    shadow-styles.js, span-names.js, storage.js, theme.js, trace-stats.js,
 │                    unmask-control.js, url-filter.js, url-state.js
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (10 tabs, plus the
-│                    Insights tab's own insights-chart.js, insights-markers.js and
-│                    insights-colors.js)
+│                    Insights tab's own insights-store.js, insights-chart.js,
+│                    insights-markers.js and insights-colors.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/ — the only third-party code, loaded on demand (see below)
@@ -67,6 +67,12 @@ element these same `<link>` tags are loaded into. The identical file therefore w
 unmodified whether it's linked into `dashboard/index.html`'s `<head>` or into the
 toolbar's or overlay's shadow root — no surface-specific variant, no build step to
 generate one.
+
+The one place the two differ on purpose is the type scale: `:root` keeps it in `rem`,
+so the dashboard follows a reader's root-size preference, while a `:host` block pins
+the same sizes in `px`. `rem` always resolves against the *host document's* root font
+size, and the toolbar and overlay live in pages Peekaboot does not own — a host with
+the common `html { font-size: 62.5% }` reset would otherwise render the bar at 7.5px.
 
 ## The icon set
 
@@ -114,7 +120,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | Module | Exports |
 |---|---|
 | `api.js` | `createClient({basePath})` — fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH` — the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
-| `components.js` | `badge`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip` — the JS builders behind the `.pk-*` primitives. |
+| `components.js` | `badge`, `badgeHtml`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `emptyState`, `emptyStateHtml`, `loadingBlock` — the JS builders behind the `.pk-*` primitives; the `*Html` variants serve the surfaces that build their markup as strings. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). |
 | `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables` — the click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
 | `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})` — the shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js`, `loggers.js` and `meters.js` are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`) — called only while the tab is active, with loading/error states handled by the shell. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
@@ -126,10 +132,10 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)` — links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)` — spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
 | `storage.js` | `readSetting`, `writeSetting` — guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
-| `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
+| `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
 | `trace-stats.js` | `traceStatParts(trace, features)` — a trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
-| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair, insights.js for its level/percentiles/restarts/panels params and lifecycle.js for its page). |
+| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair, traces.js for bucket/type/op, insights.js for its level/percentiles/restarts/panels params and lifecycle.js for its page). |
 
 ## URL state (deep links)
 
@@ -159,9 +165,10 @@ hand-edited bare hash must).
 
 Theme, locale and timezone are per-browser settings (`localStorage`), never URL
 state — a shared link must not impose the sender's display preferences on the
-reader. An invalid param value (an unknown bucket, level, log level, page, checkbox flag or
-panel override) falls
-back to its default instead of reaching the backend or filtering invisibly.
+reader. An invalid param value (an unknown bucket, root action type, level, log level,
+page, checkbox flag or panel override) falls back to its default instead of reaching the
+backend or filtering invisibly, and the URL is rewritten to the state that actually
+restored (a lower-case `type` is folded the way the backend folds it).
 
 ### Cross-links in the trace overlay
 
@@ -182,7 +189,7 @@ Every number the frontend colours a duration by comes from the backend, once, ov
 VERY_SLOW at), `slowQueryThresholdMs` (SLOW_QUERY) and `slowTraceThresholdMs`
 (`peekaboot.tracing.slow-trace-threshold-ms`, the Slow bucket's admission threshold; `null`
 while tracing is off). The dashboard hands its `features` to every tab and to the overlay it
-opens (`open(traceId, {locale, timeZone, features})`); `severity.js`'s `DEFAULT_THRESHOLDS`
+opens (`openTraceDetail(traceId, {locale, timeZone, features})`); `severity.js`'s `DEFAULT_THRESHOLDS`
 mirrors the backend defaults, keyed by the same names, for the one path that has no
 features in hand — the dev toolbar, which never fetches them, and the overlay it opens.
 `SharedModuleIT` pins the defaults to the backend properties' defaults.
@@ -238,9 +245,9 @@ one blocked or 404'd stylesheet can never leave the host permanently invisible.
 - `attachSharedStyles` must be called **exactly once per shadow root**. It doesn't guard
   against re-entry: a second call appends a second set of `<link>` elements rather than
   replacing the first. Its one remaining call site makes this safe by construction —
-  `trace-detail.js`'s `open()` always calls `close()` (which removes the whole host
-  element) before creating a new host and shadow root — but a future call site needs the
-  same discipline.
+  `trace-detail.js`'s `openTraceDetail()` always calls `closeTraceDetail()` (which
+  removes the whole host element) before creating a new host and shadow root — but a
+  future call site needs the same discipline.
 
 ## Theme resolution
 
@@ -253,6 +260,12 @@ whatever the dashboard's theme toggle last wrote, with no message-passing needed
 `watchTheme(callback)` keeps a surface in sync afterwards: it listens for both the OS
 preference changing and another tab/surface writing the storage key, and returns an
 unsubscribe function.
+
+The dashboard stamps `data-theme` once more, before any of this: an inline script at
+the top of `index.html`'s `<head>` performs the same resolution (same storage key, same
+OS fallback) before the stylesheets apply, because `main.js` is a module script and so
+runs after first paint — without it a dark-theme reader saw the light palette flash on
+every load. It is the one piece of theme logic `theme.js` does not own.
 
 `applyTheme(target, theme)` just does `target.setAttribute('data-theme', theme)`. The
 dashboard applies it to `document.documentElement`; the toolbar and overlay apply it to
@@ -384,9 +397,14 @@ hadn't reached the `TraceStore` yet.
    - `export const id = '<id>';`
    - `export const label = 'Display Name';`
    - `export function render(container, data, context) { ... }` — `context` is
-     `{client, locale, timeZone, navigate, features, unmaskRequested, toggleUnmask,
-     urlParams, urlIsAuthoritative, setUrlParams, traceUrlState}`, built by `main.js`'s
+     `{client, locale, timeZone, navigate, openTrace, features, active, unmaskRequested,
+     toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`, built by `main.js`'s
      `currentContext()`:
+     - `active` — whether the tab being rendered is the visible one. Every tab is
+       rendered on the 30s cycle whichever is showing, so a tab only reconciles its
+       filter with `urlParams` (which reflect the URL's tab, not this one) and only
+       fetches its own data while `active`; `main.js` renders it again the moment it
+       is switched to.
      - `unmaskRequested` / `toggleUnmask()` — whether the current payload was fetched
        with real values instead of `"******"`, and the shared flip that re-fetches (see
        `shared/unmask-control.js`); one state for every tab, never persisted.
@@ -399,15 +417,16 @@ hadn't reached the `TraceStore` yet.
        a detail segment (the trace overlay) is open, since the params slot then belongs to
        the overlay instead (see `shared/url-filter.js` and `traces.js`'s `reconcileWithUrl`
        for the two halves of that rule).
-     - `traceUrlState(traceId)` — builds the `{initial, update}` urlState object
-       `openTraceDetail` expects, so a trace opened via a tab's own click-to-open path gets
-       the same URL sync as one opened through a deep link.
+     - `openTrace(traceId)` — opens the trace overlay the way a `#traces/<id>` deep link
+       does (hash push, URL sync of the overlay's own tabs and filters, hash cleanup on
+       close), so a tab's click-to-open path cannot drift from the deep-link one.
    - optionally `export function isAvailable(data, features) { ... }` — gates whether the
      tab's strip button is shown at all (see `meters.js`/`traces.js` for real examples
      gating on a feature flag).
-   - optionally `export function applyFilter(payload) { ... }` — lets another tab jump
-     here with a pre-selected filter via `context.navigate(id, detail, payload)` (see
-     `traces.js`).
+   - optionally `export function applyFilter(payload, context) { ... }` — lets another
+     tab jump here with a pre-selected filter via `context.navigate(id, detail, payload)`
+     (see `traces.js`); the fresh `context` is the one the tab fetches with, since the
+     jump makes it the active tab without a render.
 
    A tab that is a filterable list of collapsible groups builds on
    `shared/filtered-group-tab.js` instead of hand-rolling the shell — see `config.js` for

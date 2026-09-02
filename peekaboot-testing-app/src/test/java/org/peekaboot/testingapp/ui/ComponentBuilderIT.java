@@ -255,4 +255,28 @@ class ComponentBuilderIT extends PlaywrightTestBase {
 
         assertThat(result).isEqualTo("true|true");
     }
+
+    @Test
+    void tableBuildsAHeaderedTableInsideAScrollBox() {
+        assertThat(evalBuilders("""
+                const row = document.createElement('tr');
+                row.innerHTML = '<td>x</td>';
+                const scroll = m.table(['A', 'B'], [row], {className: 'pk-x'});
+                const headers = [...scroll.querySelectorAll('th')].map(th => th.scope + ':' + th.textContent).join(',');
+                return scroll.className + '|' + scroll.firstElementChild.className + '|' + headers
+                    + '|' + scroll.querySelectorAll('tbody tr').length;
+                """)).isEqualTo("pk-table-scroll|pk-table pk-x|col:A,col:B|1");
+    }
+
+    /** The string builders are the ones that reach innerHTML, so they escape like badge() does. */
+    @Test
+    void stringBuildersEscapeTheirText() {
+        assertThat(evalBuilders("return m.emptyStateHtml('<b>');")).isEqualTo("<p class=\"pk-empty\">&lt;b&gt;</p>");
+        assertThat(evalBuilders("return m.badgeHtml('<i>', 'ok');"))
+                .isEqualTo("<span class=\"pk-badge pk-badge--ok\">&lt;i&gt;</span>");
+        assertThat(evalBuilders("return m.emptyState('<b>').outerHTML;"))
+                .isEqualTo("<p class=\"pk-empty\">&lt;b&gt;</p>");
+        assertThat(evalBuilders("return m.loadingBlock('Loading x').outerHTML;"))
+                .isEqualTo("<div class=\"pk-loading\"><div class=\"pk-spinner\"></div><p>Loading x</p></div>");
+    }
 }

@@ -44,15 +44,21 @@ const STROKE_TOKENS = [
 ];
 
 let uplotReady = null;
+let stylesInjected = false;
 
 /** Resolves once window.uPlot is usable; injects the vendored script/stylesheet on first call. */
 export function ensureUplot() {
     if (window.uPlot) return Promise.resolve();
     if (!uplotReady) {
-        const styles = document.createElement('link');
-        styles.rel = 'stylesheet';
-        styles.href = UPLOT_STYLES.href;
-        document.head.appendChild(styles);
+        // its own flag: a failed script load resets uplotReady for a retry, and the retry
+        // must not append a second copy of the stylesheet
+        if (!stylesInjected) {
+            stylesInjected = true;
+            const styles = document.createElement('link');
+            styles.rel = 'stylesheet';
+            styles.href = UPLOT_STYLES.href;
+            document.head.appendChild(styles);
+        }
 
         uplotReady = new Promise((resolve, reject) => {
             const script = document.createElement('script');
@@ -110,21 +116,9 @@ function valueAxis(scale, unit, side, colors) {
  * panel series, a min/max band (a uPlot band between two stroke-less edge series)
  * with the average on top, plus p90/p95/p99 hairlines the caller toggles as a
  * group. Bars are a level-0 shape only - a bar cannot carry a min/max band, so an
- * aggregated bars/bars-line panel falls back to lines.
- *
- * A drag-selection on the x-axis calls back into {@code onZoom(min, max)} with the
- * selected window in uPlot's time scale (epoch seconds, the same unit on every
- * chart regardless of level - see toData/timestamps below) instead of zooming this
- * chart alone: the caller is the one that knows about every other panel and pins
- * them all to the same window. Native zoom-on-drag is therefore switched off
- * (cursor.drag.setScale: false) so this hook is the only thing that ever moves the
- * x scale. A double-click - uPlot's own built-in gesture for undoing a zoom -
- * likewise calls back into {@code onZoomReset()} rather than resetting just itself.
- *
- * Every actual x-scale change (zoom or reset, on this chart or broadcast in from
- * another one) is read back from uPlot's own setScale hook onto the panel's own
- * element as data-zoom-min/-max - the readback proves the scale really changed,
- * rather than just that the caller intended it to (see insights.js).
+ * aggregated bars/bars-line panel falls back to lines. Zooming is the caller's business
+ * (onZoom/onZoomReset - see the cursor and hook options below): it pins every panel to
+ * one window rather than this chart alone.
  *
  * A marker layer (insights-markers.js) is created fresh for every chart - it needs
  * the charted level's own interval (snapshot.intervalMs) to place a run's own start

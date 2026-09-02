@@ -42,6 +42,9 @@
     --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt, 5.27:1 on --pk-bg-hover */
     --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt, 4.91:1 on --pk-bg-hover */
     --pk-warning-text: #9a5e06; /* 5.28:1 on --pk-bg, 4.96:1 on --pk-bg-alt, 4.70:1 on --pk-bg-hover */
+    --pk-danger-tint: rgba(210, 31, 31, 0.04); /* --pk-danger at 4%: the error banner's wash */
+    --pk-mark-bg: #fef08a;      /* the search highlight; 15.2:1 under --pk-on-mark */
+    --pk-on-mark: #111827;
 
     --pk-space-xs: 4px;
     --pk-space-sm: 8px;
@@ -60,6 +63,21 @@
     --pk-radius-lg: 8px;
     --pk-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
     --pk-transition: 0.2s ease;
+
+    /* Native widgets - scrollbars, the <select> popup, checkboxes, the caret - follow
+       the theme instead of staying light on a dark page. */
+    color-scheme: light;
+}
+
+/* The toolbar and the overlay live inside pages Peekaboot does not own, where rem
+   follows the host's root font size (an html{font-size:62.5%} reset would shrink the
+   bar to 7.5px). The px values equal the rem scale at the 16px default; the dashboard's
+   own document keeps honouring a reader's root-size preference. */
+:host {
+    --pk-text-xs: 12px;
+    --pk-text-sm: 14px;
+    --pk-text-base: 16px;
+    --pk-text-lg: 18px;
 }
 
 [data-theme="dark"], :host([data-theme="dark"]) {
@@ -92,5 +110,9 @@
     --pk-info-text:    #38c6e8; /* 9.38:1 on --pk-bg */
     --pk-success-text: #3fb950; /* 7.45:1 on --pk-bg */
     --pk-warning-text: #d29922; /* 7.50:1 on dark --pk-bg */
+    --pk-danger-tint: rgba(248, 81, 73, 0.04);
+    --pk-mark-bg: #854d0e;      /* 6.4:1 under --pk-on-mark */
+    --pk-on-mark: #fef9c3;
     --pk-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    color-scheme: dark;
 }

@@ -136,4 +136,32 @@ class ThemeResolutionIT extends PlaywrightTestBase {
             """);
         assertThat(result).isEqualTo(0);
     }
+
+    /**
+     * A dark-theme reader would otherwise see the light palette painted first on every
+     * load: the module script that resolves the theme is deferred past first paint. The
+     * inline script in index.html's head stamps data-theme before the stylesheets apply.
+     * main.js is refused here (a real network failure), so whatever the attribute says
+     * was set by that script alone.
+     */
+    @Test
+    void storedThemeIsStampedBeforeTheModuleScriptRuns() {
+        setStoredTheme("dark");
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        page.route("**/dashboard/main.js", route -> route.abort());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+    }
+
+    @Test
+    void osPreferenceIsStampedBeforeTheModuleScriptRunsWhenNothingIsStored() {
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        page.route("**/dashboard/main.js", route -> route.abort());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+    }
 }
