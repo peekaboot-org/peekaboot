@@ -13,16 +13,22 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.common.InstrumentationLibraryInfo;
 import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
 import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -40,12 +46,14 @@ class OtelSpanExporterTest {
 
     @BeforeEach
     void setUp() {
-        storage = new InMemoryTraceStore(100, 50);
+        storage = TraceStores.withDefaults();
         publishedEvents = new ArrayList<>();
         eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
                 publishedEvents.add(spanDataEvent);
                 storage.addSpan(spanDataEvent.spanData());
+            } else if (event instanceof TraceDiscardedEvent discarded) {
+                storage.discard(discarded.traceId());
             }
         };
         exporter = new OtelSpanExporter(eventPublisher, PeekabootPaths.defaults());
@@ -147,6 +155,54 @@ class OtelSpanExporterTest {
 
         assertThat(publishedEvents).isEmpty();
         assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /**
+     * Children export before their root, so the JDBC span of a {@code /actuator/health}
+     * probe is already stored when the root arrives without a path Peekaboot keeps;
+     * skipping that root discards what its trace has stored.
+     */
+    @Test
+    void skippingARootSpanDiscardsWhatItsTraceHasAlreadyStored() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData jdbcChild = testSpanBuilder(traceId, "0000000000000002", "connection", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .attributes(Attributes.of(AttributeKey.stringKey("jdbc.datasource.name"), "dataSource"))
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /actuator/health", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
+                .build();
+
+        exporter.export(List.of(jdbcChild));
+        assertThat(storage.getTrace(traceId)).isPresent();
+        exporter.export(List.of(root));
+
+        assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /** Only a root decides a trace's fate; a skipped span under some other root leaves the trace alone. */
+    @Test
+    void skippingAChildSpanLeavesTheRestOfItsTraceStored() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData peekabootCall = testSpanBuilder(
+                        traceId, "0000000000000002", "GET /peekaboot/api/features", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .build();
+
+        exporter.export(List.of(peekabootCall, root));
+
+        assertThat(storedSpans(traceId))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly(rootSpanId);
     }
 
     @Test
@@ -266,6 +322,48 @@ class OtelSpanExporterTest {
         assertThat(stored.errorClass()).isEqualTo("ERROR");
     }
 
+    /**
+     * Micrometer's OTel bridge records a thrown exception as an {@code exception} event and
+     * sets the status description to its message when it has one; the event is the only
+     * carrier of the exception class, and of the message when the throwable had none.
+     */
+    @Test
+    void takesTheErrorClassAndMessageFromTheRecordedExceptionWhenTheStatusHasNoDescription() {
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(new IllegalStateException("pool exhausted"));
+            span.setStatus(StatusCode.ERROR);
+        });
+
+        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(stored.errorMessage()).isEqualTo("pool exhausted");
+    }
+
+    @Test
+    void keepsTheStatusDescriptionAsTheMessageAndStillTakesTheClassFromTheRecordedException() {
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(new IllegalStateException("pool exhausted"));
+            span.setStatus(StatusCode.ERROR, "described by the app");
+        });
+
+        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(stored.errorMessage()).isEqualTo("described by the app");
+    }
+
+    /** Runs one span through the real SDK into the exporter; returns its trace id. */
+    private String exportThroughTheSdk(java.util.function.Consumer<io.opentelemetry.api.trace.Span> body) {
+        try (SdkTracerProvider provider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build()) {
+            io.opentelemetry.api.trace.Span span =
+                    provider.get("test").spanBuilder("op").startSpan();
+            body.accept(span);
+            span.end();
+            return span.getSpanContext().getTraceId();
+        }
+    }
+
     @Test
     void shouldExtractParentSpanIdWhenParentContextIsValid() {
         String traceId = "0123456789abcdef0123456789abcdef";
@@ -330,24 +428,17 @@ class OtelSpanExporterTest {
         assertThat(stored.events().getFirst().timestamp()).isEqualTo(eventInstant);
     }
 
-    @Test
-    void shouldMapSpanKindsToSpecificMicrometerKind() {
-        assertMappedKind(SpanKind.CLIENT, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", io.micrometer.tracing.Span.Kind.CLIENT);
-        assertMappedKind(SpanKind.SERVER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", io.micrometer.tracing.Span.Kind.SERVER);
-        assertMappedKind(
-                SpanKind.PRODUCER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", io.micrometer.tracing.Span.Kind.PRODUCER);
-        assertMappedKind(
-                SpanKind.CONSUMER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4", io.micrometer.tracing.Span.Kind.CONSUMER);
-    }
-
-    private void assertMappedKind(SpanKind otelKind, String traceId, io.micrometer.tracing.Span.Kind expected) {
+    /** Micrometer's Span.Kind has no INTERNAL; a null kind is what classifies a root as INTERNAL downstream. */
+    @ParameterizedTest
+    @CsvSource({"CLIENT, CLIENT", "SERVER, SERVER", "PRODUCER, PRODUCER", "CONSUMER, CONSUMER", "INTERNAL,"})
+    void mapsEachSpanKindToItsMicrometerKind(SpanKind otelKind, io.micrometer.tracing.Span.Kind expected) {
+        String traceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
         SpanData span =
                 testSpanBuilder(traceId, "0000000000000001", "op", otelKind).build();
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
-        assertThat(stored.kind()).isEqualTo(expected);
+        assertThat(storedSpan(traceId).kind()).isEqualTo(expected);
     }
 
     /**

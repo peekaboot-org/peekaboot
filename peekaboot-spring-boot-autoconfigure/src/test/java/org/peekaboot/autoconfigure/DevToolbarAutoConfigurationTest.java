@@ -387,7 +387,7 @@ class DevToolbarAutoConfigurationTest {
     static class MockTracingConfig {
         @Bean
         TraceStore traceStore() {
-            return new InMemoryTraceStore(100, 50);
+            return new InMemoryTraceStore(new PeekabootTracingProperties());
         }
 
         @Bean
@@ -409,7 +409,7 @@ class DevToolbarAutoConfigurationTest {
     static class TraceStoreOnlyConfig {
         @Bean
         TraceStore traceStore() {
-            return new InMemoryTraceStore(100, 50);
+            return new InMemoryTraceStore(new PeekabootTracingProperties());
         }
     }
 }

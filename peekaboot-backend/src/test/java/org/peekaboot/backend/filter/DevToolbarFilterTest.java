@@ -281,12 +281,6 @@ class DevToolbarFilterTest {
         assertThat(aborted.writeAttempts).isEqualTo(1);
     }
 
-    /** Jetty's EofException carries no message; it is recognised by class name, like Tomcat's. */
-    @Test
-    void aJettyEofExceptionIsAClientAbortToo() throws Exception {
-        assertHandledAsClientAbort(new org.eclipse.jetty.io.EofException());
-    }
-
     /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
     @Test
     void aBrokenPipeFromAnotherContainerIsAClientAbortToo() throws Exception {
@@ -302,6 +296,7 @@ class DevToolbarFilterTest {
         assertHandledAsClientAbort(new ClientAbortException());
     }
 
+    /** Jetty's EofException carries no message, so only its simple name can identify it. */
     @Test
     void anEofExceptionInAForeignPackageIsAClientAbortToo() throws Exception {
         assertHandledAsClientAbort(new EofException());

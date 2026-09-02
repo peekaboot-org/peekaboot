@@ -24,34 +24,13 @@ public class InMemoryTraceStore implements TraceStore {
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
 
-    /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
-    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace) {
-        this(maxTraces, maxSpansPerTrace, new PeekabootTracingProperties());
-    }
-
-    private InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, PeekabootTracingProperties defaults) {
-        this(
-                maxTraces,
-                maxSpansPerTrace,
-                defaults.getMaxErrorTraces(),
-                defaults.getMaxSlowTraces(),
-                defaults.getSlowTraceThresholdMs(),
-                defaults.getMaxLogsPerTrace());
-    }
-
-    public InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            int maxErrorTraces,
-            int maxSlowTraces,
-            long slowTraceThresholdMs,
-            int maxLogsPerTrace) {
-        this.maxSpansPerTrace = maxSpansPerTrace;
-        this.slowTraceThresholdMs = slowTraceThresholdMs;
-        this.maxLogsPerTrace = maxLogsPerTrace;
-        this.allTraces = boundedMap(maxTraces);
-        this.errorTraces = boundedMap(maxErrorTraces);
-        this.slowTraces = boundedMap(maxSlowTraces);
+    public InMemoryTraceStore(PeekabootTracingProperties properties) {
+        this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
+        this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
+        this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
+        this.allTraces = boundedMap(properties.getMaxTraces());
+        this.errorTraces = boundedMap(properties.getMaxErrorTraces());
+        this.slowTraces = boundedMap(properties.getMaxSlowTraces());
     }
 
     private static Map<String, TraceDataBundle> boundedMap(int maxEntries) {
@@ -85,15 +64,20 @@ public class InMemoryTraceStore implements TraceStore {
     public void setRequest(RequestCompletedEvent request) {
         TraceDataBundle bundle = resolveBundle(request.traceId());
         bundle.setRequest(request);
-        // the request event affects neither error nor slow membership under the
-        // current classification rules (those depend only on spans + logs), so no
-        // classify() call is needed here.
+        // request data never affects bucket membership
+    }
+
+    @Override
+    public void discard(String traceId) {
+        allTraces.remove(traceId);
+        errorTraces.remove(traceId);
+        slowTraces.remove(traceId);
     }
 
     /**
-     * Resolves the bundle for a trace id, reusing one retained by a bucket if the
-     * All bucket has already evicted it — avoids creating a diverging copy for
-     * late-arriving events.
+     * Resolves the bundle for a trace id, reusing one retained by a bucket if the All
+     * bucket has already evicted it - avoids creating a diverging copy for late-arriving
+     * events. Such a bucket-retained trace re-enters All, at the newest end, on that event.
      */
     private TraceDataBundle resolveBundle(String traceId) {
         return allTraces.computeIfAbsent(traceId, id -> {

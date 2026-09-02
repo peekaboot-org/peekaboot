@@ -137,6 +137,22 @@ class RequestCaptureFilterTest {
         assertThat(event.requestHeaders()).containsEntry("Content-Type", "application/json");
     }
 
+    /** A header sent more than once (Accept, or several Set-Cookie on the response) is captured whole. */
+    @Test
+    void shouldJoinTheValuesOfARepeatedHeader() throws Exception {
+        setupTraceContext("trace1");
+        request.addHeader("Accept", "text/html");
+        request.addHeader("Accept", "application/json");
+        response.addHeader("Vary", "Accept");
+        response.addHeader("Vary", "Cookie");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders()).containsEntry("Accept", "text/html, application/json");
+        assertThat(event.responseHeaders()).containsEntry("Vary", "Accept, Cookie");
+    }
+
     /**
      * Header masking goes through the engine's key-name rules rather than a fixed list,
      * so Proxy-Authorization - which carries a credential just as Authorization does - is
@@ -155,6 +171,7 @@ class RequestCaptureFilterTest {
     @Test
     void shouldCaptureQueryParameters() throws Exception {
         setupTraceContext("trace1");
+        request.setQueryString("page=1&size=10");
         request.setParameter("page", "1");
         request.setParameter("size", "10");
 
@@ -210,6 +227,37 @@ class RequestCaptureFilterTest {
         RequestCompletedEvent event = publishedEvent();
         assertThat(event.formParams()).containsEntry("username", List.of("alice"));
         assertThat(event.formParams()).containsEntry("password", List.of("******"));
+    }
+
+    /** Multipart fields reach getParameterMap() too; a parameter absent from the query string came from the body. */
+    @Test
+    void shouldReportMultipartFieldsAsFormParameters() throws Exception {
+        setupTraceContext("trace1");
+        request = get("/upload");
+        request.setMethod("POST");
+        request.setContentType("multipart/form-data; boundary=----peekaboot");
+        request.setParameter("title", "Quarterly report");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.formParams()).containsEntry("title", List.of("Quarterly report"));
+        assertThat(event.queryParams()).isEmpty();
+    }
+
+    @Test
+    void shouldReportPatchFormFieldsAsFormParameters() throws Exception {
+        setupTraceContext("trace1");
+        request = get("/persons/1");
+        request.setMethod("PATCH");
+        request.setContentType("application/x-www-form-urlencoded");
+        request.setParameter("firstName", "Bob");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.formParams()).containsEntry("firstName", List.of("Bob"));
+        assertThat(event.queryParams()).isEmpty();
     }
 
     @Test

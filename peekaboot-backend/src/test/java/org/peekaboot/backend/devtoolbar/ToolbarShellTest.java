@@ -87,7 +87,7 @@ class ToolbarShellTest {
     /**
      * Each sheet is inlined <em>and</em> linked. A host page whose CSP omits
      * {@code style-src 'unsafe-inline'} drops the inline copy - the toolbar survives such a
-     * page today only because toolbar.js builds its {@code <link>} elements through the
+     * page only because toolbar.js builds its {@code <link>} elements through the
      * CSSOM, which CSP does not govern, and losing that would regress every reader who has
      * no authorization gate at all. The link keeps them working; the inline copy keeps the
      * gated case working. Same bytes from the same file either way.

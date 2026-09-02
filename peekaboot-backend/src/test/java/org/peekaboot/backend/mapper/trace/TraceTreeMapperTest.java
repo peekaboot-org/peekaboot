@@ -29,43 +29,37 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldBuildTreeFromFlatSpans() {
-        // Given: A trace with root -> child1 -> grandchild, and root -> child2
-        var rootSpan = createSpan(
-                "trace1", "span-root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of("service.name", "api"));
-        var child1 = createSpan(
-                "trace1",
-                "span-child1",
-                "span-root",
-                "child1-op",
-                Span.Kind.CLIENT,
-                10,
-                40,
-                Map.of("service.name", "api"));
-        var child2 = createSpan(
-                "trace1",
-                "span-child2",
-                "span-root",
-                "child2-op",
-                Span.Kind.CLIENT,
-                50,
-                30,
-                Map.of("service.name", "api"));
-        var grandchild = createSpan(
-                "trace1",
-                "span-grandchild",
-                "span-child1",
-                "grandchild-op",
-                Span.Kind.CLIENT,
-                15,
-                20,
-                Map.of("service.name", "api"));
+        // A trace with root -> child1 -> grandchild, and root -> child2
+        var rootSpan = span("span-root")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("service.name", "api"))
+                .build();
+        var child1 = span("span-child1")
+                .parent("span-root")
+                .named("child1-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 40)
+                .tags(Map.of("service.name", "api"))
+                .build();
+        var child2 = span("span-child2")
+                .parent("span-root")
+                .named("child2-op")
+                .kind(Span.Kind.CLIENT)
+                .at(50, 30)
+                .tags(Map.of("service.name", "api"))
+                .build();
+        var grandchild = span("span-grandchild")
+                .parent("span-child1")
+                .named("grandchild-op")
+                .kind(Span.Kind.CLIENT)
+                .at(15, 20)
+                .tags(Map.of("service.name", "api"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan, child1, child2, grandchild));
-
-        // When
         TraceTree result = mapper.map(traceData, false);
-
-        // Then
         assertThat(result.traceId()).isEqualTo("trace1");
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("span-root");
@@ -86,10 +80,20 @@ class TraceTreeMapperTest {
     void map_shouldAttachOrphanSubtreesToRoot() {
         // Spans can arrive before their parent is exported; a subtree whose
         // parent is missing must not silently vanish from the tree.
-        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var orphan = createSpan("trace1", "orphan", "missing-parent", "orphan-op", Span.Kind.CLIENT, 10, 20, Map.of());
-        var orphanChild =
-                createSpan("trace1", "orphan-child", "orphan", "orphan-child-op", Span.Kind.CLIENT, 12, 5, Map.of());
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
+        var orphan = span("orphan")
+                .parent("missing-parent")
+                .named("orphan-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 20)
+                .build();
+        var orphanChild = span("orphan-child")
+                .parent("orphan")
+                .named("orphan-child-op")
+                .kind(Span.Kind.CLIENT)
+                .at(12, 5)
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, orphan, orphanChild));
 
@@ -106,8 +110,17 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldIdentifyRootSpanWithNullParentId() {
-        var rootSpan = createSpan("trace1", "root-id", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var childSpan = createSpan("trace1", "child-id", "root-id", "child-op", Span.Kind.CLIENT, 10, 50, Map.of());
+        var rootSpan = span("root-id")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
+        var childSpan = span("child-id")
+                .parent("root-id")
+                .named("child-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(childSpan, rootSpan)); // Intentionally reversed
 
@@ -120,34 +133,32 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldKeepTagsOnEachSpan() {
-        // Given: Parent span with two children, each with their own tags
-        var parent = createSpan(
-                "trace1", "parent", null, "parent-op", Span.Kind.SERVER, 0, 100, Map.of("service.name", "api"));
-        var child1 = createSpan(
-                "trace1",
-                "child1",
-                "parent",
-                "child1-op",
-                Span.Kind.CLIENT,
-                10,
-                30,
-                Map.of("db.system", "postgresql", "db.name", "mydb"));
-        var child2 = createSpan(
-                "trace1",
-                "child2",
-                "parent",
-                "child2-op",
-                Span.Kind.CLIENT,
-                50,
-                30,
-                Map.of("db.system", "postgresql", "db.name", "mydb"));
+        // Parent span with two children, each with their own tags
+        var parent = span("parent")
+                .named("parent-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("service.name", "api"))
+                .build();
+        var child1 = span("child1")
+                .parent("parent")
+                .named("child1-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 30)
+                .tags(Map.of("db.system", "postgresql", "db.name", "mydb"))
+                .build();
+        var child2 = span("child2")
+                .parent("parent")
+                .named("child2-op")
+                .kind(Span.Kind.CLIENT)
+                .at(50, 30)
+                .tags(Map.of("db.system", "postgresql", "db.name", "mydb"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(parent, child1, child2));
-
-        // When
         TraceTree result = mapper.map(traceData, false);
 
-        // Then: every span keeps its own tags
+        // every span keeps its own tags
         SpanNode parentNode = result.rootSpan();
         assertThat(parentNode.tags()).containsEntry("service.name", "api");
         assertThat(parentNode.tags()).doesNotContainKey("db.system");
@@ -161,15 +172,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldMaskASensitiveShapedTagValue() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "root-op",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.request.header.authorization", "Bearer abc123"));
+        var root = span("root")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.request.header.authorization", "Bearer abc123"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -180,15 +188,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldNotMaskOrdinaryTagsLikeHttpMethod() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "root-op",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.method", "GET", "http.status_code", "200"));
+        var root = span("root")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.method", "GET", "http.status_code", "200"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -200,15 +205,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldApplyValuePatternRulesToATagValueUnderAnInnocuousKey() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "root-op",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.url", "https://admin:hunter2@example.com/api"));
+        var root = span("root")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.url", "https://admin:hunter2@example.com/api"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -219,29 +221,37 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldCalculateTraceSummary() {
-        // Given: A trace with DB queries and HTTP calls
-        var root = createSpan(
-                "trace1", "root", null, "GET /api/users", Span.Kind.SERVER, 0, 200, Map.of("http.method", "GET"));
-        var dbQuery1 = createSpan(
-                "trace1", "db1", "root", "SELECT users", Span.Kind.CLIENT, 10, 50, Map.of("db.system", "postgresql"));
-        var dbQuery2 =
-                createSpan("trace1", "db2", "root", "SELECT roles", Span.Kind.CLIENT, 70, 30, Map.of("db.type", "sql"));
-        var httpCall = createSpan(
-                "trace1",
-                "http1",
-                "root",
-                "GET /external",
-                Span.Kind.CLIENT,
-                110,
-                60,
-                Map.of("http.url", "http://external.com"));
+        // A trace with DB queries and HTTP calls
+        var root = span("root")
+                .named("GET /api/users")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .tags(Map.of("http.method", "GET"))
+                .build();
+        var dbQuery1 = span("db1")
+                .parent("root")
+                .named("SELECT users")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .tags(Map.of("db.system", "postgresql"))
+                .build();
+        var dbQuery2 = span("db2")
+                .parent("root")
+                .named("SELECT roles")
+                .kind(Span.Kind.CLIENT)
+                .at(70, 30)
+                .tags(Map.of("db.type", "sql"))
+                .build();
+        var httpCall = span("http1")
+                .parent("root")
+                .named("GET /external")
+                .kind(Span.Kind.CLIENT)
+                .at(110, 60)
+                .tags(Map.of("http.url", "http://external.com"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, dbQuery1, dbQuery2, httpCall));
-
-        // When
         TraceTree result = mapper.map(traceData, false);
-
-        // Then
         assertThat(result.summary().spans().count()).isEqualTo(4);
         assertThat(result.summary().queries().count()).isEqualTo(2);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(80L); // 50 + 30
@@ -250,36 +260,39 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldCalculateTraceSummary_withJdbcQueryTags() {
-        // Given: A trace with datasource-proxy/Micrometer style jdbc.query tags
-        var root = createSpan(
-                "trace1", "root", null, "http get /", Span.Kind.SERVER, 0, 100, Map.of("http.method", "GET"));
-        var connection = createSpan(
-                "trace1",
-                "conn",
-                "root",
-                "connection",
-                Span.Kind.CLIENT,
-                10,
-                50,
-                Map.of("jdbc.datasource.name", "mydb"));
-        var query = createSpan(
-                "trace1",
-                "query",
-                "root",
-                "query",
-                Span.Kind.CLIENT,
-                20,
-                30,
-                Map.of("jdbc.query[0]", "SELECT * FROM users"));
-        var resultSet = createSpan(
-                "trace1", "rs", "root", "result-set", Span.Kind.CLIENT, 55, 5, Map.of("jdbc.row-count", "10"));
+        // A trace with datasource-proxy/Micrometer style jdbc.query tags
+        var root = span("root")
+                .named("http get /")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.method", "GET"))
+                .build();
+        var connection = span("conn")
+                .parent("root")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .tags(Map.of("jdbc.datasource.name", "mydb"))
+                .build();
+        var query = span("query")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(20, 30)
+                .tags(Map.of("jdbc.query[0]", "SELECT * FROM users"))
+                .build();
+        var resultSet = span("rs")
+                .parent("root")
+                .named("result-set")
+                .kind(Span.Kind.CLIENT)
+                .at(55, 5)
+                .tags(Map.of("jdbc.row-count", "10"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, connection, query, resultSet));
-
-        // When
         TraceTree result = mapper.map(traceData, false);
 
-        // Then: Only the query span with jdbc.query* tag should be counted, not connection or result-set
+        // Only the query span with jdbc.query* tag should be counted, not connection or result-set
         assertThat(result.summary().queries().count()).isEqualTo(1);
         assertThat(result.summary().queries().totalDurationMs()).isEqualTo(30L);
     }
@@ -291,42 +304,60 @@ class TraceTreeMapperTest {
      */
     @Test
     void map_countsExactlyTheSpansTheQueriesTabListsAndTheIssueDetectorInspects() {
-        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
-        var otelQuery = createSpan(
-                "trace1",
-                "q1",
-                "root",
-                "SELECT orders",
-                Span.Kind.CLIENT,
-                10,
-                20,
-                Map.of("db.query.text", "select * from orders", "db.system.name", "h2"));
-        var proxyQuery = createSpan(
-                "trace1",
-                "q2",
-                "root",
-                "query",
-                Span.Kind.CLIENT,
-                40,
-                20,
-                Map.of("jdbc.query[0]", "select * from lines"));
-        var untaggedStatement =
-                createSpan("trace1", "q3", "root", "SELECT users", Span.Kind.CLIENT, 70, 20, Map.of("db.system", "h2"));
-        var connection = createSpan(
-                "trace1",
-                "conn",
-                "root",
-                "connection",
-                Span.Kind.CLIENT,
-                5,
-                100,
-                Map.of("jdbc.datasource.name", "primary"));
-        var resultSet = createSpan(
-                "trace1", "rs", "root", "result-set", Span.Kind.CLIENT, 60, 5, Map.of("jdbc.row-count", "3"));
-        var serverWithDbTag = createSpan(
-                "trace1", "srv", "root", "handle", Span.Kind.SERVER, 90, 5, Map.of("db.statement", "SELECT 1"));
-        var httpCall = createSpan(
-                "trace1", "http", "root", "GET /ext", Span.Kind.CLIENT, 100, 50, Map.of("http.url", "http://x"));
+        var root = span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .build();
+        var otelQuery = span("q1")
+                .parent("root")
+                .named("SELECT orders")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 20)
+                .tags(Map.of("db.query.text", "select * from orders", "db.system.name", "h2"))
+                .build();
+        var proxyQuery = span("q2")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(40, 20)
+                .tags(Map.of("jdbc.query[0]", "select * from lines"))
+                .build();
+        var untaggedStatement = span("q3")
+                .parent("root")
+                .named("SELECT users")
+                .kind(Span.Kind.CLIENT)
+                .at(70, 20)
+                .tags(Map.of("db.system", "h2"))
+                .build();
+        var connection = span("conn")
+                .parent("root")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(5, 100)
+                .tags(Map.of("jdbc.datasource.name", "primary"))
+                .build();
+        var resultSet = span("rs")
+                .parent("root")
+                .named("result-set")
+                .kind(Span.Kind.CLIENT)
+                .at(60, 5)
+                .tags(Map.of("jdbc.row-count", "3"))
+                .build();
+        var serverWithDbTag = span("srv")
+                .parent("root")
+                .named("handle")
+                .kind(Span.Kind.SERVER)
+                .at(90, 5)
+                .tags(Map.of("db.statement", "SELECT 1"))
+                .build();
+        var httpCall = span("http")
+                .parent("root")
+                .named("GET /ext")
+                .kind(Span.Kind.CLIENT)
+                .at(100, 50)
+                .tags(Map.of("http.url", "http://x"))
+                .build();
         var traceData = TraceData.fromSpans(
                 "trace1",
                 List.of(
@@ -352,27 +383,32 @@ class TraceTreeMapperTest {
 
     @Test
     void map_putsTheMaskedStatementOnQuerySpansOnly() {
-        var root = createSpan("trace1", "root", null, "GET /orders", Span.Kind.SERVER, 0, 200, Map.of());
-        var query = createSpan(
-                "trace1",
-                "q1",
-                "root",
-                "query",
-                Span.Kind.CLIENT,
-                10,
-                20,
-                Map.of("db.query.text", "INSERT INTO hooks VALUES ('https://admin:hunter2@example.com/x')"));
-        var statementless =
-                createSpan("trace1", "q2", "root", "query", Span.Kind.CLIENT, 40, 20, Map.of("db.system", "h2"));
-        var connection = createSpan(
-                "trace1",
-                "conn",
-                "root",
-                "connection",
-                Span.Kind.CLIENT,
-                5,
-                100,
-                Map.of("jdbc.datasource.name", "primary"));
+        var root = span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .build();
+        var query = span("q1")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 20)
+                .tags(Map.of("db.query.text", "INSERT INTO hooks VALUES ('https://admin:hunter2@example.com/x')"))
+                .build();
+        var statementless = span("q2")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(40, 20)
+                .tags(Map.of("db.system", "h2"))
+                .build();
+        var connection = span("conn")
+                .parent("root")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(5, 100)
+                .tags(Map.of("jdbc.datasource.name", "primary"))
+                .build();
 
         TraceTree result =
                 mapper.map(TraceData.fromSpans("trace1", List.of(root, query, statementless, connection)), false);
@@ -388,18 +424,15 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldCountErrors() {
-        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var errorSpan = createSpanWithError(
-                "trace1",
-                "error",
-                "root",
-                "error-op",
-                Span.Kind.CLIENT,
-                10,
-                50,
-                Map.of(),
-                "Connection refused",
-                "java.net.ConnectException");
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
+        var errorSpan = span("error")
+                .parent("root")
+                .named("error-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .error("Connection refused", "java.net.ConnectException")
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, errorSpan));
 
@@ -414,18 +447,17 @@ class TraceTreeMapperTest {
     // failing request's URL back with a query-string API key attached.
     @Test
     void map_shouldMaskACredentialEmbeddedInTheSpanErrorMessage() {
-        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var errorSpan = createSpanWithError(
-                "trace1",
-                "error",
-                "root",
-                "error-op",
-                Span.Kind.CLIENT,
-                10,
-                50,
-                Map.of(),
-                "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
-                "org.springframework.web.client.HttpClientErrorException");
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
+        var errorSpan = span("error")
+                .parent("root")
+                .named("error-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .error(
+                        "HttpClientErrorException: 401 on GET \"https://api.x/v1?api_key=SECRET\"",
+                        "org.springframework.web.client.HttpClientErrorException")
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root, errorSpan));
 
@@ -437,7 +469,8 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldReturnOkStatusWhenNoErrors() {
-        var root = createSpan("trace1", "root", null, "root-op", Span.Kind.SERVER, 0, 100, Map.of());
+        var root =
+                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -448,7 +481,7 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldHandleEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
 
         TraceTree result = mapper.map(traceData, false);
 
@@ -462,8 +495,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldHandleSingleSpanTrace() {
-        var singleSpan = createSpan(
-                "trace1", "only-span", null, "single-op", Span.Kind.SERVER, 0, 100, Map.of("service.name", "api"));
+        var singleSpan = span("only-span")
+                .named("single-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("service.name", "api"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(singleSpan));
 
@@ -477,8 +514,12 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_defaultsTruncatedToFalseWhenOmitted() {
-        var singleSpan = createSpan("trace1", "only-span", null, "single-op", Span.Kind.SERVER, 0, 100, Map.of());
+    void map_reportsNotTruncatedWhenTheCallerSaysSo() {
+        var singleSpan = span("only-span")
+                .named("single-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
 
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)), false);
 
@@ -487,7 +528,11 @@ class TraceTreeMapperTest {
 
     @Test
     void map_carriesTheTruncatedFlagGivenByTheCaller() {
-        var singleSpan = createSpan("trace1", "only-span", null, "single-op", Span.Kind.SERVER, 0, 100, Map.of());
+        var singleSpan = span("only-span")
+                .named("single-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
 
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(singleSpan)), true);
 
@@ -496,7 +541,7 @@ class TraceTreeMapperTest {
 
     @Test
     void map_carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
 
         TraceTree result = mapper.map(traceData, true);
 
@@ -523,9 +568,14 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldSetSpanStatusBasedOnError() {
-        var okSpan = createSpan("trace1", "ok", null, "ok-op", Span.Kind.SERVER, 0, 100, Map.of());
-        var errorChild = createSpanWithError(
-                "trace1", "error", "ok", "error-op", Span.Kind.CLIENT, 10, 50, Map.of(), "Error", "Exception");
+        var okSpan = span("ok").named("ok-op").kind(Span.Kind.SERVER).at(0, 100).build();
+        var errorChild = span("error")
+                .parent("ok")
+                .named("error-op")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 50)
+                .error("Error", "Exception")
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(okSpan, errorChild));
 
@@ -537,15 +587,18 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldHandleOrphanSpans() {
-        // Given: A span whose parent doesn't exist in the trace (orphan)
-        var orphan = createSpan("trace1", "orphan", "missing-parent", "orphan-op", Span.Kind.CLIENT, 0, 50, Map.of());
+        // A span whose parent doesn't exist in the trace (orphan)
+        var orphan = span("orphan")
+                .parent("missing-parent")
+                .named("orphan-op")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 50)
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(orphan));
 
-        // When: The orphan should become a root
+        // The orphan should become a root
         TraceTree result = mapper.map(traceData, false);
-
-        // Then
         assertThat(result.rootSpan()).isNotNull();
         assertThat(result.rootSpan().spanId()).isEqualTo("orphan");
     }
@@ -568,7 +621,8 @@ class TraceTreeMapperTest {
     @MethodSource("rootActionTypeGrid")
     void map_shouldClassifyRootActionTypeFromKindAndTags(
             Span.Kind kind, Map<String, String> tags, RootActionType expected) {
-        var rootSpan = createSpan("trace1", "root", null, "root-op", kind, 0, 100, tags);
+        var rootSpan =
+                span("root").named("root-op").kind(kind).at(0, 100).tags(tags).build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -616,17 +670,13 @@ class TraceTreeMapperTest {
         // The shape Spring's DefaultScheduledTaskObservationConvention actually produces:
         // no Span.Kind (it isn't a Sender/Receiver-style context) plus the code.function/
         // code.namespace low-cardinality tag pair.
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "task orderReconciler.reconcileOrders",
-                null,
-                0,
-                100,
-                Map.of(
+        var rootSpan = span("root")
+                .named("task orderReconciler.reconcileOrders")
+                .at(0, 100)
+                .tags(Map.of(
                         "code.function", "reconcileOrders",
-                        "code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"));
+                        "code.namespace", "org.peekaboot.testingapp.order.OrderReconciler"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -640,7 +690,11 @@ class TraceTreeMapperTest {
         // A bean that merely happens to have "job" in its name must not be misclassified;
         // detection is tag-only. No scheduled-task tags -> falls through to the SERVER
         // default (HTTP_REQUEST), same as any other untagged SERVER-kind root span.
-        var rootSpan = createSpan("trace1", "root", null, "batch-job-processor", Span.Kind.SERVER, 0, 100, Map.of());
+        var rootSpan = span("root")
+                .named("batch-job-processor")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -653,8 +707,11 @@ class TraceTreeMapperTest {
     void map_shouldNotDetectScheduledJobFromPartialTagPair() {
         // Both code.function and code.namespace must be present; code.function alone is not
         // enough (it's a generic low-cardinality key other conventions could also set).
-        var rootSpan = createSpan(
-                "trace1", "root", null, "some-operation", null, 0, 100, Map.of("code.function", "reconcileOrders"));
+        var rootSpan = span("root")
+                .named("some-operation")
+                .at(0, 100)
+                .tags(Map.of("code.function", "reconcileOrders"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -670,17 +727,14 @@ class TraceTreeMapperTest {
         // are ordinary OTel source-code attributes any instrumentation may set, so on a
         // SERVER-kind span they say nothing about scheduling and must not outrank the
         // server default.
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "handle-request",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of(
+        var rootSpan = span("root")
+                .named("handle-request")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of(
                         "code.function", "handleRequest",
-                        "code.namespace", "org.peekaboot.testingapp.web.OrderController"));
+                        "code.namespace", "org.peekaboot.testingapp.web.OrderController"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(rootSpan));
 
@@ -691,15 +745,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldExtractRequestSummaryFromStandardTags() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "GET /api/users",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.method", "GET", "http.target", "/api/users", "http.status_code", "200"));
+        var root = span("root")
+                .named("GET /api/users")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.method", "GET", "http.target", "/api/users", "http.status_code", "200"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -713,15 +764,13 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldExtractRequestSummaryFromFallbackTags() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "POST /api/orders",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.request.method", "POST", "url.path", "/api/orders", "http.response.status_code", "201"));
+        var root = span("root")
+                .named("POST /api/orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of(
+                        "http.request.method", "POST", "url.path", "/api/orders", "http.response.status_code", "201"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -739,21 +788,18 @@ class TraceTreeMapperTest {
      */
     @Test
     void map_shouldExtractRequestSummaryFromSpringsDefaultObservationTags() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "http get /api/users/{id}",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of(
+        var root = span("root")
+                .named("http get /api/users/{id}")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of(
                         "method", "GET",
                         "uri", "/api/users/{id}",
                         "status", "200",
                         "outcome", "SUCCESS",
                         "exception", "none",
-                        "http.url", "/api/users/42"));
+                        "http.url", "/api/users/42"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -767,15 +813,12 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldTolerateMalformedStatusCodeInRequestSummary() {
-        var root = createSpan(
-                "trace1",
-                "root",
-                null,
-                "GET /api/users",
-                Span.Kind.SERVER,
-                0,
-                100,
-                Map.of("http.method", "GET", "http.status_code", "not-a-number"));
+        var root = span("root")
+                .named("GET /api/users")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.method", "GET", "http.status_code", "not-a-number"))
+                .build();
 
         var traceData = TraceData.fromSpans("trace1", List.of(root));
 
@@ -811,18 +854,15 @@ class TraceTreeMapperTest {
      */
     @Test
     void map_shouldClassifyAStandaloneConnectionSpanAsConnectionPool() {
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "connection",
-                Span.Kind.CLIENT,
-                0,
-                30,
-                Map.of(
+        var rootSpan = span("root")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tags(Map.of(
                         "jdbc.datasource.name", "dataSource",
                         "jdbc.datasource.pool", "HikariPool-1",
-                        "jdbc.datasource.driver", "org.h2.Driver"));
+                        "jdbc.datasource.driver", "org.h2.Driver"))
+                .build();
 
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
 
@@ -834,18 +874,15 @@ class TraceTreeMapperTest {
         // In a HikariCP app every datasource observation gets jdbc.datasource.* added
         // (HikariJdbcObservationFilter tags query contexts too) - db.* still marks this
         // root as real database work, not pool maintenance.
-        var rootSpan = createSpan(
-                "trace1",
-                "root",
-                null,
-                "query",
-                Span.Kind.CLIENT,
-                0,
-                30,
-                Map.of(
+        var rootSpan = span("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tags(Map.of(
                         "db.query.text", "SELECT 1",
                         "jdbc.datasource.name", "dataSource",
-                        "jdbc.datasource.pool", "HikariPool-1"));
+                        "jdbc.datasource.pool", "HikariPool-1"))
+                .build();
 
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
 
@@ -857,51 +894,14 @@ class TraceTreeMapperTest {
         // The name only counts together with the jdbc.datasource.* tags the
         // datasource-micrometer convention sets - a bare span that happens to share the
         // name says nothing about what started the trace.
-        var rootSpan = createSpan("trace1", "root", null, "connection", Span.Kind.CLIENT, 0, 30, Map.of());
+        var rootSpan = span("root")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .build();
 
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
-    }
-
-    private SpanData createSpan(
-            String traceId,
-            String spanId,
-            String parentId,
-            String name,
-            Span.Kind kind,
-            long startOffsetMs,
-            long durationMs,
-            Map<String, String> tags) {
-        return span(spanId)
-                .in(traceId)
-                .parent(parentId)
-                .named(name)
-                .kind(kind)
-                .at(startOffsetMs, durationMs)
-                .tags(tags)
-                .build();
-    }
-
-    private SpanData createSpanWithError(
-            String traceId,
-            String spanId,
-            String parentId,
-            String name,
-            Span.Kind kind,
-            long startOffsetMs,
-            long durationMs,
-            Map<String, String> tags,
-            String errorMessage,
-            String errorClass) {
-        return span(spanId)
-                .in(traceId)
-                .parent(parentId)
-                .named(name)
-                .kind(kind)
-                .at(startOffsetMs, durationMs)
-                .tags(tags)
-                .error(errorMessage, errorClass)
-                .build();
     }
 }

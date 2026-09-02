@@ -10,6 +10,7 @@ import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 
 class TraceStoreEventListenerTest {
 
@@ -55,9 +56,19 @@ class TraceStoreEventListenerTest {
     }
 
     @Test
+    void onTraceDiscarded_removesTheTraceFromTheStore() {
+        listener.onSpanData(new SpanDataEvent(span("span1").build()));
+
+        listener.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
+
+        assertThat(store.getTrace("trace1")).isEmpty();
+    }
+
+    @Test
     void nullEventsAreIgnored() {
         listener.onLogCaptured(null);
         listener.onRequestCompleted(null);
+        listener.onTraceDiscarded(null);
         assertThat(store.getTrace("trace1")).isEmpty();
     }
 }

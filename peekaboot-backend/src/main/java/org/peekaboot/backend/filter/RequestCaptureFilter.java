@@ -195,22 +195,19 @@ public class RequestCaptureFilter implements Filter {
 
         RequestCompletedEvent event = new RequestCompletedEvent(
                 traceId,
-                // Request
                 request.getMethod(),
                 request.getRequestURI(),
                 maskingEngine.maskQueryString(request.getQueryString()),
                 requestHeaders,
-                null, // requestBody - not captured yet
+                null, // request bodies are not captured
                 false, // requestBodyTruncated
                 controllerClass,
                 controllerMethod,
                 queryParams,
                 formParams,
-                List.of(), // uploadedFiles - not captured yet
-                // Response
+                List.of(), // uploads are not captured
                 response.getStatus(),
                 responseHeaders,
-                // Timing
                 durationMs);
 
         eventPublisher.publishEvent(event);
@@ -220,44 +217,39 @@ public class RequestCaptureFilter implements Filter {
     private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         Collections.list(request.getHeaderNames())
-                .forEach(name -> headers.put(name, maskingEngine.mask(name, request.getHeader(name))));
+                .forEach(name -> headers.put(
+                        name, maskingEngine.mask(name, String.join(", ", Collections.list(request.getHeaders(name))))));
         return headers;
     }
 
+    /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
     private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
         response.getHeaderNames()
-                .forEach(name -> headers.put(name, maskingEngine.mask(name, response.getHeader(name))));
+                .forEach(name ->
+                        headers.put(name, maskingEngine.mask(name, String.join(", ", response.getHeaders(name)))));
         return headers;
     }
 
     /**
-     * getParameterMap() merges query-string and form-body parameters; splits them
-     * using the actual query string.
+     * getParameterMap() merges query-string and body parameters (form-encoded and
+     * multipart alike); a parameter the query string does not carry came from the body.
      */
     private void splitParameters(
             HttpServletRequest request, Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
         Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
-        boolean formRequest = isFormRequest(request);
         request.getParameterMap().forEach((key, values) -> {
             if (values == null || values.length == 0) {
                 return;
             }
             List<String> maskedValues =
                     Arrays.stream(values).map(v -> maskingEngine.mask(key, v)).toList();
-            if (queryStringKeys.contains(key) || !formRequest) {
+            if (queryStringKeys.contains(key)) {
                 queryParams.put(key, maskedValues);
             } else {
                 formParams.put(key, maskedValues);
             }
         });
-    }
-
-    private static boolean isFormRequest(HttpServletRequest request) {
-        String contentType = request.getContentType();
-        return contentType != null
-                && contentType.contains("application/x-www-form-urlencoded")
-                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
     }
 
     private Set<String> parseQueryStringKeys(String queryString) {

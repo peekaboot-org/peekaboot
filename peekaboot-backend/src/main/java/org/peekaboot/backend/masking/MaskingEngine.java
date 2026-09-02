@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
 /**
  * Decides whether a value is sensitive and what its masked form looks like.
  *
- * <p>Two independent rule kinds, both from the design spec:
+ * <p>Two independent rule kinds:
  * <ul>
  *     <li><b>Key-name rules</b> - if the key (a property name, a header name, ...) names
  *     something structurally sensitive (a password, a token, ...), the whole value is
@@ -50,34 +50,14 @@ public final class MaskingEngine {
             .toList();
 
     /**
-     * True if {@code key} names something structurally sensitive - matched
-     * case-insensitively, anywhere in the key, on a separator boundary (dot, hyphen,
-     * underscore or a camelCase transition all count).
-     *
-     * <p>The key is tokenized two ways and a rule match on either is enough. The
-     * camelCase-aware tokenization ({@link #tokenize(String, boolean)} with splitting on)
-     * catches a genuine no-separator compound name ("clientSecret"). On its own it would
-     * also mis-split an inconsistently-cased spelling of a single-word rule -
-     * "PassWord" becomes ["pass", "word"], neither of which is "password" - because it
-     * cannot tell "a new word starts here" from "this word merely has a stray internal
-     * capital", and Spring's relaxed binding means the caller doesn't control how an
-     * external property source spells a key. The separator-only tokenization (splitting
-     * off) doesn't attempt that distinction at all: it lowercases first, so "PassWord"
-     * collapses to the single token "password" and matches directly. Both tokenizations
-     * still require an exact, whole-token match - never a substring - so this fallback
-     * doesn't reopen the over-matching a bare substring check would cause (e.g.
-     * "passwordless" staying a distinct token from "password" either way).
-     *
-     * <p>Three refinements sit on top of that token-anywhere check, in order:
-     * {@link MaskingRules#KEY_NAME_EXCEPTIONS} short-circuits a key spelled exactly,
-     * case included, like one of its entries to "not sensitive" even though it would
-     * otherwise match a rule word (see {@link MaskingRules} for why "PWD" needs this
-     * and neither "pwd" nor "db.pwd" does); then the
-     * ordinary {@link MaskingRules#KEY_NAME_RULES} match anywhere in the key,
-     * subsequence-style, same as always; then {@link MaskingRules#WHOLE_KEY_NAME_RULES}
-     * match only when the rule's tokens are the *entire* key, not merely present in it -
-     * "cookie" is sensitive as an HTTP header name but not as a token buried inside
-     * server.servlet.session.cookie.same-site.
+     * True if {@code key} names something structurally sensitive. Matched
+     * case-insensitively on whole tokens, never substrings, so "passwordless" stays
+     * distinct from "password". The key is tokenized twice (see {@link #tokenize}):
+     * camelCase-aware for "clientSecret", separator-only for an inconsistently cased
+     * "PassWord". Order: exact-spelling exceptions ({@link MaskingRules#KEY_NAME_EXCEPTIONS},
+     * "PWD"), then {@link MaskingRules#KEY_NAME_RULES} tokens anywhere in the key, then
+     * {@link MaskingRules#WHOLE_KEY_NAME_RULES} as the entire key ("cookie"), then
+     * {@link MaskingRules#SPRING_SANITIZER_KEY_PATTERNS}.
      */
     public boolean isSensitiveKey(String key) {
         if (key == null || key.isBlank()) {
@@ -86,11 +66,19 @@ public final class MaskingEngine {
         if (MaskingRules.KEY_NAME_EXCEPTIONS.contains(key)) {
             return false;
         }
+        return matchesKeyNameRules(key);
+    }
+
+    /**
+     * The key-name rules without the exact-spelling exceptions: those exempt a whole key
+     * such as the shell's PWD variable, not a parameter name found inside a value.
+     */
+    private static boolean matchesKeyNameRules(String key) {
         List<String> camelAwareTokens = tokenize(key, true);
         List<String> separatorOnlyTokens = tokenize(key, false);
         return matchesAnyRuleSubsequence(camelAwareTokens, separatorOnlyTokens)
                 || matchesAnyRuleExactly(WHOLE_KEY_NAME_TOKEN_RULES, camelAwareTokens, separatorOnlyTokens)
-                || matchesAnyLegacyPattern(key);
+                || matchesAnySanitizerPattern(key);
     }
 
     private static boolean matchesAnyRuleExactly(
@@ -113,9 +101,9 @@ public final class MaskingEngine {
         return false;
     }
 
-    private static boolean matchesAnyLegacyPattern(String key) {
-        for (Pattern legacyPattern : MaskingRules.LEGACY_KEY_PATTERNS) {
-            if (legacyPattern.matcher(key).find()) {
+    private static boolean matchesAnySanitizerPattern(String key) {
+        for (Pattern pattern : MaskingRules.SPRING_SANITIZER_KEY_PATTERNS) {
+            if (pattern.matcher(key).find()) {
                 return true;
             }
         }
@@ -139,14 +127,10 @@ public final class MaskingEngine {
     }
 
     /**
-     * Same as {@link #mask(String, String)}, except when {@code unmask} is true, in which
-     * case masking is bypassed entirely and {@code value} is returned verbatim. Exists so
-     * the controlled-unmasking decision - already made once, upstream, from
-     * {@code peekaboot.enable-unmasking} and the request's {@code unmask} parameter - can
-     * be threaded down to this call without re-deriving it here. {@code unmask} defaulting
-     * to {@code false} (Java's primitive default) means a caller that passes nothing masks,
-     * the same default-deny the two-arg {@link #mask(String, String)} already gives every
-     * caller that isn't part of the unmasking feature at all.
+     * Returns {@code value} verbatim when {@code unmask} is true. The decision is made once
+     * upstream ({@code peekaboot.enable-unmasking} and the request's {@code unmask}
+     * parameter, see {@code PeekabootController.resolveUnmask}) and threaded down; every
+     * other caller uses the two-arg overload and always masks.
      */
     public String mask(String key, String value, boolean unmask) {
         return unmask ? value : mask(key, value);
@@ -158,7 +142,8 @@ public final class MaskingEngine {
      * rest of the string without false positives/negatives. Each pair is decoded, masked
      * via the same {@link #mask(String, String)} rule as everywhere else, and re-encoded;
      * a bare flag with no "=" (e.g. "?debug") is passed through unchanged since it
-     * carries no value to mask.
+     * carries no value to mask. A pair whose percent-encoding cannot be decoded cannot be
+     * judged either, so its value is masked and the pair kept.
      */
     public String maskQueryString(String queryString) {
         if (queryString == null || queryString.isBlank()) {
@@ -176,12 +161,16 @@ public final class MaskingEngine {
                 result.append(pair);
                 continue;
             }
-            String key = URLDecoder.decode(pair.substring(0, equalsIndex), StandardCharsets.UTF_8);
-            String value = URLDecoder.decode(pair.substring(equalsIndex + 1), StandardCharsets.UTF_8);
-            String maskedValue = mask(key, value);
-            result.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
-                    .append('=')
-                    .append(URLEncoder.encode(maskedValue, StandardCharsets.UTF_8));
+            String rawKey = pair.substring(0, equalsIndex);
+            try {
+                String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
+                String value = URLDecoder.decode(pair.substring(equalsIndex + 1), StandardCharsets.UTF_8);
+                result.append(URLEncoder.encode(key, StandardCharsets.UTF_8))
+                        .append('=')
+                        .append(URLEncoder.encode(mask(key, value), StandardCharsets.UTF_8));
+            } catch (IllegalArgumentException malformedEncoding) {
+                result.append(rawKey).append('=').append(MaskingRules.MASK);
+            }
         }
         return result.toString();
     }
@@ -217,13 +206,13 @@ public final class MaskingEngine {
         return result.toString();
     }
 
-    /** Every [start, end) span of {@code value} some value rule wants masked, in rule order, unmerged. */
+    /** Every [start, end) span of {@code value} some value rule wants masked, unmerged. */
     private List<int[]> sensitiveSpans(String value) {
         List<int[]> spans = new ArrayList<>();
         for (MaskingRules.ValuePattern rule : MaskingRules.VALUE_PATTERNS) {
             Matcher matcher = rule.pattern().matcher(value);
             while (matcher.find()) {
-                if (rule.keyGroup() > 0 && !isSensitiveKey(matcher.group(rule.keyGroup()))) {
+                if (rule.keyGroup() > 0 && !matchesKeyNameRules(matcher.group(rule.keyGroup()))) {
                     continue;
                 }
                 int group = rule.maskGroup();

@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
+import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
 import java.time.Instant;
 import java.util.List;
@@ -11,12 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
-import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceLog;
-import org.peekaboot.backend.domain.trace.TraceStatus;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
@@ -101,11 +100,12 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldPreferErrorMessageFieldOverTag() {
-        // The exporter stores the error in SpanNode.errorMessage; it never
-        // writes an error.message tag
+        // The exporter stores the error in SpanNode.errorMessage and never writes an
+        // error.message tag; another instrumentation may, and the field still wins.
         SpanNode span = node("span1")
                 .durationMs(50)
                 .status(SpanStatus.ERROR)
+                .tags(Map.of("error.message", "from a tag"))
                 .error("Connection refused: db:5432", "java.net.ConnectException")
                 .build();
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 1));
@@ -384,20 +384,7 @@ class IssueDetectorTest {
 
     @Test
     void detectIssues_shouldHandleNullRootSpan() {
-        TraceTree trace = new TraceTree(
-                "trace1",
-                0,
-                0,
-                TraceStatus.OK,
-                false,
-                RootActionType.UNKNOWN,
-                null,
-                null,
-                createSummary(0, 0, 0L, 0),
-                null,
-                List.of(),
-                List.of(),
-                false);
+        TraceTree trace = tree(null).build();
 
         TraceTree result = detector.detectIssues(trace);
 
@@ -408,20 +395,7 @@ class IssueDetectorTest {
     void detectIssues_preservesTheTruncatedFlag() {
         // a trace the store marked truncated because the span cap dropped real spans
         SpanNode span = createSpan("span1", 50, SpanStatus.OK, Map.of(), List.of());
-        TraceTree trace = new TraceTree(
-                "trace-1",
-                0,
-                50,
-                TraceStatus.OK,
-                false,
-                RootActionType.UNKNOWN,
-                "test-op",
-                span,
-                createSummary(1, 0, 0L, 0),
-                null,
-                List.of(),
-                List.of(),
-                true);
+        TraceTree trace = tree(span).truncated(true).build();
 
         TraceTree result = detector.detectIssues(trace);
 
@@ -446,20 +420,7 @@ class IssueDetectorTest {
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceTabSummary summary) {
-        return new TraceTree(
-                "trace-1",
-                0,
-                rootSpan != null ? rootSpan.durationMs() : 0,
-                TraceStatus.OK,
-                false,
-                RootActionType.UNKNOWN,
-                rootSpan != null ? rootSpan.name() : null,
-                rootSpan,
-                summary,
-                null,
-                List.of(),
-                List.of(),
-                false);
+        return tree(rootSpan).summary(summary).build();
     }
 
     private TraceTabSummary createSummary(int spanCount, int queryCount, long queryDurationMs, int errorCount) {

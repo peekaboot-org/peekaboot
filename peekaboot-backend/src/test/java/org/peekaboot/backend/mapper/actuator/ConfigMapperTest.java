@@ -140,6 +140,34 @@ class ConfigMapperTest {
                 .containsExactly(tuple("credentials", "******"));
     }
 
+    /**
+     * {@code server.servlet.session.cookie.*} is configuration, not a secret: the whole-key
+     * cookie rule must not collapse it, however deep the tree nests it.
+     */
+    @Test
+    void map_shouldKeepSessionCookieConfigurationVisible() {
+        Map<String, Object> cookie = new LinkedHashMap<>();
+        cookie.put("name", "JSESSIONID");
+        cookie.put("sameSite", "Lax");
+        Map<String, Object> servlet = Map.of("session", Map.of("cookie", cookie));
+
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of(
+                                "server-ServerProperties",
+                                new ConfigPropsResponse.ConfigBean("server", Map.of("servlet", servlet))),
+                        null)));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(
+                        tuple("servlet.session.cookie.name", "JSESSIONID"),
+                        tuple("servlet.session.cookie.sameSite", "Lax"));
+    }
+
     /** List elements are indexed the way Spring's own property syntax writes them. */
     @Test
     void map_shouldIndexListElementsLikeSpringPropertyKeys() {

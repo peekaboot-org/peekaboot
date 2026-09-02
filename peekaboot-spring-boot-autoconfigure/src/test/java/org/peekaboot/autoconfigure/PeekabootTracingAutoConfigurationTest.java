@@ -118,9 +118,6 @@ class PeekabootTracingAutoConfigurationTest {
                             null,
                             null,
                             null,
-                            null,
-                            null,
-                            List.of(),
                             1L));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
@@ -215,7 +212,7 @@ class PeekabootTracingAutoConfigurationTest {
             // context-relative MVC patterns, so a server.servlet.context-path changes nothing here
             assertThat(mapped.getExcludePathPatterns())
                     .containsExactlyInAnyOrder(
-                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**", "/error");
+                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**");
         });
     }
 

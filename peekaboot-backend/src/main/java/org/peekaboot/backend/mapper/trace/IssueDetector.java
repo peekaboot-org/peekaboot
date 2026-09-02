@@ -47,7 +47,6 @@ public class IssueDetector {
     private SpanNode processSpan(SpanNode span, boolean isRoot, int traceDbQueryCount) {
         List<SpanIssue> issues = new ArrayList<>();
 
-        // Check for VERY_SLOW (before SLOW so we don't add both)
         if (span.durationMs() >= properties.getVerySlowSpanThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.VERY_SLOW,
@@ -56,7 +55,6 @@ public class IssueDetector {
                             span.durationMs(), properties.getVerySlowSpanThresholdMs()),
                     IssueSeverity.ERROR));
         } else if (span.durationMs() >= properties.getSlowSpanThresholdMs()) {
-            // Check for SLOW (only if not VERY_SLOW)
             issues.add(new SpanIssue(
                     IssueType.SLOW,
                     String.format(
@@ -64,12 +62,10 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        // Check for ERROR
         if (span.status() == SpanStatus.ERROR) {
             issues.add(new SpanIssue(IssueType.ERROR, getErrorMessage(span), IssueSeverity.ERROR));
         }
 
-        // Check for SLOW_QUERY (if DB query span)
         if (DbSpans.isQuery(span) && span.durationMs() >= properties.getSlowQueryThresholdMs()) {
             issues.add(new SpanIssue(
                     IssueType.SLOW_QUERY,
@@ -79,7 +75,6 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        // Check for HIGH_QUERY_COUNT on trace level (only on root span)
         if (isRoot && traceDbQueryCount > properties.getHighTraceQueryCountThreshold()) {
             issues.add(new SpanIssue(
                     IssueType.HIGH_QUERY_COUNT,
@@ -89,7 +84,6 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        // Check for HIGH_QUERY_COUNT per span (many direct query children)
         long directQueryChildren =
                 span.children().stream().filter(DbSpans::isQuery).count();
         if (directQueryChildren > properties.getHighQueryCountThreshold()) {
@@ -101,7 +95,6 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        // Recursively process children
         List<SpanNode> processedChildren = span.children().stream()
                 .map(child -> processSpan(child, false, traceDbQueryCount))
                 .toList();

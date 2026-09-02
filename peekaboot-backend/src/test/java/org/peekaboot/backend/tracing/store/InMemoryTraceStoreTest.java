@@ -12,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
-import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 
 class InMemoryTraceStoreTest {
@@ -23,7 +22,7 @@ class InMemoryTraceStoreTest {
 
     @BeforeEach
     void setUp() {
-        storage = new InMemoryTraceStore(100, 50);
+        storage = TraceStores.withDefaults();
     }
 
     @Test
@@ -79,7 +78,7 @@ class InMemoryTraceStoreTest {
     void duplicateArtifactsPushingRawArrivalsPastTheCapDoNotTruncate() {
         // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
         // would overflow a cap enforced before deduplication but not one enforced after.
-        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2);
+        InMemoryTraceStore capped = TraceStores.with(p -> p.setMaxSpansPerTrace(2));
         SpanData root = span("root").in("t1").named("GET /orders").build();
         SpanData duplicate =
                 jdbcDuplicate("dup1", "query1", "SELECT 1").in("t1").build();
@@ -97,7 +96,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void theBundleIsMarkedTruncatedOnceRealSpansExceedTheCap() {
-        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2);
+        InMemoryTraceStore capped = TraceStores.with(p -> p.setMaxSpansPerTrace(2));
         for (int i = 1; i <= 3; i++) {
             capped.addSpan(span("s" + i).in("t1").named("op" + i).build());
         }
@@ -116,7 +115,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void errorSpanClassifiesTraceIntoErrorBucket() {
-        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(errorSpan("t1"));
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -195,7 +194,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void classificationIsIdempotent() {
-        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(errorSpan("t1"));
         storage.addSpan(
                 span("s2").in("t1").error("boom", "java.lang.RuntimeException").build());
         storage.addLog(log("t1", "ERROR", "boom"));
@@ -224,7 +223,7 @@ class InMemoryTraceStoreTest {
     @Test
     void getTracesErrorsBucketRespectsLimit() {
         for (int i = 0; i < 5; i++) {
-            storage.addSpan(errorSpan(storage, "trace-" + i));
+            storage.addSpan(errorSpan("trace-" + i));
         }
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 3)).hasSize(3);
@@ -232,7 +231,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void getTraceCountPerBucket() {
-        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(errorSpan("t1"));
         storage.addSpan(spanIn("t2", "s2"));
 
         assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(2);
@@ -242,15 +241,30 @@ class InMemoryTraceStoreTest {
 
     @Test
     void lastNEvictionDropsOldestErrorTrace() {
-        InMemoryTraceStore store = TraceStores.with(p -> {
-            p.setMaxErrorTraces(2);
-            p.setMaxSlowTraces(2);
-        });
-        store.addSpan(errorSpan(store, "t1"));
-        store.addSpan(errorSpan(store, "t2"));
-        store.addSpan(errorSpan(store, "t3"));
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxErrorTraces(2));
+        store.addSpan(errorSpan("t1"));
+        store.addSpan(errorSpan("t2"));
+        store.addSpan(errorSpan("t3"));
 
         assertThat(store.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t3", "t2");
+    }
+
+    @Test
+    void lastNEvictionDropsOldestSlowTrace() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxSlowTraces(2);
+            p.setSlowTraceThresholdMs(100);
+        });
+        for (String traceId : List.of("t1", "t2", "t3")) {
+            store.addSpan(span(traceId + "-s")
+                    .in(traceId)
+                    .at(START, Duration.ofMillis(150))
+                    .build());
+        }
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .extracting(TraceDataBundle::traceId)
                 .containsExactly("t3", "t2");
     }
@@ -271,7 +285,7 @@ class InMemoryTraceStoreTest {
     @Test
     void errorTraceSurvivesAllBucketEviction() {
         InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(1));
-        store.addSpan(errorSpan(store, "t1"));
+        store.addSpan(errorSpan("t1"));
         store.addSpan(spanIn("t2", "s2"));
 
         assertThat(store.getTraces(TraceBucket.ALL, 10))
@@ -284,7 +298,7 @@ class InMemoryTraceStoreTest {
     @Test
     void lateEventAfterAllBucketEvictionReusesBucketBundle() {
         InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(1));
-        store.addSpan(errorSpan(store, "t1"));
+        store.addSpan(errorSpan("t1"));
         store.addSpan(spanIn("t2", "s2"));
 
         store.addLog(log("t1", "INFO", "late"));
@@ -296,8 +310,35 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
+    void discardRemovesTheTraceFromEveryBucket() {
+        InMemoryTraceStore store = storeWithSlowThreshold(100);
+        store.addSpan(span("s1")
+                .in("t1")
+                .at(START, Duration.ofMillis(150))
+                .error("boom", "java.lang.RuntimeException")
+                .build());
+        store.addLog(log("t1", "INFO", "probe"));
+
+        store.discard("t1");
+
+        assertThat(store.getTrace("t1")).isEmpty();
+        assertThat(store.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(store.getTraceCount(TraceBucket.ERRORS)).isZero();
+        assertThat(store.getTraceCount(TraceBucket.SLOW)).isZero();
+    }
+
+    @Test
+    void discardingAnUnknownTraceChangesNothing() {
+        storage.addSpan(spanIn("t1", "s1"));
+
+        storage.discard("unknown");
+
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(1);
+    }
+
+    @Test
     void clearEmptiesAllBuckets() {
-        storage.addSpan(errorSpan(storage, "t1"));
+        storage.addSpan(errorSpan("t1"));
         storage.clear();
 
         assertThat(storage.getTraceCount(TraceBucket.ALL)).isZero();
@@ -316,35 +357,6 @@ class InMemoryTraceStoreTest {
         var bundle = store.getTrace("t1");
         assertThat(bundle).isPresent();
         assertThat(bundle.get().logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
-    }
-
-    /**
-     * The two-argument constructor - the one the autoconfigure and testing-app fixtures
-     * use - takes every limit it is not given from {@link PeekabootTracingProperties}, so
-     * those defaults have exactly one owner. Checked through behaviour at the two limits a
-     * test can reach cheaply: the slow-trace threshold and the per-trace log cap.
-     */
-    @Test
-    void twoArgumentConstructorTakesTheRemainingLimitsFromTheTracingPropertiesDefaults() {
-        PeekabootTracingProperties defaults = new PeekabootTracingProperties();
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50);
-        long threshold = defaults.getSlowTraceThresholdMs();
-        store.addSpan(span("s1")
-                .in("just-under")
-                .at(START, Duration.ofMillis(threshold - 1))
-                .build());
-        store.addSpan(span("s2")
-                .in("at-threshold")
-                .at(START, Duration.ofMillis(threshold))
-                .build());
-        for (int i = 0; i <= defaults.getMaxLogsPerTrace(); i++) {
-            store.addLog(log("logged", "INFO", "log" + i));
-        }
-
-        assertThat(store.getTraces(TraceBucket.SLOW, 10))
-                .extracting(TraceDataBundle::traceId)
-                .containsExactly("at-threshold");
-        assertThat(store.getTrace("logged").orElseThrow().logs()).hasSize(defaults.getMaxLogsPerTrace());
     }
 
     @Test
@@ -366,7 +378,7 @@ class InMemoryTraceStoreTest {
         return span(spanId).in(traceId).at(START, Duration.ofMillis(100)).build();
     }
 
-    private static SpanData errorSpan(InMemoryTraceStore store, String traceId) {
+    private static SpanData errorSpan(String traceId) {
         return span(traceId + "-s")
                 .in(traceId)
                 .error("boom", "java.lang.RuntimeException")

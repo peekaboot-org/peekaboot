@@ -5,9 +5,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Decides whether two spans are the same JDBC call captured twice - Peekaboot's JDBC
- * instrumentation double-emits a span for every call, nested one under the other, differing
- * only in which service-identifier tag carries the real datasource name. Used by
+ * Decides whether two spans are the same JDBC call captured twice - a host with two
+ * datasource decorators emits a span per decorator for every call, nested one under the
+ * other, differing only in which service-identifier tag carries the real datasource name. Used by
  * {@link TraceDataBundle}, which folds duplicates away incrementally as spans are written.
  */
 public final class SpanDuplicateMatcher {

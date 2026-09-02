@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,9 @@ public final class PeekabootActuatorService {
     private final WebEndpointDiscoverer discoverer;
     private final ObjectProvider<HealthEndpoint> healthEndpoint;
 
+    /** Endpoints whose failure was reported at WARN; their later failures log at DEBUG. */
+    private final Set<String> reportedFailures = ConcurrentHashMap.newKeySet();
+
     public PeekabootActuatorService(
             ApplicationContext context,
             ObjectProvider<HealthEndpoint> healthEndpoint,
@@ -63,15 +67,16 @@ public final class PeekabootActuatorService {
                 additionalPathsMappers.orderedStream().toList(),
                 advisors.orderedStream().toList(),
                 List.of(), // Empty endpoint filters = no exposure filtering
-                List.of() // Empty operation filters
-                );
+                List.of());
         this.healthEndpoint = healthEndpoint;
     }
 
     /**
      * Invokes each insights endpoint's root read operation, keyed by endpoint id, alongside
-     * the Spring versions under {@code spring}. An endpoint that fails is logged and left
-     * out, so one broken endpoint never hides the others.
+     * the Spring versions under {@code spring}. An endpoint that fails is left out, so one
+     * broken endpoint never hides the others; its first failure is logged with the cause,
+     * later ones at DEBUG, so a persistently broken endpoint does not warn on every
+     * dashboard refresh.
      */
     public Map<String, Object> getInsightsData() {
 
@@ -104,11 +109,15 @@ public final class PeekabootActuatorService {
         return results;
     }
 
-    private static void invoke(String key, Supplier<Object> operation, Map<String, Object> results) {
+    private void invoke(String key, Supplier<Object> operation, Map<String, Object> results) {
         try {
             results.put(key, operation.get());
         } catch (Exception e) {
-            log.warn("Actuator endpoint '{}' failed: {}", key, e.toString());
+            if (reportedFailures.add(key)) {
+                log.warn("Actuator endpoint '{}' failed", key, e);
+            } else {
+                log.debug("Actuator endpoint '{}' failed again: {}", key, e.toString());
+            }
         }
     }
 
