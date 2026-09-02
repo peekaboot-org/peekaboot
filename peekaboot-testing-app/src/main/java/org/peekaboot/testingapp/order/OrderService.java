@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
@@ -14,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The demo's business logic. Several methods here are deliberately inefficient: this
@@ -99,10 +101,12 @@ public class OrderService {
         return new OrderReport(order.getReference(), lines.size(), total, computeMillis);
     }
 
+    /** One transaction for the order and its line, so the trace shows a single connection for both writes. */
+    @Transactional
     public OrderSummary placeOrder(NewOrder request) {
 
         CustomerOrder order = new CustomerOrder();
-        order.setReference("PK-" + System.currentTimeMillis());
+        order.setReference(newReference());
         order.setCustomerId(request.customerId());
         order.setStatus("PLACED");
         order.setPlacedAt(Instant.now());
@@ -125,5 +129,10 @@ public class OrderService {
                 1,
                 line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())),
                 "customer #" + saved.getCustomerId());
+    }
+
+    /** Sixteen hex digits of a random UUID: unique across concurrent orders and within the 32-character column. */
+    private static String newReference() {
+        return "PK-" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     }
 }
