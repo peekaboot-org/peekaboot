@@ -40,6 +40,21 @@ class MachineInfoTest {
     }
 
     @Test
+    void current_reportsTheCpuTopologyProcCpuinfoDescribes() {
+        // on Linux this compares two reads of the same static file; elsewhere both sides
+        // are null - either way the cached value matches a fresh parse
+        assertThat(MachineInfo.current().cpuTopology()).isEqualTo(CpuTopology.fromCpuinfo(Path.of("/proc/cpuinfo")));
+    }
+
+    @Test
+    void current_reportsOnlyNonLocalNetworkAddresses() {
+        assertThat(MachineInfo.current().networkAddresses())
+                .isNotNull()
+                .extracting(NetworkAddress::address)
+                .doesNotContain("127.0.0.1", "0:0:0:0:0:0:0:1");
+    }
+
+    @Test
     void readCpuModel_returnsTheFirstModelNameLine(@TempDir Path dir) throws Exception {
         Path cpuinfo = Files.writeString(dir.resolve("cpuinfo"), """
                 processor\t: 0
