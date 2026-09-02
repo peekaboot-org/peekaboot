@@ -250,9 +250,8 @@
 .pk-health:hover { background: var(--pk-bg-hover); }
 .pk-health:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 .pk-health--down { border-left-color: var(--pk-danger); }
-/* The text-tuned amber, not the fill: as a state stripe --pk-warning is 2.94:1 on
-   --pk-bg, under 1.4.11's 3:1 for non-text indicators. --pk-warning-text is 5.28:1.
-   The --unknown dots below make the same trade for the same reason. */
+/* The text-tuned amber, not the fill, so the stripe and the --unknown dots below
+   match the warning text they sit beside. */
 .pk-health--unknown { border-left-color: var(--pk-warning-text); }
 .pk-health__status { display: flex; align-items: center; gap: var(--pk-space-sm); }
 .pk-health__dot {

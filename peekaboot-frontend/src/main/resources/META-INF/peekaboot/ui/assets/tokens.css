@@ -4,8 +4,8 @@
 
    The palette is built from the Peekaboot mark: its green is hsl(93 64% 43%)
    and its ink is a blue-slate. That green is a mid-lightness one, so — like
-   --pk-warning before it — it is fill-tuned, not text-tuned: white on it is
-   only 2.6:1. Hence the pairing rule every surface follows:
+   --pk-success — it is fill-tuned, not text-tuned: white on it is only 2.6:1.
+   Hence the pairing rule every surface follows:
 
      --pk-primary       fills that carry --pk-on-primary ink on top
      --pk-primary-text  anything drawn ON --pk-bg/--pk-bg-alt: text, focus
@@ -27,11 +27,11 @@
     --pk-primary-light: #eef8e6;
     --pk-info: #0e7490;         /* deep tier like --pk-danger/--pk-purple: carries white ink */
     --pk-success: #16a34a;
-    --pk-warning: #ca8a04;
+    --pk-warning: #b35900;      /* deep tier too: a burnt orange is the only amber-band hue that carries white ink */
     --pk-danger: #d21f1f;       /* dark enough to double as text: 4.73:1 on --pk-bg-hover */
     --pk-purple: #7c3aed;
     --pk-on-success: #0d1117;   /* 5.74:1 on --pk-success */
-    --pk-on-warning: #0d1117;   /* 6.44:1 on --pk-warning */
+    --pk-on-warning: #ffffff;   /* 4.83:1 on --pk-warning */
     --pk-on-danger:  #ffffff;   /* 5.31:1 on --pk-danger */
     --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
     --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */

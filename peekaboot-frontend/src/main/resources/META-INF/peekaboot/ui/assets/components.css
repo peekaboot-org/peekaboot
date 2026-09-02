@@ -2,12 +2,11 @@
    the toolbar and trace-detail shadow roots. */
 
 /* Badge — one pill, six semantic variants. Each variant uses its own
-   on-colour token: --pk-warning/--pk-success (and every dark-theme fill)
-   are fill-tuned, not text-tuned, so white text on them fails WCAG AA
-   (2.6-3.3:1) — the --pk-on-* inks clear it (5.3-9.9:1 across both
-   themes). Light --pk-info sits in the deep tier beside --pk-danger and
-   carries white ink instead of the dark ink of the bright fills. Matches
-   the ink/fill choice trace-detail.js already makes for its status pills.
+   on-colour token: --pk-success (and every dark-theme fill) is fill-tuned,
+   not text-tuned, so white text on it fails WCAG AA — the --pk-on-* inks
+   clear it (4.8-9.9:1 across both themes). Light --pk-info and --pk-warning
+   sit in the deep tier beside --pk-danger and carry white ink instead of
+   the dark ink of the bright fills.
 
    --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
    would sit beside a green --pk-success UP pill and read as the same state.
@@ -155,8 +154,8 @@
     border-radius: var(--pk-radius);
     transition: width var(--pk-transition);
 }
-/* The text-tuned amber, mirroring the health banner's --unknown stripe: as a fill
-   --pk-warning is 2.76:1 on the light track, under 1.4.11's 3:1 for non-text UI. */
+/* The text-tuned amber, mirroring the health banner's --unknown stripe, so the meter
+   matches the warning text beside it. */
 .pk-meter__fill--warning { background: var(--pk-warning-text); }
 .pk-meter__fill--danger  { background: var(--pk-danger); }
 

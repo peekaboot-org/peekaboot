@@ -13,7 +13,7 @@ share one design system:
 No build step. Plain ES modules and CSS, served as-is.
 
 ```
-static/peekaboot/ui/
+META-INF/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
 ├── shared/          api.js, components.js, copyable.js, filtered-group-tab.js, format.js,
@@ -267,10 +267,11 @@ lets you match a condition on the host from inside its own shadow tree.
 Each of these has been broken at least once and caught only in review. Keep them true:
 
 - **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text color
-  on the page background.** The first three are tuned as fill colors; as text on `--pk-bg`
-  they measure 2.9:1, 3.3:1 and 2.6:1 — all under WCAG AA. `--pk-info` happens to pass by
-  the numbers (5.36:1) since its light fill sits in the deep tier, but it is ladder-tuned
-  and may move again, so text still goes through the `-text` token. Every one has a `-text`
+  on the page background.** They are tuned as fill colors; `--pk-success` and `--pk-primary`
+  measure 3.3:1 and 2.6:1 as text on `--pk-bg` — under WCAG AA. `--pk-info` and
+  `--pk-warning` happen to pass by the numbers (5.36:1, 4.83:1) since their light fills sit
+  in the deep tier, but they are ladder-tuned and may move again, so text still goes
+  through the `-text` token. Every one has a `-text`
   counterpart (`--pk-warning-text`, `--pk-success-text`, `--pk-primary-text`,
   `--pk-info-text`) tuned against `--pk-bg`, `--pk-bg-alt` *and* `--pk-bg-hover` in both
   themes; reach for those. `--pk-primary-text` is also what focus rings and the
@@ -286,8 +287,9 @@ Each of these has been broken at least once and caught only in review. Keep them
   `white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode; the
   `--pk-on-*` tokens clear 4.5:1+ in both themes by construction. With a green brand every
   `--pk-on-*` is dark ink in both themes — white on the green fill is 2.61:1 — except
-  `--pk-on-purple` and `--pk-on-info`, which are white ink in light mode: their fills sit
-  in the deep tier beside `--pk-danger` (5.70:1 and 5.36:1 under white).
+  `--pk-on-purple`, `--pk-on-info` and `--pk-on-warning`, which are white ink in light
+  mode: their fills sit in the deep tier beside `--pk-danger` (5.70:1, 5.36:1 and 4.83:1
+  under white).
 - **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a
   blue. With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~51° (light)
