@@ -25,8 +25,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Autowired
     private DataSource dataSource;
 
-    /** The page size traces.js asks for, read off its own request rather than mirrored. */
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
+
+    /** Mirrors the limit traces.js sends with every listing request. */
+    private static final int TRACES_PAGE_SIZE = 50;
 
     @Test
     void overviewShowsJavaAndSystemCards() {
@@ -513,7 +515,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
         int listedCount = errorsBucket.path("traces").size();
 
         assertThat(errorsCount).isPositive().isLessThan(counts.path("all").asInt());
-        assertThat(listedCount).isEqualTo(Math.min(errorsCount, pageSizeOf(errorsResponse)));
+        assertThat(pageSizeOf(errorsResponse))
+                .as("mirrors the page size traces.js is written with")
+                .isEqualTo(TRACES_PAGE_SIZE);
+        assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
                 listedCount);
