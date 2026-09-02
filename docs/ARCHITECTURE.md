@@ -326,6 +326,12 @@ Actuator Endpoints → Raw Beans → Domain Models → API Response
      (JSON)         (typed)      (clean DTOs)    (dashboard)
 ```
 
+`ConfigMapper` flattens a nested `@ConfigurationProperties` value to one property per leaf
+under a dotted key (`hikari.maximumPoolSize`), indexing list elements the way Spring's own
+property syntax does (`servers[0].host`), so the Config tab's filter matches nested keys
+and values. Masking runs on the tree first (`TreeMasker`, by leaf key), so a sensitive key
+anywhere in it arrives as the single masked leaf its subtree collapsed to.
+
 ### JSON on the wire
 
 Peekaboot's REST responses and its insights SSE events are serialised by

@@ -1,13 +1,16 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.ConfigPropsResponse;
 import org.peekaboot.backend.domain.config.ConfigGroup;
 import org.peekaboot.backend.domain.config.ConfigInfo;
+import org.peekaboot.backend.domain.config.ConfigProperty;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class ConfigMapperTest {
@@ -84,8 +87,13 @@ class ConfigMapperTest {
         assertThat(result.groups()).isEmpty();
     }
 
+    /**
+     * A nested tree flattens to one dotted-key property per leaf, so the Config tab's
+     * filter can match nested keys and values directly - and the sensitive leaf still
+     * masks, by its leaf key, on the way.
+     */
     @Test
-    void map_shouldMaskSensitiveKeysNestedInsideAConfigurationPropertiesTree() {
+    void map_shouldFlattenANestedTreeToDottedKeysAndMaskSensitiveLeaves() {
         Map<String, Object> google = new LinkedHashMap<>();
         google.put("clientId", "abc123");
         google.put("clientSecret", "GOCSPX-SuperSecretValue");
@@ -103,10 +111,68 @@ class ConfigMapperTest {
 
         ConfigInfo result = mapper.map(configprops, false);
 
-        String value = result.groups().get(0).properties().get(0).value();
-        assertThat(value).contains("clientId=abc123");
-        assertThat(value).contains("clientSecret=******");
-        assertThat(value).doesNotContain("GOCSPX-SuperSecretValue");
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(
+                        tuple("registration.google.clientId", "abc123"),
+                        tuple("registration.google.clientSecret", "******"));
+    }
+
+    /** A sensitive key masks its whole subtree, arriving as that one key rather than per-leaf. */
+    @Test
+    void map_shouldMaskAWholeSubtreeUnderASensitiveKey() {
+        Map<String, Object> credentials = new LinkedHashMap<>();
+        credentials.put("user", "admin");
+        credentials.put("token", "tok-123");
+
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of(
+                                "gateway",
+                                new ConfigPropsResponse.ConfigBean("gateway", Map.of("credentials", credentials))),
+                        null)));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(tuple("credentials", "******"));
+    }
+
+    /** List elements are indexed the way Spring's own property syntax writes them. */
+    @Test
+    void map_shouldIndexListElementsLikeSpringPropertyKeys() {
+        Map<String, Object> server = new LinkedHashMap<>();
+        server.put("host", "a.example.org");
+        List<Object> servers = List.of(server, "plain");
+
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", servers))), null)));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(tuple("servers[0].host", "a.example.org"), tuple("servers[1]", "plain"));
+    }
+
+    /** An empty container still shows up as the property it is, rather than vanishing. */
+    @Test
+    void map_shouldKeepAnEmptyContainerAsASingleProperty() {
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("pool", new ConfigPropsResponse.ConfigBean("pool", Map.of("servers", List.of()))),
+                        null)));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(tuple("servers", "[]"));
     }
 
     @Test
