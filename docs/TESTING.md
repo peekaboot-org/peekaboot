@@ -76,6 +76,11 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   that covers every run. Accepted because the module configures no clustering and no custom
   realm (the only other things that logger would silence) and the application's own error
   logging is unaffected — a real application failure still prints and is still asserted.
+- The same file raises `org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver`
+  to `ERROR`: Playwright teardown aborts in-flight JSON responses, and the resolver WARNs
+  `Ignoring exception ... Broken pipe` for each aborted write (Spring-side teardown noise,
+  5-20 lines per suite run). A failure the resolver really handles still reaches the client
+  as a 4xx/5xx and fails the asserting test, so only that advisory WARN is lost.
 - Accepted, unavoidable noise:
   - `OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader
     classes because bootstrap classpath has been appended` — a lowercase-`warning`

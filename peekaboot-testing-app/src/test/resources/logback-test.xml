@@ -18,6 +18,14 @@
          and is still asserted. -->
     <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
 
+    <!-- Playwright teardown (PlaywrightTestBase.closePage's about:blank navigation and
+         context close) aborts in-flight JSON responses, and Spring's resolver WARNs
+         "Ignoring exception ... Broken pipe" for each aborted write - teardown noise, not
+         application behaviour. Any failure this resolver really handles still reaches the
+         client as a 4xx/5xx and fails the asserting test, so only that advisory WARN is
+         lost by raising the level to ERROR. -->
+    <logger name="org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver" level="ERROR"/>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
