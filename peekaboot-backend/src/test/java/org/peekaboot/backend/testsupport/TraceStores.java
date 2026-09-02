@@ -19,12 +19,6 @@ public final class TraceStores {
     public static InMemoryTraceStore with(Consumer<PeekabootTracingProperties> customizer) {
         PeekabootTracingProperties properties = new PeekabootTracingProperties();
         customizer.accept(properties);
-        return new InMemoryTraceStore(
-                properties.getMaxTraces(),
-                properties.getMaxSpansPerTrace(),
-                properties.getMaxErrorTraces(),
-                properties.getMaxSlowTraces(),
-                properties.getSlowTraceThresholdMs(),
-                properties.getMaxLogsPerTrace());
+        return new InMemoryTraceStore(properties);
     }
 }

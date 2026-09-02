@@ -26,13 +26,7 @@ public class PeekabootTracingAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public TraceStore traceStore(PeekabootTracingProperties properties) {
-        return new InMemoryTraceStore(
-                properties.getMaxTraces(),
-                properties.getMaxSpansPerTrace(),
-                properties.getMaxErrorTraces(),
-                properties.getMaxSlowTraces(),
-                properties.getSlowTraceThresholdMs(),
-                properties.getMaxLogsPerTrace());
+        return new InMemoryTraceStore(properties);
     }
 
     @Bean

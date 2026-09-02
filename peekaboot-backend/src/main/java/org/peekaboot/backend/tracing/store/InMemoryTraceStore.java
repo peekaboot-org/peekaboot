@@ -24,34 +24,13 @@ public class InMemoryTraceStore implements TraceStore {
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
 
-    /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
-    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace) {
-        this(maxTraces, maxSpansPerTrace, new PeekabootTracingProperties());
-    }
-
-    private InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, PeekabootTracingProperties defaults) {
-        this(
-                maxTraces,
-                maxSpansPerTrace,
-                defaults.getMaxErrorTraces(),
-                defaults.getMaxSlowTraces(),
-                defaults.getSlowTraceThresholdMs(),
-                defaults.getMaxLogsPerTrace());
-    }
-
-    public InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            int maxErrorTraces,
-            int maxSlowTraces,
-            long slowTraceThresholdMs,
-            int maxLogsPerTrace) {
-        this.maxSpansPerTrace = maxSpansPerTrace;
-        this.slowTraceThresholdMs = slowTraceThresholdMs;
-        this.maxLogsPerTrace = maxLogsPerTrace;
-        this.allTraces = boundedMap(maxTraces);
-        this.errorTraces = boundedMap(maxErrorTraces);
-        this.slowTraces = boundedMap(maxSlowTraces);
+    public InMemoryTraceStore(PeekabootTracingProperties properties) {
+        this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
+        this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
+        this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
+        this.allTraces = boundedMap(properties.getMaxTraces());
+        this.errorTraces = boundedMap(properties.getMaxErrorTraces());
+        this.slowTraces = boundedMap(properties.getMaxSlowTraces());
     }
 
     private static Map<String, TraceDataBundle> boundedMap(int maxEntries) {

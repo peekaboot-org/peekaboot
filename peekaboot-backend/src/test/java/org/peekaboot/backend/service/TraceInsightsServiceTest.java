@@ -494,9 +494,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailSurfacesTheTruncatedFlagFromTheBundle() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2);
+        InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(2));
         for (int i = 1; i <= 3; i++) {
-            cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s" + i, "op" + i));
+            cappedStore.addSpan(rootSpanWithoutTags("t1", "s" + i, "op" + i));
         }
         TraceInsightsService cappedService = newService(cappedStore);
 
@@ -508,9 +508,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theListSurfacesTheTruncatedFlagToo() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1);
-        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s1", "op1"));
-        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s2", "op2"));
+        InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(1));
+        cappedStore.addSpan(rootSpanWithoutTags("t1", "s1", "op1"));
+        cappedStore.addSpan(rootSpanWithoutTags("t1", "s2", "op2"));
         TraceInsightsService cappedService = newService(cappedStore);
 
         TraceInsightsResponse response = cappedService.getInsights(10, TraceBucket.ALL, null, null);
@@ -518,8 +518,7 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::truncated).containsExactly(true);
     }
 
-    private static SpanData rootSpanWithoutTags(
-            InMemoryTraceStore forStore, String traceId, String spanId, String name) {
+    private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
     }
 

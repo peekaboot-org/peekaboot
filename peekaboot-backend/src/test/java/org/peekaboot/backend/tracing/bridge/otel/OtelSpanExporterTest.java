@@ -22,6 +22,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -41,7 +42,7 @@ class OtelSpanExporterTest {
 
     @BeforeEach
     void setUp() {
-        storage = new InMemoryTraceStore(100, 50);
+        storage = TraceStores.withDefaults();
         publishedEvents = new ArrayList<>();
         eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
