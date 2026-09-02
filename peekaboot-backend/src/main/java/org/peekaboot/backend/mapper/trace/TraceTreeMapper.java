@@ -130,6 +130,12 @@ public class TraceTreeMapper {
         }
     }
 
+    /** The span the tree hangs from: the first span with no parent stored in this trace, else the first span. */
+    public SpanData findRootSpan(List<SpanData> spans) {
+        Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
+        return findRootSpan(spans, spanById);
+    }
+
     private SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {
         // Find span with null parentId or parent not in this trace
         for (SpanData span : spans) {
@@ -141,7 +147,7 @@ public class TraceTreeMapper {
         return spans.isEmpty() ? null : spans.get(0);
     }
 
-    private RootActionType detectRootActionType(SpanData rootSpan) {
+    public RootActionType detectRootActionType(SpanData rootSpan) {
         if (rootSpan == null) {
             return RootActionType.UNKNOWN;
         }
