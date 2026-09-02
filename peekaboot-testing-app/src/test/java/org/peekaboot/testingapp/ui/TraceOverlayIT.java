@@ -1,14 +1,19 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -738,6 +743,47 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(closeBox.y + closeBox.height)
                 .as("close button bottom should overlap the title's vertical span")
                 .isGreaterThan(titleBox.y);
+    }
+
+    /**
+     * The overlay keeps the features it is handed for its whole lifetime - every SLOW
+     * colour in its header, Spans and Queries tabs comes from those thresholds - and
+     * nothing re-opens it once /api/features answers. So a deep link straight to a trace
+     * must not open the overlay until the features are known, or a reader who configured
+     * their own thresholds sees the shared link coloured by the defaults instead.
+     *
+     * <p>The features request is parked (a real request whose real response is merely
+     * held back, the pattern ComponentBuilderIT uses for the api client's race) rather
+     * than stubbed: the assertion is purely about ordering. A bounded wait for the
+     * overlay's absence would pass vacuously if the deep link were broken outright, so
+     * the same page then proves the overlay does open once the features are released.
+     */
+    @Test
+    void aDeepLinkedOverlayOpensOnlyOnceTheFeaturesAreKnown() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+
+        AtomicReference<Route> parkedFeatures = new AtomicReference<>();
+        page.route("**/peekaboot/api/features", route -> {
+            if (!parkedFeatures.compareAndSet(null, route)) {
+                route.resume();
+            }
+        });
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.waitForSelector("#traces-tab.active");
+        page.waitForCondition(() -> parkedFeatures.get() != null);
+
+        assertThatThrownBy(() -> page.waitForSelector(
+                        TraceOverlay.HOST,
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.ATTACHED)
+                                .setTimeout(1000)))
+                .as("no overlay while /api/features is still outstanding")
+                .isInstanceOf(TimeoutError.class);
+
+        parkedFeatures.get().resume();
+
+        overlay.waitFor("#pk-gantt-rows");
     }
 
     /**

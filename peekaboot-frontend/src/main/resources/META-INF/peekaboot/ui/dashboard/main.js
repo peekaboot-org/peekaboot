@@ -185,20 +185,13 @@ function initTabs() {
     });
     // tabStrip's own initial select() is silent (button-only), so on a deep-linked
     // boot (e.g. "#environment") the panel would otherwise stay on Overview until
-    // the deferred handleHashChange() below runs - a one-macrotask window where the
-    // accessibility tree (aria-selected) and the visible panel disagree. Setting the
-    // panel synchronously here keeps them atomic; handleHashChange() still runs to
-    // do the actual data render (and re-showTab()s the same id - a harmless no-op).
+    // init() runs the deep link's handleHashChange() - a window where the accessibility
+    // tree (aria-selected) and the visible panel disagree. Setting the panel
+    // synchronously here keeps them atomic; handleHashChange() still runs to do the
+    // actual data render (and re-showTab()s the same id - a harmless no-op).
     showTab(initialTabId);
 
     window.addEventListener('hashchange', handleHashChange);
-
-    // Handle initial hash on page load
-    const {tab} = parseAppHash();
-    if (tab !== 'overview') {
-        // Defer to allow the DOM (and the initial fetchData() call) to settle first
-        setTimeout(() => handleHashChange(), 0);
-    }
 }
 
 // --- Data fetching --------------------------------------------------------------------
@@ -460,6 +453,9 @@ async function init() {
     initLocaleSelector();
     initErrorClose();
     await fetchFeatures();
+    // A deep link is honoured only now: the overlay it may open keeps the features it is
+    // handed for its whole lifetime, so it must not open on the empty placeholder.
+    if (parseAppHash().tab !== 'overview') handleHashChange();
     fetchData();
 }
 
