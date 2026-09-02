@@ -208,6 +208,7 @@ function teardown() {
     lifecycleEvents = [];
     showPercentiles = false;
     showMarkers = true;
+    resyncPending = false;
 }
 
 // --- Lifecycle events -------------------------------------------------------------------
