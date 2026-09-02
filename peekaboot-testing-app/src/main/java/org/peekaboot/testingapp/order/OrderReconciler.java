@@ -32,12 +32,10 @@ public class OrderReconciler {
 
     private final OrderRepository orderRepository;
 
-
     public OrderReconciler(OrderRepository orderRepository) {
 
         this.orderRepository = orderRepository;
     }
-
 
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES)
     @Observed(name = "order.reconcile.job", contextualName = "order.reconcile.job")
