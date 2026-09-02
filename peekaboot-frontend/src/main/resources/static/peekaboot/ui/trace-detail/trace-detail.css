@@ -92,7 +92,9 @@
     background: var(--pk-bg-alt);
 }
 
-.pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); border-radius: 10px; font-size: 11px; }
+/* Explicit ink: inherited from .pk-tab this would be --pk-text-muted, which is only
+   3.6:1 on the --pk-border fill - body ink clears AA on it in both themes. */
+.pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); color: var(--pk-text); border-radius: 10px; font-size: 11px; }
 
 .pk-overlay__content { flex: 1; overflow: auto; padding: 16px 20px; }
 
@@ -195,8 +197,12 @@
 .pk-logs-filter input::placeholder { color: var(--pk-text-muted); }
 .pk-logs-filter-span { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: var(--pk-primary); color: var(--pk-on-primary); border-radius: var(--pk-radius); font-size: 11px; }
 .pk-logs-filter-span-clear { cursor: pointer; font-weight: bold;
-    background: none; border: none; padding: 0; font-size: inherit; color: inherit; }
-.pk-logs-filter-span-clear:hover { color: var(--pk-danger); }
+    background: none; border: none; padding: 0 2px; font-size: inherit; color: inherit;
+    border-radius: 2px; }
+/* An ink-tinted wash, not a colour swap: any danger/warning tone on the green fill is
+   under 2:1. The literal is --pk-on-primary's rgb - the same dark ink in both themes -
+   so the glyph keeps 5.5:1+ on the washed fill. */
+.pk-logs-filter-span-clear:hover { background: rgba(13, 17, 23, 0.15); }
 .pk-logs-filter-span-clear:focus-visible { outline: 2px solid var(--pk-on-primary); outline-offset: 1px; }
 
 /* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). */

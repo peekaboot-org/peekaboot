@@ -3,9 +3,9 @@
 
 /* Badge — one pill, six semantic variants. Each variant uses its own
    on-colour token: --pk-warning/--pk-success/--pk-info are fill-tuned,
-   not text-tuned, so white text on them fails WCAG AA (2.6-3.7:1) — dark
-   ink at --pk-on-* clears it (5.1-7.5:1). Matches the ink/fill choice
-   trace-detail.js already makes for its own status pills.
+   not text-tuned, so white text on them fails WCAG AA (2.6-3.3:1) — the
+   --pk-on-* inks clear it (5.3-9.9:1 across both themes). Matches the
+   ink/fill choice trace-detail.js already makes for its own status pills.
 
    --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
    would sit beside a green --pk-success UP pill and read as the same state.
@@ -153,7 +153,9 @@
     border-radius: var(--pk-radius);
     transition: width var(--pk-transition);
 }
-.pk-meter__fill--warning { background: var(--pk-warning); }
+/* The text-tuned amber, mirroring the health banner's --unknown stripe: as a fill
+   --pk-warning is 2.76:1 on the light track, under 1.4.11's 3:1 for non-text UI. */
+.pk-meter__fill--warning { background: var(--pk-warning-text); }
 .pk-meter__fill--danger  { background: var(--pk-danger); }
 
 /* Button */
@@ -182,9 +184,9 @@
    --pk-bg-alt at well over 10:1 (see tokens.css), and WCAG exempts disabled controls
    from the 1.4.3 contrast minimum outright - but a label that reads as "maybe clickable"
    is worse than one that reads as "clearly off", so this still clears the same 4.5:1 AA
-   floor the project's own -text tokens are tuned to (~4.6-4.7:1 on --pk-bg/--pk-bg-alt
-   light, ~5.7:1 dark), rather than leaning on the exemption. cursor makes the same point
-   to a mouse user that the dimmed label makes visually. */
+   floor the project's own -text tokens are tuned to (~5.0-5.9:1 on --pk-bg/--pk-bg-alt
+   light, ~6.8-9.4:1 dark), rather than leaning on the exemption. cursor makes the same
+   point to a mouse user that the dimmed label makes visually. */
 .pk-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
 /* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's

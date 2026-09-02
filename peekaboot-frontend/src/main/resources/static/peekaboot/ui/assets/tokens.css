@@ -21,26 +21,26 @@
     --pk-bg-hover: #f0f2f4;
     --pk-border: #d1d5db;
     --pk-text: #1f2937;
-    --pk-text-muted: #6b7280;
+    --pk-text-muted: #626c79;   /* 5.33:1 on --pk-bg, 4.75:1 even on --pk-bg-hover */
     --pk-text-strong: #111827;
     --pk-primary: #66b327;      /* the mark's green, straight off the artwork */
     --pk-primary-light: #eef8e6;
-    --pk-info: #0d8ca3;
+    --pk-info: #17a2b8;         /* sits in the fill ladder between success and warning */
     --pk-success: #16a34a;
     --pk-warning: #ca8a04;
-    --pk-danger: #dc2626;
+    --pk-danger: #d21f1f;       /* dark enough to double as text: 4.73:1 on --pk-bg-hover */
     --pk-purple: #7c3aed;
     --pk-on-success: #0d1117;   /* 5.74:1 on --pk-success */
     --pk-on-warning: #0d1117;   /* 6.44:1 on --pk-warning */
-    --pk-on-danger:  #ffffff;   /* 4.83:1 on --pk-danger */
+    --pk-on-danger:  #ffffff;   /* 5.31:1 on --pk-danger */
     --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
     --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */
     --pk-on-danger-soft: #7f1d1d; /* 6.93:1 on --pk-danger-soft */
-    --pk-on-info:    #0d1117;   /* 4.77:1 on --pk-info */
-    --pk-primary-text: #487e1b; /* 4.91:1 on --pk-bg, 4.61:1 on --pk-bg-alt */
-    --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt */
-    --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt */
-    --pk-warning-text: #a16207; /* 4.92:1 on --pk-bg, 4.62:1 on --pk-bg-alt */
+    --pk-on-info:    #0d1117;   /* 6.22:1 on --pk-info */
+    --pk-primary-text: #447718; /* 5.39:1 on --pk-bg, 5.06:1 on --pk-bg-alt, 4.80:1 on --pk-bg-hover */
+    --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt, 5.27:1 on --pk-bg-hover */
+    --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt, 4.91:1 on --pk-bg-hover */
+    --pk-warning-text: #9a5e06; /* 5.28:1 on --pk-bg, 4.96:1 on --pk-bg-alt, 4.70:1 on --pk-bg-hover */
 
     --pk-space-xs: 4px;
     --pk-space-sm: 8px;
@@ -70,7 +70,7 @@
     --pk-text-muted: #8b949e;
     --pk-text-strong: #f0f6fc;
     --pk-primary: #84cf3d;      /* the mark's green lifted for the dark surface */
-    --pk-primary-light: #1e2f13;
+    --pk-primary-light: #1a2a10; /* jump-flash tint: --pk-danger stays 4.53:1 as text on it */
     --pk-info: #38c6e8;
     --pk-success: #3fb950;
     --pk-warning: #d29922;
