@@ -267,8 +267,10 @@ lets you match a condition on the host from inside its own shadow tree.
 Each of these has been broken at least once and caught only in review. Keep them true:
 
 - **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text color
-  on the page background.** All four are tuned as fill colors; as text on `--pk-bg` they
-  measure 2.9:1, 3.3:1, 2.6:1 and 3.0:1 — all under WCAG AA. Every one has a `-text`
+  on the page background.** The first three are tuned as fill colors; as text on `--pk-bg`
+  they measure 2.9:1, 3.3:1 and 2.6:1 — all under WCAG AA. `--pk-info` happens to pass by
+  the numbers (5.36:1) since its light fill sits in the deep tier, but it is ladder-tuned
+  and may move again, so text still goes through the `-text` token. Every one has a `-text`
   counterpart (`--pk-warning-text`, `--pk-success-text`, `--pk-primary-text`,
   `--pk-info-text`) tuned against `--pk-bg`, `--pk-bg-alt` *and* `--pk-bg-hover` in both
   themes; reach for those. `--pk-primary-text` is also what focus rings and the
@@ -284,11 +286,12 @@ Each of these has been broken at least once and caught only in review. Keep them
   `white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode; the
   `--pk-on-*` tokens clear 4.5:1+ in both themes by construction. With a green brand every
   `--pk-on-*` is dark ink in both themes — white on the green fill is 2.61:1 — except
-  `--pk-on-purple`, which is white ink in light mode on the deep purple fill.
+  `--pk-on-purple` and `--pk-on-info`, which are white ink in light mode: their fills sit
+  in the deep tier beside `--pk-danger` (5.70:1 and 5.36:1 under white).
 - **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a
   blue. With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
-  `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~47° (light)
-  / ~64° (dark) off `--pk-success` in hue.
+  `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~51° (light)
+  / ~64° (dark) off `--pk-success` in hue — and in light additionally a tier deeper.
 - **Interactive elements are real controls with `:focus-visible`**, not `div`/`role`
   approximations. In particular: a `role="button"` container must not wrap a focusable
   child (e.g. a link) — ARIA defines a button's children as presentational, so assistive

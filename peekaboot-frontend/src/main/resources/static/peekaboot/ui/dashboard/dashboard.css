@@ -301,7 +301,7 @@
    primitive rather than a bespoke tint: a --pk-primary-light fill with --pk-primary
    text measures 4.23:1 in light theme, under AA's 4.5:1 for this text size, and a
    tint pairing has to be re-proved every time the palette moves. --pk-badge--info's --pk-on-info foreground is contrast-tuned
-   by construction (6.22:1 light / 9.38:1 dark). */
+   by construction (5.36:1 light / 9.38:1 dark). */
 .pk-profiles {
     display: flex;
     flex-wrap: wrap;
