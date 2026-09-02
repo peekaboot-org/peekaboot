@@ -273,6 +273,28 @@ class RequestCaptureFilterTest {
         assertThat(publishedEvent().queryString()).isEqualTo("debug&q=widgets");
     }
 
+    /**
+     * A query-string key whose percent-encoding is malformed cannot be decoded. Losing the
+     * decode to an exception would cost the whole capture - the event, and a WARN per
+     * request - so the raw key stands in and the capture completes.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"a%zz=1&q=widgets", "100%&q=widgets"})
+    void shouldCaptureARequestWhoseQueryStringHasAMalformedKey(String queryString) throws Exception {
+        setupTraceContext("trace1");
+        request = get("/orders");
+        request.setQueryString(queryString);
+        request.setParameter("q", "widgets");
+
+        try (LogCapture capture = LogCapture.attach(RequestCaptureFilter.class)) {
+            filter.doFilter(request, response, chain);
+
+            assertThat(capture.appender().list).isEmpty();
+        }
+
+        assertThat(publishedEvent().queryParams()).containsEntry("q", List.of("widgets"));
+    }
+
     @Test
     void shouldReturnNullQueryStringWhenThereIsNone() throws Exception {
         setupTraceContext("trace1");
