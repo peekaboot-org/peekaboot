@@ -16,15 +16,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
-/**
- * Auto-configuration for tracing interceptor that captures controller and view rendering spans.
- */
 @AutoConfiguration(after = ObservationAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(ObservationRegistry.class)
 @ConditionalOnBean(ObservationRegistry.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty(name = "peekaboot.tracing.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ENABLED, matchIfMissing = true)
 public class TracingInterceptorAutoConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);

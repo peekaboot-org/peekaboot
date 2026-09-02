@@ -29,7 +29,7 @@ import org.springframework.core.io.ResourceLoader;
         afterName = "org.springframework.boot.micrometer.metrics.autoconfigure.CompositeMeterRegistryAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty(name = "peekaboot.insights.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.INSIGHTS_ENABLED, matchIfMissing = true)
 @ConditionalOnBean(MeterRegistry.class)
 @EnableConfigurationProperties(InsightsProperties.class)
 public class InsightsAutoConfiguration {
