@@ -143,17 +143,27 @@ class PeekabootActuatorServiceTest {
     }
 
     @Test
-    void getInsightsData_logsAndLeavesOutAnEndpointThatFails() {
+    void getInsightsData_leavesOutAnEndpointThatFailsAndWarnsWithTheCauseOnceOnly() {
         try (var context =
                         new AnnotationConfigApplicationContext(FailingLoggersEndpoint.class, InfoEndpointStub.class);
-                LogCapture capture = LogCapture.attach(PeekabootActuatorService.class)) {
-            Map<String, Object> data = service(context).getInsightsData();
+                LogCapture capture = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG)) {
+            PeekabootActuatorService service = service(context);
+
+            Map<String, Object> data = service.getInsightsData();
+            service.getInsightsData();
 
             assertThat(data).doesNotContainKey("loggers").containsKey("info");
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+            assertThat(capture.appender().list).hasSize(2);
+            assertThat(capture.appender().list.get(0)).satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage()).isEqualTo("Actuator endpoint 'loggers' failed");
+                assertThat(event.getThrowableProxy().getMessage()).isEqualTo("boom");
+            });
+            assertThat(capture.appender().list.get(1)).satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())
-                        .isEqualTo("Actuator endpoint 'loggers' failed: java.lang.IllegalStateException: boom");
+                        .isEqualTo("Actuator endpoint 'loggers' failed again: java.lang.IllegalStateException: boom");
+                assertThat(event.getThrowableProxy()).isNull();
             });
         }
     }
