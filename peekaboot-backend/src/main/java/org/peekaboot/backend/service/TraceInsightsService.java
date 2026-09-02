@@ -8,7 +8,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Stream;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
@@ -54,8 +53,8 @@ public class TraceInsightsService {
     }
 
     /**
-     * Tracing is wired only when peekaboot.tracing.enabled is true; without it the
-     * nullable collaborators stay absent and every trace endpoint reports empty.
+     * Tracing is wired only when peekaboot.tracing.enabled is true; without it the store
+     * stays absent and every trace endpoint reports empty.
      */
     public boolean isTracingAvailable() {
         return traceStore != null;
@@ -71,7 +70,8 @@ public class TraceInsightsService {
         final String operationFilter = rootOperation != null && !rootOperation.isBlank() ? rootOperation : null;
 
         // filtered on the root span alone; only the returned page is mapped (and masked)
-        List<TraceTree> traceTrees = matchingBundles(bucket, actionTypeFilter, operationFilter)
+        List<TraceDataBundle> matches = matchingBundles(bucket, actionTypeFilter, operationFilter);
+        List<TraceTree> traceTrees = matches.stream()
                 .limit(limit)
                 .map(this::mapBundle)
                 .map(issueDetector::detectIssues)
@@ -84,10 +84,11 @@ public class TraceInsightsService {
 
         BucketCounts filteredBucketCounts = null;
         if (!actionTypeFilter.isEmpty() || operationFilter != null) {
+            // the requested bucket's matches are already in hand; the other two need a pass each
             filteredBucketCounts = new BucketCounts(
-                    countMatching(TraceBucket.ALL, actionTypeFilter, operationFilter),
-                    countMatching(TraceBucket.ERRORS, actionTypeFilter, operationFilter),
-                    countMatching(TraceBucket.SLOW, actionTypeFilter, operationFilter));
+                    countMatching(TraceBucket.ALL, bucket, matches, actionTypeFilter, operationFilter),
+                    countMatching(TraceBucket.ERRORS, bucket, matches, actionTypeFilter, operationFilter),
+                    countMatching(TraceBucket.SLOW, bucket, matches, actionTypeFilter, operationFilter));
         }
 
         return new TraceInsightsResponse(traceTrees, bucketCounts, filteredBucketCounts);
@@ -112,13 +113,14 @@ public class TraceInsightsService {
     }
 
     /** The bucket's bundles that pass the root-level filters, newest first - nothing mapped or masked yet. */
-    private Stream<TraceDataBundle> matchingBundles(
+    private List<TraceDataBundle> matchingBundles(
             TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
         if (traceStore == null) {
-            return Stream.empty();
+            return List.of();
         }
         return traceStore.getTraces(bucket, Integer.MAX_VALUE).stream()
-                .filter(bundle -> matchesFilters(bundle, actionTypes, rootOperation));
+                .filter(bundle -> matchesFilters(bundle, actionTypes, rootOperation))
+                .toList();
     }
 
     private TraceTree mapBundle(TraceDataBundle bundle) {
@@ -157,27 +159,34 @@ public class TraceInsightsService {
     /**
      * Classifies a bundle for filtering from its root span alone: action type and
      * operation come straight off {@link TraceTreeMapper}'s root-span logic, so the
-     * verdict matches what mapping the full tree would say - without building or masking
-     * a tree for bundles the response will never carry.
+     * verdict matches what mapping the full tree would say - without copying, building or
+     * masking a tree for bundles the response will never carry.
      */
     private boolean matchesFilters(TraceDataBundle bundle, Set<RootActionType> actionTypes, String rootOperation) {
         if (actionTypes.isEmpty() && rootOperation == null) {
             return true;
         }
-        SpanData root = traceTreeMapper.findRootSpan(bundle.spans());
+        SpanData root = bundle.rootSpan();
         return (actionTypes.isEmpty() || actionTypes.contains(traceTreeMapper.detectRootActionType(root)))
                 && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
     }
 
-    private int countMatching(TraceBucket bucket, Set<RootActionType> actionTypes, String rootOperation) {
-        return (int) matchingBundles(bucket, actionTypes, rootOperation).count();
+    private int countMatching(
+            TraceBucket bucket,
+            TraceBucket requested,
+            List<TraceDataBundle> requestedMatches,
+            Set<RootActionType> actionTypes,
+            String rootOperation) {
+        return bucket == requested
+                ? requestedMatches.size()
+                : matchingBundles(bucket, actionTypes, rootOperation).size();
     }
 
+    /** The chip sends a substring of the operation name, so a partial, case-insensitive match is the contract. */
     private boolean matchesRootOperation(String rootOperationName, String rootOperation) {
         if (rootOperationName == null) {
             return false;
         }
-        // Support partial matching for flexibility
         String operation = rootOperationName.toLowerCase(Locale.ROOT);
         String filter = rootOperation.toLowerCase(Locale.ROOT);
         if (operation.contains(filter)) {
@@ -251,10 +260,8 @@ public class TraceInsightsService {
             return null;
         }
 
-        // Get logs for this span
         List<TraceLog> spanLogs = logsBySpan.get(span.spanId());
 
-        // Recursively process children
         List<SpanNode> enrichedChildren = null;
         if (span.children() != null && !span.children().isEmpty()) {
             enrichedChildren = span.children().stream()
@@ -262,7 +269,6 @@ public class TraceInsightsService {
                     .toList();
         }
 
-        // Create new span with logs attached
         if (spanLogs != null || enrichedChildren != null) {
             SpanNode result = span;
             if (spanLogs != null) {
