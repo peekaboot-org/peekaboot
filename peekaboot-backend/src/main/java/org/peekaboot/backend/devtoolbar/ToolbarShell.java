@@ -59,7 +59,14 @@ public class ToolbarShell {
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
 
-    /** A CSS comment block; the sheets carry their design rationale in them, which a host page need not download. */
+    /**
+     * A CSS comment block; the sheets carry their design rationale in them, which a host page
+     * need not download. Naive by design: it pairs comment delimiters wherever they appear,
+     * where a CSS parser ignores them inside a string or a {@code url()}. Every sheet in
+     * {@link #INLINED_SHEETS} must therefore keep both delimiters out of its string and
+     * {@code url()} tokens - a {@code content} value spelling an opener, or a data URI
+     * carrying a closer, has the stripper swallow the declarations in between.
+     */
     private static final Pattern CSS_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
 
     /**
