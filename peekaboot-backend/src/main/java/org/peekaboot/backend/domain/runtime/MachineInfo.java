@@ -4,18 +4,28 @@ import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
- * The machine (or container) the JVM runs on: logical processor count and CPU model,
- * total physical memory, the JVM's max heap, and the detected {@link ContainerRuntime}.
+ * The machine (or container) the JVM runs on: logical processor count, CPU model and
+ * {@link CpuTopology}, total physical memory, the JVM's max heap, the detected
+ * {@link ContainerRuntime}, and the non-local {@link NetworkAddress}es.
  *
  * <p>Inside a container with limits, the JDK itself is container-aware: {@code cpuCount}
  * and {@code totalMemory} report the container's effective CPU count and memory limit,
- * not the host's. {@code cpuModel} is only cheaply readable on Linux ({@code /proc/cpuinfo},
- * no forking) and stays {@code null} elsewhere; {@code totalMemory} is {@code null} on a
- * JVM whose platform MXBean is not {@code com.sun.management}'s.
+ * not the host's. {@code cpuModel} and {@code cpuTopology} are only cheaply readable on
+ * Linux ({@code /proc/cpuinfo}, no forking) and stay {@code null} elsewhere; {@code
+ * totalMemory} is {@code null} on a JVM whose platform MXBean is not
+ * {@code com.sun.management}'s.
  */
-public record MachineInfo(int cpuCount, String cpuModel, Long totalMemory, long maxHeap, ContainerRuntime container) {
+public record MachineInfo(
+        int cpuCount,
+        String cpuModel,
+        CpuTopology cpuTopology,
+        Long totalMemory,
+        long maxHeap,
+        ContainerRuntime container,
+        List<NetworkAddress> networkAddresses) {
 
     /** Lazily computed once: the values are static for the JVM's lifetime. */
     private static final class CurrentHolder {
@@ -30,9 +40,11 @@ public record MachineInfo(int cpuCount, String cpuModel, Long totalMemory, long 
         return new MachineInfo(
                 Runtime.getRuntime().availableProcessors(),
                 readCpuModel(Path.of("/proc/cpuinfo")),
+                CpuTopology.fromCpuinfo(Path.of("/proc/cpuinfo")),
                 readTotalMemory(),
                 Runtime.getRuntime().maxMemory(),
-                ContainerRuntime.current());
+                ContainerRuntime.current(),
+                NetworkAddress.discover(NetworkAddress.Signals.fromRuntime()));
     }
 
     /** The first {@code model name} line, or {@code null} where the file or line is absent. */
