@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -235,6 +236,67 @@ class PeekabootTracingAutoConfigurationTest {
                             .contains("/manage/**")
                             .doesNotContain("/actuator/**");
                 });
+    }
+
+    /** The exporter skips by a span's path tag, which carries the context path; the bean must know it. */
+    @Test
+    void theContextPathReachesTheSpanExporterExclusions() {
+        contextRunner.withPropertyValues("server.servlet.context-path=/app").run(context -> {
+            PeekabootPaths paths = context.getBean(PeekabootPaths.class);
+            assertThat(paths.isExcludedRequestPath("/app/actuator/health")).isTrue();
+            assertThat(paths.isExcludedRequestPath("/app/api/users")).isFalse();
+        });
+    }
+
+    /** The interceptor beans back off for user-supplied same-named beans, like every other Peekaboot bean. */
+    @Test
+    void userSuppliedSameNamedInterceptorBeansReplaceTheDefaults() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class, UserInterceptorConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("tracingHandlerInterceptor"))
+                            .isSameAs(UserInterceptorConfig.INTERCEPTOR);
+                    assertThat(context.getBean("tracingInterceptorConfigurer"))
+                            .isSameAs(UserInterceptorConfig.CONFIGURER);
+                });
+    }
+
+    @Test
+    void aUserSuppliedPeekabootPathsBeanReplacesTheDefault() {
+        contextRunner.withUserConfiguration(UserPathsConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(PeekabootPaths.class)).isSameAs(UserPathsConfig.PATHS);
+        });
+    }
+
+    @Configuration
+    static class UserInterceptorConfig {
+
+        static final TracingHandlerInterceptor INTERCEPTOR =
+                new TracingHandlerInterceptor(ObservationRegistry.create());
+        static final WebMvcConfigurer CONFIGURER = new WebMvcConfigurer() {};
+
+        @Bean
+        TracingHandlerInterceptor tracingHandlerInterceptor() {
+            return INTERCEPTOR;
+        }
+
+        @Bean
+        WebMvcConfigurer tracingInterceptorConfigurer() {
+            return CONFIGURER;
+        }
+    }
+
+    @Configuration
+    static class UserPathsConfig {
+
+        static final PeekabootPaths PATHS = PeekabootPaths.defaults();
+
+        @Bean
+        PeekabootPaths peekabootPaths() {
+            return PATHS;
+        }
     }
 
     /**

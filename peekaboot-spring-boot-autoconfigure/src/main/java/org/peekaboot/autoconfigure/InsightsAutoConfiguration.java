@@ -11,6 +11,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -33,13 +34,20 @@ import org.springframework.core.io.ResourceLoader;
 @EnableConfigurationProperties(InsightsProperties.class)
 public class InsightsAutoConfiguration {
 
-    /** Peekaboot's own mapper, like the REST responses: the SSE payloads are read by the same dashboard. */
+    /**
+     * Peekaboot's own mapper, like the REST responses: the SSE payloads are read by the
+     * same dashboard. A user-supplied replacement takes over the whole lifecycle role -
+     * it is the listener the service publishes through AND the SmartLifecycle whose
+     * stop() completes the open emitters on context shutdown.
+     */
     @Bean
+    @ConditionalOnMissingBean
     public InsightsSsePublisher insightsSsePublisher() {
         return new InsightsSsePublisher(PeekabootJson.MAPPER);
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public InsightsService insightsService(
             MeterRegistry meterRegistry,
             InsightsProperties properties,
@@ -51,6 +59,7 @@ public class InsightsAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     public InsightsController insightsController(
             InsightsService insightsService, InsightsSsePublisher insightsSsePublisher) {
         return new InsightsController(insightsService, insightsSsePublisher);

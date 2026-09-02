@@ -3,9 +3,11 @@ package org.peekaboot.backend.insights.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
@@ -74,7 +76,7 @@ class InsightsSsePublisherTest {
     }
 
     @Test
-    void onTickReturnsImmediatelyWhileDeliveryHappensOnDispatchThread() throws Exception {
+    void onTickReturnsImmediatelyWhileDeliveryHappensOnTheSenderThread() throws Exception {
         CountDownLatch sendStarted = new CountDownLatch(1);
         CountDownLatch releaseSend = new CountDownLatch(1);
         CountDownLatch sendCompleted = new CountDownLatch(1);
@@ -107,11 +109,11 @@ class InsightsSsePublisherTest {
         assertThat(elapsedMs).as("onTick must not block on the emitter send").isLessThan(500);
 
         assertThat(sendStarted.await(2, TimeUnit.SECONDS))
-                .as("dispatch thread picks up the queued event")
+                .as("the queued event reaches the emitter's send")
                 .isTrue();
         releaseSend.countDown();
         assertThat(sendCompleted.await(2, TimeUnit.SECONDS))
-                .as("send eventually completes on the dispatch thread")
+                .as("send eventually completes off the caller's thread")
                 .isTrue();
     }
 
@@ -329,6 +331,98 @@ class InsightsSsePublisherTest {
     }
 
     /**
+     * One peer that has stopped reading must not stall delivery to the others: each
+     * subscriber's events go through a bounded lane of its own, drained by its own sender
+     * thread, so a send wedged on one peer blocks only that peer's lane.
+     */
+    @Test
+    void aWedgedPeerDoesNotStallDeliveryToOtherSubscribers() throws Exception {
+        CountDownLatch wedgeReleased = new CountDownLatch(1);
+        BlockingQueue<String> healthyDeliveries = new LinkedBlockingQueue<>();
+        AtomicBoolean firstEmitter = new AtomicBoolean(true);
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            SseEmitter newEmitter() {
+                if (firstEmitter.getAndSet(false)) {
+                    return new SseEmitter(0L) {
+                        @Override
+                        public void send(SseEventBuilder builder) throws IOException {
+                            try {
+                                wedgeReleased.await();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                            }
+                        }
+                    };
+                }
+                return new SseEmitter(0L) {
+                    @Override
+                    public void send(SseEventBuilder builder) throws IOException {
+                        healthyDeliveries.add("sent");
+                    }
+                };
+            }
+        };
+        try {
+            publisher.subscribe(); // the peer that stops reading
+            publisher.subscribe(); // the healthy dashboard behind it
+
+            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+
+            assertThat(healthyDeliveries.poll(3, TimeUnit.SECONDS))
+                    .as("the healthy subscriber receives while the other peer's send is wedged")
+                    .isNotNull();
+        } finally {
+            wedgeReleased.countDown();
+        }
+    }
+
+    /**
+     * The backed-up lane is how a peer that stops reading is detected: the wedged send
+     * blocks its sender, the lane fills, and the overflow drops the subscriber - as
+     * routine as a failed send, so a one-line DEBUG message, not a warning.
+     */
+    @Test
+    void aPeerThatStopsReadingIsDroppedOnceItsLaneOverflows() {
+        CountDownLatch wedgeReleased = new CountDownLatch(1);
+        InsightsSsePublisher publisher = new InsightsSsePublisher(new ObjectMapper()) {
+            @Override
+            SseEmitter newEmitter() {
+                return new SseEmitter(0L) {
+                    @Override
+                    public void send(SseEventBuilder builder) throws IOException {
+                        try {
+                            wedgeReleased.await();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                };
+            }
+        };
+        try {
+            publisher.subscribe();
+
+            try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class, Level.DEBUG)) {
+                // the sender holds at most one event in flight, so this overflows the lane
+                for (int i = 0; i < InsightsSsePublisher.SUBSCRIBER_QUEUE_CAPACITY + 2; i++) {
+                    publisher.broadcast("tick", "{}");
+                }
+
+                assertThat(publisher.subscriberCount())
+                        .as("the wedged peer is dropped on lane overflow")
+                        .isZero();
+                assertThat(logs.appender().list).anySatisfy(event -> {
+                    assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                    assertThat(event.getFormattedMessage()).contains("stopped reading");
+                });
+            }
+        } finally {
+            wedgeReleased.countDown();
+        }
+    }
+
+    /**
      * A peer that went away is routine, not an incident: the reason is logged at DEBUG as
      * one line, without the stack trace of the servlet container's broken pipe.
      */
@@ -350,6 +444,9 @@ class InsightsSsePublisherTest {
         try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class, Level.DEBUG)) {
             publisher.broadcast("tick", "{}");
 
+            // the send - and with it the failure - happens on the subscriber's sender thread
+            await().atMost(Duration.ofSeconds(3))
+                    .untilAsserted(() -> assertThat(logs.appender().list).hasSize(1));
             assertThat(logs.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())

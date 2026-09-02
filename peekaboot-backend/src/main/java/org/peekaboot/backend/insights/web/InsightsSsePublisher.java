@@ -22,7 +22,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Fans collector events out to all connected dashboard SSE clients.
+ * Fans collector events out to all connected dashboard SSE clients: the single dispatch
+ * thread renders each event once and offers it to a bounded per-subscriber lane, whose
+ * own sender thread performs the blocking send - no peer can stall another.
  *
  * <p>A {@link SmartLifecycle} so that context shutdown completes every open
  * emitter: an emitter left open holds its async servlet request, and the
@@ -36,6 +38,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private static final Duration DISPATCH_POLL_TIMEOUT = Duration.ofSeconds(1);
     private static final int QUEUE_CAPACITY = 256;
     /**
+     * Each subscriber's own send lane. A healthy peer drains it as fast as the dispatch
+     * thread fills it and a burst spans a handful of events, so a backlog this deep only
+     * ever means a peer that has stopped reading.
+     */
+    static final int SUBSCRIBER_QUEUE_CAPACITY = 32;
+    /**
      * Each emitter pins one of the container's async requests, so the number a single
      * client can open is bounded; a handful of dashboards on one app is the use case.
      */
@@ -48,7 +56,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(5);
 
     private final ObjectMapper objectMapper;
-    private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
+    private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
     /**
@@ -86,26 +94,27 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     /**
      * Stops the loops and completes every open emitter, so nothing outlives the context.
      *
-     * <p>The loops go first: a loop thread wedged in a blocking send() holds that
-     * emitter's write lock, and complete() would then queue up behind it while the
-     * loop kept feeding further events into the same wedge. Emitters are snapshotted
-     * and cleared under the monitor before either step, so a broadcast racing this
-     * has nothing left to iterate.
+     * <p>The loops go first, and each sender is interrupted before its emitter is
+     * completed: a sender wedged in a blocking send() holds that emitter's write lock,
+     * and complete() would then queue up behind it while events kept feeding the same
+     * wedge. Subscribers are snapshotted and cleared under the monitor before either
+     * step, so a broadcast racing this has nothing left to iterate.
      */
     @Override
     public void stop() {
-        List<SseEmitter> open;
+        List<Subscriber> open;
         synchronized (lock) {
             running = false;
-            open = List.copyOf(emitters);
-            emitters.clear();
+            open = List.copyOf(subscribers);
+            subscribers.clear();
             queue.clear();
         }
         dispatchLoop.stop();
         heartbeatLoop.stop();
-        for (SseEmitter emitter : open) {
+        for (Subscriber subscriber : open) {
+            subscriber.sender.interrupt();
             try {
-                emitter.complete();
+                subscriber.emitter.complete();
             } catch (RuntimeException e) {
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
@@ -123,30 +132,32 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      */
     public SseEmitter subscribe() {
         SseEmitter emitter = newEmitter();
+        Subscriber subscriber = new Subscriber(emitter);
         boolean accepted;
         synchronized (lock) {
             accepted = running;
-            if (accepted && emitters.size() >= MAX_SUBSCRIBERS) {
+            if (accepted && subscribers.size() >= MAX_SUBSCRIBERS) {
                 throw new ResponseStatusException(
                         HttpStatus.SERVICE_UNAVAILABLE, "Insights stream subscriber limit reached");
             }
             if (accepted) {
                 // Anything still queued belongs to a subscriber that has since left;
                 // delivering it would burst stale history into this fresh client.
-                if (emitters.isEmpty()) {
+                if (subscribers.isEmpty()) {
                     queue.clear();
                     queueOverflowWarned = false;
                 }
-                emitters.add(emitter);
+                subscribers.add(subscriber);
             }
         }
         if (!accepted) {
             emitter.complete();
             return emitter;
         }
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(e -> emitters.remove(emitter));
+        subscriber.sender.start();
+        emitter.onCompletion(() -> removeSubscriber(emitter));
+        emitter.onTimeout(() -> removeSubscriber(emitter));
+        emitter.onError(e -> removeSubscriber(emitter));
         heartbeatLoop.startIfNeeded();
         dispatchLoop.startIfNeeded();
         return emitter;
@@ -154,9 +165,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
     /**
      * complete()/completeWithError() are overridden because Spring's container-driven
-     * onCompletion/onError callbacks fire only inside a real request dispatch; when the
-     * dispatch loop here completes an emitter itself (or a unit test does), no Handler is
-     * registered to invoke them and the emitter would stay in {@code emitters}.
+     * onCompletion/onError callbacks fire only inside a real request dispatch; when a
+     * sender here completes an emitter itself (or a unit test does), no Handler is
+     * registered to invoke them and the emitter would stay subscribed.
      * Package-visible (rather than inlined into subscribe()) so tests can override the
      * emitter's send behavior.
      */
@@ -165,19 +176,34 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             @Override
             public void complete() {
                 super.complete();
-                emitters.remove(this);
+                removeSubscriber(this);
             }
 
             @Override
             public void completeWithError(Throwable ex) {
                 super.completeWithError(ex);
-                emitters.remove(this);
+                removeSubscriber(this);
             }
         };
     }
 
     public int subscriberCount() {
-        return emitters.size();
+        return subscribers.size();
+    }
+
+    /** Detaches the subscriber whose emitter this is and interrupts its sender; a no-op for an unknown emitter. */
+    // CompareObjectsWithEquals: identity is the point - the very emitter being detached,
+    // not one that happens to compare equal
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
+    private void removeSubscriber(SseEmitter emitter) {
+        synchronized (lock) {
+            for (Subscriber subscriber : subscribers) {
+                if (subscriber.emitter == emitter) {
+                    subscribers.remove(subscriber);
+                    subscriber.sender.interrupt();
+                }
+            }
+        }
     }
 
     @Override
@@ -237,7 +263,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private void enqueue(String eventName, Supplier<String> json) {
         SseEvent event = new SseEvent(eventName, json);
         synchronized (lock) {
-            if (emitters.isEmpty()) {
+            if (subscribers.isEmpty()) {
                 return;
             }
             if (queue.offer(event)) {
@@ -254,24 +280,16 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /**
-     * Sends one event to every subscriber, in order, on the single dispatch thread.
-     * A peer that has stopped reading therefore holds up the subscribers behind it
-     * until the servlet container's write timeout fires. The heartbeat is no help
-     * there: its send() to that same emitter takes the emitter's write lock, which
-     * the stuck send already holds, so it blocks rather than detecting the dead peer.
-     * Accepted for a dev tool, where a handful of dashboards watch a single app.
+     * Fans one event out to every subscriber's lane, on the single dispatch thread. The
+     * offers never block, so a peer that has stopped reading wedges only its own sender;
+     * once its lane overflows the peer is dropped (see {@link Subscriber}).
      *
-     * <p>Package-visible so tests can stand in for (or wedge) the delivery step.
+     * <p>Package-visible so tests can stand in for (or wedge) the fan-out step.
      */
     void broadcast(String eventName, String json) {
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().name(eventName).data(json));
-                onDelivered(eventName);
-            } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
-                emitter.completeWithError(e);
-            }
+        OutboundEvent event = new OutboundEvent(eventName, json);
+        for (Subscriber subscriber : subscribers) {
+            subscriber.offerOrDrop(event);
         }
     }
 
@@ -285,14 +303,15 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         heartbeat();
     }
 
+    /**
+     * Heartbeats travel the same lanes as events: a healthy peer gets the keep-alive
+     * comment, and at a peer whose send is stuck they accumulate like any other event,
+     * so even an idle stream's wedge is eventually detected by lane overflow.
+     */
     void heartbeat() {
-        for (SseEmitter emitter : emitters) {
-            try {
-                emitter.send(SseEmitter.event().comment("hb"));
-            } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after heartbeat failure: {}", e.toString());
-                emitter.completeWithError(e);
-            }
+        OutboundEvent heartbeat = OutboundEvent.heartbeat();
+        for (Subscriber subscriber : subscribers) {
+            subscriber.offerOrDrop(heartbeat);
         }
     }
 
@@ -306,6 +325,67 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         if (event != null) {
             broadcast(event.name(), event.json().get());
+        }
+    }
+
+    /** One rendered event on its way to the lanes; {@code name == null} is the heartbeat comment. */
+    private record OutboundEvent(String name, String json) {
+
+        static OutboundEvent heartbeat() {
+            return new OutboundEvent(null, null);
+        }
+
+        boolean isHeartbeat() {
+            return name == null;
+        }
+    }
+
+    /**
+     * One connected dashboard: its emitter plus the bounded lane and sender thread that
+     * decouple it from every other subscriber. The sender performs the blocking send()
+     * calls, so a peer that stops reading wedges only itself; its lane then fills and the
+     * overflow drops the subscriber, mirroring the drop on a failed send. Completing the
+     * emitter on that path would block behind the very send that is stuck (complete()
+     * takes the same write lock), so a dropped emitter is left to its timeout instead.
+     */
+    private final class Subscriber {
+
+        private final SseEmitter emitter;
+        private final BlockingQueue<OutboundEvent> lane = new ArrayBlockingQueue<>(SUBSCRIBER_QUEUE_CAPACITY);
+        private final Thread sender;
+
+        Subscriber(SseEmitter emitter) {
+            this.emitter = emitter;
+            this.sender = Thread.ofVirtual().name("peekaboot-insights-sse-send").unstarted(this::drainLane);
+        }
+
+        void offerOrDrop(OutboundEvent event) {
+            if (lane.offer(event)) {
+                return;
+            }
+            log.debug(
+                    "Dropping insights SSE subscriber that stopped reading (send lane of {} full)",
+                    SUBSCRIBER_QUEUE_CAPACITY);
+            removeSubscriber(emitter);
+        }
+
+        private void drainLane() {
+            try {
+                while (true) {
+                    OutboundEvent event = lane.take();
+                    if (event.isHeartbeat()) {
+                        emitter.send(SseEmitter.event().comment("hb"));
+                    } else {
+                        emitter.send(SseEmitter.event().name(event.name()).data(event.json()));
+                        onDelivered(event.name());
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (IOException | IllegalStateException e) {
+                log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
+                emitter.completeWithError(e);
+            }
         }
     }
 
@@ -372,7 +452,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         private void run() {
             while (true) {
                 synchronized (lock) {
-                    if (emitters.isEmpty()) {
+                    if (subscribers.isEmpty()) {
                         thread = null;
                         return;
                     }

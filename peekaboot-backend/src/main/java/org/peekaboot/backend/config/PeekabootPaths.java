@@ -10,17 +10,19 @@ import java.util.Set;
  * Peekaboot's own URL space: the prefix its UI and API live under, and the prefixes its
  * filters, interceptor and span exporter leave alone.
  *
- * <p>Everything here is relative to the servlet context. Requests are matched on their
+ * <p>The exclusions are relative to the servlet context. Requests are matched on their
  * {@linkplain #pathWithinApplication path within the application}, which the container
  * has already decoded and normalised, so neither a {@code server.servlet.context-path}
  * nor a {@code /x/../peekaboot/...} spelling hides Peekaboot's own endpoints from the
- * prefix check. URLs written into a page get the context path put back in front via
- * {@link #basePath}.
+ * prefix check. A path that still carries the context path - a span's HTTP path tag -
+ * goes through {@link #isExcludedRequestPath}, which strips it first. URLs written into
+ * a page get the context path put back in front via {@link #basePath}.
  *
  * <p>One instance per application: the auto-configuration constructs it with the resolved
  * {@code management.endpoints.web.base-path}, so the actuator exclusion follows a
- * relocated management base path. {@link #defaults()} carries Spring Boot's default for
- * plain construction in tests.
+ * relocated management base path, and with the resolved {@code server.servlet.context-path}
+ * for the stripping above. {@link #defaults()} carries Spring Boot's defaults for plain
+ * construction in tests.
  */
 public final class PeekabootPaths {
 
@@ -35,19 +37,36 @@ public final class PeekabootPaths {
     /** Prefixes whose requests are neither traced nor given a toolbar. */
     private final Set<String> excludedPrefixes;
 
-    /** @param managementBasePath the effective {@code management.endpoints.web.base-path} */
-    public PeekabootPaths(String managementBasePath) {
+    /** The effective servlet context path, {@code ""} at the root; see {@link #isExcludedRequestPath}. */
+    private final String contextPath;
+
+    /**
+     * @param managementBasePath the effective {@code management.endpoints.web.base-path}
+     * @param contextPath the effective {@code server.servlet.context-path}; empty or {@code /} at the root
+     */
+    public PeekabootPaths(String managementBasePath, String contextPath) {
         Set<String> prefixes = new LinkedHashSet<>(Set.of("/static/", "/webjars/", BASE_PATH + "/", ERROR_PATH + "/"));
         String managementPrefix = managementPrefix(managementBasePath);
         if (managementPrefix != null) {
             prefixes.add(managementPrefix);
         }
         this.excludedPrefixes = Set.copyOf(prefixes);
+        this.contextPath = normalisedContextPath(contextPath);
     }
 
-    /** The exclusions at Spring Boot's default management base path - plain construction for tests. */
+    /** The exclusions at Spring Boot's defaults - {@code /actuator}, root context path - for plain construction in tests. */
     public static PeekabootPaths defaults() {
-        return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH);
+        return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH, "");
+    }
+
+    /** {@code /app} as a strippable prefix, tolerating the trailing-slash and bare-root spellings a property can carry. */
+    private static String normalisedContextPath(String contextPath) {
+        String path = contextPath == null ? "" : contextPath.strip();
+        if (path.isEmpty() || "/".equals(path)) {
+            return "";
+        }
+        path = path.startsWith("/") ? path : "/" + path;
+        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
     }
 
     /**
@@ -78,6 +97,19 @@ public final class PeekabootPaths {
             }
         }
         return false;
+    }
+
+    /**
+     * {@link #isExcluded}, for a server-absolute path that still carries the servlet context
+     * path - the shape an HTTP span's path tag has. The context path is stripped before
+     * matching, so the exclusions hold the same with and without a
+     * {@code server.servlet.context-path}.
+     */
+    public boolean isExcludedRequestPath(String path) {
+        if (!contextPath.isEmpty() && path.startsWith(contextPath + "/")) {
+            return isExcluded(path.substring(contextPath.length()));
+        }
+        return isExcluded(path);
     }
 
     /** The same exclusions as Spring MVC path patterns, for registering the interceptor. */

@@ -65,6 +65,38 @@ class DevToolbarAutoConfigurationTest {
                 });
     }
 
+    /** Every toolbar bean is {@code @ConditionalOnMissingBean}, so an application can supply its own. */
+    @Test
+    void userSuppliedSameNamedBeansReplaceTheDefaults() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class, UserSameNamedBeansConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("toolbarDataProvider"))
+                            .isSameAs(UserSameNamedBeansConfig.TOOLBAR_DATA_PROVIDER);
+                    assertThat(context.getBean("devToolbarFilter"))
+                            .isSameAs(UserSameNamedBeansConfig.FILTER_REGISTRATION);
+                });
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserSameNamedBeansConfig {
+
+        static final ToolbarDataProvider TOOLBAR_DATA_PROVIDER = new ToolbarDataProvider();
+        static final FilterRegistrationBean<DevToolbarFilter> FILTER_REGISTRATION = new FilterRegistrationBean<>();
+
+        @Bean
+        ToolbarDataProvider toolbarDataProvider() {
+            return TOOLBAR_DATA_PROVIDER;
+        }
+
+        @Bean
+        FilterRegistrationBean<DevToolbarFilter> devToolbarFilter() {
+            return FILTER_REGISTRATION;
+        }
+    }
+
     /** The springdoc property decides where idle mode applies; it has to reach the filter. */
     @Test
     void theCustomisedSwaggerUiPathReachesTheToolbarFilter() {

@@ -284,7 +284,11 @@ opens need no configuration either. The `/actuator/` exclusion follows
 single `PeekabootPaths` bean with the resolved base path and threads it into both
 filters, the interceptor registration and `OtelSpanExporter`'s span skip (a base path of
 `/`, management endpoints at the application root, excludes nothing extra - there is no
-prefix to tell them apart by). Both filters
+prefix to tell them apart by). The bean also carries the resolved
+`server.servlet.context-path`: a span's HTTP path tag is the raw request path with the
+context path still in front, so the exporter matches it through
+`isExcludedRequestPath`, which strips that prefix first — the host's actuator spans and
+Peekaboot's own are skipped the same with and without a context path. Both filters
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
 toolbar on, a trace still carries a basic method/path/status summary (`summary.request`)
@@ -489,10 +493,16 @@ the three hooks that run before or outside the application context are registere
 | `PeekabootTracingAutoConfiguration` | `.imports` | Tracing properties and store |
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor |
+| `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | `peekaboot.enabled`/`peekaboot.dev-toolbar` local-dev detection + default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes actuator endpoint beans available without web/JMX exposure |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Spring Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LocalDevDetector` | — (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
+
+Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean` —
+matched by name for the anonymous `WebMvcConfigurer` registration, by the deduced
+generic type for the `FilterRegistrationBean`s — so an application bean of the same type
+or name replaces any Peekaboot default instead of colliding with it.
 
 ### Conditional Loading
 
