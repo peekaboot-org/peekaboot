@@ -2,7 +2,6 @@ package org.peekaboot.backend.insights.web;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -10,7 +9,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
 import org.slf4j.Logger;
@@ -60,7 +58,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      */
     static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(5);
 
-    private final ObjectMapper objectMapper;
+    private final InsightsEventJson eventJson;
     private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
@@ -86,7 +84,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private volatile boolean running = true;
 
     public InsightsSsePublisher(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        this.eventJson = new InsightsEventJson(objectMapper);
     }
 
     @Override
@@ -195,41 +193,12 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
     @Override
     public void onTick(long epochMs, Map<String, Double> values) {
-        enqueue("tick", () -> tickJson(epochMs, values));
+        enqueue("tick", () -> eventJson.tick(epochMs, values));
     }
 
     @Override
     public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
-        enqueue("rollup", () -> rollupJson(level, epochMs, entries));
-    }
-
-    String tickJson(long epochMs, Map<String, Double> values) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("epochMs", epochMs);
-        payload.put("values", nullSafeMap(values));
-        return objectMapper.writeValueAsString(payload);
-    }
-
-    String rollupJson(int level, long epochMs, Map<String, AggregateStats> entries) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("level", level);
-        payload.put("epochMs", epochMs);
-
-        Map<String, Object> entryPayloads = new LinkedHashMap<>();
-        for (Map.Entry<String, AggregateStats> entry : entries.entrySet()) {
-            entryPayloads.put(entry.getKey(), nullSafeMap(entry.getValue().byName()));
-        }
-        payload.put("entries", entryPayloads);
-
-        return objectMapper.writeValueAsString(payload);
-    }
-
-    private static Map<String, Object> nullSafeMap(Map<String, Double> values) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Double> entry : values.entrySet()) {
-            result.put(entry.getKey(), PeekabootJson.nanToNull(entry.getValue()));
-        }
-        return result;
+        enqueue("rollup", () -> eventJson.rollUp(level, epochMs, entries));
     }
 
     /**
