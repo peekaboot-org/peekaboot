@@ -35,14 +35,16 @@ used verbatim, with no per-application subdirectory appended.
 
 `StorageDirectory` only resolves this path — it never touches the disk itself; while
 `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and
-neither store ever writes. Directory creation and I/O failure handling belong to the
-stores themselves: each creates its parent directory on first write and, on
-`IOException`, logs once and continues in memory rather than taking the host application
-down over an unwritable `$HOME`. Both go through `OwnerOnlyFiles` for that: on a POSIX
-file system the directory is created `rwx------` and every file `rw-------` regardless
-of the process umask (an existing directory keeps its permissions), and the temporary a
-write goes to is always created fresh with `CREATE_NEW` after removing whatever sat at
-its path — a symlink planted at `*.tmp` is deleted, never followed.
+neither store ever writes. Every write goes through `OwnerOnlyFiles.replaceAtomically`,
+the single implementation of the mechanism: it creates the parent directory, writes to a
+sibling `*.tmp`, moves that over the target with `ATOMIC_MOVE` (a plain replace where the
+file system offers none), and deletes the temporary if the write fails. On a POSIX file
+system the directory is created `rwx------` and every file `rw-------` regardless of the
+process umask (an existing directory keeps its permissions), and the temporary is always
+created fresh with `CREATE_NEW` after removing whatever sat at its path — a symlink planted
+at `*.tmp` is deleted, never followed. What stays with the stores is failure handling: on
+`IOException` each logs and continues in memory rather than taking the host application
+down over an unwritable `$HOME`.
 
 Both stores assume one application instance per directory. Two instances pointed at the
 same `peekaboot.storage.dir` overwrite each other's files: the loser's history is lost,
@@ -61,9 +63,9 @@ exposes because the next roll-up weights its average by it; omitting it would re
 rings whose first roll-up computes the wrong average. `InsightsSnapshotCodec` reads and
 writes this as a small versioned binary format (magic `"PKIN"`, a schema version, then
 the header and body described above); `InsightsSnapshotStore` owns the file, writing it
-to `insights.snapshot.tmp` and moving it into place with `ATOMIC_MOVE` on each boundary
-of `peekaboot.insights.persistence.interval` (default: the coarsest level's own
-interval) and once more, synchronously, at shutdown, after the collector has stopped so
+through `OwnerOnlyFiles.replaceAtomically` on each boundary of
+`peekaboot.insights.persistence.interval` (default: the coarsest level's own interval)
+and once more, synchronously, at shutdown, after the collector has stopped so
 the final write sees quiesced rings. A run that never ticked skips the write rather than
 overwriting a good file with an empty one.
 
@@ -92,9 +94,10 @@ the missed interval, capped at the ring size.
 
 The application's start/stop history: one JSON object per line, at most 1000 events
 (oldest dropped first), read on a virtual thread rather than the startup path.
-`LifecycleEventFile` rewrites the whole file and moves it into place atomically on every
-change — cheap at this size (≤400 KB for the full 1000), and it removes both a
-partial-line corruption window and a second trim code path. A line that fails to parse
+`LifecycleEventFile` rewrites the whole file through the same
+`OwnerOnlyFiles.replaceAtomically` on every change — cheap at this size (≤400 KB for the
+full 1000), and it removes both a partial-line corruption window and a second trim code
+path. A line that fails to parse
 is skipped on read; the rest of the file still loads. A start event carries every
 `BuildProperties` and `GitProperties` entry the application has, plus its epoch
 timestamp and pid; a stop event carries only its own timestamp and pid; its build
@@ -420,9 +423,9 @@ only the headline decisions. The file inventory — every module under
   lets the identical stylesheet apply in both contexts, so no surface carries its own
   palette, `escapeHtml`, duration thresholds or collapsible-group CSS.
 - **Shadow DOM**: Toolbar and trace-detail overlay isolated from host app styles
-- **Responsive dashboard, desktop toolbar and overlay**: the dashboard's grids, key-value
-  rows and task rows reflow below 768px (`dashboard.css`, `components.css`); the toolbar
-  and the trace-detail overlay assume a desktop viewport
+- **Responsive dashboard, desktop-first toolbar and overlay**: the dashboard is responsive;
+  the toolbar wraps and the overlay's gantt reflows below 768px, but both assume a desktop
+  viewport for their full layout
 - **Lazy loading**: Trace-detail overlay JS loaded only on first use (dynamic `import()`
   from `toolbar.js`; eager static import from `dashboard/main.js`)
 - **Theme support**: `--pk-*` CSS custom properties for dark/light modes, resolved once
@@ -507,7 +510,11 @@ are skipped for a non-servlet application (see *Default Properties*).
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
 `TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled`
 (default on): handler and view observations are tracing, and with it off there is no store
-for them to land in.
+for them to land in. `DevToolbarAutoConfiguration` does not read that property at all;
+instead its capture half — the `RequestCaptureFilter` registration and the Logback
+appender registrar — is `@ConditionalOnBean(TraceStore.class)`. With
+`peekaboot.tracing.enabled=false` the toolbar is therefore still injected into every page,
+and nothing is captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar` — both default from `PeekabootDefaultsEnvironmentPostProcessor`,
@@ -524,9 +531,11 @@ two signals of its own, checked in order:
 
 1. Running as a native image always resolves to `false`, before anything else is checked.
 2. Otherwise, if the current thread's context class loader is DevTools' `RestartClassLoader`
-   (the `restartedMain` thread DevTools relaunches the app on), the result is `true`
-   immediately — DevTools only relaunches like that for a local launch in the first place,
-   so the class loader alone is proof.
+   (the `restartedMain` thread DevTools relaunches the app on), only the container check
+   below is left to decide: DevTools relaunches like that for a local launch, so the class
+   loader stands in for the class-path proof — but a Jib image and Boot's `extract` layout
+   ship DevTools whenever the application has it as a runtime dependency, so a container
+   marker still resolves `false`.
 3. Otherwise, the result is `true` only when *all* of the following hold: the thread is
    named `main`; its context class loader is the JDK's own `AppClassLoader` — not Spring
    Boot's `LaunchedClassLoader` (a packaged, executable jar) and not a servlet container's
@@ -538,8 +547,9 @@ two signals of its own, checked in order:
 4. Those three hold for *every* exploded-classpath launch, so two more signals decide
    (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests):
    `java.class.path` must contain a build tool's output directory — an entry ending in
-   `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main` or `bin/main`, or
-   containing `out/production/` — which an IDE, `spring-boot:run` and `bootRun` always put
+   `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main`,
+   `build/classes/groovy/main`, `build/classes/scala/main` or `bin/main`, or containing
+   `out/production/` — which an IDE, `spring-boot:run` and `bootRun` always put
    there and a Jib image (`/app/classes`) or Boot's `extract` layout (a thin jar with a
    `Class-Path` manifest) never do; and the backend's shared `ContainerRuntime.current()`
    (also behind the Overview tab's Machine card) must report `NONE` — no `/.dockerenv`, no
@@ -567,10 +577,12 @@ other switch.
 precedence, all overridable by an app's own `application.yml`:
 
 - `peekaboot-defaults.yml` &mdash; enables full observability, but only when Peekaboot is
-  enabled *and* the application is a servlet web application
-  (`SpringApplication.getWebApplicationType()`); skipped entirely otherwise, since
-  everything that would read it &mdash; the dashboard, the filters, the trace store
-  &mdash; is servlet-only. The dev-toolbar defaults below sit behind the same check.
+  enabled *and* the application is a servlet web application; skipped entirely otherwise,
+  since everything that would read it &mdash; the dashboard, the filters, the trace store
+  &mdash; is servlet-only. The web type is `spring.main.web-application-type` where the
+  environment carries it, and otherwise the one `SpringApplication.getWebApplicationType()`
+  deduced: Boot binds `spring.main.*` onto the application only after the post-processors
+  have run. The dev-toolbar defaults below sit behind the same check.
 - `peekaboot-no-push-defaults.yml` &mdash; applies unconditionally, even when Peekaboot
   itself is disabled, to keep telemetry from leaving the process by default.
 - `peekaboot-dev-toolbar-defaults.yml` &mdash; applied only when the dev toolbar resolves
@@ -581,11 +593,21 @@ precedence, all overridable by an app's own `application.yml`:
 `management.endpoint.env.show-values` and the `configprops` equivalent are deliberately
 not in `peekaboot-defaults.yml`: they're set by the `peekabootDetection` property source
 instead (the same one that resolves `peekaboot.enabled` and `peekaboot.dev-toolbar` — see
-*Conditional Loading*), and only when that source detects a local run, never as an
-explicit `never` off-local. An application that switches Peekaboot on in a shared
-environment therefore doesn't have its own `/actuator/env` widened as a side effect:
+*Conditional Loading*), and only on a local servlet run whose `peekaboot.enabled` also
+resolves true, never as an explicit `never` off-local. An application that switches
+Peekaboot on in a shared environment therefore doesn't have its own `/actuator/env`
+widened as a side effect:
 off-local, Spring's own default (`never`) applies and every property masks, exactly as it
 would without Peekaboot at all.
+
+How those sources are contributed matters. Boot moves `defaultProperties` — the source
+`SpringApplication.setDefaultProperties` fills — to the end of the environment once every
+post-processor has run, so a source merely appended last would outrank it. Where that
+source exists, Peekaboot folds its entries into it, underneath the application's own, so
+`SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other
+setting. Where it does not, Peekaboot's four named sources — `peekabootDetection`,
+`peekabootNoPushDefaults`, `peekabootDefaults` and `peekabootDevToolbarDefaults` — are
+appended last, in that order. `PeekabootDefaultsRegistrationTest` pins both halves.
 
 ## Tracing Integration
 
@@ -616,10 +638,18 @@ The exporter:
   `peekaboot.tracing.enabled` off leaves the rest of the app's OpenTelemetry setup
   (sampling, other exporters — Zipkin, Jaeger, an OTLP backend) untouched.
 - Receives finished spans from OTel SDK
-- Filters out peekaboot's own requests (`/peekaboot/**` and the management base path - `/actuator/**` by default)
+- Filters out peekaboot's own requests (`/peekaboot/**` and the management base path -
+  `/actuator/**` by default), span by span. A child of such a request carries neither the
+  path tag nor the route name, so skipping a *root* also publishes a `TraceDiscardedEvent`;
+  `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from
+  all three buckets
 - Converts to `SpanData` and publishes `SpanDataEvent` via Spring's
   `ApplicationEventPublisher`; `TraceStoreEventListener` receives it via an
   `@EventListener` and forwards it to `TraceStore`
+- Records an error only for a span whose status code is `ERROR`: the message is the status
+  description, falling back to the `exception` event's `exception.message` when the
+  description is empty, and the class is that event's `exception.type` — `ERROR` where the
+  span recorded no exception event
 
 ### Micrometer Tracer Integration
 
@@ -726,8 +756,7 @@ SpanData
 ├── tags: Map<String, String>
 ├── events: List<Event>
 ├── errorMessage, errorClass
-├── remoteServiceName, remoteIp, remotePort
-├── links: List<LinkData>
+├── remoteServiceName
 └── creationOrder: long
 ```
 
@@ -769,8 +798,11 @@ consumes the same cached result.
 
 Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 
-- `*Test` — plain unit tests, run by surefire at `test`.
-- `*IT` — anything that boots a real application, run by failsafe at `integration-test`.
+- `*Test` — plain unit tests, run by surefire at `test`. The one deliberate exception is
+  `PeekabootDefaultsRegistrationTest`, which runs a real non-web `SpringApplication`: it
+  boots no server, and what it proves — `spring.factories` registration and
+  default-property precedence — belongs in the fast gate.
+- `*IT` — anything that boots a server, run by failsafe at `integration-test`.
 
 Where the Spring-backed tests live: `peekaboot-backend`'s suite uses no `@SpringBootTest`
 and no embedded server — a bare `AnnotationConfigApplicationContext` or an
