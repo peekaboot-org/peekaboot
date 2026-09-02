@@ -10,9 +10,7 @@ import org.peekaboot.backend.domain.config.ConfigInfo;
 import org.peekaboot.backend.domain.config.ConfigProperty;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
-import org.springframework.stereotype.Component;
 
-@Component
 public class ConfigMapper {
 
     private final TreeMasker treeMasker;

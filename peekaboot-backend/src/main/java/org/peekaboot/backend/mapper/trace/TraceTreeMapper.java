@@ -17,9 +17,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
-import org.springframework.stereotype.Component;
 
-@Component
 public class TraceTreeMapper {
 
     private final MaskingEngine maskingEngine;

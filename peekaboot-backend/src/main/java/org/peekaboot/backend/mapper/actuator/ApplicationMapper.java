@@ -8,9 +8,7 @@ import org.peekaboot.backend.actuator.parsed.SpringInfo;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
-import org.springframework.stereotype.Component;
 
-@Component
 public class ApplicationMapper {
 
     private final TreeMasker treeMasker;

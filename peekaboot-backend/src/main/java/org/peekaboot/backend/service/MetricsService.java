@@ -18,9 +18,7 @@ import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
 import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Service;
 
-@Service
 public class MetricsService {
 
     @Nullable

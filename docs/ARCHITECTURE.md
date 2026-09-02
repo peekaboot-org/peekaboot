@@ -471,7 +471,7 @@ the three hooks that run before or outside the application context are registere
 
 | Class | Registered via | Purpose |
 |-------|----------------|---------|
-| `PeekabootAutoConfiguration` | `.imports` | Core beans, component scan |
+| `PeekabootAutoConfiguration` | `.imports` | Core beans (controller, services, mappers, web config) as explicit `@Bean` methods, each `@ConditionalOnMissingBean` |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration, `LogbackAppenderRegistrar` |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory` — where the insights snapshot and lifecycle log are kept; no web/actuator conditions |
@@ -498,13 +498,17 @@ Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
 @ConditionalOnClass(TraceStore.class)
 ```
 
-`PeekabootAutoConfiguration` &mdash; the class that component-scans the servlet-only
-`PeekabootWebConfig` and registers the controllers, services and actuator wiring &mdash;
-needs it because `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type;
+`PeekabootAutoConfiguration` &mdash; the class that registers the servlet-only
+`PeekabootWebConfig` next to the controllers, services and actuator wiring, all as
+explicit `@Bean` methods, each `@ConditionalOnMissingBean` so an application bean of the
+same type or name replaces the default instead of colliding with it (the method names
+keep the class-derived bean names component scanning used to produce, which
+`ServerUrlResolver`'s dashboard check relies on) &mdash; needs it because
+`PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type;
 without the guard, a non-servlet application (WebFlux, or no web application at all) with
 `peekaboot.enabled=true` would still register the controller, actuator services and
 mappers, just with nothing servlet-specific ever invoking them &mdash; dead beans and
-wasted component-scan work, not a startup crash (`ApplicationContextRunner` confirms the
+wasted registration work, not a startup crash (`ApplicationContextRunner` confirms the
 context starts cleanly either way; only `WebMvcConfigurationSupport`, itself only wired up
 in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard prevents
 even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry it

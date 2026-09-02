@@ -10,9 +10,7 @@ import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.mapper.actuator.*;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
 
-@Service
 public final class ActuatorInsightsService {
 
     private final PeekabootActuatorService actuatorService;

@@ -9,9 +9,7 @@ import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
 import org.peekaboot.backend.domain.trace.TraceTree;
-import org.springframework.stereotype.Component;
 
-@Component
 public class IssueDetector {
 
     private final UiTracingProperties properties;

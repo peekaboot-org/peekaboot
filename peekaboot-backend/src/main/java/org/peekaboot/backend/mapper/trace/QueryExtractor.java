@@ -9,9 +9,7 @@ import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
-import org.springframework.stereotype.Component;
 
-@Component
 public class QueryExtractor {
 
     private final MaskingEngine maskingEngine;

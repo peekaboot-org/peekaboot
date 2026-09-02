@@ -6,9 +6,7 @@ import org.peekaboot.backend.actuator.parsed.FlywayResponse;
 import org.peekaboot.backend.domain.flyway.FlywayInfo;
 import org.peekaboot.backend.domain.flyway.MigrationInfo;
 import org.peekaboot.backend.domain.flyway.MigrationState;
-import org.springframework.stereotype.Component;
 
-@Component
 public class FlywayMapper {
 
     public FlywayInfo map(FlywayResponse flywayData) {

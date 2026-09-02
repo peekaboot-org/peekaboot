@@ -8,9 +8,7 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.masking.ConnectionParamsMasker;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.springframework.stereotype.Component;
 
-@Component
 public class DataSourceMapper {
 
     private final ConnectionParamsMasker connectionParamsMasker;

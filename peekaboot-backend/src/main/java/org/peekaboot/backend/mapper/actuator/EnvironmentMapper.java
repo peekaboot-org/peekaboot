@@ -8,9 +8,7 @@ import org.peekaboot.backend.domain.environment.EnvironmentInfo;
 import org.peekaboot.backend.domain.environment.PropertySourceGroup;
 import org.peekaboot.backend.domain.environment.PropertyValue;
 import org.peekaboot.backend.masking.MaskingEngine;
-import org.springframework.stereotype.Component;
 
-@Component
 public class EnvironmentMapper {
 
     private final MaskingEngine maskingEngine;
