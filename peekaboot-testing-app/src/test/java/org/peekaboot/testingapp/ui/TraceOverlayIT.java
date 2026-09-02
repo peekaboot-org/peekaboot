@@ -650,6 +650,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * duration, and the gantt header's tick marks line up with the row tracks below
      * them - both track and header timeline carry the same side margin, so the 0%/100%
      * ticks sit right above the start/end of the bars they describe rather than further out.
+     *
+     * <p>The leftmost tick is the axis origin, the trace's own start: it reads "0ms"
+     * rather than the "&lt;1ms" formatDurationMs() gives any sub-millisecond duration,
+     * because no duration is being measured there at all.
      */
     @Test
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
@@ -661,6 +665,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat((Boolean) allDurationsMatchPattern)
                 .as("every duration cell reads '<duration> \u00B7 <pct>%'")
                 .isTrue();
+
+        String originTick =
+                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-header__timeline span').textContent");
+        assertThat(originTick)
+                .as("the axis origin is the trace's start, not a sub-millisecond measurement")
+                .isEqualTo("0ms");
 
         BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
                 .boundingBox();

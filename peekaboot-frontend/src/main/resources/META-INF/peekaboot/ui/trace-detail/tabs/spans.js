@@ -18,7 +18,9 @@ export function render(container, trace, context = {}) {
     // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = trace.durationMs || 1;
     const traceStart = trace.startTimeMs || 0;
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p));
+    // the origin is where the trace starts, not a duration anyone measured, so it is
+    // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
+    const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
 
     container.innerHTML = '<div class="pk-gantt">'
         + '<div class="pk-gantt-header">'
