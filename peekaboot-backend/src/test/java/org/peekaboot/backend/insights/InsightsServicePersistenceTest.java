@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.storage.StorageDirectory;
+import org.peekaboot.backend.testsupport.LogCapture;
 import org.springframework.core.io.DefaultResourceLoader;
 
 class InsightsServicePersistenceTest {
@@ -73,7 +75,7 @@ class InsightsServicePersistenceTest {
     @Test
     void historyOutlivesTheRunThatCollectedIt() {
         InsightsService first = service(true, registryReading(7));
-        first.start();
+        start(first);
         // A few real ticks, not a fixed sleep and a hope: this is what the first run
         // actually has to persist. Polling heap.used itself, rather than the level's
         // count, sidesteps snapshot() reporting count from whichever series its own
@@ -88,7 +90,7 @@ class InsightsServicePersistenceTest {
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).exists();
 
         InsightsService second = service(true, registryReading(1));
-        second.start();
+        start(second);
         try {
             // Restore lands before the second run's first tick; wait for heap.used's own
             // newest sample to become this run's value - proof that live sampling has
@@ -111,6 +113,17 @@ class InsightsServicePersistenceTest {
         }
     }
 
+    /** start()'s one INFO summary line is deliberate; pin it here rather than let it reach the console. */
+    private static void start(InsightsService service) {
+        try (LogCapture capture = LogCapture.attach(InsightsService.class, Level.INFO)) {
+            service.start();
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
+            });
+        }
+    }
+
     private static List<Double> heapUsedValues(InsightsService service) {
         return service.data(0).series().get("heap.used").values();
     }
@@ -123,7 +136,7 @@ class InsightsServicePersistenceTest {
     @Test
     void nothingIsWrittenWhileStorageIsSwitchedOff() throws Exception {
         InsightsService service = service(false);
-        service.start();
+        start(service);
         await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
                 .until(() -> service.data(0).count() >= 1); // a tick has landed, so there was something to write
