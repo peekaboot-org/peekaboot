@@ -265,12 +265,16 @@ only the build mechanics.
   `peekaboot-test-support`, an unpublished reactor module that `peekaboot-backend` and
   `peekaboot-spring-boot-autoconfigure` consume as a plain test-scope dependency (Maven
   `<scope>test</scope>`, Gradle `testImplementation(project(":peekaboot-test-support"))`).
-  The backend's own fixture builders (`Spans`, `SpanNodes`, `RequestCompletedEvents`,
-  `TraceStores`) construct backend domain types and stay in its test tree. Why a module and
-  not a `-tests` jar: [peekaboot-test-support/README.md](peekaboot-test-support/README.md).
+  The backend's own fixture builders (`Spans`, `SpanNodes`, `TraceTrees`,
+  `RequestCompletedEvents`, `TraceStores`) construct backend domain types and stay in its
+  test tree. Why a module and not a `-tests` jar:
+  [peekaboot-test-support/README.md](peekaboot-test-support/README.md).
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
-  `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes.
+  `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes, nor the
+  Gradle `test`/`integrationTest` task includes. Running either is Maven only: `-Dtest=`
+  widens Surefire's includes, while Gradle's `--tests` only filters within a task's own
+  includes, so no Gradle task can reach them.
 - Never combine `-am` with `-Dtest`.
 
 ## CI

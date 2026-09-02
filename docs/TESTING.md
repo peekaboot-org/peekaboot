@@ -24,7 +24,8 @@
 `peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`:
 `Spans.span(id)` (a `SpanData` with neutral defaults, plus the `jdbcQuery`/`jdbcDuplicate`
 presets for the double-instrumented pair), `SpanNodes.node(id)` (an already-mapped
-`SpanNode`), `RequestCompletedEvents.request(traceId)`/`minimal(traceId)`, and
+`SpanNode`), `TraceTrees.tree(rootSpan)` (the mapped `TraceTree` around one),
+`RequestCompletedEvents.request(traceId)`/`minimal(traceId)`, and
 `TraceStores.withDefaults()`/`with(customizer)` (an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`). A test names only what it
 asserts on; a new record component is added to the builder once, not to every test class.
@@ -36,7 +37,10 @@ The frontend is plain ES modules, so a Java enum and its JS mirror drift silentl
 `MIGRATION_STATES`, `ISSUE_TYPES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
 `MigrationState`, `IssueType` and Logback's levels, the keys the frontend reads off
 `/api/features` to the `Features` record, and `severity.js`'s `DEFAULT_THRESHOLDS` to the
-properties' defaults. A vocabulary that gains a JS mirror gets a row there.
+properties' defaults. A vocabulary that gains a JS mirror gets a row there. The same suite
+pins `format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and
+drives `dashboard/tabs/insights-store.js` — the browser's mirror of the insights rings —
+directly, so the JS with no Java counterpart is covered too.
 
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external
@@ -44,6 +48,10 @@ Mock only when the real dependency is expensive, non-deterministic, or external
 `DataSource`, or an in-module class whose real construction needs a live container).
 Cheap in-module classes (`InMemoryTraceStore`, `QueryExtractor`, `ToolbarDataProvider`,
 mappers) are used for real. Spring/servlet machinery (`MockMvc`, mock requests) is fine.
+`InsightsSsePublisherTest` shows how far that reaches: it drives Spring's real
+`ResponseBodyEmitterReturnValueHandler` and `StandardServletAsyncWebRequest` over mock
+servlet objects, so a container timeout runs the interceptor chain a stubbed emitter would
+have skipped.
 
 Exception: controller tests that stub a service and assert `isSameAs` pass-through
 (sentinel-identity delegation) are a legitimate use of a stub even when the service
@@ -98,8 +106,10 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     `peekaboot-testing-app`, giving the dashboard's Errors bucket a scheduled-job failure to
     show.
   - `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and
-    has not been acknowledged`, one line per stale order — deliberate demo signal giving the
-    Logs tab WARN content on a non-HTTP (`SCHEDULED_JOB`) trace.
+    has not been acknowledged` — deliberate demo signal giving the Logs tab WARN content
+    on a non-HTTP (`SCHEDULED_JOB`) trace. One line per order the context holds, on every
+    run: nothing ever moves an order out of `PLACED`, so the count grows with the orders a
+    run places.
   - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is
     unreachable` — `OrderController`'s deliberately failing `/boom` endpoint, exercised to
     populate the Errors bucket and the toolbar's error styling.
@@ -136,6 +146,10 @@ a class that clears shared state this way MUST hold the corresponding
 that same store holds the `READ` side — `DashboardTraceViewIT` and `DevToolbarIT`
 are the pattern. A class on its own context
 configuration (its own app) needs no lock.
+
+Pinning to a traceId does not mean searching the store for it: a JSON endpoint answers
+with `Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
+`OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
 
 The database needs no such discipline: `application-test.yml` and `application-security.yml`
 set no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its
@@ -176,9 +190,12 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
 - Fast gate (unit tests + Error Prone only): `mvn test` (root). Single unit-test class:
   `mvn -pl <module> test -Dtest=<Class>` — never combine `-am` with `-Dtest`.
 - Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
-  phase) and only runs under `verify`; `peekaboot-testing-app` runs them as concurrent
-  classes in one JVM, 2 worker threads with a Chromium each
-  (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test that asserts on
+  phase) and only runs under `verify`. The one exception is
+  `PeekabootDefaultsRegistrationTest`, a `*Test` that runs a real non-web
+  `SpringApplication` on purpose, so the fast gate covers `spring.factories` registration
+  and default-property precedence; it boots no server and costs a fraction of a second.
+  `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker
+  threads with a Chromium each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test that asserts on
   app-global state shared with other classes must either pin to its own traceId or take
   a `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
   Single class: `mvn -pl <module> verify -Dit.test=<Class>`.

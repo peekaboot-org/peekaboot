@@ -93,7 +93,7 @@ Overall health status of a trace.
 | Value | Description |
 |-------|-------------|
 | `OK` | No issues detected |
-| `HAS_ERRORS` | One or more spans have errors |
+| `HAS_ERRORS` | At least one span carries an error class or message; an error-level log alone does not — that only puts the trace in the Errors bucket |
 
 **Usage:** `TraceStatus` enum, `status` field
 
