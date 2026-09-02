@@ -8,7 +8,6 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
@@ -24,7 +23,7 @@ class InMemoryTraceStoreTest {
 
     @BeforeEach
     void setUp() {
-        storage = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        storage = new InMemoryTraceStore(100, 50);
     }
 
     @Test
@@ -80,7 +79,7 @@ class InMemoryTraceStoreTest {
     void duplicateArtifactsPushingRawArrivalsPastTheCapDoNotTruncate() {
         // Cap of 2 real spans; five raw arrivals (root + a duplicated child pair, twice)
         // would overflow a cap enforced before deduplication but not one enforced after.
-        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2);
         SpanData root = span("root").in("t1").named("GET /orders").build();
         SpanData duplicate =
                 jdbcDuplicate("dup1", "query1", "SELECT 1").in("t1").build();
@@ -98,7 +97,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void theBundleIsMarkedTruncatedOnceRealSpansExceedTheCap() {
-        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        InMemoryTraceStore capped = new InMemoryTraceStore(100, 2);
         for (int i = 1; i <= 3; i++) {
             capped.addSpan(span("s" + i).in("t1").named("op" + i).build());
         }
@@ -206,13 +205,10 @@ class InMemoryTraceStoreTest {
 
     @Test
     void getTracesAllReturnsNewestFirst() {
-        // createdAt has millisecond resolution; a seeded clock orders the bundles deterministically
-        AtomicLong clock = new AtomicLong();
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), clock::incrementAndGet);
-        store.addSpan(spanIn("t1", "s1"));
-        store.addSpan(spanIn("t2", "s2"));
+        storage.addSpan(spanIn("t1", "s1"));
+        storage.addSpan(spanIn("t2", "s2"));
 
-        List<TraceDataBundle> all = store.getTraces(TraceBucket.ALL, 10);
+        List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
         assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
     }
 
@@ -260,24 +256,36 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void errorTraceSurvivesAllCacheEviction() throws InterruptedException {
-        // TTL-based eviction is deterministic, size-based (W-TinyLFU) is not
-        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
-        store.addSpan(errorSpan(store, "t1"));
-        Thread.sleep(10);
-        store.cleanUp();
+    void allBucketEvictsOldestTraceOnceFull() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(2));
+        store.addSpan(spanIn("t1", "s1"));
+        store.addSpan(spanIn("t2", "s2"));
+        store.addSpan(spanIn("t3", "s3"));
 
-        assertThat(store.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(store.getTraces(TraceBucket.ALL, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t3", "t2");
+        assertThat(store.getTrace("t1")).isEmpty();
+    }
+
+    @Test
+    void errorTraceSurvivesAllBucketEviction() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(1));
+        store.addSpan(errorSpan(store, "t1"));
+        store.addSpan(spanIn("t2", "s2"));
+
+        assertThat(store.getTraces(TraceBucket.ALL, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t2");
         assertThat(store.getTrace("t1")).isPresent();
         assertThat(store.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
     }
 
     @Test
-    void lateEventAfterCacheEvictionReusesBucketBundle() throws InterruptedException {
-        InMemoryTraceStore store = TraceStores.with(Duration.ofMillis(1), p -> {});
+    void lateEventAfterAllBucketEvictionReusesBucketBundle() {
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxTraces(1));
         store.addSpan(errorSpan(store, "t1"));
-        Thread.sleep(10);
-        store.cleanUp();
+        store.addSpan(spanIn("t2", "s2"));
 
         store.addLog(log("t1", "INFO", "late"));
 
@@ -311,15 +319,15 @@ class InMemoryTraceStoreTest {
     }
 
     /**
-     * The three-argument constructor - the one the autoconfigure and testing-app fixtures
+     * The two-argument constructor - the one the autoconfigure and testing-app fixtures
      * use - takes every limit it is not given from {@link PeekabootTracingProperties}, so
      * those defaults have exactly one owner. Checked through behaviour at the two limits a
      * test can reach cheaply: the slow-trace threshold and the per-trace log cap.
      */
     @Test
-    void threeArgumentConstructorTakesTheRemainingLimitsFromTheTracingPropertiesDefaults() {
+    void twoArgumentConstructorTakesTheRemainingLimitsFromTheTracingPropertiesDefaults() {
         PeekabootTracingProperties defaults = new PeekabootTracingProperties();
-        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50);
         long threshold = defaults.getSlowTraceThresholdMs();
         store.addSpan(span("s1")
                 .in("just-under")

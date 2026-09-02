@@ -9,7 +9,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.util.ContextInitializer;
 import ch.qos.logback.core.Appender;
 import io.micrometer.tracing.Tracer;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -388,7 +387,7 @@ class DevToolbarAutoConfigurationTest {
     static class MockTracingConfig {
         @Bean
         TraceStore traceStore() {
-            return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+            return new InMemoryTraceStore(100, 50);
         }
 
         @Bean
@@ -410,7 +409,7 @@ class DevToolbarAutoConfigurationTest {
     static class TraceStoreOnlyConfig {
         @Bean
         TraceStore traceStore() {
-            return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+            return new InMemoryTraceStore(100, 50);
         }
     }
 }

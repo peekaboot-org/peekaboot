@@ -8,7 +8,6 @@ dependencies {
     api("org.springframework.boot:spring-boot")
     api("org.springframework.boot:spring-boot-actuator")
     api("tools.jackson.core:jackson-databind")
-    api("com.github.ben-manes.caffeine:caffeine")
     api("io.micrometer:micrometer-core")
     api("io.micrometer:micrometer-tracing")
     api("net.osslabz:jdbc-url-parser:0.1.1")

@@ -197,8 +197,9 @@ cost of a few seconds' divergence from "ready" that the banner's own label names
 │   └────────────────────┬─────────────────────┘                      │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
-│   │    TraceStore (InMemoryTraceStore)       │ ◄── Caffeine Cache   │
-│   │   All / Errors / Slow buckets            │     + bounded maps   │
+│   │    TraceStore (InMemoryTraceStore)       │ ◄── three bounded,   │
+│   │   All / Errors / Slow buckets            │     insertion-ordered│
+│   │                                          │     maps             │
 │   └────────────────────┬─────────────────────┘                      │
 │                        ▼                                            │
 │   ┌──────────────────────────────────────────┐                      │
@@ -253,7 +254,7 @@ org.peekaboot.backend/
 
 1. **Span Capture**: `OtelSpanExporter` receives spans from OpenTelemetry SDK
 2. **Event Publishing**: Publishes `SpanDataEvent` via Spring's `ApplicationEventPublisher`
-3. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), which stores in a Caffeine cache (All bucket) plus bounded maps for the Errors and Slow buckets
+3. **Storage**: `TraceStoreEventListener` listens via `@EventListener` and forwards to `TraceStore` (`InMemoryTraceStore`), which keeps three insertion-ordered bounded maps: the All, Errors and Slow buckets
 4. **Log Correlation**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span), and drops events without a `traceId`
 5. **Request Metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 6. **Query**: `TraceInsightsService` queries `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW)
@@ -834,9 +835,9 @@ class DevToolbarAutoConfigurationIT {
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All (Caffeine cache), Errors, and Slow (bounded maps holding references into the All bucket's bundles, surviving its eviction). Errors and Slow are independently capped and evicted oldest-first once full, not tied to All's 30-minute TTL (`InMemoryTraceStore.DEFAULT_EXPIRE`, not configurable) — once a trace qualifies it's copied into its bucket and can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All, Errors and Slow — each an insertion-ordered map capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so once a trace qualifies it can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
-6. **Caffeine for storage**: Bounded memory with automatic eviction
+6. **Plain bounded maps for storage**: Memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
 7. **Shadow DOM**: Toolbar cannot interfere with host application
 8. **Lowest-priority defaults**: Apps can always override peekaboot settings
 9. **Shared frontend design system, one override point**: The dashboard, toolbar, and

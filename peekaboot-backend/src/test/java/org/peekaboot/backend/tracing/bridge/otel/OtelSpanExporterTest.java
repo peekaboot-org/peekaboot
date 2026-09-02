@@ -16,7 +16,6 @@ import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,7 +40,7 @@ class OtelSpanExporterTest {
 
     @BeforeEach
     void setUp() {
-        storage = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        storage = new InMemoryTraceStore(100, 50);
         publishedEvents = new ArrayList<>();
         eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {

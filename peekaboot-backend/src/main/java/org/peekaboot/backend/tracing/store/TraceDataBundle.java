@@ -10,7 +10,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.LongSupplier;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
@@ -60,24 +59,13 @@ public class TraceDataBundle {
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
-    private final long createdAt;
 
     public TraceDataBundle(String traceId) {
-        this(traceId, System::currentTimeMillis);
-    }
-
-    /** Clock seam, mirroring RequestCaptureFilter's: deterministic creation ordering for tests. */
-    TraceDataBundle(String traceId, LongSupplier clock) {
         this.traceId = traceId;
-        this.createdAt = clock.getAsLong();
     }
 
     public String traceId() {
         return traceId;
-    }
-
-    public long createdAt() {
-        return createdAt;
     }
 
     /**

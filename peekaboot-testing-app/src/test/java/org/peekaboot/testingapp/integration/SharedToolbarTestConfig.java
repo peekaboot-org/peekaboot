@@ -1,7 +1,6 @@
 package org.peekaboot.testingapp.integration;
 
 import io.micrometer.tracing.Tracer;
-import java.time.Duration;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.backend.tracing.store.TraceStoreEventListener;
@@ -31,7 +30,7 @@ public class SharedToolbarTestConfig {
 
     @Bean
     TraceStore traceStore() {
-        return new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
+        return new InMemoryTraceStore(100, 50);
     }
 
     @Bean

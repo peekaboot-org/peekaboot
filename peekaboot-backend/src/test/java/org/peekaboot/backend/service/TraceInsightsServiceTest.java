@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
@@ -495,7 +494,7 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailSurfacesTheTruncatedFlagFromTheBundle() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2);
         for (int i = 1; i <= 3; i++) {
             cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s" + i, "op" + i));
         }
@@ -509,7 +508,7 @@ class TraceInsightsServiceTest {
 
     @Test
     void theListSurfacesTheTruncatedFlagToo() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
+        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1);
         cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s1", "op1"));
         cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s2", "op2"));
         TraceInsightsService cappedService = newService(cappedStore);
