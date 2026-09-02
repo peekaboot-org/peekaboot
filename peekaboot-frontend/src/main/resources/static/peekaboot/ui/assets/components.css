@@ -171,7 +171,7 @@
     color: inherit;
     font-size: var(--pk-text-sm);
     cursor: pointer;
-    transition: background-color var(--pk-transition);
+    transition: background-color var(--pk-transition), filter var(--pk-transition);
 }
 /* Pressed buttons are excluded: their fill IS their state (the green selection fill
    below, the unmask toggle's danger fill in dashboard.css), each paired with its own
@@ -179,6 +179,17 @@
    guard a hover swaps the fill for the neutral --pk-bg-hover under ink tuned for a
    saturated fill - white on near-white light, dark-on-dark dark. */
 .pk-btn:not(:disabled):not([aria-pressed="true"]):hover { background: var(--pk-bg-hover); }
+/* The pressed-button hover cue: a brightness() filter shifts fill and ink together, so
+   the pairing above survives instead of the fill being swapped out from under its ink.
+   Direction follows each theme's own hover polarity (--pk-bg-hover sits darker than
+   --pk-bg light, lighter dark), at a strength computed to hold every pressed pairing
+   at AA's 4.5:1: light 0.92 takes primary/on-primary 7.25:1 -> 6.24:1 and the unmask
+   toggle's danger/on-danger 5.31:1 -> 5.07:1; dark 1.12 improves both outright
+   (9.89:1 -> 12.29:1, 5.65:1 -> 6.08:1). Pinned in ComponentPrimitiveIT's rendered
+   pressed+hover sweep. */
+.pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(0.92); }
+[data-theme="dark"] .pk-btn:not(:disabled)[aria-pressed="true"]:hover,
+:host([data-theme="dark"]) .pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(1.12); }
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 /* 0.65 opacity, not the more common 0.5: this button's own text sits on --pk-bg/
    --pk-bg-alt at well over 10:1 (see tokens.css), and WCAG exempts disabled controls

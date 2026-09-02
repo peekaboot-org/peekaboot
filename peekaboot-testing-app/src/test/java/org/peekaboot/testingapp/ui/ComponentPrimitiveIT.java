@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
@@ -184,14 +185,14 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
-     * Waits until the element's background-color holds still across consecutive reads -
-     * .pk-btn transitions it over 0.2s, so a read right after a theme flip or hover/
-     * un-hover would otherwise catch a mid-blend value and assert against noise.
+     * Waits until the element's background-color and filter hold still across consecutive
+     * reads - .pk-btn transitions both over 0.2s, so a read right after a theme flip or
+     * hover/un-hover would otherwise catch a mid-blend value and assert against noise.
      */
-    private void awaitSettledBackground(String selector) {
+    private void awaitSettledPaint(String selector) {
         page.evalOnSelector(selector, """
                 async el => {
-                    const read = () => getComputedStyle(el).backgroundColor;
+                    const read = () => getComputedStyle(el).backgroundColor + ' ' + getComputedStyle(el).filter;
                     let previous = read();
                     for (let i = 0; i < 60; i++) {
                         await new Promise(resolve => setTimeout(resolve, 50));
@@ -199,9 +200,72 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                         if (current === previous) return;
                         previous = current;
                     }
-                    throw new Error('background-color never settled: ' + read());
+                    throw new Error('paint never settled: ' + read());
                 }
                 """);
+    }
+
+    /**
+     * The ink/fill pair as actually rendered: a brightness() filter - the pressed-button
+     * hover cue - multiplies every channel of ink and fill alike in sRGB space (the CSS
+     * shorthand filters operate in sRGB, clamped at white), which the computed color/
+     * backgroundColor that {@link #contrastRatio} reads never reflects.
+     */
+    private Map<String, Object> renderedInkAndFill(String selector) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rendered = (Map<String, Object>) page.evaluate("""
+                (sel) => {
+                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).map(Number);
+                    const luminance = ([r, g, b]) => {
+                        const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+                    };
+                    const style = getComputedStyle(document.querySelector(sel));
+                    const brightness = style.filter.match(/brightness\\((\\d*\\.?\\d+)\\)/);
+                    const k = brightness ? Number(brightness[1]) : 1;
+                    const apply = rgb => rgb.slice(0, 3).map(v => Math.min(255, v * k));
+                    const ink = luminance(apply(parse(style.color)));
+                    const fill = apply(parse(style.backgroundColor));
+                    const [hi, lo] = [ink, luminance(fill)].sort((a, b) => b - a);
+                    return {fill: fill.join(','), ratio: (hi + 0.05) / (lo + 0.05)};
+                }
+                """, selector);
+        return rendered;
+    }
+
+    /**
+     * Pressed buttons are excluded from the generic hover fill swap (their fill IS their
+     * state - see components.css), so they carry a hover cue of their own: a per-theme
+     * brightness() filter that shifts ink and fill together instead of swapping the fill
+     * out from under its ink. The cue must actually show (the rendered fill changes) and
+     * the rendered pairing must still clear AA's 4.5:1 in every combination - the green
+     * selection fill and the unmask toggle's danger fill, resting and hovered, both themes.
+     */
+    @Test
+    void pressedButtonsShowAHoverCueAndKeepAaContrastInBothThemes() {
+        openFixture();
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            for (String button : List.of("#btn-pressed", "#unmask-pressed")) {
+                page.mouse().move(0, 0); // make sure nothing is hovered
+                awaitSettledPaint(button);
+                Map<String, Object> resting = renderedInkAndFill(button);
+                assertThat(((Number) resting.get("ratio")).doubleValue())
+                        .as("%s resting ink/fill contrast (%s theme)", button, theme)
+                        .isGreaterThanOrEqualTo(4.5);
+
+                page.hover(button);
+                awaitSettledPaint(button);
+                Map<String, Object> hovered = renderedInkAndFill(button);
+                assertThat(hovered.get("fill"))
+                        .as("%s hover shifts the rendered fill (%s theme)", button, theme)
+                        .isNotEqualTo(resting.get("fill"));
+                assertThat(((Number) hovered.get("ratio")).doubleValue())
+                        .as("%s hovered ink/fill contrast (%s theme)", button, theme)
+                        .isGreaterThanOrEqualTo(4.5);
+            }
+        }
     }
 
     /**
@@ -220,7 +284,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
             page.mouse().move(0, 0); // make sure nothing is hovered
-            awaitSettledBackground("#unmask-pressed");
+            awaitSettledPaint("#unmask-pressed");
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("resting fill is --pk-danger (%s theme)", theme)
@@ -230,7 +294,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                     .isGreaterThanOrEqualTo(4.5);
 
             page.hover("#unmask-pressed");
-            awaitSettledBackground("#unmask-pressed");
+            awaitSettledPaint("#unmask-pressed");
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("hovered fill stays --pk-danger (%s theme)", theme)
