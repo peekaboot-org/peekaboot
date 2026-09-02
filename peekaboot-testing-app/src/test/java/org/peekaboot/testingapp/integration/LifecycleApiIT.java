@@ -2,13 +2,16 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.info.BuildProperties;
+import org.springframework.boot.info.GitProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
@@ -31,6 +34,9 @@ class LifecycleApiIT {
     @Autowired
     private BuildProperties buildProperties;
 
+    @Autowired
+    private ObjectProvider<GitProperties> gitProperties;
+
     private PeekabootApi api;
 
     @BeforeEach
@@ -45,14 +51,32 @@ class LifecycleApiIT {
         assertThat(events).hasSize(1);
 
         JsonNode event = events.get(0);
-        assertThat(event.get("type").asText()).isEqualTo("start");
-        assertThat(event.get("epochMs").asLong()).isPositive();
-        assertThat(event.get("version").asText()).isEqualTo(buildProperties.getVersion());
-        assertThat(event.get("branch").asText()).isNotEmpty();
-        assertThat(event.get("commitId").asText()).isNotEmpty();
-        assertThat(event.get("shortCommitId").asText()).isNotEmpty();
-        assertThat(event.get("buildTimeEpochMs").asLong()).isPositive();
-        assertThat(event.get("uncleanPrevious").asBoolean()).isFalse();
+        assertThat(event.path("type").asString()).isEqualTo("start");
+        assertThat(event.path("epochMs").asLong()).isPositive();
+        assertThat(event.path("version").asString()).isEqualTo(buildProperties.getVersion());
+        assertThat(event.path("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(event.path("uncleanPrevious").asBoolean()).isFalse();
+    }
+
+    /**
+     * The pom's {@code failOnNoGitDirectory=false} lets the build run without a resolvable
+     * {@code .git} directory, in which case no {@code git.properties} - and no
+     * {@code GitProperties} bean - exists and the lifecycle history carries no git facts.
+     */
+    @Test
+    void theRunningApplicationServesTheGitFactsOfItsBuild() {
+        GitProperties git = gitProperties.getIfAvailable();
+        assumeTrue(git != null, "the build generated no git.properties");
+
+        JsonNode event = awaitFirst("/peekaboot/api/lifecycle/events", "events").get(0);
+        JsonNode run = awaitFirst("/peekaboot/api/lifecycle/runs", "runs").get(0);
+
+        assertThat(event.path("branch").asString()).isEqualTo(git.getBranch());
+        // the pom's full generation mode writes commit.id.full, a key getCommitId() does not read
+        assertThat(event.path("commitId").asString()).isEqualTo(git.get("commit.id.full"));
+        assertThat(event.path("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
+        assertThat(run.path("branch").asString()).isEqualTo(git.getBranch());
+        assertThat(run.path("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
     }
 
     @Test
@@ -62,16 +86,14 @@ class LifecycleApiIT {
         assertThat(runs).hasSize(1);
 
         JsonNode run = runs.get(0);
-        assertThat(run.get("startedAtEpochMs").asLong()).isPositive();
-        assertThat(run.get("running").asBoolean()).isTrue();
-        assertThat(run.get("uncleanExit").asBoolean()).isFalse();
-        assertThat(run.get("stoppedAtEpochMs").isNull()).isTrue();
-        assertThat(run.get("downForMs").isNull()).isTrue();
-        assertThat(run.get("changed")).isEmpty();
-        assertThat(run.get("version").asText()).isEqualTo(buildProperties.getVersion());
-        assertThat(run.get("branch").asText()).isNotEmpty();
-        assertThat(run.get("shortCommitId").asText()).isNotEmpty();
-        assertThat(run.get("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(run.path("startedAtEpochMs").asLong()).isPositive();
+        assertThat(run.path("running").asBoolean()).isTrue();
+        assertThat(run.path("uncleanExit").asBoolean()).isFalse();
+        assertThat(run.path("stoppedAtEpochMs").isNull()).isTrue();
+        assertThat(run.path("downForMs").isNull()).isTrue();
+        assertThat(run.path("changed")).isEmpty();
+        assertThat(run.path("version").asString()).isEqualTo(buildProperties.getVersion());
+        assertThat(run.path("buildTimeEpochMs").asLong()).isPositive();
     }
 
     /**
@@ -82,6 +104,6 @@ class LifecycleApiIT {
     private JsonNode awaitFirst(String path, String listField) {
         return await().atMost(Duration.ofSeconds(5))
                 .pollInterval(Duration.ofMillis(20))
-                .until(() -> api.getJson(path).get(listField), node -> !node.isEmpty());
+                .until(() -> api.getJson(path).path(listField), node -> !node.isEmpty());
     }
 }
