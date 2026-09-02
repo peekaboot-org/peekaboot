@@ -47,8 +47,8 @@ public class LifecycleEvents {
         static Build of(LifecycleEvent event) {
             Map<String, String> build = event.build();
             Map<String, String> git = event.git();
-            // git-commit-id-maven-plugin's `full` generation mode (used across this
-            // project) emits commit.id.full rather than the bare commit.id key.
+            // With git-commit-id's commitIdGenerationMode=full (the testing-app's setting)
+            // the key is commit.id.full, not commit.id.
             String commitId = first(git.get("commit.id"), git.get("commit.id.full"));
             return new Build(
                     first(build.get("version"), git.get("build.version")),
