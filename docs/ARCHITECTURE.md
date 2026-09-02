@@ -98,10 +98,13 @@ The application's start/stop history: one JSON object per line, at most 1000 eve
 `OwnerOnlyFiles.replaceAtomically` on every change — cheap at this size (≤400 KB for the
 full 1000), and it removes both a partial-line corruption window and a second trim code
 path. A line that fails to parse
-is skipped on read; the rest of the file still loads. A start event carries every
-`BuildProperties` and `GitProperties` entry the application has, plus its epoch
-timestamp and pid; a stop event carries only its own timestamp and pid; its build
-belongs to the start it follows, which the log still remembers.
+is skipped on read; the rest of the file still loads. A start event carries the
+`BuildProperties` and `GitProperties` entries the two projections read — `version`,
+`time`, `branch`, `commit.id`, `commit.id.full`, `commit.id.abbrev`, `build.version`,
+`build.time` — and no others: a git remote URL can carry the token it was cloned with,
+and the building user's mail address is personal data. It carries its epoch timestamp
+and pid too; a stop event carries only its own timestamp and pid; its build belongs to
+the start it follows, which the log still remembers.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`: with
 storage off, `LifecycleEventLog` still records the current run's start and stop in
