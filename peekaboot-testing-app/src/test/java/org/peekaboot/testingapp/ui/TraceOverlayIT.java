@@ -279,6 +279,40 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(content).isNotEmpty();
     }
 
+    /**
+     * The ARIA tabs pattern needs both halves: a tab that says which panel it controls,
+     * and a panel that says which tab labels it - otherwise a screen reader announces
+     * "tab 2 of 4" with no relationship to what changes. The strip is built at runtime by
+     * tabStrip(), so it has to wire this itself; the dashboard's static strip carries the
+     * same attributes in its markup.
+     */
+    @Test
+    void overlayTabsAndTheirContentPanelPointAtEachOther() {
+        openOverlayFromToolbar();
+
+        assertThat((String) overlay.evaluate("root => root.querySelector('#pk-tab-content').getAttribute('role')"))
+                .isEqualTo("tabpanel");
+        assertThat((Boolean) overlay.evaluate("root => [...root.querySelectorAll('.pk-tab')]"
+                        + ".every(tab => tab.id && tab.getAttribute('aria-controls') === 'pk-tab-content')"))
+                .as("every tab controls the one content panel")
+                .isTrue();
+        assertThat(labelledBy()).isEqualTo(selectedTabId());
+
+        overlay.openTab("queries");
+
+        assertThat(selectedTabId()).endsWith("queries");
+        assertThat(labelledBy()).as("the panel's label follows the selection").isEqualTo(selectedTabId());
+    }
+
+    private String labelledBy() {
+        return (String)
+                overlay.evaluate("root => root.querySelector('#pk-tab-content').getAttribute('aria-labelledby')");
+    }
+
+    private String selectedTabId() {
+        return (String) overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').id");
+    }
+
     /** Only the selected main tab stays in the tab order - roving tabindex. */
     @Test
     void onlyTheSelectedOverlayTabIsInTheTabOrder() {
@@ -602,22 +636,24 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Each span's duration cell also shows its share of the whole trace's duration, and
-     * the gantt header's tick marks line up with the row tracks below them - both track
-     * and header timeline carry the same 8px side margin, so the 0%/100% ticks sit right
-     * above the start/end of the bars they describe rather than 8px further out.
+     * Each span's duration cell shows the duration the way every other surface formats
+     * one (formatDurationMs - "250ms", "1.50s") plus its share of the whole trace's
+     * duration, and the gantt header's tick marks line up with the row tracks below
+     * them - both track and header timeline carry the same side margin, so the 0%/100%
+     * ticks sit right above the start/end of the bars they describe rather than further out.
      */
     @Test
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
         openOverlayFromToolbar();
 
         Object allDurationsMatchPattern = overlay.evaluate(
-                "root => Array.from(root.querySelectorAll('.pk-gantt-duration')).every(el => /^\\d+ms \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+                "root => Array.from(root.querySelectorAll('.pk-gantt-duration'))"
+                        + ".every(el => /^(<1ms|\\d+ms|\\d+\\.\\d{2}[sm]) \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
         assertThat((Boolean) allDurationsMatchPattern)
-                .as("every duration cell reads '<ms>ms \u00B7 <pct>%'")
+                .as("every duration cell reads '<duration> \u00B7 <pct>%'")
                 .isTrue();
 
-        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header-timeline")
+        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
                 .boundingBox();
         BoundingBox trackBox = page.locator("#peekaboot-trace-overlay .pk-gantt-row")
                 .first()
@@ -669,37 +705,32 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * .pk-overlay__back and .pk-overlay__close sit in the header's own flex flow next to a
-     * .pk-overlay__header-main wrapper, so they cannot drift from the title's first line.
+     * .pk-overlay__close sits in the header's own flex flow next to a
+     * .pk-overlay__header-main wrapper, so it cannot drift from the title's first line.
      * Positioned absolutely against .pk-overlay__container, with the title carrying a
-     * margin-left hack to fake reserving space for the button, they would be two
+     * margin-right hack to fake reserving space for the button, they would be two
      * independent layouts that only look aligned by coincidence - and drift the moment the
      * title's UA margin-top pushes it down without moving the absolutely-positioned button.
+     *
+     * <p>Close is the header's one dismiss control: the overlay is a dialog, not a page,
+     * so a "Back" beside it would only collide with the browser's own Back, which the
+     * dashboard's hash routing handles separately.
      */
     @Test
-    void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
+    void overlayHeaderKeepsCloseInTheFlowAlignedWithTheTitle() {
         openOverlayFromToolbar();
 
         assertThat((String)
-                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__back')).position"))
-                .isEqualTo("static");
-        assertThat((String)
                         overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__close')).position"))
                 .isEqualTo("static");
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__back')"))
+                .as("no second dismiss control")
+                .isFalse();
 
-        BoundingBox backBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__back").boundingBox();
         BoundingBox closeBox =
                 page.locator("#peekaboot-trace-overlay .pk-overlay__close").boundingBox();
         BoundingBox titleBox =
                 page.locator("#peekaboot-trace-overlay .pk-overlay__title").boundingBox();
-
-        assertThat(backBox.y)
-                .as("back button top should be within the title's vertical span")
-                .isLessThan(titleBox.y + titleBox.height);
-        assertThat(backBox.y + backBox.height)
-                .as("back button bottom should overlap the title's vertical span")
-                .isGreaterThan(titleBox.y);
 
         assertThat(closeBox.y)
                 .as("close button top should be within the title's vertical span")

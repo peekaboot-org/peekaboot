@@ -12,7 +12,7 @@ import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.
 import {readSetting, writeSetting} from '../shared/storage.js';
 import {formatDateTime} from '../shared/format.js';
 import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
-import {open as openTraceDetail, close as closeTraceDetail} from '../trace-detail/trace-detail.js';
+import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
 import * as insights from './tabs/insights.js';
 import * as lifecycle from './tabs/lifecycle.js';

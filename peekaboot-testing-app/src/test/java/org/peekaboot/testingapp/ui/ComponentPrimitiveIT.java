@@ -28,9 +28,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     /**
      * Every badge variant's ink/fill pair must clear WCAG AA's 4.5:1 in BOTH themes,
      * measured from the resolved styles rather than pinned hexes so a future palette
-     * tweak that regresses one variant fails here instead of in a screenshot. --info
-     * is the variant that prompted this sweep: its old light-theme fill passed AA on
-     * paper (4.77:1) while sitting visibly darker than every sibling fill.
+     * tweak that regresses one variant fails here instead of in a screenshot.
      */
     @Test
     void badgeVariantInkClearsAaContrastInBothThemes() {
@@ -48,10 +46,10 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
-     * The trace-detail overlay renders pills of its own - the gantt kind pills, the
-     * span tag badges and the tab-strip count - that are badges in all but class name,
-     * so they owe the same 4.5:1 in both themes. The tag badge doubles as the guard for
-     * muted/accent ink on the --pk-bg-hover surface, the lightest fill any text sits on.
+     * The trace-detail overlay renders pills of its own - the gantt kind pills and the
+     * span tag badges - and tabStrip() its count pill; all are badges in all but class
+     * name, so they owe the same 4.5:1 in both themes. The tag badge doubles as the guard
+     * for muted/accent ink on the --pk-bg-hover surface, the lightest fill any text sits on.
      */
     @Test
     void traceDetailPillInkClearsAaContrastInBothThemes() {

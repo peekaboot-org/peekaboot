@@ -3,30 +3,35 @@
  * A span's "N logs" toggle does not render anything of its own - it asks trace-detail.js
  * (via context.goToSpanLogs) to switch the overlay to the Logs tab pre-filtered to that
  * span, which is where a span's logs and its full id both live.
+ *
+ * Bar positions, marker offsets and row indents are set through the CSSOM, never as a
+ * style attribute in markup: a host page whose CSP omits style-src 'unsafe-inline' drops
+ * the attributes, which would flatten every row to depth 0 and every bar to the left edge.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatCount} from '../../shared/format.js';
+import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity} from '../../shared/severity.js';
 
+const INDENT_PX = 20;
+
 export function render(container, trace, context = {}) {
+    // the 1 keeps a zero-length trace from dividing by zero in every position below
     const totalDuration = trace.durationMs || 1;
     const traceStart = trace.startTimeMs || 0;
-    const markers = [0, 0.25, 0.5, 0.75, 1].map(p => Math.round(totalDuration * p) + 'ms');
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p));
 
-    let html = '<div class="pk-gantt">';
-    html += '<div class="pk-gantt-header">';
-    html += '<div class="pk-gantt-header-name">Span</div>';
-    html += '<div class="pk-gantt-header-timeline">' + markers.map(m => `<span>${m}</span>`).join('') + '</div>';
-    html += '<div class="pk-gantt-header-spacer"></div>';
-    html += '</div>';
-    html += '<div id="pk-gantt-rows"></div>';
-    html += '</div>';
-    container.innerHTML = html;
+    container.innerHTML = '<div class="pk-gantt">'
+        + '<div class="pk-gantt-header">'
+        + '<div class="pk-gantt-header__name">Span</div>'
+        + `<div class="pk-gantt-header__timeline">${ticks.map(tick => `<span>${tick}</span>`).join('')}</div>`
+        + '<div class="pk-gantt-header__spacer"></div>'
+        + '</div>'
+        + '<div id="pk-gantt-rows"></div>'
+        + '</div>';
 
     const rowsContainer = container.querySelector('#pk-gantt-rows');
-    renderSpanRows(rowsContainer, trace.rootSpan, 0, traceStart, totalDuration, null);
+    renderSpanRows(rowsContainer, trace.rootSpan, 0, traceStart, totalDuration);
 
-    // Add click handlers for expand/collapse
     rowsContainer.addEventListener('click', (e) => {
         // Logs toggle: hands off to the Logs tab.
         const logsToggle = e.target.closest('.pk-span-logs-toggle');
@@ -42,189 +47,203 @@ export function render(container, trace, context = {}) {
             return;
         }
 
-        // Handle SQL toggle clicks
         const sqlToggle = e.target.closest('.pk-span-query-toggle');
         if (sqlToggle) {
-            const spanId = sqlToggle.dataset.spanId;
-            const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${CSS.escape(spanId)}"]`);
-            if (queryDetail) {
-                queryDetail.classList.toggle('expanded');
-                sqlToggle.title = queryDetail.classList.contains('expanded') ? 'Hide SQL' : 'Show SQL';
-            }
+            toggleQueryDetail(rowsContainer, sqlToggle);
             return;
         }
 
-        // Handle row expand/collapse
         const toggle = e.target.closest('.pk-gantt-toggle');
-        if (!toggle) return;
-        const row = toggle.closest('.pk-gantt-row');
-        const spanId = row.dataset.spanId;
-        const isCollapsed = toggle.getAttribute('aria-expanded') === 'false';
-
-        toggle.setAttribute('aria-expanded', String(isCollapsed));
-        toggle.setAttribute('aria-label', isCollapsed ? 'Collapse child spans' : 'Expand child spans');
-        toggle.textContent = isCollapsed ? '-' : '+';
-
-        // Show/hide descendant rows
-        let sibling = row.nextElementSibling;
-        const rowDepth = parseInt(row.dataset.depth);
-        while (sibling && parseInt(sibling.dataset.depth) > rowDepth) {
-            if (isCollapsed) {
-                sibling.style.display = '';
-                // If this row has a collapsed toggle, skip its children
-                const sibToggle = sibling.querySelector('.pk-gantt-toggle');
-                if (sibToggle && sibToggle.getAttribute('aria-expanded') === 'false') {
-                    const sibDepth = parseInt(sibling.dataset.depth);
-                    sibling = sibling.nextElementSibling;
-                    while (sibling && parseInt(sibling.dataset.depth) > sibDepth) {
-                        sibling = sibling.nextElementSibling;
-                    }
-                    continue;
-                }
-            } else {
-                sibling.style.display = 'none';
-            }
-            sibling = sibling.nextElementSibling;
-        }
+        if (toggle) toggleSubtree(toggle);
     });
 }
 
-function renderSpanRows(container, span, depth, traceStart, totalDuration, parentId) {
+function toggleQueryDetail(rowsContainer, sqlToggle) {
+    const spanId = sqlToggle.dataset.spanId;
+    const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${CSS.escape(spanId)}"]`);
+    if (!queryDetail) return;
+    const expanded = queryDetail.classList.toggle('pk-span-query-detail--expanded');
+    sqlToggle.title = expanded ? 'Hide SQL' : 'Show SQL';
+}
+
+function toggleSubtree(toggle) {
+    const expand = toggle.getAttribute('aria-expanded') === 'false';
+    toggle.setAttribute('aria-expanded', String(expand));
+    toggle.setAttribute('aria-label', expand ? 'Collapse child spans' : 'Expand child spans');
+    toggle.textContent = expand ? '-' : '+';
+    setSubtreeVisible(toggle.closest('.pk-gantt-row'), expand);
+}
+
+/**
+ * Shows or hides everything nested under `row` - every following row with a deeper
+ * data-depth, query details and tag rows included. Expanding leaves a collapsed
+ * descendant's own subtree hidden.
+ */
+function setSubtreeVisible(row, expand) {
+    const rowDepth = Number(row.dataset.depth);
+    let sibling = row.nextElementSibling;
+    while (sibling && Number(sibling.dataset.depth) > rowDepth) {
+        sibling.style.display = expand ? '' : 'none';
+        const collapsed = expand && sibling.querySelector('.pk-gantt-toggle[aria-expanded="false"]');
+        sibling = collapsed ? nextOutsideSubtree(sibling) : sibling.nextElementSibling;
+    }
+}
+
+function nextOutsideSubtree(row) {
+    const depth = Number(row.dataset.depth);
+    let next = row.nextElementSibling;
+    while (next && Number(next.dataset.depth) > depth) next = next.nextElementSibling;
+    return next;
+}
+
+function renderSpanRows(container, span, depth, traceStart, totalDuration) {
     if (!span) return;
-
-    const indent = depth * 20;
-    const spanStart = span.startTimeMs || traceStart;
-    const spanDuration = span.durationMs || 0;
-    const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
-    // Percent of total trace time, from the raw ratio - computed before the 0.5%-min
-    // clamp below, which exists only to keep the bar itself visible, not to inflate
-    // what a genuinely tiny span reports as its share of the trace.
-    const pct = Math.min(100, Math.round((spanDuration / totalDuration) * 100));
-    const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
-    const kindRaw = span.kind || 'internal';
-    const kind = kindRaw.toLowerCase();
-    const hasError = span.status === 'ERROR' || span.errorMessage;
-    const hasChildren = span.children && span.children.length > 0;
-    const events = span.events || [];
-    const tags = span.tags || {};
-
-    // The backend decides what a query span is (DbSpans) and ships its masked statement as
-    // span.query; a datasource-proxy result-set span carries the row count as a tag.
-    const spanName = (span.name || '').toLowerCase();
-    const isResultSetSpan = spanName === 'result-set' || spanName.includes('result-set');
-    const hasQuery = Boolean(span.query);
-    const rowCount = tags['jdbc.row-count'];
-    // the backend's own verdict on this span's latency, where it raised an issue
-    const durationClass = issueSeverity(span.issues);
-
-    // Logs are attached to the span by the backend
-    const spanLogs = span.logs || [];
-    const hasLogs = spanLogs.length > 0;
+    const indent = depth * INDENT_PX;
 
     const row = document.createElement('div');
     row.className = 'pk-gantt-row';
     row.dataset.spanId = span.spanId;
     row.dataset.depth = depth;
-    if (parentId) row.dataset.parentId = parentId;
-
-    let nameHtml = `<div class="pk-gantt-name" style="padding-left: ${indent}px">`;
-    if (hasChildren) {
-        nameHtml += `<button type="button" class="pk-gantt-toggle" aria-expanded="true" aria-label="Collapse child spans">-</button>`;
-    } else {
-        nameHtml += `<span style="width:16px"></span>`;
-    }
-    if (kind !== 'internal' && kind !== 'unknown') {
-        nameHtml += `<span class="pk-gantt-kind ${kind}">${kind}</span>`;
-    }
-    nameHtml += `<span class="pk-gantt-name-text" title="${escapeHtml(span.name || 'unknown')}">${escapeHtml(span.name || 'unknown')}</span>`;
-
-    // Add row count badge for result-set spans
-    if (isResultSetSpan && rowCount !== undefined) {
-        nameHtml += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
-    }
-
-    // Add query toggle for query spans with SQL, plus the cross-link to the same
-    // query's entry in the Queries tab (see trace-detail.js's goToQuery)
-    if (hasQuery) {
-        nameHtml += `<button type="button" class="pk-span-query-toggle" data-span-id="${escapeHtml(span.spanId)}" title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>`;
-        nameHtml += `<button type="button" class="pk-span-query-link" data-span-id="${escapeHtml(span.spanId)}"`
-            + ` title="Show in Queries tab" aria-label="Show this query in the Queries tab">&#10551;</button>`;
-    }
-
-    // Add logs toggle for spans with logs - switches the overlay to the Logs tab,
-    // pre-filtered to this span (see context.goToSpanLogs above).
-    if (hasLogs) {
-        nameHtml += `<button type="button" class="pk-span-logs-toggle" data-span-id="${escapeHtml(span.spanId)}"`
-            + ` title="View logs for this span" aria-label="View ${formatCount(spanLogs.length, 'log')} for this span in the Logs tab">`
-            + `${formatCount(spanLogs.length, 'log')}</button>`;
-    }
-
-    nameHtml += `</div>`;
-
-    // Build track HTML with bar and event markers
-    let trackHtml = `<div class="pk-gantt-track">`;
-    trackHtml += `<div class="pk-gantt-bar kind-${kind}${hasError ? ' has-error' : ''}" style="left: ${left}%; width: ${width}%"></div>`;
-
-    // Add event markers on the timeline
-    events.forEach(event => {
-        if (event.timestamp) {
-            const eventTimeMs = new Date(event.timestamp).getTime();
-            // Position relative to the entire trace timeline
-            const eventLeft = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
-            trackHtml += `<button type="button" class="pk-gantt-event-marker" style="left: ${eventLeft}%" aria-label="Event: ${escapeHtml(event.name)}"><span class="pk-gantt-event-tooltip" aria-hidden="true">${escapeHtml(event.name)}</span></button>`;
-        }
-    });
-    trackHtml += `</div>`;
-
-    row.innerHTML = nameHtml + trackHtml
-        + `<span class="pk-gantt-duration${durationClass ? ' pk-gantt-duration--' + durationClass : ''}">${spanDuration}ms · ${pct}%</span>`;
-
+    row.append(nameCell(span, indent), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
     container.appendChild(row);
 
-    // Add query detail row (hidden by default) for query spans
-    if (hasQuery) {
-        const queryDetail = document.createElement('div');
-        queryDetail.className = 'pk-span-query-detail';
-        queryDetail.dataset.spanId = span.spanId;
-        // depth + 1: counts as collapsible content of this span's row, so the
-        // expand/collapse walker (which stops at depth <= row depth) passes it
-        queryDetail.dataset.depth = depth + 1;
-        queryDetail.style.marginLeft = (indent + 20) + 'px';
+    if (span.query) container.appendChild(queryDetailRow(span, indent, depth));
+    const badges = tagBadgesRow(span, indent, depth);
+    if (badges) container.appendChild(badges);
 
-        queryDetail.innerHTML = '<div class="pk-query-label">Query</div>'
-            + `<div class="pk-query-text">${escapeHtml(span.query)}</div>`;
-        container.appendChild(queryDetail);
+    (span.children || []).forEach(child => renderSpanRows(container, child, depth + 1, traceStart, totalDuration));
+}
+
+function nameCell(span, indent) {
+    const cell = document.createElement('div');
+    cell.className = 'pk-gantt-name';
+    cell.style.paddingLeft = `${indent}px`;
+    cell.innerHTML = nameCellHtml(span);
+    return cell;
+}
+
+function nameCellHtml(span) {
+    const hasChildren = span.children && span.children.length > 0;
+    const kind = (span.kind || 'internal').toLowerCase();
+    const name = span.name || 'unknown';
+    const spanId = escapeHtml(span.spanId);
+    const logCount = (span.logs || []).length;
+    // The backend decides what a query span is (DbSpans) and ships its masked statement as
+    // span.query; a datasource-proxy result-set span carries the row count as a tag.
+    const rowCount = name.toLowerCase().includes('result-set') ? (span.tags || {})['jdbc.row-count'] : undefined;
+
+    let html = hasChildren
+        ? '<button type="button" class="pk-gantt-toggle" aria-expanded="true" aria-label="Collapse child spans">-</button>'
+        : '<span class="pk-gantt-toggle-spacer"></span>';
+    if (kind !== 'internal' && kind !== 'unknown') {
+        html += `<span class="pk-gantt-kind pk-gantt-kind--${escapeHtml(kind)}">${escapeHtml(kind)}</span>`;
     }
-
-    // Add tags row if present (events are shown as markers on the timeline); the
-    // statement tags already show in the query detail above
-    const tagEntries = Object.entries(tags).filter(([k]) => !isStatementTag(k));
-    const hasTags = tagEntries.length > 0;
-
-    if (hasTags) {
-        const badgesRow = document.createElement('div');
-        badgesRow.className = 'pk-gantt-badges';
-        badgesRow.style.paddingLeft = (indent + 20) + 'px';
-        badgesRow.dataset.depth = depth + 1;
-        if (parentId) badgesRow.dataset.parentId = parentId;
-
-        let badgesHtml = '';
-        // Render all tags
-        tagEntries.forEach(([key, value]) => {
-            const shortKey = key.split('.').pop();
-            const shortVal = String(value).length > 50 ? String(value).substring(0, 50) + '...' : String(value);
-            badgesHtml += `<span class="pk-tag-badge" title="${escapeHtml(key)}: ${escapeHtml(value)}"><span class="key">${escapeHtml(shortKey)}</span>=<span class="value">${escapeHtml(shortVal)}</span></span>`;
-        });
-
-        badgesRow.innerHTML = badgesHtml;
-        container.appendChild(badgesRow);
+    html += `<span class="pk-gantt-name__text" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
+    if (rowCount !== undefined) {
+        html += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
     }
-
-    if (hasChildren) {
-        span.children.forEach(child => {
-            renderSpanRows(container, child, depth + 1, traceStart, totalDuration, span.spanId);
-        });
+    if (span.query) {
+        html += `<button type="button" class="pk-span-action pk-span-query-toggle" data-span-id="${spanId}"`
+            + ' title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>'
+            + `<button type="button" class="pk-span-action pk-span-query-link" data-span-id="${spanId}"`
+            + ' title="Show in Queries tab" aria-label="Show this query in the Queries tab">&#10551;</button>';
     }
+    if (logCount > 0) {
+        const logs = formatCount(logCount, 'log');
+        html += `<button type="button" class="pk-span-action pk-span-logs-toggle" data-span-id="${spanId}"`
+            + ` title="View logs for this span" aria-label="View ${logs} for this span in the Logs tab">${logs}</button>`;
+    }
+    return html;
+}
+
+function track(span, traceStart, totalDuration) {
+    const spanStart = span.startTimeMs || traceStart;
+    const spanDuration = span.durationMs || 0;
+    const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
+    // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
+    const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
+    const kind = (span.kind || 'internal').toLowerCase();
+    const hasError = span.status === 'ERROR' || span.errorMessage;
+
+    const element = document.createElement('div');
+    element.className = 'pk-gantt-track';
+
+    const bar = document.createElement('div');
+    bar.className = `pk-gantt-bar pk-gantt-bar--${kind}${hasError ? ' pk-gantt-bar--error' : ''}`;
+    bar.style.left = `${left}%`;
+    bar.style.width = `${width}%`;
+    element.appendChild(bar);
+
+    (span.events || []).forEach(event => {
+        if (event.timestamp) element.appendChild(eventMarker(event, traceStart, totalDuration));
+    });
+    return element;
+}
+
+function eventMarker(event, traceStart, totalDuration) {
+    const eventTimeMs = new Date(event.timestamp).getTime();
+    const left = Math.max(0, Math.min(100, ((eventTimeMs - traceStart) / totalDuration) * 100));
+
+    const marker = document.createElement('button');
+    marker.type = 'button';
+    marker.className = 'pk-gantt-event-marker';
+    marker.style.left = `${left}%`;
+    marker.setAttribute('aria-label', `Event: ${event.name}`);
+
+    const tooltip = document.createElement('span');
+    tooltip.className = 'pk-gantt-event-tooltip';
+    tooltip.setAttribute('aria-hidden', 'true');
+    tooltip.textContent = event.name;
+    marker.appendChild(tooltip);
+    return marker;
+}
+
+function durationCell(span, totalDuration) {
+    const pct = Math.min(100, Math.round(((span.durationMs || 0) / totalDuration) * 100));
+    // the backend's own verdict on this span's latency, where it raised an issue
+    const severity = issueSeverity(span.issues);
+
+    const cell = document.createElement('span');
+    cell.className = 'pk-gantt-duration' + (severity ? ` pk-gantt-duration--${severity}` : '');
+    cell.textContent = `${formatDurationMs(span.durationMs)} · ${pct}%`;
+    return cell;
+}
+
+/** The masked statement, hidden until the row's SQL toggle reveals it. */
+function queryDetailRow(span, indent, depth) {
+    const detail = document.createElement('div');
+    detail.className = 'pk-span-query-detail';
+    detail.dataset.spanId = span.spanId;
+    // depth + 1: counts as collapsible content of this span's row, so the
+    // expand/collapse walker (which stops at depth <= row depth) passes it
+    detail.dataset.depth = depth + 1;
+    detail.style.marginLeft = `${indent + INDENT_PX}px`;
+    detail.innerHTML = `<div class="pk-query-label">Query</div><div class="pk-query-text">${escapeHtml(span.query)}</div>`;
+    return detail;
+}
+
+/**
+ * The span's tags as badges under its row, or null when there are none to show: the
+ * statement tags already show in the query detail, and events sit on the track.
+ */
+function tagBadgesRow(span, indent, depth) {
+    const entries = Object.entries(span.tags || {}).filter(([key]) => !isStatementTag(key));
+    if (entries.length === 0) return null;
+
+    const row = document.createElement('div');
+    row.className = 'pk-gantt-badges';
+    row.dataset.depth = depth + 1;
+    row.style.paddingLeft = `${indent + INDENT_PX}px`;
+    row.innerHTML = entries.map(([key, value]) => tagBadgeHtml(key, String(value))).join('');
+    return row;
+}
+
+function tagBadgeHtml(key, value) {
+    const shortKey = key.split('.').pop();
+    const shortValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
+    return `<span class="pk-tag-badge" title="${escapeHtml(key)}: ${escapeHtml(value)}">`
+        + `<span class="pk-tag-badge__key">${escapeHtml(shortKey)}</span>=`
+        + `<span class="pk-tag-badge__value">${escapeHtml(shortValue)}</span></span>`;
 }
 
 /** The tags DbSpans.sql reads the statement from - shown once, in the query detail, not again as a badge. */

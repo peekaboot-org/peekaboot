@@ -1,12 +1,9 @@
 /* Shared Peekaboot UI primitives. Consumed by the dashboard document and by
    the toolbar and trace-detail shadow roots. */
 
-/* Badge — one pill, six semantic variants. Each variant uses its own
-   on-colour token: --pk-success (and every dark-theme fill) is fill-tuned,
-   not text-tuned, so white text on it fails WCAG AA — the --pk-on-* inks
-   clear it (4.8-9.9:1 across both themes). Light --pk-info and --pk-warning
-   sit in the deep tier beside --pk-danger and carry white ink instead of
-   the dark ink of the bright fills.
+/* Badge — one pill, six semantic variants. Each variant uses its own --pk-on-* ink:
+   the fills are fill-tuned, not text-tuned, so neither white nor --pk-text-strong
+   clears WCAG AA on all of them (see tokens.css for the pairs).
 
    --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
    would sit beside a green --pk-success UP pill and read as the same state.
@@ -192,14 +189,10 @@
 [data-theme="dark"] .pk-btn:not(:disabled)[aria-pressed="true"]:hover,
 :host([data-theme="dark"]) .pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(1.12); }
 .pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
-/* 0.65 opacity, not the more common 0.5: this button's own text sits on --pk-bg/
-   --pk-bg-alt at well over 10:1 (see tokens.css), and WCAG exempts disabled controls
-   from the 1.4.3 contrast minimum outright - but a label that reads as "maybe clickable"
-   is worse than one that reads as "clearly off", so this still clears the same 4.5:1 AA
-   floor the project's own -text tokens are tuned to (~5.0-5.9:1 on --pk-bg/--pk-bg-alt
-   light, ~6.8-9.4:1 dark), rather than leaning on the exemption. cursor makes the same
-   point to a mouse user that the dimmed label makes visually. */
+/* 0.65, not 0.5: the dimmed label still clears 4.5:1 on --pk-bg/--pk-bg-alt, so it
+   reads as off rather than as maybe-clickable. */
 .pk-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+.pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }
 .pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
 /* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's
    24px target floor, and the extra height must not push the label off-centre. */
@@ -281,7 +274,6 @@
 .pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
 /* Wide tables scroll inside their own box rather than widening the page. */
 .pk-table-scroll { overflow-x: auto; }
-.pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }
 
 /* Tab strip */
 .pk-tabs {
@@ -304,6 +296,10 @@
 .pk-tab:hover { color: var(--pk-text); }
 .pk-tab:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 .pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary-text); }
+/* The count tabStrip() renders beside a tab's label. Explicit ink: inherited from .pk-tab
+   this would be --pk-text-muted, which is only 3.6:1 on the --pk-border fill - body ink
+   clears AA on it in both themes. */
+.pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); color: var(--pk-text); border-radius: 10px; font-size: var(--pk-text-xs); }
 
 /* Empty state — centred, muted placeholder text shown when a list has no data */
 .pk-empty {

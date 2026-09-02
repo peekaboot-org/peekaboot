@@ -5,6 +5,7 @@
  * via view.goToSpan (see trace-detail.js's jumpToElement).
  */
 import {escapeHtml} from '../../shared/markup.js';
+import {emptyStateHtml} from '../../shared/components.js';
 import {querySeverity} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 
@@ -12,7 +13,7 @@ export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
 
     if (queries.length === 0) {
-        container.innerHTML = '<div class="pk-empty">No database queries recorded</div>';
+        container.innerHTML = emptyStateHtml('No database queries recorded');
         return;
     }
 
@@ -34,7 +35,7 @@ export function render(container, trace, view = {}) {
             html += `<span class="pk-query-rows">${formatCount(Number(rowCount), 'row')}</span>`;
         }
         if (spanId && view.goToSpan) {
-            html += `<button type="button" class="pk-query-span-link" data-span-id="${escapeHtml(spanId)}"`
+            html += `<button type="button" class="pk-span-action pk-query-span-link" data-span-id="${escapeHtml(spanId)}"`
                 + ` title="Show this query's span in the span tree"`
                 + ` aria-label="Show this query's span in the span tree">&#10550;</button>`;
         }

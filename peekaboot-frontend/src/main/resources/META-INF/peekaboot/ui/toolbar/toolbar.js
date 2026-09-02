@@ -68,7 +68,7 @@ function initToolbar(host, data) {
         renderRequest(traceId, method, path, status);
         metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
         if (traceId) {
-            pollTrace(traceId, {
+            pollTrace(data.basePath, traceId, {
                 stillCurrent: () => currentTraceId === traceId,
                 onTrace: renderTrace,
                 onNothingArrived: renderPending
@@ -104,12 +104,11 @@ function initToolbar(host, data) {
             shadow.getElementById('pk-controller').textContent = '→ ' + className + '.' + controller.method;
         }
 
-        const duration = trace.durationMs || 0;
-        const durationClass = durationSeverity(duration);
+        const durationClass = durationSeverity(trace.durationMs);
         const durationStat = document.createElement('span');
         durationStat.className = 'pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '');
         durationStat.innerHTML = '<span aria-hidden="true">⏱</span><span class="pk-stat__duration"></span>';
-        durationStat.querySelector('.pk-stat__duration').textContent = formatDurationMs(duration);
+        durationStat.querySelector('.pk-stat__duration').textContent = formatDurationMs(trace.durationMs);
 
         metricsEl.replaceChildren(durationStat, ...traceStatParts(trace));
     }
@@ -120,44 +119,9 @@ function initToolbar(host, data) {
         metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
     }
 
-    /**
-     * Fetches the trace's insights on the fixed schedule above, calling onTrace for every
-     * attempt that brings a trace with a root span - a 404 or an empty result leaves the
-     * previous render standing - and onNothingArrived once if no attempt ever did. Stops
-     * silently the moment stillCurrent() says the bar has moved on to another trace.
-     */
-    function pollTrace(traceId, {stillCurrent, onTrace, onNothingArrived}) {
-        let rendered = false;
-
-        function attempt(index) {
-            if (!stillCurrent() || index >= ATTEMPT_DELAYS_MS.length) return;
-            const last = index === ATTEMPT_DELAYS_MS.length - 1;
-            setTimeout(() => {
-                if (!stillCurrent()) return;
-                fetch(data.basePath + '/api/traces/' + traceId + '/insights')
-                    .then(resp => (resp.ok ? resp.json() : null))
-                    .then(trace => {
-                        if (!stillCurrent()) return;
-                        if (trace && trace.rootSpan) {
-                            onTrace(trace);
-                            rendered = true;
-                        } else if (last && !rendered) {
-                            onNothingArrived();
-                        }
-                    })
-                    .catch(() => {
-                        if (stillCurrent() && last && !rendered) onNothingArrived();
-                    })
-                    .finally(() => attempt(index + 1));
-            }, ATTEMPT_DELAYS_MS[index]);
-        }
-
-        attempt(0);
-    }
-
     async function openOverlay() {
         const overlay = await import('../trace-detail/trace-detail.js');
-        overlay.open(currentTraceId, {basePath: data.basePath});
+        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath});
     }
 
     if (!data.idle && data.traceId) {
@@ -181,41 +145,84 @@ function initToolbar(host, data) {
         });
     });
 
-    // Idle mode (Swagger UI): no request of its own - intercept fetch calls and
-    // pick up the trace id from the Server-Timing header of API responses.
-    if (data.idle) {
-        // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
-        // the prefixes to ignore have to be put behind it too.
-        const contextPath = data.basePath.slice(0, data.basePath.lastIndexOf('/'));
-        const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
-            .map(function(prefix) { return contextPath + prefix; });
-        const originalFetch = window.fetch;
+    if (data.idle) installServerTimingInterceptor(data.basePath, loadTrace);
+}
 
-        window.fetch = function(input, init) {
-            const url = (typeof input === 'string') ? input : (input instanceof Request ? input.url : String(input));
-            const method = (init && init.method) ? init.method.toUpperCase() : 'GET';
+/**
+ * Fetches the trace's insights on the fixed schedule above, calling onTrace for every
+ * attempt that brings a trace with a root span - a 404 or an empty result leaves the
+ * previous render standing - and onNothingArrived once if no attempt ever did. Stops
+ * silently the moment stillCurrent() says the bar has moved on to another trace.
+ */
+function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived}) {
+    let rendered = false;
 
-            let path;
-            try {
-                path = new URL(url, window.location.origin).pathname;
-            } catch (e) {
-                path = url;
-            }
-
-            const skip = skipPrefixes.some(function(prefix) { return path.startsWith(prefix); });
-
-            return originalFetch.apply(this, arguments).then(function(response) {
-                if (skip) return response;
-
-                const serverTiming = response.headers.get('Server-Timing');
-                if (serverTiming) {
-                    const match = serverTiming.match(/trace;desc="00-([a-f0-9]+)-([a-f0-9]+)-([a-f0-9]+)"/);
-                    if (match) {
-                        loadTrace(match[1], method, path, response.status);
+    function attempt(index) {
+        if (!stillCurrent() || index >= ATTEMPT_DELAYS_MS.length) return;
+        const last = index === ATTEMPT_DELAYS_MS.length - 1;
+        setTimeout(() => {
+            if (!stillCurrent()) return;
+            fetch(basePath + '/api/traces/' + traceId + '/insights')
+                .then(resp => (resp.ok ? resp.json() : null))
+                .then(trace => {
+                    if (!stillCurrent()) return;
+                    if (trace && trace.rootSpan) {
+                        onTrace(trace);
+                        rendered = true;
+                    } else if (last && !rendered) {
+                        onNothingArrived();
                     }
-                }
-                return response;
-            });
-        };
+                })
+                .catch(() => {
+                    if (stillCurrent() && last && !rendered) onNothingArrived();
+                })
+                .finally(() => attempt(index + 1));
+        }, ATTEMPT_DELAYS_MS[index]);
     }
+
+    attempt(0);
+}
+
+/**
+ * Idle mode (Swagger UI): the page has no request of its own, so window.fetch is wrapped
+ * and the trace id is picked up from the Server-Timing header of every API response,
+ * reported as onRequest(traceId, method, path, status).
+ */
+function installServerTimingInterceptor(basePath, onRequest) {
+    // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
+    // the prefixes to ignore have to be put behind it too. '/actuator/' is Boot's default
+    // path, not the configured management base path: a relocated actuator is merely
+    // treated like any other API call and lands its own trace id on the bar.
+    const contextPath = basePath.slice(0, basePath.lastIndexOf('/'));
+    const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
+        .map(prefix => contextPath + prefix);
+    const originalFetch = window.fetch;
+
+    window.fetch = function(input, init) {
+        const request = input instanceof Request ? input : null;
+        const url = request ? request.url : String(input);
+        const method = (init?.method ?? request?.method ?? 'GET').toUpperCase();
+
+        let path;
+        try {
+            path = new URL(url, window.location.origin).pathname;
+        } catch (e) {
+            path = url;
+        }
+
+        const skip = skipPrefixes.some(prefix => path.startsWith(prefix));
+
+        return originalFetch.apply(this, arguments).then(response => {
+            if (skip) return response;
+
+            const serverTiming = response.headers.get('Server-Timing');
+            if (serverTiming) {
+                const match = serverTiming.match(/trace;desc="00-([a-f0-9]+)-([a-f0-9]+)-([a-f0-9]+)"/);
+                if (match) {
+                    onRequest(match[1], method, path, response.status);
+                }
+            }
+            return response;
+        });
+    };
 }

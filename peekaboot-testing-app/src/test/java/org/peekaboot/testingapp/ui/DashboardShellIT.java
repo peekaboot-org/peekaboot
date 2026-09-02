@@ -102,10 +102,10 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
-     * main.js imports {open, close} directly from trace-detail.js (no
+     * main.js imports {openTraceDetail, closeTraceDetail} directly from trace-detail.js (no
      * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
      * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
-     * imported open() itself, without going through the traces tab - so a
+     * imported openTraceDetail() itself, without going through the traces tab - so a
      * direct navigation to such a link is enough to prove the import actually loaded and
      * ran, independent of whether the trace id resolves to anything real.
      *

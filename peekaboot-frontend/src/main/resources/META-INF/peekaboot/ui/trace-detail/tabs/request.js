@@ -1,12 +1,14 @@
 /**
  * Trace-detail overlay - Request tab: the whole HTTP exchange on one page, request
- * details first and the two header tables last. Every section builds the same
- * `<table class="pk-table pk-table--kv">` shape; renderTable/tableRow collapse that duplication
- * into one helper each.
+ * details first and the two header tables last. Every section is the same
+ * `<table class="pk-table pk-table--kv">` shape; renderTable/tableRow build it.
  */
 import {escapeHtml, MASK_LITERAL} from '../../shared/markup.js';
+import {badgeHtml, emptyStateHtml} from '../../shared/components.js';
 import {formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
+
+const byKey = ([a], [b]) => a.localeCompare(b);
 
 function renderTable(rows) {
     return `<table class="pk-table pk-table--kv">${rows.join('')}</table>`;
@@ -31,7 +33,7 @@ export function render(container, trace, view = {}) {
     const res = httpExchange?.response;
 
     if (!req && !res) {
-        container.innerHTML = '<div class="pk-empty">No request details available</div>';
+        container.innerHTML = emptyStateHtml('No request details available');
         return;
     }
 
@@ -45,21 +47,21 @@ export function render(container, trace, view = {}) {
         + renderResponseHeaders(res);
 }
 
+/** Header names are stored as the container spelled them, so the lookup ignores case. */
+function headerValue(headers, name) {
+    return Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name)?.[1];
+}
+
 function renderRequestDetails(req, res, trace) {
-    const contentType = req?.headers?.['content-type'] || req?.headers?.['Content-Type'] || '-';
     const rows = [
         tableRow('Method', req?.method || '-'),
         tableRow('Path', req?.path || '-'),
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
-        tableRowHtml('Status', statusBadgeHtml(res?.status)),
-        tableRow('Content-Type', contentType),
+        tableRowHtml('Status', badgeHtml(statusLabel(res?.status), statusVariant(res?.status))),
+        tableRow('Content-Type', headerValue(req?.headers, 'content-type') || '-'),
         tableRow('Duration', formatDurationMs(trace.durationMs))
     ];
     return section('Request', renderTable(rows));
-}
-
-function statusBadgeHtml(status) {
-    return `<span class="pk-badge pk-badge--${statusVariant(status)}">${escapeHtml(statusLabel(status))}</span>`;
 }
 
 function renderController(req) {
@@ -71,7 +73,7 @@ function renderController(req) {
 function renderParams(title, params) {
     const entries = Object.entries(params || {});
     if (entries.length === 0) return '';
-    return section(title, renderTable(entries.sort().map(([key, value]) =>
+    return section(title, renderTable(entries.sort(byKey).map(([key, value]) =>
         tableRow(key, Array.isArray(value) ? value.join(', ') : value))));
 }
 
@@ -91,7 +93,7 @@ function renderRequestBody(body) {
 function renderRequestHeaders(req, maskLiteral) {
     const headers = Object.entries(req?.headers || {});
     const rows = headers.length > 0
-        ? headers.sort().map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
+        ? headers.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
         : [noHeadersRow()];
     return section('Request Headers', renderTable(rows));
 }
@@ -99,7 +101,7 @@ function renderRequestHeaders(req, maskLiteral) {
 function renderResponseHeaders(res) {
     const headers = Object.entries(res?.headers || {});
     const rows = headers.length > 0
-        ? headers.sort().map(([key, value]) => tableRow(key, value))
+        ? headers.sort(byKey).map(([key, value]) => tableRow(key, value))
         : [noHeadersRow()];
     return section('Response Headers', renderTable(rows));
 }

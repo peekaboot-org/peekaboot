@@ -20,7 +20,7 @@ import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/r
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {traceStatParts} from '../../shared/trace-stats.js';
 import {parseAppHash} from '../../shared/url-state.js';
-import {open as openTraceDetail} from '../../trace-detail/trace-detail.js';
+import {openTraceDetail} from '../../trace-detail/trace-detail.js';
 
 export const id = 'traces';
 export const label = 'Traces';

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
     <!-- dashboard chrome, for the unmask toggle's pressed (danger) state below -->
     <link rel="stylesheet" href="/peekaboot/ui/dashboard/dashboard.css">
-    <!-- overlay chrome, for the gantt/tag/tab-count pills in the contrast sweep below -->
+    <!-- overlay chrome, for the gantt kind and tag pills in the contrast sweep below -->
     <link rel="stylesheet" href="/peekaboot/ui/trace-detail/trace-detail.css">
 </head>
 <body>
@@ -20,11 +20,11 @@
     <span class="pk-badge pk-badge--muted" id="badge-muted">still counting</span>
 
     <!-- the trace-detail overlay's own pills: badges in all but class name -->
-    <span class="pk-gantt-kind server" id="kind-server">server</span>
-    <span class="pk-gantt-kind client" id="kind-client">client</span>
-    <span class="pk-gantt-kind internal" id="kind-internal">internal</span>
-    <span class="pk-gantt-kind producer" id="kind-producer">producer</span>
-    <span class="pk-tag-badge" id="tag-badge"><span class="key" id="tag-badge-key">http.method</span>=<span class="value">GET</span></span>
+    <span class="pk-gantt-kind pk-gantt-kind--server" id="kind-server">server</span>
+    <span class="pk-gantt-kind pk-gantt-kind--client" id="kind-client">client</span>
+    <span class="pk-gantt-kind pk-gantt-kind--internal" id="kind-internal">internal</span>
+    <span class="pk-gantt-kind pk-gantt-kind--producer" id="kind-producer">producer</span>
+    <span class="pk-tag-badge" id="tag-badge"><span class="pk-tag-badge__key" id="tag-badge-key">http.method</span>=<span class="pk-tag-badge__value">GET</span></span>
     <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
 
     <div class="pk-group" id="group">
