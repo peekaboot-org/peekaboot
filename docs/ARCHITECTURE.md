@@ -746,7 +746,6 @@ renders `query.sql`, which is what `QueryExtractor` populates; this is where the
 TraceData
 ├── traceId: String
 ├── startTime, endTime, duration
-├── spanCount: int
 └── spans: List<SpanData>
 
 SpanData
