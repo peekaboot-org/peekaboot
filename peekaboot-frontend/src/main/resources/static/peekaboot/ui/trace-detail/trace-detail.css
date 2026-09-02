@@ -124,7 +124,7 @@
 .pk-gantt-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-gantt-kind { font-size: 10px; padding: 1px 4px; border-radius: 3px; text-transform: uppercase; }
 .pk-gantt-kind.server { background: var(--pk-primary); color: var(--pk-on-primary); }
-.pk-gantt-kind.client { background: var(--pk-purple); color: var(--pk-bg); }
+.pk-gantt-kind.client { background: var(--pk-purple); color: var(--pk-on-purple); }
 .pk-gantt-kind.internal { background: var(--pk-border); color: var(--pk-text); }
 .pk-gantt-kind.producer, .pk-gantt-kind.consumer { background: var(--pk-info); color: var(--pk-on-info); }
 

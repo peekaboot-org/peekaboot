@@ -37,6 +37,7 @@
     --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */
     --pk-on-danger-soft: #7f1d1d; /* 6.93:1 on --pk-danger-soft */
     --pk-on-info:    #0d1117;   /* 6.22:1 on --pk-info */
+    --pk-on-purple:  #ffffff;   /* 5.70:1 on --pk-purple */
     --pk-primary-text: #447718; /* 5.39:1 on --pk-bg, 5.06:1 on --pk-bg-alt, 4.80:1 on --pk-bg-hover */
     --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt, 5.27:1 on --pk-bg-hover */
     --pk-success-text: #117937; /* 5.51:1 on --pk-bg, 5.17:1 on --pk-bg-alt, 4.91:1 on --pk-bg-hover */
@@ -85,6 +86,7 @@
     --pk-danger-soft: #5c1f1f;
     --pk-on-danger-soft: #f8d7da; /* 9.41:1 on --pk-danger-soft */
     --pk-on-info:    #0d1117;   /* 9.38:1 */
+    --pk-on-purple:  #0d1117;   /* 5.64:1 */
     /* all four clear AA on --pk-bg outright, so the fill tone doubles as the text tone */
     --pk-primary-text: #84cf3d; /* 9.89:1 on --pk-bg */
     --pk-info-text:    #38c6e8; /* 9.38:1 on --pk-bg */
