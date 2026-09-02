@@ -207,9 +207,6 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         }
     }
 
-    // CloseResource: the DataSource is the application's own Spring bean, merely
-    // borrowed here to report pool settings - closing it would break the app
-    @SuppressWarnings("PMD.CloseResource")
     private void appendPoolInfo(StringBuilder report, String dataSourceName) {
 
         if (hikariPoolInfo == null || !dataSources.containsKey(dataSourceName)) {

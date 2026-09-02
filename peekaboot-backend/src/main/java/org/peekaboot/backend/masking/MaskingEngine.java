@@ -57,7 +57,8 @@ public final class MaskingEngine {
      * "PassWord". Order: exact-spelling exceptions ({@link MaskingRules#KEY_NAME_EXCEPTIONS},
      * "PWD"), then {@link MaskingRules#KEY_NAME_RULES} tokens anywhere in the key, then
      * {@link MaskingRules#WHOLE_KEY_NAME_RULES} as the entire key ("cookie"), then
-     * {@link MaskingRules#SPRING_SANITIZER_KEY_PATTERNS}.
+     * {@link MaskingRules#SPRING_SANITIZER_KEY_PATTERNS}. A key ending in
+     * {@link MaskingRules#ENDPOINT_KEY_SUFFIXES} skips the two vocabularies.
      */
     public boolean isSensitiveKey(String key) {
         return key != null
@@ -73,9 +74,22 @@ public final class MaskingEngine {
     private static boolean matchesKeyNameRules(String key) {
         List<String> camelAwareTokens = tokenize(key, true);
         List<String> separatorOnlyTokens = tokenize(key, false);
+        if (namesAnEndpoint(camelAwareTokens)) {
+            return matchesAnySanitizerPattern(key);
+        }
         return matchesAnyRuleSubsequence(camelAwareTokens, separatorOnlyTokens)
                 || matchesAnyRuleExactly(WHOLE_KEY_NAME_TOKEN_RULES, camelAwareTokens, separatorOnlyTokens)
                 || matchesAnySanitizerPattern(key);
+    }
+
+    /**
+     * True when the key's last token is one of {@link MaskingRules#ENDPOINT_KEY_SUFFIXES}.
+     * The Spring Sanitizer patterns still decide such a key, because they match a whole
+     * key rather than a vocabulary: a vcap.services binding's URI carries that binding's
+     * own password.
+     */
+    private static boolean namesAnEndpoint(List<String> tokens) {
+        return !tokens.isEmpty() && MaskingRules.ENDPOINT_KEY_SUFFIXES.contains(tokens.getLast());
     }
 
     private static boolean matchesAnyRuleExactly(

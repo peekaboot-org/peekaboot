@@ -38,8 +38,8 @@ public class BuildInfoProvider {
         return buildProperties != null;
     }
 
-    /** Every build-info entry, not only the ones the banner shows. */
-    public Map<String, String> getAll() {
+    /** The build-info entries the lifecycle log keeps; see {@link InfoEntries}. */
+    public Map<String, String> getEntries() {
         return InfoEntries.of(buildProperties);
     }
 }

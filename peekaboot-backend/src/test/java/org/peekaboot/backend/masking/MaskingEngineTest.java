@@ -54,6 +54,15 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldMatchEachKeyNameRule(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
+
+        // The three environment variables a developer meets on the systemEnvironment
+        // property source that the rules catch without being secrets themselves; see
+        // MaskingRules.KEY_NAME_EXCEPTIONS for why none of them is exempted.
+        @ParameterizedTest
+        @ValueSource(strings = {"XDG_SESSION_ID", "SSH_AUTH_SOCK", "CREDENTIALS_DIRECTORY"})
+        void isSensitiveKey_shouldMatchTheSensitiveAdjacentEnvironmentVariables(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
     }
 
     @Nested
@@ -140,6 +149,56 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldNotMatchAuthAsASubstringOfOauth2() {
             assertThat(engine.isSensitiveKey("spring.security.oauth2.client.registration.google.client-id"))
                     .isFalse();
+        }
+    }
+
+    /**
+     * A key whose last token is "uri" or "url" names where something lives, not a secret.
+     * The OAuth2 provider endpoints are the case that matters: they are public addresses
+     * and among the first properties read when a login misbehaves.
+     */
+    @Nested
+    class EndpointKeys {
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "spring.security.oauth2.client.provider.keycloak.token-uri",
+                    "spring.security.oauth2.client.provider.keycloak.authorization-uri",
+                    "app.tokenUri",
+                    "app.TOKEN_URL",
+                    "app.api-key-url",
+                })
+        void isSensitiveKey_shouldNotJudgeAnAddressKeyByItsName(String key) {
+            assertThat(engine.isSensitiveKey(key)).isFalse();
+        }
+
+        // Only the key's last token is waived: a rule word anywhere else still decides,
+        // and "uri"/"url" in the middle of a name says nothing about the value.
+        @ParameterizedTest
+        @ValueSource(strings = {"token", "authorization", "app.token-uri.password", "app.url-token"})
+        void isSensitiveKey_shouldStillMatchAKeyThatDoesNotEndInAnAddress(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
+
+        // The legacy Spring patterns match the whole key, not its vocabulary: a
+        // vcap.services binding's URI carries that binding's own password.
+        @Test
+        void isSensitiveKey_shouldStillMatchAVcapServicesBindingUri() {
+            assertThat(engine.isSensitiveKey("vcap.services.mydb.credentials.uri"))
+                    .isTrue();
+        }
+
+        // Only the name is exempt; a credential inside such a URL is still caught by its
+        // shape, exactly as under any other innocuous key.
+        @Test
+        void mask_shouldStillMaskAnAccessTokenCarriedInsideAnAddressKeysValue() {
+            String masked = engine.mask(
+                    "spring.security.oauth2.client.provider.keycloak.token-uri",
+                    "https://idp.example.com/realms/acme/protocol/openid-connect/token?access_token=s3cr3tvalue");
+
+            assertThat(masked)
+                    .isEqualTo("https://idp.example.com/realms/acme/protocol/openid-connect/token?access_token=******");
         }
     }
 

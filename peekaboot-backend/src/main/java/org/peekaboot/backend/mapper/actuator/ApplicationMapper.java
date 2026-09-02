@@ -48,6 +48,10 @@ public class ApplicationMapper {
      * Unlike git and the JVM/Spring version fields, which are all populated here, {@code
      * info.build} is a free-form map a consuming app supplies itself - not controlled by
      * this mapper at all.
+     *
+     * <p>The {@code instanceof Map} check is total in practice: {@link TreeMasker} returns a
+     * {@code LinkedHashMap} for a map input and hands the input straight back when unmasking.
+     * It stands to keep the unchecked cast above honest.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> maskBuild(Map<String, Object> build, boolean unmask) {

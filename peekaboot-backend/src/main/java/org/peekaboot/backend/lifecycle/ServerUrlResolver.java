@@ -2,6 +2,7 @@ package org.peekaboot.backend.lifecycle;
 
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.web.server.Ssl;
@@ -22,7 +23,7 @@ public class ServerUrlResolver {
     // which still reaches this resolver.
     static final String DASHBOARD_CONFIG_BEAN_NAME = "peekabootWebConfig";
 
-    private static final String DASHBOARD_PATH = "/peekaboot/";
+    private static final String DASHBOARD_PATH = PeekabootPaths.BASE_PATH + "/";
 
     private final Environment environment;
 

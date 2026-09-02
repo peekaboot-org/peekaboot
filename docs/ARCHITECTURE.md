@@ -98,10 +98,13 @@ The application's start/stop history: one JSON object per line, at most 1000 eve
 `OwnerOnlyFiles.replaceAtomically` on every change — cheap at this size (≤400 KB for the
 full 1000), and it removes both a partial-line corruption window and a second trim code
 path. A line that fails to parse
-is skipped on read; the rest of the file still loads. A start event carries every
-`BuildProperties` and `GitProperties` entry the application has, plus its epoch
-timestamp and pid; a stop event carries only its own timestamp and pid; its build
-belongs to the start it follows, which the log still remembers.
+is skipped on read; the rest of the file still loads. A start event carries the
+`BuildProperties` and `GitProperties` entries the two projections read — `version`,
+`time`, `branch`, `commit.id`, `commit.id.full`, `commit.id.abbrev`, `build.version`,
+`build.time` — and no others: a git remote URL can carry the token it was cloned with,
+and the building user's mail address is personal data. It carries its epoch timestamp
+and pid too; a stop event carries only its own timestamp and pid; its build belongs to
+the start it follows, which the log still remembers.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`: with
 storage off, `LifecycleEventLog` still records the current run's start and stop in
@@ -299,8 +302,14 @@ browser never has to know those names. Headers, query/form parameters
 and the resolved controller class/method are never available without the toolbar;
 correlated logs are likewise unavailable (see *Log Capture* below). Request/response body
 content and uploaded file names have fields reserved for them on `HttpExchange` but aren't
-populated by `RequestCaptureFilter` — not captured, regardless of dev-toolbar (see
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
+populated by `RequestCaptureFilter` — not captured, regardless of dev-toolbar. Those
+fields, and the `null`/`List.of()` arguments the filter passes in their place, are the seam
+a body-capture implementation would fill: they are kept deliberately, not dead code to
+tidy away, and filling them is its own design pass rather than a side effect of another
+change. Capture is the easy half. Masking is the hard one, because a body carries
+credentials in shapes `MaskingEngine`'s key-name rules cannot see — there are no key names
+to judge: a JSON body is structure, a form post is pairs, an upload is bytes. Sizing needs
+a cap and the truncation marker the Request tab already renders off `body.truncated`.
 
 ### Server-Timing Header
 
@@ -598,7 +607,16 @@ resolves true, never as an explicit `never` off-local. An application that switc
 Peekaboot on in a shared environment therefore doesn't have its own `/actuator/env`
 widened as a side effect:
 off-local, Spring's own default (`never`) applies and every property masks, exactly as it
-would without Peekaboot at all.
+would without Peekaboot at all — `server.port` and `os.name` along with the passwords.
+Emitting an explicit `never` there instead of leaving the key absent would pin Spring's
+current default into applications that never asked Peekaboot to decide it.
+
+`show-values` and `peekaboot.enable-unmasking` are two switches, and only the first is
+about visibility. `show-values` decides whether the actuator hands Peekaboot a real value
+at all; `enable-unmasking` decides only whether the dashboard's reveal step is offered and
+honoured — `PeekabootController.resolveUnmask` combines it with the request's `unmask`
+parameter and neither half suffices alone. With `show-values` at `never` a reveal has
+nothing left to reveal.
 
 How those sources are contributed matters. Boot moves `defaultProperties` — the source
 `SpringApplication.setDefaultProperties` fills — to the end of the environment once every
@@ -702,6 +720,19 @@ trace is flagged `truncated: true` — exposed on both `GET /peekaboot/api/trace
 and `GET /peekaboot/api/traces/{traceId}/insights`, and shown as a `TRUNCATED` badge in the
 trace list and the trace-detail overlay.
 
+The fold checks both arrival directions on every insertion — see `TraceDataBundle`'s class
+Javadoc for why it has to — but `addSpan` returns as soon as the arriving span duplicates
+its own already-stored parent, without then re-examining that span's children. On a
+triple-nested chain whose three spans all duplicate one another, two of the arrival orders
+therefore leave one duplicate standing. Two independent properties keep that shape out of
+reach, either sufficient alone: it needs three nesting levels, where
+`SpanDuplicateMatcher.SERVICE_IDENTIFIER_KEYS` carries one key per datasource decorator and
+only two decorators exist; and it needs a span to arrive after its own parent, which the
+`BatchSpanProcessor`'s child-before-parent end ordering forbids. Adding a third
+service-identifier key, or making `SpanDuplicateMatcher.isDuplicate` non-transitive, brings
+it within reach — and the answer to that is a few lines in `TraceDataBundle`, never a second
+deduplication pass beside the write-time one.
+
 ### Query Extraction
 
 Database queries aren't captured specially: a query shows up in a trace because the
@@ -726,7 +757,11 @@ emits both, the current one is authoritative); then `jdbc.query[N]`
 if it looks like SQL. The same masked text is put on the span itself as `SpanNode.query`,
 which is what the Spans tab's SQL toggle shows. `findDbSystem` mirrors this priority for
 `db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Matching is
-value-patterns only, not column-aware literal masking — see the class Javadoc for why.
+value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS`
+carries the reasoning), so a credential with no provider-recognisable shape sitting in an
+ordinary column is not caught. peekaboot.org's security page states that as a caveat and
+tells readers to assume a captured trace carries plaintext SQL; it is a caveat, not a
+promise waiting to be strengthened.
 
 **Two separate pipelines render a query, and only one of them depends on
 `QueryExtractor`.** The Spans tab (`trace-detail/tabs/spans.js`) renders `span.name`
@@ -735,8 +770,7 @@ correct and expected for a span tree. The Queries tab (`trace-detail/tabs/querie
 renders `query.sql`, which is what `QueryExtractor` populates; this is where the tag
 `DbSpans.sql` picks actually shows up. The overlay opens on Spans by default
 (`trace-detail.js`'s `initial: 'spans'`); `ScreenshotCapture` photographs both views, so
-`trace-detail-queries-*` is the shipped image that demonstrates `QueryExtractor`'s output
-(see [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.7).
+`trace-detail-queries-*` is the shipped image that demonstrates `QueryExtractor`'s output.
 
 ## Data Models
 
@@ -878,8 +912,3 @@ edge in `InsightsAutoConfiguration`. Boot reads ordering edges from the class me
 without loading the named classes, which is why `TracingInterceptorAutoConfiguration` can
 use a class literal (`after = ObservationAutoConfiguration.class`) for a module the pom
 marks `<optional>`: the class only has to exist at compile time.
-
-## Known defects
-
-Known gaps and the decisions still waiting on a call live in
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1 and §2; what was closed, and why, is in its §5.

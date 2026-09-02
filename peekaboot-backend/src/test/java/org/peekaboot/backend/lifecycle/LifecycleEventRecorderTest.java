@@ -5,9 +5,13 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.info.GitProperties;
@@ -38,7 +42,7 @@ class LifecycleEventRecorderTest {
     }
 
     @Test
-    void aReadyApplicationIsRecordedWithEveryBuildAndGitProperty() {
+    void aReadyApplicationIsRecordedWithTheBuildAndGitFactsTheViewsRead() {
         LifecycleEventLog log = log();
         LifecycleEventRecorder recorder = new LifecycleEventRecorder(
                 log, new BuildInfoProvider(buildProperties()), gitProperties(), mock(ApplicationContext.class));
@@ -53,8 +57,34 @@ class LifecycleEventRecorderTest {
         assertThat(recorded.type()).isEqualTo(LifecycleEvent.Type.START);
         assertThat(recorded.epochMs()).isEqualTo(1_756_000_000_000L);
         assertThat(recorded.pid()).isEqualTo(ProcessHandle.current().pid());
-        assertThat(recorded.build()).containsEntry("version", "1.2.3").containsEntry("artifact", "orders");
+        assertThat(recorded.build()).containsEntry("version", "1.2.3").doesNotContainKey("artifact");
         assertThat(recorded.git()).containsEntry("branch", "dev").containsEntry("commit.id", "abc1234def5678");
+    }
+
+    /**
+     * An HTTPS remote cloned with a token carries it in {@code git.remote.origin.url}, and
+     * the log outlives the process that wrote it.
+     */
+    @Test
+    void aCredentialInTheGitRemoteUrlNeverReachesTheWrittenFile(@TempDir Path directory) throws IOException {
+        Properties git = new Properties();
+        git.setProperty("branch", "dev");
+        git.setProperty("remote.origin.url", "https://xar:ghp_secrettoken@github.com/acme/orders.git");
+        Path path = directory.resolve(LifecycleEventFile.FILE_NAME);
+        LifecycleEventLog log = new LifecycleEventLog(new LifecycleEventFile(path));
+        log.beginLoad();
+        LifecycleEventRecorder recorder = new LifecycleEventRecorder(
+                log, new BuildInfoProvider(buildProperties()), new GitProperties(git), mock(ApplicationContext.class));
+        ApplicationReadyEvent event = mock(ApplicationReadyEvent.class);
+        when(event.getTimestamp()).thenReturn(1_756_000_000_000L);
+
+        recorder.onReady(event);
+
+        // the log persists inside the same lock its readers take, so a visible event is a written file
+        await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
+        assertThat(Files.readString(path))
+                .contains("\"branch\":\"dev\"")
+                .doesNotContain("ghp_secrettoken", "remote.origin.url");
     }
 
     @Test

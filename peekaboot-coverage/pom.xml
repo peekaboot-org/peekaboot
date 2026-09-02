@@ -92,8 +92,17 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.6.3</version>
                 <executions>
+                    <!-- The parent's upper-bound check reads a closure this module does not
+                         publish: its dependencies exist to force build order, so they pull
+                         in the sample app's springdoc chain along with everything else. The
+                         published modules are checked in their own builds. -->
+                    <execution>
+                        <id>require-upper-bound-deps</id>
+                        <configuration>
+                            <skip>true</skip>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>require-coverage-data</id>
                         <phase>verify</phase>

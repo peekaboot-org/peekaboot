@@ -386,6 +386,10 @@ isn't coming, and the bar falls back to a pending placeholder rather than leavin
 spinner up forever. A response that arrived but was empty (a 404, or `rootSpan` missing)
 leaves whatever the previous render already showed standing.
 
+`ToolbarLateSpanIT` is timed against this ladder: `LateSpanFixture.LateSpanController.LATE_WORK` is arithmetic over
+these four attempts and the test profile's export delay, so moving an attempt means redoing that arithmetic rather
+than assuming it still holds.
+
 ## `application-test.yml`: the export delay
 
 `peekaboot-testing-app/src/test/resources/application-test.yml` sets

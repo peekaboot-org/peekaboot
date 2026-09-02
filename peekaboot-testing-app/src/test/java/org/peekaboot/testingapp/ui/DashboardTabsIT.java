@@ -487,12 +487,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * checked against the count carried by the very response that rendered it: the
      * bucket count is app-global and uncapped, the list is capped at the page size, and
      * any class running alongside this one can log an ERROR between two requests. It has
-     * to be the <em>filtered</em> count: traces.js always sends a type include-list
-     * (hiding CONNECTION_POOL), and a hidden trace that logs an ERROR is counted in
-     * {@code bucketCounts} but never listed. The sanity assertion that the errors count is
-     * smaller than the all count is what keeps this non-vacuous: the store always holds a
-     * mix of error and non-error traces (the scheduler's deliberate failures alongside
-     * ordinary HTTP request traces for the dashboard's own page loads).
+     * to be the <em>filtered</em> count: the backend's default view leaves CONNECTION_POOL
+     * out, and such a hidden trace that logs an ERROR is counted in {@code bucketCounts} but
+     * never listed. The sanity assertion that the errors count is smaller than the all count
+     * is what keeps this non-vacuous: the store always holds a mix of error and non-error
+     * traces (the scheduler's deliberate failures alongside ordinary HTTP request traces for
+     * the dashboard's own page loads).
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
@@ -509,7 +509,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         JsonNode errorsBucket = JSON.readTree(errorsResponse.text());
         JsonNode counts = errorsBucket.path("filteredBucketCounts");
         assertThat(counts.isObject())
-                .as("a type-filtered listing carries the counts that match it")
+                .as("the default view is a filter, so its listing carries the counts that match it")
                 .isTrue();
         int errorsCount = counts.path("errors").asInt();
         int listedCount = errorsBucket.path("traces").size();
@@ -771,10 +771,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * Connection-pool traces sit in the store but not in the default view: with no type
-     * in the URL, traces.js requests every type except CONNECTION_POOL. Selecting the
-     * type's own chip reveals them and lands in the URL (#traces?type=CONNECTION_POOL),
-     * so the revealed view stays shareable while old typed links keep their meaning.
+     * Connection-pool traces sit in the store but not in the default view: with no type in
+     * the URL, traces.js names none in its request either and the backend answers with the
+     * default view. Selecting the type's own chip reveals them and lands in the URL
+     * (#traces?type=CONNECTION_POOL), so the revealed view stays shareable.
      */
     @Test
     void connectionPoolTracesAreHiddenByDefaultAndRevealedByTheirChip() throws SQLException {
@@ -788,7 +788,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         Response defaultResponse = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
                 () -> page.click(".pk-tab[data-tab='traces']"));
-        assertThat(defaultResponse.url()).contains("rootActionType=").doesNotContain("CONNECTION_POOL");
+        assertThat(defaultResponse.url()).doesNotContain("rootActionType");
         page.waitForSelector("#traces-list .pk-trace-item");
         assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']")
                         .count())

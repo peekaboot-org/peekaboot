@@ -21,11 +21,9 @@ import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 export const id = 'traces';
 export const label = 'Traces';
 
-// Types the default view leaves out - routine pool maintenance (health probes, HikariCP
-// refills) would otherwise drown the list. Their chips work like any other type's.
-const DEFAULT_HIDDEN_TYPES = ['CONNECTION_POOL'];
-
-// Empty set means the default filter: every type except DEFAULT_HIDDEN_TYPES.
+// Empty set means no type in the request, which the backend answers with its default
+// view - every type except the routine pool maintenance it keeps out. Every chip,
+// including Connection Pool's, then works like any other type's.
 let selectedRootActionTypes = new Set();
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
@@ -110,9 +108,9 @@ function reconcileWithUrl(container) {
 function seedFromUrl(container, params) {
     // Validated against the canonical lists - an unrecognized bucket (a typo, a stale link)
     // would otherwise sail straight through to the backend and back as a literal "undefined"
-    // in the empty-state message, and an unknown type would be dropped by the backend
-    // (every type listed) while the banner here still claimed a filter. The case fold
-    // mirrors the backend's own.
+    // in the empty-state message, and an unknown type would leave the backend on its
+    // default view while the banner here still claimed a filter. The case fold mirrors
+    // the backend's own.
     const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
     const urlTypes = (params.type ? params.type.split(',') : [])
         .map(type => type.toUpperCase())
@@ -222,12 +220,7 @@ async function fetchAndRender() {
 
     const params = {limit: 50};
     if (currentBucket !== 'all') params.bucket = currentBucket;
-    // Always an explicit include-list: with no chip selected the default still has to
-    // say which types it wants, since it hides DEFAULT_HIDDEN_TYPES.
-    const requestedTypes = selectedRootActionTypes.size > 0
-        ? Array.from(selectedRootActionTypes)
-        : ROOT_ACTION_TYPES.filter(type => !DEFAULT_HIDDEN_TYPES.includes(type));
-    params.rootActionType = requestedTypes.join(',');
+    if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
     if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
 
     try {
@@ -243,8 +236,8 @@ async function fetchAndRender() {
 }
 
 /**
- * The plain number is what the list can actually show - the default request already
- * excludes DEFAULT_HIDDEN_TYPES, so the filtered count is the truthful one. The
+ * The plain number is what the list can actually show - the backend's default view
+ * already leaves its hidden types out, so the filtered count is the truthful one. The
  * "shown / total" pair appears only for a filter the user chose, with the store's full
  * count (hidden types included) as the total.
  */

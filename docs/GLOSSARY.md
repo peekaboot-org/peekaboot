@@ -36,9 +36,11 @@ own `class`/`method` tags, not Spring's pair) instead of duplicating them here.
 
 `CONNECTION_POOL` marks a trace whose root is datasource-micrometer's `connection` span
 &mdash; a pooled connection acquired outside any traced work (an external health probe,
-HikariCP maintenance). It is the one type the Traces tab hides by default: with no `type`
-in the URL the tab requests every other type, and selecting the Connection Pool chip both
-reveals these traces and puts `type=CONNECTION_POOL` in the shareable URL.
+HikariCP maintenance). It is the one type the listing endpoint leaves out of its default
+view: a request naming no root action type gets every other type, so with no `type` in the
+URL the Traces tab shows everything but these, and selecting the Connection Pool chip both
+reveals them and puts `type=CONNECTION_POOL` in the shareable URL. A client that wants the
+store as it stands asks for `rootActionType=*`.
 
 **Usage:** `RootActionType` enum, `rootActionType` field, `detectRootActionType()`
 
@@ -172,8 +174,9 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 | `params.upload` | Uploaded files |
 
 `body.content`, `body.truncated` and `params.upload` are reserved fields: `RequestCaptureFilter`
-never populates them, so they are always null/empty (see
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
+never populates them, so they are always null/empty. They are the seam a body-capture
+implementation would fill &mdash; see *Servlet Filters* in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for what such a pass has to solve first.
 
 **HttpResponse fields:**
 | Field | Description |
