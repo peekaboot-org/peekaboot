@@ -52,9 +52,11 @@ public class OtelSpanExporter implements SpanExporter {
         for (SpanData otelSpan : spans) {
             Map<String, String> tags = extractAttributes(otelSpan);
             if (shouldSkipSpan(otelSpan, tags)) {
-                // A skipped root ends a trace that is Peekaboot's own. Its children exported
-                // before it and its logs and request arrived synchronously, so whatever the
-                // trace stored is complete and one discard clears it.
+                // A skipped root ends a trace that is Peekaboot's own. The discard assumes
+                // nothing more arrives under that id: the excluded prefixes serve no endpoint
+                // that outlives its response, so the children exported alongside the root and
+                // the logs arrived synchronously. A later event would rebuild the id as an
+                // empty, rootless bundle.
                 if (!otelSpan.getParentSpanContext().isValid()) {
                     eventPublisher.publishEvent(
                             new TraceDiscardedEvent(otelSpan.getSpanContext().getTraceId()));
@@ -68,16 +70,18 @@ public class OtelSpanExporter implements SpanExporter {
     }
 
     /**
-     * Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its
-     * name. The path tag carries the servlet context path while the name (Spring's matched
-     * route pattern) does not, so the path goes through the context-stripping check.
+     * Peekaboot's own requests, recognised by the span's HTTP path or, for a span carrying
+     * no path at all, its name. The path tag carries the servlet context path while the
+     * name (Spring's matched route pattern) does not, so the path goes through the
+     * context-stripping check - and it decides alone, since a host route such as
+     * {@code /admin/peekaboot/status} spells the prefix without being Peekaboot's request.
      * Judged per span: the children of such a request carry neither and are stored, which
      * is what the discard in {@link #export} undoes once their root arrives.
      */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         String path = HttpSpanTags.path(tags);
-        if (path != null && paths.isExcludedRequestPath(path)) {
-            return true;
+        if (path != null) {
+            return paths.isExcludedRequestPath(path);
         }
         String name = span.getName();
         return name != null && name.contains(PeekabootPaths.BASE_PATH + "/");
