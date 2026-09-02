@@ -12,15 +12,14 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Buffers the response body so the dev toolbar can be injected into HTML
- * pages. Only text/html responses stay buffered, and only up to
- * {@link #MAX_BUFFERED_BYTES}: as soon as a non-HTML content type is declared (JSON
- * APIs, downloads, text/event-stream - via {@code setContentType} or, as Spring's
- * message converters do it, the {@code Content-Type} header), the buffer outgrows the cap, or
- * {@link #enablePassthrough()} is called explicitly (async requests), the
- * wrapper hands the buffered bytes to the real response and delegates all
- * further writes directly, so streaming and async responses work and no large
- * body is held in heap. A page past the cap is served without the toolbar.
+ * Buffers the response body so the dev toolbar can be injected into HTML pages. Only
+ * text/html responses stay buffered, and only up to {@link #MAX_BUFFERED_BYTES}. The
+ * wrapper flips to passthrough - hands the buffered bytes to the real response and
+ * delegates every further write - as soon as a non-HTML content type is declared (via
+ * {@code setContentType} or, as Spring's message converters do it, the {@code Content-Type}
+ * header), the buffer outgrows the cap, or {@link #enablePassthrough()} is called for an
+ * async request. Streaming and async responses therefore work and no large body is held
+ * in heap; a page past the cap is served without the toolbar.
  *
  * <p>Reset and commit semantics follow Spring's {@code ContentCachingResponseWrapper}:
  * {@link #reset()} clears the buffer along with the real response, {@link #isCommitted()}
@@ -135,10 +134,8 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
             throw new IllegalStateException("getOutputStream() has already been called");
         }
         if (writer == null) {
-            String encoding = getCharacterEncoding();
-            Charset charset = encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
             writer = new PrintWriter(
-                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset)));
+                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset())));
         }
         return writer;
     }
@@ -223,9 +220,13 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         if (writer != null) {
             writer.flush();
         }
+        return buffer.toString(charset());
+    }
+
+    /** The response's declared character encoding, UTF-8 while none is declared. */
+    public Charset charset() {
         String encoding = getCharacterEncoding();
-        Charset charset = encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
-        return buffer.toString(charset);
+        return encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
     }
 
     public void copyBodyToResponse() throws IOException {
@@ -282,9 +283,9 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     /**
-     * In passthrough mode nobody flushes the wrapping encoder at end of
-     * request (processResponse is skipped), so flush through on every write
-     * to guarantee delivery; while buffering, writes stay cheap.
+     * In passthrough mode nobody flushes the wrapping encoder at end of request (the
+     * filter skips injection), so flush through on every write to guarantee delivery;
+     * while buffering, writes stay cheap.
      */
     private final class SwitchableWriter extends java.io.Writer {
 
