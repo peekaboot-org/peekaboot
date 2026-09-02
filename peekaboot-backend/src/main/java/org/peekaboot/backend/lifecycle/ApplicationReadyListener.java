@@ -52,7 +52,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
         this.serverUrlResolver = serverUrlResolver;
-        this.dataSourceMetadataList = dataSourceMetadataList != null ? dataSourceMetadataList : List.of();
+        this.dataSourceMetadataList = dataSourceMetadataList;
         this.dataSources = dataSources;
         this.hikariPoolInfo = hikariPoolInfo;
     }
@@ -212,7 +212,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @SuppressWarnings("PMD.CloseResource")
     private void appendPoolInfo(StringBuilder report, String dataSourceName) {
 
-        if (hikariPoolInfo == null || dataSources == null || !dataSources.containsKey(dataSourceName)) {
+        if (hikariPoolInfo == null || !dataSources.containsKey(dataSourceName)) {
             return;
         }
 
