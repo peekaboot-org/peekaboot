@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.microsoft.playwright.APIResponse;
 import java.util.List;
@@ -72,9 +73,110 @@ class OverviewMachineIT extends PlaywrightTestBase {
                 assertThat(text).contains(address.hostname());
             }
         }
-        assertThat(page.locator("#machine-info .pk-kv:has(.pk-kv__key:text-is('IP Address'))")
-                        .count())
-                .isEqualTo(addresses.size());
+        // the IPv4/IPv6 tab labels carry the context - the rows themselves are bare
+        assertThat(text).doesNotContain("IP Address");
+        assertThat(page.locator("#machine-info .pk-machine-net__addr").count()).isEqualTo(addresses.size());
+    }
+
+    @Test
+    void networkAddressesSplitIntoFamilyTabsDefaultingToIpv4() {
+        openDashboard();
+        page.waitForSelector("#machine-info .pk-kv");
+
+        List<NetworkAddress> addresses = MachineInfo.current().networkAddresses();
+        if (addresses.isEmpty()) {
+            // no addresses at all - the whole section stays absent, tabs included
+            assertThat(page.locator("#machine-net-tabs").count()).isZero();
+            return;
+        }
+
+        List<NetworkAddress> v4 = family(addresses, false);
+        List<NetworkAddress> v6 = family(addresses, true);
+        String defaultFamily = v4.isEmpty() ? "ipv6" : "ipv4";
+
+        assertThat(page.getAttribute("#machine-net-" + defaultFamily + "-btn", "aria-selected"))
+                .isEqualTo("true");
+        assertThat(page.isVisible("#machine-net-" + defaultFamily)).isTrue();
+
+        // each row sits in its family's panel; a family with no addresses hides its
+        // tab, the same way the main strip hides tabs for absent features
+        assertThat(page.locator("#machine-net-ipv4 .pk-machine-net__addr").count())
+                .isEqualTo(v4.size());
+        assertThat(page.locator("#machine-net-ipv6 .pk-machine-net__addr").count())
+                .isEqualTo(v6.size());
+        if (v4.isEmpty()) {
+            assertThat(page.isVisible("#machine-net-ipv4-btn")).isFalse();
+        }
+        if (v6.isEmpty()) {
+            assertThat(page.isVisible("#machine-net-ipv6-btn")).isFalse();
+        }
+    }
+
+    @Test
+    void switchingToTheIpv6TabShowsTheV6SetAndSurvivesARefresh() {
+        List<NetworkAddress> addresses = MachineInfo.current().networkAddresses();
+        assumeTrue(
+                !family(addresses, false).isEmpty() && !family(addresses, true).isEmpty(),
+                "needs a machine with both an IPv4 and an IPv6 address");
+
+        openDashboard();
+        page.waitForSelector("#machine-net-ipv6-btn");
+        page.click("#machine-net-ipv6-btn");
+
+        assertThat(page.getAttribute("#machine-net-ipv6-btn", "aria-selected")).isEqualTo("true");
+        assertThat(page.isVisible("#machine-net-ipv6")).isTrue();
+        assertThat(page.isHidden("#machine-net-ipv4")).isTrue();
+        String text = page.textContent("#machine-net-ipv6");
+        for (NetworkAddress address : family(addresses, true)) {
+            assertThat(text).contains(address.address());
+        }
+
+        // the open family is transient per-browser UI, but a refresh rebuild must keep
+        // it (the group-expansion convention) - tag the panel so the rebuild is provable
+        page.evaluate("() => document.querySelector('#machine-net-ipv6').dataset.probe = 'pre-refresh'");
+        page.click("#refresh-btn");
+        page.waitForFunction("() => !document.querySelector('#machine-net-ipv6').dataset.probe");
+        assertThat(page.getAttribute("#machine-net-ipv6-btn", "aria-selected")).isEqualTo("true");
+        assertThat(page.isVisible("#machine-net-ipv6")).isTrue();
+    }
+
+    @Test
+    void networkTabsExposeAsATablistAndAreKeyboardOperable() {
+        openDashboard();
+        page.waitForSelector("#machine-info .pk-kv");
+
+        List<NetworkAddress> addresses = MachineInfo.current().networkAddresses();
+        assumeTrue(!addresses.isEmpty(), "needs a machine with at least one non-local address");
+
+        assertThat(page.locator("#machine-net-tabs").ariaSnapshot()).contains("tablist");
+        String defaultFamily = family(addresses, false).isEmpty() ? "ipv6" : "ipv4";
+        String defaultButton = "#machine-net-" + defaultFamily + "-btn";
+        assertThat(page.getAttribute(defaultButton, "role")).isEqualTo("tab");
+        assertThat(page.getAttribute(defaultButton, "aria-controls")).isEqualTo("machine-net-" + defaultFamily);
+        assertThat(page.getAttribute("#machine-net-" + defaultFamily, "role")).isEqualTo("tabpanel");
+        assertThat(page.getAttribute("#machine-net-" + defaultFamily, "aria-labelledby"))
+                .isEqualTo("machine-net-" + defaultFamily + "-btn");
+
+        // arrow keys move selection over the visible families (wrapping onto the only
+        // one where a family is absent) and keep the roving tabindex on the selection
+        boolean bothFamilies =
+                !family(addresses, false).isEmpty() && !family(addresses, true).isEmpty();
+        String nextFamily = bothFamilies ? (defaultFamily.equals("ipv4") ? "ipv6" : "ipv4") : defaultFamily;
+        page.focus(defaultButton);
+        page.keyboard().press("ArrowRight");
+        assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo(nextFamily);
+        assertThat(page.getAttribute("#machine-net-" + nextFamily + "-btn", "aria-selected"))
+                .isEqualTo("true");
+        assertThat(page.isVisible("#machine-net-" + nextFamily)).isTrue();
+        assertThat(page.evaluate("() => document.querySelector('#machine-net-" + nextFamily + "-btn').tabIndex"))
+                .isEqualTo(0);
+    }
+
+    /** Splits by address family the way the card does: a ":" in the literal means IPv6. */
+    private static List<NetworkAddress> family(List<NetworkAddress> addresses, boolean ipv6) {
+        return addresses.stream()
+                .filter(address -> address.address().contains(":") == ipv6)
+                .toList();
     }
 
     @Test

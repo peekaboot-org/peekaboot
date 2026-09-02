@@ -117,7 +117,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.keyboard().press("ArrowLeft");
 
         Object lastVisible = page.evaluate(
-                "() => [...document.querySelectorAll('.pk-tab')].filter(t => t.offsetParent !== null).pop().dataset.tab");
+                "() => [...document.querySelectorAll('#main-tabs .pk-tab')].filter(t => t.offsetParent !== null).pop().dataset.tab");
         assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo(lastVisible);
     }
 
@@ -128,7 +128,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
         page.keyboard().press("End");
         Object lastVisible = page.evaluate(
-                "() => [...document.querySelectorAll('.pk-tab')].filter(t => t.offsetParent !== null).pop().dataset.tab");
+                "() => [...document.querySelectorAll('#main-tabs .pk-tab')].filter(t => t.offsetParent !== null).pop().dataset.tab");
         assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo(lastVisible);
 
         page.keyboard().press("Home");
@@ -166,7 +166,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         String selected =
                 (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
         Object expectedNext = page.evaluate(
-                "() => { const visible = [...document.querySelectorAll('.pk-tab')].filter(t => t.offsetParent !== null);"
+                "() => { const visible = [...document.querySelectorAll('#main-tabs .pk-tab')].filter(t => t.offsetParent !== null);"
                         + " const idx = visible.findIndex(t => t.dataset.tab === 'overview');"
                         + " return visible[(idx + 1) % visible.length].dataset.tab; }");
 

@@ -3,7 +3,7 @@
  * info + datasource cards, the memory/storage usage meters and the health banner +
  * component grid.
  */
-import {kvRow, badge, meter} from '../../shared/components.js';
+import {kvRow, badge, meter, tabStrip} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
@@ -195,6 +195,7 @@ function renderOsInfo(container, runtime) {
  */
 function renderMachineInfo(container, runtime) {
     const el = container.querySelector('#machine-info');
+    const previousFamily = el.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
     el.innerHTML = '';
 
     const machine = runtime?.machine;
@@ -209,9 +210,68 @@ function renderMachineInfo(container, runtime) {
     if (machine.maxHeap) el.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
     el.appendChild(kvRow('Container', machine.container || 'none'));
 
-    (machine.networkAddresses ?? []).forEach(({address, hostname}) => {
-        el.appendChild(kvRow('IP Address', hostname ? `${address} (${hostname})` : address, {mono: true}));
+    renderNetworkAddresses(el, machine.networkAddresses ?? [], previousFamily);
+}
+
+const IP_FAMILIES = [
+    {id: 'ipv4', label: 'IPv4'},
+    {id: 'ipv6', label: 'IPv6'}
+];
+
+/** A ":" in the literal means IPv6 - dotted-quad IPv4 never carries one. */
+function ipFamily(address) {
+    return address.includes(':') ? 'ipv6' : 'ipv4';
+}
+
+/**
+ * The machine's non-local IP addresses, split into an IPv4/IPv6 tab strip. The tab
+ * labels carry the context a key column would, so the rows are bare full-width
+ * address (+ hostname) text. A family with no addresses hides its tab, the same way
+ * the main strip hides tabs for absent features; with no addresses at all nothing
+ * renders. Which family is open is transient per-browser UI - carried across the
+ * refresh rebuild via previousFamily (the group-expansion convention), never into
+ * the URL.
+ */
+function renderNetworkAddresses(el, addresses, previousFamily) {
+    if (addresses.length === 0) return;
+
+    const strip = document.createElement('div');
+    strip.className = 'pk-tabs';
+    strip.id = 'machine-net-tabs';
+    el.appendChild(strip);
+
+    const panels = new Map();
+    IP_FAMILIES.forEach(({id, label}) => {
+        const familyAddresses = addresses.filter(({address}) => ipFamily(address) === id);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.id = `machine-net-${id}-btn`;
+        button.className = 'pk-tab' + (familyAddresses.length === 0 ? ' hidden' : '');
+        button.dataset.tab = id;
+        button.setAttribute('role', 'tab');
+        button.setAttribute('aria-controls', `machine-net-${id}`);
+        button.textContent = label;
+        strip.appendChild(button);
+
+        const panel = document.createElement('div');
+        panel.id = `machine-net-${id}`;
+        panel.setAttribute('role', 'tabpanel');
+        panel.setAttribute('aria-labelledby', button.id);
+        familyAddresses.forEach(({address, hostname}) => {
+            const row = document.createElement('div');
+            row.className = 'pk-machine-net__addr';
+            row.textContent = hostname ? `${address} (${hostname})` : address;
+            panel.appendChild(row);
+        });
+        el.appendChild(panel);
+        if (familyAddresses.length > 0) panels.set(id, panel);
     });
+
+    const showFamily = id => panels.forEach((panel, family) => panel.hidden = family !== id);
+    const initial = panels.has(previousFamily) ? previousFamily : panels.keys().next().value;
+    tabStrip(strip, IP_FAMILIES, {onSelect: showFamily, initial});
+    showFamily(initial);
 }
 
 /**

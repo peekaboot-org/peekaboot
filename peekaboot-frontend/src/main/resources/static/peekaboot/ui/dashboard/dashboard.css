@@ -297,6 +297,19 @@
 .pk-datasources__params[hidden] { display: none; }
 .pk-datasources__params-list { background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
+/* Machine card — the per-family address lists under the IPv4/IPv6 tab strip. Bare
+   full-width mono rows: the tab labels carry the context a key column would. */
+#machine-net-tabs { margin-top: var(--pk-space-md); }
+.pk-machine-net__addr {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    border-bottom: 1px solid var(--pk-border);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    word-break: break-all;
+}
+.pk-machine-net__addr:last-child { border-bottom: none; }
+
 /* Environment — active profiles banner. Profile pills use the shared badge('info')
    primitive rather than a bespoke tint: a --pk-primary-light fill with --pk-primary
    text measures 4.23:1 in light theme, under AA's 4.5:1 for this text size, and a
