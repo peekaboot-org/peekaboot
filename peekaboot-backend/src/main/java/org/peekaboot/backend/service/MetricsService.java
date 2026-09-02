@@ -51,10 +51,6 @@ public class MetricsService {
             String name = entry.getKey();
             List<Meter> meters = entry.getValue();
 
-            if (meters.isEmpty()) {
-                continue;
-            }
-
             Meter firstMeter = meters.get(0);
             String description = firstMeter.getId().getDescription();
             String baseUnit = firstMeter.getId().getBaseUnit();
@@ -62,6 +58,7 @@ public class MetricsService {
 
             List<MetricMeasurement> measurements = new ArrayList<>();
             for (Meter meter : meters) {
+                // a meter's tags never repeat a key; the merge function only satisfies toMap
                 Map<String, String> tags = tagMasker.mask(meter.getId().getTags().stream()
                         .collect(Collectors.toMap(Tag::getKey, Tag::getValue, (v1, v2) -> v1, LinkedHashMap::new)));
 

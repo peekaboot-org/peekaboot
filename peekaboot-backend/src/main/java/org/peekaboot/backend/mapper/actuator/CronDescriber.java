@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 /** Puts a cron expression into words for the Scheduled Tasks tab ("every hour"), in the reader's locale. */
 final class CronDescriber {
 
-    private static final Logger logger = LoggerFactory.getLogger(CronDescriber.class);
+    private static final Logger log = LoggerFactory.getLogger(CronDescriber.class);
 
     private final CronParser parser;
 
@@ -32,7 +32,7 @@ final class CronDescriber {
             return CronDescriptor.instance(effectiveLocale).describe(cron);
         } catch (IllegalArgumentException e) {
             // called on every insights refresh - keep the log noise low
-            logger.debug("Failed to parse cron expression '{}': {}", cronExpression, e.getMessage());
+            log.debug("Failed to parse cron expression '{}': {}", cronExpression, e.getMessage());
             return null;
         }
     }

@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ public class ToolbarShell {
      * Every sheet the bar's own appearance depends on, in cascade order, relative to the base
      * path. components.css is deliberately absent: it styles the status badge and the copy
      * control, both of which only exist once toolbar.js has injected them, so a reader who
-     * cannot load the script cannot reach anything it styles either - and it is 12 KB.
+     * cannot load the script cannot reach anything it styles either - and it is the largest sheet.
      */
     private static final List<String> INLINED_SHEETS =
             List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/toolbar/toolbar.css");
@@ -119,8 +120,7 @@ public class ToolbarShell {
     private static String stylesheetLinks() {
         return LINKED_SHEETS.stream()
                 .map(href -> "        <link rel=\"stylesheet\" href=\"" + BASE_TOKEN + href + "\">")
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse("");
+                .collect(Collectors.joining("\n"));
     }
 
     private static String loadInlinedCss() {
