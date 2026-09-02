@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
@@ -28,9 +27,6 @@ import tools.jackson.databind.JsonNode;
 @ActiveProfiles("test")
 class ConnectionPoolTraceCaptureIT {
 
-    private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private static final long POLL_INTERVAL_MS = 50;
-
     @LocalServerPort
     private int port;
 
@@ -43,8 +39,7 @@ class ConnectionPoolTraceCaptureIT {
             assertThat(connection.isValid(1)).isTrue();
         }
 
-        PeekabootApi api = new PeekabootApi(port);
-        JsonNode trace = awaitConnectionPoolTrace(api);
+        JsonNode trace = new TraceApiClient(port).awaitTraceOfType(RootActionType.CONNECTION_POOL);
 
         assertThat(trace.path("rootOperation").asString("")).isEqualTo("connection");
         assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("CLIENT");
@@ -55,7 +50,8 @@ class ConnectionPoolTraceCaptureIT {
                 .startsWith("HikariPool");
 
         // the include-list the dashboard sends by default keeps the trace out of the list
-        JsonNode defaultView = api.getJson("/peekaboot/api/traces/insights?rootActionType=" + defaultIncludeList());
+        JsonNode defaultView =
+                new PeekabootApi(port).getJson("/peekaboot/api/traces/insights?rootActionType=" + defaultIncludeList());
         for (JsonNode listed : defaultView.path("traces")) {
             assertThat(listed.path("rootActionType").asString("")).isNotEqualTo(RootActionType.CONNECTION_POOL.name());
         }
@@ -67,30 +63,5 @@ class ConnectionPoolTraceCaptureIT {
                 .filter(type -> type != RootActionType.CONNECTION_POOL)
                 .map(Enum::name)
                 .collect(Collectors.joining(","));
-    }
-
-    /**
-     * Spans reach the TraceStore via the async BatchSpanProcessor (50ms schedule-delay in
-     * the test profile), so the read polls with a deadline, the way TraceApiClient does.
-     */
-    private JsonNode awaitConnectionPoolTrace(PeekabootApi api) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        JsonNode lastResponse = null;
-        while (System.nanoTime() < deadline) {
-            lastResponse = api.getJson(
-                    "/peekaboot/api/traces/insights?rootActionType=" + RootActionType.CONNECTION_POOL.name());
-            JsonNode traces = lastResponse.path("traces");
-            if (!traces.isEmpty()) {
-                return traces.get(0);
-            }
-            try {
-                Thread.sleep(POLL_INTERVAL_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("interrupted while waiting for the connection-pool trace", e);
-            }
-        }
-        throw new AssertionError(
-                "no CONNECTION_POOL trace was captured within " + TIMEOUT + "; last response: " + lastResponse);
     }
 }
