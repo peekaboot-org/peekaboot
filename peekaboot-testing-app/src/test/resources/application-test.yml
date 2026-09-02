@@ -80,4 +80,5 @@ management:
 
 logging:
   level:
-    org.peekaboot: DEBUG
+    # INFO keeps IT logs readable; no test asserts on DEBUG output
+    org.peekaboot: INFO
