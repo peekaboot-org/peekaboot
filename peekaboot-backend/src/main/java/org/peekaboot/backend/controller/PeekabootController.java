@@ -101,6 +101,12 @@ public class PeekabootController {
         return metricsService.getMetrics();
     }
 
+    /**
+     * The trace listing. {@code rootActionType} takes a comma-separated include-list of
+     * root action types; a request that names none gets the default view, which leaves
+     * out the types that are routine maintenance, and {@code *} gets every type. See
+     * {@link TraceInsightsService#getInsights}.
+     */
     @GetMapping(value = "/api/traces/insights", produces = MediaType.APPLICATION_JSON_VALUE)
     public TraceInsightsResponse getTracesInsights(
             @RequestParam(name = "limit", defaultValue = "100") int limit,
