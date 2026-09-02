@@ -23,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -46,6 +47,8 @@ class OtelSpanExporterTest {
             if (event instanceof SpanDataEvent spanDataEvent) {
                 publishedEvents.add(spanDataEvent);
                 storage.addSpan(spanDataEvent.spanData());
+            } else if (event instanceof TraceDiscardedEvent discarded) {
+                storage.discard(discarded.traceId());
             }
         };
         exporter = new OtelSpanExporter(eventPublisher, PeekabootPaths.defaults());
@@ -147,6 +150,54 @@ class OtelSpanExporterTest {
 
         assertThat(publishedEvents).isEmpty();
         assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /**
+     * Children export before their root, so the JDBC span of a {@code /actuator/health}
+     * probe is already stored when the root arrives without a path Peekaboot keeps;
+     * skipping that root discards what its trace has stored.
+     */
+    @Test
+    void skippingARootSpanDiscardsWhatItsTraceHasAlreadyStored() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData jdbcChild = testSpanBuilder(traceId, "0000000000000002", "connection", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .attributes(Attributes.of(AttributeKey.stringKey("jdbc.datasource.name"), "dataSource"))
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /actuator/health", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
+                .build();
+
+        exporter.export(List.of(jdbcChild));
+        assertThat(storage.getTrace(traceId)).isPresent();
+        exporter.export(List.of(root));
+
+        assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /** Only a root decides a trace's fate; a skipped span under some other root leaves the trace alone. */
+    @Test
+    void skippingAChildSpanLeavesTheRestOfItsTraceStored() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData peekabootCall = testSpanBuilder(
+                        traceId, "0000000000000002", "GET /peekaboot/api/features", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .build();
+
+        exporter.export(List.of(peekabootCall, root));
+
+        assertThat(storedSpans(traceId))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly(rootSpanId);
     }
 
     @Test

@@ -18,12 +18,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.mapper.trace.HttpSpanTags;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * Copies every span the host's OpenTelemetry SDK exports into Peekaboot's own store, as a
- * {@link SpanDataEvent} per span, leaving out the spans of Peekaboot's own requests. Runs
- * beside whatever other exporter the application has configured, never instead of it.
+ * {@link SpanDataEvent} per span, leaving out Peekaboot's own requests. Runs beside
+ * whatever other exporter the application has configured, never instead of it.
  */
 public class OtelSpanExporter implements SpanExporter {
 
@@ -45,6 +46,13 @@ public class OtelSpanExporter implements SpanExporter {
         for (SpanData otelSpan : spans) {
             Map<String, String> tags = extractAttributes(otelSpan);
             if (shouldSkipSpan(otelSpan, tags)) {
+                // A skipped root ends a trace that is Peekaboot's own. Its children exported
+                // before it and its logs and request arrived synchronously, so whatever the
+                // trace stored is complete and one discard clears it.
+                if (!otelSpan.getParentSpanContext().isValid()) {
+                    eventPublisher.publishEvent(
+                            new TraceDiscardedEvent(otelSpan.getSpanContext().getTraceId()));
+                }
                 continue;
             }
             org.peekaboot.backend.tracing.store.SpanData spanData = convertToSpanData(otelSpan, tags);
@@ -57,6 +65,8 @@ public class OtelSpanExporter implements SpanExporter {
      * Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its
      * name. The path tag carries the servlet context path while the name (Spring's matched
      * route pattern) does not, so the path goes through the context-stripping check.
+     * Judged per span: the children of such a request carry neither and are stored, which
+     * is what the discard in {@link #export} undoes once their root arrives.
      */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         String path = HttpSpanTags.path(tags);

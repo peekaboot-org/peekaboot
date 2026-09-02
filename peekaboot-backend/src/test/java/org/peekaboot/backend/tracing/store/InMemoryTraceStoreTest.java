@@ -296,6 +296,33 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
+    void discardRemovesTheTraceFromEveryBucket() {
+        InMemoryTraceStore store = storeWithSlowThreshold(100);
+        store.addSpan(span("s1")
+                .in("t1")
+                .at(START, Duration.ofMillis(150))
+                .error("boom", "java.lang.RuntimeException")
+                .build());
+        store.addLog(log("t1", "INFO", "probe"));
+
+        store.discard("t1");
+
+        assertThat(store.getTrace("t1")).isEmpty();
+        assertThat(store.getTraceCount(TraceBucket.ALL)).isZero();
+        assertThat(store.getTraceCount(TraceBucket.ERRORS)).isZero();
+        assertThat(store.getTraceCount(TraceBucket.SLOW)).isZero();
+    }
+
+    @Test
+    void discardingAnUnknownTraceChangesNothing() {
+        storage.addSpan(spanIn("t1", "s1"));
+
+        storage.discard("unknown");
+
+        assertThat(storage.getTraceCount(TraceBucket.ALL)).isEqualTo(1);
+    }
+
+    @Test
     void clearEmptiesAllBuckets() {
         storage.addSpan(errorSpan(storage, "t1"));
         storage.clear();
