@@ -186,10 +186,12 @@ function renderOsInfo(container, runtime) {
 }
 
 /**
- * The deployment environment: CPU, physical memory, the JVM's max heap and the
- * container runtime the backend detected ("none" outside one). cpuCount and
- * totalMemory come from the JDK, which is container-aware - inside a limited
- * container they report the container's share, not the host's.
+ * The deployment environment: CPU, physical memory, the JVM's max heap, the
+ * container runtime the backend detected ("none" outside one) and the machine's
+ * non-local IP addresses. cpuCount and totalMemory come from the JDK, which is
+ * container-aware - inside a limited container they report the container's share,
+ * not the host's. Every other fact is best-effort: what the backend couldn't read
+ * arrives null/empty and renders no row at all.
  */
 function renderMachineInfo(container, runtime) {
     const el = container.querySelector('#machine-info');
@@ -201,11 +203,28 @@ function renderMachineInfo(container, runtime) {
         return;
     }
 
-    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', machine.cpuCount));
+    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', cpuCoresValue(machine)));
     if (machine.cpuModel) el.appendChild(kvRow('CPU Model', machine.cpuModel));
     if (machine.totalMemory) el.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
     if (machine.maxHeap) el.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
     el.appendChild(kvRow('Container', machine.container || 'none'));
+
+    (machine.networkAddresses ?? []).forEach(({address, hostname}) => {
+        el.appendChild(kvRow('IP Address', hostname ? `${address} (${hostname})` : address, {mono: true}));
+    });
+}
+
+/**
+ * The logical count, annotated with the physical layout where /proc/cpuinfo gave the
+ * backend one - "8 (4 cores × 2 threads)" with SMT/hyper-threading active. The plain
+ * count means the topology is unknown (non-Linux, exotic kernels).
+ */
+function cpuCoresValue(machine) {
+    const topology = machine.cpuTopology;
+    if (!topology) return machine.cpuCount;
+    return topology.threadsPerCore > 1
+        ? `${machine.cpuCount} (${topology.physicalCores} cores × ${topology.threadsPerCore} threads)`
+        : `${machine.cpuCount} (${topology.physicalCores} cores, SMT off)`;
 }
 
 function renderJvmDefaults(container, server, {locale, timeZone}) {
