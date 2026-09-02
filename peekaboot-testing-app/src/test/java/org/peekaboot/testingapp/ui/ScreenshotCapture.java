@@ -249,9 +249,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
 
         // Spans and Queries are independent rendering paths - Spans shows span.name
         // (OpenTelemetry's own summary), Queries shows the SQL QueryExtractor extracts
-        // (see docs/IMPROVEMENTS.md §2.1). The overlay opens on Spans, so without this
-        // click no shipped image has ever shown QueryExtractor's output. The flagship
-        // /orders trace deep-linked above is deliberately the N+1 example, so it is
+        // (see docs/ARCHITECTURE.md's Query Extraction section). The overlay opens on Spans,
+        // so without this click no shipped image has ever shown QueryExtractor's output. The
+        // flagship /orders trace deep-linked above is deliberately the N+1 example, so it is
         // guaranteed to carry real queries to click across to.
         page.click("#peekaboot-trace-overlay .pk-tabs .pk-tab[data-tab=\"queries\"]");
         page.waitForSelector("#peekaboot-trace-overlay .pk-query-item");
@@ -373,7 +373,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * <p>This only ever reveals the {@code spring.datasource.password} fixture inside the
      * one group {@link #MASKED_GROUP_HEADER_SELECTOR} already scoped to - never
      * {@code systemProperties}/{@code systemEnvironment}, which that selector deliberately
-     * excludes. See its doc comment, and {@code docs/IMPROVEMENTS.md} §4, for why.
+     * excludes. See its doc comment for why, and {@code peekaboot-testing-app/README.md}'s
+     * screenshot section before revealing any further group.
      */
     private void captureRevealedGroupIfPresent(Path outputDir, String tabId, String theme) {
         String buttonSelector = REVEAL_BUTTON_SELECTOR.get(tabId);
