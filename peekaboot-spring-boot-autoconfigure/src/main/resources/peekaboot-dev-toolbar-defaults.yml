@@ -1,4 +1,3 @@
-# peekaboot-dev-toolbar-defaults.yml
 # Applied only when the dev toolbar resolves on. Everything here trades throughput for
 # latency, which is the right trade for a toolbar a developer is watching and the wrong
 # one for anything else.
