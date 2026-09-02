@@ -766,14 +766,20 @@ ActuatorInsightsResponse
 ```
 
 `RuntimeInfo.machine` (`MachineInfo`, computed once and cached) describes the deployment
-environment: the logical processor count, the CPU model (only where cheaply readable —
-`/proc/cpuinfo` on Linux, no forking), total physical memory, the JVM's max heap, and the
-`ContainerRuntime` the process runs under — docker (`/.dockerenv`), podman
-(`/run/.containerenv`), kubernetes (`KUBERNETES_SERVICE_HOST`), a generic container (a
-`/proc/1/cgroup` marker), or none. The JDK's processor count and total memory are
-container-aware: inside a limited container they report the container's share, not the
-host's. `ContainerRuntime.current()` is the one detection in the codebase; the
-autoconfigure module's `LocalDevDetector` consumes the same cached result.
+environment: the logical processor count, the CPU model and physical-core/SMT topology
+(`CpuTopology`; both only where cheaply readable — `/proc/cpuinfo` on Linux, no forking),
+total physical memory, the JVM's max heap, the machine's non-local IP addresses with
+their reverse-resolved hostnames (`NetworkAddress` — up interfaces only, loopback and
+link-local skipped; the lookups run in parallel on virtual threads against a shared ~1s
+budget, and one that misses it or only echoes the literal address leaves the hostname
+`null`), and the `ContainerRuntime` the process runs under — docker (`/.dockerenv`),
+podman (`/run/.containerenv`), kubernetes (`KUBERNETES_SERVICE_HOST`), a generic
+container (a `/proc/1/cgroup` marker), or none. Every fact is best-effort: whatever the
+host doesn't let the JVM read stays `null`/empty and the dashboard renders no row for it.
+The JDK's processor count and total memory are container-aware: inside a limited
+container they report the container's share, not the host's. `ContainerRuntime.current()`
+is the one detection in the codebase; the autoconfigure module's `LocalDevDetector`
+consumes the same cached result.
 
 ## Testing
 
