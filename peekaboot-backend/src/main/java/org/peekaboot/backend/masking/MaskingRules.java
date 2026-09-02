@@ -84,6 +84,11 @@ final class MaskingRules {
      * property source (systemEnvironment). The exception is that one spelling and nothing
      * wider: a lower-case "pwd" is how a SQL Server JDBC URL (";pwd=") or a login form
      * ("?pwd=") names a password and still masks, as does a compound like "db.pwd".
+     *
+     * <p>Three environment variables mask through the ordinary rules and are deliberately
+     * not exempted here: XDG_SESSION_ID, SSH_AUTH_SOCK and CREDENTIALS_DIRECTORY, caught
+     * by "session-id", "auth" and "credentials". None is a secret; all three are
+     * sensitive-adjacent, and the rules that catch them earn their keep elsewhere.
      */
     static final List<String> KEY_NAME_EXCEPTIONS = List.of("PWD");
 

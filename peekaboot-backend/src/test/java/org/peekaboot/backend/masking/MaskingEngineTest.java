@@ -54,6 +54,15 @@ class MaskingEngineTest {
         void isSensitiveKey_shouldMatchEachKeyNameRule(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
+
+        // The three environment variables a developer meets on the systemEnvironment
+        // property source that the rules catch without being secrets themselves; see
+        // MaskingRules.KEY_NAME_EXCEPTIONS for why none of them is exempted.
+        @ParameterizedTest
+        @ValueSource(strings = {"XDG_SESSION_ID", "SSH_AUTH_SOCK", "CREDENTIALS_DIRECTORY"})
+        void isSensitiveKey_shouldMatchTheSensitiveAdjacentEnvironmentVariables(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
     }
 
     @Nested
