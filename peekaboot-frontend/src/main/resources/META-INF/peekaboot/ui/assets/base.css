@@ -17,15 +17,10 @@ body {
 }
 
 mark {
-    background: #fef08a;
-    color: var(--pk-text-strong);
+    background: var(--pk-mark-bg);
+    color: var(--pk-on-mark);
     padding: 1px 4px;
     border-radius: 2px;
-}
-
-[data-theme="dark"] mark, :host([data-theme="dark"]) mark {
-    background: #854d0e;
-    color: #fef9c3;
 }
 
 /* Honour the OS "reduce motion" setting. Peekaboot runs three infinite animations —

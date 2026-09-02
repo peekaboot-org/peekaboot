@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Route;
@@ -10,8 +11,11 @@ import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
@@ -851,5 +855,68 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + "deterministic, not just usually 1")
                 .contains("1 query")
                 .doesNotContain("1 queries");
+    }
+
+    /**
+     * A host page whose CSP omits style-src 'unsafe-inline' drops every style attribute
+     * written through innerHTML, but not CSSOM writes (element.style) - which is why the
+     * toolbar's own positioning avoids inline attributes. The gantt has to survive the
+     * same policy: its bar positions and row indents are the whole chart. The policy is
+     * applied by adding the header to the real dashboard response (its body is untouched),
+     * and a depth-1 row's indent is the observable that a dropped attribute would zero.
+     */
+    @Test
+    void ganttSurvivesAHostPageWhoseCspForbidsInlineStyles() {
+        List<String> cspViolations = new ArrayList<>();
+        page.onConsoleMessage(message -> {
+            if (message.text().contains("Content Security Policy")) cspViolations.add(message.text());
+        });
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
+            APIResponse response = route.fetch();
+            Map<String, String> headers = new HashMap<>(response.headers());
+            headers.put("content-security-policy", "style-src 'self'");
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
+        });
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.waitFor(".pk-gantt-row[data-depth='1']");
+
+        assertThat(
+                        overlay.evaluate(
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-row[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
+                .as("a nested row keeps its indent")
+                .isEqualTo("20px");
+        assertThat((Boolean) overlay.evaluate("root => {"
+                        + "const track = root.querySelector('.pk-gantt-row[data-depth=\"0\"] .pk-gantt-track');"
+                        + "return track.querySelector('.pk-gantt-bar').getBoundingClientRect().width"
+                        + "  > track.getBoundingClientRect().width * 0.9; }"))
+                .as("the root span's bar spans its track")
+                .isTrue();
+        assertThat(cspViolations).isEmpty();
+    }
+
+    /**
+     * On a phone-sized viewport the fixed 350px name column would leave the track no
+     * room at all and push every row past the right edge; the name shares the row
+     * proportionally instead.
+     */
+    @Test
+    void ganttRowsFitANarrowViewport() {
+        page.setViewportSize(375, 667);
+        openOverlayFromToolbar();
+        overlay.waitFor(".pk-gantt-row");
+
+        Boolean rowFits = (Boolean) overlay.evaluate("root => {"
+                + "const row = root.querySelector('.pk-gantt-row');"
+                + "return row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= 375.5; }");
+        assertThat(rowFits).as("the row stays inside the viewport").isTrue();
+        assertThat(((Number)
+                                overlay.evaluate(
+                                        "root => root.querySelector('.pk-gantt-row .pk-gantt-track').getBoundingClientRect().width"))
+                        .doubleValue())
+                .as("the track keeps a usable width")
+                .isGreaterThan(40.0);
     }
 }

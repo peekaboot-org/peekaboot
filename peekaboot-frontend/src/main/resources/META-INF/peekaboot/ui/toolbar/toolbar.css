@@ -15,6 +15,7 @@
 
 .pk-toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--pk-space-md);
@@ -33,6 +34,7 @@
    <button>) are new, not its appearance. */
 .pk-toolbar__open {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     flex: 1;
@@ -48,8 +50,12 @@
 }
 .pk-toolbar__open:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 
-.pk-toolbar__side { display: flex; align-items: center; gap: 12px; min-width: 0; }
+/* Wrapping (here, on the bar and on the metrics) is what keeps a narrow viewport from
+   pushing the bar's content past the right edge: nothing shrinks below its own words. */
+.pk-toolbar__side { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-md); min-width: 0; }
 .pk-toolbar__method { color: var(--pk-text-muted); }
+/* Room for a typical REST path with the stats still on the same line; anything longer
+   is in the title. */
 .pk-toolbar__path {
     color: var(--pk-text-strong);
     max-width: 300px;
@@ -75,7 +81,7 @@
 @media (forced-colors: active) {
     .pk-toolbar__link { border: 1px solid currentColor; border-radius: var(--pk-radius); }
 }
-.pk-toolbar__metrics { display: flex; align-items: center; gap: var(--pk-space-md); }
+.pk-toolbar__metrics { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-md); }
 /* Sits outside .pk-toolbar__open so the copy control inside it is a real, reachable
    button rather than presentational children of the open button. */
 .pk-toolbar__trace { flex: 0 1 auto; min-width: 0; font-family: var(--pk-font-mono); color: var(--pk-text-muted); }

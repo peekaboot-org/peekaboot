@@ -61,9 +61,8 @@
     .pk-header__tz-info { display: none; }
 }
 /* The header sits on --pk-bg like everything else, so .pk-btn needs no
-   border/hover overrides here - only the select reset it always needed. */
+   border/hover overrides here - only the select's appearance reset. */
 .pk-header select.pk-btn { appearance: none; -webkit-appearance: none; }
-.pk-header select.pk-btn option { background: var(--pk-bg); color: var(--pk-text); }
 
 /* Layout */
 .pk-container {
@@ -78,7 +77,6 @@
 }
 @media (min-width: 768px) {
     .pk-grid { grid-template-columns: repeat(2, 1fr); }
-    .pk-grid--full { grid-column: span 2; }
 }
 /* Vertical rhythm between stacked dashboard sections (memory card, health
    banner, its details) that sit outside the .pk-grid flow. */
@@ -148,11 +146,10 @@
     animation: pk-spin 1s linear infinite;
 }
 
-/* Error banner. Background tint is 0.04 alpha, faint enough that the danger-red
-   text keeps clear AA headroom in both themes (4.99:1 light, 5.54:1 dark) without
-   a token for "danger, but tuned for text-on-tint". */
+/* Error banner. The tint is faint enough (0.04 alpha) that the danger-red text keeps
+   clear AA headroom in both themes (4.99:1 light, 5.54:1 dark). */
 .pk-error-banner {
-    background: rgba(220, 38, 38, 0.04);
+    background: var(--pk-danger-tint);
     border: 1px solid var(--pk-danger);
     border-radius: var(--pk-radius);
     padding: var(--pk-space-md);
@@ -162,8 +159,7 @@
     justify-content: space-between;
     gap: var(--pk-space-md);
 }
-/* .message stays unprefixed: PlaywrightTestBase.openDashboard() asserts on
-   the literal selector "#error .message". */
+/* .message stays unprefixed: the browser tests read the literal selector "#error .message". */
 .pk-error-banner .message { color: var(--pk-danger); }
 /* 24x24 minimum: as a bare glyph button this measured 10.5x18, under WCAG 2.2's
    target-size floor. The box grows, the glyph does not. */
@@ -293,7 +289,6 @@
 /* DataSources */
 .pk-datasources__toggle { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
-.pk-datasources__params[hidden] { display: none; }
 .pk-datasources__params-list { background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
 /* Machine card — the per-family address lists under the IPv4/IPv6 tab strip. Bare
@@ -309,11 +304,9 @@
 }
 .pk-machine-net__addr:last-child { border-bottom: none; }
 
-/* Environment — active profiles banner. Profile pills use the shared badge('info')
-   primitive rather than a bespoke tint: a --pk-primary-light fill with --pk-primary
-   text measures 4.23:1 in light theme, under AA's 4.5:1 for this text size, and a
-   tint pairing has to be re-proved every time the palette moves. --pk-badge--info's --pk-on-info foreground is contrast-tuned
-   by construction (5.36:1 light / 9.38:1 dark). */
+/* Environment — active profiles banner. Profile pills are badge('info'), whose ink/fill
+   pair is tuned by construction; a bespoke tint would have to be re-proved every time
+   the palette moves. */
 .pk-profiles {
     display: flex;
     flex-wrap: wrap;
@@ -329,9 +322,9 @@
 /* Loggers. Also used by the scheduled-tasks summary row (.pk-tasks-summary) - both are
    just a wrapping row of count badges, with nothing logger-specific about the layout. */
 .pk-loggers-summary, .pk-tasks-summary { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
-.loggers-controls { margin-bottom: var(--pk-space-md); }
-.checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
-.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary-text); }
+.pk-loggers-controls { margin-bottom: var(--pk-space-md); }
+.pk-checkbox-label { display: flex; align-items: center; gap: var(--pk-space-sm); font-size: var(--pk-text-sm); color: var(--pk-text); cursor: pointer; }
+.pk-checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--pk-primary-text); }
 /* .pk-kv__key already sits at --pk-text-strong by default; the modifier only adds
    the extra weight that marks a logger with an explicit configured level. */
 .pk-kv__key--configured { font-weight: 700; }
@@ -420,8 +413,8 @@
 .pk-task__timing-label { font-weight: 500; }
 .pk-task__target-row { margin-top: var(--pk-space-sm); }
 .pk-task__target { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-/* Same 0.04 tint as .pk-error-banner, for the same AA-contrast reason (see there). */
-.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: rgba(220, 38, 38, 0.04); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
+/* Same tint as .pk-error-banner, for the same AA-contrast reason (see there). */
+.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: var(--pk-danger-tint); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
 .pk-task__exception-label { font-weight: 600; color: var(--pk-danger); }
 @media (max-width: 767px) {
     .pk-task__row { flex-direction: column; align-items: flex-start; gap: var(--pk-space-sm); }
@@ -441,7 +434,6 @@
 }
 .pk-task__traces-link:hover, .pk-trace-item__scheduler-link:hover {
     background: var(--pk-bg-alt);
-    text-decoration: none;
 }
 
 /* Metric group. The collapsible header/body is the shared .pk-group primitive (see its
@@ -490,7 +482,10 @@
 .pk-insight-level + .pk-insight-level { border-left-width: 0; }
 .pk-insight-level:first-child { border-top-left-radius: var(--pk-radius); border-bottom-left-radius: var(--pk-radius); }
 .pk-insight-level:last-child { border-top-right-radius: var(--pk-radius); border-bottom-right-radius: var(--pk-radius); }
-#insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--pk-space-md); }
+/* 420px is the floor at which a chart's two value axes and its legend still fit beside
+   each other; min() lets a narrower viewport have a single full-width column instead of
+   a horizontal scroll. */
+#insights-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: var(--pk-space-md); }
 .pk-insight-panel { border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); padding: var(--pk-space-md); background: var(--pk-bg); }
 .pk-insight-panel__header { display: flex; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
 .pk-insight-panel__title { margin: 0; font-size: var(--pk-text-sm); font-weight: 600; }
@@ -551,7 +546,7 @@
 .pk-lifecycle-pager__readout { color: var(--pk-text-muted); font-size: var(--pk-text-sm); font-variant-numeric: tabular-nums; }
 
 /* Tab panels — the frozen #<tabId>-tab section ids, shown/hidden with a
-   plain .active class (asserted verbatim by DashboardTabsTest). */
+   plain .active class (read verbatim by the browser tests). */
 .pk-tab-panel { display: none; }
 /* Panels start clear of the tab strip - without this the first control in a panel
    sits flush against the strip's bottom border and reads as part of it. */
