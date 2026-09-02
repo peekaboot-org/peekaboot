@@ -102,21 +102,29 @@ class PeekabootActuatorServiceIT {
         assertThat(data).doesNotContainKeys("beans", "conditions", "mappings", "threaddump", "metrics");
     }
 
+    /**
+     * The repeat call is what this asserts on: {@code reportedFailures} lives on the
+     * service instance, so whether the first call of a method is the context's first
+     * failure depends on test order, but a call made after one in the same method never
+     * is. That pins the DEBUG half of "WARN once, DEBUG afterwards" against a real
+     * container; PeekabootActuatorServiceTest pins the WARN and its cause.
+     */
     @Test
     void aFailingEndpointIsLeftOutAndLoggedWithoutBreakingTheOthers() {
+        service.getInsightsData();
+        serviceLog.list.clear();
+
         Map<String, Object> data = service.getInsightsData();
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
-        // Whether this call is the endpoint's first failure in the shared context depends on
-        // test order, so either line is acceptable; PeekabootActuatorServiceTest pins both.
-        assertThat(serviceLog.list).anySatisfy(event -> {
-            assertThat(event.getFormattedMessage()).contains("'loggers' failed");
-            String cause = event.getThrowableProxy() != null
-                    ? event.getThrowableProxy().getMessage()
-                    : event.getFormattedMessage();
-            assertThat(cause).contains("boom");
-        });
+        assertThat(serviceLog.list)
+                .filteredOn(event -> event.getFormattedMessage().contains("'loggers' failed"))
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                    assertThat(event.getFormattedMessage()).contains("boom");
+                });
     }
 
     @Test
