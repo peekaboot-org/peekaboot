@@ -89,6 +89,14 @@ class DbSpansTest {
     }
 
     @Test
+    void sqlJoinsTheStatementsOfABatchInIndexOrder() {
+        assertThat(DbSpans.sql(span("s1")
+                        .tags(Map.of("jdbc.query[1]", "INSERT 1", "jdbc.query[0]", "INSERT 0"))
+                        .build()))
+                .isEqualTo("INSERT 0;\nINSERT 1");
+    }
+
+    @Test
     void sqlFallsBackToASqlShapedSpanNameAndIsNullOtherwise() {
         assertThat(DbSpans.sql(span("s1")
                         .named("UPDATE users SET active = true")

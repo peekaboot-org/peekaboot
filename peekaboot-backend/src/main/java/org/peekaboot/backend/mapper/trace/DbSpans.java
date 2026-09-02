@@ -4,6 +4,9 @@ import io.micrometer.tracing.Span;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.tracing.store.SpanData;
 
@@ -23,6 +26,9 @@ public final class DbSpans {
 
     private static final String CLIENT_KIND = Span.Kind.CLIENT.name();
 
+    /** datasource-proxy's per-statement tag; a batch carries one per statement. */
+    private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
+
     private DbSpans() {}
 
     public static boolean isQuery(SpanData span) {
@@ -36,8 +42,9 @@ public final class DbSpans {
     /**
      * The statement a query span carries, unmasked: {@code db.query.text} (the current
      * OpenTelemetry convention) ahead of {@code db.statement} (its superseded spelling), then
-     * datasource-proxy's {@code jdbc.query[N]}, then the span's own name when it looks like
-     * SQL. Null when the instrumentation recorded no statement at all.
+     * datasource-proxy's {@code jdbc.query[N]} tags - a batch's statements joined in index
+     * order - then the span's own name when it looks like SQL. Null when the
+     * instrumentation recorded no statement at all.
      */
     public static String sql(SpanData span) {
         Map<String, String> tags = span.tags();
@@ -47,17 +54,24 @@ public final class DbSpans {
                 sql = tags.get("db.statement");
             }
             if (sql == null) {
-                sql = tags.entrySet().stream()
-                        .filter(entry -> entry.getKey().startsWith("jdbc.query["))
-                        .map(Map.Entry::getValue)
-                        .findFirst()
-                        .orElse(null);
+                sql = batchStatements(tags);
             }
             if (sql != null) {
                 return sql;
             }
         }
         return isSqlShaped(span.name()) ? span.name() : null;
+    }
+
+    private static String batchStatements(Map<String, String> tags) {
+        Map<Integer, String> byIndex = new TreeMap<>();
+        for (Map.Entry<String, String> entry : tags.entrySet()) {
+            Matcher matcher = BATCH_STATEMENT_TAG.matcher(entry.getKey());
+            if (matcher.matches()) {
+                byIndex.put(Integer.parseInt(matcher.group(1)), entry.getValue());
+            }
+        }
+        return byIndex.isEmpty() ? null : String.join(";\n", byIndex.values());
     }
 
     private static boolean hasQueryTag(Map<String, ?> tags) {
