@@ -65,7 +65,7 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
         try {
             for (String line : Files.readAllLines(status)) {
                 if (line.startsWith(key + ":")) {
-                    String[] ids = line.substring(key.length() + 1).trim().split("\\s+");
+                    String[] ids = line.substring(key.length() + 1).trim().split("\\s+", -1);
                     return ids[0].isEmpty() ? null : ids[0];
                 }
             }

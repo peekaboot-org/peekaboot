@@ -131,6 +131,7 @@ public class TraceInsightsService {
             try {
                 types.add(RootActionType.valueOf(token.trim().toUpperCase(Locale.ROOT)));
             } catch (IllegalArgumentException ignored) {
+                // a name no RootActionType carries asks for nothing
             }
         }
         return types.isEmpty() ? DEFAULT_VIEW_TYPES : types;
