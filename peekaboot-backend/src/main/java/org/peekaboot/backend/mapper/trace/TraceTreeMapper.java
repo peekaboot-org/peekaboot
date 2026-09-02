@@ -163,7 +163,7 @@ public class TraceTreeMapper {
         if (kind == Span.Kind.SERVER) {
             return detectServerActionType(tags);
         }
-        return detectNonServerActionType(kind, tags);
+        return detectNonServerActionType(kind, rootSpan.name(), tags);
     }
 
     /**
@@ -173,7 +173,7 @@ public class TraceTreeMapper {
      * been exported yet, so they say nothing about what started the trace - UNKNOWN is
      * the honest answer there, not HTTP_REQUEST.
      */
-    private static RootActionType detectNonServerActionType(Span.Kind kind, Map<String, String> tags) {
+    private static RootActionType detectNonServerActionType(Span.Kind kind, String name, Map<String, String> tags) {
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
         // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
         // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind
@@ -186,6 +186,17 @@ public class TraceTreeMapper {
         // Peekaboot ever sees, so any other kind carrying db.* is not a database action.
         if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
             return RootActionType.DATABASE;
+        }
+        // datasource-micrometer's connection observation as the trace root: a pooled
+        // connection acquired outside any traced work (a health probe, HikariCP
+        // maintenance). Checked after DATABASE because in a HikariCP app every datasource
+        // observation carries jdbc.datasource.* tags (HikariJdbcObservationFilter), query
+        // and result-set spans included - the "connection" name, the library's fixed
+        // contextual name for its connection observation
+        // (JdbcObservationDocumentation.CONNECTION), is what separates a pool acquisition
+        // from those siblings sharing the tag prefix.
+        if (kind == Span.Kind.CLIENT && "connection".equals(name) && hasTagPrefix(tags, "jdbc.datasource.")) {
+            return RootActionType.CONNECTION_POOL;
         }
         // null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
         // internal spans are represented by null kind)

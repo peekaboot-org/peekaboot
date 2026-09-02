@@ -7,13 +7,16 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import io.micrometer.tracing.Span;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.IssueType;
+import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
@@ -342,6 +345,34 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
     }
 
+    /**
+     * The Traces tab's default request: with no chip selected it sends an include-list of
+     * every type except CONNECTION_POOL, so routine pool-maintenance traces stay out of
+     * the list and the filtered counts until their own chip asks for them.
+     */
+    @Test
+    void theDashboardsDefaultIncludeListLeavesConnectionPoolTracesOut() {
+        addTrace("http1", 100, false);
+        addConnectionPoolTrace("pool1");
+
+        TraceInsightsResponse response =
+                service.getInsights(10, TraceBucket.ALL, everyTypeExcept(RootActionType.CONNECTION_POOL), null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("http1");
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    @Test
+    void theListFiltersToConnectionPoolTracesWhenTheirChipAsksForThem() {
+        addTrace("http1", 100, false);
+        addConnectionPoolTrace("pool1");
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "connection_pool", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("pool1");
+    }
+
     @Test
     void filteredBucketCountsAreReturnedWhileATypeFilterIsActive() {
         addTrace("trace1", 100, false); // HTTP_REQUEST, ok
@@ -526,6 +557,22 @@ class TraceInsightsServiceTest {
                         "code.function", "reconcileOrders",
                         "code.namespace", "org.peekaboot.example.OrderReconciler"))
                 .build());
+    }
+
+    /** The exact root datasource-micrometer exports for a standalone pool acquisition. */
+    private void addConnectionPoolTrace(String traceId) {
+        store.addSpan(rootSpan(traceId, "connection", Span.Kind.CLIENT, 30)
+                .tags(Map.of(
+                        "jdbc.datasource.name", "dataSource",
+                        "jdbc.datasource.pool", "HikariPool-1"))
+                .build());
+    }
+
+    private static String everyTypeExcept(RootActionType excluded) {
+        return Arrays.stream(RootActionType.values())
+                .filter(type -> type != excluded)
+                .map(Enum::name)
+                .collect(Collectors.joining(","));
     }
 
     private void addTraceWithOperation(String traceId, String operationName, long durationMs) {

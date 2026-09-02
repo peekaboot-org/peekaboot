@@ -803,6 +803,67 @@ class TraceTreeMapperTest {
         assertThat(result.rootSpan().events().getFirst().timestamp()).isEqualTo(eventTime);
     }
 
+    /**
+     * The exact shape datasource-micrometer exports when a pooled connection is acquired
+     * outside any traced work (an external health probe, HikariCP maintenance): contextual
+     * name "connection", CLIENT kind, and only the {@code jdbc.datasource.*} connection
+     * keys as tags - no {@code db.*}, no {@code jdbc.query[N]}.
+     */
+    @Test
+    void map_shouldClassifyAStandaloneConnectionSpanAsConnectionPool() {
+        var rootSpan = createSpan(
+                "trace1",
+                "root",
+                null,
+                "connection",
+                Span.Kind.CLIENT,
+                0,
+                30,
+                Map.of(
+                        "jdbc.datasource.name", "dataSource",
+                        "jdbc.datasource.pool", "HikariPool-1",
+                        "jdbc.datasource.driver", "org.h2.Driver"));
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.CONNECTION_POOL);
+    }
+
+    @Test
+    void map_shouldKeepAQueryRootCarryingPoolTagsAsDatabase() {
+        // In a HikariCP app every datasource observation gets jdbc.datasource.* added
+        // (HikariJdbcObservationFilter tags query contexts too) - db.* still marks this
+        // root as real database work, not pool maintenance.
+        var rootSpan = createSpan(
+                "trace1",
+                "root",
+                null,
+                "query",
+                Span.Kind.CLIENT,
+                0,
+                30,
+                Map.of(
+                        "db.query.text", "SELECT 1",
+                        "jdbc.datasource.name", "dataSource",
+                        "jdbc.datasource.pool", "HikariPool-1"));
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.DATABASE);
+    }
+
+    @Test
+    void map_shouldNotClassifyAConnectionNamedSpanWithoutDatasourceTagsAsConnectionPool() {
+        // The name only counts together with the jdbc.datasource.* tags the
+        // datasource-micrometer convention sets - a bare span that happens to share the
+        // name says nothing about what started the trace.
+        var rootSpan = createSpan("trace1", "root", null, "connection", Span.Kind.CLIENT, 0, 30, Map.of());
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
+    }
+
     private SpanData createSpan(
             String traceId,
             String spanId,
