@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
@@ -21,6 +22,7 @@ import org.springframework.core.env.Environment;
 public class PeekabootPathsAutoConfiguration {
 
     @Bean
+    @ConditionalOnMissingBean
     public PeekabootPaths peekabootPaths(Environment environment) {
         return new PeekabootPaths(
                 environment.getProperty("management.endpoints.web.base-path", "/actuator"),

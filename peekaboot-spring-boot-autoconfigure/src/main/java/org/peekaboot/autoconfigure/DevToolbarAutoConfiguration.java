@@ -20,6 +20,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
@@ -45,11 +46,15 @@ public class DevToolbarAutoConfiguration {
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
 
     @Bean
+    @ConditionalOnMissingBean
     public ToolbarDataProvider toolbarDataProvider() {
         return new ToolbarDataProvider();
     }
 
+    // the missing-bean check matches the deduced generic FilterRegistrationBean<DevToolbarFilter>,
+    // so the application's other filter registrations never back this one off
     @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
             ToolbarDataProvider toolbarDataProvider,
@@ -71,6 +76,7 @@ public class DevToolbarAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
             Tracer tracer,
@@ -94,6 +100,7 @@ public class DevToolbarAutoConfiguration {
     static class LogbackCaptureConfiguration {
 
         @Bean
+        @ConditionalOnMissingBean
         LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
             return new LogbackAppenderRegistrar(eventPublisher);
         }

@@ -248,6 +248,57 @@ class PeekabootTracingAutoConfigurationTest {
         });
     }
 
+    /** The interceptor beans back off for user-supplied same-named beans, like every other Peekaboot bean. */
+    @Test
+    void userSuppliedSameNamedInterceptorBeansReplaceTheDefaults() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class, UserInterceptorConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("tracingHandlerInterceptor"))
+                            .isSameAs(UserInterceptorConfig.INTERCEPTOR);
+                    assertThat(context.getBean("tracingInterceptorConfigurer"))
+                            .isSameAs(UserInterceptorConfig.CONFIGURER);
+                });
+    }
+
+    @Test
+    void aUserSuppliedPeekabootPathsBeanReplacesTheDefault() {
+        contextRunner.withUserConfiguration(UserPathsConfig.class).run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context.getBean(PeekabootPaths.class)).isSameAs(UserPathsConfig.PATHS);
+        });
+    }
+
+    @Configuration
+    static class UserInterceptorConfig {
+
+        static final TracingHandlerInterceptor INTERCEPTOR =
+                new TracingHandlerInterceptor(ObservationRegistry.create());
+        static final WebMvcConfigurer CONFIGURER = new WebMvcConfigurer() {};
+
+        @Bean
+        TracingHandlerInterceptor tracingHandlerInterceptor() {
+            return INTERCEPTOR;
+        }
+
+        @Bean
+        WebMvcConfigurer tracingInterceptorConfigurer() {
+            return CONFIGURER;
+        }
+    }
+
+    @Configuration
+    static class UserPathsConfig {
+
+        static final PeekabootPaths PATHS = PeekabootPaths.defaults();
+
+        @Bean
+        PeekabootPaths peekabootPaths() {
+            return PATHS;
+        }
+    }
+
     /**
      * {@code InterceptorRegistry.getInterceptors()} is protected with no public
      * accessor; a test-local subclass reaches it with compile-time safety

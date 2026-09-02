@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -29,12 +30,16 @@ public class TracingInterceptorAutoConfiguration {
     private static final Logger log = LoggerFactory.getLogger(TracingInterceptorAutoConfiguration.class);
 
     @Bean
+    @ConditionalOnMissingBean
     public TracingHandlerInterceptor tracingHandlerInterceptor(ObservationRegistry observationRegistry) {
         log.debug("Peekaboot TracingHandlerInterceptor registered for handler/view span capture");
         return new TracingHandlerInterceptor(observationRegistry);
     }
 
+    // matched by name: a type check on WebMvcConfigurer would let any of the
+    // application's own configurers back this registration off
     @Bean
+    @ConditionalOnMissingBean(name = "tracingInterceptorConfigurer")
     public WebMvcConfigurer tracingInterceptorConfigurer(
             TracingHandlerInterceptor interceptor, PeekabootPaths peekabootPaths) {
         return new WebMvcConfigurer() {

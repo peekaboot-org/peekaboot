@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
@@ -38,6 +39,34 @@ class InsightsAutoConfigurationTest {
                 assertThat(context).hasSingleBean(InsightsController.class);
             });
             assertStartupInfo(startupLog);
+        }
+    }
+
+    /** Every insights bean is {@code @ConditionalOnMissingBean}, so an application can supply its own. */
+    @Test
+    void userSuppliedSameNamedBeansReplaceTheDefaults() {
+        try (LogCapture startupLog = startupInfoCapture()) {
+            contextRunner
+                    .withUserConfiguration(MeterRegistryConfig.class, UserSameNamedBeansConfig.class)
+                    .run(context -> {
+                        assertThat(context).hasNotFailed();
+                        assertThat(context.getBean("insightsSsePublisher"))
+                                .isSameAs(UserSameNamedBeansConfig.SSE_PUBLISHER);
+                        // the user's publisher is also the listener the service publishes through
+                        assertThat(context).hasSingleBean(InsightsService.class);
+                    });
+            assertStartupInfo(startupLog);
+        }
+    }
+
+    @Configuration
+    static class UserSameNamedBeansConfig {
+
+        static final InsightsSsePublisher SSE_PUBLISHER = new InsightsSsePublisher(PeekabootJson.MAPPER);
+
+        @Bean
+        InsightsSsePublisher insightsSsePublisher() {
+            return SSE_PUBLISHER;
         }
     }
 
