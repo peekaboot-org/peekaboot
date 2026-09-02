@@ -29,7 +29,11 @@ implementation("org.peekaboot:peekaboot-spring-boot-starter:0.0.5-SNAPSHOT")
 ```
 
 Run your app the way you already do. Peekaboot detects local development and turns itself
-on — open the dashboard at `http://localhost:8080/peekaboot/`.
+on — open the dashboard at `http://localhost:8080/peekaboot/`. Local development means an
+IDE run, `mvn spring-boot:run` or `gradle bootRun` on your own machine; a packaged jar, a
+container, a test, an AOT build or a native image counts as not local. Set
+`peekaboot.enabled=true|false` (and `peekaboot.dev-toolbar` for the toolbar alone) to
+override the detection in either direction.
 
 ![The Peekaboot dashboard](docs/images/dashboard.png)
 
@@ -74,7 +78,7 @@ peekaboot/
 
 ```bash
 mvn clean install   # full build, all modules
-mvn test             # test suite only
+mvn test             # unit tests only (~1 min); integration tests need `mvn verify`
 
 cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app; needs a prior
                                                   # `mvn install` and a running Docker
