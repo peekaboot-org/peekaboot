@@ -6,8 +6,10 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.env.DefaultPropertiesPropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.PropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
 class PeekabootDefaultsEnvironmentPostProcessorTest {
@@ -270,6 +272,20 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isNull();
     }
 
+    /** A developer who opts out on their own machine must not have their /actuator/env widened either. */
+    @Test
+    void explicitEnabledFalseLeavesActuatorValueVisibilityAlone() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("peekaboot.enabled", "false");
+
+        postProcessor(true).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isNull();
+    }
+
     @Test
     void explicitShowValuesNeverWinsInLocalDevelopment() {
         MockEnvironment environment = new MockEnvironment();
@@ -301,15 +317,12 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     @Test
     void appPropertiesOverrideDefaults() {
         ConfigurableEnvironment environment = new MockEnvironment();
-
-        // Simulate app properties with higher priority
         MapPropertySource appProperties =
                 new MapPropertySource("appProperties", Map.of("management.info.java.enabled", "false"));
         environment.getPropertySources().addFirst(appProperties);
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        // App property should win over starter default
         assertThat(environment.getProperty("management.info.java.enabled")).isEqualTo("false");
     }
 
@@ -319,15 +332,54 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        // Verify peekabootDefaults is added last (lowest priority)
-        assertThat(environment.getPropertySources().get("peekabootDefaults")).isNotNull();
+        assertThat(environment.getPropertySources().stream().map(PropertySource::getName))
+                .endsWith(
+                        "peekabootDetection",
+                        "peekabootNoPushDefaults",
+                        "peekabootDefaults",
+                        "peekabootDevToolbarDefaults");
+    }
 
-        // Add app properties after - they should still win
-        MapPropertySource appProperties =
-                new MapPropertySource("appProperties", Map.of("management.info.os.enabled", "false"));
-        environment.getPropertySources().addFirst(appProperties);
+    /**
+     * Boot keeps {@code defaultProperties} the last source whatever a post-processor appends
+     * after it, so Peekaboot's entries have to go inside that source - underneath the
+     * application's own, which keep winning on overlap.
+     */
+    @Test
+    void foldsItsDefaultsUnderneathTheApplicationsDefaultProperties() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addLast(new DefaultPropertiesPropertySource(Map.of("peekaboot.enabled", "false")));
 
-        assertThat(environment.getProperty("management.info.os.enabled")).isEqualTo("false");
+        postProcessor(true).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getPropertySources().stream().map(PropertySource::getName))
+                .endsWith(DefaultPropertiesPropertySource.NAME);
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isFalse();
+        assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
+                .isTrue();
+        assertThat(environment.getProperty("management.otlp.metrics.export.enabled"))
+                .isEqualTo("false");
+    }
+
+    /**
+     * An application that keeps spring-webmvc on the classpath but opts out of the web server
+     * in its properties is still deduced SERVLET when the post-processors run; the property
+     * decides, as it does for the auto-configurations.
+     */
+    @Test
+    void honoursAnExplicitNonWebTypeOverTheDeducedOne() {
+        MockEnvironment environment = new MockEnvironment();
+        environment.setProperty("spring.main.web-application-type", "none");
+
+        postProcessor(true).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.enabled", Boolean.class)).isTrue();
+        assertThat(environment.getPropertySources().contains("peekabootDefaults"))
+                .isFalse();
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
     }
 
     @Test

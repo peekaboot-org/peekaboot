@@ -1,4 +1,3 @@
-# peekaboot-defaults.yml
 # These defaults enable full observability for peekaboot.
 # Apps can override any of these in their own application.yml
 
@@ -15,10 +14,11 @@ management:
   # dashboard reads the HealthEndpoint bean directly (see PeekabootActuatorService), which
   # always carries the components, so the application's own show-details setting for its
   # public /actuator/health is left untouched. Env/configprops value visibility follows the
-  # launch context, not peekaboot.enabled - it is set in the detection property source (see
-  # PeekabootDefaultsEnvironmentPostProcessor) and only on a local run, so an application that
-  # switches Peekaboot on in a shared environment does not have its own /actuator/env widened
-  # as a side effect.
+  # launch context - it is set in the detection property source (see
+  # PeekabootDefaultsEnvironmentPostProcessor), only on a local run and only while
+  # peekaboot.enabled resolves true, so neither an application that switches Peekaboot on in
+  # a shared environment nor a developer who switches it off has their own /actuator/env
+  # widened as a side effect.
 
   info:
     env:
