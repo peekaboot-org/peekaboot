@@ -1,6 +1,7 @@
 package org.peekaboot.backend.domain.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -38,10 +39,12 @@ class MachineInfoTest {
     }
 
     @Test
-    void current_reportsTheCpuModelAndTopologyProcCpuinfoDescribes() {
-        // on Linux this compares two reads of the same static file; elsewhere both sides
-        // are null - either way the cached value matches a fresh parse
+    void current_takesTheCpuModelAndTopologyFromProcCpuinfoUnaltered() {
+        // what Cpuinfo makes of the file is CpuinfoTest's subject; this pins that the cached
+        // facts are that parse and nothing else. Off Linux there is no file and both sides
+        // are null, which would compare equal without proving anything - hence the assumption.
         Cpuinfo cpuinfo = Cpuinfo.read(Path.of("/proc/cpuinfo"));
+        assumeTrue(cpuinfo.model() != null, "/proc/cpuinfo describes no CPU on this platform");
 
         assertThat(MachineInfo.current().cpuModel()).isEqualTo(cpuinfo.model());
         assertThat(MachineInfo.current().cpuTopology()).isEqualTo(cpuinfo.topology());
