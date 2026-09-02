@@ -293,7 +293,7 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('NOPE')")).isEqualTo("Unknown");
         assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST').startsWith('&')"))
                 .isEqualTo(false);
-        assertThat(evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.length")).isEqualTo(7);
+        assertThat(evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.length")).isEqualTo(8);
     }
 
     @Test
@@ -309,6 +309,8 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'"))
                 .isEqualTo(true);
         assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'"))
+                .isEqualTo(true);
+        assertThat(evalModule("root-actions.js", "m.rootActionIcon('CONNECTION_POOL') === '\\u{1F50C}'"))
                 .isEqualTo(true);
         assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'"))
                 .isEqualTo(true);

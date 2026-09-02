@@ -25,7 +25,11 @@ import {open as openTraceDetail} from '../../trace-detail/trace-detail.js';
 export const id = 'traces';
 export const label = 'Traces';
 
-// Empty set means "no type filter" - all traces are shown.
+// Types the default view leaves out - routine pool maintenance (health probes, HikariCP
+// refills) would otherwise drown the list. Their chips work like any other type's.
+const DEFAULT_HIDDEN_TYPES = ['CONNECTION_POOL'];
+
+// Empty set means the default filter: every type except DEFAULT_HIDDEN_TYPES.
 let selectedRootActionTypes = new Set();
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
@@ -239,7 +243,12 @@ async function fetchAndRender() {
 
     const params = {limit: 50};
     if (currentBucket !== 'all') params.bucket = currentBucket;
-    if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
+    // Always an explicit include-list: with no chip selected the default still has to
+    // say which types it wants, since it hides DEFAULT_HIDDEN_TYPES.
+    const requestedTypes = selectedRootActionTypes.size > 0
+        ? Array.from(selectedRootActionTypes)
+        : ROOT_ACTION_TYPES.filter(type => !DEFAULT_HIDDEN_TYPES.includes(type));
+    params.rootActionType = requestedTypes.join(',');
     if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
 
     try {
@@ -254,14 +263,20 @@ async function fetchAndRender() {
     }
 }
 
+/** The plain number is what the list can actually show - the default request already
+    excludes DEFAULT_HIDDEN_TYPES, so the filtered count is the truthful one. The
+    "shown / total" pair appears only for a filter the user chose, with the store's full
+    count (hidden types included) as the total. */
 function updateBucketCounts(container, counts, filteredCounts) {
     if (!counts) return;
+    const userFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         const bucket = btn.dataset.bucket;
         const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
         const count = counts[bucket];
         if (count == null) btn.textContent = bucketLabel;
-        else if (filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]} / ${count})`;
+        else if (userFiltered && filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]} / ${count})`;
+        else if (filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]})`;
         else btn.textContent = `${bucketLabel} (${count})`;
     });
 }
