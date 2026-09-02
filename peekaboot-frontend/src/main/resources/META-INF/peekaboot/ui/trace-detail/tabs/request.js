@@ -8,7 +8,9 @@ import {badgeHtml, emptyStateHtml} from '../../shared/components.js';
 import {formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
-const byKey = ([a], [b]) => a.localeCompare(b);
+// Code-point order, not localeCompare's: collation is the reader's browser setting, and
+// two readers must not see the same trace's headers and parameters in different orders.
+const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
 
 function renderTable(rows) {
     return `<table class="pk-table pk-table--kv">${rows.join('')}</table>`;
