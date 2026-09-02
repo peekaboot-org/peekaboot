@@ -35,7 +35,7 @@ public class LifecycleEventRecorder {
         log.recordWhenLoaded(LifecycleEvent.start(
                 event.getTimestamp(),
                 ProcessHandle.current().pid(),
-                buildInfoProvider.getAll(),
+                buildInfoProvider.getEntries(),
                 InfoEntries.of(gitProperties)));
     }
 

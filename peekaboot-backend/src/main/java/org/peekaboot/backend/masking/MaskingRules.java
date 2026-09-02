@@ -56,6 +56,16 @@ final class MaskingRules {
             "certificate-private-key");
 
     /**
+     * Final key-name tokens that make the key an address rather than a secret:
+     * {@code spring.security.oauth2.client.provider.<x>.token-uri} and
+     * {@code .authorization-uri} are public endpoints, and among the first properties read
+     * when an OAuth2 login misbehaves. Only the last token counts, so "app.token-uri.password"
+     * still names a password, and only {@link MaskingEngine}'s key vocabulary is waived - a
+     * credential carried inside such a URL is still caught by {@link #VALUE_PATTERNS}.
+     */
+    static final List<String> ENDPOINT_KEY_SUFFIXES = List.of("uri", "url");
+
+    /**
      * Key names sensitive only as the entire key, not as one token inside a longer compound
      * name: "cookie" and "set-cookie" name an HTTP header outright, but the token also
      * appears inside ordinary session-cookie configuration
@@ -74,6 +84,11 @@ final class MaskingRules {
      * property source (systemEnvironment). The exception is that one spelling and nothing
      * wider: a lower-case "pwd" is how a SQL Server JDBC URL (";pwd=") or a login form
      * ("?pwd=") names a password and still masks, as does a compound like "db.pwd".
+     *
+     * <p>Three environment variables mask through the ordinary rules and are deliberately
+     * not exempted here: XDG_SESSION_ID, SSH_AUTH_SOCK and CREDENTIALS_DIRECTORY, caught
+     * by "session-id", "auth" and "credentials". None is a secret; all three are
+     * sensitive-adjacent, and the rules that catch them earn their keep elsewhere.
      */
     static final List<String> KEY_NAME_EXCEPTIONS = List.of("PWD");
 

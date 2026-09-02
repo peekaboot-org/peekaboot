@@ -5,9 +5,9 @@ import java.util.Map;
 /**
  * One thing that happened to the application: it became ready, or its context closed.
  *
- * <p>A start carries every entry of the build and git info, not just the handful the
- * dashboard renders - the file is the only record that survives the process, and a
- * property no view renders costs one map entry.
+ * <p>A start carries the build and git entries the lifecycle views render and no others
+ * (see {@link InfoEntries}), so what the log leaves behind in a developer's home
+ * directory is the handful of facts the dashboard draws with.
  */
 public record LifecycleEvent(Type type, long epochMs, long pid, Map<String, String> build, Map<String, String> git) {
 

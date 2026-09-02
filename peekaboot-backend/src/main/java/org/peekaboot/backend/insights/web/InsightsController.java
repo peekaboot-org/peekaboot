@@ -1,5 +1,6 @@
 package org.peekaboot.backend.insights.web;
 
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.InsightsService;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
-@RequestMapping("/peekaboot/api/insights")
+@RequestMapping(PeekabootPaths.BASE_PATH + "/api/insights")
 public class InsightsController {
 
     private final InsightsService service;
