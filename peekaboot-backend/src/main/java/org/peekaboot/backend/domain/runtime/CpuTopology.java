@@ -24,16 +24,24 @@ public record CpuTopology(int physicalCores, int threadsPerCore) {
         } catch (IOException e) {
             return null;
         }
+        CpuinfoScan scan = new CpuinfoScan();
+        lines.forEach(scan::take);
+        return scan.toTopology();
+    }
 
-        int logical = 0;
-        Set<String> cores = new HashSet<>();
-        Integer cpuCores = null;
-        Integer siblings = null;
-        String physicalId = "0";
-        for (String line : lines) {
+    /** Accumulates the topology fields of the {@code key : value} lines fed to {@link #take}. */
+    private static final class CpuinfoScan {
+
+        private int logical;
+        private final Set<String> cores = new HashSet<>();
+        private Integer cpuCores;
+        private Integer siblings;
+        private String physicalId = "0";
+
+        void take(String line) {
             int colon = line.indexOf(':');
             if (colon < 0) {
-                continue;
+                return;
             }
             String key = line.substring(0, colon).trim();
             String value = line.substring(colon + 1).trim();
@@ -51,36 +59,38 @@ public record CpuTopology(int physicalCores, int threadsPerCore) {
                 }
             }
         }
-        if (logical <= 0) {
-            return null;
+
+        CpuTopology toTopology() {
+            if (logical <= 0) {
+                return null;
+            }
+            Integer physical = physicalCores();
+            if (physical == null || physical <= 0 || logical % physical != 0) {
+                return null;
+            }
+            return new CpuTopology(physical, logical / physical);
         }
 
-        Integer physical = physicalCores(logical, cores, cpuCores, siblings);
-        if (physical == null || physical <= 0 || logical % physical != 0) {
-            return null;
+        private Integer physicalCores() {
+            if (!cores.isEmpty()) {
+                return cores.size();
+            }
+            if (cpuCores == null || cpuCores <= 0) {
+                return null;
+            }
+            if (siblings != null && siblings > 0 && siblings % cpuCores == 0) {
+                int threadsPerCore = siblings / cpuCores;
+                return logical % threadsPerCore == 0 ? logical / threadsPerCore : null;
+            }
+            return cpuCores;
         }
-        return new CpuTopology(physical, logical / physical);
-    }
 
-    private static Integer physicalCores(int logical, Set<String> cores, Integer cpuCores, Integer siblings) {
-        if (!cores.isEmpty()) {
-            return cores.size();
-        }
-        if (cpuCores == null || cpuCores <= 0) {
-            return null;
-        }
-        if (siblings != null && siblings > 0 && siblings % cpuCores == 0) {
-            int threadsPerCore = siblings / cpuCores;
-            return logical % threadsPerCore == 0 ? logical / threadsPerCore : null;
-        }
-        return cpuCores;
-    }
-
-    private static Integer parseOrNull(String value) {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return null;
+        private static Integer parseOrNull(String value) {
+            try {
+                return Integer.parseInt(value);
+            } catch (NumberFormatException e) {
+                return null;
+            }
         }
     }
 }
