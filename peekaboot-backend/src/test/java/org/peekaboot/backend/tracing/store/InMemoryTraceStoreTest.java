@@ -132,6 +132,24 @@ class InMemoryTraceStoreTest {
                 .containsExactly("t1");
     }
 
+    /** The error can arrive on any span, not just the one that opens the trace. */
+    @Test
+    void aLateArrivingErrorSpanClassifiesTheTraceIntoTheErrorBucket() {
+        storage.addSpan(spanIn("t1", "s1"));
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
+
+        storage.addSpan(span("s2")
+                .in("t1")
+                .parent("s1")
+                .named("failing-op")
+                .error("boom", "java.lang.RuntimeException")
+                .build());
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
     @Test
     void infoLogDoesNotClassifyTraceIntoErrorBucket() {
         storage.addLog(log("t1", "INFO", "fine"));

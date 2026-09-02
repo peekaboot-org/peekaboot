@@ -171,14 +171,14 @@ public class InMemoryTraceStore implements TraceStore {
         }
     }
 
-    private boolean hasError(TraceDataBundle bundle) {
-        return bundle.spans().stream().anyMatch(SpanData::hasError)
-                || bundle.logs().stream().anyMatch(LogCapturedEvent::isError);
+    /** Incremental signals the bundle maintains as events arrive; no span copy or sort per span. */
+    private static boolean hasError(TraceDataBundle bundle) {
+        return bundle.hasErrorSpan() || bundle.hasErrorLog();
     }
 
     private boolean isSlow(TraceDataBundle bundle) {
-        TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-        return traceData.duration() != null && traceData.duration().toMillis() >= slowTraceThresholdMs;
+        Duration window = bundle.spanWindow();
+        return window != null && window.toMillis() >= slowTraceThresholdMs;
     }
 
     @Override

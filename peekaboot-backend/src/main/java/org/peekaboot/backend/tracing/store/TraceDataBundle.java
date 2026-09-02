@@ -1,5 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -46,6 +48,15 @@ public class TraceDataBundle {
     private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     private boolean truncated = false;
+    // Classification signals, maintained span by span in store() so InMemoryTraceStore's
+    // classify() never has to copy and sort the whole trace per arriving span. High-water
+    // values, deliberately not recomputed on eviction: bucket membership is add-only, and
+    // a folded-away duplicate is an identical twin of its surviving span, so skipping it
+    // changes nothing.
+    private boolean hasErrorSpan;
+    private Instant minSpanStart;
+    private Instant maxSpanEnd;
+    private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
     private final long createdAt;
@@ -100,6 +111,16 @@ public class TraceDataBundle {
 
     private void store(SpanData span) {
         spansById.put(span.spanId(), span);
+        if (span.hasError()) {
+            hasErrorSpan = true;
+        }
+        if (span.startTime() != null
+                && (minSpanStart == null || span.startTime().isBefore(minSpanStart))) {
+            minSpanStart = span.startTime();
+        }
+        if (span.endTime() != null && (maxSpanEnd == null || span.endTime().isAfter(maxSpanEnd))) {
+            maxSpanEnd = span.endTime();
+        }
         if (span.parentId() != null) {
             childrenByParentId
                     .computeIfAbsent(span.parentId(), k -> new ArrayList<>())
@@ -213,6 +234,9 @@ public class TraceDataBundle {
     }
 
     public void addLog(LogCapturedEvent log, int maxLogs) {
+        if (log.isError()) {
+            hasErrorLog = true;
+        }
         logs.add(log);
         if (logs.size() > maxLogs) {
             synchronized (logs) {
@@ -264,6 +288,29 @@ public class TraceDataBundle {
         }
         String resolvedParentId = resolve(span.parentId());
         return resolvedParentId.equals(span.parentId()) ? span : span.withParentId(resolvedParentId);
+    }
+
+    /** Whether any span stored so far carried an error - an incremental read for classification. */
+    public boolean hasErrorSpan() {
+        synchronized (spansLock) {
+            return hasErrorSpan;
+        }
+    }
+
+    /** Whether any log captured so far was an error. */
+    public boolean hasErrorLog() {
+        return hasErrorLog;
+    }
+
+    /**
+     * The wall-clock window the trace's spans have covered so far - the duration the slow
+     * classification compares, read off the running min/max instead of copying and
+     * sorting the spans. Null while no timed span has arrived.
+     */
+    public Duration spanWindow() {
+        synchronized (spansLock) {
+            return minSpanStart == null || maxSpanEnd == null ? null : Duration.between(minSpanStart, maxSpanEnd);
+        }
     }
 
     public List<LogCapturedEvent> logs() {
