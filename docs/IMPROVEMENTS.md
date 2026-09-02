@@ -115,7 +115,7 @@ Each looks like a defect and is not. All checked against source.
 - **`SELECT customer_order` in a span tree is correct.** It is OpenTelemetry's own span-name summary.
   The Spans tab renders `span.name` unconditionally and never consults `QueryExtractor`; the Queries
   tab renders extracted SQL. Two independent pipelines — `ARCHITECTURE.md`'s *Query Extraction*
-  section has the detail, and `trace-detail-queries-*.png` now shows the difference.
+  section has the detail, and `trace-detail-queries-*.png` shows the difference.
 - **Off-local, every property masks — `server.port` and `os.name` included.** Actuator value
   visibility follows the launch context: `show-values: always` is emitted only on a local run, and is
   *absent* otherwise so Spring's own default applies. Emitting an explicit `never` would pin Spring's
