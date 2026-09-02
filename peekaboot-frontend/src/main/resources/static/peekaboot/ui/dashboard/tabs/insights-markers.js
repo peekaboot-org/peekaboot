@@ -28,8 +28,9 @@ import {formatDateTime} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
-const FALLBACK_INK = '#6b7280';
-const FALLBACK_BAND = 'rgba(107, 114, 128, 0.12)';
+// Fallbacks mirror the tokens.css light --pk-text-muted.
+const FALLBACK_INK = '#626c79';
+const FALLBACK_BAND = 'rgba(98, 108, 121, 0.12)';
 const HIT_RADIUS = 5;                     // CSS px around a marker that shows its tooltip
 const FLAG_WIDTH = 3;                     // half-width of a start's top flag
 const FLAG_HEIGHT = 5;
