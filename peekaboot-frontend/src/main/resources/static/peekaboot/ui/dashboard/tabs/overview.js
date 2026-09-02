@@ -1,7 +1,7 @@
 /**
  * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/machine/JVM
- * info cards, the DataSources grid, the memory/storage usage meters and the health
- * banner + component grid.
+ * info + datasource cards, the memory/storage usage meters and the health banner +
+ * component grid.
  */
 import {kvRow, badge, meter} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
@@ -30,7 +30,7 @@ export function render(container, data, context = {}) {
 }
 
 /**
- * The insights stat tiles (started at / startup / ready / uptime / cores). They are
+ * The insights stat tiles (started at / startup / ready / uptime). They are
  * config-driven server-side, so the icons are keyed by tile id with a neutral fallback
  * for any tile an application adds in its own peekaboot-insights.yml. 24x24 viewBox,
  * drawn in the surrounding text colour so they follow the theme with no extra tokens.
@@ -39,9 +39,7 @@ const TILE_ICONS = new Map([
     ['started-at', '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'],
     ['startup-time', '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>'],
     ['ready-time', '<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'],
-    ['uptime', '<path d="M10 2h4M12 14v-4"/><circle cx="12" cy="14" r="8"/>'],
-    ['cpu-cores', '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/>'
-        + '<path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/>']
+    ['uptime', '<path d="M10 2h4M12 14v-4"/><circle cx="12" cy="14" r="8"/>']
 ]);
 const FALLBACK_TILE_ICON = '<path d="M3 12h4l3 8 4-16 3 8h4"/>';
 
@@ -234,24 +232,20 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
     if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
 }
 
+/**
+ * Datasource cards join the main card grid right after JVM Defaults, so a single
+ * datasource sits beside it in the two-column layout and further ones flow on in
+ * grid order. Rebuilt from scratch on every refresh cycle.
+ */
 function renderDataSourcesInfo(container, dataSources) {
-    const wrapper = container.querySelector('#datasources-container');
-    wrapper.innerHTML = '';
-
-    if (!dataSources || dataSources.length === 0) {
-        wrapper.classList.add('hidden');
-        return;
-    }
-    wrapper.classList.remove('hidden');
-
-    dataSources.forEach(ds => {
-        wrapper.appendChild(renderDataSourceCard(ds));
-    });
+    container.querySelectorAll('.pk-card[data-datasource]').forEach(card => card.remove());
+    container.querySelector('#jvm-defaults-card').after(...(dataSources ?? []).map(renderDataSourceCard));
 }
 
 function renderDataSourceCard(ds) {
     const card = document.createElement('div');
     card.className = 'pk-card';
+    card.dataset.datasource = ds.name || 'DataSource';
 
     const header = document.createElement('div');
     header.className = 'pk-card__header';
