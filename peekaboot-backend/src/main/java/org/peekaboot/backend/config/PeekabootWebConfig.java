@@ -1,8 +1,7 @@
 package org.peekaboot.backend.config;
 
-import java.util.List;
 import org.springframework.http.CacheControl;
-import org.springframework.http.converter.HttpMessageConverter;
+import org.springframework.http.converter.HttpMessageConverters;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
@@ -17,10 +16,14 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
                 .setCacheControl(CacheControl.noCache());
     }
 
-    /** First in the list, so a Peekaboot type never reaches the application's own JSON converter. */
+    /**
+     * Registered as a custom converter, which the builder places ahead of every converter
+     * an application configures, so a Peekaboot type never reaches the application's own
+     * JSON converter.
+     */
     @Override
-    public void extendMessageConverters(List<HttpMessageConverter<?>> converters) {
-        converters.addFirst(new PeekabootJsonMessageConverter());
+    public void configureMessageConverters(HttpMessageConverters.ServerBuilder builder) {
+        builder.addCustomConverter(new PeekabootJsonMessageConverter());
     }
 
     @Override
