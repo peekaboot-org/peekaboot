@@ -6,7 +6,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;

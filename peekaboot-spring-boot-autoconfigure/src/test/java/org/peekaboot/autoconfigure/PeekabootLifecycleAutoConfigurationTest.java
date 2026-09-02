@@ -23,7 +23,7 @@ import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
 import org.peekaboot.backend.lifecycle.LifecycleRuns;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.info.ProjectInfoAutoConfiguration;

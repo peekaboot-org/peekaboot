@@ -112,6 +112,13 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- shared test support (LogCapture) -->
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-test-support</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -180,27 +187,6 @@
                 <configuration>
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                 </configuration>
-            </plugin>
-            <!-- Test support (LogCapture) for the other modules' tests, as a -tests jar
-                 holding only the testsupport package: the tests themselves and the test
-                 resources stay out of every other module's classpath. Gradle publishes
-                 the same package as this module's test fixtures. -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>test-support-jar</id>
-                        <goals>
-                            <goal>test-jar</goal>
-                        </goals>
-                        <configuration>
-                            <includes>
-                                <include>org/peekaboot/backend/testsupport/**</include>
-                            </includes>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

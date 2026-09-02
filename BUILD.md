@@ -88,6 +88,7 @@ stays around a minute.
 | Module | Artifact | Published | Contains |
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
+| `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only — shared test helpers the backend and autoconfigure tests consume at test scope. See its [README](peekaboot-test-support/README.md) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/health-endpoint/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/static/peekaboot/ui/**` only. **No build step** — plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
@@ -260,13 +261,13 @@ mechanics.
   Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
   install it explicitly with the `exec:java` invocation in the module README if that fails.
-- `peekaboot-backend` shares its test support (`org.peekaboot.backend.testsupport`, i.e.
-  `LogCapture`) with the other modules' tests: Maven attaches a `-tests` jar holding only
-  that package (`maven-jar-plugin:test-jar` with an include; the tests and test resources
-  stay out of every other classpath), consumed as a `<type>test-jar</type>` test dependency;
-  Gradle publishes the same package as the module's test fixtures (`java-test-fixtures`, the
-  `testFixtures` source set reading it out of `src/test/java`), consumed as
-  `testImplementation(testFixtures(project(":peekaboot-backend")))`.
+- The shared test support (`org.peekaboot.testsupport.LogCapture`) lives in
+  `peekaboot-test-support`, an unpublished reactor module that `peekaboot-backend` and
+  `peekaboot-spring-boot-autoconfigure` consume as a plain test-scope dependency (Maven
+  `<scope>test</scope>`, Gradle `testImplementation(project(":peekaboot-test-support"))`).
+  The backend's own fixture builders (`Spans`, `SpanNodes`, `RequestCompletedEvents`,
+  `TraceStores`) construct backend domain types and stay in its test tree. Why a module and
+  not a `-tests` jar: [peekaboot-test-support/README.md](peekaboot-test-support/README.md).
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
   `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes.
@@ -337,13 +338,14 @@ modules, and javadoc runs with `doclint` at `all,-missing` and fails the build o
 a broken `@link` surfaces at `mvn package` rather than after `release:prepare` has pushed the
 tag.
 
-Two modules stay out of the bundle, by two different switches. The publishing plugin binds
+Three modules stay out of the bundle, by two different switches. The publishing plugin binds
 itself to `deploy` in every module that inherits the profile and **ignores
-`maven.deploy.skip`**; `peekaboot-coverage` therefore opts out with `skipPublishing`, the
-plugin's per-module switch (it only filters that module's own artifacts — the bundle is still
-uploaded from there, the last module of the reactor). `peekaboot-testing-app` never sees the
-plugin at all: the profile is undefined in its `spring-boot-starter-parent` pom, so the plain
-`maven-deploy-plugin` runs for it, and `maven.deploy.skip` is what keeps the sample app out.
+`maven.deploy.skip`**; `peekaboot-coverage` and `peekaboot-test-support` therefore opt out
+with `skipPublishing`, the plugin's per-module switch (it only filters that module's own
+artifacts — the bundle is still uploaded from `peekaboot-coverage`, the last module of the
+reactor). `peekaboot-testing-app` never sees the plugin at all: the profile is undefined in
+its `spring-boot-starter-parent` pom, so the plain `maven-deploy-plugin` runs for it, and
+`maven.deploy.skip` is what keeps the sample app out.
 
 `release:prepare` bumps the POMs to the release version, commits, tags, runs its
 `preparationGoals` (`clean verify`) against that tag and then commits the next

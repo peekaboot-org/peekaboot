@@ -11,7 +11,7 @@ import javax.sql.DataSource;
 import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 
 class DataSourceMetadataTest {
 

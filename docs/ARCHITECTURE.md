@@ -11,6 +11,7 @@ Technical documentation for contributors and maintainers.
 ```
 peekaboot/
 ├── peekaboot-backend/                    # Core logic and APIs
+├── peekaboot-test-support/               # Shared test helpers (never published)
 ├── peekaboot-frontend/                   # Static web resources
 ├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
 ├── peekaboot-spring-boot-starter/        # Dependency aggregator

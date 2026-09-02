@@ -64,10 +64,10 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   recorded. There is no shared listener that filters, and no allow-list — the Chromium
   engine has no incompatibilities of its own to excuse.
 - Tests that trigger error paths capture the log event (logback `ListAppender`) and assert
-  it instead of letting it print. `peekaboot-backend` shares one helper for this,
-  `org.peekaboot.backend.testsupport.LogCapture`, published to the other modules as the
-  backend's `-tests` jar / Gradle test fixtures (see [`BUILD.md`](../BUILD.md)), so
-  `peekaboot-spring-boot-autoconfigure`'s tests use it too.
+  it instead of letting it print. The shared helper for this is
+  `org.peekaboot.testsupport.LogCapture` from `peekaboot-test-support`, an unpublished
+  reactor module both `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure` consume
+  at test scope (see [`BUILD.md`](../BUILD.md)).
 - `peekaboot-testing-app`'s `logback-test.xml` sets `org.apache.catalina.core.ContainerBase`
   to `OFF`: `OrderController`'s deliberately failing `/boom` endpoint escapes as an unhandled
   exception, which embedded Tomcat logs as a full stack trace under a per-JVM

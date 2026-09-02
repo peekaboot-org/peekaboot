@@ -12,6 +12,7 @@
     <description>peekaboot - A Spring Boot starter for embedded application monitoring UI</description>
 
     <modules>
+        <module>peekaboot-test-support</module>
         <module>peekaboot-backend</module>
         <module>peekaboot-frontend</module>
         <module>peekaboot-spring-boot-autoconfigure</module>

@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Level;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
 import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;

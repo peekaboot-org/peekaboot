@@ -70,12 +70,11 @@
         </dependency>
 
         <!-- Test dependencies -->
-        <!-- peekaboot-backend's test support (LogCapture) -->
+        <!-- shared test support (LogCapture) -->
         <dependency>
             <groupId>org.peekaboot</groupId>
-            <artifactId>peekaboot-backend</artifactId>
+            <artifactId>peekaboot-test-support</artifactId>
             <version>${project.version}</version>
-            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
