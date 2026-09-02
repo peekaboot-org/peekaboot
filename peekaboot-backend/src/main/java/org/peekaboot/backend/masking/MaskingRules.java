@@ -56,6 +56,16 @@ final class MaskingRules {
             "certificate-private-key");
 
     /**
+     * Final key-name tokens that make the key an address rather than a secret:
+     * {@code spring.security.oauth2.client.provider.<x>.token-uri} and
+     * {@code .authorization-uri} are public endpoints, and among the first properties read
+     * when an OAuth2 login misbehaves. Only the last token counts, so "app.token-uri.password"
+     * still names a password, and only {@link MaskingEngine}'s key vocabulary is waived - a
+     * credential carried inside such a URL is still caught by {@link #VALUE_PATTERNS}.
+     */
+    static final List<String> ENDPOINT_KEY_SUFFIXES = List.of("uri", "url");
+
+    /**
      * Key names sensitive only as the entire key, not as one token inside a longer compound
      * name: "cookie" and "set-cookie" name an HTTP header outright, but the token also
      * appears inside ordinary session-cookie configuration
