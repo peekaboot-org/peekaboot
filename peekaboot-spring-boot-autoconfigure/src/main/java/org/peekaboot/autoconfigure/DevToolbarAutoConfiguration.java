@@ -30,17 +30,17 @@ import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 
 /**
- * Auto-configuration for the development toolbar.
- * Configures filters for toolbar injection and request/log capture.
+ * The toolbar injection filter, and the request and log capture that feed the store. The
+ * capture parts need a {@link TraceStore} bean to land in; the toolbar itself only needs
+ * the {@link Tracer}.
  */
 @AutoConfiguration(
-        after = PeekabootAutoConfiguration.class,
+        after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
         afterName =
                 "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
-@ConditionalOnClass(TraceStore.class)
 public class DevToolbarAutoConfiguration {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(DevToolbarAutoConfiguration.class);
@@ -77,7 +77,7 @@ public class DevToolbarAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(Tracer.class)
+    @ConditionalOnBean({Tracer.class, TraceStore.class})
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
             Tracer tracer,
             ApplicationEventPublisher eventPublisher,
@@ -89,6 +89,8 @@ public class DevToolbarAutoConfiguration {
         registration.setFilter(new RequestCaptureFilter(
                 tracer, eventPublisher, maskingEngine.getIfAvailable(MaskingEngine::new), peekabootPaths));
         registration.addUrlPatterns("/*");
+        // inside Boot's ServerHttpObservationFilter (HIGHEST_PRECEDENCE + 1), so the server
+        // span is current, and ahead of Spring Security, so rejected requests are captured too
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");
         log.debug("RequestCaptureFilter registered for all URLs");
@@ -97,6 +99,7 @@ public class DevToolbarAutoConfiguration {
 
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = "ch.qos.logback.classic.LoggerContext")
+    @ConditionalOnBean(TraceStore.class)
     static class LogbackCaptureConfiguration {
 
         @Bean
@@ -109,11 +112,8 @@ public class DevToolbarAutoConfiguration {
     public static class LogbackAppenderRegistrar {
 
         /**
-         * The Logback {@code LoggerContext} is JVM-wide while application contexts are not:
-         * several can be running at once, and every one that starts makes Spring Boot reset
-         * that shared context, detaching the appenders of all the others. The still-running
-         * contexts never learn of it, so {@link LogbackCaptureReinstaller} puts them back
-         * from here.
+         * JVM-wide, like the {@code LoggerContext}: the appender of every running application
+         * context, for {@link LogbackCaptureReinstaller} to put back after a reset.
          */
         private static final Set<PeekabootLogbackAppender> LIVE_APPENDERS = ConcurrentHashMap.newKeySet();
 

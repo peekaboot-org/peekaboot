@@ -103,12 +103,9 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar=true", "springdoc.swagger-ui.path=/admin/docs.html")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
-                    DevToolbarFilter filter = ((FilterRegistrationBean<?>)
-                                                    context.getBean("devToolbarFilter", FilterRegistrationBean.class))
-                                            .getFilter()
-                                    instanceof DevToolbarFilter f
-                            ? f
-                            : null;
+                    DevToolbarFilter filter =
+                            (DevToolbarFilter) context.getBean("devToolbarFilter", FilterRegistrationBean.class)
+                                    .getFilter();
                     MockHttpServletRequest request = new MockHttpServletRequest("GET", "/admin/swagger-ui/index.html");
                     request.setServletPath("/admin/swagger-ui/index.html");
                     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -137,16 +134,21 @@ class DevToolbarAutoConfigurationTest {
         });
     }
 
+    /**
+     * With tracing off there is no store: the toolbar still shows the trace id it reads from
+     * the Tracer, but the request and log capture would publish events for nobody.
+     */
     @Test
-    void shouldNotCreateBeansWhenTracingNotOnClasspath() {
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
-                .withUserConfiguration(MinimalPropertiesConfig.class)
-                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
-                .withClassLoader(new FilteredClassLoader(TraceStore.class))
+    void capturesNothingWithoutATraceStore() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(TracerOnlyConfig.class)
                 .run(context -> {
-                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(ToolbarDataProvider.class);
+                    assertThat(context).hasBean("devToolbarFilter");
+                    assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
                 });
     }
 
@@ -195,16 +197,6 @@ class DevToolbarAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
-                });
-    }
-
-    @Test
-    void shouldCreateLogbackAppenderRegistrar() {
-        contextRunner
-                .withPropertyValues("peekaboot.dev-toolbar=true")
-                .withUserConfiguration(MockTracingConfig.class)
-                .run(context -> {
-                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
                 });
     }
 
@@ -410,6 +402,14 @@ class DevToolbarAutoConfigurationTest {
         @Bean
         TraceStore traceStore() {
             return new InMemoryTraceStore(100, 50);
+        }
+    }
+
+    @Configuration
+    static class TracerOnlyConfig {
+        @Bean
+        Tracer tracer() {
+            return mock(Tracer.class);
         }
     }
 }
