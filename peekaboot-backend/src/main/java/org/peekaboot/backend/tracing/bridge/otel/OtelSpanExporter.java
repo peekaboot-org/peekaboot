@@ -53,10 +53,14 @@ public class OtelSpanExporter implements SpanExporter {
         return CompletableResultCode.ofSuccess();
     }
 
-    /** Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its name. */
+    /**
+     * Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its
+     * name. The path tag carries the servlet context path while the name (Spring's matched
+     * route pattern) does not, so the path goes through the context-stripping check.
+     */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         String path = HttpSpanTags.path(tags);
-        if (path != null && paths.isExcluded(path)) {
+        if (path != null && paths.isExcludedRequestPath(path)) {
             return true;
         }
         String name = span.getName();

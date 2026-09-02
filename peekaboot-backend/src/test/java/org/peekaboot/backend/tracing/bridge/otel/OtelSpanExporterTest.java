@@ -36,13 +36,14 @@ class OtelSpanExporterTest {
 
     private InMemoryTraceStore storage;
     private List<SpanDataEvent> publishedEvents;
+    private ApplicationEventPublisher eventPublisher;
     private OtelSpanExporter exporter;
 
     @BeforeEach
     void setUp() {
         storage = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5));
         publishedEvents = new ArrayList<>();
-        ApplicationEventPublisher eventPublisher = event -> {
+        eventPublisher = event -> {
             if (event instanceof SpanDataEvent spanDataEvent) {
                 publishedEvents.add(spanDataEvent);
                 storage.addSpan(spanDataEvent.spanData());
@@ -224,6 +225,31 @@ class OtelSpanExporterTest {
 
         assertThat(publishedEvents).isEmpty();
         assertThat(storage.getTrace(traceId)).isEmpty();
+    }
+
+    /**
+     * Behind a {@code server.servlet.context-path} the span's path tags carry the prefix;
+     * the host's actuator spans and Peekaboot's own must be skipped exactly as at the root.
+     * The span names deliberately carry no matchable route, so the path tags alone decide.
+     */
+    @Test
+    void shouldSkipTheSameSpansBehindAContextPath() {
+        OtelSpanExporter behindContext = new OtelSpanExporter(eventPublisher, new PeekabootPaths("/actuator", "/app"));
+        String traceId = "0123456789abcdef0123456789abcdef";
+
+        behindContext.export(List.of(
+                testSpanBuilder(traceId, "0000000000000001", "GET", SpanKind.SERVER)
+                        .attributes(Attributes.of(URL_PATH_KEY, "/app/actuator/health"))
+                        .build(),
+                testSpanBuilder(traceId, "0000000000000002", "GET", SpanKind.SERVER)
+                        .attributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/app/peekaboot/api/traces"))
+                        .build(),
+                testSpanBuilder(traceId, "0000000000000003", "GET", SpanKind.SERVER)
+                        .attributes(Attributes.of(URL_PATH_KEY, "/app/api/users"))
+                        .build()));
+
+        assertThat(publishedEvents).hasSize(1);
+        assertThat(storedSpan(traceId).tags()).containsEntry("url.path", "/app/api/users");
     }
 
     @Test

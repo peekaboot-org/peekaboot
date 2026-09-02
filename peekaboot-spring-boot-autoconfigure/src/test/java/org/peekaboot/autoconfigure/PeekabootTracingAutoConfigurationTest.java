@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.interceptor.TracingHandlerInterceptor;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -235,6 +236,16 @@ class PeekabootTracingAutoConfigurationTest {
                             .contains("/manage/**")
                             .doesNotContain("/actuator/**");
                 });
+    }
+
+    /** The exporter skips by a span's path tag, which carries the context path; the bean must know it. */
+    @Test
+    void theContextPathReachesTheSpanExporterExclusions() {
+        contextRunner.withPropertyValues("server.servlet.context-path=/app").run(context -> {
+            PeekabootPaths paths = context.getBean(PeekabootPaths.class);
+            assertThat(paths.isExcludedRequestPath("/app/actuator/health")).isTrue();
+            assertThat(paths.isExcludedRequestPath("/app/api/users")).isFalse();
+        });
     }
 
     /**

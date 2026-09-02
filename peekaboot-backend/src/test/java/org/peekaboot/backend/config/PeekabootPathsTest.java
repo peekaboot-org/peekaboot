@@ -71,7 +71,7 @@ class PeekabootPathsTest {
     /** The actuator exclusion follows {@code management.endpoints.web.base-path}, not a fixed prefix. */
     @Test
     void aCustomManagementBasePathReplacesTheActuatorExclusion() {
-        PeekabootPaths custom = new PeekabootPaths("/manage");
+        PeekabootPaths custom = new PeekabootPaths("/manage", "");
 
         assertThat(custom.isExcluded("/manage/health")).isTrue();
         assertThat(custom.isExcluded("/actuator/health")).isFalse();
@@ -80,7 +80,7 @@ class PeekabootPathsTest {
 
     @Test
     void theManagementBasePathIsNormalisedToAPrefix() {
-        PeekabootPaths custom = new PeekabootPaths("manage/");
+        PeekabootPaths custom = new PeekabootPaths("manage/", "");
 
         assertThat(custom.isExcluded("/manage/health")).isTrue();
         assertThat(custom.isExcluded("/managed")).isFalse();
@@ -89,7 +89,7 @@ class PeekabootPathsTest {
     /** Management endpoints at the application root have no prefix of their own; nothing extra is excluded - never everything. */
     @Test
     void aRootManagementBasePathExcludesNothingExtra() {
-        PeekabootPaths custom = new PeekabootPaths("/");
+        PeekabootPaths custom = new PeekabootPaths("/", "");
 
         assertThat(custom.isExcluded("/health")).isFalse();
         assertThat(custom.isExcluded("/peekaboot/api/v1/traces")).isTrue();
@@ -132,5 +132,41 @@ class PeekabootPathsTest {
     void basePathIsThePrefixItselfWithoutAContextPath() {
         assertThat(PeekabootPaths.basePath(new MockHttpServletRequest("GET", "/persons")))
                 .isEqualTo("/peekaboot");
+    }
+
+    /** An HTTP span's path tag carries the context path; the exclusions must hold behind it too. */
+    @Test
+    void requestPathsBehindAContextPathAreExcludedTheSameWay() {
+        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app");
+
+        assertThat(behindContext.isExcludedRequestPath("/app/actuator/health")).isTrue();
+        assertThat(behindContext.isExcludedRequestPath("/app/peekaboot/api/v1/traces"))
+                .isTrue();
+        assertThat(behindContext.isExcludedRequestPath("/app/api/users")).isFalse();
+    }
+
+    @Test
+    void aPathMerelyStartingWithTheContextPathTextIsNotStripped() {
+        PeekabootPaths behindContext = new PeekabootPaths("/actuator", "/app");
+
+        assertThat(behindContext.isExcludedRequestPath("/application/actuator/health"))
+                .isFalse();
+        assertThat(behindContext.isExcludedRequestPath("/application/peekaboot/api/v1/traces"))
+                .isFalse();
+    }
+
+    @Test
+    void requestPathsMatchDirectlyAtTheRootContextPath() {
+        assertThat(paths.isExcludedRequestPath("/actuator/health")).isTrue();
+        assertThat(paths.isExcludedRequestPath("/api/users")).isFalse();
+    }
+
+    /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */
+    @Test
+    void theContextPathIsNormalisedToItsPrefixForm() {
+        assertThat(new PeekabootPaths("/actuator", "/app/").isExcludedRequestPath("/app/actuator/health"))
+                .isTrue();
+        assertThat(new PeekabootPaths("/actuator", "/").isExcludedRequestPath("/actuator/health"))
+                .isTrue();
     }
 }
