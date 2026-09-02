@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ch.qos.logback.classic.Level;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
@@ -23,14 +23,11 @@ class InsightsServiceTest {
 
     private SimpleMeterRegistry registry;
     private InsightsService service;
-    // Micrometer gauges hold the state object via a WeakReference; without a strong
-    // reference here the GC can collect it between registration and sampling.
-    private AtomicLong cpuUsage;
 
     @BeforeEach
     void setUp() {
         registry = new SimpleMeterRegistry();
-        cpuUsage = registry.gauge("process.cpu.usage", new AtomicLong(1)); // resolves the cpu panel's first series
+        Gauge.builder("process.cpu.usage", () -> 1.0).register(registry); // resolves the cpu panel's first series
         service = new InsightsService(
                 registry,
                 new InsightsProperties(),

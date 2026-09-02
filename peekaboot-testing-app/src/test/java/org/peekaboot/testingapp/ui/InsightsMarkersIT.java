@@ -69,7 +69,7 @@ class InsightsMarkersIT extends PlaywrightTestBase {
         useALevelWithHeadroomForTheStartMarker();
 
         double markerX = Double.parseDouble(
-                page.locator(PANEL).first().getAttribute("data-marker-x").split(",")[0]);
+                page.locator(PANEL).first().getAttribute("data-marker-x").split(",", -1)[0]);
         // A marker pinned to the plot's left edge publishes x=0 (or near it); hovering
         // exactly there can land on the boundary uPlot treats as "outside the plot"
         // (setCursor hides the tooltip once cursorLeft < 0), so nudge a couple of CSS
