@@ -217,14 +217,17 @@ public class RequestCaptureFilter implements Filter {
     private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         Collections.list(request.getHeaderNames())
-                .forEach(name -> headers.put(name, maskingEngine.mask(name, request.getHeader(name))));
+                .forEach(name -> headers.put(
+                        name, maskingEngine.mask(name, String.join(", ", Collections.list(request.getHeaders(name))))));
         return headers;
     }
 
+    /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
     private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
         response.getHeaderNames()
-                .forEach(name -> headers.put(name, maskingEngine.mask(name, response.getHeader(name))));
+                .forEach(name ->
+                        headers.put(name, maskingEngine.mask(name, String.join(", ", response.getHeaders(name)))));
         return headers;
     }
 

@@ -137,6 +137,22 @@ class RequestCaptureFilterTest {
         assertThat(event.requestHeaders()).containsEntry("Content-Type", "application/json");
     }
 
+    /** A header sent more than once (Accept, or several Set-Cookie on the response) is captured whole. */
+    @Test
+    void shouldJoinTheValuesOfARepeatedHeader() throws Exception {
+        setupTraceContext("trace1");
+        request.addHeader("Accept", "text/html");
+        request.addHeader("Accept", "application/json");
+        response.addHeader("Vary", "Accept");
+        response.addHeader("Vary", "Cookie");
+
+        filter.doFilter(request, response, chain);
+
+        RequestCompletedEvent event = publishedEvent();
+        assertThat(event.requestHeaders()).containsEntry("Accept", "text/html, application/json");
+        assertThat(event.responseHeaders()).containsEntry("Vary", "Accept, Cookie");
+    }
+
     /**
      * Header masking goes through the engine's key-name rules rather than a fixed list,
      * so Proxy-Authorization - which carries a credential just as Authorization does - is
