@@ -21,7 +21,6 @@ import jakarta.servlet.WriteListener;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import org.apache.catalina.connector.ClientAbortException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -264,7 +263,8 @@ class DevToolbarFilterTest {
      */
     @Test
     void aClientAbortWhileWritingTheInjectedPageIsNotAFailure() throws Exception {
-        FailingWriteResponse aborted = new FailingWriteResponse(new ClientAbortException(), false);
+        FailingWriteResponse aborted =
+                new FailingWriteResponse(new org.apache.catalina.connector.ClientAbortException(), false);
         response = aborted;
         chainWritesHtml("<html><body></body></html>");
 
@@ -284,25 +284,39 @@ class DevToolbarFilterTest {
     /** Jetty's EofException carries no message; it is recognised by class name, like Tomcat's. */
     @Test
     void aJettyEofExceptionIsAClientAbortToo() throws Exception {
-        FailingWriteResponse aborted = new FailingWriteResponse(new org.eclipse.jetty.io.EofException(), false);
-        response = aborted;
-        chainWritesHtml("<html><body></body></html>");
-
-        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
-            filter.doFilter(request, response, chain);
-
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                assertThat(event.getThrowableProxy()).isNull();
-            });
-        }
-        assertThat(aborted.writeAttempts).isEqualTo(1);
+        assertHandledAsClientAbort(new org.eclipse.jetty.io.EofException());
     }
 
     /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
     @Test
     void aBrokenPipeFromAnotherContainerIsAClientAbortToo() throws Exception {
-        FailingWriteResponse aborted = new FailingWriteResponse(new IOException("Broken pipe"), false);
+        assertHandledAsClientAbort(new IOException("Broken pipe"));
+    }
+
+    /**
+     * Containers and shaded copies package their abort exceptions wherever they like;
+     * the simple name is the recognisable part, so it decides on its own.
+     */
+    @Test
+    void aClientAbortExceptionInAForeignPackageIsAClientAbortToo() throws Exception {
+        assertHandledAsClientAbort(new ClientAbortException());
+    }
+
+    @Test
+    void anEofExceptionInAForeignPackageIsAClientAbortToo() throws Exception {
+        assertHandledAsClientAbort(new EofException());
+    }
+
+    /** Windows words the hang-up its own way; the JDK passes that wording through. */
+    @Test
+    void aWindowsConnectionAbortIsAClientAbortToo() throws Exception {
+        assertHandledAsClientAbort(
+                new IOException("An established connection was aborted by the software in your host machine"));
+    }
+
+    /** A client abort surfaces as a single DEBUG line without a stack trace, and no retry. */
+    private void assertHandledAsClientAbort(IOException failure) throws Exception {
+        FailingWriteResponse aborted = new FailingWriteResponse(failure, false);
         response = aborted;
         chainWritesHtml("<html><body></body></html>");
 
@@ -479,6 +493,14 @@ class DevToolbarFilterTest {
 
         assertThat(response.getContentAsString()).doesNotContain("\"idle\":true");
     }
+
+    /**
+     * Stand-ins carrying the abort exceptions' simple names in a package no container
+     * uses: only the simple name may matter to the recognition.
+     */
+    private static final class ClientAbortException extends IOException {}
+
+    private static final class EofException extends IOException {}
 
     /**
      * A response whose first write fails the way a container's does: with {@code failure},
