@@ -1,9 +1,7 @@
 /**
  * Shared URL <-> filter-control reconciliation, used by every dashboard tab whose filter
- * state doubles as its own query params (config.js, environment.js, meters.js, loggers.js;
- * traces.js's bucket/type/op filter is structurally different enough - three independently
- * combinable keys instead of one or two flat fields - that it keeps its own hand-rolled
- * version rather than being forced through this).
+ * state doubles as its own query params (config.js, environment.js, meters.js, loggers.js,
+ * traces.js, insights.js, lifecycle.js).
  *
  * `reconcileFilterWithUrl` is the shared "which direction wins" decision for every one of
  * those tabs. Two directions, picked by whether

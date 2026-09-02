@@ -40,6 +40,7 @@ export function createClient({basePath = BASE_PATH} = {}) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const body = await response.json();
+        // checked again: a newer request can win while this body is still being parsed
         return generations.get(dedupeKey) === generation ? body : null;
     }
 

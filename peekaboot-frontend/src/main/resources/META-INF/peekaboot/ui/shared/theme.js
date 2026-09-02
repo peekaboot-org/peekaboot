@@ -1,7 +1,8 @@
 import {readSetting, writeSetting} from './storage.js';
 
-/** The key the dashboard toggle writes. Shared across surfaces via same-origin storage. */
-export const THEME_STORAGE_KEY = 'peekaboot-theme';
+// The key the dashboard toggle writes, shared across surfaces via same-origin storage;
+// dashboard/index.html's pre-paint script reads the same literal.
+const THEME_STORAGE_KEY = 'peekaboot-theme';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 

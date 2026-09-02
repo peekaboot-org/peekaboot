@@ -1,13 +1,12 @@
 /**
  * The "Meters" tab: Micrometer meters, filterable by name or tag, each expandable to
  * its measurements. Built on shared/filtered-group-tab.js like the other filterable
- * group tabs, using its fetchData hook: the metrics come from their own endpoint (not
- * the main dashboard payload) and are fetched only while this tab's container is the
- * active one - see the hook's doc comment in the shell.
+ * group tabs, using its fetchData hook: the metrics come from their own endpoint, not
+ * the main dashboard payload.
  */
 import {badge} from '../../shared/components.js';
 import {highlightText} from '../../shared/markup.js';
-import {formatBytes} from '../../shared/format.js';
+import {formatBytes, formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
@@ -28,7 +27,7 @@ const tab = filteredGroupTab({
     key: metric => metric.name,
     header: (metric, query) => ({
         name: metric.name,
-        count: `${metric.measurements.length} measurement${metric.measurements.length !== 1 ? 's' : ''}`,
+        count: formatCount(metric.measurements.length, 'measurement'),
         highlight: query
     }),
     items: (metric, list, query, context) => {

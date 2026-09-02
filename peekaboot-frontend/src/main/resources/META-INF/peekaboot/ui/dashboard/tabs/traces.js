@@ -5,22 +5,19 @@
  * applyFilter() - for another tab (via context.navigate's payload) to pre-select a type
  * and root operation without reaching into this module's private filter state.
  *
- * Fetched from its own endpoint (not part of the main dashboard payload). render() is
- * called on every 30s auto-refresh cycle for every available tab regardless of which is
- * visible (see main.js's renderData()), so the actual network fetch is skipped here
- * unless this tab's container is the active one - main.js's renderTabById() calls
- * render() again the moment this tab becomes active, so switching to it never waits on
- * the next cycle. context.client's per-path generation counter is the guard against a
- * slow older response overwriting a newer one.
+ * Fetched from its own endpoint (not part of the main dashboard payload); a background
+ * render skips the round trip (active-tab guard, see main.js's renderTab). context.client's
+ * per-path generation counter is the guard against a slow older response overwriting a
+ * newer one.
  */
-import {badge} from '../../shared/components.js';
+import {badge, emptyStateHtml, loadingBlock} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {traceStatParts} from '../../shared/trace-stats.js';
 import {parseAppHash} from '../../shared/url-state.js';
-import {openTraceDetail} from '../../trace-detail/trace-detail.js';
+import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
 export const id = 'traces';
 export const label = 'Traces';
@@ -57,24 +54,19 @@ export function render(container, data, context) {
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
     wireControls(container);
-    // Only while this tab is the one the hash currently points at - context.urlParams
-    // reflects whatever tab is active in the URL, so reconciling here during a background
-    // auto-refresh render of a hidden traces tab would read another tab's params (or
-    // none) and clobber this tab's own filter state. See reconcileWithUrl's own doc
-    // comment.
-    if (container.classList.contains('active')) reconcileWithUrl(container);
+    if (context.active) reconcileWithUrl(container);
     fetchAndRender();
 }
 
 /**
  * Pre-selects a root action type and/or root operation, called from another tab's
  * cross-link via context.navigate(tabId, detail, payload) - see main.js's navigate().
- * Requires at least one prior render() (always true in practice: a link that lands here
- * only ever renders once this tab has already rendered at least once - see
- * scheduled-tasks.js's own isAvailable/features gating).
+ * Needs a prior render() to have wired the controls; a link that lands here only exists
+ * once this tab is available, which is after its first render.
  */
-export function applyFilter({rootActionType, rootOperation} = {}) {
+export function applyFilter({rootActionType, rootOperation} = {}, context) {
     if (!currentContainer) return;
+    currentContext = context;
 
     selectedRootActionTypes.clear();
     if (rootActionType) selectedRootActionTypes.add(rootActionType);
@@ -92,51 +84,30 @@ export function applyFilter({rootActionType, rootOperation} = {}) {
 }
 
 /**
- * Reconciles bucket/type/op state with the URL - called only while this tab's container
- * is the active one (see render()). Two directions, picked by whether this render is
- * URL-authoritative (context.urlIsAuthoritative - a genuine hash change: a deep link,
- * Back/Forward, or a hand-edited hash, as opposed to a programmatic tab switch - see
- * main.js's urlChangeInProgress) or the URL already carries any of this tab's own
- * filter keys either way:
- *  - URL-authoritative, or the URL has bucket/type/op -> the URL wins, including a bare
- *    one: seedFromUrl() restores state from it, resetting to defaults when the URL
- *    carries none of the keys but this render is URL-authoritative (a hand-edited hash
- *    with the filter keys removed means the user asked to clear the filter, and that
- *    has to actually clear it, not just leave the state untouched).
- *  - Otherwise (a programmatic, non-authoritative render with a bare URL) -> this tab's
- *    *current* state wins instead. A bare hash here almost always just means the tab
- *    strip switched tabs (main.js's onSelect pushes a plain "#<tab>" hash with no
- *    params - see navigate()), not that the user asked to clear the filter, and the
- *    DOM/module state the user set before switching away is still sitting right here.
- *    Writing it back (writeUrlParams()) is what makes a filter survive switching away
- *    and back to this tab, and makes the URL truthful again instead of silently
- *    drifting out of sync with what's actually filtered.
- *
- * A detail segment in the hash (the trace overlay open on top of this tab's still-.active
- * panel - e.g. a background auto-refresh while "#traces/<id>/logs?level=ERROR" is showing)
- * is an outright no-op instead: the params slot belongs to the overlay while it's open (see
- * main.js's setUrlParams, which drops the write side of this same rule), and the overlay's
- * own params (level/q, ...) are not this tab's bucket/type/op - seeding from them would
- * wrongly reset the filter to its defaults, and writing back would clobber the overlay's URL.
+ * Reconciles bucket/type/op with the URL by the shared two-direction rule (see
+ * url-filter.js). A detail segment in the hash means the overlay owns the params slot:
+ * no seed, no write (main.js's setUrlParams drops the write side of the same rule) -
+ * the overlay's own level/q params are not this tab's bucket/type/op.
  */
 function reconcileWithUrl(container) {
     if (parseAppHash().detail) return;
 
-    const params = currentContext.urlParams || {};
-    const urlHasFilterParams = 'bucket' in params || 'type' in params || 'op' in params;
-
-    if (urlHasFilterParams || currentContext.urlIsAuthoritative) {
-        seedFromUrl(container, params);
-        // corrects a bogus or non-canonical value in the URL to the state that actually restored
-        writeUrlParams();
-    } else if (currentBucket !== 'all' || selectedRootActionTypes.size > 0 || currentRootOperationFilter) {
-        writeUrlParams();
-    }
+    reconcileFilterWithUrl(currentContext, ['bucket', 'type', 'op'], {
+        seed: params => {
+            seedFromUrl(container, params);
+            // corrects a bogus or non-canonical value in the URL to the state that actually restored
+            writeUrlParams();
+        },
+        hasNonDefaultState: () => currentBucket !== 'all' || selectedRootActionTypes.size > 0 || Boolean(currentRootOperationFilter),
+        writeBack: writeUrlParams
+    });
 }
 
-/** Restores bucket/type/op state from the URL. Compares against the current state
-    rather than unconditionally overwriting it, so this is a no-op once the URL already
-    matches (the steady state on every render while this tab's own filter is active). */
+/**
+ * Restores bucket/type/op state from the URL. Compares against the current state
+ * rather than unconditionally overwriting it, so this is a no-op once the URL already
+ * matches (the steady state on every render while this tab's own filter is active).
+ */
 function seedFromUrl(container, params) {
     // Validated against the canonical lists - an unrecognized bucket (a typo, a stale link)
     // would otherwise sail straight through to the backend and back as a literal "undefined"
@@ -166,8 +137,10 @@ function seedFromUrl(container, params) {
     });
 }
 
-/** Writes the current bucket/type/op filter state back to the URL, omitting each key
-    that's at its default so a clean filter yields a clean "#traces" hash. */
+/**
+ * Writes the current bucket/type/op filter state back to the URL, omitting each key
+ * that's at its default so a clean filter yields a clean "#traces" hash.
+ */
 function writeUrlParams() {
     const params = {};
     if (currentBucket !== 'all') params.bucket = currentBucket;
@@ -179,6 +152,8 @@ function writeUrlParams() {
 function wireControls(container) {
     if (container.dataset.wired) return;
     container.dataset.wired = 'true';
+
+    container.querySelector('#traces-loading').appendChild(loadingBlock('Loading traces...'));
 
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         btn.setAttribute('aria-pressed', String(btn.dataset.bucket === currentBucket));
@@ -198,16 +173,18 @@ function wireControls(container) {
     if (clearBtn) clearBtn.addEventListener('click', resetFilter);
 }
 
-/** Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
-    root action type means no HTML edit. Each checkbox's accessible name comes
-    from the wrapping <label>, matching the loggers tab's checkbox-label convention. */
+/**
+ * Generated from ROOT_ACTION_TYPES rather than hardcoded in index.html, so adding a
+ * root action type means no HTML edit. Each checkbox's accessible name comes
+ * from the wrapping <label>, matching the loggers tab's checkbox-label convention.
+ */
 function renderTypeFilterCheckboxes(container) {
     const filterEl = container.querySelector('#traces-filter');
     const clearBtn = filterEl.querySelector('#traces-filter-clear');
 
     ROOT_ACTION_TYPES.forEach(type => {
         const checkboxLabel = document.createElement('label');
-        checkboxLabel.className = 'checkbox-label';
+        checkboxLabel.className = 'pk-checkbox-label';
 
         const checkbox = document.createElement('input');
         checkbox.type = 'checkbox';
@@ -235,10 +212,7 @@ function resetFilter() {
 async function fetchAndRender() {
     const container = currentContainer;
     const context = currentContext;
-    // Not the active tab - skip the network round trip. main.js's renderTabById() calls
-    // render() (and so this) again the instant this tab is switched to, and every
-    // control here (bucket/checkbox/clear) is only reachable while it is visible anyway.
-    if (!container.classList.contains('active')) return;
+    if (!context.active) return;
 
     const loadingEl = container.querySelector('#traces-loading');
     const listEl = container.querySelector('#traces-list');
@@ -263,16 +237,18 @@ async function fetchAndRender() {
         updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts);
         renderList(container, result, context);
     } catch (error) {
-        listEl.innerHTML = `<p class="pk-empty">Failed to load traces: ${escapeHtml(error.message)}</p>`;
+        listEl.innerHTML = emptyStateHtml(`Failed to load traces: ${error.message}`);
     } finally {
         loadingEl.classList.add('hidden');
     }
 }
 
-/** The plain number is what the list can actually show - the default request already
-    excludes DEFAULT_HIDDEN_TYPES, so the filtered count is the truthful one. The
-    "shown / total" pair appears only for a filter the user chose, with the store's full
-    count (hidden types included) as the total. */
+/**
+ * The plain number is what the list can actually show - the default request already
+ * excludes DEFAULT_HIDDEN_TYPES, so the filtered count is the truthful one. The
+ * "shown / total" pair appears only for a filter the user chose, with the store's full
+ * count (hidden types included) as the total.
+ */
 function updateBucketCounts(container, counts, filteredCounts) {
     if (!counts) return;
     const userFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
@@ -352,22 +328,15 @@ function renderTraceItem(trace, context) {
     const header = document.createElement('div');
     header.className = 'pk-trace-item__header';
 
-    // A real <button>, not the header itself: for SCHEDULED_JOB traces the header also
-    // carries the scheduler link below, and a <button> cannot contain interactive
-    // content - nesting the link inside one would make it unreachable to assistive tech
-    // (Children Presentational: True on a role="button" div has the same effect, which
-    // is why that's not used here either). The button and the link are siblings under
-    // header instead, each independently focusable and named. Native Enter/Space
-    // activation comes free with a real <button>, so no hand-rolled keydown handler is
-    // needed, and since the link lives outside the button, no click-target guard is
-    // needed either.
+    // A real <button>; the scheduler link below is its sibling, not its child, because a
+    // button cannot contain interactive content (see ToolbarShell for the same shape).
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
     openBtn.className = 'pk-trace-item__open';
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
     openBtn.appendChild(renderStats(trace, context));
     if (trace.traceId) {
-        openBtn.addEventListener('click', () => openTrace(trace.traceId, context));
+        openBtn.addEventListener('click', () => context.openTrace(trace.traceId));
     }
     header.appendChild(openBtn);
 
@@ -470,30 +439,4 @@ function renderStats(trace, context) {
     });
 
     return stats;
-}
-
-function openTrace(traceId, context) {
-    context.navigate('traces', traceId);
-    openTraceDetail(traceId, {
-        // Threads the same urlState factory main.js's own hash-driven open uses (see
-        // buildTraceUrlState), so a trace opened by clicking it here - the primary way
-        // anyone opens one - gets its tab switches and filter changes synced to the URL
-        // too, not just a trace reached via a deep link or Back/Forward.
-        urlState: context.traceUrlState(traceId),
-        // The overlay formats its timestamps and colours its durations the way this
-        // dashboard does - by the reader's locale/timezone choice and the published thresholds.
-        locale: context.locale,
-        timeZone: context.timeZone,
-        features: context.features,
-        // Closing the overlay (ESC, buttons) must also clean the hash, otherwise a
-        // reload would unexpectedly reopen the trace - mirrors main.js's expandTraceById.
-        // Parses the hash and compares only tab/detail (not the exact string) since a tab
-        // switch after opening rewrites the hash to "#traces/<id>/<subview>" via
-        // replaceAppHash - an exact-string match against the bare "#traces/<id>" open-time
-        // hash would stop matching the moment the overlay's own tab strip is touched.
-        onClose: () => {
-            const {tab, detail} = parseAppHash();
-            if (tab === 'traces' && detail === traceId) context.navigate('traces');
-        }
-    });
 }

@@ -28,7 +28,7 @@ function queryStat({count, totalDurationMs}, features) {
 
     const duration = document.createElement('span');
     duration.className = 'pk-stat__duration';
-    duration.textContent = formatDurationMs(totalDurationMs || 0);
+    duration.textContent = formatDurationMs(totalDurationMs);
     stat.appendChild(duration);
     return stat;
 }

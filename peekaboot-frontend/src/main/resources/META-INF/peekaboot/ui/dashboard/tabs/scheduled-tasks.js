@@ -3,8 +3,8 @@
  * delay, fixed rate), each expandable to its individual task rows, with a summary badge
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
-import {groupList, expandedKeys, badge} from '../../shared/components.js';
-import {formatDateTime, formatInterval} from '../../shared/format.js';
+import {groupList, expandedKeys, badge, emptyState} from '../../shared/components.js';
+import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
 
 export const id = 'scheduled-tasks';
 export const label = 'Scheduled Tasks';
@@ -36,13 +36,13 @@ function taskSeverity(status) {
 function renderGroups(container, context) {
     const scheduledTasks = currentData?.scheduledTasks;
     const target = container.querySelector('#scheduled-tasks-groups');
-    // Must run before the container is cleared below - see environment.js.
+    // Must run before the container is cleared below - see filtered-group-tab.js's renderGroups.
     const expanded = expandedKeys(target);
     target.innerHTML = '';
 
     const tasks = scheduledTasks?.tasks;
     if (!tasks || tasks.length === 0) {
-        target.innerHTML = '<p class="pk-empty">No scheduled tasks configured</p>';
+        target.appendChild(emptyState('No scheduled tasks configured'));
         return;
     }
 
@@ -54,7 +54,7 @@ function renderGroups(container, context) {
 
     groupList(target, groups, {
         key: group => group.type,
-        header: group => ({name: TYPE_LABELS[group.type], count: `${group.tasks.length} tasks`}),
+        header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
         items: (group, list) => group.tasks.forEach(task =>
             list.appendChild(renderTaskRow(task, group.type, context))),
         expandedKeys: expanded
@@ -160,7 +160,6 @@ function renderTracesLink(context, task) {
     link.textContent = '\u{1F50D}';
     link.addEventListener('click', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         context.navigate('traces', null, {rootActionType: 'SCHEDULED_JOB', rootOperation: task.target});
     });
     return link;

@@ -5,7 +5,7 @@
  * single scannable row rather than a card, which would spend roughly 130px per
  * migration on three stacked lines.
  */
-import {badge} from '../../shared/components.js';
+import {badge, table} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {durationSeverity} from '../../shared/severity.js';
 
@@ -34,34 +34,8 @@ export function render(container, data, {locale, timeZone, features} = {}) {
         return;
     }
 
-    const scroll = document.createElement('div');
-    scroll.className = 'pk-table-scroll';
-
-    const table = document.createElement('table');
-    table.className = 'pk-table pk-flyway-table';
-    table.append(renderHead(), renderBody(migrations, {locale, timeZone, features}));
-
-    scroll.appendChild(table);
-    target.appendChild(scroll);
-}
-
-function renderHead() {
-    const head = document.createElement('thead');
-    const row = document.createElement('tr');
-    COLUMNS.forEach(label => {
-        const th = document.createElement('th');
-        th.scope = 'col';
-        th.textContent = label;
-        row.appendChild(th);
-    });
-    head.appendChild(row);
-    return head;
-}
-
-function renderBody(migrations, context) {
-    const body = document.createElement('tbody');
-    migrations.forEach(migration => body.appendChild(renderRow(migration, context)));
-    return body;
+    const rows = migrations.map(migration => renderRow(migration, {locale, timeZone, features}));
+    target.appendChild(table(COLUMNS, rows, {className: 'pk-flyway-table'}));
 }
 
 function renderRow(migration, {locale, timeZone, features}) {

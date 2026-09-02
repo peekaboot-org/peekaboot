@@ -5,7 +5,7 @@ const HTML_ESCAPES = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'"
  * /api/features - the dev toolbar and the overlay it opens. Everywhere else
  * Features.maskLiteral is authoritative; this copy must match MaskingEngine.MASK_LITERAL
  * (which mirrors Spring's own Sanitizer) exactly, or a masked-value comparison on those
- * surfaces silently stops matching (SharedModuleIT pins the two together).
+ * surfaces silently stops matching (the browser tests pin the two together).
  */
 export const MASK_LITERAL = '******';
 

@@ -22,12 +22,10 @@
  *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
  *                                  instead of the shared payload render() receives. Called
- *                                  only while the tab's container is the active one - a
- *                                  background auto-refresh render of a hidden tab skips
- *                                  the round trip, and main.js's renderTabById() renders
- *                                  again the moment the tab becomes active. Resolves to
- *                                  the data select() reads, or null when superseded (see
- *                                  shared/api.js); a rejection renders fetchErrorMessage.
+ *                                  only for the active tab (active-tab guard, see main.js's
+ *                                  renderTab). Resolves to the data select() reads, or null
+ *                                  when superseded (see shared/api.js); a rejection renders
+ *                                  fetchErrorMessage.
  *   loadingMessage              -> shown while the very first fetchData() is in flight
  *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
@@ -35,8 +33,7 @@
  * refresh(container), which re-renders with the current filter for a control the tab wires
  * itself (loggers.js's checkbox).
  */
-import {groupList, expandedKeys} from './components.js';
-import {escapeHtml} from './markup.js';
+import {groupList, expandedKeys, emptyState, loadingBlock} from './components.js';
 import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
 
 export function filteredGroupTab({
@@ -59,11 +56,7 @@ export function filteredGroupTab({
         if (!fetchData) currentData = data;
         currentContext = context;
         wireFilter(container);
-        // Only while this tab is the one the hash currently points at - context.urlParams
-        // reflects whatever tab is active in the URL, so reconciling during a background
-        // auto-refresh render of a hidden tab would read another tab's params (or none)
-        // and clobber whatever the user already typed here.
-        if (container.classList.contains('active')) reconcile(input(container), container, context);
+        if (context.active) reconcile(input(container), container, context);
         if (fetchData) fetchAndRender(container, context);
         else renderGroups(container);
     }
@@ -73,23 +66,19 @@ export function filteredGroupTab({
     }
 
     async function fetchAndRender(container, context) {
-        // Not the active tab - skip the network round trip (see fetchData's doc above).
-        if (!container.classList.contains('active')) return;
+        if (!context.active) return;
 
         const target = container.querySelector(`#${listId}`);
         // Only before the very first data arrives - a background refresh of an
         // already-populated, currently visible list must not blank it for the round
         // trip's duration (renderGroups replaces the content once the response is in).
-        if (currentData === null) {
-            target.innerHTML =
-                `<div class="pk-loading"><div class="pk-spinner"></div><p>${escapeHtml(loadingMessage)}</p></div>`;
-        }
+        if (currentData === null) target.replaceChildren(loadingBlock(loadingMessage));
 
         let result;
         try {
             result = await fetchData(context);
         } catch (error) {
-            target.innerHTML = `<p class="pk-empty">${escapeHtml(fetchErrorMessage(error))}</p>`;
+            target.replaceChildren(emptyState(fetchErrorMessage(error)));
             return;
         }
         if (result === null) return; // superseded by a newer request
@@ -126,7 +115,7 @@ export function filteredGroupTab({
 
         const groups = select(currentData);
         if (!groups || groups.length === 0) {
-            target.innerHTML = `<p class="pk-empty">${escapeHtml(emptyMessage)}</p>`;
+            target.appendChild(emptyState(emptyMessage));
             afterRender?.(container, {groups: [], filtered: [], query});
             return;
         }
@@ -137,7 +126,7 @@ export function filteredGroupTab({
         const filtered = groups.map(group => filterGroup(group, query)).filter(Boolean);
         if (filtered.length === 0) {
             const message = query ? noMatchMessage(query) : emptyMessage;
-            target.insertAdjacentHTML('beforeend', `<p class="pk-empty">${escapeHtml(message)}</p>`);
+            target.appendChild(emptyState(message));
             afterRender?.(container, {groups, filtered, query});
             return;
         }
