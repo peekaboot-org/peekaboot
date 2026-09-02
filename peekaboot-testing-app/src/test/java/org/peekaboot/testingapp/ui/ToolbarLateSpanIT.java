@@ -58,8 +58,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
         Instant responseReceivedAt = Instant.now();
         page.waitForSelector("#peekaboot-toolbar-host");
 
-        // The render the old backoff loop stopped at: the root span has been exported, the
-        // late child is still running.
+        // First render: the root span is exported, the late child is still running.
         String firstRender = (String)
                 page.waitForFunction(RENDERED_DURATION, null, within(10_000)).jsonValue();
         String barTraceId = (String) page.evaluate(RENDERED_TRACE_ID);
