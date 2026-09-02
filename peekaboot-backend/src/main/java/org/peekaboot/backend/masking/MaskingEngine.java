@@ -60,13 +60,10 @@ public final class MaskingEngine {
      * {@link MaskingRules#SPRING_SANITIZER_KEY_PATTERNS}.
      */
     public boolean isSensitiveKey(String key) {
-        if (key == null || key.isBlank()) {
-            return false;
-        }
-        if (MaskingRules.KEY_NAME_EXCEPTIONS.contains(key)) {
-            return false;
-        }
-        return matchesKeyNameRules(key);
+        return key != null
+                && !key.isBlank()
+                && !MaskingRules.KEY_NAME_EXCEPTIONS.contains(key)
+                && matchesKeyNameRules(key);
     }
 
     /**
