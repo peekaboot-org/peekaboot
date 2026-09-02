@@ -29,9 +29,9 @@ public class DevToolbarFilter implements Filter {
 
     /** springdoc's own default for {@code springdoc.swagger-ui.path}. */
     public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
-    // Recognised by name: this module depends on neither container.
-    private static final Set<String> CLIENT_ABORT_EXCEPTIONS =
-            Set.of("org.apache.catalina.connector.ClientAbortException", "org.eclipse.jetty.io.EofException");
+    // Recognised by simple name: this module depends on no container, and shaded or
+    // repackaged copies move the classes around.
+    private static final Set<String> CLIENT_ABORT_EXCEPTION_NAMES = Set.of("ClientAbortException", "EofException");
     private static final Set<String> EXCLUDED_EXTENSIONS =
             Set.of(".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot");
 
@@ -127,13 +127,13 @@ public class DevToolbarFilter implements Filter {
      * Whether the write failed because the client hung up - a browser navigating away
      * mid-response - rather than because of anything on this side. Tomcat wraps that in
      * its own ClientAbortException, Jetty throws its EofException (both recognised by
-     * name, since this module depends on neither container); other containers surface
-     * the socket error itself.
+     * simple name, wherever a container or a shaded copy packages them, since this module
+     * depends on neither container); other containers surface the socket error itself.
      */
     private static boolean isClientAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof IOException
-                    && (CLIENT_ABORT_EXCEPTIONS.contains(t.getClass().getName())
+                    && (CLIENT_ABORT_EXCEPTION_NAMES.contains(t.getClass().getSimpleName())
                             || saysClientWentAway(t.getMessage()))) {
                 return true;
             }
@@ -146,7 +146,11 @@ public class DevToolbarFilter implements Filter {
             return false;
         }
         String lower = message.toLowerCase(Locale.ROOT);
-        return lower.contains("broken pipe") || lower.contains("connection reset");
+        // "connection was aborted": Windows' "An established connection was aborted by
+        // the software in your host machine", passed through by the JDK
+        return lower.contains("broken pipe")
+                || lower.contains("connection reset")
+                || lower.contains("connection was aborted");
     }
 
     private boolean shouldSkip(HttpServletRequest request) {
