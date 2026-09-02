@@ -30,8 +30,8 @@ class ThemeTokenIT extends PlaywrightTestBase {
     }
 
     /**
-     * The light theme's status colours are tuned for contrast against white: #dc2626 on
-     * the #0d1117 dark background scores 3.92:1, below WCAG AA's 4.5:1. The dark overrides
+     * The light theme's status colours are tuned for contrast against white: #d21f1f on
+     * the #0d1117 dark background scores 3.57:1, below WCAG AA's 4.5:1. The dark overrides
      * (#f85149 scores 5.65:1) keep the dashboard's status colours readable and aligned
      * with the overlay's palette.
      */

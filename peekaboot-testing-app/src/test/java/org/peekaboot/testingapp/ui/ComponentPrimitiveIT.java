@@ -24,6 +24,55 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         assertThat(ok).isNotEqualTo("rgba(0, 0, 0, 0)");
     }
 
+    /**
+     * Every badge variant's ink/fill pair must clear WCAG AA's 4.5:1 in BOTH themes,
+     * measured from the resolved styles rather than pinned hexes so a future palette
+     * tweak that regresses one variant fails here instead of in a screenshot. --info
+     * is the variant that prompted this sweep: its old light-theme fill passed AA on
+     * paper (4.77:1) while sitting visibly darker than every sibling fill.
+     */
+    @Test
+    void badgeVariantInkClearsAaContrastInBothThemes() {
+        openFixture();
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            for (String badge :
+                    List.of("badge-ok", "badge-warn", "badge-error", "badge-error-soft", "badge-info", "badge-muted")) {
+                assertThat(contrastRatio("#" + badge))
+                        .as("%s ink/fill contrast (%s theme)", badge, theme)
+                        .isGreaterThanOrEqualTo(4.5);
+            }
+        }
+    }
+
+    /**
+     * The trace-detail overlay renders pills of its own - the gantt kind pills, the
+     * span tag badges and the tab-strip count - that are badges in all but class name,
+     * so they owe the same 4.5:1 in both themes. The tag badge doubles as the guard for
+     * muted/accent ink on the --pk-bg-hover surface, the lightest fill any text sits on.
+     */
+    @Test
+    void traceDetailPillInkClearsAaContrastInBothThemes() {
+        openFixture();
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            for (String pill : List.of(
+                    "kind-server",
+                    "kind-client",
+                    "kind-internal",
+                    "kind-producer",
+                    "tag-badge",
+                    "tag-badge-key",
+                    "tab-count")) {
+                assertThat(contrastRatio("#" + pill))
+                        .as("%s ink/fill contrast (%s theme)", pill, theme)
+                        .isGreaterThanOrEqualTo(4.5);
+            }
+        }
+    }
+
     @Test
     void collapsedGroupListIsNotVisible() {
         openFixture();
@@ -89,18 +138,27 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         assertThat(overflow).isEqualTo("hidden");
     }
 
-    /** WCAG contrast ratio between an element's computed color and background-color. */
+    /**
+     * WCAG contrast ratio between an element's computed color and the effective fill
+     * behind it: its own background-color, or - where that is fully transparent, like
+     * the tag badge's key span - the nearest ancestor's.
+     */
     private double contrastRatio(String selector) {
         return ((Number) page.evaluate("""
                 (sel) => {
-                    const style = getComputedStyle(document.querySelector(sel));
-                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).slice(0, 3).map(Number);
+                    const parse = c => c.match(/\\d+(\\.\\d+)?/g).map(Number);
                     const luminance = ([r, g, b]) => {
                         const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
                         return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
                     };
-                    const text = luminance(parse(style.color));
-                    const fill = luminance(parse(style.backgroundColor));
+                    const start = document.querySelector(sel);
+                    const text = luminance(parse(getComputedStyle(start).color).slice(0, 3));
+                    let fill = null;
+                    for (let el = start; el; el = el.parentElement) {
+                        const c = parse(getComputedStyle(el).backgroundColor);
+                        if (c.length < 4 || c[3] > 0) { fill = luminance(c.slice(0, 3)); break; }
+                    }
+                    if (fill === null) throw new Error('no opaque background behind ' + sel);
                     const [hi, lo] = text > fill ? [text, fill] : [fill, text];
                     return (hi + 0.05) / (lo + 0.05);
                 }

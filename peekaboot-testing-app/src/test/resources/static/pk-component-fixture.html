@@ -8,10 +8,24 @@
     <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
     <!-- dashboard chrome, for the unmask toggle's pressed (danger) state below -->
     <link rel="stylesheet" href="/peekaboot/ui/dashboard/dashboard.css">
+    <!-- overlay chrome, for the gantt/tag/tab-count pills in the contrast sweep below -->
+    <link rel="stylesheet" href="/peekaboot/ui/trace-detail/trace-detail.css">
 </head>
 <body>
     <span class="pk-badge pk-badge--ok" id="badge-ok">UP</span>
     <span class="pk-badge pk-badge--error" id="badge-error">DOWN</span>
+    <span class="pk-badge pk-badge--warn" id="badge-warn">SLOW</span>
+    <span class="pk-badge pk-badge--error-soft" id="badge-error-soft">404</span>
+    <span class="pk-badge pk-badge--info" id="badge-info">Deployment</span>
+    <span class="pk-badge pk-badge--muted" id="badge-muted">still counting</span>
+
+    <!-- the trace-detail overlay's own pills: badges in all but class name -->
+    <span class="pk-gantt-kind server" id="kind-server">server</span>
+    <span class="pk-gantt-kind client" id="kind-client">client</span>
+    <span class="pk-gantt-kind internal" id="kind-internal">internal</span>
+    <span class="pk-gantt-kind producer" id="kind-producer">producer</span>
+    <span class="pk-tag-badge" id="tag-badge"><span class="key" id="tag-badge-key">http.method</span>=<span class="value">GET</span></span>
+    <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
 
     <div class="pk-group" id="group">
         <button class="pk-group__header" id="group-header" aria-expanded="false" aria-controls="group-list">

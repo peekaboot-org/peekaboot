@@ -267,13 +267,14 @@ Each of these has been broken at least once and caught only in review. Keep them
 
 - **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text color
   on the page background.** All four are tuned as fill colors; as text on `--pk-bg` they
-  measure 2.9:1, 3.3:1, 2.6:1 and 3.7:1 — all under WCAG AA. Every one has a `-text`
+  measure 2.9:1, 3.3:1, 2.6:1 and 3.0:1 — all under WCAG AA. Every one has a `-text`
   counterpart (`--pk-warning-text`, `--pk-success-text`, `--pk-primary-text`,
   `--pk-info-text`) tuned against `--pk-bg`, `--pk-bg-alt` *and* `--pk-bg-hover` in both
   themes; reach for those. `--pk-primary-text` is also what focus rings and the
   selected-tab underline use, so they clear 1.4.11's 3:1 for non-text UI.
   `--pk-danger` and `--pk-purple` are the two exceptions that are dark enough to double
-  as text colors (4.8:1 and 5.7:1), which is why they have no `-text` variant.
+  as text colors (5.3:1 and 5.7:1) — down to 4.7:1 for danger on `--pk-bg-hover`, still
+  AA — which is why they have no `-text` variant.
 - **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`,
   `--pk-info`) needs its own on-colour token as foreground** — `--pk-on-success`,
   `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info` respectively.

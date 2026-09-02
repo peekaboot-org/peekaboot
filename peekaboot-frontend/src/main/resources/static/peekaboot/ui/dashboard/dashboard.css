@@ -148,10 +148,9 @@
     animation: pk-spin 1s linear infinite;
 }
 
-/* Error banner. Background tint is 0.04 alpha: danger-red text on a 0.1 tint
-   measures 4.13:1 in light theme, under AA's 4.5:1 (dark is fine at 5.33:1);
-   0.04 clears both (4.54:1 light, 5.54:1 dark) without a token for "danger,
-   but tuned for text-on-tint". */
+/* Error banner. Background tint is 0.04 alpha, faint enough that the danger-red
+   text keeps clear AA headroom in both themes (4.99:1 light, 5.54:1 dark) without
+   a token for "danger, but tuned for text-on-tint". */
 .pk-error-banner {
     background: rgba(220, 38, 38, 0.04);
     border: 1px solid var(--pk-danger);
@@ -252,7 +251,8 @@
 .pk-health:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
 .pk-health--down { border-left-color: var(--pk-danger); }
 /* The text-tuned amber, not the fill: as a state stripe --pk-warning is 2.94:1 on
-   --pk-bg, under 1.4.11's 3:1 for non-text indicators. --pk-warning-text is 4.92:1. */
+   --pk-bg, under 1.4.11's 3:1 for non-text indicators. --pk-warning-text is 5.28:1.
+   The --unknown dots below make the same trade for the same reason. */
 .pk-health--unknown { border-left-color: var(--pk-warning-text); }
 .pk-health__status { display: flex; align-items: center; gap: var(--pk-space-sm); }
 .pk-health__dot {
@@ -263,7 +263,7 @@
     animation: pk-pulse 2s ease-in-out infinite;
 }
 .pk-health__dot--down { background: var(--pk-danger); animation: none; }
-.pk-health__dot--unknown { background: var(--pk-warning); animation: none; }
+.pk-health__dot--unknown { background: var(--pk-warning-text); animation: none; }
 @keyframes pk-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
@@ -288,18 +288,10 @@
 .pk-component-grid__name { font-weight: 600; font-size: var(--pk-text-sm); color: var(--pk-text-strong); }
 .pk-component-grid__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pk-success); }
 .pk-component-grid__dot--down { background: var(--pk-danger); }
-.pk-component-grid__dot--unknown { background: var(--pk-warning); }
+.pk-component-grid__dot--unknown { background: var(--pk-warning-text); }
 .pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); word-break: break-word; white-space: pre-line; }
 
 /* DataSources */
-.pk-datasources {
-    display: grid;
-    gap: var(--pk-space-md);
-    grid-template-columns: 1fr;
-}
-@media (min-width: 768px) {
-    .pk-datasources { grid-template-columns: repeat(2, 1fr); }
-}
 .pk-datasources__toggle { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params[hidden] { display: none; }
@@ -309,7 +301,7 @@
    primitive rather than a bespoke tint: a --pk-primary-light fill with --pk-primary
    text measures 4.23:1 in light theme, under AA's 4.5:1 for this text size, and a
    tint pairing has to be re-proved every time the palette moves. --pk-badge--info's --pk-on-info foreground is contrast-tuned
-   by construction (4.77:1 light / 9.38:1 dark). */
+   by construction (6.22:1 light / 9.38:1 dark). */
 .pk-profiles {
     display: flex;
     flex-wrap: wrap;
