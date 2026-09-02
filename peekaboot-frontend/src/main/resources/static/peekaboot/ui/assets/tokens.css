@@ -13,7 +13,7 @@
 
    --pk-info does not borrow --pk-primary. The pill it actually sits beside
    in the health panel is --pk-success, so that is the hue it has to clear:
-   it is held ~47° off it (light) / ~64° (dark), far enough that an INFO pill
+   it is held ~51° off it (light) / ~64° (dark), far enough that an INFO pill
    and an UP pill cannot be confused at pill size. */
 :root, :host {
     --pk-bg: #ffffff;
@@ -25,7 +25,7 @@
     --pk-text-strong: #111827;
     --pk-primary: #66b327;      /* the mark's green, straight off the artwork */
     --pk-primary-light: #eef8e6;
-    --pk-info: #17a2b8;         /* sits in the fill ladder between success and warning */
+    --pk-info: #0e7490;         /* deep tier like --pk-danger/--pk-purple: carries white ink */
     --pk-success: #16a34a;
     --pk-warning: #ca8a04;
     --pk-danger: #d21f1f;       /* dark enough to double as text: 4.73:1 on --pk-bg-hover */
@@ -36,7 +36,7 @@
     --pk-on-primary: #0d1117;   /* 7.25:1 on --pk-primary */
     --pk-danger-soft: #fecaca;  /* the 4xx pill: a client error is not a server error */
     --pk-on-danger-soft: #7f1d1d; /* 6.93:1 on --pk-danger-soft */
-    --pk-on-info:    #0d1117;   /* 6.22:1 on --pk-info */
+    --pk-on-info:    #ffffff;   /* 5.36:1 on --pk-info */
     --pk-on-purple:  #ffffff;   /* 5.70:1 on --pk-purple */
     --pk-primary-text: #447718; /* 5.39:1 on --pk-bg, 5.06:1 on --pk-bg-alt, 4.80:1 on --pk-bg-hover */
     --pk-info-text:    #0a6e7f; /* 5.92:1 on --pk-bg, 5.56:1 on --pk-bg-alt, 5.27:1 on --pk-bg-hover */

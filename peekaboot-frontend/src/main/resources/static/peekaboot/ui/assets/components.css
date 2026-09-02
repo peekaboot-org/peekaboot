@@ -2,10 +2,12 @@
    the toolbar and trace-detail shadow roots. */
 
 /* Badge — one pill, six semantic variants. Each variant uses its own
-   on-colour token: --pk-warning/--pk-success/--pk-info are fill-tuned,
-   not text-tuned, so white text on them fails WCAG AA (2.6-3.3:1) — the
-   --pk-on-* inks clear it (5.3-9.9:1 across both themes). Matches the
-   ink/fill choice trace-detail.js already makes for its own status pills.
+   on-colour token: --pk-warning/--pk-success (and every dark-theme fill)
+   are fill-tuned, not text-tuned, so white text on them fails WCAG AA
+   (2.6-3.3:1) — the --pk-on-* inks clear it (5.3-9.9:1 across both
+   themes). Light --pk-info sits in the deep tier beside --pk-danger and
+   carries white ink instead of the dark ink of the bright fills. Matches
+   the ink/fill choice trace-detail.js already makes for its status pills.
 
    --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
    would sit beside a green --pk-success UP pill and read as the same state.
