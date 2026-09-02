@@ -1,6 +1,7 @@
 package org.peekaboot.backend.controller;
 
 import java.util.Locale;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.UiTracingProperties;
@@ -18,7 +19,6 @@ import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.Nullable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

@@ -9,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.HttpExchange;
 import org.peekaboot.backend.domain.trace.QueryInfo;
@@ -28,7 +29,6 @@ import org.peekaboot.backend.tracing.store.TraceBucket;
 import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
-import org.springframework.lang.Nullable;
 
 public class TraceInsightsService {
 
