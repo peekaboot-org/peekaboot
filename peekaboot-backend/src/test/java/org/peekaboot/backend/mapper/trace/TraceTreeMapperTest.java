@@ -448,7 +448,7 @@ class TraceTreeMapperTest {
 
     @Test
     void map_shouldHandleEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
 
         TraceTree result = mapper.map(traceData, false);
 
@@ -496,7 +496,7 @@ class TraceTreeMapperTest {
 
     @Test
     void map_carriesTheTruncatedFlagEvenForAnEmptyTrace() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
 
         TraceTree result = mapper.map(traceData, true);
 

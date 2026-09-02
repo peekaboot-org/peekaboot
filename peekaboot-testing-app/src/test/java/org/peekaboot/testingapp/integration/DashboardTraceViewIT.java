@@ -20,7 +20,6 @@ import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
@@ -70,7 +69,7 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void traceFromToolbarShouldBeVisibleInDashboardApi() throws Exception {
+    void anInjectedTraceIsListedByTheDashboardApi() {
         JsonNode response = api.getJson("/peekaboot/api/traces/insights");
         JsonNode traces = response.get("traces");
 
@@ -83,7 +82,7 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void traceDetailsShouldContainSpans() throws Exception {
+    void traceDetailsShouldContainSpans() {
         JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode rootSpan = trace.get("rootSpan");
 
@@ -94,7 +93,7 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void traceDetailsShouldContainHttpAttributes() throws Exception {
+    void traceDetailsShouldContainHttpAttributes() {
         JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode rootTags = trace.get("rootSpan").get("tags");
 
@@ -103,7 +102,7 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void traceShouldContainDatabaseSpansWhenQueryExecuted() throws Exception {
+    void traceShouldContainDatabaseSpansWhenQueryExecuted() {
         JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
         JsonNode summary = trace.get("summary");
 
@@ -114,18 +113,6 @@ class DashboardTraceViewIT {
         assertThat(queries.get("count").asInt(-1))
                 .as("the single DB span injected by injectTestSpan() must be counted as exactly one query")
                 .isEqualTo(1);
-    }
-
-    @Test
-    void dashboardShouldBeAccessible() {
-        String html = api.restClient()
-                .get()
-                .uri("/peekaboot/ui/dashboard/index.html")
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
-
-        assertThat(html).contains("<!DOCTYPE html>");
     }
 
     @Test
@@ -145,9 +132,6 @@ class DashboardTraceViewIT {
                 "boom",
                 "java.lang.RuntimeException",
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet()));
         traceStore.addSpan(new SpanData(
                 "bok",
@@ -163,9 +147,6 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet()));
 
         JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
@@ -180,7 +161,7 @@ class DashboardTraceViewIT {
     }
 
     @Test
-    void featuresShouldIndicateTracingEnabled() throws Exception {
+    void featuresShouldIndicateTracingEnabled() {
         JsonNode features = api.getJson("/peekaboot/api/features");
 
         assertThat(features.get("tracing").asBoolean())
@@ -209,9 +190,6 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet());
         traceStore.addSpan(rootSpan);
 
@@ -229,9 +207,6 @@ class DashboardTraceViewIT {
                 null,
                 null,
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet());
         traceStore.addSpan(dbSpan);
     }

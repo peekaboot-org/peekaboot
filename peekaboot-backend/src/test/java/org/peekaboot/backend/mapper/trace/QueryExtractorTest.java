@@ -261,14 +261,14 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldHandleTraceWithNullSpans() {
-        var traceData = new TraceData("trace1", null, null, null, 0, null);
+        var traceData = new TraceData("trace1", null, null, null, null);
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }
 
     @Test
     void extract_shouldHandleTraceWithEmptySpans() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }

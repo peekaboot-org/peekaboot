@@ -122,9 +122,6 @@ public class OtelSpanExporter implements SpanExporter {
                 errorMessage,
                 errorClass,
                 serviceName,
-                null,
-                null,
-                List.of(),
                 creationOrder.incrementAndGet());
     }
 

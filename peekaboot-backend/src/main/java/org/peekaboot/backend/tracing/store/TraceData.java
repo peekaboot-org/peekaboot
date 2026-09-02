@@ -5,18 +5,12 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
-public record TraceData(
-        String traceId,
-        Instant startTime,
-        Instant endTime,
-        Duration duration,
-        int spanCount,
-        List<SpanData> spans
-) {
+/** @param spans in creation order, whatever order {@link #fromSpans} was handed them in */
+public record TraceData(String traceId, Instant startTime, Instant endTime, Duration duration, List<SpanData> spans) {
 
     public static TraceData fromSpans(String traceId, List<SpanData> spans) {
         if (spans == null || spans.isEmpty()) {
-            return new TraceData(traceId, null, null, null, 0, List.of());
+            return new TraceData(traceId, null, null, null, List.of());
         }
 
         List<SpanData> sortedSpans = spans.stream()
@@ -37,14 +31,6 @@ public record TraceData(
 
         Duration dur = (start != null && end != null) ? Duration.between(start, end) : null;
 
-        return new TraceData(traceId, start, end, dur, sortedSpans.size(), sortedSpans);
-    }
-
-    public boolean isComplete() {
-        return spans != null && spans.stream().allMatch(SpanData::isComplete);
-    }
-
-    public boolean hasErrors() {
-        return spans != null && spans.stream().anyMatch(SpanData::hasError);
+        return new TraceData(traceId, start, end, dur, sortedSpans);
     }
 }

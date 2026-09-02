@@ -146,9 +146,6 @@ public final class Spans {
                     errorMessage,
                     errorClass,
                     remoteServiceName,
-                    null,
-                    null,
-                    List.of(),
                     creationOrder);
         }
     }
