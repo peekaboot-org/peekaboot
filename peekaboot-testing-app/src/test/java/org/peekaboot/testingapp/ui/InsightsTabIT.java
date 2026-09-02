@@ -7,6 +7,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -549,5 +550,48 @@ class InsightsTabIT extends PlaywrightTestBase {
                 + ".forEach(button => button.click())");
 
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+    }
+
+    /**
+     * An init() that fails after the stream is opened leaves the reconnect flag set - the
+     * dead stream's error event sets it - and teardown() has to clear it with everything
+     * else. Otherwise the retry's brand-new stream resyncs on its very first open, before
+     * a single delta has been missed: a redundant round trip against a mirror that was
+     * just filled. The extra fetch of the restart markers is what that resync is visible
+     * as, so the retry is expected to ask for them exactly once, its own load.
+     *
+     * <p>The failure is provoked by blocking the stream (the flag) and the level-0
+     * snapshot (the throw), and the assertion waits for a live tick first: a tick can
+     * only arrive after the open the spurious resync would have ridden on.
+     */
+    @Test
+    void aStreamThatDiedDuringAFailedInitDoesNotMakeTheRetryResyncOnItsFirstOpen() {
+        List<String> initFailures = new ArrayList<>();
+        page.onConsoleMessage(message -> {
+            if (message.text().contains("Insights tab failed to initialise")) initFailures.add(message.text());
+        });
+        page.route("**/api/insights/stream", route -> route.abort());
+        page.route("**/api/insights/data**", route -> route.abort());
+
+        openDashboard();
+        page.click("#insights-tab-btn");
+        page.waitForCondition(() -> !initFailures.isEmpty());
+
+        page.unroute("**/api/insights/data**");
+        page.unroute("**/api/insights/stream");
+        List<String> markerLoads = new ArrayList<>();
+        page.onRequest(request -> {
+            if (request.url().contains("/api/lifecycle/events")) markerLoads.add(request.url());
+        });
+
+        page.click("#overview-tab-btn");
+        page.click("#insights-tab-btn");
+        String readout = "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .pk-insight-current";
+        page.waitForFunction(
+                "(selector) => document.querySelector(selector)?.classList.contains('pk-blink')",
+                readout,
+                new Page.WaitForFunctionOptions().setTimeout(15000));
+
+        assertThat(markerLoads).hasSize(1);
     }
 }

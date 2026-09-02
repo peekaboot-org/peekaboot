@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
 import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
@@ -650,6 +651,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * duration, and the gantt header's tick marks line up with the row tracks below
      * them - both track and header timeline carry the same side margin, so the 0%/100%
      * ticks sit right above the start/end of the bars they describe rather than further out.
+     *
+     * <p>The leftmost tick is the axis origin, the trace's own start: it reads "0ms"
+     * rather than the "&lt;1ms" formatDurationMs() gives any sub-millisecond duration,
+     * because no duration is being measured there at all.
      */
     @Test
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
@@ -661,6 +666,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat((Boolean) allDurationsMatchPattern)
                 .as("every duration cell reads '<duration> \u00B7 <pct>%'")
                 .isTrue();
+
+        String originTick =
+                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-header__timeline span').textContent");
+        assertThat(originTick)
+                .as("the axis origin is the trace's start, not a sub-millisecond measurement")
+                .isEqualTo("0ms");
 
         BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
                 .boundingBox();
@@ -858,12 +869,19 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * A host page whose CSP omits style-src 'unsafe-inline' drops every style attribute
-     * written through innerHTML, but not CSSOM writes (element.style) - which is why the
-     * toolbar's own positioning avoids inline attributes. The gantt has to survive the
-     * same policy: its bar positions and row indents are the whole chart. The policy is
-     * applied by adding the header to the real dashboard response (its body is untouched),
-     * and a depth-1 row's indent is the observable that a dropped attribute would zero.
+     * A CSP that omits style-src 'unsafe-inline' drops every style attribute written
+     * through innerHTML, but not CSSOM writes (element.style). The gantt has to survive
+     * that policy: its bar positions and row indents are the whole chart, and it sets
+     * them through the CSSOM for exactly this reason. The policy is applied by adding the
+     * header to the real dashboard response (its body is untouched), so the dashboard
+     * document and the overlay it opens are what runs under it - the toolbar's own page
+     * is served before the route is installed and is not covered here.
+     *
+     * <p>Two positive controls keep the test from passing with no policy in force at all:
+     * the header is asserted on the navigation response, and a probe element whose style
+     * arrives as a parsed attribute is asserted not to take the width it asks for. The
+     * probe runs last, since the violation it provokes is the one console message this
+     * test does expect.
      */
     @Test
     void ganttSurvivesAHostPageWhoseCspForbidsInlineStyles() {
@@ -880,9 +898,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
             route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
         });
 
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-gantt-row[data-depth='1']");
 
+        assertThat(navigation.headers())
+                .as("the policy reached the document under test")
+                .containsEntry("content-security-policy", "style-src 'self'");
         assertThat(
                         overlay.evaluate(
                                 "root => getComputedStyle(root.querySelector('.pk-gantt-row[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
@@ -895,6 +916,21 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .as("the root span's bar spans its track")
                 .isTrue();
         assertThat(cspViolations).isEmpty();
+
+        // style-src-attr falls back to style-src, so a parsed style attribute is refused
+        // while the element.style writes the gantt uses go through.
+        assertThat(page.evaluate("""
+                        () => {
+                            const probe = document.createElement('div');
+                            probe.setAttribute('style', 'width: 99px');
+                            document.body.appendChild(probe);
+                            const width = getComputedStyle(probe).width;
+                            probe.remove();
+                            return width;
+                        }
+                        """))
+                .as("a style attribute is dropped, so the policy is in force")
+                .isNotEqualTo("99px");
     }
 
     /**

@@ -268,6 +268,20 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 """)).isEqualTo("pk-table-scroll|pk-table pk-x|col:A,col:B|1");
     }
 
+    /**
+     * badgeHtml() writes its variant straight into a class attribute of markup bound for
+     * innerHTML, so the variant is whitelisted against the set components.css styles
+     * rather than trusted. Anything else falls back to the neutral pill, which is also
+     * what an unstyled variant would have looked like.
+     */
+    @Test
+    void badgeHtmlFallsBackToTheNeutralVariantForOneItDoesNotKnow() {
+        assertThat(evalBuilders("return m.badgeHtml('UP', 'error-soft');"))
+                .isEqualTo("<span class=\"pk-badge pk-badge--error-soft\">UP</span>");
+        assertThat(evalBuilders("return m.badgeHtml('UP', '\" onclick=\"alert(1)');"))
+                .isEqualTo("<span class=\"pk-badge pk-badge--muted\">UP</span>");
+    }
+
     /** The string builders are the ones that reach innerHTML, so they escape like badge() does. */
     @Test
     void stringBuildersEscapeTheirText() {

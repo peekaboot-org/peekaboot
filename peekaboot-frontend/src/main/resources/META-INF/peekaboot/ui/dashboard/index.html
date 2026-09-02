@@ -6,19 +6,9 @@
     <meta name="robots" content="noindex">
     <title>peekaboot</title>
     <!-- Stamps the theme before the stylesheets apply, so a dark-theme reader never sees
-         the light palette painted first. The same resolution as shared/theme.js's
-         resolveTheme(), which cannot run this early: a module script is deferred past
-         first paint. -->
-    <script>
-        (function () {
-            var stored = null;
-            try { stored = localStorage.getItem('peekaboot-theme'); } catch (e) { /* storage blocked */ }
-            var theme = stored === 'light' || stored === 'dark'
-                ? stored
-                : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
-    </script>
+         the light palette painted first. Classic and non-deferred on purpose: it has to
+         run ahead of first paint, which a module script does not. -->
+    <script src="../assets/theme-boot.js"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
     <link rel="stylesheet" href="../assets/tokens.css">

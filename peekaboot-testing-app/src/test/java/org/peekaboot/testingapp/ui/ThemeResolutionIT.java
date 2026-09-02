@@ -2,8 +2,13 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.ColorScheme;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class ThemeResolutionIT extends PlaywrightTestBase {
@@ -139,10 +144,10 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
     /**
      * A dark-theme reader would otherwise see the light palette painted first on every
-     * load: the module script that resolves the theme is deferred past first paint. The
-     * inline script in index.html's head stamps data-theme before the stylesheets apply.
-     * main.js is refused here (a real network failure), so whatever the attribute says
-     * was set by that script alone.
+     * load: the module script that resolves the theme is deferred past first paint.
+     * assets/theme-boot.js, linked from index.html's head, stamps data-theme before the
+     * stylesheets apply. main.js is refused here (a real network failure), so whatever
+     * the attribute says was set by that script alone.
      */
     @Test
     void storedThemeIsStampedBeforeTheModuleScriptRuns() {
@@ -162,6 +167,34 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
 
+        assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+    }
+
+    /**
+     * A host that puts script-src 'self' in front of /peekaboot/** drops every inline
+     * script, so the pre-paint resolution has to arrive as a file the policy allows -
+     * otherwise the light flash comes back for exactly the readers who hardened their
+     * deployment. The policy is applied by adding the header to the real dashboard
+     * response; asserting it round-tripped keeps the test from passing with no policy in
+     * force at all.
+     */
+    @Test
+    void theThemeIsStampedBeforeTheModuleScriptRunsUnderAScriptSrcCsp() {
+        setStoredTheme("dark");
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        page.route("**/dashboard/main.js", route -> route.abort());
+        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
+            APIResponse response = route.fetch();
+            Map<String, String> headers = new HashMap<>(response.headers());
+            headers.put("content-security-policy", "script-src 'self'");
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
+        });
+
+        Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        assertThat(navigation.headers())
+                .as("the policy reached the document under test")
+                .containsEntry("content-security-policy", "script-src 'self'");
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
     }
 }

@@ -25,8 +25,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Autowired
     private DataSource dataSource;
 
-    /** The page size traces.js asks for, read off its own request rather than mirrored. */
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
+
+    /** Mirrors the limit traces.js sends with every listing request. */
+    private static final int TRACES_PAGE_SIZE = 50;
 
     @Test
     void overviewShowsJavaAndSystemCards() {
@@ -513,7 +515,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
         int listedCount = errorsBucket.path("traces").size();
 
         assertThat(errorsCount).isPositive().isLessThan(counts.path("all").asInt());
-        assertThat(listedCount).isEqualTo(Math.min(errorsCount, pageSizeOf(errorsResponse)));
+        assertThat(pageSizeOf(errorsResponse))
+                .as("mirrors the page size traces.js is written with")
+                .isEqualTo(TRACES_PAGE_SIZE);
+        assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
                 listedCount);
@@ -771,14 +776,6 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * type's own chip reveals them and lands in the URL (#traces?type=CONNECTION_POOL),
      * so the revealed view stays shareable while old typed links keep their meaning.
      */
-    private static int pageSizeOf(Response listing) {
-        Matcher matcher = TRACES_PAGE_SIZE_PARAM.matcher(listing.url());
-        assertThat(matcher.find())
-                .as("traces.js names its page size: %s", listing.url())
-                .isTrue();
-        return Integer.parseInt(matcher.group(1));
-    }
-
     @Test
     void connectionPoolTracesAreHiddenByDefaultAndRevealedByTheirChip() throws SQLException {
         // What an external health probe or HikariCP maintenance does: acquire a pooled
@@ -803,5 +800,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
         assertThat(page.url()).endsWith("#traces?type=CONNECTION_POOL");
         page.waitForSelector("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']");
+    }
+
+    /** The page size traces.js asked the listing endpoint for. */
+    private static int pageSizeOf(Response listing) {
+        Matcher matcher = TRACES_PAGE_SIZE_PARAM.matcher(listing.url());
+        assertThat(matcher.find())
+                .as("traces.js names its page size: %s", listing.url())
+                .isTrue();
+        return Integer.parseInt(matcher.group(1));
     }
 }

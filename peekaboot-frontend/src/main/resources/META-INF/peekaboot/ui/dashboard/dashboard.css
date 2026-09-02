@@ -149,7 +149,7 @@
 /* Error banner. The tint is faint enough (0.04 alpha) that the danger-red text keeps
    clear AA headroom in both themes (4.99:1 light, 5.54:1 dark). */
 .pk-error-banner {
-    background: var(--pk-danger-tint);
+    background: var(--pk-danger-tint, rgba(210, 31, 31, 0.04));
     border: 1px solid var(--pk-danger);
     border-radius: var(--pk-radius);
     padding: var(--pk-space-md);
@@ -414,7 +414,7 @@
 .pk-task__target-row { margin-top: var(--pk-space-sm); }
 .pk-task__target { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 /* Same tint as .pk-error-banner, for the same AA-contrast reason (see there). */
-.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: var(--pk-danger-tint); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
+.pk-task__exception { margin-top: var(--pk-space-sm); padding: var(--pk-space-sm); background: var(--pk-danger-tint, rgba(210, 31, 31, 0.04)); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-danger); word-break: break-word; }
 .pk-task__exception-label { font-weight: 600; color: var(--pk-danger); }
 @media (max-width: 767px) {
     .pk-task__row { flex-direction: column; align-items: flex-start; gap: var(--pk-space-sm); }

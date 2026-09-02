@@ -15,6 +15,7 @@ No build step. Plain ES modules and CSS, served as-is.
 ```
 META-INF/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css — the shared design system
+│                    theme-boot.js — the dashboard's pre-paint theme stamp
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png — the icon set
 ├── shared/          api.js, components.js, copyable.js, filtered-group-tab.js, format.js,
 │                    http-status.js, markup.js, root-actions.js, severity.js,
@@ -261,11 +262,15 @@ whatever the dashboard's theme toggle last wrote, with no message-passing needed
 preference changing and another tab/surface writing the storage key, and returns an
 unsubscribe function.
 
-The dashboard stamps `data-theme` once more, before any of this: an inline script at
-the top of `index.html`'s `<head>` performs the same resolution (same storage key, same
-OS fallback) before the stylesheets apply, because `main.js` is a module script and so
-runs after first paint — without it a dark-theme reader saw the light palette flash on
-every load. It is the one piece of theme logic `theme.js` does not own.
+The dashboard stamps `data-theme` once more, before any of this: `assets/theme-boot.js`,
+linked from the top of `index.html`'s `<head>`, performs the same resolution (same
+storage key, same OS fallback) before the stylesheets apply, because `main.js` is a
+module script and so runs after first paint — without it a dark-theme reader saw the
+light palette flash on every load. It is the one piece of theme logic `theme.js` does
+not own. It is linked as a **classic, non-deferred** script rather than written inline:
+a module would run after first paint, and an inline block is dropped by a host whose CSP
+omits `script-src 'unsafe-inline'` — the same class of policy the overlay's gantt is
+hardened against on the style side.
 
 `applyTheme(target, theme)` just does `target.setAttribute('data-theme', theme)`. The
 dashboard applies it to `document.documentElement`; the toolbar and overlay apply it to
