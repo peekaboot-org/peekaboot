@@ -69,22 +69,26 @@ class ActuatorMaskingIT {
 
     /**
      * {@code ConfigMapper} masks inside a {@code @ConfigurationProperties} bean's nested
-     * Map/List values before flattening them to text: flattened first with {@code
-     * Object.toString()}, a sensitive key nested inside the tree (e.g. {@code
-     * registration.google.client-secret}) would never reach {@code isSensitiveKey} - only
-     * the flattened text would, and that text matches no value pattern. {@code
+     * Map/List values and then flattens the tree to one dotted-key property per leaf:
+     * masked first, a sensitive key nested inside the tree (e.g. {@code
+     * registration.google.client-secret}) reaches {@code isSensitiveKey} as a real key
+     * and arrives as its own masked property, filterable like any flat one. {@code
      * NestedConfigPropertiesFixture} provides that nesting.
      */
     @Test
     void insightsEndpointMasksASensitiveKeyNestedInsideAConfigurationPropertiesTree() {
         JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
 
-        JsonNode registrationProperty = findConfigInfoProperty(config, "registration");
-        assertThat(registrationProperty)
-                .as("the nested-fixture.registration property must be present in /configprops")
+        JsonNode clientSecret = findConfigInfoProperty(config, "registration.google.client-secret");
+        assertThat(clientSecret)
+                .as("the nested fixture's client-secret must arrive as its own dotted-key property")
                 .isNotNull();
-        String value = registrationProperty.path("value").asString();
-        assertThat(value).contains("client-secret=******");
-        assertThat(value).doesNotContain("fixture-client-secret");
+        assertThat(clientSecret.path("value").asString()).isEqualTo("******");
+
+        JsonNode clientId = findConfigInfoProperty(config, "registration.google.client-id");
+        assertThat(clientId)
+                .as("the innocuous sibling leaf keeps its value under its own dotted key")
+                .isNotNull();
+        assertThat(clientId.path("value").asString()).isEqualTo("fixture-client-id");
     }
 }
