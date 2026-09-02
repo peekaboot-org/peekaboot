@@ -162,6 +162,34 @@
 
     <build>
         <plugins>
+            <!-- Every @ConfigurationProperties class lives here, so this file is what the
+                 IDE reads to complete and document peekaboot's settings. It exists only
+                 while spring-boot-configuration-processor runs, which the parent's
+                 <proc>full</proc> and annotationProcessorPaths keep true; losing either
+                 would otherwise ship a jar with no metadata and nothing would say so. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>require-configuration-metadata</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireFilesExist>
+                                    <files>
+                                        <file>${project.build.outputDirectory}/META-INF/spring-configuration-metadata.json</file>
+                                    </files>
+                                    <message>The configuration processor produced no metadata. It runs through the parent POM's &lt;proc&gt;full&lt;/proc&gt; and annotationProcessorPaths; check both before changing anything else.</message>
+                                </requireFilesExist>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- resolves org.mockito:mockito-core:jar to its local repo path so
                  surefire can register it as a Java agent below, avoiding the
                  inline-mock-maker's self-attach warning -->

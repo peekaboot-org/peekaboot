@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
+import org.jspecify.annotations.Nullable;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
 import org.peekaboot.backend.domain.metrics.MetricMeasurement;
@@ -17,7 +18,6 @@ import org.peekaboot.backend.domain.metrics.MetricStatistic;
 import org.peekaboot.backend.domain.metrics.MetricsInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TagMasker;
-import org.springframework.lang.Nullable;
 
 public class MetricsService {
 

@@ -12,9 +12,9 @@ final class ContextEvents {
 
     private ContextEvents() {}
 
-    // CompareObjectsWithEquals: identity is the point - the very context the listener
-    // belongs to, not one that happens to compare equal
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
+    // Identity is the point - the very context the listener belongs to, not one that
+    // happens to compare equal.
+    @SuppressWarnings({"PMD.CompareObjectsWithEquals", "ReferenceEquality"})
     static boolean fromOwnContext(ApplicationContextEvent event, ApplicationContext ownContext) {
         return event.getApplicationContext() == ownContext;
     }

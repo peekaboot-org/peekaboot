@@ -5,7 +5,11 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 
-/** @param spans in creation order, whatever order {@link #fromSpans} was handed them in */
+/**
+ * A trace as the store holds it: the spans captured for it and the window they cover.
+ *
+ * @param spans in creation order, whatever order {@link #fromSpans} was handed them in
+ */
 public record TraceData(String traceId, Instant startTime, Instant endTime, Duration duration, List<SpanData> spans) {
 
     public static TraceData fromSpans(String traceId, List<SpanData> spans) {

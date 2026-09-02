@@ -10,9 +10,10 @@ import tools.jackson.databind.ObjectWriter;
 public class ToolbarDataProvider {
 
     /**
-     * The blob sits verbatim inside a script element, so beyond JSON's own escapes {@code <}
-     * and {@code >} are written as {@code \u003c}/{@code \u003e}: a literal
-     * {@code </script>} in a request path would otherwise end the element and inject markup.
+     * The blob sits verbatim inside a script element, so beyond JSON's own escapes
+     * {@code <} and {@code >} are written as the unicode escapes {@code ScriptSafeEscapes}
+     * holds: a literal {@code </script>} in a request path would otherwise end the element
+     * and inject markup.
      */
     private static final ObjectWriter WRITER = PeekabootJson.MAPPER.writer().with(new ScriptSafeEscapes());
 
@@ -23,6 +24,8 @@ public class ToolbarDataProvider {
     record IdleMode(boolean idle, String basePath) {}
 
     /**
+     * What the bar shows for a page that came out of a traced request.
+     *
      * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
      *     prefix behind the request's context path
      */

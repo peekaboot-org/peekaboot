@@ -66,6 +66,13 @@ class ProcessInfoTest {
     }
 
     @Test
+    void procStatusId_isNullWhenTheLineCarriesNoId(@TempDir Path dir) throws IOException {
+        Path status = Files.writeString(dir.resolve("status"), "Name:\tjava\nUid:\n");
+
+        assertThat(ProcessInfo.procStatusId(status, "Uid")).isNull();
+    }
+
+    @Test
     void procStatusId_isNullWhenTheFileIsMissing(@TempDir Path dir) {
         assertThat(ProcessInfo.procStatusId(dir.resolve("status"), "Uid")).isNull();
     }
