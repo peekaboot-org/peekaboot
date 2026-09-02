@@ -33,7 +33,7 @@ public class FlywayMapper {
         }
 
         // Flyway's own order is kept: versioned ascending, then repeatables. Re-sorting by a
-        // parsed version put 14-digit timestamp versions first and repeatables ahead of all.
+        // parsed version would put 14-digit timestamp versions first and repeatables ahead of all.
         return new FlywayInfo(migrations);
     }
 

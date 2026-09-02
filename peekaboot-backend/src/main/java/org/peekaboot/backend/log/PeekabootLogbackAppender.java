@@ -13,8 +13,8 @@ import org.springframework.context.ApplicationEventPublisher;
  *
  * <p>Every event Logback delivers is captured. The appender applies no threshold of its own:
  * it hangs off the root logger, so the levels configured under {@code logging.level.*} have
- * already decided what arrives, and a second hidden floor here only made the trace's log tab
- * disagree with the log file. Per-trace volume stays bounded by
+ * already decided what arrives, and a second floor here would only make the Logs tab disagree
+ * with the log file. Per-trace volume stays bounded by
  * {@code peekaboot.tracing.max-logs-per-trace}.
  */
 public class PeekabootLogbackAppender extends UnsynchronizedAppenderBase<ILoggingEvent> {

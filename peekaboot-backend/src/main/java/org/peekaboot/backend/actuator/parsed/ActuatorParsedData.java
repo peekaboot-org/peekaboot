@@ -1,8 +1,5 @@
 package org.peekaboot.backend.actuator.parsed;
 
-/**
- * Typed container for parsed actuator data used by insights mappers.
- */
 public record ActuatorParsedData(
         SpringInfo spring,
         HealthResponse health,

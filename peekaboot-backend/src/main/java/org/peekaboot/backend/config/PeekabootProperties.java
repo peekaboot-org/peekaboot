@@ -15,7 +15,7 @@ public class PeekabootProperties {
 
     /**
      * Injects the dev toolbar into HTML responses and turns on correlated-log and full
-     * request-detail capture; auto-detected: on for a local launch (IDE, spring-boot:run, bootRun), off otherwise.
+     * request-detail capture. Defaulted from the launch context like {@code peekaboot.enabled}.
      */
     private boolean devToolbar = false;
 
@@ -73,14 +73,13 @@ public class PeekabootProperties {
 
     /**
      * Where Peekaboot keeps the state it wants to survive a restart, and whether it
-     * keeps any at all. The starter switches this on for a local launch and off
-     * everywhere else (see PeekabootDefaultsEnvironmentPostProcessor); the {@code false}
-     * here is what remains without that detection, so an embedded dev tool that is
-     * merely on the classpath still writes nothing to disk.
+     * keeps any at all. The {@code false} is what remains without the launch-context
+     * detection, so an embedded dev tool that is merely on the classpath still writes
+     * nothing to disk.
      */
     public static class Storage {
 
-        /** Whether anything is written to disk at all; auto-detected: on for a local launch (IDE, spring-boot:run, bootRun), off otherwise. */
+        /** Whether anything is written to disk at all. Defaulted from the launch context like {@code peekaboot.enabled}. */
         private boolean enabled = false;
 
         /**

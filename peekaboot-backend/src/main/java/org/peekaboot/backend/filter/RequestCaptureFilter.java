@@ -199,13 +199,13 @@ public class RequestCaptureFilter implements Filter {
                 request.getRequestURI(),
                 maskingEngine.maskQueryString(request.getQueryString()),
                 requestHeaders,
-                null, // requestBody - not captured yet
+                null, // request bodies are not captured
                 false, // requestBodyTruncated
                 controllerClass,
                 controllerMethod,
                 queryParams,
                 formParams,
-                List.of(), // uploadedFiles - not captured yet
+                List.of(), // uploads are not captured
                 response.getStatus(),
                 responseHeaders,
                 durationMs);
