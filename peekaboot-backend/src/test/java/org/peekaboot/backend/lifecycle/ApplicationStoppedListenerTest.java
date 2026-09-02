@@ -6,7 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 

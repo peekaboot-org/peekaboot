@@ -8,9 +8,7 @@ import org.peekaboot.backend.actuator.parsed.LoggersResponse;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.domain.loggers.LoggerInfo;
 import org.peekaboot.backend.domain.loggers.LoggersInfo;
-import org.springframework.stereotype.Component;
 
-@Component
 public class LoggersMapper {
 
     public LoggersInfo map(LoggersResponse loggersData) {

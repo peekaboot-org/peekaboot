@@ -2,7 +2,6 @@ package org.peekaboot.backend.actuator.parsed;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import org.springframework.stereotype.Component;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -14,7 +13,6 @@ import tools.jackson.databind.json.JsonMapper;
  * every record at once: the records bind only what the mappers read, and a Boot release
  * adding a field must not break the parse.
  */
-@Component
 public class ActuatorResponseParser {
 
     private final ObjectMapper objectMapper;

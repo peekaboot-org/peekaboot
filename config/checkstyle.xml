@@ -14,10 +14,20 @@
         <module name="JavaNCSS"/>
         <module name="MethodLength"/>
         <!-- Methods only: constructor arity mirrors structure (DI wiring, record
-             convenience constructors), not logic complexity. -->
+             convenience constructors), not logic complexity. @Bean factory methods are
+             that same DI wiring - the parameters are the injected collaborators - so
+             they are exempt for the same reason. -->
         <module name="ParameterNumber">
             <property name="tokens" value="METHOD_DEF"/>
+            <property name="ignoreAnnotatedBy" value="Bean"/>
         </module>
         <module name="ClassFanOutComplexity"/>
+    </module>
+    <!-- PeekabootAutoConfiguration's whole job is registering the dashboard's bean
+         graph as explicit conditional @Bean methods, so it references that graph by
+         design; its logic metrics (above) stay gated. -->
+    <module name="SuppressionSingleFilter">
+        <property name="files" value="PeekabootAutoConfiguration\.java"/>
+        <property name="checks" value="ClassFanOutComplexity"/>
     </module>
 </module>

@@ -11,9 +11,7 @@ import org.peekaboot.backend.domain.runtime.OsInfo;
 import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 import org.peekaboot.backend.domain.runtime.StorageInfo;
-import org.springframework.stereotype.Component;
 
-@Component
 public class RuntimeMapper {
 
     public RuntimeInfo map(InfoResponse info, HealthResponse health) {

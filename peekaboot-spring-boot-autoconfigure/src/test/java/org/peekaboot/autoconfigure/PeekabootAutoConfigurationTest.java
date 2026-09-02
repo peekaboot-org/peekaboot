@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
+import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.service.MetricsService;
 import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -12,6 +14,8 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -51,10 +55,46 @@ class PeekabootAutoConfigurationTest {
         contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(PeekabootProperties.class);
-            // Proves the @ComponentScan actually pulls in the controller/service/
-            // mapper/config/actuator packages, not just the properties beans.
+            // Proves the explicit registrations actually wire up the whole
+            // controller/service/mapper graph, not just the properties beans.
             assertThat(context).hasSingleBean(PeekabootController.class);
         });
+    }
+
+    /**
+     * The contract behind every explicit {@code @Bean} carrying
+     * {@code @ConditionalOnMissingBean}: an application that defines its own bean under an
+     * auto-configured name wins, instead of the second definition raising
+     * {@code BeanDefinitionOverrideException}. maskingEngine covers a bean this class has
+     * always declared explicitly; metricsService covers the wider registered graph.
+     */
+    @Test
+    void userSuppliedSameNamedBeansReplaceTheDefaults() {
+        contextRunner
+                .withPropertyValues("peekaboot.enabled=true")
+                .withUserConfiguration(UserSameNamedBeansConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean("maskingEngine")).isSameAs(UserSameNamedBeansConfig.MASKING_ENGINE);
+                    assertThat(context.getBean("metricsService")).isSameAs(UserSameNamedBeansConfig.METRICS_SERVICE);
+                });
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class UserSameNamedBeansConfig {
+
+        static final MaskingEngine MASKING_ENGINE = new MaskingEngine();
+        static final MetricsService METRICS_SERVICE = new MetricsService(null, MASKING_ENGINE);
+
+        @Bean
+        MaskingEngine maskingEngine() {
+            return MASKING_ENGINE;
+        }
+
+        @Bean
+        MetricsService metricsService() {
+            return METRICS_SERVICE;
+        }
     }
 
     @Test

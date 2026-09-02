@@ -7,9 +7,7 @@ import java.util.List;
 import java.util.Locale;
 import org.peekaboot.backend.actuator.parsed.ScheduledTasksResponse;
 import org.peekaboot.backend.domain.scheduledtasks.*;
-import org.springframework.stereotype.Component;
 
-@Component
 public class ScheduledTasksMapper {
 
     private final CronDescriber cronDescriber = new CronDescriber();

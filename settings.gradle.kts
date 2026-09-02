@@ -2,6 +2,7 @@
 // their artifactIds must stay in lockstep with the root pom.xml.
 rootProject.name = "peekaboot"
 
+include("peekaboot-test-support")
 include("peekaboot-backend")
 include("peekaboot-frontend")
 include("peekaboot-spring-boot-autoconfigure")

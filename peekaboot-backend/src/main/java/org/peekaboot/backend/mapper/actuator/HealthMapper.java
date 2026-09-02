@@ -10,9 +10,7 @@ import org.peekaboot.backend.domain.health.HealthInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
-import org.springframework.stereotype.Component;
 
-@Component
 public class HealthMapper {
 
     private final TreeMasker treeMasker;

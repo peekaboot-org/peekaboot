@@ -1,4 +1,4 @@
-package org.peekaboot.backend.testsupport;
+package org.peekaboot.testsupport;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -8,8 +8,8 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Attaches a logback {@link ListAppender} to a class's logger so tests can assert on a log event
- * instead of letting it reach the console. Shared by every {@code peekaboot-backend} test that
- * exercises a deliberate WARN/DEBUG logging path. {@code AutoCloseable} so call sites use
+ * instead of letting it reach the console. Shared by every peekaboot test that exercises a
+ * deliberate WARN/DEBUG logging path. {@code AutoCloseable} so call sites use
  * try-with-resources; {@link #close()} stops the appender, detaches it, and restores the
  * logger's additivity and level to whatever they were before {@link #attach} ran.
  */

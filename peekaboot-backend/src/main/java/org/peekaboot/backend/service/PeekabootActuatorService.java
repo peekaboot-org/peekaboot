@@ -25,9 +25,7 @@ import org.springframework.boot.actuate.endpoint.web.annotation.WebEndpointDisco
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.SpringVersion;
-import org.springframework.stereotype.Service;
 
-@Service
 public final class PeekabootActuatorService {
 
     private static final Logger log = LoggerFactory.getLogger(PeekabootActuatorService.class);

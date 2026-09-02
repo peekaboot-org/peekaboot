@@ -20,8 +20,8 @@ dependencies {
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
 
-    // peekaboot-backend's test support (LogCapture)
-    testImplementation(testFixtures(project(":peekaboot-backend")))
+    // shared test support (LogCapture)
+    testImplementation(project(":peekaboot-test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-actuator")
     testImplementation("org.springframework.boot:spring-boot-starter-web")

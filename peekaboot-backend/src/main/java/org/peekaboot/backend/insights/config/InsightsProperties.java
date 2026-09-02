@@ -5,13 +5,28 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * Binds {@code peekaboot.insights.*}. The core is {@code levels}, a list of
+ * {@code {interval, size}} rings configured as
+ * {@code peekaboot.insights.levels[0].interval=10s} /
+ * {@code peekaboot.insights.levels[0].size=90} and so on, finest first. Level 0 samples
+ * every {@code interval} and keeps {@code size} entries; each coarser level aggregates
+ * the previous one, so its interval must be a whole multiple of the previous interval,
+ * and that multiple must not exceed the previous {@code size} (the roll-up window has to
+ * fit inside the previous ring). Setting the property replaces the whole default list
+ * (10s x 90, 1m x 1440, 1h x 720); {@link #validate()} enforces the rules.
+ */
 @ConfigurationProperties(prefix = "peekaboot.insights")
 public class InsightsProperties {
 
     /** Whether the collector, the /api/insights endpoints and the Insights tab exist at all; also needs a MeterRegistry bean. */
     private boolean enabled = true;
 
-    /** The sampling tick (level 0) and each aggregation window above it; every interval must be a whole multiple of the previous one. */
+    /**
+     * The ring levels, finest first ({@code levels[0].interval=10s}, {@code levels[0].size=90}, ...).
+     * Each coarser interval must be a whole multiple of the previous one, by no more than the
+     * previous size. Setting this replaces the default list (10s x 90, 1m x 1440, 1h x 720).
+     */
     private List<Level> levels = defaultLevels();
 
     /** A Spring resource location for the panel file, replacing the default lookup of peekaboot-insights.yml on the classpath root. */
@@ -153,9 +168,10 @@ public class InsightsProperties {
         }
     }
 
+    /** One ring of the {@code levels} list: {@code interval} x {@code size} is the span it covers. */
     public static class Level {
 
-        /** The sampling tick for level 0, the aggregation window for every level above it. */
+        /** The sampling tick for level 0, the aggregation window for every level above it; must be a whole multiple of the previous level's interval. */
         private Duration interval;
 
         /** Ring buffer entries kept per series at this level; interval x size is how far back the charts reach. */

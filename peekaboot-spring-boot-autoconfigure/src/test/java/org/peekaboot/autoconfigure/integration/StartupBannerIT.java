@@ -6,7 +6,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
@@ -17,7 +17,7 @@ import org.springframework.context.ConfigurableApplicationContext;
  * Boots a real application to prove the startup banner links the dashboard.
  *
  * <p>ServerUrlResolver finds the dashboard's configuration by bean name rather than by type,
- * so only a fully component-scanned context can show that the name it looks for is the name
+ * so only a fully auto-configured context can show that the name it looks for is the name
  * Spring actually registers.
  */
 class StartupBannerIT {

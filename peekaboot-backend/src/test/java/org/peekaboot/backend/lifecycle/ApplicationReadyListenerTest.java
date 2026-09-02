@@ -13,7 +13,7 @@ import javax.sql.DataSource;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.testsupport.LogCapture;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.mock.env.MockEnvironment;
 

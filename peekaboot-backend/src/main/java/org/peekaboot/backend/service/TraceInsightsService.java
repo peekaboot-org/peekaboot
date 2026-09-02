@@ -28,9 +28,7 @@ import org.peekaboot.backend.tracing.store.TraceData;
 import org.peekaboot.backend.tracing.store.TraceDataBundle;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Service;
 
-@Service
 public class TraceInsightsService {
 
     private static final TraceInsightsResponse EMPTY_RESPONSE =
