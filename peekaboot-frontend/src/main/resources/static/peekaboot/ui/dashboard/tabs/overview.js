@@ -1,7 +1,7 @@
 /**
  * The "Overview" tab: the insights stat-tile row, build/git/Spring/Java/OS/machine/JVM
- * info cards, the DataSources grid, the memory/storage usage meters and the health
- * banner + component grid.
+ * info + datasource cards, the memory/storage usage meters and the health banner +
+ * component grid.
  */
 import {kvRow, badge, meter} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
@@ -232,24 +232,20 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
     if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
 }
 
+/**
+ * Datasource cards join the main card grid right after JVM Defaults, so a single
+ * datasource sits beside it in the two-column layout and further ones flow on in
+ * grid order. Rebuilt from scratch on every refresh cycle.
+ */
 function renderDataSourcesInfo(container, dataSources) {
-    const wrapper = container.querySelector('#datasources-container');
-    wrapper.innerHTML = '';
-
-    if (!dataSources || dataSources.length === 0) {
-        wrapper.classList.add('hidden');
-        return;
-    }
-    wrapper.classList.remove('hidden');
-
-    dataSources.forEach(ds => {
-        wrapper.appendChild(renderDataSourceCard(ds));
-    });
+    container.querySelectorAll('.pk-card[data-datasource]').forEach(card => card.remove());
+    container.querySelector('#jvm-defaults-card').after(...(dataSources ?? []).map(renderDataSourceCard));
 }
 
 function renderDataSourceCard(ds) {
     const card = document.createElement('div');
     card.className = 'pk-card';
+    card.dataset.datasource = ds.name || 'DataSource';
 
     const header = document.createElement('div');
     header.className = 'pk-card__header';

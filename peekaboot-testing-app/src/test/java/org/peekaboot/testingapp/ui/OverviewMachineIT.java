@@ -39,4 +39,18 @@ class OverviewMachineIT extends PlaywrightTestBase {
         // render a second copy
         assertThat(page.textContent("#jvm-defaults-info")).doesNotContain("CPU Cores");
     }
+
+    @Test
+    void datasourceCardSitsBesideJvmDefaultsInTheCardGrid() {
+        openDashboard();
+        page.waitForSelector(".pk-grid > .pk-card[data-datasource]");
+
+        // the two-column card grid pairs grid neighbours, so the first datasource card
+        // has to follow JVM Defaults in DOM order to land beside it
+        Object neighbour = page.evaluate(
+                "() => document.querySelector('#jvm-defaults-card').nextElementSibling?.dataset.datasource ?? null");
+        assertThat(neighbour)
+                .as("the first datasource card directly follows the JVM Defaults card")
+                .isNotNull();
+    }
 }
