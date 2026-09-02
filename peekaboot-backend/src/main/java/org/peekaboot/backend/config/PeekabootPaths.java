@@ -23,7 +23,7 @@ import java.util.Set;
  */
 public final class PeekabootPaths {
 
-    /** Peekaboot's UI/API prefix, relative to the context path; also the controllers' request mapping. */
+    /** Peekaboot's UI/API prefix, relative to the context path; every controller's request mapping starts with it. */
     public static final String BASE_PATH = "/peekaboot";
 
     /**

@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle.web;
 
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.domain.lifecycle.LifecycleEventsResponse;
 import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 import org.peekaboot.backend.lifecycle.LifecycleEvents;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/peekaboot/api/lifecycle")
+@RequestMapping(PeekabootPaths.BASE_PATH + "/api/lifecycle")
 public class LifecycleController {
 
     private final LifecycleEvents lifecycleEvents;
