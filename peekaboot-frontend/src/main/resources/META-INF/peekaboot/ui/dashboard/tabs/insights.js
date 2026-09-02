@@ -18,11 +18,11 @@ import {escapeHtml} from '../../shared/markup.js';
 import {formatInterval, formatMetricValue} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {createChart, ensureUplot} from './insights-chart.js';
+import {normalizeLevel, lastValue, appendTick, appendRollup} from './insights-store.js';
 
 export const id = 'insights';
 export const label = 'Insights';
 
-const STAT_NAMES = ['min', 'max', 'avg', 'median', 'p90', 'p95', 'p99'];
 const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
 /** Every param this tab owns in the URL (see reconcileUrlState / writeUrlParams). */
 const URL_KEYS = ['level', 'percentiles', 'restarts', 'panels'];
@@ -68,20 +68,18 @@ export function render(container, data, context) {
     currentContext = context;
     if (initialized) {
         // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the
-        // URL-owned state is reconciled - and only while this tab is the one the
-        // hash currently points at, for the same reason every other tab guards its
-        // reconcile (context.urlParams reflects whatever tab is active in the URL).
-        if (config && container.classList.contains('active')) reconcileUrlState(context);
+        // URL-owned state is reconciled (active-tab guard, see main.js's renderTab).
+        if (config && context.active) reconcileUrlState(context);
         return;
     }
-    if (!container.classList.contains('active')) return;
+    if (!context.active) return;
     initialized = true;
     init(container, context);
 }
 
 /**
  * The URL's level param as a configured level index, or `fallback` for anything else -
- * a stale link, a typo, a level from an older config. Exported for SharedModuleIT.
+ * a stale link, a typo, a level from an older config. Exported for the browser tests.
  */
 export function levelFromUrl(params, configuredLevels, fallback) {
     const level = Number(params?.level);
@@ -92,7 +90,7 @@ export function levelFromUrl(params, configuredLevels, fallback) {
  * The URL's panels param ("<id>:<level>[,...]") as {panel id -> level index}. Only pairs
  * naming a configured panel at a configured level survive - a stale panel id, an
  * unconfigured level or hand-mangled syntax is dropped, so that panel simply follows the
- * global level again. Exported for SharedModuleIT.
+ * global level again. Exported for the browser tests.
  */
 export function panelOverridesFromUrl(params, {panels, levels}) {
     const overrides = {};
@@ -401,13 +399,7 @@ function createPanelState(definition, element, urlLevel) {
 
 /** Latest non-null raw value of the panel's first series, whatever level it charts. */
 function currentValue(panel) {
-    const snapshot = levels.get(0);
-    const values = snapshot?.series[panel.definition.series[0].id];
-    if (!Array.isArray(values)) return null;
-    for (let i = values.length - 1; i >= 0; i--) {
-        if (values[i] != null) return values[i];
-    }
-    return null;
+    return lastValue(levels.get(0)?.series[panel.definition.series[0].id]);
 }
 
 function updateReadouts() {
@@ -420,38 +412,10 @@ function updateReadouts() {
 
 // --- Level data store ---------------------------------------------------------------------
 
-/**
- * The /data response as a mutable mirror of the server ring: {@code series} holds
- * either the raw values (level 0) or one array per stat (levels >= 1), and grows
- * by one sample per tick/rollup until it reaches the level's configured size.
- */
-function normalizeLevel(body) {
-    const series = {};
-    Object.entries(body.series).forEach(([key, entry]) => {
-        series[key] = body.level === 0 ? (entry.values ?? []) : normalizeStats(entry.stats);
-    });
-    return {
-        level: body.level,
-        intervalMs: body.intervalMs,
-        endEpochMs: body.endEpochMs,
-        count: body.count,
-        size: config.levels.find(level => level.index === body.level)?.size ?? body.count,
-        series
-    };
-}
-
-function normalizeStats(stats) {
-    const result = {};
-    STAT_NAMES.forEach(name => {
-        result[name] = stats?.[name] ?? [];
-    });
-    return result;
-}
-
 /** One dedupe key per level, so a level-1 load cannot cancel an in-flight level-0 load (see shared/api.js). */
 async function loadLevel(level) {
     const body = await currentContext.client.get('/api/insights/data', {params: {level}, dedupeKey: `insights-data-${level}`});
-    if (body) levels.set(level, normalizeLevel(body));
+    if (body) levels.set(level, normalizeLevel(body, config.levels.find(configured => configured.index === level)?.size));
 }
 
 /** Loads a level at most once; concurrent callers share the in-flight request. */
@@ -461,76 +425,6 @@ function ensureLevel(level) {
         levelLoads.set(level, loadLevel(level).finally(() => levelLoads.delete(level)));
     }
     return levelLoads.get(level);
-}
-
-function numberOrNull(value) {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function pushCapped(values, value, size) {
-    values.push(value);
-    while (values.length > size) values.shift();
-}
-
-function seriesArray(snapshot, key) {
-    if (!snapshot.series[key]) {
-        snapshot.series[key] = snapshot.level === 0
-            ? new Array(snapshot.count).fill(null)
-            : normalizeStats(null);
-    }
-    return snapshot.series[key];
-}
-
-/**
- * An event is only applicable if it is newer than what the mirrored ring already
- * holds: a /data snapshot loaded while events were in flight (first subscribe, or
- * a reconnect resync) already contains them, and appending them again would
- * duplicate samples and shift the whole history.
- */
-function isStale(snapshot, event) {
-    return snapshot.endEpochMs > 0 && event.epochMs <= snapshot.endEpochMs;
-}
-
-/**
- * Boundaries the server skipped between the ring's end and this event. Samples
- * carry no timestamps - sample i sits (count - 1 - i) intervals before endEpochMs -
- * so a gap has to be pushed as nulls or every older sample shifts forward in time.
- * Capped at the ring size; beyond that everything visible is a gap anyway.
- */
-function missedSamples(snapshot, event) {
-    if (!snapshot.endEpochMs || !snapshot.intervalMs) return 0;
-    const missed = Math.floor((event.epochMs - snapshot.endEpochMs) / snapshot.intervalMs) - 1;
-    return Math.max(0, Math.min(missed, snapshot.size));
-}
-
-function appendTick(event) {
-    const snapshot = levels.get(0);
-    if (!snapshot || isStale(snapshot, event)) return;
-    const values = event.values ?? {};
-    Object.keys(values).forEach(key => seriesArray(snapshot, key));
-    const missed = missedSamples(snapshot, event);
-    Object.entries(snapshot.series).forEach(([key, series]) => {
-        for (let i = 0; i < missed; i++) pushCapped(series, null, snapshot.size);
-        pushCapped(series, numberOrNull(values[key]), snapshot.size);
-    });
-    snapshot.count = Math.min(snapshot.count + missed + 1, snapshot.size);
-    snapshot.endEpochMs = event.epochMs;
-}
-
-function appendRollup(event) {
-    const snapshot = levels.get(event.level);
-    if (!snapshot || isStale(snapshot, event)) return;
-    const entries = event.entries ?? {};
-    Object.keys(entries).forEach(key => seriesArray(snapshot, key));
-    const missed = missedSamples(snapshot, event);
-    Object.entries(snapshot.series).forEach(([key, stats]) => {
-        STAT_NAMES.forEach(name => {
-            for (let i = 0; i < missed; i++) pushCapped(stats[name], null, snapshot.size);
-            pushCapped(stats[name], numberOrNull(entries[key]?.[name]), snapshot.size);
-        });
-    });
-    snapshot.count = Math.min(snapshot.count + missed + 1, snapshot.size);
-    snapshot.endEpochMs = event.epochMs;
 }
 
 function markDirty(level) {
@@ -659,14 +553,7 @@ async function createPanelChart(panel) {
 function hasData(panel) {
     const snapshot = levels.get(0);
     if (!snapshot || !snapshot.count) return true;
-    return panel.definition.series.some(series => {
-        const values = snapshot.series[series.id];
-        if (!Array.isArray(values)) return false;
-        for (let i = values.length - 1; i >= 0; i--) {
-            if (values[i] != null) return true;
-        }
-        return false;
-    });
+    return panel.definition.series.some(series => lastValue(snapshot.series[series.id]) != null);
 }
 
 /** Swaps the chart mount between the "no data" message and an empty mount, ready for a chart. */
@@ -795,14 +682,14 @@ function connectStream() {
     // which reads them off /api/insights/config on the 30s cycle instead
     source.addEventListener('tick', event => {
         const tick = JSON.parse(event.data);
-        appendTick(tick);
+        appendTick(levels.get(0), tick);
         markDirty(0);
         scheduleFlush();
     });
 
     source.addEventListener('rollup', event => {
         const rollup = JSON.parse(event.data);
-        appendRollup(rollup);
+        appendRollup(levels.get(rollup.level), rollup);
         markDirty(rollup.level);
         scheduleFlush();
     });
