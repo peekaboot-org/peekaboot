@@ -29,6 +29,8 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Notified after each tick and each roll-up. */
     public interface Listener {
+        // UncommentedEmptyMethodBody: the constant's name is the documentation
+        @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
         Listener NO_OP = new Listener() {
             @Override
             public void onTick(long epochMs, Map<String, Double> values) {}

@@ -278,6 +278,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /** Test seam: invoked after each event successfully handed to an emitter's send(). No-op in production. */
+    @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
     void onDelivered(String eventName) {}
 
     private void heartbeatStep() throws InterruptedException {
