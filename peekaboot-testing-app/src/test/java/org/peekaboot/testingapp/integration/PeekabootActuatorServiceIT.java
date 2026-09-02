@@ -67,13 +67,17 @@ class PeekabootActuatorServiceIT {
     private final Logger serviceLogger = (Logger) LoggerFactory.getLogger(PeekabootActuatorService.class);
     private final ListAppender<ILoggingEvent> serviceLog = new ListAppender<>();
     private boolean additivity;
+    private Level level;
 
-    // The throwing endpoint makes every getInsightsData() call log a WARN; capture it so
-    // it can be asserted on and never reaches the console.
+    // The throwing endpoint makes every getInsightsData() call log its failure - WARN with
+    // the cause the first time, DEBUG afterwards; capture both so they can be asserted on
+    // and never reach the console.
     @BeforeEach
     void captureServiceLog() {
         additivity = serviceLogger.isAdditive();
+        level = serviceLogger.getLevel();
         serviceLogger.setAdditive(false);
+        serviceLogger.setLevel(Level.DEBUG);
         serviceLog.start();
         serviceLogger.addAppender(serviceLog);
     }
@@ -81,6 +85,7 @@ class PeekabootActuatorServiceIT {
     @AfterEach
     void releaseServiceLog() {
         serviceLogger.detachAppender(serviceLog);
+        serviceLogger.setLevel(level);
         serviceLogger.setAdditive(additivity);
     }
 
@@ -103,9 +108,14 @@ class PeekabootActuatorServiceIT {
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
+        // Whether this call is the endpoint's first failure in the shared context depends on
+        // test order, so either line is acceptable; PeekabootActuatorServiceTest pins both.
         assertThat(serviceLog.list).anySatisfy(event -> {
-            assertThat(event.getLevel()).isEqualTo(Level.WARN);
-            assertThat(event.getFormattedMessage()).contains("loggers").contains("boom");
+            assertThat(event.getFormattedMessage()).contains("'loggers' failed");
+            String cause = event.getThrowableProxy() != null
+                    ? event.getThrowableProxy().getMessage()
+                    : event.getFormattedMessage();
+            assertThat(cause).contains("boom");
         });
     }
 
