@@ -19,6 +19,12 @@
 - Micrometer gauges in tests: never `registry.gauge(name, obj)` with the result discarded —
   the registry holds `obj` weakly and samples become NaN after a GC; use
   `Gauge.builder(name, supplier)` or keep the returned object in a field.
+- Timing a test does not own: `ToolbarLateSpanIT`'s margins are arithmetic against the
+  toolbar's fetch ladder (`toolbar.js`, documented in `peekaboot-frontend/README.md`) and
+  the test profile's span export delay, neither of which has a source of truth a Java test
+  can read. `LateSpanFixture.LateSpanController.LATE_WORK` carries that arithmetic in its
+  Javadoc; touching the ladder, the export delay or the constant means redoing it rather
+  than assuming it still holds.
 
 ## Fixtures
 `peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`:
@@ -30,6 +36,12 @@ presets for the double-instrumented pair), `SpanNodes.node(id)` (an already-mapp
 auto-configuration builds it, from `PeekabootTracingProperties`). A test names only what it
 asserts on; a new record component is added to the builder once, not to every test class.
 The domain records carry no test-only constructors.
+
+`MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123…"`) on purpose:
+the file is full of strings shaped exactly like the credentials the engine detects, and
+GitHub's push protection scans for the same shapes. The concatenation folds at compile
+time, so the value under test is unchanged — it just never appears contiguously in the
+source. A new provider fixture is written the same way and never tidied back together.
 
 ## Backend <-> frontend contracts
 The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
@@ -134,8 +146,9 @@ four ladder attempts before teardown); and
 failed dynamic import. A scheduled poll firing while the close is mid-flight makes
 Playwright's client sync interception patterns against a target that is already closing.
 The `about:blank` navigation stops the pollers first; per-test `unroute()` calls would not
-close the race, since `unroute` is itself an interception update over the same wire. The
-history of the flake this rule closed is in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.6.
+close the race, since `unroute` is itself an interception update over the same wire. Each
+catch logs what it swallowed at WARN, so a teardown that is hiding a real failure still
+leaves a line in the output rather than nothing.
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
@@ -211,9 +224,9 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
   ```
 
   See `peekaboot-testing-app/README.md`'s screenshot section — `docs/images/dashboard.png`
-  is a byte-identical copy of one of those images and is regenerated with them. What the
-  capture tool reaches &mdash; and what it deliberately does not &mdash; is described in
-  [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
+  is a byte-identical copy of one of those images and is regenerated with them. Which masked
+  property group the tool is allowed to reveal &mdash; and which it must never touch
+  &mdash; is in `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment.
 
 ## Counting tests
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`

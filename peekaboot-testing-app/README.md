@@ -117,6 +117,14 @@ showing the `spring.datasource.password` fixture after the "Show secrets" contro
 clicked - see `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly
 which group that is and isn't, and why.
 
+Widening that scope is a security decision, not a cosmetic one. The one revealed value is
+safe to publish because it is a placeholder already plaintext in this repository
+(`compose.yml`, `application-screenshots.yml`); that reasoning covers no other group, and
+never `systemEnvironment` or `systemProperties`, which are read from whatever machine runs
+the capture and can carry real usernames, paths, hostnames or credentials. Before revealing
+another group, confirm that every value in it - not only the one being added - originates in
+a file already committed here. When in doubt, don't click it.
+
 The tool's file names are canonical and follow the dashboard's own tab ids:
 `dashboard-<tab>-<theme>.png` (`overview`, `insights`, `lifecycle`, `traces`, `meters`,
 `environment`, `flyway`, `loggers`, `config`, `scheduled-tasks`),

@@ -172,8 +172,9 @@ HTTP request/response metadata captured for web traces. Contains nested `HttpReq
 | `params.upload` | Uploaded files |
 
 `body.content`, `body.truncated` and `params.upload` are reserved fields: `RequestCaptureFilter`
-never populates them, so they are always null/empty (see
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1.1).
+never populates them, so they are always null/empty. They are the seam a body-capture
+implementation would fill &mdash; see *Servlet Filters* in
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for what such a pass has to solve first.
 
 **HttpResponse fields:**
 | Field | Description |
