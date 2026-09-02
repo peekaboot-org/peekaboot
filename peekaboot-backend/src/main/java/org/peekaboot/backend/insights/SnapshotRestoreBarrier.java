@@ -9,15 +9,17 @@ import java.util.function.Consumer;
  * The one-shot gate between a collector's persisted history and its first write:
  * whichever level thread calls {@link #arriveBefore} first applies the persisted
  * rings, if any - a level-1 roll-up must never land in front of the history it
- * belongs to. Waiting happens here rather than in the collector's {@code start()}
- * so the application's own startup never pays for it; the boundary a tick was
- * scheduled for is already fixed, so a short wait does not shift any timestamp.
- * A source that times out on {@link #RESTORE_WAIT} or throws is abandoned for
- * good - the state leaves {@code PENDING} no matter how the attempt ends, so a
- * failed or partial restore is never retried on top of a collector that has
- * since started ticking. A propagating exception is left to the caller's own
- * handler; losing the one tick or roll-up it was guarding is harmless, since the
- * collector pads the gap on its next write.
+ * belongs to.
+ *
+ * <p>Waiting happens here rather than in the collector's {@code start()} so the
+ * application's own startup never pays for it; the boundary a tick was scheduled for
+ * is already fixed, so a short wait does not shift any timestamp.
+ *
+ * <p>A source that times out on {@link #RESTORE_WAIT} or throws is abandoned for good:
+ * the state leaves {@code PENDING} either way, so a failed or partial restore is never
+ * retried on top of a collector that has since started ticking. A propagating exception
+ * is left to the caller's own handler; losing the one tick or roll-up it was guarding is
+ * harmless, since the collector pads the gap on its next write.
  */
 final class SnapshotRestoreBarrier {
 

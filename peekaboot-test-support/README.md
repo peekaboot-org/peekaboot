@@ -3,7 +3,7 @@
 Shared test helpers for the sibling modules' test suites - currently `LogCapture`
 (`org.peekaboot.testsupport`), the logback `ListAppender` wrapper that
 `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure` tests use to assert on
-deliberate WARN/DEBUG log events instead of letting them reach the console (see
+deliberate log events instead of letting them reach the console (see
 [`docs/TESTING.md`](../docs/TESTING.md)).
 
 ## Why a module and not a `-tests` jar

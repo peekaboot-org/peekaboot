@@ -29,19 +29,17 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Notified after each tick and each roll-up. */
     public interface Listener {
+        // UncommentedEmptyMethodBody: the constant's name is the documentation
+        @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
         Listener NO_OP = new Listener() {
             @Override
-            public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
-                // NO_OP: collectors without an interested listener discard events
-            }
+            public void onTick(long epochMs, Map<String, Double> values) {}
 
             @Override
-            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {
-                // NO_OP: collectors without an interested listener discard events
-            }
+            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {}
         };
 
-        void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles);
+        void onTick(long epochMs, Map<String, Double> values);
 
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
     }
@@ -111,7 +109,6 @@ public final class InsightsCollector implements SmartLifecycle {
         this.tiles = new TileTracker(tiles, registry);
     }
 
-    /** Starts one virtual thread per level, each ticking/rolling up on its own boundary-aligned schedule. */
     @Override
     public synchronized void start() {
         if (running) {
@@ -216,7 +213,7 @@ public final class InsightsCollector implements SmartLifecycle {
         }
         levelEndEpochMs.set(0, epochMs);
 
-        listener.onTick(epochMs, values, tileValues());
+        listener.onTick(epochMs, values);
     }
 
     /**
@@ -232,9 +229,9 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /**
      * Appends one empty entry per boundary this level slept through (a suspended
-     * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)},
-     * so a silently skipped boundary would shift every older sample one interval
-     * into the future, so the gap is recorded as NaN entries instead. Capped at the ring size,
+     * laptop, a stalled sampler). Timestamps derive from {@code (endEpoch, index)}, so a
+     * silently skipped boundary would shift every older sample one interval into the
+     * future; the gap is therefore recorded as NaN entries. Capped at the ring size,
      * beyond which every visible sample is a gap anyway. Listeners see no synthetic
      * events - clients mirror the same geometry from the event's epoch.
      */
@@ -296,7 +293,13 @@ public final class InsightsCollector implements SmartLifecycle {
         return AggregateStats.ofAggregates(mins, maxes, avgs, sampleCounts);
     }
 
-    /** Point-in-time copy of one level's ring contents. */
+    /**
+     * Point-in-time copy of one level's ring contents, read without a lock like every API
+     * read. {@code count} is the length of whichever series the loop lands on last: a tick
+     * or roll-up landing mid-read can leave the series read after it one sample longer
+     * than those before, and the response tolerates that skew rather than trimming the way
+     * {@link #capture()} must for the file format.
+     */
     LevelSnapshot snapshot(int level) {
         long intervalMs = intervalMillis[level];
         long endEpochMs = levelEndEpochMs.get(level);
@@ -318,10 +321,6 @@ public final class InsightsCollector implements SmartLifecycle {
             count = ring.size();
         }
         return new LevelSnapshot(level, intervalMs, endEpochMs, count, Map.of(), statValues);
-    }
-
-    int levelCount() {
-        return intervalMillis.length;
     }
 
     /**

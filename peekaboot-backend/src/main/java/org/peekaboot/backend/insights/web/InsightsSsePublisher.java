@@ -36,6 +36,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
 
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
     private static final Duration DISPATCH_POLL_TIMEOUT = Duration.ofSeconds(1);
+    /**
+     * Events awaiting the dispatch thread. A dispatch step is one JSON render plus
+     * non-blocking lane offers, so a backlog this deep (over half an hour of ticks and
+     * roll-ups) only ever means the dispatch thread itself is stuck.
+     */
     private static final int QUEUE_CAPACITY = 256;
     /**
      * Each subscriber's own send lane. A healthy peer drains it as fast as the dispatch
@@ -75,10 +80,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
     private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
     /**
-     * True from construction on: the publisher serves subscribers as soon as it
-     * exists, so start() has nothing to do. The flag is here to make stop() final -
-     * the connector outlives this lifecycle phase, so a client reconnecting during
-     * shutdown must not be handed an emitter that would hold the shutdown open.
+     * True from construction; only stop() clears it, so a client reconnecting during
+     * shutdown is not handed an emitter that would hold the shutdown open.
      */
     private volatile boolean running = true;
 
@@ -148,52 +151,36 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                     queueOverflowWarned = false;
                 }
                 subscribers.add(subscriber);
+                // Started under the same lock that stop() and a lane overflow interrupt
+                // it from, so the sender is never interrupted before it has been started.
+                subscriber.sender.start();
             }
         }
         if (!accepted) {
             emitter.complete();
             return emitter;
         }
-        subscriber.sender.start();
         emitter.onCompletion(() -> removeSubscriber(emitter));
-        emitter.onTimeout(() -> removeSubscriber(emitter));
         emitter.onError(e -> removeSubscriber(emitter));
         heartbeatLoop.startIfNeeded();
         dispatchLoop.startIfNeeded();
         return emitter;
     }
 
-    /**
-     * complete()/completeWithError() are overridden because Spring's container-driven
-     * onCompletion/onError callbacks fire only inside a real request dispatch; when a
-     * sender here completes an emitter itself (or a unit test does), no Handler is
-     * registered to invoke them and the emitter would stay subscribed.
-     * Package-visible (rather than inlined into subscribe()) so tests can override the
-     * emitter's send behavior.
-     */
+    /** Package-visible (rather than inlined into subscribe()) so tests can override the emitter's send behavior. */
     SseEmitter newEmitter() {
-        return new SseEmitter(EMITTER_TIMEOUT.toMillis()) {
-            @Override
-            public void complete() {
-                super.complete();
-                removeSubscriber(this);
-            }
-
-            @Override
-            public void completeWithError(Throwable ex) {
-                super.completeWithError(ex);
-                removeSubscriber(this);
-            }
-        };
+        return new SubscriberEmitter();
     }
 
-    public int subscriberCount() {
+    int subscriberCount() {
         return subscribers.size();
     }
 
-    /** Detaches the subscriber whose emitter this is and interrupts its sender; a no-op for an unknown emitter. */
-    // CompareObjectsWithEquals: identity is the point - the very emitter being detached,
-    // not one that happens to compare equal
+    /**
+     * Detaches the subscriber whose emitter this is and interrupts its sender; a no-op for
+     * an unknown emitter. Compared by identity (PMD CompareObjectsWithEquals): the very
+     * emitter being detached, not one that happens to compare equal.
+     */
     @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private void removeSubscriber(SseEmitter emitter) {
         synchronized (lock) {
@@ -207,8 +194,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     @Override
-    public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
-        enqueue("tick", () -> tickJson(epochMs, values, tiles));
+    public void onTick(long epochMs, Map<String, Double> values) {
+        enqueue("tick", () -> tickJson(epochMs, values));
     }
 
     @Override
@@ -216,11 +203,10 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         enqueue("rollup", () -> rollupJson(level, epochMs, entries));
     }
 
-    String tickJson(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+    String tickJson(long epochMs, Map<String, Double> values) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("epochMs", epochMs);
         payload.put("values", nullSafeMap(values));
-        payload.put("tiles", nullSafeMap(tiles));
         return objectMapper.writeValueAsString(payload);
     }
 
@@ -254,11 +240,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * up, keeping serialization off the collector threads as well - safe because
      * the collector hands out a fresh, unshared map per event.
      *
-     * <p>Nothing is queued while no one is subscribed: an unwatched app would
-     * otherwise fill the queue within the hour and log a "queue full" warning
-     * during entirely normal operation. Bounded; on overflow the oldest queued
-     * event is dropped and a warning logged once per overflow episode - a stream
-     * that recovers and later floods again has to say so a second time.
+     * <p>Nothing is queued while no one is subscribed, so an unwatched app never logs
+     * "queue full". Bounded: on overflow the oldest event is dropped and a warning
+     * logged once per episode.
      */
     private void enqueue(String eventName, Supplier<String> json) {
         SseEvent event = new SseEvent(eventName, json);
@@ -294,9 +278,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /** Test seam: invoked after each event successfully handed to an emitter's send(). No-op in production. */
-    void onDelivered(String eventName) {
-        // production no-op; tests override to observe delivery
-    }
+    @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
+    void onDelivered(String eventName) {}
 
     private void heartbeatStep() throws InterruptedException {
         Thread.sleep(HEARTBEAT_INTERVAL);
@@ -325,6 +308,53 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
         if (event != null) {
             broadcast(event.name(), event.json().get());
+        }
+    }
+
+    /**
+     * The stream handed to one dashboard.
+     *
+     * <p>complete()/completeWithError() detach the subscriber themselves: Spring's
+     * container-driven onCompletion/onError callbacks fire only inside a real request
+     * dispatch, so when a sender completes an emitter (or a unit test does) nobody else
+     * would.
+     *
+     * <p>The container's timeout completes the emitter, which is what keeps Spring's
+     * timeout interceptor from raising an AsyncRequestTimeoutException - a WARN in the
+     * host's log for every open dashboard, every {@link #EMITTER_TIMEOUT}. It does so only
+     * while the write lock is free: a sender wedged in send() holds it, and waiting behind
+     * that send on the container's thread is what the per-subscriber lanes exist to
+     * prevent. Such a peer is only detached, and Spring's own timeout handling ends it.
+     */
+    private final class SubscriberEmitter extends SseEmitter {
+
+        SubscriberEmitter() {
+            super(EMITTER_TIMEOUT.toMillis());
+            onTimeout(this::completeUnlessSending);
+        }
+
+        @Override
+        public void complete() {
+            super.complete();
+            removeSubscriber(this);
+        }
+
+        @Override
+        public void completeWithError(Throwable ex) {
+            super.completeWithError(ex);
+            removeSubscriber(this);
+        }
+
+        private void completeUnlessSending() {
+            if (!writeLock.tryLock()) {
+                removeSubscriber(this);
+                return;
+            }
+            try {
+                complete();
+            } finally {
+                writeLock.unlock();
+            }
         }
     }
 
@@ -397,14 +427,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /**
-     * Lazily starts a named virtual thread that repeats {@code step} while
-     * subscribers remain, and stops itself once they don't. Starting and the
-     * exit decision both happen under the publisher's private {@code lock},
-     * so a subscribe() racing the loop's own "should I stop?" check can never
-     * observe a stale non-null thread handle for a loop that has already
-     * committed to exiting without rechecking - the two are mutually exclusive
-     * on the same monitor, closing that class of race at the source (shared by
-     * both the heartbeat and dispatch loops).
+     * A named virtual thread that repeats {@code step} while subscribers remain and exits
+     * once they don't. Start and the exit check both run under the publisher's
+     * {@code lock}, so a subscribe() racing the exit can never see a stale thread handle.
      */
     private final class ManagedLoop {
         private final String name;

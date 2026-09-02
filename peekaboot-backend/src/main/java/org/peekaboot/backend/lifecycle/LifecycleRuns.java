@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 
 /**
@@ -20,9 +21,16 @@ import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 public class LifecycleRuns {
 
     private final LifecycleEventLog log;
+    private final LongSupplier clock;
 
     public LifecycleRuns(LifecycleEventLog log) {
+        this(log, System::currentTimeMillis);
+    }
+
+    /** {@code clock} supplies the epoch millis a still-running run is measured up to; tests fix it. */
+    LifecycleRuns(LifecycleEventLog log, LongSupplier clock) {
         this.log = log;
+        this.clock = clock;
     }
 
     public LifecycleRunsResponse runs() {
@@ -37,7 +45,7 @@ public class LifecycleRuns {
             LifecycleEvents.Build effective = carryForward(LifecycleEvents.Build.of(event), carried);
             LifecycleEvent previous = i == 0 ? null : events.get(i - 1);
             LifecycleEvent next = i + 1 < events.size() ? events.get(i + 1) : null;
-            runs.add(toRun(event, previous, next, effective, changed(effective, carried)));
+            runs.add(toRun(event, previous, next, effective, changed(effective, carried), clock.getAsLong()));
             carried = effective;
         }
         Collections.reverse(runs);
@@ -91,8 +99,9 @@ public class LifecycleRuns {
             LifecycleEvent previous,
             LifecycleEvent next,
             LifecycleEvents.Build effective,
-            List<String> changed) {
-        Timing timing = Timing.of(start, next);
+            List<String> changed,
+            long nowEpochMs) {
+        Timing timing = Timing.of(start, next, nowEpochMs);
         Long downForMs = downForMs(start, previous);
         return new LifecycleRunsResponse.Run(
                 start.epochMs(),
@@ -136,9 +145,9 @@ public class LifecycleRuns {
             this.uncleanExit = uncleanExit;
         }
 
-        private static Timing of(LifecycleEvent start, LifecycleEvent next) {
+        private static Timing of(LifecycleEvent start, LifecycleEvent next, long nowEpochMs) {
             if (next == null) {
-                long ranForMs = Math.max(0, System.currentTimeMillis() - start.epochMs());
+                long ranForMs = Math.max(0, nowEpochMs - start.epochMs());
                 return new Timing(null, ranForMs, true, false);
             }
             if (next.type() == LifecycleEvent.Type.STOP) {

@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class CpuTopologyTest {
+class CpuinfoTest {
 
     /** One /proc/cpuinfo processor block in the kernel's key\t: value shape. */
     private static String block(int processor, int physicalId, int coreId, int cores, int siblings) {
@@ -28,7 +28,7 @@ class CpuTopologyTest {
         }
         Path file = Files.writeString(dir.resolve("cpuinfo"), cpuinfo);
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isEqualTo(new CpuTopology(4, 2));
+        assertThat(Cpuinfo.read(file).topology()).isEqualTo(new CpuTopology(4, 2));
     }
 
     @Test
@@ -39,7 +39,7 @@ class CpuTopologyTest {
         }
         Path file = Files.writeString(dir.resolve("cpuinfo"), cpuinfo);
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isEqualTo(new CpuTopology(4, 1));
+        assertThat(Cpuinfo.read(file).topology()).isEqualTo(new CpuTopology(4, 1));
     }
 
     @Test
@@ -52,7 +52,7 @@ class CpuTopologyTest {
         }
         Path file = Files.writeString(dir.resolve("cpuinfo"), cpuinfo);
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isEqualTo(new CpuTopology(4, 2));
+        assertThat(Cpuinfo.read(file).topology()).isEqualTo(new CpuTopology(4, 2));
     }
 
     @Test
@@ -67,7 +67,7 @@ class CpuTopologyTest {
         }
         Path file = Files.writeString(dir.resolve("cpuinfo"), cpuinfo);
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isEqualTo(new CpuTopology(4, 2));
+        assertThat(Cpuinfo.read(file).topology()).isEqualTo(new CpuTopology(4, 2));
     }
 
     @Test
@@ -78,7 +78,7 @@ class CpuTopologyTest {
         }
         Path file = Files.writeString(dir.resolve("cpuinfo"), cpuinfo);
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isEqualTo(new CpuTopology(4, 2));
+        assertThat(Cpuinfo.read(file).topology()).isEqualTo(new CpuTopology(4, 2));
     }
 
     @Test
@@ -86,18 +86,42 @@ class CpuTopologyTest {
         // aarch64 kernels commonly list processors with no physical id/core id/cpu cores
         Path file = Files.writeString(dir.resolve("cpuinfo"), "processor\t: 0\nCPU implementer\t: 0x41\n");
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isNull();
+        assertThat(Cpuinfo.read(file).topology()).isNull();
     }
 
     @Test
     void returnsNullOnGarbageContent(@TempDir Path dir) throws Exception {
         Path file = Files.writeString(dir.resolve("cpuinfo"), "processor\t: zero\ncpu cores\t: many\n<<<###>>>\n");
 
-        assertThat(CpuTopology.fromCpuinfo(file)).isNull();
+        assertThat(Cpuinfo.read(file).topology()).isNull();
     }
 
     @Test
-    void returnsNullWhenTheFileIsMissing(@TempDir Path dir) {
-        assertThat(CpuTopology.fromCpuinfo(dir.resolve("cpuinfo"))).isNull();
+    void readsTheFirstModelNameLine(@TempDir Path dir) throws Exception {
+        Path file = Files.writeString(dir.resolve("cpuinfo"), """
+                processor\t: 0
+                vendor_id\t: AuthenticAMD
+                model name\t: AMD Ryzen 7 5800X 8-Core Processor
+                processor\t: 1
+                model name\t: AMD Ryzen 7 5800X 8-Core Processor
+                """);
+
+        assertThat(Cpuinfo.read(file).model()).isEqualTo("AMD Ryzen 7 5800X 8-Core Processor");
+    }
+
+    @Test
+    void modelIsNullWithoutAModelNameLine(@TempDir Path dir) throws Exception {
+        // aarch64 kernels commonly expose no "model name" field at all
+        Path file = Files.writeString(dir.resolve("cpuinfo"), "processor\t: 0\nCPU implementer\t: 0x41\n");
+
+        assertThat(Cpuinfo.read(file).model()).isNull();
+    }
+
+    @Test
+    void knowsNothingWhenTheFileIsMissing(@TempDir Path dir) {
+        Cpuinfo cpuinfo = Cpuinfo.read(dir.resolve("cpuinfo"));
+
+        assertThat(cpuinfo.model()).isNull();
+        assertThat(cpuinfo.topology()).isNull();
     }
 }

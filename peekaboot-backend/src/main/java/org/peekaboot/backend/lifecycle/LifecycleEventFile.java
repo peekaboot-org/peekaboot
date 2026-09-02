@@ -1,12 +1,9 @@
 package org.peekaboot.backend.lifecycle;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -34,14 +31,11 @@ public final class LifecycleEventFile {
     private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 
     public static final String FILE_NAME = "lifecycle.jsonl";
-    private static final String TEMP_SUFFIX = ".tmp";
 
     private final Path file;
-    private final Path temp;
 
     public LifecycleEventFile(Path file) {
         this.file = file;
-        this.temp = file.resolveSibling(file.getFileName() + TEMP_SUFFIX);
     }
 
     /** The log as written, oldest first; an absent or unreadable file is simply no history. */
@@ -95,35 +89,7 @@ public final class LifecycleEventFile {
         for (LifecycleEvent event : events) {
             content.append(MAPPER.writeValueAsString(event)).append("\n");
         }
-        Path parent = file.getParent();
-        if (parent != null) {
-            OwnerOnlyFiles.createDirectories(parent);
-        }
-        try {
-            try (OutputStream out = OwnerOnlyFiles.newOutputStream(temp)) {
-                out.write(content.toString().getBytes(StandardCharsets.UTF_8));
-            }
-            moveIntoPlace();
-        } catch (IOException e) {
-            deleteTemp(e);
-            throw e;
-        }
-    }
-
-    private void moveIntoPlace() throws IOException {
-        try {
-            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    /** A half-written temporary describes nothing; the next write starts from scratch anyway. */
-    private void deleteTemp(IOException cause) {
-        try {
-            Files.deleteIfExists(temp);
-        } catch (IOException e) {
-            cause.addSuppressed(e);
-        }
+        byte[] bytes = content.toString().getBytes(StandardCharsets.UTF_8);
+        OwnerOnlyFiles.replaceAtomically(file, out -> out.write(bytes));
     }
 }

@@ -5,17 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Binds {@code peekaboot.insights.*}. The core is {@code levels}, a list of
- * {@code {interval, size}} rings configured as
- * {@code peekaboot.insights.levels[0].interval=10s} /
- * {@code peekaboot.insights.levels[0].size=90} and so on, finest first. Level 0 samples
- * every {@code interval} and keeps {@code size} entries; each coarser level aggregates
- * the previous one, so its interval must be a whole multiple of the previous interval,
- * and that multiple must not exceed the previous {@code size} (the roll-up window has to
- * fit inside the previous ring). Setting the property replaces the whole default list
- * (10s x 90, 1m x 1440, 1h x 720); {@link #validate()} enforces the rules.
- */
+/** Binds {@code peekaboot.insights.*}; {@link #validate()} enforces the level rules. */
 @ConfigurationProperties(prefix = "peekaboot.insights")
 public class InsightsProperties {
 
@@ -124,17 +114,14 @@ public class InsightsProperties {
         this.persistence = persistence;
     }
 
-    /** How often the rings are written, defaulting to one write per coarsest window. */
+    /** The configured value, else the coarsest level's interval. */
     public Duration resolvePersistenceInterval() {
         return persistence.getInterval() != null
                 ? persistence.getInterval()
                 : levels.get(levels.size() - 1).getInterval();
     }
 
-    /**
-     * How old a snapshot may be and still be worth loading, defaulting to the span the
-     * coarsest level covers - beyond it, every restored sample would be an empty gap.
-     */
+    /** The configured value, else the coarsest level's span. */
     public Duration resolvePersistenceMaxAge() {
         if (persistence.getMaxAge() != null) {
             return persistence.getMaxAge();

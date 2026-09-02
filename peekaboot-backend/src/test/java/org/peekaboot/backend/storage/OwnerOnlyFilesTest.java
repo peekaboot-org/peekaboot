@@ -1,6 +1,7 @@
 package org.peekaboot.backend.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
@@ -70,6 +71,40 @@ class OwnerOnlyFilesTest {
         assertThat(Files.readString(victim)).isEqualTo("untouched");
         assertThat(Files.isSymbolicLink(file)).isFalse();
         assertThat(Files.readString(file)).isEqualTo("content");
+    }
+
+    @Test
+    void replacesTheFileInOneStepAndLeavesNoTemporaryBehind() throws IOException {
+        Path file = directory.resolve("nested").resolve("state");
+        replace(file, "first");
+
+        replace(file, "second");
+
+        assertThat(Files.readString(file)).isEqualTo("second");
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
+                .isEqualTo("rw-------");
+        assertThat(directory.resolve("nested").resolve("state.tmp")).doesNotExist();
+    }
+
+    /** A rewrite that fails halfway must cost nothing: the previous file stays, and no temporary lingers. */
+    @Test
+    void aFailedRewriteKeepsThePreviousFileAndLeavesNoTemporaryBehind() throws IOException {
+        Path file = directory.resolve("state");
+        replace(file, "first");
+        IOException diskFull = new IOException("disk full");
+
+        assertThatThrownBy(() -> OwnerOnlyFiles.replaceAtomically(file, out -> {
+                    out.write('x');
+                    throw diskFull;
+                }))
+                .isSameAs(diskFull);
+
+        assertThat(Files.readString(file)).isEqualTo("first");
+        assertThat(directory.resolve("state.tmp")).doesNotExist();
+    }
+
+    private static void replace(Path file, String content) throws IOException {
+        OwnerOnlyFiles.replaceAtomically(file, out -> out.write(content.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static void write(Path file, String content) throws IOException {

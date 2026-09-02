@@ -5,10 +5,8 @@ import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -36,13 +34,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private static final Logger log = LoggerFactory.getLogger(InsightsSnapshotStore.class);
 
     public static final String FILE_NAME = "insights.snapshot";
-    private static final String TEMP_SUFFIX = ".tmp";
     private static final Duration WRITER_JOIN = Duration.ofSeconds(2);
-    /** Clock skew a snapshot may carry and still be believed; anything beyond it is a stepped clock. */
     private static final Duration CLOCK_SKEW = Duration.ofMinutes(5);
 
     private final Path file;
-    private final Path temp;
     private final List<InsightsSnapshot.Level> geometry;
     private final Duration interval;
     private final Duration maxAge;
@@ -56,7 +51,6 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
 
     public InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
         this.file = file;
-        this.temp = file.resolveSibling(file.getFileName() + TEMP_SUFFIX);
         this.geometry = List.copyOf(geometry);
         this.interval = interval;
         this.maxAge = maxAge;
@@ -165,17 +159,12 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             return;
         }
         try {
-            Path parent = file.getParent();
-            if (parent != null) {
-                OwnerOnlyFiles.createDirectories(parent);
-            }
-            try (DataOutputStream out =
-                    new DataOutputStream(new BufferedOutputStream(OwnerOnlyFiles.newOutputStream(temp)))) {
-                InsightsSnapshotCodec.write(out, snapshot);
-            }
-            move();
+            OwnerOnlyFiles.replaceAtomically(file, stream -> {
+                try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(stream))) {
+                    InsightsSnapshotCodec.write(out, snapshot);
+                }
+            });
         } catch (IOException e) {
-            deleteTemp();
             if (!writeFailureLogged) {
                 writeFailureLogged = true;
                 log.warn("Peekaboot insights: cannot write {}; history will not survive this restart", file, e);
@@ -193,23 +182,6 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private boolean replacesWhatIsThere(InsightsSnapshot snapshot) {
         return historyRestored.getAsBoolean()
                 || (!unclaimedHistory && snapshot.levels().stream().anyMatch(level -> level.endEpochMs() > 0));
-    }
-
-    /** A half-written temporary is megabytes of nothing; the next write starts it from scratch anyway. */
-    private void deleteTemp() {
-        try {
-            Files.deleteIfExists(temp);
-        } catch (IOException e) {
-            log.debug("Could not delete the partial insights snapshot {}", temp, e);
-        }
-    }
-
-    private void move() throws IOException {
-        try {
-            Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-        }
     }
 
     private void runWriter() {
@@ -258,10 +230,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
 
     /**
      * A snapshot is worth reading only while it is dated inside the window it would restore
-     * into. Past the cutoff every restored sample would be an empty gap; ahead of now - a
-     * clock stepped back, a backup restored over a newer file - it would roll every level's
-     * {@code endEpochMs} into the future, so no gap is ever filled and the newest samples
-     * keep timestamps that never arrive.
+     * into. Past the cutoff every restored sample would be an empty gap; ahead of now by
+     * more than {@link #CLOCK_SKEW} - a clock stepped back, a backup restored over a newer
+     * file - it would roll every level's {@code endEpochMs} into the future, so no gap is
+     * ever filled and the newest samples keep timestamps that never arrive.
      */
     private boolean isImplausiblyDated(InsightsSnapshotCodec.Header header) {
         long now = System.currentTimeMillis();

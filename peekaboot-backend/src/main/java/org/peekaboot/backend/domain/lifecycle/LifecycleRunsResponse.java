@@ -19,9 +19,9 @@ public record LifecycleRunsResponse(List<Run> runs) {
      * One run of the application, oldest-run-has-no-predecessor aside, always comparable
      * to the run before it.
      *
-     * <p>{@code stoppedAtEpochMs} and {@code ranForMs} are both null when the run ended
-     * without a matching stop - a crash or a kill - because {@code uncleanExit} is true and
-     * we genuinely do not know when it died. {@code downForMs} is the gap to the event
+     * <p>{@code stoppedAtEpochMs} and {@code ranForMs} are both null, and {@code uncleanExit}
+     * is true, when the run ended without a matching stop - a crash or a kill leaves no
+     * record of when it died. {@code downForMs} is the gap to the event
      * immediately before this run's start, but only when that event is a stop - it is null
      * when there is no preceding event at all, or when the preceding event is itself a
      * start, meaning the previous run ended uncleanly and the downtime is unknowable.

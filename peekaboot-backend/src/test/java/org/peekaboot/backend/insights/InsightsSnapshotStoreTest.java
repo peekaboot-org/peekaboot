@@ -161,8 +161,13 @@ class InsightsSnapshotStoreTest {
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.stop();
 
-            assertThat(capture.appender().list).hasSize(1);
-            assertThat(capture.appender().list.get(0).getLevel()).isEqualTo(Level.WARN);
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo(
+                                "Peekaboot insights: cannot write " + directory.resolve(InsightsSnapshotStore.FILE_NAME)
+                                        + "; history will not survive this restart");
+            });
         }
         assertThat(directory.resolve("insights.snapshot.tmp")).doesNotExist();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
@@ -223,8 +228,12 @@ class InsightsSnapshotStoreTest {
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
             assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
 
-            assertThat(capture.appender().list).hasSize(1);
-            assertThat(capture.appender().list.get(0).getFormattedMessage()).contains("insights");
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage())
+                        .startsWith("Peekaboot insights: ignoring unreadable " + file + " (")
+                        .endsWith("); starting with empty history");
+            });
         }
         assertThat(file).doesNotExist();
     }
@@ -277,8 +286,12 @@ class InsightsSnapshotStoreTest {
             store.writeNow();
             store.stop();
 
-            assertThat(capture.appender().list).hasSize(1);
-            assertThat(capture.appender().list.get(0).getLevel()).isEqualTo(Level.WARN);
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: cannot write " + blocked.resolve("insights.snapshot")
+                                + "; history will not survive this restart");
+            });
         }
     }
 }

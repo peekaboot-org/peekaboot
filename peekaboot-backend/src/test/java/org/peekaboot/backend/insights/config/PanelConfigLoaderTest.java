@@ -91,6 +91,23 @@ class PanelConfigLoaderTest {
         assertThat(file.panels()).hasSize(2);
     }
 
+    /** The collector keys its rings by id, so a second definition would silently replace the first. */
+    @Test
+    void rejectsDuplicatePanelIdsWithinOneFile() {
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-panel.yml"), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("duplicate panel id 'cpu'");
+    }
+
+    @Test
+    void rejectsDuplicateSeriesIdsWithinOnePanel() {
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-series.yml"), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("panel 'heap': duplicate series id 'used'");
+    }
+
     @Test
     void rejectsInvalidStat() {
         // loader-invalid.yml: single panel whose series has stat: bogus

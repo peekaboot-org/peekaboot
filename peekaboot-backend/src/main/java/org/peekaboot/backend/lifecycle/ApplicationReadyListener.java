@@ -52,7 +52,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         this.environmentInfo = environmentInfo;
         this.buildInfoProvider = buildInfoProvider;
         this.serverUrlResolver = serverUrlResolver;
-        this.dataSourceMetadataList = dataSourceMetadataList != null ? dataSourceMetadataList : List.of();
+        this.dataSourceMetadataList = dataSourceMetadataList;
         this.dataSources = dataSources;
         this.hikariPoolInfo = hikariPoolInfo;
     }
@@ -157,15 +157,18 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         MemoryUsage nonHeapMemory = memoryMXBean.getNonHeapMemoryUsage();
 
         report.append(String.format(
-                        " Heap Memory: used=%s, max=%s",
-                        ByteFormat.humanize(heapMemory.getUsed()), ByteFormat.humanize(heapMemory.getMax())))
+                        " Heap Memory: used=%s, max=%s", ByteFormat.humanize(heapMemory.getUsed()), maxOf(heapMemory)))
                 .append("\n");
         report.append(String.format(
                         " Non-Heap Memory: used=%s, max=%s",
-                        ByteFormat.humanize(nonHeapMemory.getUsed()),
-                        ByteFormat.humanize(nonHeapMemory.getMax() > 0 ? nonHeapMemory.getMax() : 0)))
+                        ByteFormat.humanize(nonHeapMemory.getUsed()), maxOf(nonHeapMemory)))
                 .append("\n");
         report.append(LifecycleBanner.LINE).append("\n");
+    }
+
+    /** A pool without a configured maximum (HotSpot's non-heap by default) reports -1, not a limit of zero. */
+    private static String maxOf(MemoryUsage usage) {
+        return usage.getMax() < 0 ? "unbounded" : ByteFormat.humanize(usage.getMax());
     }
 
     private void appendDatabaseInfo(StringBuilder report) {
@@ -209,7 +212,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     @SuppressWarnings("PMD.CloseResource")
     private void appendPoolInfo(StringBuilder report, String dataSourceName) {
 
-        if (hikariPoolInfo == null || dataSources == null || !dataSources.containsKey(dataSourceName)) {
+        if (hikariPoolInfo == null || !dataSources.containsKey(dataSourceName)) {
             return;
         }
 

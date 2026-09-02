@@ -23,7 +23,7 @@ class InsightsCollectorLifecycleTest {
         CountDownLatch rollups = new CountDownLatch(1);
         InsightsCollector.Listener listener = new InsightsCollector.Listener() {
             @Override
-            public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+            public void onTick(long epochMs, Map<String, Double> values) {
                 ticks.countDown();
             }
 

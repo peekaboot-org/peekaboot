@@ -20,11 +20,17 @@ class LifecycleRunsTest {
         return LifecycleEvent.start(epochMs, 1, build, git);
     }
 
+    private static final long NOW = 100_000;
+
     private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events) {
+        return runsFor(events, NOW);
+    }
+
+    private static LifecycleRunsResponse runsFor(List<LifecycleEvent> events, long nowEpochMs) {
         LifecycleEventLog log = new LifecycleEventLog(null);
         log.beginLoad();
         events.forEach(log::recordAndPersist);
-        return new LifecycleRuns(log).runs();
+        return new LifecycleRuns(log, () -> nowEpochMs).runs();
     }
 
     @Test
@@ -36,19 +42,14 @@ class LifecycleRunsTest {
 
     @Test
     void aSingleStartIsTheCurrentlyRunningRun() {
-        long startedAgoMs = 5_000;
-        long startEpochMs = System.currentTimeMillis() - startedAgoMs;
-
-        LifecycleRunsResponse response = runsFor(List.of(start(startEpochMs, "1.0.0", "dev", "abc1234")));
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234")), 6_000);
 
         Run run = response.runs().get(0);
-        assertThat(run.startedAtEpochMs()).isEqualTo(startEpochMs);
+        assertThat(run.startedAtEpochMs()).isEqualTo(1_000);
         assertThat(run.running()).isTrue();
         assertThat(run.stoppedAtEpochMs()).isNull();
         assertThat(run.uncleanExit()).isFalse();
-        // A generous window around the known elapsed time, without a clock seam: at least
-        // the time we waited, comfortably less than "something is badly wrong".
-        assertThat(run.ranForMs()).isBetween(startedAgoMs, startedAgoMs + 60_000);
+        assertThat(run.ranForMs()).isEqualTo(5_000);
         assertThat(run.downForMs()).isNull();
         assertThat(run.changed()).isEmpty();
     }

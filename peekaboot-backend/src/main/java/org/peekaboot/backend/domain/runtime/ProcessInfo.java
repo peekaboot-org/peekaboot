@@ -11,9 +11,11 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
 
     public record ParentProcess(long pid, String command) {}
 
+    private static final Path PROC_SELF_STATUS = Path.of("/proc/self/status");
+
     /**
      * Lazily computed once: the values are static for the JVM's lifetime and
-     * computing them reads filesystem attributes and walks the parent process chain.
+     * computing them reads {@code /proc} and walks the parent process chain.
      */
     private static final class CurrentHolder {
         private static final ProcessInfo CURRENT = compute();
@@ -26,15 +28,10 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
     private static ProcessInfo compute() {
         String username = System.getProperty("user.name");
         long pid = ProcessHandle.current().pid();
-        String uid = unixAttribute("uid");
-        String gid = unixAttribute("gid");
+        String uid = procStatusId(PROC_SELF_STATUS, "Uid");
+        String gid = procStatusId(PROC_SELF_STATUS, "Gid");
         List<ParentProcess> parents = resolveParentProcesses();
         return new ProcessInfo(username, uid, gid, pid, parents);
-    }
-
-    public static ProcessInfo of(
-            String username, String uid, String gid, long pid, List<ParentProcess> parentProcesses) {
-        return new ProcessInfo(username, uid, gid, pid, parentProcesses != null ? parentProcesses : List.of());
     }
 
     private static List<ParentProcess> resolveParentProcesses() {
@@ -59,15 +56,21 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
     }
 
     /**
-     * The working directory's owner id from the "unix" attribute view - the process's own
-     * uid/gid without forking {@code id} from a request thread. Null where the view is
-     * unsupported (Windows) or unreadable.
+     * The real id, first of the four on {@code status}'s {@code Uid:}/{@code Gid:} line -
+     * the credentials the process runs under, which no file's owner (the working
+     * directory's included) reliably shares. A plain file read, no forking. Null where
+     * the file or the line is absent (anything but Linux) or unreadable.
      */
-    private static String unixAttribute(String attribute) {
+    static String procStatusId(Path status, String key) {
         try {
-            Object value = Files.getAttribute(Path.of("."), "unix:" + attribute);
-            return value != null ? String.valueOf(value) : null;
-        } catch (UnsupportedOperationException | IllegalArgumentException | IOException e) {
+            for (String line : Files.readAllLines(status)) {
+                if (line.startsWith(key + ":")) {
+                    String[] ids = line.substring(key.length() + 1).trim().split("\\s+");
+                    return ids[0].isEmpty() ? null : ids[0];
+                }
+            }
+            return null;
+        } catch (IOException e) {
             return null;
         }
     }

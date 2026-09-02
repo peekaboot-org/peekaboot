@@ -34,18 +34,13 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         this.ownContext = ownContext;
     }
 
-    // CompareObjectsWithEquals: identity is the point - the very context this listener
-    // belongs to, not one that happens to compare equal
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     @Override
     public void onApplicationEvent(ContextClosedEvent event) {
-        // A child context's close (Boot's management context on a separate port) is
-        // forwarded to the parent too; only this listener's own context is the application.
-        if (event.getApplicationContext() != ownContext) {
+        if (!ContextEvents.fromOwnContext(event, ownContext)) {
             return;
         }
 
-        Instant started = Instant.ofEpochMilli(event.getApplicationContext().getStartupDate());
+        Instant started = Instant.ofEpochMilli(ownContext.getStartupDate());
         Instant stopped = Instant.now();
 
         StringBuilder report = LifecycleBanner.open("ApplicationStopped");

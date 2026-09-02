@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Attaches a logback {@link ListAppender} to a class's logger so tests can assert on a log event
  * instead of letting it reach the console. Shared by every peekaboot test that exercises a
- * deliberate WARN/DEBUG logging path. {@code AutoCloseable} so call sites use
+ * deliberate log line. {@code AutoCloseable} so call sites use
  * try-with-resources; {@link #close()} stops the appender, detaches it, and restores the
  * logger's additivity and level to whatever they were before {@link #attach} ran.
  */

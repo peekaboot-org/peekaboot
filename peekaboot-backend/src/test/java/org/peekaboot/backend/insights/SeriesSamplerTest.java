@@ -112,4 +112,21 @@ class SeriesSamplerTest {
         fresh.increment(10);
         assertThat(sampler.sample(10_000)).isCloseTo(1.0, within(1e-9)); // 10 in 10s
     }
+
+    /** A negative count delta divided into a negative total delta is a plausible-looking wrong average, not a reset. */
+    @Test
+    void aTimerReRegisteredBehindTheBaselineYieldsNaNForAvgAndRebases() {
+        Timer timer = registry.timer("req");
+        for (int i = 0; i < 5; i++) {
+            timer.record(Duration.ofMillis(100));
+        }
+        SeriesSampler sampler = new SeriesSampler(def("req", Map.of(), "avg"), registry);
+        sampler.sample(10_000); // baseline: 5 calls, 500 ms
+        registry.remove(timer);
+        Timer fresh = registry.timer("req");
+        fresh.record(Duration.ofMillis(30));
+        assertThat(sampler.sample(10_000)).isNaN(); // -4 calls, -470 ms: nothing to average
+        fresh.record(Duration.ofMillis(50));
+        assertThat(sampler.sample(10_000)).isCloseTo(50.0, within(1e-9)); // one call of 50 ms since the rebase
+    }
 }
