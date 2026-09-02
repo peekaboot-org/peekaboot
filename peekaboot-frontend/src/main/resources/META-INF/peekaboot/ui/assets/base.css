@@ -16,9 +16,12 @@ body {
     transition: background-color var(--pk-transition), color var(--pk-transition);
 }
 
+/* The literals repeat the light palette: a consuming application that shadows tokens.css
+   with a copy of its own predating a token would otherwise leave the highlight with
+   neither fill nor ink. Same reasoning for --pk-danger-tint in dashboard.css. */
 mark {
-    background: var(--pk-mark-bg);
-    color: var(--pk-on-mark);
+    background: var(--pk-mark-bg, #fef08a);
+    color: var(--pk-on-mark, #111827);
     padding: 1px 4px;
     border-radius: 2px;
 }
