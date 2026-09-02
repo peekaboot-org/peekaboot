@@ -814,20 +814,18 @@ function connectStream() {
         resyncPending = true;
     });
     source.addEventListener('open', () => {
-        if (resyncPending) {
-            resyncPending = false;
-            resync();
-        }
+        if (!resyncPending) return;
+        resyncPending = false;
+        // the application may still be coming up - a failed snapshot is retried on the
+        // next reconnect rather than leaving the mirrored rings silently out of step
+        resync().catch(error => {
+            console.warn('Insights: resync after reconnect failed, retrying on the next reconnect:', error);
+            resyncPending = true;
+        });
     });
 }
 
-/**
- * Verified by hand (stop the app, let the browser's EventSource reconnect, watch
- * every loaded level re-snapshot before the next delta lands): killing and
- * re-establishing the stream on cue is not something the Playwright suite can do
- * deterministically, and a test that only usually reconnects in time is worse than
- * none.
- */
+/** Re-snapshots every loaded level after a reconnect. */
 async function resync() {
     // an application that restarted under an open dashboard has a new event to
     // draw, fetched before the level loop so every chart is updated in one pass

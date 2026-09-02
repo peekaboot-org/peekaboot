@@ -127,6 +127,8 @@ function reconcileWithUrl(container) {
 
     if (urlHasFilterParams || currentContext.urlIsAuthoritative) {
         seedFromUrl(container, params);
+        // corrects a bogus or non-canonical value in the URL to the state that actually restored
+        writeUrlParams();
     } else if (currentBucket !== 'all' || selectedRootActionTypes.size > 0 || currentRootOperationFilter) {
         writeUrlParams();
     }
@@ -136,11 +138,15 @@ function reconcileWithUrl(container) {
     rather than unconditionally overwriting it, so this is a no-op once the URL already
     matches (the steady state on every render while this tab's own filter is active). */
 function seedFromUrl(container, params) {
-    // Validated against the canonical bucket list - an unrecognized value (a typo, a stale
-    // link) would otherwise sail straight through to the backend and back as a literal
-    // "undefined" in the empty-state message (BUCKET_EMPTY_MESSAGES has no such key).
+    // Validated against the canonical lists - an unrecognized bucket (a typo, a stale link)
+    // would otherwise sail straight through to the backend and back as a literal "undefined"
+    // in the empty-state message, and an unknown type would be dropped by the backend
+    // (every type listed) while the banner here still claimed a filter. The case fold
+    // mirrors the backend's own.
     const urlBucket = Object.keys(BUCKET_EMPTY_MESSAGES).includes(params.bucket) ? params.bucket : 'all';
-    const urlTypes = params.type ? params.type.split(',').filter(Boolean) : [];
+    const urlTypes = (params.type ? params.type.split(',') : [])
+        .map(type => type.toUpperCase())
+        .filter(type => ROOT_ACTION_TYPES.includes(type));
     const urlOp = params.op || null;
 
     const currentTypesJoined = Array.from(selectedRootActionTypes).sort().join(',');
