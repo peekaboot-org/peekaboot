@@ -205,6 +205,31 @@ class OtelSpanExporterTest {
                 .containsExactly(rootSpanId);
     }
 
+    /**
+     * A host route that merely spells Peekaboot's prefix deeper in its own path is not
+     * Peekaboot's request: its path tag says so, and a span that carries one is judged by
+     * it alone - otherwise the name match would discard the whole trace.
+     */
+    @Test
+    void keepsAHostRouteWhosePathSpellsThePeekabootPrefix() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData jdbcChild = testSpanBuilder(traceId, "0000000000000002", "select", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /admin/peekaboot/status", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/admin/peekaboot/status"))
+                .build();
+
+        exporter.export(List.of(jdbcChild, root));
+
+        assertThat(storedSpans(traceId))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("0000000000000002", rootSpanId);
+    }
+
     @Test
     void shouldExportSpanWhenPathDoesNotMatchAnyExclusionRule() {
         // Negative control for the skip tests above: a span whose path clearly

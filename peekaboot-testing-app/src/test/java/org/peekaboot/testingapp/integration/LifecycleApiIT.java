@@ -23,6 +23,10 @@ import tools.jackson.databind.JsonNode;
  * disabled (the default for this module), so this exercises the in-memory path: the
  * current run's own start, recorded asynchronously off {@code ApplicationReadyEvent} (see
  * LifecycleEventRecorder.onReady), is served without any storage configuration at all.
+ *
+ * <p>Fields are read with {@code required} rather than {@code path}: the {@code MissingNode}
+ * {@code path} yields for an absent field iterates empty and reads as {@code false}, so a
+ * field the API stopped serving would slip past {@code isEmpty()} and {@code isFalse()}.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -51,11 +55,11 @@ class LifecycleApiIT {
         assertThat(events).hasSize(1);
 
         JsonNode event = events.get(0);
-        assertThat(event.path("type").asString()).isEqualTo("start");
-        assertThat(event.path("epochMs").asLong()).isPositive();
-        assertThat(event.path("version").asString()).isEqualTo(buildProperties.getVersion());
-        assertThat(event.path("buildTimeEpochMs").asLong()).isPositive();
-        assertThat(event.path("uncleanPrevious").asBoolean()).isFalse();
+        assertThat(event.required("type").asString()).isEqualTo("start");
+        assertThat(event.required("epochMs").asLong()).isPositive();
+        assertThat(event.required("version").asString()).isEqualTo(buildProperties.getVersion());
+        assertThat(event.required("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(event.required("uncleanPrevious").asBoolean()).isFalse();
     }
 
     /**
@@ -71,12 +75,12 @@ class LifecycleApiIT {
         JsonNode event = awaitFirst("/peekaboot/api/lifecycle/events", "events").get(0);
         JsonNode run = awaitFirst("/peekaboot/api/lifecycle/runs", "runs").get(0);
 
-        assertThat(event.path("branch").asString()).isEqualTo(git.getBranch());
+        assertThat(event.required("branch").asString()).isEqualTo(git.getBranch());
         // the pom's full generation mode writes commit.id.full, a key getCommitId() does not read
-        assertThat(event.path("commitId").asString()).isEqualTo(git.get("commit.id.full"));
-        assertThat(event.path("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
-        assertThat(run.path("branch").asString()).isEqualTo(git.getBranch());
-        assertThat(run.path("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
+        assertThat(event.required("commitId").asString()).isEqualTo(git.get("commit.id.full"));
+        assertThat(event.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
+        assertThat(run.required("branch").asString()).isEqualTo(git.getBranch());
+        assertThat(run.required("shortCommitId").asString()).isEqualTo(git.getShortCommitId());
     }
 
     @Test
@@ -86,14 +90,14 @@ class LifecycleApiIT {
         assertThat(runs).hasSize(1);
 
         JsonNode run = runs.get(0);
-        assertThat(run.path("startedAtEpochMs").asLong()).isPositive();
-        assertThat(run.path("running").asBoolean()).isTrue();
-        assertThat(run.path("uncleanExit").asBoolean()).isFalse();
-        assertThat(run.path("stoppedAtEpochMs").isNull()).isTrue();
-        assertThat(run.path("downForMs").isNull()).isTrue();
-        assertThat(run.path("changed")).isEmpty();
-        assertThat(run.path("version").asString()).isEqualTo(buildProperties.getVersion());
-        assertThat(run.path("buildTimeEpochMs").asLong()).isPositive();
+        assertThat(run.required("startedAtEpochMs").asLong()).isPositive();
+        assertThat(run.required("running").asBoolean()).isTrue();
+        assertThat(run.required("uncleanExit").asBoolean()).isFalse();
+        assertThat(run.required("stoppedAtEpochMs").isNull()).isTrue();
+        assertThat(run.required("downForMs").isNull()).isTrue();
+        assertThat(run.required("changed")).isEmpty();
+        assertThat(run.required("version").asString()).isEqualTo(buildProperties.getVersion());
+        assertThat(run.required("buildTimeEpochMs").asLong()).isPositive();
     }
 
     /**

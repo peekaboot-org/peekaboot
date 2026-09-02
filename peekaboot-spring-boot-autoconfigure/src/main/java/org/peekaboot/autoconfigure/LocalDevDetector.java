@@ -28,6 +28,12 @@ import org.springframework.core.NativeDetector;
  * local launch, that classloader stands in for the class-path check. The
  * container check still applies: DevTools has none of its own, and Jib or an
  * extracted layout ships it whenever it is a runtime dependency.
+ *
+ * <p>A container marker is a container marker wherever it comes from, so a checkout worked on
+ * inside a devcontainer - VS Code Dev Containers, GitHub Codespaces - is not a local launch by
+ * this measure however it was started; what the detection would have switched on there
+ * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar}, {@code peekaboot.storage.enabled})
+ * has to be set explicitly.
  */
 final class LocalDevDetector {
 

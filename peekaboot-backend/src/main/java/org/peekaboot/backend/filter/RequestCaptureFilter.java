@@ -261,9 +261,22 @@ public class RequestCaptureFilter implements Filter {
             int equalsIndex = pair.indexOf('=');
             String key = equalsIndex >= 0 ? pair.substring(0, equalsIndex) : pair;
             if (!key.isBlank()) {
-                keys.add(URLDecoder.decode(key, StandardCharsets.UTF_8));
+                keys.add(decodedOrRaw(key));
             }
         }
         return keys;
+    }
+
+    /**
+     * A key whose percent-encoding is malformed decodes to nothing at all; keeping it raw
+     * costs at most a mismatch against one parameter name, where the decoder's
+     * {@code IllegalArgumentException} would cost the whole capture.
+     */
+    private static String decodedOrRaw(String key) {
+        try {
+            return URLDecoder.decode(key, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException malformedEncoding) {
+            return key;
+        }
     }
 }
