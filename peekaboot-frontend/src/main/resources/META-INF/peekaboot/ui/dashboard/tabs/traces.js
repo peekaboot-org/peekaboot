@@ -11,7 +11,6 @@
  * newer one.
  */
 import {badge, emptyStateHtml, loadingBlock} from '../../shared/components.js';
-import {escapeHtml} from '../../shared/markup.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
