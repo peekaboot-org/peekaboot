@@ -1,9 +1,7 @@
 package org.peekaboot.backend.config;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -21,8 +19,7 @@ import java.util.Set;
  * <p>One instance per application: the auto-configuration constructs it with the resolved
  * {@code management.endpoints.web.base-path}, so the actuator exclusion follows a
  * relocated management base path, and with the resolved {@code server.servlet.context-path}
- * for the stripping above. {@link #defaults()} carries Spring Boot's defaults for plain
- * construction in tests.
+ * for the stripping above.
  */
 public final class PeekabootPaths {
 
@@ -38,8 +35,6 @@ public final class PeekabootPaths {
     /** Spring Boot's default {@code management.endpoints.web.base-path}. */
     private static final String DEFAULT_MANAGEMENT_BASE_PATH = "/actuator";
 
-    private static final String ERROR_PATH = "/error";
-
     /** Prefixes whose requests are neither traced nor given a toolbar. */
     private final Set<String> excludedPrefixes;
 
@@ -51,7 +46,7 @@ public final class PeekabootPaths {
      * @param contextPath the effective {@code server.servlet.context-path}; empty or {@code /} at the root
      */
     public PeekabootPaths(String managementBasePath, String contextPath) {
-        Set<String> prefixes = new LinkedHashSet<>(Set.of("/static/", "/webjars/", BASE_PATH + "/", ERROR_PATH + "/"));
+        Set<String> prefixes = new LinkedHashSet<>(Set.of("/static/", "/webjars/", BASE_PATH + "/", "/error/"));
         String managementPrefix = managementPrefix(managementBasePath);
         if (managementPrefix != null) {
             prefixes.add(managementPrefix);
@@ -88,17 +83,10 @@ public final class PeekabootPaths {
         return "/".equals(path) ? null : path;
     }
 
-    public Set<String> excludedPrefixes() {
-        return excludedPrefixes;
-    }
-
+    /** True for the prefix itself ({@code /peekaboot}) and everything below it; {@code /errors} stays an application path. */
     public boolean isExcluded(String pathWithinApplication) {
-        // exact match so /errors or /error-report are not excluded
-        if (ERROR_PATH.equals(pathWithinApplication)) {
-            return true;
-        }
         for (String prefix : excludedPrefixes) {
-            if (pathWithinApplication.startsWith(prefix)) {
+            if (pathWithinApplication.startsWith(prefix) || prefix.equals(pathWithinApplication + "/")) {
                 return true;
             }
         }
@@ -118,14 +106,9 @@ public final class PeekabootPaths {
         return isExcluded(path);
     }
 
-    /** The same exclusions as Spring MVC path patterns, for registering the interceptor. */
+    /** The same exclusions as Spring MVC path patterns, for registering the interceptor; {@code /x/**} matches {@code /x} too. */
     public String[] excludePatterns() {
-        List<String> patterns = new ArrayList<>();
-        for (String prefix : excludedPrefixes) {
-            patterns.add(prefix + "**");
-        }
-        patterns.add(ERROR_PATH);
-        return patterns.toArray(String[]::new);
+        return excludedPrefixes.stream().map(prefix -> prefix + "**").toArray(String[]::new);
     }
 
     /**

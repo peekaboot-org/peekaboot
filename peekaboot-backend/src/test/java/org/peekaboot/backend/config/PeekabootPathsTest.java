@@ -2,8 +2,13 @@ package org.peekaboot.backend.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.http.server.PathContainer;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.util.pattern.PathPatternParser;
 
 class PeekabootPathsTest {
 
@@ -49,23 +54,44 @@ class PeekabootPathsTest {
     }
 
     @Test
-    void pathsMerelyStartingWithErrorAreNotExcluded() {
-        assertThat(paths.isExcluded("/errors")).isFalse();
-        assertThat(paths.isExcluded("/error-report")).isFalse();
-    }
-
-    @Test
-    void excludedPrefixesContainsExpectedValues() {
-        assertThat(paths.excludedPrefixes())
-                .containsExactlyInAnyOrder("/static/", "/webjars/", "/actuator/", "/peekaboot/", "/error/");
-    }
-
-    /** The interceptor's MVC patterns are the same exclusions, so the two can never drift apart. */
-    @Test
-    void excludePatternsMirrorTheExcludedPrefixes() {
+    void excludePatternsCoverEveryExcludedPrefix() {
         assertThat(paths.excludePatterns())
-                .containsExactlyInAnyOrder(
-                        "/static/**", "/webjars/**", "/actuator/**", "/peekaboot/**", "/error/**", "/error");
+                .containsExactlyInAnyOrder("/static/**", "/webjars/**", "/actuator/**", "/peekaboot/**", "/error/**");
+    }
+
+    /**
+     * The filters check {@link PeekabootPaths#isExcluded} while the interceptor is
+     * registered with the MVC patterns; both must exclude the bare prefix ({@code GET
+     * /peekaboot} is the dashboard's own entry URL) as well as everything below it.
+     */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "/peekaboot",
+                "/peekaboot/api/traces",
+                "/actuator",
+                "/actuator/health",
+                "/error",
+                "/error/404",
+                "/static",
+                "/webjars"
+            })
+    void theFiltersAndTheInterceptorExcludeTheSamePaths(String path) {
+        assertThat(paths.isExcluded(path)).isTrue();
+        assertThat(matchesAnExcludePattern(path)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/errors", "/error-report", "/peekabooting", "/actuators"})
+    void neitherSideExcludesAPathMerelyStartingWithAPrefixText(String path) {
+        assertThat(paths.isExcluded(path)).isFalse();
+        assertThat(matchesAnExcludePattern(path)).isFalse();
+    }
+
+    private boolean matchesAnExcludePattern(String path) {
+        PathPatternParser parser = new PathPatternParser();
+        return Arrays.stream(paths.excludePatterns())
+                .anyMatch(pattern -> parser.parse(pattern).matches(PathContainer.parsePath(path)));
     }
 
     /** The actuator exclusion follows {@code management.endpoints.web.base-path}, not a fixed prefix. */
@@ -93,8 +119,8 @@ class PeekabootPathsTest {
 
         assertThat(custom.isExcluded("/health")).isFalse();
         assertThat(custom.isExcluded("/peekaboot/api/v1/traces")).isTrue();
-        assertThat(custom.excludedPrefixes())
-                .containsExactlyInAnyOrder("/static/", "/webjars/", "/peekaboot/", "/error/");
+        assertThat(custom.excludePatterns())
+                .containsExactlyInAnyOrder("/static/**", "/webjars/**", "/peekaboot/**", "/error/**");
     }
 
     /**
