@@ -13,9 +13,11 @@ import io.opentelemetry.sdk.common.CompletableResultCode;
 import io.opentelemetry.sdk.common.InstrumentationLibraryInfo;
 import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
 import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
 import io.opentelemetry.sdk.trace.data.StatusData;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -316,6 +318,48 @@ class OtelSpanExporterTest {
         org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
         assertThat(stored.errorMessage()).isEqualTo("boom");
         assertThat(stored.errorClass()).isEqualTo("ERROR");
+    }
+
+    /**
+     * Micrometer's OTel bridge records a thrown exception as an {@code exception} event and
+     * sets the status description to its message when it has one; the event is the only
+     * carrier of the exception class, and of the message when the throwable had none.
+     */
+    @Test
+    void takesTheErrorClassAndMessageFromTheRecordedExceptionWhenTheStatusHasNoDescription() {
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(new IllegalStateException("pool exhausted"));
+            span.setStatus(StatusCode.ERROR);
+        });
+
+        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(stored.errorMessage()).isEqualTo("pool exhausted");
+    }
+
+    @Test
+    void keepsTheStatusDescriptionAsTheMessageAndStillTakesTheClassFromTheRecordedException() {
+        String traceId = exportThroughTheSdk(span -> {
+            span.recordException(new IllegalStateException("pool exhausted"));
+            span.setStatus(StatusCode.ERROR, "described by the app");
+        });
+
+        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
+        assertThat(stored.errorClass()).isEqualTo("java.lang.IllegalStateException");
+        assertThat(stored.errorMessage()).isEqualTo("described by the app");
+    }
+
+    /** Runs one span through the real SDK into the exporter; returns its trace id. */
+    private String exportThroughTheSdk(java.util.function.Consumer<io.opentelemetry.api.trace.Span> body) {
+        try (SdkTracerProvider provider = SdkTracerProvider.builder()
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
+                .build()) {
+            io.opentelemetry.api.trace.Span span =
+                    provider.get("test").spanBuilder("op").startSpan();
+            body.accept(span);
+            span.end();
+            return span.getSpanContext().getTraceId();
+        }
     }
 
     @Test

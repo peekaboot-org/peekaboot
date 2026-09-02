@@ -30,6 +30,12 @@ public class OtelSpanExporter implements SpanExporter {
 
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
+    /** The event Micrometer's bridge records a thrown exception as, with the OTel semantic-convention attributes. */
+    private static final String EXCEPTION_EVENT = "exception";
+
+    private static final AttributeKey<String> EXCEPTION_TYPE = AttributeKey.stringKey("exception.type");
+    private static final AttributeKey<String> EXCEPTION_MESSAGE = AttributeKey.stringKey("exception.message");
+
     private final ApplicationEventPublisher eventPublisher;
     private final PeekabootPaths paths;
 
@@ -102,8 +108,17 @@ public class OtelSpanExporter implements SpanExporter {
         String errorMessage = null;
         String errorClass = null;
         if (otelSpan.getStatus().getStatusCode() == StatusCode.ERROR) {
+            // the bridge sets the description to the throwable's message when it has one;
+            // the recorded exception event is the only carrier of its class
+            EventData exception = lastExceptionEvent(otelSpan);
             errorMessage = otelSpan.getStatus().getDescription();
-            errorClass = "ERROR";
+            if (errorMessage.isEmpty() && exception != null) {
+                errorMessage = exception.getAttributes().get(EXCEPTION_MESSAGE);
+            }
+            errorClass = exception != null ? exception.getAttributes().get(EXCEPTION_TYPE) : null;
+            if (errorClass == null) {
+                errorClass = "ERROR";
+            }
         }
 
         String serviceName = extractServiceName(otelSpan);
@@ -137,6 +152,16 @@ public class OtelSpanExporter implements SpanExporter {
             }
         });
         return tags;
+    }
+
+    private static EventData lastExceptionEvent(SpanData otelSpan) {
+        EventData last = null;
+        for (EventData event : otelSpan.getEvents()) {
+            if (EXCEPTION_EVENT.equals(event.getName())) {
+                last = event;
+            }
+        }
+        return last;
     }
 
     private List<org.peekaboot.backend.tracing.store.SpanData.Event> extractEvents(SpanData otelSpan) {
