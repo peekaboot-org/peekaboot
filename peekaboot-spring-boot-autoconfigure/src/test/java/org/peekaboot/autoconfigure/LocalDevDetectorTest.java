@@ -43,6 +43,8 @@ class LocalDevDetectorTest {
             strings = {
                 "/home/dev/app/build/classes/java/main",
                 "/home/dev/app/build/classes/kotlin/main",
+                "/home/dev/app/build/classes/groovy/main",
+                "/home/dev/app/build/classes/scala/main",
                 "/home/dev/app/out/production/app",
                 "/home/dev/app/bin/main",
                 "target/classes"
@@ -92,12 +94,23 @@ class LocalDevDetectorTest {
     @Test
     void detectsLocalDevForDevToolsRestartedThread() {
         // DevTools relaunches the app on "restartedMain" with its RestartClassLoader and only
-        // ever enables itself in a local launch - proof on its own, whatever the classpath says
-        Thread thread = new Thread(() -> {}, "restartedMain");
-        thread.setContextClassLoader(new FakeRestartClassLoader());
-
-        assertThat(LocalDevDetector.isLocalDevelopment(thread, CLEAN_STACK, JIB_LAUNCH))
+        // ever enables itself in a local launch - proof on its own, whatever the classpath
+        // says, unless the process shows a container marker
+        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, JIB_LAUNCH))
                 .isTrue();
+    }
+
+    /**
+     * DevTools has no container check of its own, and an image built by Jib or from Boot's
+     * extracted layout ships it whenever it is a runtime dependency - so the restart alone
+     * would switch Peekaboot on inside a reachable container.
+     */
+    @Test
+    void rejectsADevToolsRestartInsideAContainer() {
+        LaunchSignals signals = new LaunchSignals(JIB_LAUNCH.classPath(), true);
+
+        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, signals))
+                .isFalse();
     }
 
     @Test
@@ -173,6 +186,12 @@ class LocalDevDetectorTest {
     private static Thread mainThreadWithAppClassLoader() {
         Thread thread = new Thread(() -> {}, "main");
         thread.setContextClassLoader(new FakeAppClassLoader());
+        return thread;
+    }
+
+    private static Thread devToolsRestartedThread() {
+        Thread thread = new Thread(() -> {}, "restartedMain");
+        thread.setContextClassLoader(new FakeRestartClassLoader());
         return thread;
     }
 
