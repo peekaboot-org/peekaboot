@@ -6,16 +6,13 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.IssueType;
-import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
@@ -267,13 +264,14 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
     }
 
+    /** A filter naming nothing recognizable falls back to the default view, not to no filter at all. */
     @Test
-    void anInvalidRootActionTypeFilterIsIgnored() {
+    void aRootActionTypeFilterWithNoRecognizedTypeFallsBackToTheDefaultView() {
         addTrace("trace1", 100, false);
+        addConnectionPoolTrace("pool1");
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "not-a-real-type", null);
 
-        // Invalid filter value is caught and ignored, so no filtering is applied
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
     }
 
@@ -310,21 +308,31 @@ class TraceInsightsServiceTest {
     }
 
     /**
-     * The Traces tab's default request: with no chip selected it sends an include-list of
-     * every type except CONNECTION_POOL, so routine pool-maintenance traces stay out of
-     * the list and the filtered counts until their own chip asks for them.
+     * The default view: a request that names no type gets every type except the routine
+     * pool maintenance one, so those traces stay out of the list and out of the filtered
+     * counts until something asks for them by name.
      */
     @Test
-    void theDashboardsDefaultIncludeListLeavesConnectionPoolTracesOut() {
+    void aRequestNamingNoTypeLeavesConnectionPoolTracesOut() {
         addTrace("http1", 100, false);
         addConnectionPoolTrace("pool1");
 
-        TraceInsightsResponse response =
-                service.getInsights(10, TraceBucket.ALL, everyTypeExcept(RootActionType.CONNECTION_POOL), null);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("http1");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    /** The way past the default view's exclusion for a client that wants the store as it is. */
+    @Test
+    void aWildcardTypeFilterListsConnectionPoolTracesAlongsideEveryOther() {
+        addTrace("http1", 100, false);
+        addConnectionPoolTrace("pool1");
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactlyInAnyOrder("http1", "pool1");
     }
 
     @Test
@@ -373,11 +381,12 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(5, 0, 0));
     }
 
+    /** Only a request that filters nothing at all - every type, any operation - skips the extra bucket passes. */
     @Test
-    void filteredBucketCountsAreOmittedWithoutAFilter() {
+    void filteredBucketCountsAreOmittedWhenEveryTypeIsAskedFor() {
         addTrace("trace1", 100, false);
 
-        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", null);
 
         assertThat(response.filteredBucketCounts()).isNull();
     }
@@ -525,13 +534,6 @@ class TraceInsightsServiceTest {
                         "jdbc.datasource.name", "dataSource",
                         "jdbc.datasource.pool", "HikariPool-1"))
                 .build());
-    }
-
-    private static String everyTypeExcept(RootActionType excluded) {
-        return Arrays.stream(RootActionType.values())
-                .filter(type -> type != excluded)
-                .map(Enum::name)
-                .collect(Collectors.joining(","));
     }
 
     private void addTraceWithOperation(String traceId, String operationName, long durationMs) {

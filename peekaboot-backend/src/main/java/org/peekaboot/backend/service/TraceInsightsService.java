@@ -1,6 +1,7 @@
 package org.peekaboot.backend.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +35,18 @@ public class TraceInsightsService {
     private static final TraceInsightsResponse EMPTY_RESPONSE =
             new TraceInsightsResponse(List.of(), BucketCounts.empty(), null);
 
+    /**
+     * The types a request that names none asks for. A connection-pool trace is routine
+     * maintenance - an external health probe, a HikariCP refill acquiring a connection
+     * outside any traced work - and enough of them arrive to drown everything else, so
+     * they are kept in the store but out of the default view.
+     */
+    private static final Set<RootActionType> DEFAULT_VIEW_TYPES =
+            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(RootActionType.CONNECTION_POOL)));
+
+    /** The one {@code rootActionType} value that asks for every type, the hidden ones included. */
+    private static final String EVERY_TYPE = "*";
+
     @Nullable
     private final TraceStore traceStore;
 
@@ -60,6 +73,12 @@ public class TraceInsightsService {
         return traceStore != null;
     }
 
+    /**
+     * The trace listing for one bucket. {@code rootActionType} is a comma-separated
+     * include-list of {@link RootActionType} names; naming none asks for
+     * {@link #DEFAULT_VIEW_TYPES} and {@code *} asks for every type. {@code rootOperation}
+     * matches the root span's name partially and case-insensitively.
+     */
     public TraceInsightsResponse getInsights(
             int limit, TraceBucket bucket, String rootActionType, String rootOperation) {
         if (traceStore == null) {
@@ -95,11 +114,16 @@ public class TraceInsightsService {
     }
 
     /**
-     * Parses a comma-separated list of {@link RootActionType} names, silently dropping invalid
-     * values. An empty result means "no type filter".
+     * Parses a comma-separated list of {@link RootActionType} names, silently dropping
+     * invalid values. A request that names no recognizable type asks for
+     * {@link #DEFAULT_VIEW_TYPES}; {@link #EVERY_TYPE} asks for every type, which is the
+     * empty set here since an empty set filters nothing away.
      */
     private Set<RootActionType> parseRootActionTypes(String rootActionType) {
         if (rootActionType == null || rootActionType.isBlank()) {
+            return DEFAULT_VIEW_TYPES;
+        }
+        if (EVERY_TYPE.equals(rootActionType.trim())) {
             return Set.of();
         }
         Set<RootActionType> types = EnumSet.noneOf(RootActionType.class);
@@ -109,7 +133,7 @@ public class TraceInsightsService {
             } catch (IllegalArgumentException ignored) {
             }
         }
-        return types;
+        return types.isEmpty() ? DEFAULT_VIEW_TYPES : types;
     }
 
     /** The bucket's bundles that pass the root-level filters, newest first - nothing mapped or masked yet. */
