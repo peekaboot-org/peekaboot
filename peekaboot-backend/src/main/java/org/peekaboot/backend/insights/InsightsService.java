@@ -57,7 +57,7 @@ public final class InsightsService implements SmartLifecycle {
         Resource userOverride = properties.getConfigLocation() != null
                 ? resourceLoader.getResource(properties.getConfigLocation())
                 : resourceLoader.getResource(CLASSPATH_PREFIX + USER_LOCATION);
-        PanelsFile file = load(defaults, userOverride);
+        PanelsFile file = load(defaults, userOverride, properties.getLevels().size());
 
         this.panels = file.panels().stream()
                 .filter(panel -> panel.enabled() == null || panel.enabled())
@@ -85,17 +85,28 @@ public final class InsightsService implements SmartLifecycle {
      * because it is theirs - a typo in it costs them their panel customisation, not
      * the application Peekaboot is embedded in.
      */
-    private static PanelsFile load(Resource defaults, Resource userOverride) {
-        PanelsFile bundled = PanelConfigLoader.load(defaults, null);
+    private static PanelsFile load(Resource defaults, Resource userOverride, int levelCount) {
+        PanelsFile bundled = withKnownLevels(PanelConfigLoader.load(defaults, null), levelCount);
         if (userOverride == null || !userOverride.exists()) {
             return bundled;
         }
         try {
-            return PanelConfigLoader.load(defaults, userOverride);
+            return withKnownLevels(PanelConfigLoader.load(defaults, userOverride), levelCount);
         } catch (RuntimeException e) {
             log.error("Ignoring invalid insights panel config {}; using the bundled defaults", userOverride, e);
             return bundled;
         }
+    }
+
+    /** A panel's level picks one of the configured rings - a check the loader, which knows no levels, cannot make. */
+    private static PanelsFile withKnownLevels(PanelsFile file, int levelCount) {
+        for (PanelDef panel : file.panels()) {
+            if (panel.level() != null && (panel.level() < 0 || panel.level() >= levelCount)) {
+                throw new IllegalStateException("Invalid insights panel config: panel '" + panel.id() + "': level "
+                        + panel.level() + " is not one of the " + levelCount + " configured levels");
+            }
+        }
+        return file;
     }
 
     private static SeriesDef namespaced(String panelId, SeriesDef series) {
