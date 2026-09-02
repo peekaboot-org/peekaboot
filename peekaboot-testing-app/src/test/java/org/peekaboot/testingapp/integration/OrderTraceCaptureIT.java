@@ -12,8 +12,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
@@ -39,6 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
@@ -65,10 +67,12 @@ class OrderTraceCaptureIT {
 
     private TraceApiClient traces;
 
-    @BeforeEach
+    /**
+     * Seeded once: every save outside a request is a root trace of its own in the store
+     * the UI classes read, and no test here changes the seeded rows.
+     */
+    @BeforeAll
     void seedOrders() {
-        orderLineRepository.deleteAll();
-        orderRepository.deleteAll();
         for (int i = 1; i <= SEEDED_ORDERS; i++) {
             CustomerOrder order = new CustomerOrder();
             order.setReference("PK-200" + i);
