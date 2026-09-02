@@ -2,8 +2,8 @@
  * The "Insights" tab: aggregated metric charts (uPlot) with a global
  * aggregation-level switch and SSE-driven live updates. All grouping and
  * ordering comes from /api/insights/config - this module renders it verbatim.
- * The config's stat tiles are rendered by the Overview tab (see overview.js),
- * so the `tiles` payload the tick events carry is ignored here.
+ * The tick events carry series values only; the config's stat tiles are the Overview
+ * tab's business (see overview.js), which reads them off /api/insights/config.
  *
  * The tab owns three things beyond its markup:
  *   - a client-side mirror of the server's ring buffers, one entry per loaded
@@ -679,8 +679,8 @@ function flush() {
 function connectStream() {
     source = new EventSource(currentContext.client.basePath + '/api/insights/stream');
 
-    // the event's `tiles` payload is the Overview tab's business (overview.js),
-    // which reads them off /api/insights/config on the 30s cycle instead
+    // a tick carries this level's series values and nothing else - the stat tiles come
+    // from /api/insights/config, on the Overview tab's own 30s cycle
     source.addEventListener('tick', event => {
         const tick = JSON.parse(event.data);
         appendTick(levels.get(0), tick);
