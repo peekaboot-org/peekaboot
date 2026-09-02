@@ -1,6 +1,7 @@
 package org.peekaboot.backend.controller;
 
 import java.util.Locale;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
@@ -25,7 +26,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/peekaboot")
+@RequestMapping(PeekabootPaths.BASE_PATH)
 public class PeekabootController {
 
     private final ActuatorInsightsService actuatorInsightsService;
@@ -122,10 +123,7 @@ public class PeekabootController {
         }
     }
 
-    /**
-     * Negative limits would throw from Stream.limit; excessive ones overflow
-     * downstream arithmetic.
-     */
+    /** Negative limits throw from Stream.limit; the cap bounds the response size. */
     private int sanitizeLimit(int limit) {
         return Math.clamp(limit, 0, 10_000);
     }
