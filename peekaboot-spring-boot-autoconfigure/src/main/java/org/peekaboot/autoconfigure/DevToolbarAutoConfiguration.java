@@ -7,6 +7,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
@@ -51,12 +52,16 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
-            ToolbarDataProvider toolbarDataProvider, Tracer tracer, Environment environment) {
+            ToolbarDataProvider toolbarDataProvider,
+            Tracer tracer,
+            PeekabootPaths peekabootPaths,
+            Environment environment) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
         // read via the Environment: springdoc's SwaggerUiConfigProperties may not be on the classpath
         registration.setFilter(new DevToolbarFilter(
                 toolbarDataProvider,
                 tracer,
+                peekabootPaths,
                 environment.getProperty("springdoc.swagger-ui.path", DevToolbarFilter.DEFAULT_SWAGGER_UI_PATH)));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
@@ -68,12 +73,15 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<RequestCaptureFilter> requestCaptureFilter(
-            Tracer tracer, ApplicationEventPublisher eventPublisher, ObjectProvider<MaskingEngine> maskingEngine) {
+            Tracer tracer,
+            ApplicationEventPublisher eventPublisher,
+            ObjectProvider<MaskingEngine> maskingEngine,
+            PeekabootPaths peekabootPaths) {
         FilterRegistrationBean<RequestCaptureFilter> registration = new FilterRegistrationBean<>();
         // The shared bean when the dashboard is up; a private instance when the toolbar
         // runs without PeekabootAutoConfiguration (no actuator endpoint classes).
-        registration.setFilter(
-                new RequestCaptureFilter(tracer, eventPublisher, maskingEngine.getIfAvailable(MaskingEngine::new)));
+        registration.setFilter(new RequestCaptureFilter(
+                tracer, eventPublisher, maskingEngine.getIfAvailable(MaskingEngine::new), peekabootPaths));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 100);
         registration.setName("requestCaptureFilter");

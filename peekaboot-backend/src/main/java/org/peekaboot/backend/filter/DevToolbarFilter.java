@@ -37,19 +37,28 @@ public class DevToolbarFilter implements Filter {
 
     private final ToolbarDataProvider toolbarDataProvider;
     private final Tracer tracer;
+    private final PeekabootPaths paths;
     private final String swaggerUiPrefix;
     // Reads the bar's stylesheets off the classpath once, at construction, and caches the
     // rendered fragment's CSS; there is one filter instance per application.
     private final ToolbarShell toolbarShell = new ToolbarShell();
 
-    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
+    /** Every path default in place - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
         this(toolbarDataProvider, tracer, DEFAULT_SWAGGER_UI_PATH);
     }
 
+    /** {@link PeekabootPaths#defaults()} plus the given swagger path - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String swaggerUiPath) {
+        this(toolbarDataProvider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
+    }
+
     /** @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check */
-    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String swaggerUiPath) {
+    public DevToolbarFilter(
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer, PeekabootPaths paths, String swaggerUiPath) {
         this.toolbarDataProvider = toolbarDataProvider;
         this.tracer = tracer;
+        this.paths = paths;
         this.swaggerUiPrefix = swaggerUiPrefix(swaggerUiPath);
     }
 
@@ -144,7 +153,7 @@ public class DevToolbarFilter implements Filter {
         String path = PeekabootPaths.pathWithinApplication(request);
 
         // Skip excluded prefixes
-        if (PeekabootPaths.isExcluded(path)) {
+        if (paths.isExcluded(path)) {
             return true;
         }
 

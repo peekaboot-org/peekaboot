@@ -47,8 +47,10 @@ import org.springframework.mock.web.MockHttpServletResponse;
 class DevToolbarAutoConfigurationTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(
-                    AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    DevToolbarAutoConfiguration.class,
+                    PeekabootAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true")
             .withUserConfiguration(MockActuatorConfig.class);
 
@@ -314,7 +316,8 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void theCaptureFilterWorksWithoutTheDashboardsMaskingEngineBean() {
         new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
+                .withConfiguration(
+                        AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class, MockTracingConfig.class)
                 .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
                 .run(context -> {

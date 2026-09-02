@@ -1,5 +1,6 @@
 package org.peekaboot.autoconfigure;
 
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -22,7 +23,7 @@ public class OtelTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher) {
-        return new OtelSpanExporter(eventPublisher);
+    public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
+        return new OtelSpanExporter(eventPublisher, peekabootPaths);
     }
 }

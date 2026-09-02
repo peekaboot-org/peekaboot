@@ -30,12 +30,14 @@ public class OtelSpanExporter implements SpanExporter {
     private static final AttributeKey<String> SERVICE_NAME_KEY = AttributeKey.stringKey("service.name");
 
     private final ApplicationEventPublisher eventPublisher;
+    private final PeekabootPaths paths;
 
     /** Numbers spans in export order; per-trace sorting only ever compares orders minted here. */
     private final AtomicLong creationOrder = new AtomicLong();
 
-    public OtelSpanExporter(ApplicationEventPublisher eventPublisher) {
+    public OtelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths paths) {
         this.eventPublisher = eventPublisher;
+        this.paths = paths;
     }
 
     @Override
@@ -54,7 +56,7 @@ public class OtelSpanExporter implements SpanExporter {
     /** Peekaboot's own requests, recognised by the span's HTTP path or, failing that, its name. */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
         String path = HttpSpanTags.path(tags);
-        if (path != null && PeekabootPaths.isExcluded(path)) {
+        if (path != null && paths.isExcluded(path)) {
             return true;
         }
         String name = span.getName();

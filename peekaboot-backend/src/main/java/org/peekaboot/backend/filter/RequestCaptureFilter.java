@@ -44,18 +44,28 @@ public class RequestCaptureFilter implements Filter {
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
+    private final PeekabootPaths paths;
     /** Epoch millis; the duration is the difference between two reads around the chain. */
     private final LongSupplier clock;
 
-    public RequestCaptureFilter(Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine) {
-        this(tracer, eventPublisher, maskingEngine, System::currentTimeMillis);
+    public RequestCaptureFilter(
+            Tracer tracer,
+            ApplicationEventPublisher eventPublisher,
+            MaskingEngine maskingEngine,
+            PeekabootPaths paths) {
+        this(tracer, eventPublisher, maskingEngine, paths, System::currentTimeMillis);
     }
 
     RequestCaptureFilter(
-            Tracer tracer, ApplicationEventPublisher eventPublisher, MaskingEngine maskingEngine, LongSupplier clock) {
+            Tracer tracer,
+            ApplicationEventPublisher eventPublisher,
+            MaskingEngine maskingEngine,
+            PeekabootPaths paths,
+            LongSupplier clock) {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
         this.maskingEngine = maskingEngine;
+        this.paths = paths;
         this.clock = clock;
     }
 
@@ -69,7 +79,7 @@ public class RequestCaptureFilter implements Filter {
             return;
         }
 
-        if (PeekabootPaths.isExcluded(PeekabootPaths.pathWithinApplication(httpRequest))) {
+        if (paths.isExcluded(PeekabootPaths.pathWithinApplication(httpRequest))) {
             chain.doFilter(request, response);
             return;
         }

@@ -1,3 +1,4 @@
+org.peekaboot.autoconfigure.PeekabootPathsAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootTracingAutoConfiguration
 org.peekaboot.autoconfigure.OtelTracingAutoConfiguration
 org.peekaboot.autoconfigure.PeekabootAutoConfiguration
