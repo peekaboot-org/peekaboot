@@ -276,12 +276,14 @@ Each of these has been broken at least once and caught only in review. Keep them
   as text colors (5.3:1 and 5.7:1) — down to 4.7:1 for danger on `--pk-bg-hover`, still
   AA — which is why they have no `-text` variant.
 - **A saturated fill (`--pk-success`, `--pk-warning`, `--pk-danger`, `--pk-primary`,
-  `--pk-info`) needs its own on-colour token as foreground** — `--pk-on-success`,
-  `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info` respectively.
+  `--pk-info`, `--pk-purple`) needs its own on-colour token as foreground** — `--pk-on-success`,
+  `--pk-on-warning`, `--pk-on-danger`, `--pk-on-primary`, `--pk-on-info`, `--pk-on-purple`
+  respectively.
   **Never `--pk-text-strong` or literal `white`/`#fff` on one of these fills** —
   `white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode; the
   `--pk-on-*` tokens clear 4.5:1+ in both themes by construction. With a green brand every
-  `--pk-on-*` is dark ink, in both themes — white on the green fill is 2.61:1.
+  `--pk-on-*` is dark ink in both themes — white on the green fill is 2.61:1 — except
+  `--pk-on-purple`, which is white ink in light mode on the deep purple fill.
 - **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a
   blue. With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~47° (light)

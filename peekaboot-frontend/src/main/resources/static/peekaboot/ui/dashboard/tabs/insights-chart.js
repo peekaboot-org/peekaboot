@@ -31,15 +31,16 @@ const FALLBACK_BAND_FILL = 'rgba(128, 128, 128, 0.17)';
  * active theme. Text-tuned tokens are preferred where they exist: a 2px stroke is
  * a graphical object and needs the same 3:1 contrast against the card background
  * that the fill-tuned tokens (--pk-primary, --pk-warning) do not reach in light
- * mode. Only one green is used, so a green line is never ambiguous.
+ * mode. Only one green is used, so a green line is never ambiguous. The fallbacks
+ * (here and in themeColors) mirror the tokens.css light-theme values.
  */
 const STROKE_TOKENS = [
-    ['--pk-primary-text', '#487e1b'],
+    ['--pk-primary-text', '#447718'],
     ['--pk-info-text', '#0a6e7f'],
-    ['--pk-warning-text', '#a16207'],
+    ['--pk-warning-text', '#9a5e06'],
     ['--pk-purple', '#7c3aed'],
-    ['--pk-danger', '#dc2626'],
-    ['--pk-text-muted', '#6b7280']
+    ['--pk-danger', '#d21f1f'],
+    ['--pk-text-muted', '#626c79']
 ];
 
 let uplotReady = null;
@@ -72,7 +73,7 @@ export function ensureUplot() {
 function themeColors() {
     return {
         strokes: STROKE_TOKENS.map(([name, fallback]) => themeToken(name, fallback)),
-        axis: themeToken('--pk-text-muted', '#6b7280'),
+        axis: themeToken('--pk-text-muted', '#626c79'),
         grid: themeToken('--pk-border', '#d1d5db'),
         font: '12px ' + themeToken('--pk-font', 'system-ui, sans-serif')
     };
