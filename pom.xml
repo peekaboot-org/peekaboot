@@ -42,8 +42,8 @@
         <!-- Empty default so @{jacocoArgLine} still resolves when JaCoCo is skipped. -->
         <jacocoArgLine></jacocoArgLine>
 
-        <!-- Files whose content differs from this commit (where formatting was
-             introduced) are formatted; untouched legacy files are left alone. -->
+        <!-- Spotless ratchets from this commit: only files changed since it are
+             formatted and checked. -->
         <spotless.ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</spotless.ratchetFrom>
     </properties>
 
@@ -185,6 +185,36 @@
     <build>
         <pluginManagement>
             <plugins>
+                <!-- The lifecycle plugins Maven binds by itself, pinned so a local Maven
+                     other than the wrapper's 3.9.9 builds the same way. The versions are
+                     the ones spring-boot-dependencies manages, so the testing-app (parented
+                     to spring-boot-starter-parent) runs identical plugins; the site plugin,
+                     which Boot does not manage, is Maven 3.9.9's own binding. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.12.1</version>
+                </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
@@ -251,9 +281,13 @@
                 <version>3.15.0</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
-                    <!-- JDK 23+ no longer runs classpath annotation processors by
-                         default; required for spring-boot-configuration-processor -->
+                    <!-- Explicit so a future removal of annotationProcessorPaths does not
+                         silently stop the configuration processor: JDK 23+ runs classpath
+                         annotation processors only when asked to. -->
                     <proc>full</proc>
+                    <!-- -Xplugin:ErrorProne needs the add-exports/add-opens into
+                         jdk.compiler that .mvn/jvm.config carries (that file admits no
+                         comment of its own). -->
                     <compilerArgs>
                         <arg>-XDcompilePolicy=simple</arg>
                         <arg>--should-stop=ifError=FLOW</arg>

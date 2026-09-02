@@ -5,7 +5,7 @@ This glossary defines terms used in the Peekaboot codebase and documentation.
 ## Core Tracing Concepts
 
 ### Trace
-A distributed trace representing a complete request flow through the system. A trace consists of one or more spans forming a tree structure. Each trace has a unique `traceId`.
+One unit of work in this process — an HTTP request, a scheduled job run — recorded as one or more spans forming a tree structure. Each trace has a unique `traceId`. Peekaboot traces a single process; it does not stitch traces together across services.
 
 **Usage:** `TraceData`, `TraceTree`, `traceId`
 
@@ -130,17 +130,16 @@ Per-trace statistics organized by UI tab categories (request, spans, queries, lo
 
 **Usage:** `TraceTabSummary` record, `summary` field on `TraceTree`
 
-### Trace List Summary
-Aggregate statistics across multiple traces in list responses.
+### Bucket Counts
+How many traces each store bucket holds, carried twice on every list response: `bucketCounts` for the whole store and `filteredBucketCounts` for the traces matching the request's root-action/operation filter (null when the request carried no filter), so the Traces tab's bucket chips can show `filtered / total` while a filter is active.
 
 | Field | Description |
 |-------|-------------|
-| `traceCount` | Number of traces |
-| `errorCount` | Traces with `TraceStatus.HAS_ERRORS` |
-| `slowCount` | Traces with a `SLOW`/`VERY_SLOW` issue on any span — **not** the same as the Slow bucket, which is a whole-trace duration check against `slow-trace-threshold-ms`; see [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) |
-| `avgDurationMs` | Average trace duration |
+| `all` | Traces in the All bucket |
+| `errors` | Traces in the Errors bucket — an errored span or an error-level log anywhere in the trace |
+| `slow` | Traces in the Slow bucket — a whole-trace duration check against `slow-trace-threshold-ms`, **not** the same as a `SLOW`/`VERY_SLOW` issue on a span; see [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) |
 
-**Usage:** `TraceListSummary` record, `summary` field on `TraceInsightsResponse`
+**Usage:** `BucketCounts` record, `bucketCounts`/`filteredBucketCounts` fields on `TraceInsightsResponse`
 
 ## Additional Data
 
@@ -193,7 +192,7 @@ Development-time toolbar injected into HTML responses, showing trace data inline
 Standalone web UI at `/peekaboot/` showing application health, traces, and diagnostics, organized into tabs (Overview, Insights, Lifecycle, Traces, Meters, Environment, Flyway, Loggers, Config, Scheduled Tasks). "Dashboard" always names the whole UI, never one tab.
 
 ### Overview Tab
-The dashboard's landing tab: build/git/Spring/Java/OS/JVM info, a Machine card (CPU count and model, total memory, max heap, and the detected container runtime — docker, podman, kubernetes, a generic container, or none), the insights stat tiles, datasource cards (seated beside JVM Defaults), memory/storage usage meters, and the health banner. Not to be confused with the Insights tab below.
+The dashboard's landing tab: build/git/Spring/Java/OS/JVM info, a Machine card (CPU count and model, total memory, max heap, the detected container runtime — docker, podman, kubernetes, a generic container, or none — and the machine's non-local addresses in an IPv4/IPv6 tab strip with their reverse-resolved hostnames), the insights stat tiles, datasource cards (seated beside JVM Defaults), memory/storage usage meters, and the health banner. Not to be confused with the Insights tab below.
 
 ### Insights
 Ambiguous outside context, so used narrowly here: as a tab name, "Insights" is the aggregated-metric-charts feature (`dashboard/tabs/insights.js`, backed by `/api/insights/*`). "Insights API"/"Insights Data" (see above) is the unrelated BFF pattern used throughout the backend to enrich raw trace data before it reaches the frontend.

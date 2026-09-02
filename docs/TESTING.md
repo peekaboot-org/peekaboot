@@ -107,33 +107,25 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     all persons` — `PersonController`'s deliberate error path (`/?error=true`), same purpose.
   - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than
     the version Flyway has been verified with. The latest verified version of H2 is
-    <version>.` — a Flyway/H2 version-compatibility `WARN`, printed once per Spring context
-    start.
+    <version>.` — a Flyway/H2 version-compatibility `WARN`, printed by `FlywayTabIT`'s
+    context, the only test in the default suite that enables Flyway (both shared profiles
+    set `spring.flyway.enabled: false`).
 
-## Known flakes
-- `TraceOverlayIT` — a Playwright `TargetClosedError` was seen once from `@AfterEach`'s
-  `page.context().close()`, in `closeButtonDismissesTheOverlayOnTheErrorPath`. Root-caused and
-  fixed: the collapsed toolbar's own fetch ladder (`toolbar.js`) keeps polling
-  `/api/traces/{id}/insights` for up to 4.75s after page load, independent of any one test's
-  lifetime. That test routes the same endpoint (`page.route("**/api/traces/*/insights", route ->
-  route.abort())`) and never unroutes it, so a scheduled poll can still fire while teardown's
-  `context().close()` is mid-flight, and Playwright's client tries to sync interception patterns
-  against a target that is already closing. `PlaywrightTestBase.closePage()` navigates to
-  `about:blank` first, which stops the pollers before the close, and catches
-  `TargetClosedError` around `context().close()` as insurance against the same race.
-  Characterised by running `mvn -pl
-  peekaboot-testing-app verify -Dit.test=TraceOverlayIT` repeatedly before the fix (reproduced once
-  in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
-  previously-failing method).
-
-  Three tests share this route-and-never-unroute shape, which is why the fix lives in
-  `PlaywrightTestBase` rather than per-test `unroute()` calls:
-  `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
-  `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails` (identical pattern, and it
-  deliberately waits out all four fetch-ladder attempts before teardown runs); and
-  `ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, which routes
-  `trace-detail.js` and must *not* unroute — its Javadoc explains the browser's module map
-  caches the failed dynamic import, so a real reopen would require more than removing the route.
+## Teardown and the toolbar's fetch ladder
+`PlaywrightTestBase.closePage()` navigates to `about:blank` before `context().close()`, and
+catches `TargetClosedError` around the close as insurance. The reason: the collapsed
+toolbar's fetch ladder (`toolbar.js`) polls `/api/traces/{id}/insights` for up to 4.75s
+after page load, independent of any one test's lifetime, and three tests route that
+traffic and never unroute it — `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
+`ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails` (which deliberately waits out all
+four ladder attempts before teardown); and
+`ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, which routes
+`trace-detail.js` and must *not* unroute, because the browser's module map caches the
+failed dynamic import. A scheduled poll firing while the close is mid-flight makes
+Playwright's client sync interception patterns against a target that is already closing.
+The `about:blank` navigation stops the pollers first; per-test `unroute()` calls would not
+close the race, since `unroute` is itself an interception update over the same wire. The
+history of the flake this rule closed is in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.6.
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
@@ -207,7 +199,14 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
   [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 
 ## Counting tests
-Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`, so
-summing them under-reports. Count from the XML instead — see
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2.3 for the command and why annotation-counting is also
-wrong.
+Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`
+(`PeekabootControllerTest`, `MaskingEngineTest`), so summing them under-reports. Counting
+`@Test` annotations is also wrong: it misses `@ParameterizedTest`, and `MaskingEngineTest`
+alone has 7 that expand to 107 invocations. Count from the XML, or from the reactor
+summary, never from the `.txt` files:
+
+```bash
+for f in <module>/target/surefire-reports/TEST-*.xml; do
+  grep -m1 -o 'tests="[0-9]*"' "$f" | grep -o '[0-9]*'
+done | paste -sd+ | bc
+```

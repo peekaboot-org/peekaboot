@@ -1,11 +1,11 @@
 # Building Peekaboot
 
-Maven is the system of record: one reactor, six gates at `verify` - five static-analysis
-and one coverage floor. No Node toolchain, no codegen beyond annotation processing.
-A parallel **Gradle build** covers the same modules, tests and gates (see
-[the Gradle build](#the-parallel-gradle-build) below); until it is proven equivalent in
-CI, every Maven statement in this document is authoritative and the Gradle build must be
-kept in lockstep.
+Maven is the system of record: one reactor, six gates - five static-analysis and one
+coverage floor; Error Prone runs at compile time, the other five at `verify`. No Node
+toolchain, no codegen beyond annotation processing. A parallel **Gradle build** covers the
+same modules, tests and gates (see [the Gradle build](#the-parallel-gradle-build) below);
+CI runs Maven only, so every Maven statement in this document is authoritative and the
+Gradle build must be kept in lockstep.
 
 Both builds ship wrapper scripts, each pinned by SHA-256 checksum: `./mvnw` (downloads
 Maven 3.9.9, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
@@ -89,9 +89,9 @@ stays around a minute.
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
 | `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only — shared test helpers the backend and autoconfigure tests consume at test scope. See its [README](peekaboot-test-support/README.md) |
-| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners. Web/servlet/logback/Hikari/health-endpoint/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
+| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class (and therefore the `spring-boot-configuration-processor` metadata). Web/servlet/logback/Hikari/health-endpoint/OTel deps are `<optional>` — the host app supplies them, auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only (outside every default static location, so a consumer with Peekaboot off serves none of it). **No build step** — plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
-| `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration + `spring-boot-configuration-processor` metadata |
+| `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources — Maven logs `JAR will be empty`, which is correct. Its `-sources` and `-javadoc` jars are empty on purpose (below) |
 | `peekaboot-testing-app` | jar (boot) | **no** (`maven.deploy.skip`, see [Releasing](#releasing)) | Sample app + the Playwright UI suite. See its [README](peekaboot-testing-app/README.md) |
 | `peekaboot-coverage` | pom | **no** (`skipPublishing`, see [Releasing](#releasing)) | No sources. Merges every module's coverage data, renders the aggregate report and enforces the floor. Builds last |
@@ -126,7 +126,7 @@ applies the same convention plus the Spring Boot and git-properties plugins — 
 consume-the-starter-as-a-published-artifact proof stays with Maven, which is why the
 Maven module keeps its `spring-boot-starter-parent` parent.
 
-**Lockstep.** Two values live once, in `gradle.properties`: `version` (the six poms'
+**Lockstep.** Two values live once, in `gradle.properties`: `version` (the eight poms'
 `<version>` — `maven-release-plugin` rewrites only the poms, so **bump it by hand after every
 release**, see the checklist under [Releasing](#releasing), or `./gradlew build` keeps
 producing pre-release jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
@@ -136,7 +136,8 @@ BOM, as Maven does. Every other shared literal — Error Prone, palantir, the ra
 Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors, the build timestamp, Playwright,
 springdoc and the testing-app's direct dependencies — is written on both sides and has to
 change on both. Dependabot watches the `gradle` ecosystem next to `maven`, so version bumps
-arrive as paired PRs.
+arrive as paired PRs; the Gradle half is never auto-merged, because nothing in CI would
+build it — check it against the merged Maven bump by hand.
 
 **Reproducibility and artifact parity** (verified by building each system twice and
 cross-diffing): both builds are self-reproducible - byte-identical jars across
@@ -203,11 +204,10 @@ directory alike.
 ### The coverage gate
 
 `peekaboot-coverage` holds it: line >= 90%, branch >= 75% over every published class,
-measured on the merged data of the whole reactor. At the time the gate landed the real
-figures were **95.6% line, 81.8% branch** (97.3% of methods), so the floors sit well below
-today's value: they catch a substantial regression, not a few uncovered lines. Both are
-properties - `jacoco.min.line` and `jacoco.min.branch` - so raising the floor is a one-line
-commit. Lowering one to make a build pass is not a fix.
+measured on the merged data of the whole reactor. The floors sit well below actual coverage
+(about **95% line, 82% branch**) on purpose: they catch a substantial regression, not a few
+uncovered lines. Both are properties - `jacoco.min.line` and `jacoco.min.branch` - so
+raising the floor is a one-line commit. Lowering one to make a build pass is not a fix.
 
 Three things about that module are deliberate and worth knowing before changing it:
 
@@ -226,7 +226,7 @@ Three things about that module are deliberate and worth knowing before changing 
 - **A missing data file makes `jacoco:check` pass silently**, which would turn the gate into
   decoration the moment the merge broke. `maven-enforcer-plugin` fails the build first if
   `target/jacoco-merged.exec` is absent. The consequence is that `mvn verify -DskipTests`
-  now fails on purpose; pass `-Djacoco.skip=true` to turn the agent, the check and the guard
+  fails on purpose; pass `-Djacoco.skip=true` to turn the agent, the check and the guard
   off together.
 
 The aggregate HTML report lands at `peekaboot-coverage/target/site/jacoco-aggregate/index.html`,
@@ -248,9 +248,9 @@ left alone. Two consequences:
 
 ## Tests
 
-Surefire 3.5.6, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the known
-flakes live in [`docs/TESTING.md`](docs/TESTING.md) — this section covers only the build
-mechanics.
+Surefire 3.5.6, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the
+Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md) — this section covers
+only the build mechanics.
 
 - Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
   `peekaboot-testing-app`. Those three resolve `${org.mockito:mockito-core:jar}` via
@@ -281,25 +281,30 @@ Three workflows, all under `.github/workflows/`.
 the ratchet, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
 `playwright.version` property (Chromium changes with Playwright, not with any other
 dependency), then `./mvnw --batch-mode clean verify`. The Chromium install is split into two
-steps on purpose: `exec:java` ignores `-pl` scoping when combined with `-am`, so the
-reactor's SNAPSHOTs are installed first (`-pl peekaboot-testing-app -am install
--Dmaven.test.skip=true`) and the plain `exec:java` call resolves against the local repo
-afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
-`pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
-invocation resolves whatever is latest that day.
+steps on purpose: `exec:java` ignores `-pl` scoping when combined with `-am` (it runs the
+goal against every upstream reactor module too and fails on the first one without
+Playwright on its classpath), so the reactor's SNAPSHOTs are installed first (`-pl
+peekaboot-testing-app -am install -Dmaven.test.skip=true`, with every gate and the
+sources/javadoc jars skipped because the `verify` that follows runs them all anyway) and
+the plain `exec:java` call resolves against the local repo afterwards. That ad-hoc call is
+why the testing-app pom pins `exec-maven-plugin` in `pluginManagement`:
+`spring-boot-starter-parent` does not manage it, and an unpinned prefix invocation resolves
+whatever is latest that day.
 
 Both workflows build with the checked-in `./mvnw`, and every action is pinned to a commit
 SHA with the tag in a trailing comment; Dependabot's `github-actions` updates move the pins.
 
-**`build-release-on-main-push.yml`** — see Releasing. Untested in anger: `dev` is currently
-the only branch on the remote, so no release has ever run.
+**`build-release-on-main-push.yml`** — see Releasing.
 
 **`dependabot-pr-auto-merge.yml`** — auto-approves and auto-merges Dependabot PRs targeting
-`dev`. Dependabot watches Maven and Gradle daily and GitHub Actions weekly.
+`dev`, except semver-major updates and every `gradle`-ecosystem update, which wait for a
+human (CI never builds Gradle, so a merged Gradle bump would be unverified). Dependabot
+watches Maven and Gradle daily and GitHub Actions weekly.
 
 Branch model: `dev` is the default and integration branch; `main` is the release trunk, and
-pushing to it releases. Branch protection on `dev` is configured but not enforcing — see
-[`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md) §1.2.
+pushing to it releases. The `green-default-branch` ruleset on `dev` requires the
+`build-on-push` check, but admins bypass it unconditionally, so a direct push by the owner
+never waits for it — see [`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md) §1.2.
 
 ## Releasing
 
@@ -321,11 +326,15 @@ which is how recursion is prevented) runs:
 
 Nothing automates what follows a release; do it on `dev` once the merge-back has landed:
 
-1. Set `version` in `gradle.properties` to the new `-SNAPSHOT` version the poms now carry.
-2. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
+1. Set `version` in `gradle.properties` to the new `-SNAPSHOT` version the poms carry.
+2. `release:prepare` also rewrites `project.build.outputTimestamp` in both parent poms; copy
+   the new instant into `peekaboot-testing-app/build.gradle.kts` (two places: the
+   `buildInfo` `time` and the `git.build.time` custom property), or the two builds' jars
+   stop being byte-identical.
+3. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
    to the released version — every dependency snippet on the site reads it.
-3. Remove the pre-release callout from the site's `quick-start.md`.
-4. Put the released version into the two quick-start snippets in `README.md`.
+4. Remove the pre-release callout from the site's `quick-start.md`.
+5. Put the released version into the two quick-start snippets in `README.md`.
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
@@ -355,8 +364,10 @@ and the upload to Maven Central happen. The workflow passes it
 `-Darguments="-DskipTests -Djacoco.skip=true"`: that tree has passed `verify` twice by then
 (the job's own build, then `preparationGoals`), so the third run would only repeat the
 Playwright suite. The four static-analysis gates still run. Reproducibility depends on
-`project.build.outputTimestamp` being pinned in the parent POM and on every plugin version
-being explicit.
+`project.build.outputTimestamp` being pinned in both parent POMs and on every plugin version
+being explicit — including the lifecycle plugins Maven would otherwise bind on its own
+(clean, resources, install, deploy, site), which the parent pins at the versions
+`spring-boot-dependencies` manages so the testing-app runs the same ones.
 
 ### First release
 
@@ -377,8 +388,8 @@ The first release is **0.1.0**. The recipe that works with the workflow exactly 
    `feat:`/`fix:`/`chore:`/`test:` work without a breaking marker, so the policy computes a
    minor step from 0.0.4 (verified in a throwaway clone: `Starting from SCM tag with version
    0.0.4 … Doing a MINOR version increase … Next release version : 0.1.0`). The tag must sit
-   *before* the features that make this a minor release: on the current tip the window holds
-   no `feat:` and the same dry run answers `0.0.5`.
+   *before* the features that make this a minor release: tagging the tip instead would leave
+   an empty window, and the same dry run then answers `0.0.5`.
 2. Confirm nothing merged after the tag carries `!:` or a `BREAKING CHANGE:` footer — either
    turns the answer into 1.0.0.
 3. Create `main` from `dev` and push. The workflow tags `0.1.0`; the next development version

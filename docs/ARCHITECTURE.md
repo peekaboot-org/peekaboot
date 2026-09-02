@@ -8,16 +8,9 @@ Technical documentation for contributors and maintainers.
 
 ## Module Structure
 
-```
-peekaboot/
-├── peekaboot-backend/                    # Core logic and APIs
-├── peekaboot-test-support/               # Shared test helpers (never published)
-├── peekaboot-frontend/                   # Static web resources
-├── peekaboot-spring-boot-autoconfigure/  # Auto-configuration
-├── peekaboot-spring-boot-starter/        # Dependency aggregator
-├── peekaboot-testing-app/                # Sample app + UI tests
-└── peekaboot-coverage/                   # JaCoCo aggregate report + coverage floor
-```
+Seven reactor modules; the reactor table in [`BUILD.md`](../BUILD.md) says what each one
+contains and which are published. The sections below follow the same split: backend,
+frontend, auto-configuration.
 
 ## Persisted state
 
@@ -28,8 +21,8 @@ peekaboot.storage.enabled = <local run>                       # on for a local l
 peekaboot.storage.dir     = ${user.home}/.peekaboot/<app>      # both stores
 ```
 
-Like `peekaboot.enabled` and `peekaboot.dev-toolbar`, the switch follows the launch
-context rather than `peekaboot.enabled`: on for an IDE or `spring-boot:run` launch, off
+Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
+`peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off
 everywhere else, and an explicit setting wins in either direction. Switching Peekaboot on
 deliberately in a shared environment therefore writes nothing to that host's `$HOME`.
 
@@ -91,7 +84,7 @@ arrives first applies the snapshot — a level-1 roll-up can never land ahead of
 restore it depends on. That thread waits up to 5 seconds for the parse; a snapshot that
 lands after the wait is discarded rather than layered on top of live samples. Restoring
 a level's `endEpochMs` is what turns the outage into a visible gap on the chart: the
-collector's existing `fillMissed()` — the same code that already pads a suspended
+collector's `fillMissed()` — the same code that pads a suspended
 laptop or a stalled sampler — runs at that level's next tick or roll-up and pads exactly
 the missed interval, capped at the ring size.
 
@@ -115,7 +108,7 @@ run in progress.
 
 ### API and dashboard
 
-`GET /peekaboot/api/lifecycle/events`, gated by the existing `peekaboot.lifecycle.enabled`
+`GET /peekaboot/api/lifecycle/events`, gated by the `peekaboot.lifecycle.enabled`
 property, serves the log as start/stop markers. For each start, `LifecycleEvents`
 compares it against the previous start already in the log and includes `version`,
 `branch`, `commitId`/`shortCommitId` and `buildTimeEpochMs` only when they differ from
@@ -123,7 +116,7 @@ it (all four are present on the log's first entry); a start whose predecessor in
 log is itself a start — no stop in between — is flagged `uncleanPrevious`. Computing
 this diff server-side, rather than in the dashboard, gives the browser one definition of
 "what changed" instead of reimplementing it wherever a marker is drawn. This endpoint
-complements the existing insights endpoints under `/peekaboot/api/insights/*`
+complements the insights endpoints under `/peekaboot/api/insights/*`
 (`/config`, `/data`, `/stream`): the dashboard fetches lifecycle events alongside the
 ring data and renders them as restart markers over the same charts.
 
@@ -354,11 +347,12 @@ sets `spring.jackson.property-naming-strategy`, `default-property-inclusion=non_
 return value whose class lives under `org.peekaboot.backend.` — the scope has to be the
 value's type because Spring MVC picks converters per return value, not per controller —
 and `InsightsAutoConfiguration` hands the same mapper to `InsightsSsePublisher`. The
-default mapper writes byte for byte what an unconfigured Boot application already wrote,
-so nothing changed for hosts with default Jackson settings (`PeekabootJsonTest` pins that).
-`PeekabootController.getFeatures()` and `InsightsController`'s 400 body return plain
-`Map`s and therefore still go through the application's converter; naming strategies do
-not touch map keys, and neither map holds a null.
+default mapper writes byte for byte what an unconfigured Boot application writes, so a
+host with default Jackson settings sees the same bytes either way
+(`PeekabootJsonMessageConverterTest.writesCamelCaseNullsAndIsoInstants` pins the wire
+shape). Every Peekaboot response goes through it: `PeekabootController.getFeatures()`
+returns the `Features` record and `InsightsController`'s 400 body is a record in
+`org.peekaboot.backend.insights.web`, both under the converter's package prefix.
 
 ### In-Process Actuator Invocation
 
@@ -414,49 +408,8 @@ standalone dashboard, the dev toolbar injected into host-app pages, and the trac
 overlay — that share one design system. See `peekaboot-frontend/README.md` for the full
 picture (the shared-layer split, the shadow-DOM delivery mechanism, theme resolution,
 accessibility invariants, and the ids the test suite depends on); this section covers
-only the file layout and the headline decisions.
-
-### File Structure
-
-```
-META-INF/peekaboot/ui/
-├── assets/
-│   ├── tokens.css          # Design tokens (--pk-* custom properties) — the re-theme point
-│   ├── base.css             # Reset + bare element defaults
-│   └── components.css       # .pk-* component primitives (badge, group, kv, meter, tabs, ...)
-├── shared/
-│   ├── api.js                # createClient() — fetch wrapper with per-path generation guards
-│   ├── components.js         # JS builders behind the .pk-* primitives
-│   ├── copyable.js             # copyableId()/copyableIdHtml()/bindCopyables() — click-to-copy trace/span ids
-│   ├── filtered-group-tab.js   # filteredGroupTab() — the shell of a filterable collapsible-group tab (config/environment/loggers)
-│   ├── format.js              # Duration/byte/date formatting
-│   ├── http-status.js          # statusLabel()/statusVariant() — IANA reason phrases and badge colouring
-│   ├── markup.js               # escapeHtml, highlightText, MASK_LITERAL (fallback for Features.maskLiteral)
-│   ├── root-actions.js         # Root action type -> icon/label map
-│   ├── severity.js             # Duration/issue/log-level/health colouring; thresholds read from /api/features
-│   ├── shadow-styles.js        # attachSharedStyles() — links the shared sheets into a shadow root
-│   ├── span-names.js           # spanId -> name lookup, shared by overlay tabs
-│   ├── theme.js                # localStorage-backed theme resolution shared across surfaces
-│   ├── trace-stats.js          # traceStatParts() — a trace's query/error/warning stat line, shared by list and toolbar
-│   ├── unmask-control.js       # renderUnmaskControl() — the Environment/Config "Show secrets" toggle,
-│   │                            # rendered only when /api/features reports unmaskingEnabled
-│   ├── url-filter.js           # reconcileFilterWithUrl() — URL-vs-current-state direction for tab filters
-│   └── url-state.js            # parseAppHash()/buildAppHash()/pushAppHash()/replaceAppHash() — hash routing
-├── dashboard/
-│   ├── index.html            # Dashboard document
-│   ├── dashboard.css         # Dashboard-only chrome
-│   ├── main.js                # Bootstrap: tab registry, hash routing, auto-refresh
-│   └── tabs/*.js               # One module per tab (10), each exporting id/label/render, plus the
-│                                # Insights tab's own insights-chart.js and insights-markers.js
-├── trace-detail/
-│   ├── trace-detail.css      # Overlay chrome
-│   ├── trace-detail.js        # Shell: open()/close(), tab wiring (shadow-rooted)
-│   └── tabs/*.js               # One module per tab (4: request, spans, queries, logs)
-└── toolbar/
-    ├── toolbar.css            # Toolbar chrome
-    └── toolbar.js              # Enhances the server-rendered bar (declarative shadow root;
-                                #   lazy-imports trace-detail.js)
-```
+only the headline decisions. The file inventory — every module under
+`META-INF/peekaboot/ui/` and what it exports — lives in that README alone.
 
 ### Design Principles
 
@@ -467,7 +420,9 @@ META-INF/peekaboot/ui/
   lets the identical stylesheet apply in both contexts, so no surface carries its own
   palette, `escapeHtml`, duration thresholds or collapsible-group CSS.
 - **Shadow DOM**: Toolbar and trace-detail overlay isolated from host app styles
-- **Mobile-first**: Responsive design
+- **Responsive dashboard, desktop toolbar and overlay**: the dashboard's grids, key-value
+  rows and task rows reflow below 768px (`dashboard.css`, `components.css`); the toolbar
+  and the trace-detail overlay assume a desktop viewport
 - **Lazy loading**: Trace-detail overlay JS loaded only on first use (dynamic `import()`
   from `toolbar.js`; eager static import from `dashboard/main.js`)
 - **Theme support**: `--pk-*` CSS custom properties for dark/light modes, resolved once
@@ -479,7 +434,7 @@ application overrides `tokens.css` to re-theme all three surfaces.
 
 ## peekaboot-spring-boot-autoconfigure
 
-Auto-configuration classes that wire everything together. The eight `@AutoConfiguration`
+Auto-configuration classes that wire everything together. The nine `@AutoConfiguration`
 classes are registered in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`;
 the three hooks that run before or outside the application context are registered in
 `META-INF/spring.factories`.
@@ -495,7 +450,7 @@ the three hooks that run before or outside the application context are registere
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | `peekaboot.enabled`/`peekaboot.dev-toolbar` local-dev detection + default property values |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (plus, on a local servlet run, the `env`/`configprops` `show-values` keys) + default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes actuator endpoint beans available without web/JMX exposure |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Spring Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LocalDevDetector` | — (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
@@ -507,24 +462,30 @@ or name replaces any Peekaboot default instead of colliding with it.
 
 ### Conditional Loading
 
-Auto-configuration uses Spring Boot conditionals. `PeekabootAutoConfiguration`,
+Auto-configuration uses Spring Boot conditionals. Seven of the nine classes &mdash;
+`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
-`InsightsAutoConfiguration` all carry the servlet guard:
+`InsightsAutoConfiguration` &mdash; carry the same two class-level conditions, the servlet
+guard and the master switch:
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty("peekaboot.dev-toolbar")
-@ConditionalOnClass(TraceStore.class)
 ```
+
+Each adds its own on top: `PeekabootAutoConfiguration` needs the `HealthEndpoint` and
+`InfoEndpoint` classes, `DevToolbarAutoConfiguration` additionally requires
+`peekaboot.dev-toolbar`, `TracingInterceptorAutoConfiguration` an `ObservationRegistry`
+bean, `InsightsAutoConfiguration` a `MeterRegistry` bean and `peekaboot.insights.enabled`,
+`OtelTracingAutoConfiguration` the OpenTelemetry SDK's `SpanExporter` class.
 
 `PeekabootAutoConfiguration` &mdash; the class that registers the servlet-only
 `PeekabootWebConfig` next to the controllers, services and actuator wiring, all as
 explicit `@Bean` methods, each `@ConditionalOnMissingBean` so an application bean of the
 same type or name replaces the default instead of colliding with it (the method names
-keep the class-derived bean names component scanning used to produce, which
-`ServerUrlResolver`'s dashboard check relies on) &mdash; needs it because
+yield the class-derived bean names `ServerUrlResolver`'s dashboard check relies on)
+&mdash; needs it because
 `PeekabootWebConfig implements WebMvcConfigurer`, a servlet-only type;
 without the guard, a non-servlet application (WebFlux, or no web application at all) with
 `peekaboot.enabled=true` would still register the controller, actuator services and
@@ -535,13 +496,15 @@ in a real servlet context, ever calls back into `WebMvcConfigurer`). The guard p
 even that. `PeekabootTracingAutoConfiguration` and `OtelTracingAutoConfiguration` carry it
 for the same reason: everything that reads the trace store is servlet-only, so a WebFlux or
 non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
-`PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no such
-guard, since neither touches anything servlet-specific. `PeekabootDefaultsEnvironmentPostProcessor`
+`PeekabootLifecycleAutoConfiguration` and `PeekabootStorageAutoConfiguration` carry no
+class-level servlet guard &mdash; the ready/stopped summaries, the run history and the
+storage directory must work in a plain non-web application &mdash; and only the lifecycle
+API's `LifecycleController` bean is servlet-gated on its own. `PeekabootDefaultsEnvironmentPostProcessor`
 applies the same split to the property defaults: the activation, storage and value-visibility
 detection is web-type independent, while `peekaboot-defaults.yml` and the dev-toolbar defaults
 are skipped for a non-servlet application (see *Default Properties*).
 
-guard, since neither touches anything servlet-specific. `OtelTracingAutoConfiguration` and
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
 `TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled`
 (default on): handler and view observations are tracing, and with it off there is no store
 for them to land in.
@@ -628,13 +591,21 @@ would without Peekaboot at all.
 
 ### OpenTelemetry Bridge
 
-When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
+When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered
+(`OtelTracingAutoConfiguration`; the class condition is on the auto-configuration, not
+the bean method):
 
 ```java
-@Bean
+@AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
-    return new OtelSpanExporter(eventPublisher, peekabootPaths);
+// ... the servlet guard, peekaboot.enabled and peekaboot.tracing.enabled
+public class OtelTracingAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean
+    public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
+        return new OtelSpanExporter(eventPublisher, peekabootPaths);
+    }
 }
 ```
 
@@ -732,7 +703,7 @@ value-patterns only, not column-aware literal masking — see the class Javadoc 
 directly — OpenTelemetry's own span-name summary, e.g. `SELECT customer_order` — which is
 correct and expected for a span tree. The Queries tab (`trace-detail/tabs/queries.js`)
 renders `query.sql`, which is what `QueryExtractor` populates; this is where the tag
-`findSql` picks actually shows up. The overlay opens on Spans by default
+`DbSpans.sql` picks actually shows up. The overlay opens on Spans by default
 (`trace-detail.js`'s `initial: 'spans'`); `ScreenshotCapture` photographs both views, so
 `trace-detail-queries-*` is the shipped image that demonstrates `QueryExtractor`'s output
 (see [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.7).
@@ -801,22 +772,34 @@ Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 - `*Test` — plain unit tests, run by surefire at `test`.
 - `*IT` — anything that boots a real application, run by failsafe at `integration-test`.
 
-Any test that boots a Spring context — `@SpringBootTest`, including the Playwright UI
-suite under `org.peekaboot.testingapp.ui` — lives in `peekaboot-testing-app`, not
-`peekaboot-backend`. `peekaboot-backend`'s own test suite is pure unit tests with no
-Spring context; `peekaboot-frontend` currently has no test sources of its own (its
-behaviour is covered by the Playwright suite in `peekaboot-testing-app`, which boots the
-sample app and drives the real dashboard/toolbar/overlay in a headless browser).
+Where the Spring-backed tests live: `peekaboot-backend`'s suite uses no `@SpringBootTest`
+and no embedded server — a bare `AnnotationConfigApplicationContext` or an
+`ApplicationContextRunner` is fine where a bean-name lookup or endpoint discovery needs a
+real container (`PeekabootActuatorServiceTest`, `ServerUrlResolverTest`).
+`peekaboot-spring-boot-autoconfigure` has context-runner unit tests per auto-configuration
+plus three `*IT`s that boot its own `TestApplication` (`DevToolbarAutoConfigurationIT` and
+`PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT` through `SpringApplicationBuilder`)
+and one `*Test` that runs a real non-web `SpringApplication` to prove the
+`spring.factories` registration (`PeekabootDefaultsRegistrationTest`). Everything
+Playwright — the UI suite under `org.peekaboot.testingapp.ui` — lives in
+`peekaboot-testing-app`, which boots the sample app and drives the real
+dashboard/toolbar/overlay in a headless browser; `peekaboot-frontend` has no test sources
+of its own, that suite covers it.
 
 ### Testing Auto-Configuration
 
-Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests:
+Use `ApplicationContextRunner` with `FilteredClassLoader` for unit tests, as
+`PeekabootAutoConfigurationTest` does to prove a missing actuator endpoint class disables
+the whole configuration:
 
 ```java
-new ApplicationContextRunner()
-    .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
-    .withClassLoader(new FilteredClassLoader(TraceStore.class))
-    .run(context -> assertThat(context).doesNotHaveBean("devToolbarFilter"));
+contextRunner
+    .withPropertyValues("peekaboot.enabled=true")
+    .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
+    .run(context -> {
+        assertThat(context).hasNotFailed();
+        assertThat(context).doesNotHaveBean(PeekabootController.class);
+    });
 ```
 
 For integration tests that verify auto-configuration ordering, use real OpenTelemetry:
@@ -857,9 +840,15 @@ class DevToolbarAutoConfigurationIT {
 )
 ```
 
-The `afterName` attribute (string-based) is used instead of a class reference because Boot's OpenTelemetry auto-configuration is an optional dependency: a class literal would fail to load when it is absent. `InsightsAutoConfiguration` names `CompositeMeterRegistryAutoConfiguration` the same way.
+The `afterName` attribute (string-based) is used where the referenced auto-configuration
+lives in a module this one does not compile against at all — Boot's OpenTelemetry tracing
+module here, `spring-boot-micrometer-metrics` for the `CompositeMeterRegistryAutoConfiguration`
+edge in `InsightsAutoConfiguration`. Boot reads ordering edges from the class metadata
+without loading the named classes, which is why `TracingInterceptorAutoConfiguration` can
+use a class literal (`after = ObservationAutoConfiguration.class`) for a module the pom
+marks `<optional>`: the class only has to exist at compile time.
 
 ## Known defects
 
-Open defects live in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2, each naming the class at
-fault and the remedy; what was closed, and why, is in its §5.
+Known gaps and the decisions still waiting on a call live in
+[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §1 and §2; what was closed, and why, is in its §5.
