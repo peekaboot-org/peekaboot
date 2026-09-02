@@ -192,6 +192,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /** Detaches the subscriber whose emitter this is and interrupts its sender; a no-op for an unknown emitter. */
+    // CompareObjectsWithEquals: identity is the point - the very emitter being detached,
+    // not one that happens to compare equal
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private void removeSubscriber(SseEmitter emitter) {
         synchronized (lock) {
             for (Subscriber subscriber : subscribers) {
