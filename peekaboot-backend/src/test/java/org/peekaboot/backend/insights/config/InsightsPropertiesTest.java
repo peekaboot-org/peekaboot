@@ -105,6 +105,6 @@ class InsightsPropertiesTest {
         InsightsProperties properties = new InsightsProperties();
 
         assertThat(properties.resolvePersistenceInterval()).isEqualTo(Duration.ofHours(1));
-        assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofHours(720));
+        assertThat(properties.resolvePersistenceMaxAge()).isEqualTo(Duration.ofDays(30)); // 720 one-hour slots
     }
 }

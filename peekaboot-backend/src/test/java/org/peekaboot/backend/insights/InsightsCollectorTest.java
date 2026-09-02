@@ -34,7 +34,8 @@ class InsightsCollectorTest {
     @BeforeEach
     void setUp() {
         registry = new SimpleMeterRegistry();
-        gaugeValue = registry.gauge("test.gauge", new AtomicLong(0));
+        gaugeValue = new AtomicLong(0);
+        Gauge.builder("test.gauge", gaugeValue::get).register(registry);
         SeriesDef series = new SeriesDef("g", "G", "test.gauge", Map.of(), "value", null, null);
         TileDef staticTile = new TileDef("startup", "Startup", "app.start", Map.of(), "duration", false);
         TileDef liveTile = new TileDef("uptime", "Uptime", "app.uptime", Map.of(), "duration", true);
@@ -69,7 +70,7 @@ class InsightsCollectorTest {
     @Test
     void rollUpAggregatesTicksIntoLevelOne() {
         for (int i = 1; i <= 6; i++) {
-            gaugeValue.set(i * 10);
+            gaugeValue.set(i * 10L);
             collector.tick(i * 10_000L);
         }
         collector.rollUp(1, 60_000);
@@ -86,7 +87,7 @@ class InsightsCollectorTest {
         // two full level-1 windows with different values
         for (int window = 0; window < 2; window++) {
             for (int i = 1; i <= 6; i++) {
-                gaugeValue.set((window + 1) * 100);
+                gaugeValue.set((window + 1) * 100L);
                 collector.tick((window * 6 + i) * 10_000L);
             }
             collector.rollUp(1, (window + 1) * 60_000L);
@@ -166,7 +167,8 @@ class InsightsCollectorTest {
     void staticTileFreezesAfterFirstResolution() {
         collector.tick(10_000); // app.start not registered yet -> NaN
         assertThat(collector.tileValues().get("startup")).isNaN();
-        AtomicLong start = registry.gauge("app.start", new AtomicLong(42));
+        AtomicLong start = new AtomicLong(42);
+        Gauge.builder("app.start", start::get).register(registry);
         collector.tick(20_000);
         assertThat(collector.tileValues().get("startup")).isEqualTo(42.0);
         start.set(99); // static tile must NOT follow further changes
@@ -176,7 +178,8 @@ class InsightsCollectorTest {
 
     @Test
     void liveTileFollowsChanges() {
-        AtomicLong uptime = registry.gauge("app.uptime", new AtomicLong(1));
+        AtomicLong uptime = new AtomicLong(1);
+        Gauge.builder("app.uptime", uptime::get).register(registry);
         collector.tick(10_000);
         uptime.set(11);
         collector.tick(20_000);
@@ -192,8 +195,9 @@ class InsightsCollectorTest {
      */
     @Test
     void tileValuesResolveOnReadBeforeTheFirstTick() {
-        AtomicLong start = registry.gauge("app.start", new AtomicLong(42));
-        registry.gauge("app.uptime", new AtomicLong(7));
+        AtomicLong start = new AtomicLong(42);
+        Gauge.builder("app.start", start::get).register(registry);
+        Gauge.builder("app.uptime", () -> 7).register(registry);
 
         assertThat(collector.tileValues().get("startup")).isEqualTo(42.0);
         assertThat(collector.tileValues().get("uptime")).isEqualTo(7.0);
