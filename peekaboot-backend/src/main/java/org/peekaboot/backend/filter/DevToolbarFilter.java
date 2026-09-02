@@ -10,8 +10,6 @@ import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 import org.peekaboot.backend.config.PeekabootPaths;
@@ -106,7 +104,7 @@ public class DevToolbarFilter implements Filter {
                 // hand the response over and skip injection
                 wrappedResponse.enablePassthrough();
             } else if (!wrappedResponse.isPassthrough()) {
-                processResponse(httpRequest, wrappedResponse, httpResponse);
+                processResponse(httpRequest, wrappedResponse);
             }
         } catch (Exception e) {
             if (isClientAbort(e)) {
@@ -126,9 +124,8 @@ public class DevToolbarFilter implements Filter {
     /**
      * Whether the write failed because the client hung up - a browser navigating away
      * mid-response - rather than because of anything on this side. Tomcat wraps that in
-     * its own ClientAbortException, Jetty throws its EofException (both recognised by
-     * simple name, wherever a container or a shaded copy packages them, since this module
-     * depends on neither container); other containers surface the socket error itself.
+     * its own ClientAbortException, Jetty throws its EofException; other containers
+     * surface the socket error itself.
      */
     private static boolean isClientAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
@@ -156,12 +153,10 @@ public class DevToolbarFilter implements Filter {
     private boolean shouldSkip(HttpServletRequest request) {
         String path = PeekabootPaths.pathWithinApplication(request);
 
-        // Skip excluded prefixes
         if (paths.isExcluded(path)) {
             return true;
         }
 
-        // Skip static file extensions
         String lowerPath = path.toLowerCase(Locale.ROOT);
         for (String ext : EXCLUDED_EXTENSIONS) {
             if (lowerPath.endsWith(ext)) {
@@ -169,15 +164,11 @@ public class DevToolbarFilter implements Filter {
             }
         }
 
-        // Skip AJAX requests
         String xRequestedWith = request.getHeader("X-Requested-With");
         return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
     }
 
-    private void processResponse(
-            HttpServletRequest request,
-            ContentBufferingResponseWrapper wrappedResponse,
-            HttpServletResponse originalResponse)
+    private void processResponse(HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse)
             throws IOException {
 
         wrappedResponse.flushBuffer();
@@ -225,10 +216,7 @@ public class DevToolbarFilter implements Filter {
         String modifiedContent = content.substring(0, bodyEndIndex) + toolbarHtml + content.substring(bodyEndIndex);
 
         // encode with the response's declared charset, not blindly UTF-8
-        String encoding = wrappedResponse.getCharacterEncoding();
-        Charset charset = encoding != null ? Charset.forName(encoding) : StandardCharsets.UTF_8;
-        byte[] modifiedBytes = modifiedContent.getBytes(charset);
-        originalResponse.setContentType(contentType);
+        byte[] modifiedBytes = modifiedContent.getBytes(wrappedResponse.charset());
         wrappedResponse.copyBodyToResponse(modifiedBytes);
 
         log.trace("Toolbar injected successfully for {}", request.getRequestURI());

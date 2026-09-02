@@ -13,12 +13,10 @@ import org.peekaboot.backend.insights.config.TileDef;
  * in which case it keeps sampling forever.
  *
  * <p>Sampled on read rather than on the collector's tick cadence: the Overview fetches
- * tile values off {@code /api/insights/config} the moment the dashboard opens, which is
- * routinely before the first boundary-aligned level-0 tick - waiting for that tick would
- * serve every tile as unresolved to exactly the first look at the dashboard. Every tile
- * is a plain {@code value}-stat sample, so a read needs no elapsed interval, and
- * concurrent reads race only benignly: sampling is idempotent and both fields below
- * are volatile.
+ * tile values off {@code /api/insights/config} the moment the dashboard opens, routinely
+ * before the first boundary-aligned tick. Every tile is a plain {@code value}-stat sample,
+ * so a read needs no elapsed interval, and concurrent reads race only benignly: sampling
+ * is idempotent and {@code TileState.value}/{@code frozen} are volatile.
  */
 final class TileTracker {
 

@@ -22,10 +22,9 @@
              uploads the bundle from here, the last module of the reactor. -->
         <skipPublishing>true</skipPublishing>
 
-        <!-- Measured on the merged data at the time the gate landed: line 95.6%,
-             branch 81.8%. The floors sit well below that on purpose - they catch a
-             substantial regression, not a few uncovered lines. Raise them deliberately;
-             never lower one to make a build pass. -->
+        <!-- The floors sit well below actual coverage (~95% line, ~82% branch) on
+             purpose: they catch a substantial regression, not a few uncovered lines.
+             Raise them deliberately; never lower one to make a build pass. -->
         <jacoco.min.line>0.90</jacoco.min.line>
         <jacoco.min.branch>0.75</jacoco.min.branch>
     </properties>
@@ -64,14 +63,16 @@
             <!-- jacoco:check only ever analyses the classes of the module it runs in, so the
                  gated classes have to physically be here. Unpacking the published jars is what
                  makes a reactor-wide check possible at all; JaCoCo matches exec data to classes
-                 by a hash of the bytecode, so the unpacked copies match what the tests ran. -->
+                 by a hash of the bytecode, so the unpacked copies match what the tests ran.
+                 Bound to prepare-package because the siblings' jars do not exist before that
+                 (MDEP-98), which is also what keeps a plain `mvn test` working. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
                     <execution>
                         <id>collect-gated-classes</id>
-                        <phase>process-test-classes</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>unpack-dependencies</goal>
                         </goals>
@@ -124,7 +125,7 @@
                     </execution>
                     <execution>
                         <id>coverage-merge</id>
-                        <phase>process-test-classes</phase>
+                        <phase>prepare-package</phase>
                         <goals>
                             <goal>merge</goal>
                         </goals>

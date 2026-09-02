@@ -114,6 +114,44 @@ class InsightsServiceTest {
                 .contains("cpu", "heap");
     }
 
+    /** A panel's level picks one of the configured rings; one that names a ring that does not exist has nothing to chart. */
+    @Test
+    void aPanelLevelBeyondTheConfiguredLevelsIsRejectedLikeAnyOtherConfigError() {
+        ResourceLoader deepDefaults = new DefaultResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                return location.contains("peekaboot-insights-defaults")
+                        ? new ClassPathResource("insights/loader-unknown-level.yml")
+                        : super.getResource(location);
+            }
+        };
+
+        assertThatThrownBy(() -> new InsightsService(
+                        registry, new InsightsProperties(), deepDefaults, InsightsCollector.Listener.NO_OP, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("panel 'deep': level 7");
+    }
+
+    @Test
+    void aUserPanelLevelBeyondTheConfiguredLevelsCostsOnlyTheCustomisation() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setConfigLocation("classpath:insights/loader-unknown-level.yml");
+
+        try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
+            InsightsService fallback = new InsightsService(
+                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+
+            assertThat(fallback.config().panels())
+                    .extracting(InsightsConfigResponse.Panel::id)
+                    .contains("cpu", "heap")
+                    .doesNotContain("deep");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getThrowableProxy().getMessage()).contains("panel 'deep': level 7");
+            });
+        }
+    }
+
     /** A broken file of ours is a bug of ours, and must not be papered over. */
     @Test
     void invalidBundledPanelFileFailsFast() {

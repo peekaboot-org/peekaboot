@@ -10,7 +10,6 @@ class DoubleRingTest {
     void startsEmpty() {
         DoubleRing ring = new DoubleRing(4);
         assertThat(ring.size()).isZero();
-        assertThat(ring.capacity()).isEqualTo(4);
         assertThat(ring.toArray()).isEmpty();
     }
 

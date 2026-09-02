@@ -43,7 +43,7 @@ class ActuatorMaskingIT {
     void insightsEndpointMasksASecretLookingConfigProperty() {
         JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
 
-        JsonNode passwordProperty = findConfigInfoProperty(config, "password");
+        JsonNode passwordProperty = findConfigInfoProperty(config, "spring.datasource", "password");
         assertThat(passwordProperty)
                 .as("the spring.datasource.password fixture property must be present in /configprops")
                 .isNotNull();

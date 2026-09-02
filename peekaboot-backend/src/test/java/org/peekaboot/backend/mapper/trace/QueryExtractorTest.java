@@ -53,6 +53,27 @@ class QueryExtractorTest {
         assertThat(queries.get(0).dbSystem()).isEqualTo("orders_db");
     }
 
+    /** A statement batch is one span carrying jdbc.query[0..N]; every statement belongs to it, in index order. */
+    @Test
+    void extract_shouldJoinTheStatementsOfABatchInIndexOrder() {
+        var batchSpan = createSpan(
+                "span1",
+                "query",
+                50,
+                Map.of(
+                        "jdbc.query[10]", "INSERT INTO t VALUES (10)",
+                        "jdbc.query[0]", "INSERT INTO t VALUES (0)",
+                        "jdbc.query[2]", "INSERT INTO t VALUES (2)",
+                        "peer.service", "orders_db"),
+                20);
+
+        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(batchSpan)));
+
+        assertThat(queries).hasSize(1);
+        assertThat(queries.get(0).sql())
+                .isEqualTo("INSERT INTO t VALUES (0);\nINSERT INTO t VALUES (2);\nINSERT INTO t VALUES (10)");
+    }
+
     @Test
     void extract_shouldDetectSqlFromSpanName() {
         // a query span (db.* tagged) whose instrumentation put the statement in the name only
@@ -240,14 +261,14 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldHandleTraceWithNullSpans() {
-        var traceData = new TraceData("trace1", null, null, null, 0, null);
+        var traceData = new TraceData("trace1", null, null, null, null);
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }
 
     @Test
     void extract_shouldHandleTraceWithEmptySpans() {
-        var traceData = new TraceData("trace1", null, null, null, 0, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of());
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }

@@ -7,7 +7,7 @@ import java.util.Map;
  *
  * <p>A start carries every entry of the build and git info, not just the handful the
  * dashboard renders - the file is the only record that survives the process, and a
- * property nobody reads today costs one map entry.
+ * property no view renders costs one map entry.
  */
 public record LifecycleEvent(Type type, long epochMs, long pid, Map<String, String> build, Map<String, String> git) {
 

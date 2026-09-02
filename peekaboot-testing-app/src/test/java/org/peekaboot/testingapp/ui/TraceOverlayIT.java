@@ -1,14 +1,24 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Response;
+import com.microsoft.playwright.Route;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
@@ -277,6 +287,40 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
         assertThat(content).isNotEmpty();
+    }
+
+    /**
+     * The ARIA tabs pattern needs both halves: a tab that says which panel it controls,
+     * and a panel that says which tab labels it - otherwise a screen reader announces
+     * "tab 2 of 4" with no relationship to what changes. The strip is built at runtime by
+     * tabStrip(), so it has to wire this itself; the dashboard's static strip carries the
+     * same attributes in its markup.
+     */
+    @Test
+    void overlayTabsAndTheirContentPanelPointAtEachOther() {
+        openOverlayFromToolbar();
+
+        assertThat((String) overlay.evaluate("root => root.querySelector('#pk-tab-content').getAttribute('role')"))
+                .isEqualTo("tabpanel");
+        assertThat((Boolean) overlay.evaluate("root => [...root.querySelectorAll('.pk-tab')]"
+                        + ".every(tab => tab.id && tab.getAttribute('aria-controls') === 'pk-tab-content')"))
+                .as("every tab controls the one content panel")
+                .isTrue();
+        assertThat(labelledBy()).isEqualTo(selectedTabId());
+
+        overlay.openTab("queries");
+
+        assertThat(selectedTabId()).endsWith("queries");
+        assertThat(labelledBy()).as("the panel's label follows the selection").isEqualTo(selectedTabId());
+    }
+
+    private String labelledBy() {
+        return (String)
+                overlay.evaluate("root => root.querySelector('#pk-tab-content').getAttribute('aria-labelledby')");
+    }
+
+    private String selectedTabId() {
+        return (String) overlay.evaluate("root => root.querySelector('.pk-tab[aria-selected=\"true\"]').id");
     }
 
     /** Only the selected main tab stays in the tab order - roving tabindex. */
@@ -602,22 +646,34 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Each span's duration cell also shows its share of the whole trace's duration, and
-     * the gantt header's tick marks line up with the row tracks below them - both track
-     * and header timeline carry the same 8px side margin, so the 0%/100% ticks sit right
-     * above the start/end of the bars they describe rather than 8px further out.
+     * Each span's duration cell shows the duration the way every other surface formats
+     * one (formatDurationMs - "250ms", "1.50s") plus its share of the whole trace's
+     * duration, and the gantt header's tick marks line up with the row tracks below
+     * them - both track and header timeline carry the same side margin, so the 0%/100%
+     * ticks sit right above the start/end of the bars they describe rather than further out.
+     *
+     * <p>The leftmost tick is the axis origin, the trace's own start: it reads "0ms"
+     * rather than the "&lt;1ms" formatDurationMs() gives any sub-millisecond duration,
+     * because no duration is being measured there at all.
      */
     @Test
     void spansTabShowsPercentOfTotalTraceTimeNextToEachDuration() {
         openOverlayFromToolbar();
 
         Object allDurationsMatchPattern = overlay.evaluate(
-                "root => Array.from(root.querySelectorAll('.pk-gantt-duration')).every(el => /^\\d+ms \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
+                "root => Array.from(root.querySelectorAll('.pk-gantt-duration'))"
+                        + ".every(el => /^(<1ms|\\d+ms|\\d+\\.\\d{2}[sm]) \\u00B7 \\d{1,3}%$/.test(el.textContent.trim()))");
         assertThat((Boolean) allDurationsMatchPattern)
-                .as("every duration cell reads '<ms>ms \u00B7 <pct>%'")
+                .as("every duration cell reads '<duration> \u00B7 <pct>%'")
                 .isTrue();
 
-        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header-timeline")
+        String originTick =
+                (String) overlay.evaluate("root => root.querySelector('.pk-gantt-header__timeline span').textContent");
+        assertThat(originTick)
+                .as("the axis origin is the trace's start, not a sub-millisecond measurement")
+                .isEqualTo("0ms");
+
+        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
                 .boundingBox();
         BoundingBox trackBox = page.locator("#peekaboot-trace-overlay .pk-gantt-row")
                 .first()
@@ -669,37 +725,32 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * .pk-overlay__back and .pk-overlay__close sit in the header's own flex flow next to a
-     * .pk-overlay__header-main wrapper, so they cannot drift from the title's first line.
+     * .pk-overlay__close sits in the header's own flex flow next to a
+     * .pk-overlay__header-main wrapper, so it cannot drift from the title's first line.
      * Positioned absolutely against .pk-overlay__container, with the title carrying a
-     * margin-left hack to fake reserving space for the button, they would be two
+     * margin-right hack to fake reserving space for the button, they would be two
      * independent layouts that only look aligned by coincidence - and drift the moment the
      * title's UA margin-top pushes it down without moving the absolutely-positioned button.
+     *
+     * <p>Close is the header's one dismiss control: the overlay is a dialog, not a page,
+     * so a "Back" beside it would only collide with the browser's own Back, which the
+     * dashboard's hash routing handles separately.
      */
     @Test
-    void overlayHeaderKeepsBackAndCloseInTheFlowAlignedWithTheTitle() {
+    void overlayHeaderKeepsCloseInTheFlowAlignedWithTheTitle() {
         openOverlayFromToolbar();
 
         assertThat((String)
-                        overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__back')).position"))
-                .isEqualTo("static");
-        assertThat((String)
                         overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-overlay__close')).position"))
                 .isEqualTo("static");
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__back')"))
+                .as("no second dismiss control")
+                .isFalse();
 
-        BoundingBox backBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__back").boundingBox();
         BoundingBox closeBox =
                 page.locator("#peekaboot-trace-overlay .pk-overlay__close").boundingBox();
         BoundingBox titleBox =
                 page.locator("#peekaboot-trace-overlay .pk-overlay__title").boundingBox();
-
-        assertThat(backBox.y)
-                .as("back button top should be within the title's vertical span")
-                .isLessThan(titleBox.y + titleBox.height);
-        assertThat(backBox.y + backBox.height)
-                .as("back button bottom should overlap the title's vertical span")
-                .isGreaterThan(titleBox.y);
 
         assertThat(closeBox.y)
                 .as("close button top should be within the title's vertical span")
@@ -707,6 +758,47 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(closeBox.y + closeBox.height)
                 .as("close button bottom should overlap the title's vertical span")
                 .isGreaterThan(titleBox.y);
+    }
+
+    /**
+     * The overlay keeps the features it is handed for its whole lifetime - every SLOW
+     * colour in its header, Spans and Queries tabs comes from those thresholds - and
+     * nothing re-opens it once /api/features answers. So a deep link straight to a trace
+     * must not open the overlay until the features are known, or a reader who configured
+     * their own thresholds sees the shared link coloured by the defaults instead.
+     *
+     * <p>The features request is parked (a real request whose real response is merely
+     * held back, the pattern ComponentBuilderIT uses for the api client's race) rather
+     * than stubbed: the assertion is purely about ordering. A bounded wait for the
+     * overlay's absence would pass vacuously if the deep link were broken outright, so
+     * the same page then proves the overlay does open once the features are released.
+     */
+    @Test
+    void aDeepLinkedOverlayOpensOnlyOnceTheFeaturesAreKnown() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+
+        AtomicReference<Route> parkedFeatures = new AtomicReference<>();
+        page.route("**/peekaboot/api/features", route -> {
+            if (!parkedFeatures.compareAndSet(null, route)) {
+                route.resume();
+            }
+        });
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        page.waitForSelector("#traces-tab.active");
+        page.waitForCondition(() -> parkedFeatures.get() != null);
+
+        assertThatThrownBy(() -> page.waitForSelector(
+                        TraceOverlay.HOST,
+                        new Page.WaitForSelectorOptions()
+                                .setState(WaitForSelectorState.ATTACHED)
+                                .setTimeout(1000)))
+                .as("no overlay while /api/features is still outstanding")
+                .isInstanceOf(TimeoutError.class);
+
+        parkedFeatures.get().resume();
+
+        overlay.waitFor("#pk-gantt-rows");
     }
 
     /**
@@ -774,5 +866,93 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + "deterministic, not just usually 1")
                 .contains("1 query")
                 .doesNotContain("1 queries");
+    }
+
+    /**
+     * A CSP that omits style-src 'unsafe-inline' drops every style attribute written
+     * through innerHTML, but not CSSOM writes (element.style). The gantt has to survive
+     * that policy: its bar positions and row indents are the whole chart, and it sets
+     * them through the CSSOM for exactly this reason. The policy is applied by adding the
+     * header to the real dashboard response (its body is untouched), so the dashboard
+     * document and the overlay it opens are what runs under it - the toolbar's own page
+     * is served before the route is installed and is not covered here.
+     *
+     * <p>Two positive controls keep the test from passing with no policy in force at all:
+     * the header is asserted on the navigation response, and a probe element whose style
+     * arrives as a parsed attribute is asserted not to take the width it asks for. The
+     * probe runs last, since the violation it provokes is the one console message this
+     * test does expect.
+     */
+    @Test
+    void ganttSurvivesAHostPageWhoseCspForbidsInlineStyles() {
+        List<String> cspViolations = new ArrayList<>();
+        page.onConsoleMessage(message -> {
+            if (message.text().contains("Content Security Policy")) cspViolations.add(message.text());
+        });
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
+            APIResponse response = route.fetch();
+            Map<String, String> headers = new HashMap<>(response.headers());
+            headers.put("content-security-policy", "style-src 'self'");
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
+        });
+
+        Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.waitFor(".pk-gantt-row[data-depth='1']");
+
+        assertThat(navigation.headers())
+                .as("the policy reached the document under test")
+                .containsEntry("content-security-policy", "style-src 'self'");
+        assertThat(
+                        overlay.evaluate(
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-row[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
+                .as("a nested row keeps its indent")
+                .isEqualTo("20px");
+        assertThat((Boolean) overlay.evaluate("root => {"
+                        + "const track = root.querySelector('.pk-gantt-row[data-depth=\"0\"] .pk-gantt-track');"
+                        + "return track.querySelector('.pk-gantt-bar').getBoundingClientRect().width"
+                        + "  > track.getBoundingClientRect().width * 0.9; }"))
+                .as("the root span's bar spans its track")
+                .isTrue();
+        assertThat(cspViolations).isEmpty();
+
+        // style-src-attr falls back to style-src, so a parsed style attribute is refused
+        // while the element.style writes the gantt uses go through.
+        assertThat(page.evaluate("""
+                        () => {
+                            const probe = document.createElement('div');
+                            probe.setAttribute('style', 'width: 99px');
+                            document.body.appendChild(probe);
+                            const width = getComputedStyle(probe).width;
+                            probe.remove();
+                            return width;
+                        }
+                        """))
+                .as("a style attribute is dropped, so the policy is in force")
+                .isNotEqualTo("99px");
+    }
+
+    /**
+     * On a phone-sized viewport the fixed 350px name column would leave the track no
+     * room at all and push every row past the right edge; the name shares the row
+     * proportionally instead.
+     */
+    @Test
+    void ganttRowsFitANarrowViewport() {
+        page.setViewportSize(375, 667);
+        openOverlayFromToolbar();
+        overlay.waitFor(".pk-gantt-row");
+
+        Boolean rowFits = (Boolean) overlay.evaluate("root => {"
+                + "const row = root.querySelector('.pk-gantt-row');"
+                + "return row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= 375.5; }");
+        assertThat(rowFits).as("the row stays inside the viewport").isTrue();
+        assertThat(((Number)
+                                overlay.evaluate(
+                                        "root => root.querySelector('.pk-gantt-row .pk-gantt-track').getBoundingClientRect().width"))
+                        .doubleValue())
+                .as("the track keeps a usable width")
+                .isGreaterThan(40.0);
     }
 }

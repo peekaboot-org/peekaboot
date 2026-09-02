@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
 import java.lang.reflect.RecordComponent;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,7 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.lifecycle.UptimeFormat;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 
@@ -32,10 +34,20 @@ class SharedModuleIT extends PlaywrightTestBase {
         return evalUiModule("shared/" + module, expression);
     }
 
-    private Object evalUiModule(String path, String expression) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+    /**
+     * The blank same-origin host page these tests import their modules from. Its status is
+     * asserted because a 404 whitelabel page hosts an {@code import()} just as well as the
+     * fixture does - the suite would stay green with the fixture unreachable.
+     */
+    private void openBlankFixture() {
+        String url = baseUrl + "/peekaboot/ui/pk-blank.html";
+        if (!page.url().equals(url)) {
+            assertThat(page.navigate(url).status()).as("GET %s", url).isEqualTo(200);
         }
+    }
+
+    private Object evalUiModule(String path, String expression) {
+        openBlankFixture();
         return page.evaluate(
                 "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
                 List.of("/peekaboot/ui/" + path, expression));
@@ -482,5 +494,70 @@ class SharedModuleIT extends PlaywrightTestBase {
     void statusVariantIsMutedWhenThereIsNoStatusToColour() {
         assertThat(evalModule("http-status.js", "m.statusVariant('-')")).isEqualTo("muted");
         assertThat(evalModule("http-status.js", "m.statusVariant(null)")).isEqualTo("muted");
+    }
+
+    /**
+     * formatLongDuration mirrors the backend's UptimeFormat unit by unit, so a run's
+     * duration reads identically in the log banner and on the Lifecycle tab.
+     */
+    @Test
+    void formatLongDurationMirrorsTheBackendsUptimeFormat() {
+        long ms = 93_784_000L;
+        assertThat(evalModule("format.js", "m.formatLongDuration(" + ms + ")"))
+                .isEqualTo(UptimeFormat.humanize(Duration.ofMillis(ms)));
+        assertThat(evalModule("format.js", "m.formatLongDuration(45000)"))
+                .isEqualTo(UptimeFormat.humanize(Duration.ofSeconds(45)));
+    }
+
+    /**
+     * The Insights tab's mirror of the server rings: samples carry no timestamps, so a
+     * tick that skips boundaries has to push nulls for the gap or every older sample
+     * shifts forward in time; the ring is capped at its size; a series the snapshot did
+     * not know starts as an all-null ring; and an event no newer than the ring's end is
+     * one the snapshot already contains.
+     */
+    @Test
+    void insightsStoreAppendsTicksWithGapNullsAndIgnoresStaleOnes() {
+        String setup = "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
+                + " series: {a: {values: [1, 2, 3]}}}, 5);";
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js",
+                        setup
+                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
+                                + " JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs])"))
+                .isEqualTo("[[2,3,null,null,4],[null,null,null,null,7],5,13000]");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js",
+                        setup
+                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
+                                + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
+                                + " JSON.stringify(s.series.a)"))
+                .isEqualTo("[2,3,null,null,4]");
+    }
+
+    @Test
+    void insightsStoreAppendsRollupsPerStat() {
+        assertThat(
+                        evalUiModule(
+                                "dashboard/tabs/insights-store.js",
+                                "const r = m.normalizeLevel({level: 1, intervalMs: 60000, endEpochMs: 60000, count: 1,"
+                                        + " series: {a: {stats: {min: [1], max: [3], avg: [2]}}}}, 4);"
+                                        + " m.appendRollup(r, {level: 1, epochMs: 120000, entries: {a: {min: 0, max: 5, avg: 2.5}}});"
+                                        + " JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count])"))
+                .isEqualTo("[[1,0],[3,5],[2,2.5],[null],2]");
+    }
+
+    @Test
+    void insightsStoreCountsMissedSamplesCappedAtTheRingSize() {
+        String snapshot = "{endEpochMs: 10000, intervalMs: 1000, size: 5}";
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 11000})"))
+                .isEqualTo(0);
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 13000})"))
+                .isEqualTo(2);
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 20000})"))
+                .isEqualTo(5);
     }
 }

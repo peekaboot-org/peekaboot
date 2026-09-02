@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootJson;
+import tools.jackson.databind.JsonNode;
 
 class ToolbarDataProviderTest {
 
@@ -18,11 +20,11 @@ class ToolbarDataProviderTest {
     void shouldGenerateValidJson() {
         String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
 
-        assertThat(json).startsWith("{");
-        assertThat(json).endsWith("}");
-        assertThat(json).contains("\"method\":\"GET\"");
-        assertThat(json).contains("\"path\":\"/users\"");
-        assertThat(json).contains("\"status\":200");
+        JsonNode parsed = PeekabootJson.MAPPER.readTree(json);
+        assertThat(parsed.path("method").asString()).isEqualTo("GET");
+        assertThat(parsed.path("path").asString()).isEqualTo("/users");
+        assertThat(parsed.path("status").asInt()).isEqualTo(200);
+        assertThat(parsed.path("traceId").isNull()).isTrue();
     }
 
     @Test

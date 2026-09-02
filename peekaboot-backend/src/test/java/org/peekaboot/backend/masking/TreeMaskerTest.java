@@ -106,6 +106,28 @@ class TreeMaskerTest {
         assertThat(maskedGoogle).containsEntry("clientId", "abc123").containsEntry("clientSecret", "******");
     }
 
+    /**
+     * A nested key is judged by its dotted path from the root, so a whole-key rule
+     * ("cookie") fires on a {@code Cookie} header but not on the {@code cookie} segment of
+     * session-cookie configuration.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_withKey_shouldJudgeANestedKeyByItsPathSoAWholeKeyRuleDoesNotFireOnASegment() {
+        Map<String, Object> cookie = Map.of("sameSite", "Lax", "httpOnly", true);
+        Map<String, Object> servlet = Map.of("session", Map.of("cookie", cookie));
+
+        Object masked = treeMasker.mask("servlet", servlet);
+
+        Map<String, Object> session = (Map<String, Object>) ((Map<String, Object>) masked).get("session");
+        assertThat(session.get("cookie")).isEqualTo(cookie);
+    }
+
+    @Test
+    void mask_withKey_shouldStillApplyAWholeKeyRuleToTheRootKey() {
+        assertThat(treeMasker.mask("cookie", "session=abc123")).isEqualTo("******");
+    }
+
     @Test
     void mask_withKeyAndUnmask_shouldReturnTheNodeVerbatimWhenUnmaskIsTrueEvenForASensitiveRootKey() {
         Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", true);

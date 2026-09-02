@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.peekaboot.backend.domain.trace.RootActionType;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -80,12 +82,11 @@ class TraceApiClient {
                 // flush, so a single non-zero read can be a partial snapshot. Requiring the count
                 // to hold steady across two consecutive polls confirms the flushes have caught up.
                 //
-                // This is a heuristic, not a completeness guarantee: the poll interval (50ms)
-                // equals the BatchSpanProcessor schedule-delay in application-test.yml, so a
-                // trace whose spans land in three or more separate flushes could look stable
-                // across exactly two polls and still be a partial tree. Two polls is empirically
-                // sufficient for today's trace shapes; if this ever flakes again, widen the
-                // stability window rather than assume the current shape generalises.
+                // Two consecutive equal polls is a heuristic, not a completeness proof: the poll
+                // interval (50ms) equals the BatchSpanProcessor schedule-delay in
+                // application-test.yml, so a trace whose spans land in three or more flushes can
+                // look stable across two polls and still be partial. Widen the window before
+                // trusting a new multi-flush trace shape.
                 if (spanCount > 0 && spanCount == previousSpanCount) {
                     return trace;
                 }
@@ -98,23 +99,32 @@ class TraceApiClient {
     }
 
     JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
+        return awaitListedTrace(
+                "bucket=" + bucket,
+                trace -> trace.path("rootOperation").asString("").contains(rootOperationFragment),
+                "a trace whose rootOperation contains '" + rootOperationFragment + "' in the " + bucket + " bucket");
+    }
+
+    JsonNode awaitTraceOfType(RootActionType type) {
+        return awaitListedTrace("rootActionType=" + type.name(), trace -> true, "a " + type + " trace");
+    }
+
+    /** Polls the listing endpoint with {@code query} until a listed trace satisfies {@code match}. */
+    private JsonNode awaitListedTrace(String query, Predicate<JsonNode> match, String description) {
         long deadline = System.nanoTime() + TIMEOUT.toNanos();
         List<String> seen = new ArrayList<>();
         while (System.nanoTime() < deadline) {
-            JsonNode response = api.getJson("/peekaboot/api/traces/insights?bucket=" + bucket);
+            JsonNode response = api.getJson("/peekaboot/api/traces/insights?" + query);
             seen.clear();
             for (JsonNode trace : response.path("traces")) {
-                String rootOperation = trace.path("rootOperation").asString("");
-                seen.add(rootOperation);
-                if (rootOperation.contains(rootOperationFragment)) {
+                seen.add(trace.path("rootOperation").asString(""));
+                if (match.test(trace)) {
                     return trace;
                 }
             }
             sleepBriefly();
         }
-        throw new AssertionError("no trace whose rootOperation contains '" + rootOperationFragment
-                + "' reached the " + bucket + " bucket within " + TIMEOUT
-                + "; the bucket held: " + seen);
+        throw new AssertionError(description + " was not listed within " + TIMEOUT + "; the listing held: " + seen);
     }
 
     private JsonNode fetchOrNull(String uri) {

@@ -13,9 +13,9 @@ import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 
 /**
- * Interceptor that creates spans for controller execution and view rendering.
- * Opens an observation scope so spans created inside the handler (JDBC, HTTP
- * clients, ...) nest under the handler span instead of the HTTP server span.
+ * Observes controller execution and view rendering as spans of their own, opening an
+ * observation scope so spans created inside the handler (JDBC, HTTP clients, ...) nest
+ * under the handler span instead of the HTTP server span.
  *
  * <p>Peekaboot's own endpoints and static resources are kept out by the context-relative
  * exclude patterns the interceptor is registered with, not by the interceptor itself.
@@ -63,7 +63,6 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
             HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
         stopHandlerObservation(request, null);
 
-        // Start view rendering observation only if there's a view to render
         String viewName = viewName(modelAndView);
         if (viewName != null) {
             Observation viewObservation = Observation.createNotStarted("spring.view.render", observationRegistry)
@@ -88,7 +87,6 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     @Override
     public void afterCompletion(
             HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        // Stop view observation if present
         Observation viewObservation = (Observation) request.getAttribute(VIEW_OBSERVATION_ATTR);
         if (viewObservation != null) {
             closeScope(request, VIEW_SCOPE_ATTR);
@@ -100,7 +98,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
             log.trace("Stopped view observation");
         }
 
-        // Safety: stop handler observation if still running (exception during handler)
+        // an exception in the handler skips postHandle
         stopHandlerObservation(request, ex);
     }
 

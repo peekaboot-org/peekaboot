@@ -31,12 +31,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
         classes = TestingApp.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = {
-            "server.servlet.context-path=/app",
-            // An in-memory database of its own: the module's other contexts share testdb and
-            // would create-drop their schema underneath this one.
-            "spring.datasource.url=jdbc:h2:mem:contextpathdb;DB_CLOSE_DELAY=-1"
-        })
+        properties = "server.servlet.context-path=/app")
 class ContextPathToolbarIT extends PlaywrightTestBase {
 
     private static final String CONTEXT_PATH = "/app";

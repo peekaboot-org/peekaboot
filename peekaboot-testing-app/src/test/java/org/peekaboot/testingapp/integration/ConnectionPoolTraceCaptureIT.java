@@ -4,8 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
@@ -28,9 +29,6 @@ import tools.jackson.databind.JsonNode;
 @ActiveProfiles("test")
 class ConnectionPoolTraceCaptureIT {
 
-    private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private static final long POLL_INTERVAL_MS = 50;
-
     @LocalServerPort
     private int port;
 
@@ -43,8 +41,7 @@ class ConnectionPoolTraceCaptureIT {
             assertThat(connection.isValid(1)).isTrue();
         }
 
-        PeekabootApi api = new PeekabootApi(port);
-        JsonNode trace = awaitConnectionPoolTrace(api);
+        JsonNode trace = new TraceApiClient(port).awaitTraceOfType(RootActionType.CONNECTION_POOL);
 
         assertThat(trace.path("rootOperation").asString("")).isEqualTo("connection");
         assertThat(trace.path("rootSpan").path("kind").asString("")).isEqualTo("CLIENT");
@@ -54,11 +51,23 @@ class ConnectionPoolTraceCaptureIT {
                         .asString(""))
                 .startsWith("HikariPool");
 
-        // the include-list the dashboard sends by default keeps the trace out of the list
-        JsonNode defaultView = api.getJson("/peekaboot/api/traces/insights?rootActionType=" + defaultIncludeList());
-        for (JsonNode listed : defaultView.path("traces")) {
-            assertThat(listed.path("rootActionType").asString("")).isNotEqualTo(RootActionType.CONNECTION_POOL.name());
+        // The pair, on the one trace this test made: the chip's own request lists it, the
+        // include-list the dashboard sends with no chip selected does not. Asserting only the
+        // second would hold just as well for a listing that came back empty.
+        String traceId = trace.path("traceId").asString("");
+        PeekabootApi api = new PeekabootApi(port);
+        assertThat(listedTraceIds(api, RootActionType.CONNECTION_POOL.name())).contains(traceId);
+        assertThat(listedTraceIds(api, defaultIncludeList())).doesNotContain(traceId);
+    }
+
+    /** The ids the listing endpoint returns for one {@code rootActionType} include-list. */
+    private static List<String> listedTraceIds(PeekabootApi api, String rootActionTypes) {
+        JsonNode response = api.getJson("/peekaboot/api/traces/insights?limit=10000&rootActionType=" + rootActionTypes);
+        List<String> ids = new ArrayList<>();
+        for (JsonNode listed : response.path("traces")) {
+            ids.add(listed.path("traceId").asString(""));
         }
+        return ids;
     }
 
     /** Every type except CONNECTION_POOL - the request shape traces.js sends with no chip selected. */
@@ -67,30 +76,5 @@ class ConnectionPoolTraceCaptureIT {
                 .filter(type -> type != RootActionType.CONNECTION_POOL)
                 .map(Enum::name)
                 .collect(Collectors.joining(","));
-    }
-
-    /**
-     * Spans reach the TraceStore via the async BatchSpanProcessor (50ms schedule-delay in
-     * the test profile), so the read polls with a deadline, the way TraceApiClient does.
-     */
-    private JsonNode awaitConnectionPoolTrace(PeekabootApi api) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        JsonNode lastResponse = null;
-        while (System.nanoTime() < deadline) {
-            lastResponse = api.getJson(
-                    "/peekaboot/api/traces/insights?rootActionType=" + RootActionType.CONNECTION_POOL.name());
-            JsonNode traces = lastResponse.path("traces");
-            if (!traces.isEmpty()) {
-                return traces.get(0);
-            }
-            try {
-                Thread.sleep(POLL_INTERVAL_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("interrupted while waiting for the connection-pool trace", e);
-            }
-        }
-        throw new AssertionError(
-                "no CONNECTION_POOL trace was captured within " + TIMEOUT + "; last response: " + lastResponse);
     }
 }

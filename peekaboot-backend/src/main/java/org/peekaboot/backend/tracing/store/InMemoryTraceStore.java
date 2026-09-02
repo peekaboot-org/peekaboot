@@ -1,100 +1,36 @@
 package org.peekaboot.backend.tracing.store;
 
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.LongSupplier;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
-/** In-memory {@link TraceStore} backed by a bounded Caffeine cache. */
+/**
+ * In-memory {@link TraceStore}: three insertion-ordered buckets, each capped at its own size
+ * and evicting its oldest trace once full.
+ */
 public class InMemoryTraceStore implements TraceStore {
 
-    /** How long a trace stays in the All bucket; not configurable, owned here and reused by the auto-configuration. */
-    public static final Duration DEFAULT_EXPIRE = Duration.ofMinutes(30);
-
-    private final Cache<String, TraceDataBundle> cache;
     private final int maxSpansPerTrace;
     private final long slowTraceThresholdMs;
     private final int maxLogsPerTrace;
+    private final Map<String, TraceDataBundle> allTraces;
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
-    /** Epoch millis for each new bundle's createdAt; the seam keeps creation ordering deterministic in tests. */
-    private final LongSupplier clock;
 
-    /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
-    public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
-        this(maxTraces, maxSpansPerTrace, expireAfter, System::currentTimeMillis);
-    }
-
-    /** {@link #InMemoryTraceStore(int, int, Duration)} with the clock seam - for tests. */
-    InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter, LongSupplier clock) {
-        this(maxTraces, maxSpansPerTrace, expireAfter, new PeekabootTracingProperties(), clock);
-    }
-
-    private InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            Duration expireAfter,
-            PeekabootTracingProperties defaults,
-            LongSupplier clock) {
-        this(
-                maxTraces,
-                maxSpansPerTrace,
-                expireAfter,
-                defaults.getMaxErrorTraces(),
-                defaults.getMaxSlowTraces(),
-                defaults.getSlowTraceThresholdMs(),
-                defaults.getMaxLogsPerTrace(),
-                clock);
-    }
-
-    public InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            Duration expireAfter,
-            int maxErrorTraces,
-            int maxSlowTraces,
-            long slowTraceThresholdMs,
-            int maxLogsPerTrace) {
-        this(
-                maxTraces,
-                maxSpansPerTrace,
-                expireAfter,
-                maxErrorTraces,
-                maxSlowTraces,
-                slowTraceThresholdMs,
-                maxLogsPerTrace,
-                System::currentTimeMillis);
-    }
-
-    private InMemoryTraceStore(
-            int maxTraces,
-            int maxSpansPerTrace,
-            Duration expireAfter,
-            int maxErrorTraces,
-            int maxSlowTraces,
-            long slowTraceThresholdMs,
-            int maxLogsPerTrace,
-            LongSupplier clock) {
-        this.maxSpansPerTrace = maxSpansPerTrace;
-        this.slowTraceThresholdMs = slowTraceThresholdMs;
-        this.maxLogsPerTrace = maxLogsPerTrace;
-        this.clock = clock;
-        this.cache = Caffeine.newBuilder()
-                .maximumSize(maxTraces)
-                .expireAfterWrite(expireAfter)
-                .build();
-        this.errorTraces = boundedMap(maxErrorTraces);
-        this.slowTraces = boundedMap(maxSlowTraces);
+    public InMemoryTraceStore(PeekabootTracingProperties properties) {
+        this.maxSpansPerTrace = properties.getMaxSpansPerTrace();
+        this.slowTraceThresholdMs = properties.getSlowTraceThresholdMs();
+        this.maxLogsPerTrace = properties.getMaxLogsPerTrace();
+        this.allTraces = boundedMap(properties.getMaxTraces());
+        this.errorTraces = boundedMap(properties.getMaxErrorTraces());
+        this.slowTraces = boundedMap(properties.getMaxSlowTraces());
     }
 
     private static Map<String, TraceDataBundle> boundedMap(int maxEntries) {
@@ -128,29 +64,34 @@ public class InMemoryTraceStore implements TraceStore {
     public void setRequest(RequestCompletedEvent request) {
         TraceDataBundle bundle = resolveBundle(request.traceId());
         bundle.setRequest(request);
-        // the request event affects neither error nor slow membership under the
-        // current classification rules (those depend only on spans + logs), so no
-        // classify() call is needed here.
+        // request data never affects bucket membership
+    }
+
+    @Override
+    public void discard(String traceId) {
+        allTraces.remove(traceId);
+        errorTraces.remove(traceId);
+        slowTraces.remove(traceId);
     }
 
     /**
-     * Resolves the bundle for a trace id, reusing one retained by a bucket if the
-     * All cache has already evicted it — avoids creating a diverging copy for
-     * late-arriving events.
+     * Resolves the bundle for a trace id, reusing one retained by a bucket if the All
+     * bucket has already evicted it - avoids creating a diverging copy for late-arriving
+     * events. Such a bucket-retained trace re-enters All, at the newest end, on that event.
      */
     private TraceDataBundle resolveBundle(String traceId) {
-        return cache.get(traceId, id -> {
+        return allTraces.computeIfAbsent(traceId, id -> {
             TraceDataBundle retained = errorTraces.get(id);
             if (retained == null) {
                 retained = slowTraces.get(id);
             }
-            return retained != null ? retained : new TraceDataBundle(id, clock);
+            return retained != null ? retained : new TraceDataBundle(id);
         });
     }
 
     @Override
     public Optional<TraceDataBundle> getTrace(String traceId) {
-        TraceDataBundle bundle = cache.getIfPresent(traceId);
+        TraceDataBundle bundle = allTraces.get(traceId);
         if (bundle == null) {
             bundle = errorTraces.get(traceId);
         }
@@ -163,12 +104,7 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public List<TraceDataBundle> getTraces(TraceBucket bucket, int limit) {
         return switch (bucket) {
-            case ALL ->
-                cache.asMap().values().stream()
-                        .sorted(Comparator.comparingLong(TraceDataBundle::createdAt)
-                                .reversed())
-                        .limit(limit)
-                        .toList();
+            case ALL -> newestFirst(allTraces, limit);
             case ERRORS -> newestFirst(errorTraces, limit);
             case SLOW -> newestFirst(slowTraces, limit);
         };
@@ -177,7 +113,7 @@ public class InMemoryTraceStore implements TraceStore {
     @Override
     public int getTraceCount(TraceBucket bucket) {
         return switch (bucket) {
-            case ALL -> (int) cache.estimatedSize();
+            case ALL -> allTraces.size();
             case ERRORS -> errorTraces.size();
             case SLOW -> slowTraces.size();
         };
@@ -217,16 +153,8 @@ public class InMemoryTraceStore implements TraceStore {
 
     @Override
     public void clear() {
-        cache.invalidateAll();
+        allTraces.clear();
         errorTraces.clear();
         slowTraces.clear();
-    }
-
-    /**
-     * Test hook: runs the All cache's pending maintenance so that a TTL eviction becomes
-     * observable synchronously instead of on Caffeine's own schedule.
-     */
-    public void cleanUp() {
-        cache.cleanUp();
     }
 }

@@ -6,53 +6,22 @@ import java.util.regex.Pattern;
 /**
  * The masking rules themselves - pure data, no matching logic. {@link MaskingEngine} is
  * what applies these to a key and/or a value.
- *
- * <p>{@link #KEY_NAME_RULES} lists compound, separator-delimited key names ("api-key",
- * "client-secret", ...). {@link MaskingEngine} normalises both these rule names and the
- * key under test into token lists before comparing, so "api-key", "apiKey" and "API_KEY"
- * all match the same rule regardless of whether the key uses dots, hyphens, underscores
- * or camelCase. Bare "key" is deliberately absent from this list: it would mask
- * spring.jpa.key-generator, server.ssl.key-store (a filesystem path, not a secret) and
- * key-alias. Bare "certificate" is absent for the same reason - server.ssl.certificate is
- * also a filesystem path, not a secret, identically shaped to server.ssl.key-store; actual
- * key material is already caught by the PEM value pattern, so only the two compound names
- * that name a secret outright ("certificate-password", "certificate-private-key") are
- * listed.
- *
- * <p>{@link #WHOLE_KEY_NAME_RULES} lists key names that are sensitive only as the entire
- * key, not as one token inside a longer compound name - "cookie" and "set-cookie" name an
- * HTTP header ({@code Cookie}, {@code Set-Cookie}) outright, but the token "cookie" also
- * appears inside ordinary session-cookie *configuration*
- * (server.servlet.session.cookie.same-site and siblings), which is not a secret and is
- * exactly what someone opens the Environment tab to check.
- *
- * <p>{@link #KEY_NAME_EXCEPTIONS} lists whole keys that would otherwise match a
- * {@link #KEY_NAME_RULES} entry but are well-known non-secrets under that exact,
- * case-sensitive spelling - "PWD", the POSIX shell's current-working-directory variable,
- * is the "pwd" password abbreviation in upper case, and PWD is set by every shell, so it
- * hits every developer on the most-viewed property source (systemEnvironment). The
- * exception is that one spelling and nothing wider: a lower-case "pwd" is how a SQL
- * Server JDBC URL (";pwd=") or a login form ("?pwd=") names a password and still masks,
- * as does a compound like "db.pwd".
- *
- * <p>{@link #LEGACY_KEY_PATTERNS} carries a handful of Spring Boot 2.x's removed
- * {@code Sanitizer} defaults that don't fit that compound-name shape - they are matched
- * as plain case-insensitive regexes against the whole key instead.
- *
- * <p>{@link #VALUE_PATTERNS} carries high-precision, provider-prefixed patterns that
- * catch a credential sitting inside a value under an innocuous key (a JDBC URL's
- * password, a bearer token in a header, a key pasted into SQL text). Deliberately does
- * not include entropy-based detection - see the design spec's "Explicitly rejected"
- * section for why. Two of them are key/value pairs embedded in a value - a URL's query
- * parameters, a command line's {@code -Dname=value} options - and carry no vocabulary
- * of their own: {@link MaskingEngine} judges the captured key with the key-name rules
- * above, so a name that masks as a property masks as a query parameter too.
  */
 final class MaskingRules {
 
     /** Spring's own literal for a masked value ({@code org.springframework.boot.actuate.endpoint.Sanitizer}). */
     static final String MASK = "******";
 
+    /**
+     * Compound, separator-delimited key names. {@link MaskingEngine} normalises both these
+     * and the key under test into token lists before comparing, so "api-key", "apiKey" and
+     * "API_KEY" all match the same rule whatever separator the key uses. Bare "key" is
+     * deliberately absent: it would mask spring.jpa.key-generator, server.ssl.key-store (a
+     * filesystem path, not a secret) and key-alias. Bare "certificate" is absent for the
+     * same reason - server.ssl.certificate is a path too; actual key material is caught by
+     * the PEM value pattern, so only the two compound names that name a secret outright
+     * are listed.
+     */
     static final List<String> KEY_NAME_RULES = List.of(
             "password",
             "passwd",
@@ -86,16 +55,48 @@ final class MaskingRules {
             "certificate-password",
             "certificate-private-key");
 
-    static final List<String> WHOLE_KEY_NAME_RULES = List.of("cookie", "set-cookie");
+    /**
+     * Key names sensitive only as the entire key, not as one token inside a longer compound
+     * name: "cookie" and "set-cookie" name an HTTP header outright, but the token also
+     * appears inside ordinary session-cookie configuration
+     * (server.servlet.session.cookie.same-site and siblings), which is not a secret and is
+     * exactly what someone opens the Environment tab to check. The two attribute names are
+     * the OpenTelemetry header-capture spellings of the same headers on a span.
+     */
+    static final List<String> WHOLE_KEY_NAME_RULES =
+            List.of("cookie", "set-cookie", "http.request.header.cookie", "http.response.header.set-cookie");
 
+    /**
+     * Whole keys that would otherwise match a {@link #KEY_NAME_RULES} entry but are
+     * well-known non-secrets under that exact, case-sensitive spelling: "PWD", the POSIX
+     * shell's current-working-directory variable, is the "pwd" password abbreviation in
+     * upper case, and every shell sets it, so it hits every developer on the most-viewed
+     * property source (systemEnvironment). The exception is that one spelling and nothing
+     * wider: a lower-case "pwd" is how a SQL Server JDBC URL (";pwd=") or a login form
+     * ("?pwd=") names a password and still masks, as does a compound like "db.pwd".
+     */
     static final List<String> KEY_NAME_EXCEPTIONS = List.of("PWD");
 
-    static final List<Pattern> LEGACY_KEY_PATTERNS = List.of(
+    /**
+     * Spring Boot's {@code Sanitizer} key patterns that do not fit the compound-name shape,
+     * matched as plain case-insensitive regexes against the whole key.
+     */
+    static final List<Pattern> SPRING_SANITIZER_KEY_PATTERNS = List.of(
             Pattern.compile("vcap_services", Pattern.CASE_INSENSITIVE),
             Pattern.compile("^vcap\\.services.*$", Pattern.CASE_INSENSITIVE),
             Pattern.compile("sun.java.command", Pattern.CASE_INSENSITIVE),
             Pattern.compile("^spring[._]application[._]json$", Pattern.CASE_INSENSITIVE));
 
+    /**
+     * High-precision, provider-prefixed patterns that catch a credential sitting inside a
+     * value under an innocuous key (a JDBC URL's password, a bearer token in a header, a
+     * key pasted into SQL text). Deliberately no entropy-based detection: a git SHA, a UUID
+     * or a base64-encoded asset would trip it, and those must stay readable. Two of the
+     * patterns are key/value pairs embedded in a value - a URL's query parameters, a
+     * command line's {@code -Dname=value} options - and carry no vocabulary of their own:
+     * {@link MaskingEngine} judges the captured key with the key-name rules above, so a
+     * name that masks as a property masks as a query parameter too.
+     */
     static final List<ValuePattern> VALUE_PATTERNS = List.of(
             new ValuePattern(
                     "JWT",
@@ -112,22 +113,14 @@ final class MaskingRules {
             new ValuePattern("Stripe key", Pattern.compile("\\b[sr]k_live_[0-9A-Za-z]{20,}\\b")),
             new ValuePattern("OpenAI project key", Pattern.compile("\\bsk-proj-[A-Za-z0-9_-]{20,}\\b")),
             new ValuePattern("Anthropic key", Pattern.compile("\\bsk-ant-[A-Za-z0-9_-]{20,}\\b")),
-            // Legacy (pre-project-key) OpenAI format: "sk-" plus an unbroken 48-character
-            // alphanumeric run, no hyphens/underscores anywhere in the tail. That's the key
-            // difference from an infra identifier that merely starts with "sk-"
-            // ("sk-cluster-prod-eu-west-1a-worker-nodes"): the identifier's run breaks at
-            // its first hyphen, only 7 characters in, so it never reaches the 20-character
-            // floor. Tightening the tail to [A-Za-z0-9] (no "-"/"_") is what makes that
-            // separation possible: a tail that admits "-"/"_" matches the infra identifier
-            // as well. Doesn't overlap the two prefixed rules above: "sk-proj-" and "sk-ant-"
-            // both put a hyphen right after "sk-", four or three characters in, so this
-            // pattern's required run breaks there too and it never fires for either -
-            // whichever of the three rules matches a given value, the masked span is the
-            // same (the whole key), so which one "wins" is never observable.
+            // Legacy OpenAI format: "sk-" plus an unbroken alphanumeric run (no "-"/"_"), so
+            // an infra name like "sk-cluster-prod-..." breaks at its first hyphen and never
+            // reaches the 20-character floor; "sk-proj-"/"sk-ant-" break at the same place
+            // and are caught by their own rules above.
             new ValuePattern("Legacy OpenAI key", Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
-            // The upstream regex has no capturing group; group 1 is added here so
-            // MaskingEngine can mask the userinfo only, leaving scheme://host:port/path intact.
-            // The user may be empty: redis://:secret@host is the common Redis shape.
+            // Group 1 is the userinfo, so MaskingEngine masks it alone and leaves
+            // scheme://host:port/path intact. The user may be empty: redis://:secret@host is
+            // the common Redis shape.
             new ValuePattern(
                     "Credentials in a URL", 1, Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
             // Oracle's thin URL (jdbc:oracle:thin:user/password@host) has no "://" ahead of

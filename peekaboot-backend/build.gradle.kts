@@ -8,7 +8,6 @@ dependencies {
     api("org.springframework.boot:spring-boot")
     api("org.springframework.boot:spring-boot-actuator")
     api("tools.jackson.core:jackson-databind")
-    api("com.github.ben-manes.caffeine:caffeine")
     api("io.micrometer:micrometer-core")
     api("io.micrometer:micrometer-tracing")
     api("net.osslabz:jdbc-url-parser:0.1.1")
@@ -24,7 +23,6 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-health")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
     compileOnly("org.springframework.boot:spring-boot-configuration-processor")
-    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
 
     // The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off
     // the runtime classpath. Test scope only: a compile-scope edge would invert the

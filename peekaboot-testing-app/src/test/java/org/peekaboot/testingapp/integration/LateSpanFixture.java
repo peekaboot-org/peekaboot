@@ -33,45 +33,19 @@ public class LateSpanFixture {
     public static class LateSpanController {
 
         /**
-         * Long enough that the bar provably renders at least once before the span lands - not an
-         * accident of round numbers, but a margin against numbers this class does not own.
+         * Long enough that the bar provably renders at least once before the span lands.
          *
-         * <p><b>Two different clocks.</b> This fixture's clock starts on the request thread, in
-         * {@link #lateSpan()}: the late span begins essentially at response time and ends
-         * {@code LATE_WORK} later. The toolbar's fetch ladder ({@code attemptDelays} in {@code
-         * toolbar.js}) does not start there - {@code DevToolbarFilter} injects {@code toolbar.js} as
-         * {@code <script type="module">}, which defers past HTML parse and then pulls in five
-         * further ES modules ({@code format.js}, {@code severity.js}, {@code theme.js}, {@code
-         * shadow-styles.js}, {@code copyable.js}), each a separate round trip, cold on first
-         * navigation. Call that response-to-module-graph-executed latency {@code L}; the ladder's
-         * attempts fire at {@code L+250} and {@code L+750} (cumulative), not at 250ms and 750ms from
-         * the response. {@code L} is exactly what inflates under CI load, so it is the margin that
-         * matters, not the raw attempt delays.
+         * <p>Two clocks: the late span starts at response time and ends {@code LATE_WORK} later.
+         * The toolbar's fetch ladder ({@code attemptDelays} in {@code toolbar.js}) starts only once
+         * its module graph has executed, some latency {@code L} after the response, so its
+         * attempts fire at {@code L+250}, {@code L+750}, {@code L+1750} and {@code L+4750}.
+         * {@code L} is what inflates under CI load, so it is the margin that matters.
          *
-         * <p><b>The constraint.</b> The first render must still show the trace's short baseline
-         * duration, i.e. land before the late span ends: {@code L+250 < LATE_WORK} if the first
-         * attempt supplies it, or the more conservative {@code L+750 < LATE_WORK} if the first
-         * attempt is missed and the second supplies it instead. At {@code LATE_WORK = 1500ms} that
-         * is a 1250ms tolerance for {@code L} on the first attempt, or 750ms on the conservative
-         * path - both comfortably wider than the 50ms this class ran with when both attempt delays
-         * were measured from the response instead of from {@code L}.
-         *
-         * <p>The other side of the ladder needs no margin at all: the late span becomes visible to
-         * {@code /insights} at {@code LATE_WORK} plus the test profile's OTel span export {@code
-         * schedule-delay} ({@code application-test.yml}), 50ms - 1550ms from the response,
-         * independent of {@code L}. The third attempt, at {@code L+1750}, already clears that at
-         * {@code L=0}; growing {@code L} only pushes it later, which helps rather than hurts here.
-         * The fourth attempt, at {@code L+4750}, is a 3.2s backstop that fires regardless -
-         * {@code toolbar.js} chains {@code attempt(index + 1)} off a {@code .finally()}, so it runs
-         * whether or not the previous attempt's fetch succeeded.
-         *
-         * <p>One more effect of the raised value: past 1000ms, {@code formatDurationMs} switches
-         * from {@code Math.round(ms) + 'ms'} to {@code (ms/1000).toFixed(2) + 's'} - 10ms
-         * granularity. The trace duration this test asserts on is strictly greater than {@code
-         * LATE_WORK} (root-start to late-end spans more than the sleep itself), so the worst-case
-         * rendering rounds down to {@code "1.50s"}, which parses back to exactly 1500.0 - the
-         * assertion's {@code isGreaterThanOrEqualTo(LATE_WORK.toMillis())} still passes, but on the
-         * boundary rather than with headroom.
+         * <p>The constraints: the first render must still show the short baseline duration, i.e.
+         * land before the late span ends - {@code L+750 < LATE_WORK} even if the first attempt is
+         * missed - and the late span must be exported ({@code LATE_WORK} plus the test profile's
+         * 50ms {@code schedule-delay}) before the third attempt: {@code LATE_WORK + 50 < L+1750},
+         * which holds at {@code L=0} and only gains room as {@code L} grows.
          *
          * <p>Changing the ladder, the export delay, or this value invalidates this arithmetic - redo
          * it rather than assume it still holds.

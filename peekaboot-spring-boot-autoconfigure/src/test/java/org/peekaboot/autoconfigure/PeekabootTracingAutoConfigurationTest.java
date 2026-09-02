@@ -33,6 +33,12 @@ class PeekabootTracingAutoConfigurationTest {
                     PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
+    /** The interceptor auto-configuration is covered here as well; it shares the paths bean. */
+    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(
+                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
+            .withPropertyValues("peekaboot.enabled=true");
+
     @Test
     void shouldCreateCoreBeans() {
         contextRunner.run(context -> {
@@ -118,20 +124,12 @@ class PeekabootTracingAutoConfigurationTest {
                             null,
                             null,
                             null,
-                            null,
-                            null,
-                            List.of(),
                             1L));
                     assertThat(store.getTraceCount(TraceBucket.SLOW)).isEqualTo(1);
                 });
     }
 
     // --- TracingInterceptorAutoConfiguration ---
-
-    private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(
-                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
-            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {
@@ -215,7 +213,7 @@ class PeekabootTracingAutoConfigurationTest {
             // context-relative MVC patterns, so a server.servlet.context-path changes nothing here
             assertThat(mapped.getExcludePathPatterns())
                     .containsExactlyInAnyOrder(
-                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**", "/error");
+                            "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**");
         });
     }
 

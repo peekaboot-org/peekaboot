@@ -2,8 +2,6 @@ package org.peekaboot.backend.tracing.interceptor;
 
 import static io.micrometer.observation.tck.TestObservationRegistryAssert.assertThat;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.tck.TestObservationRegistry;
@@ -115,28 +113,34 @@ class TracingHandlerInterceptorTest {
         assertThat(observationRegistry)
                 .hasNumberOfObservationsWithNameEqualTo("spring.handler", 1)
                 .hasNumberOfObservationsWithNameEqualTo("spring.view.render", 1);
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.view.render")
+                .that()
+                .hasBeenStopped();
     }
 
+    /** postHandle is skipped when the handler throws; afterCompletion records the error and still stops the observation. */
     @Test
-    void afterCompletion_shouldHandleExceptionInHandler() {
+    void afterCompletion_recordsTheHandlerExceptionAndStopsTheObservation() {
         request.setRequestURI("/api/users");
         Object handler = new Object();
         RuntimeException exception = new RuntimeException("Handler error");
 
         interceptor.preHandle(request, response, handler);
-        // Simulate exception - postHandle is not called when exception occurs
         interceptor.afterCompletion(request, response, handler, exception);
 
-        assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .hasError(exception)
+                .hasBeenStopped();
     }
 
     @Test
     void preHandle_shouldResolveHandlerMethodName() throws NoSuchMethodException {
         request.setRequestURI("/api/users");
-
-        HandlerMethod handlerMethod = mock(HandlerMethod.class);
-        when(handlerMethod.getBeanType()).thenReturn((Class) TestController.class);
-        when(handlerMethod.getMethod()).thenReturn(TestController.class.getMethod("getUsers"));
+        HandlerMethod handlerMethod =
+                new HandlerMethod(new TestController(), TestController.class.getMethod("getUsers"));
 
         interceptor.preHandle(request, response, handlerMethod);
 

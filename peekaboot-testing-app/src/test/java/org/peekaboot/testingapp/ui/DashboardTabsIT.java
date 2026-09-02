@@ -9,6 +9,8 @@ import com.microsoft.playwright.options.WaitForSelectorState;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +25,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Autowired
     private DataSource dataSource;
 
-    /** The {@code limit} traces.js requests with (its fetchAndRender). */
+    private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
+
+    /** Mirrors the limit traces.js sends with every listing request. */
     private static final int TRACES_PAGE_SIZE = 50;
 
     @Test
@@ -53,9 +57,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     /**
      * The insights stat tiles sit on the Overview tab, filled from /api/insights/config
-     * on the dashboard's own 30s cycle - no SSE and no visit to the Insights tab. The
-     * heap/disk/pool tiles were dropped rather than moved: the Memory & Storage meters
-     * and the DataSources grid on this very page already carry those numbers.
+     * on the dashboard's own 30s cycle - no SSE and no visit to the Insights tab. Only the
+     * four time tiles: heap/disk/pool already appear in the Memory & Storage meters and
+     * the DataSources grid on this page.
      */
     @Test
     void overviewShowsTheInsightStatTiles() {
@@ -482,11 +486,13 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * What genuinely differs between bucket responses is the item count, so the list is
      * checked against the count carried by the very response that rendered it: the
      * bucket count is app-global and uncapped, the list is capped at the page size, and
-     * any class running alongside this one can log an ERROR between two requests. The
-     * sanity assertion that the errors count is smaller than the all count is what keeps
-     * this non-vacuous: the unfiltered store always holds a mix of error and non-error
-     * traces (the scheduler's deliberate failures alongside ordinary HTTP request traces
-     * for the dashboard's own page loads).
+     * any class running alongside this one can log an ERROR between two requests. It has
+     * to be the <em>filtered</em> count: traces.js always sends a type include-list
+     * (hiding CONNECTION_POOL), and a hidden trace that logs an ERROR is counted in
+     * {@code bucketCounts} but never listed. The sanity assertion that the errors count is
+     * smaller than the all count is what keeps this non-vacuous: the store always holds a
+     * mix of error and non-error traces (the scheduler's deliberate failures alongside
+     * ordinary HTTP request traces for the dashboard's own page loads).
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
@@ -501,12 +507,17 @@ class DashboardTabsIT extends PlaywrightTestBase {
                         && response.url().contains("bucket=errors"),
                 () -> page.click("#traces-bucket .pk-btn[data-bucket='errors']"));
         JsonNode errorsBucket = JSON.readTree(errorsResponse.text());
-        int errorsCount = errorsBucket.path("bucketCounts").path("errors").asInt();
+        JsonNode counts = errorsBucket.path("filteredBucketCounts");
+        assertThat(counts.isObject())
+                .as("a type-filtered listing carries the counts that match it")
+                .isTrue();
+        int errorsCount = counts.path("errors").asInt();
         int listedCount = errorsBucket.path("traces").size();
 
-        assertThat(errorsCount)
-                .isPositive()
-                .isLessThan(errorsBucket.path("bucketCounts").path("all").asInt());
+        assertThat(errorsCount).isPositive().isLessThan(counts.path("all").asInt());
+        assertThat(pageSizeOf(errorsResponse))
+                .as("mirrors the page size traces.js is written with")
+                .isEqualTo(TRACES_PAGE_SIZE);
         assertThat(listedCount).isEqualTo(Math.min(errorsCount, TRACES_PAGE_SIZE));
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
@@ -605,8 +616,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
 
-        // Forces a full renderData() cycle while the overlay is open, so traces.js's
-        // setUrlParams closure (pre-fix) would pick up the open trace's id as "detail" -
+        // Forces a full renderData() cycle while the overlay is open, so a setUrlParams
+        // closure taken at render time would pick up the open trace's id as "detail" -
         // the same thing a real 30s auto-refresh cycle would eventually do on its own.
         // A real pointer click on the button is unusable here: the full-screen overlay
         // intercepts it, so this invokes the button's own click handler directly instead.
@@ -653,12 +664,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 new Page.WaitForFunctionOptions().setTimeout(15000));
         page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
                 + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        // The tab switch itself is synchronous (tabStrip's click listener calls onSelect,
-        // which renders the Logs tab content, in the same call stack) - but waiting on the
-        // element rather than assuming it's already there the instant the click evaluate()
-        // resolves is the same defensive idiom TraceOverlayIT's own Logs-tab tests use
-        // (see logsFilterChipUsesTheContrastTunedForeground's wait for '.pk-log__span'
-        // right after this exact click), and is what actually observed a real flake here.
+        // The tab switch renders synchronously, but wait for the element anyway - the
+        // click evaluate() resolving does not mean the shadow DOM has been re-queried.
         page.waitForFunction(
                 "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
                         + ".querySelector('#pk-log-level')",
@@ -793,5 +800,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
         assertThat(page.url()).endsWith("#traces?type=CONNECTION_POOL");
         page.waitForSelector("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']");
+    }
+
+    /** The page size traces.js asked the listing endpoint for. */
+    private static int pageSizeOf(Response listing) {
+        Matcher matcher = TRACES_PAGE_SIZE_PARAM.matcher(listing.url());
+        assertThat(matcher.find())
+                .as("traces.js names its page size: %s", listing.url())
+                .isTrue();
+        return Integer.parseInt(matcher.group(1));
     }
 }

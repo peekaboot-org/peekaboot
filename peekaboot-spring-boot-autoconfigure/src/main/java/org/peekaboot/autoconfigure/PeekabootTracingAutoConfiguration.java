@@ -11,29 +11,18 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
-/**
- * Auto-configuration for Peekaboot tracing components.
- * Configures TraceStore as the central storage for all trace data. Servlet-only because
- * everything that reads the store - the trace service, controller and filters - is.
- */
+/** Servlet-only because everything that reads the store - the trace service, controller and filters - is. */
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty(name = "peekaboot.tracing.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ENABLED, matchIfMissing = true)
 @EnableConfigurationProperties(PeekabootTracingProperties.class)
 public class PeekabootTracingAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
     public TraceStore traceStore(PeekabootTracingProperties properties) {
-        return new InMemoryTraceStore(
-                properties.getMaxTraces(),
-                properties.getMaxSpansPerTrace(),
-                InMemoryTraceStore.DEFAULT_EXPIRE,
-                properties.getMaxErrorTraces(),
-                properties.getMaxSlowTraces(),
-                properties.getSlowTraceThresholdMs(),
-                properties.getMaxLogsPerTrace());
+        return new InMemoryTraceStore(properties);
     }
 
     @Bean

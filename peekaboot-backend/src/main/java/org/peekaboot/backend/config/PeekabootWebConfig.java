@@ -12,8 +12,8 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        registry.addResourceHandler("/peekaboot/ui/**")
-                .addResourceLocations("classpath:/static/peekaboot/ui/")
+        registry.addResourceHandler(PeekabootPaths.BASE_PATH + "/ui/**")
+                .addResourceLocations("classpath:" + PeekabootPaths.CLASSPATH_ROOT + "/ui/")
                 .setCacheControl(CacheControl.noCache());
     }
 
@@ -25,12 +25,14 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addRedirectViewController("/peekaboot", "/peekaboot/ui/dashboard/index.html");
-        registry.addRedirectViewController("/peekaboot/", "/peekaboot/ui/dashboard/index.html");
+        String dashboard = PeekabootPaths.BASE_PATH + "/ui/dashboard/index.html";
+        registry.addRedirectViewController(PeekabootPaths.BASE_PATH, dashboard);
+        registry.addRedirectViewController(PeekabootPaths.BASE_PATH + "/", dashboard);
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(new ApiSecurityHeadersInterceptor()).addPathPatterns("/peekaboot/api/**");
+        registry.addInterceptor(new ApiSecurityHeadersInterceptor())
+                .addPathPatterns(PeekabootPaths.BASE_PATH + "/api/**");
     }
 }

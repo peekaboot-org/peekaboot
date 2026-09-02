@@ -23,7 +23,9 @@
         <plugins>
             <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
                  -javadoc jar for every jar component. Package the empty javadoc output
-                 directory as that jar. -->
+                 directory as that jar. Remove this execution the day the module gains
+                 Java sources: javadoc:jar would then attach a second javadoc artifact
+                 and the release would fail on the duplicate. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>

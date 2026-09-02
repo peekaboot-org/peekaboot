@@ -15,7 +15,7 @@ spring:
 # Both endpoints are already enabled by default (springdoc's own conditionals treat an
 # absent property as enabled) - setting them explicitly only stops SpringDocAppInitializer's
 # startup WARN, which fires whenever the property was left unset. Behaviour is unchanged;
-# the toolbar's Swagger UI integration (docs: dev-toolbar.md) still needs both live.
+# the toolbar's Swagger UI integration (the website's dev-toolbar page) still needs both live.
 springdoc:
   api-docs:
     enabled: true

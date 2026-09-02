@@ -1,0 +1,6 @@
+panels:
+  - id: deep
+    title: Deep
+    level: 7
+    series:
+      - meter: process.cpu.usage

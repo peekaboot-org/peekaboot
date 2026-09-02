@@ -1,6 +1,5 @@
 package org.peekaboot.backend.testsupport;
 
-import java.time.Duration;
 import java.util.function.Consumer;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
@@ -18,19 +17,8 @@ public final class TraceStores {
     }
 
     public static InMemoryTraceStore with(Consumer<PeekabootTracingProperties> customizer) {
-        return with(InMemoryTraceStore.DEFAULT_EXPIRE, customizer);
-    }
-
-    public static InMemoryTraceStore with(Duration expireAfter, Consumer<PeekabootTracingProperties> customizer) {
         PeekabootTracingProperties properties = new PeekabootTracingProperties();
         customizer.accept(properties);
-        return new InMemoryTraceStore(
-                properties.getMaxTraces(),
-                properties.getMaxSpansPerTrace(),
-                expireAfter,
-                properties.getMaxErrorTraces(),
-                properties.getMaxSlowTraces(),
-                properties.getSlowTraceThresholdMs(),
-                properties.getMaxLogsPerTrace());
+        return new InMemoryTraceStore(properties);
     }
 }

@@ -130,9 +130,6 @@ class RequestAndQueryMaskingIT {
                 null,
                 null,
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet()));
         traceStore.addSpan(new SpanData(
                 traceId,
@@ -153,9 +150,6 @@ class RequestAndQueryMaskingIT {
                 null,
                 null,
                 null,
-                null,
-                null,
-                List.of(),
                 CREATION_ORDER.incrementAndGet()));
 
         JsonNode trace = traces.awaitTrace(traceId);

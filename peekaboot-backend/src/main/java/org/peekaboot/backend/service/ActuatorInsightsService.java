@@ -8,7 +8,15 @@ import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.peekaboot.backend.mapper.actuator.*;
+import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
+import org.peekaboot.backend.mapper.actuator.ConfigMapper;
+import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
+import org.peekaboot.backend.mapper.actuator.EnvironmentMapper;
+import org.peekaboot.backend.mapper.actuator.FlywayMapper;
+import org.peekaboot.backend.mapper.actuator.HealthMapper;
+import org.peekaboot.backend.mapper.actuator.LoggersMapper;
+import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
+import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
 import org.springframework.beans.factory.ObjectProvider;
 
 public final class ActuatorInsightsService {

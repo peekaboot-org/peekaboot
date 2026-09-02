@@ -233,6 +233,7 @@ class TraceDataBundleTest {
                 }
             });
 
+            // reads race the writer on purpose
             while (!writer.isDone()) {
                 List<SpanData> snapshot = bundle.spans();
                 assertThat(snapshot).isSortedAccordingTo(Comparator.comparingLong(SpanData::creationOrder));
@@ -243,6 +244,19 @@ class TraceDataBundleTest {
         }
 
         assertThat(bundle.spans()).hasSize(totalSpans);
+    }
+
+    /** The root is the first stored span whose parent is not stored - a child that exported before its parent is not it. */
+    @Test
+    void rootSpanIsTheFirstStoredSpanWhoseParentIsNotStored() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        assertThat(bundle.rootSpan()).isNull();
+
+        bundle.addSpan(createSpan("child", 1, "parent"), 10);
+        assertThat(bundle.rootSpan().spanId()).isEqualTo("child");
+
+        bundle.addSpan(createSpan("parent", 2, null), 10);
+        assertThat(bundle.rootSpan().spanId()).isEqualTo("parent");
     }
 
     @Test
@@ -271,6 +285,14 @@ class TraceDataBundleTest {
                 .parent(parentId)
                 .named(name)
                 .tag("peer.service", peerService)
+                .at(creationOrder * 100, 50)
+                .order(creationOrder)
+                .build();
+    }
+
+    private SpanData createSpan(String spanId, long creationOrder, String parentId) {
+        return span(spanId)
+                .parent(parentId)
                 .at(creationOrder * 100, 50)
                 .order(creationOrder)
                 .build();

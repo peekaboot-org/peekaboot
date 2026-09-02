@@ -1,7 +1,9 @@
 package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -16,7 +18,15 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
-import org.peekaboot.backend.mapper.actuator.*;
+import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
+import org.peekaboot.backend.mapper.actuator.ConfigMapper;
+import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
+import org.peekaboot.backend.mapper.actuator.EnvironmentMapper;
+import org.peekaboot.backend.mapper.actuator.FlywayMapper;
+import org.peekaboot.backend.mapper.actuator.HealthMapper;
+import org.peekaboot.backend.mapper.actuator.LoggersMapper;
+import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
+import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.beans.factory.ObjectProvider;
 

@@ -60,22 +60,17 @@ public class TraceTreeMapper {
 
         List<SpanData> spans = traceData.spans();
 
-        // Build lookup maps
         Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
         Map<String, List<SpanData>> childrenByParentId =
                 spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
 
-        // Find root span
         SpanData rootSpanData = findRootSpan(spans, spanById);
 
         // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
         // exported) under the root so they don't silently vanish from the tree
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
-        // Calculate summary
         TraceTabSummary summary = calculateSummary(spans, rootSpanData);
-
-        // Determine trace status
         TraceStatus status = determineStatus(spans);
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
@@ -129,20 +124,13 @@ public class TraceTreeMapper {
     }
 
     /** The span the tree hangs from: the first span with no parent stored in this trace, else the first span. */
-    public SpanData findRootSpan(List<SpanData> spans) {
-        Map<String, SpanData> spanById = spans.stream().collect(Collectors.toMap(SpanData::spanId, s -> s));
-        return findRootSpan(spans, spanById);
-    }
-
-    private SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {
-        // Find span with null parentId or parent not in this trace
+    private static SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {
         for (SpanData span : spans) {
             if (span.parentId() == null || !spanById.containsKey(span.parentId())) {
                 return span;
             }
         }
-        // Fallback: return first span
-        return spans.isEmpty() ? null : spans.get(0);
+        return spans.getFirst();
     }
 
     public RootActionType detectRootActionType(SpanData rootSpan) {
@@ -187,14 +175,11 @@ public class TraceTreeMapper {
         if (kind == Span.Kind.CLIENT && hasTagPrefix(tags, "db.")) {
             return RootActionType.DATABASE;
         }
-        // datasource-micrometer's connection observation as the trace root: a pooled
-        // connection acquired outside any traced work (a health probe, HikariCP
-        // maintenance). Checked after DATABASE because in a HikariCP app every datasource
-        // observation carries jdbc.datasource.* tags (HikariJdbcObservationFilter), query
-        // and result-set spans included - the "connection" name, the library's fixed
-        // contextual name for its connection observation
-        // (JdbcObservationDocumentation.CONNECTION), is what separates a pool acquisition
-        // from those siblings sharing the tag prefix.
+        // datasource-micrometer's connection observation as the root: a pooled connection
+        // acquired outside traced work (HikariCP maintenance). Checked after DATABASE because
+        // every datasource observation in a HikariCP app carries jdbc.datasource.*; the fixed
+        // contextual name "connection" (JdbcObservationDocumentation.CONNECTION) singles out
+        // the acquisition.
         if (kind == Span.Kind.CLIENT && "connection".equals(name) && hasTagPrefix(tags, "jdbc.datasource.")) {
             return RootActionType.CONNECTION_POOL;
         }

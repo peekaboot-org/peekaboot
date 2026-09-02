@@ -5,9 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import org.junit.jupiter.api.BeforeEach;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.peekaboot.testingapp.TestingApp;
 import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
@@ -19,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
@@ -32,10 +40,15 @@ import tools.jackson.databind.json.JsonMapper;
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
+    private static final int CONCURRENT_ORDERS = 16;
     private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     @LocalServerPort
     private int port;
@@ -54,10 +67,12 @@ class OrderTraceCaptureIT {
 
     private TraceApiClient traces;
 
-    @BeforeEach
+    /**
+     * Seeded once: every save outside a request is a root trace of its own in the store
+     * the UI classes read, and no test here changes the seeded rows.
+     */
+    @BeforeAll
     void seedOrders() {
-        orderLineRepository.deleteAll();
-        orderRepository.deleteAll();
         for (int i = 1; i <= SEEDED_ORDERS; i++) {
             CustomerOrder order = new CustomerOrder();
             order.setReference("PK-200" + i);
@@ -197,16 +212,9 @@ class OrderTraceCaptureIT {
 
     @Test
     void placingAnOrderIsCapturedAsItsOwnTrace() {
-        String summary = traces.restClient()
-                .post()
-                .uri("/api/orders")
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new NewOrder(1L, "WIDGET-NEW", 2))
-                .retrieve()
-                .body(String.class);
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-NEW", 2));
 
-        JsonNode listed = traces.awaitTraceInBucket("all", "http post /api/orders");
-        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
+        JsonNode trace = traces.awaitTrace(traceIdOf(response));
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
@@ -214,11 +222,49 @@ class OrderTraceCaptureIT {
         assertThat(spanNames(trace))
                 .as("the order-placed listener runs inside the request, so its span belongs to this trace")
                 .contains("order.placed");
-        JsonNode placed = JSON.readTree(summary);
+        JsonNode placed = JSON.readTree(response.getBody());
         assertThat(placed.path("lineCount").asInt()).isEqualTo(1);
         assertThat(placed.path("total").decimalValue())
                 .as("the summary describes the line that was persisted: 2 x 19.99")
                 .isEqualByComparingTo("39.98");
+    }
+
+    /**
+     * The order and its line are written in one transaction, so the trace shows a single
+     * pooled connection for the request rather than one per save.
+     */
+    @Test
+    void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-TX", 1));
+
+        JsonNode trace = traces.awaitTrace(traceIdOf(response));
+
+        assertThat(spanNames(trace))
+                .as("spans of the POST trace")
+                .filteredOn("connection"::equals)
+                .hasSize(1);
+    }
+
+    /**
+     * Order references are unique in the schema, so two orders placed in the same instant
+     * must still get their own; a colliding reference fails the second request outright.
+     */
+    @Test
+    void ordersPlacedAtTheSameInstantGetDistinctReferences() throws Exception {
+        List<String> references = new ArrayList<>();
+        try (ExecutorService placers = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<String>> placed = placers.invokeAll(Collections.nCopies(
+                    CONCURRENT_ORDERS,
+                    () -> JSON.readTree(placeOrder(new NewOrder(1L, "WIDGET-BURST", 1))
+                                    .getBody())
+                            .path("reference")
+                            .asString()));
+            for (Future<String> reference : placed) {
+                references.add(reference.get());
+            }
+        }
+
+        assertThat(references).hasSize(CONCURRENT_ORDERS).doesNotHaveDuplicates();
     }
 
     /**
@@ -262,6 +308,25 @@ class OrderTraceCaptureIT {
                         + "trace root when the scheduler fires it; that root span's "
                         + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
                 .isEqualTo("SCHEDULED_JOB");
+    }
+
+    private ResponseEntity<String> placeOrder(NewOrder order) {
+        return traces.restClient()
+                .post()
+                .uri("/api/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(order)
+                .retrieve()
+                .toEntity(String.class);
+    }
+
+    private static String traceIdOf(ResponseEntity<?> response) {
+        String serverTiming = response.getHeaders().getFirst("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        assertThat(matcher.find())
+                .as("Server-Timing must carry the trace id, or the request was never captured: %s", serverTiming)
+                .isTrue();
+        return matcher.group(1);
     }
 
     private static List<String> spanNames(JsonNode trace) {

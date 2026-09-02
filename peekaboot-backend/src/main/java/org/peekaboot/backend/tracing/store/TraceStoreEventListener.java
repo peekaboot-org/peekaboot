@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.store;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
+import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 import org.springframework.context.event.EventListener;
 
 /** The store's single write entry point: one {@code @EventListener} per event type the capture side publishes. */
@@ -36,5 +37,13 @@ public class TraceStoreEventListener {
             return;
         }
         store.setRequest(event);
+    }
+
+    @EventListener
+    public void onTraceDiscarded(TraceDiscardedEvent event) {
+        if (event == null) {
+            return;
+        }
+        store.discard(event.traceId());
     }
 }

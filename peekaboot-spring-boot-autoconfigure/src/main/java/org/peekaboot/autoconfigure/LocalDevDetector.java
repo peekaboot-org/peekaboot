@@ -25,7 +25,15 @@ import org.springframework.core.NativeDetector;
  * <p>With DevTools on the classpath the application is relaunched on the
  * {@code restartedMain} thread under DevTools' {@code RestartClassLoader}
  * before the environment is built; since DevTools only enables itself in a
- * local launch, that classloader is itself proof of local development.
+ * local launch, that classloader stands in for the class-path check. The
+ * container check still applies: DevTools has none of its own, and Jib or an
+ * extracted layout ships it whenever it is a runtime dependency.
+ *
+ * <p>A container marker is a container marker wherever it comes from, so a checkout worked on
+ * inside a devcontainer - VS Code Dev Containers, GitHub Codespaces - is not a local launch by
+ * this measure however it was started; what the detection would have switched on there
+ * ({@code peekaboot.enabled}, {@code peekaboot.dev-toolbar}, {@code peekaboot.storage.enabled})
+ * has to be set explicitly.
  */
 final class LocalDevDetector {
 
@@ -37,8 +45,13 @@ final class LocalDevDetector {
             "cucumber.runtime.");
 
     /** Build output directories as IDEs, spring-boot:run and bootRun put them on the class path. */
-    private static final Set<String> BUILD_OUTPUT_SUFFIXES =
-            Set.of("/target/classes", "/build/classes/java/main", "/build/classes/kotlin/main", "/bin/main");
+    private static final Set<String> BUILD_OUTPUT_SUFFIXES = Set.of(
+            "/target/classes",
+            "/build/classes/java/main",
+            "/build/classes/kotlin/main",
+            "/build/classes/groovy/main",
+            "/build/classes/scala/main",
+            "/bin/main");
 
     /** IntelliJ's own builder: {@code out/production/<module>}. */
     private static final String INTELLIJ_OUTPUT_SEGMENT = "/out/production/";
@@ -91,7 +104,7 @@ final class LocalDevDetector {
             return false;
         }
         if (classLoader.getClass().getName().contains("RestartClassLoader")) {
-            return true;
+            return !signals.containerMarkers();
         }
         if (!"main".equals(thread.getName())) {
             return false;

@@ -39,6 +39,8 @@ public class ToolbarDataProvider {
         private static final long serialVersionUID = 1L;
 
         private static final int[] ASCII_ESCAPES = standardAsciiEscapesForJSON();
+        private static final SerializedString LESS_THAN = new SerializedString("\\u003c");
+        private static final SerializedString GREATER_THAN = new SerializedString("\\u003e");
 
         static {
             ASCII_ESCAPES['<'] = ESCAPE_CUSTOM;
@@ -53,8 +55,8 @@ public class ToolbarDataProvider {
         @Override
         public SerializableString getEscapeSequence(int ch) {
             return switch (ch) {
-                case '<' -> new SerializedString("\\u003c");
-                case '>' -> new SerializedString("\\u003e");
+                case '<' -> LESS_THAN;
+                case '>' -> GREATER_THAN;
                 default -> null;
             };
         }

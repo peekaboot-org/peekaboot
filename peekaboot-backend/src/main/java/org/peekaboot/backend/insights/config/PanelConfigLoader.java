@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights.config;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,11 @@ public final class PanelConfigLoader {
     }
 
     private static PanelsFile validate(PanelsFile file) {
-        file.panels().forEach(PanelConfigLoader::validatePanel);
+        Set<String> panelIds = new HashSet<>();
+        for (PanelDef panel : file.panels()) {
+            validatePanel(panel);
+            require(panelIds.add(panel.id()), "duplicate panel id '" + panel.id() + "'");
+        }
         file.tiles().forEach(PanelConfigLoader::validateTile);
         return withDefaults(file);
     }
@@ -76,6 +81,7 @@ public final class PanelConfigLoader {
         require(
                 panel.unit() == null || UNITS.contains(panel.unit()),
                 "panel '" + panel.id() + "': unknown unit '" + panel.unit() + "'");
+        Set<String> seriesIds = new HashSet<>();
         for (SeriesDef series : panel.series()) {
             require(series.meter() != null, "panel '" + panel.id() + "': series without meter");
             require(
@@ -84,7 +90,15 @@ public final class PanelConfigLoader {
             require(
                     series.unit() == null || UNITS.contains(series.unit()),
                     "panel '" + panel.id() + "': unknown series unit '" + series.unit() + "'");
+            require(
+                    seriesIds.add(idOf(series)),
+                    "panel '" + panel.id() + "': duplicate series id '" + idOf(series) + "'");
         }
+    }
+
+    /** A series without an id is addressed by its meter. */
+    private static String idOf(SeriesDef series) {
+        return series.id() == null ? series.meter() : series.id();
     }
 
     private static void validateTile(TileDef tile) {
@@ -107,10 +121,10 @@ public final class PanelConfigLoader {
                         p.level(),
                         p.series().stream()
                                 .map(s -> new SeriesDef(
-                                        s.id() == null ? s.meter() : s.id(),
+                                        idOf(s),
                                         s.label() == null ? s.meter() : s.label(),
                                         s.meter(),
-                                        s.tags() == null ? Map.of() : s.tags(),
+                                        s.tags(),
                                         s.stat() == null ? "value" : s.stat(),
                                         s.subtractMeter(),
                                         s.unit()))

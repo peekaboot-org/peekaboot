@@ -198,4 +198,53 @@ class AccessibilityIT extends PlaywrightTestBase {
                         + "components.css sets for every .pk-copy")
                 .isGreaterThanOrEqualTo(24.0);
     }
+
+    /**
+     * A placeholder is the last fallback in the accessible-name computation and vanishes
+     * the moment something is typed, so every filter field carries a real label. The
+     * overlay's level <select> had no name at all - "combo box, All Levels".
+     */
+    @Test
+    void filterFieldsHaveAccessibleNamesBeyondTheirPlaceholder() {
+        openDashboard();
+        for (String field : List.of("#meters-filter", "#env-filter", "#loggers-filter", "#config-filter")) {
+            assertThat(page.getAttribute(field, "aria-label")).as(field).isNotBlank();
+        }
+
+        page.navigate(baseUrl + "/?error=true");
+        toolbar.openOverlay();
+        overlay.openLogsTab();
+
+        assertThat(overlay.evaluate("root => root.querySelector('#pk-log-filter').getAttribute('aria-label')"))
+                .isEqualTo("Filter logs");
+        assertThat(overlay.evaluate("root => root.querySelector('#pk-log-level').getAttribute('aria-label')"))
+                .isEqualTo("Log level");
+    }
+
+    /**
+     * The overlay's glyph buttons - the expand/collapse triangle, the SQL and query
+     * cross-link toggles, the logs toggle and the log row's span link - were converted to
+     * real buttons but rendered at glyph size. Measured like the copy control above:
+     * the declared min-width/min-height is not what a reader clicks.
+     */
+    @Test
+    void overlayGlyphControlsKeepTheMinimumHitTarget() {
+        page.navigate(baseUrl + "/?error=true");
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-link");
+        for (String control :
+                List.of(".pk-gantt-toggle", ".pk-span-query-toggle", ".pk-span-query-link", ".pk-span-logs-toggle")) {
+            assertMinimumHitTarget(control);
+        }
+
+        overlay.openLogsTab();
+        overlay.waitFor(".pk-log__goto-span");
+        assertMinimumHitTarget(".pk-log__goto-span");
+    }
+
+    private void assertMinimumHitTarget(String selector) {
+        BoundingBox box = page.locator(selector).first().boundingBox();
+        assertThat(box.width).as("%s width", selector).isGreaterThanOrEqualTo(24.0);
+        assertThat(box.height).as("%s height", selector).isGreaterThanOrEqualTo(24.0);
+    }
 }

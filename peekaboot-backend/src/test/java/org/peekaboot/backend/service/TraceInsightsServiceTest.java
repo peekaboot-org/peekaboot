@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
@@ -142,13 +141,8 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailReturnsTheTransformedTrace() {
-        // Given
         addTrace("trace1", 100, false);
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
         assertThat(result.get().traceId()).isEqualTo("trace1");
         assertThat(result.get().durationMs()).isEqualTo(100L);
@@ -156,13 +150,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailDetectsIssues() {
-        // Given: A trace with a slow span (200ms > 100ms threshold)
+        // A trace with a slow span (200ms > 100ms threshold)
         addTrace("trace1", 200, false);
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
         assertThat(result.get().rootSpan().issues()).isNotEmpty();
         assertThat(result.get().rootSpan().issues()).extracting(SpanIssue::type).contains(IssueType.SLOW);
@@ -170,22 +160,14 @@ class TraceInsightsServiceTest {
 
     @Test
     void anUnknownTraceIdYieldsAnEmptyDetail() {
-        // When
         Optional<TraceTree> result = service.getTraceInsights("unknown");
-
-        // Then
         assertThat(result).isEmpty();
     }
 
     @Test
     void theDetailIsEmptyWithoutATraceStore() {
-        // Given
         TraceInsightsService serviceWithNullStore = newService(null);
-
-        // When
         Optional<TraceTree> result = serviceWithNullStore.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isEmpty();
     }
 
@@ -209,17 +191,12 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailIsEnrichedWithLogs() {
-        // Given: a trace with an attached log
+        // a trace with an attached log
         addTrace("trace1", 100, false);
         store.addLog(new LogCapturedEvent(
                 "trace1", "span-trace1", Instant.EPOCH, "INFO", "TestLogger", "Test log message from trace", "main"));
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
-        assertThat(result.get().logs()).isNotNull();
         assertThat(result.get().logs()).hasSize(1);
         assertThat(result.get().logs().get(0).message()).isEqualTo("Test log message from trace");
         assertThat(result.get().logs().get(0).level()).isEqualTo("INFO");
@@ -228,13 +205,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailCarriesEmptyLogsWhenNoneAreStored() {
-        // Given: no logs stored for this trace
+        // no logs stored for this trace
         addTrace("trace1", 100, false);
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
         assertThat(result.get().logs()).isEmpty();
     }
@@ -265,15 +238,10 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailExtractsQueries() {
-        // Given: A trace with a DB span
+        // A trace with a DB span
         addTraceWithDbSpan("trace1", 100);
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
-        assertThat(result.get().queries()).isNotNull();
         assertThat(result.get().queries()).hasSize(1);
         assertThat(result.get().queries().get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ?");
         assertThat(result.get().queries().get(0).dbSystem()).isEqualTo("postgresql");
@@ -282,13 +250,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailCarriesEmptyQueriesWhenThereAreNoDbSpans() {
-        // Given: A trace without DB spans
+        // A trace without DB spans
         addTrace("trace1", 100, false);
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
-
-        // Then
         assertThat(result).isPresent();
         assertThat(result.get().queries()).isEmpty();
     }
@@ -448,17 +412,15 @@ class TraceInsightsServiceTest {
 
     @Test
     void aLogEmittedInAFoldedDuplicateSpanIsAttachedToTheSurvivingSpan() {
-        // Given: a DB span whose duplicate is folded away on write, and a log emitted
+        // a DB span whose duplicate is folded away on write, and a log emitted
         // while inside the folded-away duplicate's MDC scope - i.e. carrying the
         // duplicate's spanId, not the surviving span's
         addTraceWithDuplicatedDbSpan("trace1", 100);
         store.addLog(new LogCapturedEvent(
                 "trace1", "span-db-dup-trace1", Instant.EPOCH, "TRACE", "TestLogger", "Datasource log", "main"));
-
-        // When
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
-        // Then: the log attaches to the surviving span in the tree rather than being
+        // the log attaches to the surviving span in the tree rather than being
         // silently dropped as an orphan
         assertThat(result).isPresent();
         SpanNode dbSpanNode = result.get().rootSpan().children().stream()
@@ -474,16 +436,14 @@ class TraceInsightsServiceTest {
 
     @Test
     void theSameTreeIsReturnedWhetherOrNotTheDuplicateWasCaptured() {
-        // Given: one trace whose DB call was captured twice (real span + duplicate) and
+        // one trace whose DB call was captured twice (real span + duplicate) and
         // an equivalent trace whose DB call was only ever captured once
         addTraceWithDuplicatedDbSpan("withDup", 100);
         addTraceWithDbSpan("withoutDup", 100);
-
-        // When
         TraceTree withDup = service.getTraceInsights("withDup").orElseThrow();
         TraceTree withoutDup = service.getTraceInsights("withoutDup").orElseThrow();
 
-        // Then: folding the duplicate away on write must produce the exact tree the
+        // folding the duplicate away on write must produce the exact tree the
         // never-duplicated trace produces
         assertThat(withDup.summary().spans().count())
                 .isEqualTo(withoutDup.summary().spans().count());
@@ -495,9 +455,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theDetailSurfacesTheTruncatedFlagFromTheBundle() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 2, Duration.ofMinutes(5));
+        InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(2));
         for (int i = 1; i <= 3; i++) {
-            cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s" + i, "op" + i));
+            cappedStore.addSpan(rootSpanWithoutTags("t1", "s" + i, "op" + i));
         }
         TraceInsightsService cappedService = newService(cappedStore);
 
@@ -509,9 +469,9 @@ class TraceInsightsServiceTest {
 
     @Test
     void theListSurfacesTheTruncatedFlagToo() {
-        InMemoryTraceStore cappedStore = new InMemoryTraceStore(100, 1, Duration.ofMinutes(5));
-        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s1", "op1"));
-        cappedStore.addSpan(rootSpanWithoutTags(cappedStore, "t1", "s2", "op2"));
+        InMemoryTraceStore cappedStore = TraceStores.with(p -> p.setMaxSpansPerTrace(1));
+        cappedStore.addSpan(rootSpanWithoutTags("t1", "s1", "op1"));
+        cappedStore.addSpan(rootSpanWithoutTags("t1", "s2", "op2"));
         TraceInsightsService cappedService = newService(cappedStore);
 
         TraceInsightsResponse response = cappedService.getInsights(10, TraceBucket.ALL, null, null);
@@ -519,8 +479,7 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::truncated).containsExactly(true);
     }
 
-    private static SpanData rootSpanWithoutTags(
-            InMemoryTraceStore forStore, String traceId, String spanId, String name) {
+    private static SpanData rootSpanWithoutTags(String traceId, String spanId, String name) {
         return span(spanId).in(traceId).named(name).build();
     }
 

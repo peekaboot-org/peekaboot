@@ -65,7 +65,7 @@ class RequestTabIT extends PlaywrightTestBase {
     }
 
     @Test
-    void requestHeadersDoNotHighlightTheStaleEightStarLiteral() {
+    void requestHeadersDoNotHighlightAValueThatMerelyLooksMasked() {
         // The backend masks with six stars, so an eight-star value reaching the frontend
         // would be a backend bug, not a masked value - it must NOT be highlighted. A
         // highlight keyed on '********' would also silently never fire for a real masked
@@ -163,6 +163,30 @@ class RequestTabIT extends PlaywrightTestBase {
                         .getByText("No headers captured")
                         .count())
                 .isEqualTo(2);
+    }
+
+    /**
+     * Headers and parameters sort by code point, not by the reader's collation: an en-US
+     * browser orders "a-token" before "B-cache" and a code-point sort the other way
+     * round, so a locale-sensitive comparison would show two readers the same trace's
+     * headers in different orders. Playwright pins the context to en-US, which is exactly
+     * the locale that disagrees with code point here.
+     */
+    @Test
+    void requestHeadersSortByCodePointRatherThanTheReadersCollation() {
+        renderWithTrace("""
+                {"durationMs": 12, "httpExchange": {
+                    "request": {"method": "GET", "path": "/api/users",
+                        "headers": {"a-token": "1", "B-cache": "2"}},
+                    "response": {"status": 200, "headers": {}}
+                }}
+                """);
+
+        Object keys = page.evaluate("() => [...document.querySelectorAll('#pk-request-test-container tr')]"
+                + ".map(row => row.firstElementChild.textContent)");
+        @SuppressWarnings("unchecked")
+        List<String> rowKeys = (List<String>) keys;
+        assertThat(rowKeys).containsSubsequence("B-cache", "a-token");
     }
 
     @Test

@@ -35,7 +35,11 @@ class ApplicationReadyListenerTest {
         assertThat(report).contains(" Service URL:").doesNotContain("Peekaboot Dashboard");
     }
 
-    /** The banner is read by people in every locale; "1,5 MB" under a German default is not a number to a log parser. */
+    /**
+     * The banner is read by people in every locale; "1,5 MB" under a German default is not a
+     * number to a log parser. A pool without a configured maximum (HotSpot's non-heap by
+     * default) says so rather than printing a limit of zero.
+     */
     @Test
     void banner_reportsMemoryInLocaleIndependentHumanUnits() {
         Locale defaultLocale = Locale.getDefault();
@@ -44,8 +48,9 @@ class ApplicationReadyListenerTest {
             String report = report(ReadyEvents.webApplication(8083));
 
             assertThat(report)
-                    .containsPattern(" Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=\\d+(\\.\\d)? [KMG]?B\n")
-                    .containsPattern(" Non-Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=\\d+(\\.\\d)? [KMG]?B\n");
+                    .containsPattern(" Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=[1-9]\\d*(\\.\\d)? [KMG]?B\n")
+                    .containsPattern(
+                            " Non-Heap Memory: used=\\d+(\\.\\d)? [KMG]?B, max=(unbounded|[1-9]\\d*(\\.\\d)? [KMG]?B)\n");
         } finally {
             Locale.setDefault(defaultLocale);
         }

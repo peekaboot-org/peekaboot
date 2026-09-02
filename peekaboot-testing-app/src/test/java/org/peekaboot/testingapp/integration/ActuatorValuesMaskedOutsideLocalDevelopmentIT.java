@@ -12,8 +12,8 @@ import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Proves the other required row of spec §2 end to end through the real HTTP API: outside
- * local development, actuator value visibility is absent - not an explicit {@code never} (see
+ * Proves the off-local half of the visibility rule end to end through the real HTTP API:
+ * outside local development, actuator value visibility is absent - not an explicit {@code never} (see
  * {@code PeekabootDefaultsEnvironmentPostProcessorTest.doesNotShowActuatorValuesOutsideLocalDevelopment}
  * and {@code .setsNoActuatorValueVisibilityWhenPeekabootIsDisabled}) - which resolves to
  * Spring's own default, which is {@code never}. So off-local every property masks, not just

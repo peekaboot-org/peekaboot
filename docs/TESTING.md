@@ -24,7 +24,8 @@
 `peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`:
 `Spans.span(id)` (a `SpanData` with neutral defaults, plus the `jdbcQuery`/`jdbcDuplicate`
 presets for the double-instrumented pair), `SpanNodes.node(id)` (an already-mapped
-`SpanNode`), `RequestCompletedEvents.request(traceId)`/`minimal(traceId)`, and
+`SpanNode`), `TraceTrees.tree(rootSpan)` (the mapped `TraceTree` around one),
+`RequestCompletedEvents.request(traceId)`/`minimal(traceId)`, and
 `TraceStores.withDefaults()`/`with(customizer)` (an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`). A test names only what it
 asserts on; a new record component is added to the builder once, not to every test class.
@@ -36,7 +37,10 @@ The frontend is plain ES modules, so a Java enum and its JS mirror drift silentl
 `MIGRATION_STATES`, `ISSUE_TYPES` and `LOG_LEVELS` to `RootActionType`, `TaskType`,
 `MigrationState`, `IssueType` and Logback's levels, the keys the frontend reads off
 `/api/features` to the `Features` record, and `severity.js`'s `DEFAULT_THRESHOLDS` to the
-properties' defaults. A vocabulary that gains a JS mirror gets a row there.
+properties' defaults. A vocabulary that gains a JS mirror gets a row there. The same suite
+pins `format.js`'s `formatLongDuration` against `UptimeFormat.humanize` unit by unit, and
+drives `dashboard/tabs/insights-store.js` — the browser's mirror of the insights rings —
+directly, so the JS with no Java counterpart is covered too.
 
 ## Real collaborators over mocks
 Mock only when the real dependency is expensive, non-deterministic, or external
@@ -44,6 +48,10 @@ Mock only when the real dependency is expensive, non-deterministic, or external
 `DataSource`, or an in-module class whose real construction needs a live container).
 Cheap in-module classes (`InMemoryTraceStore`, `QueryExtractor`, `ToolbarDataProvider`,
 mappers) are used for real. Spring/servlet machinery (`MockMvc`, mock requests) is fine.
+`InsightsSsePublisherTest` shows how far that reaches: it drives Spring's real
+`ResponseBodyEmitterReturnValueHandler` and `StandardServletAsyncWebRequest` over mock
+servlet objects, so a container timeout runs the interceptor chain a stubbed emitter would
+have skipped.
 
 Exception: controller tests that stub a service and assert `isSameAs` pass-through
 (sentinel-identity delegation) are a legitimate use of a stub even when the service
@@ -98,8 +106,10 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     `peekaboot-testing-app`, giving the dashboard's Errors bucket a scheduled-job failure to
     show.
   - `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and
-    has not been acknowledged`, one line per stale order — deliberate demo signal giving the
-    Logs tab WARN content on a non-HTTP (`SCHEDULED_JOB`) trace.
+    has not been acknowledged` — deliberate demo signal giving the Logs tab WARN content
+    on a non-HTTP (`SCHEDULED_JOB`) trace. One line per order the context holds, on every
+    run: nothing ever moves an order out of `PLACED`, so the count grows with the orders a
+    run places.
   - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is
     unreachable` — `OrderController`'s deliberately failing `/boom` endpoint, exercised to
     populate the Errors bucket and the toolbar's error styling.
@@ -107,33 +117,25 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
     all persons` — `PersonController`'s deliberate error path (`/?error=true`), same purpose.
   - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than
     the version Flyway has been verified with. The latest verified version of H2 is
-    <version>.` — a Flyway/H2 version-compatibility `WARN`, printed once per Spring context
-    start.
+    <version>.` — a Flyway/H2 version-compatibility `WARN`, printed by `FlywayTabIT`'s
+    context, the only test in the default suite that enables Flyway (both shared profiles
+    set `spring.flyway.enabled: false`).
 
-## Known flakes
-- `TraceOverlayIT` — a Playwright `TargetClosedError` was seen once from `@AfterEach`'s
-  `page.context().close()`, in `closeButtonDismissesTheOverlayOnTheErrorPath`. Root-caused and
-  fixed: the collapsed toolbar's own fetch ladder (`toolbar.js`) keeps polling
-  `/api/traces/{id}/insights` for up to 4.75s after page load, independent of any one test's
-  lifetime. That test routes the same endpoint (`page.route("**/api/traces/*/insights", route ->
-  route.abort())`) and never unroutes it, so a scheduled poll can still fire while teardown's
-  `context().close()` is mid-flight, and Playwright's client tries to sync interception patterns
-  against a target that is already closing. `PlaywrightTestBase.closePage()` navigates to
-  `about:blank` first, which stops the pollers before the close, and catches
-  `TargetClosedError` around `context().close()` as insurance against the same race.
-  Characterised by running `mvn -pl
-  peekaboot-testing-app verify -Dit.test=TraceOverlayIT` repeatedly before the fix (reproduced once
-  in 7 runs) and after (0 failures across 8 full-class reruns plus 6 focused reruns of the
-  previously-failing method).
-
-  Three tests share this route-and-never-unroute shape, which is why the fix lives in
-  `PlaywrightTestBase` rather than per-test `unroute()` calls:
-  `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
-  `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails` (identical pattern, and it
-  deliberately waits out all four fetch-ladder attempts before teardown runs); and
-  `ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, which routes
-  `trace-detail.js` and must *not* unroute — its Javadoc explains the browser's module map
-  caches the failed dynamic import, so a real reopen would require more than removing the route.
+## Teardown and the toolbar's fetch ladder
+`PlaywrightTestBase.closePage()` navigates to `about:blank` before `context().close()`, and
+catches `TargetClosedError` around the close as insurance. The reason: the collapsed
+toolbar's fetch ladder (`toolbar.js`) polls `/api/traces/{id}/insights` for up to 4.75s
+after page load, independent of any one test's lifetime, and three tests route that
+traffic and never unroute it — `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
+`ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails` (which deliberately waits out all
+four ladder attempts before teardown); and
+`ToolbarIT.openOverlayImportFailureIsCaughtAndLeavesTheBarUsable`, which routes
+`trace-detail.js` and must *not* unroute, because the browser's module map caches the
+failed dynamic import. A scheduled poll firing while the close is mid-flight makes
+Playwright's client sync interception patterns against a target that is already closing.
+The `about:blank` navigation stops the pollers first; per-test `unroute()` calls would not
+close the race, since `unroute` is itself an interception update over the same wire. The
+history of the flake this rule closed is in [`IMPROVEMENTS.md`](IMPROVEMENTS.md) §5.6.
 
 ## Isolation in shared Spring contexts
 `@SpringBootTest` classes sharing mutable singletons (e.g. `TraceStore`) reset
@@ -144,6 +146,10 @@ a class that clears shared state this way MUST hold the corresponding
 that same store holds the `READ` side — `DashboardTraceViewIT` and `DevToolbarIT`
 are the pattern. A class on its own context
 configuration (its own app) needs no lock.
+
+Pinning to a traceId does not mean searching the store for it: a JSON endpoint answers
+with `Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
+`OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
 
 The database needs no such discipline: `application-test.yml` and `application-security.yml`
 set no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its
@@ -184,9 +190,12 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
 - Fast gate (unit tests + Error Prone only): `mvn test` (root). Single unit-test class:
   `mvn -pl <module> test -Dtest=<Class>` — never combine `-am` with `-Dtest`.
 - Everything that boots an application lives in `*IT` classes (failsafe, `integration-test`
-  phase) and only runs under `verify`; `peekaboot-testing-app` runs them as concurrent
-  classes in one JVM, 2 worker threads with a Chromium each
-  (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test that asserts on
+  phase) and only runs under `verify`. The one exception is
+  `PeekabootDefaultsRegistrationTest`, a `*Test` that runs a real non-web
+  `SpringApplication` on purpose, so the fast gate covers `spring.factories` registration
+  and default-property precedence; it boots no server and costs a fraction of a second.
+  `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker
+  threads with a Chromium each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test that asserts on
   app-global state shared with other classes must either pin to its own traceId or take
   a `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
   Single class: `mvn -pl <module> verify -Dit.test=<Class>`.
@@ -207,7 +216,14 @@ auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)`.
   [`IMPROVEMENTS.md`](IMPROVEMENTS.md).
 
 ## Counting tests
-Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`, so
-summing them under-reports. Count from the XML instead — see
-[`IMPROVEMENTS.md`](IMPROVEMENTS.md) §2.3 for the command and why annotation-counting is also
-wrong.
+Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`
+(`PeekabootControllerTest`, `MaskingEngineTest`), so summing them under-reports. Counting
+`@Test` annotations is also wrong: it misses `@ParameterizedTest`, and `MaskingEngineTest`
+alone has 7 that expand to 107 invocations. Count from the XML, or from the reactor
+summary, never from the `.txt` files:
+
+```bash
+for f in <module>/target/surefire-reports/TEST-*.xml; do
+  grep -m1 -o 'tests="[0-9]*"' "$f" | grep -o '[0-9]*'
+done | paste -sd+ | bc
+```

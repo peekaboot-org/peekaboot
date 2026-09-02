@@ -10,7 +10,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.LongSupplier;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 
@@ -43,10 +42,9 @@ public class TraceDataBundle {
     private final Object spansLock = new Object();
     private final Map<String, SpanData> spansById = new LinkedHashMap<>();
     private final Map<String, String> parentRedirects = new HashMap<>();
-    // reverse index of parentRedirects, pruned in evictOldest so the redirect table stays
-    // bounded by currently-retained real spans rather than growing for the trace's whole
-    // life under sustained duplicate-producing traffic
+    /** Reverse index of {@link #parentRedirects}, so an evicted survivor's redirects can be pruned. */
     private final Map<String, List<String>> redirectsPointingAt = new HashMap<>();
+
     private final Map<String, List<String>> childrenByParentId = new HashMap<>();
     private boolean truncated = false;
     // Classification signals, maintained span by span in store() so InMemoryTraceStore's
@@ -60,24 +58,13 @@ public class TraceDataBundle {
     private volatile boolean hasErrorLog;
     private final List<LogCapturedEvent> logs = Collections.synchronizedList(new ArrayList<>());
     private volatile RequestCompletedEvent request;
-    private final long createdAt;
 
     public TraceDataBundle(String traceId) {
-        this(traceId, System::currentTimeMillis);
-    }
-
-    /** Clock seam, mirroring RequestCaptureFilter's: deterministic creation ordering for tests. */
-    TraceDataBundle(String traceId, LongSupplier clock) {
         this.traceId = traceId;
-        this.createdAt = clock.getAsLong();
     }
 
     public String traceId() {
         return traceId;
-    }
-
-    public long createdAt() {
-        return createdAt;
     }
 
     /**
@@ -157,21 +144,24 @@ public class TraceDataBundle {
         }
     }
 
-    /** Records that {@code removedId} folded into {@code survivorId}, maintaining
+    /**
+     * Records that {@code removedId} folded into {@code survivorId}, maintaining
      * {@link #redirectsPointingAt} alongside {@link #parentRedirects} so the entry can be
-     * pruned in {@link #evictOldest} once {@code survivorId} itself is evicted. */
+     * pruned in {@link #evictOldest} once {@code survivorId} itself is evicted.
+     */
     private void recordRedirect(String removedId, String survivorId) {
         parentRedirects.put(removedId, survivorId);
         redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).add(removedId);
         retargetChainedRedirects(removedId, survivorId);
     }
 
-    /** {@code removedId} may itself have been an earlier fold's survivor - i.e. other ids
+    /**
+     * {@code removedId} may itself have been an earlier fold's survivor - i.e. other ids
      * already redirect to it (triple-nested duplicates; does not occur in production, but
-     * the fold must stay correct if it ever did). {@code removedId} is now folded away too
-     * and, unlike a real span, will never itself be evicted, so those entries would never
-     * be pruned if left keyed on it. Re-point them directly at {@code survivorId} so they
-     * are pruned together with it once it is evicted. */
+     * the fold must stay correct if it ever did). A folded-away id, unlike a real span, is
+     * never evicted, so entries keyed on it would never be pruned. Re-point them directly
+     * at {@code survivorId} so they are pruned together with it once it is evicted.
+     */
     private void retargetChainedRedirects(String removedId, String survivorId) {
         List<String> chained = redirectsPointingAt.remove(removedId);
         if (chained == null || chained.isEmpty()) {
@@ -181,8 +171,10 @@ public class TraceDataBundle {
         redirectsPointingAt.computeIfAbsent(survivorId, k -> new ArrayList<>()).addAll(chained);
     }
 
-    /** Follows the redirect chain for a (possibly folded-away) span id to the span it
-     * ultimately survived as. Returns {@code spanId} unchanged if it was never redirected. */
+    /**
+     * Follows the redirect chain for a (possibly folded-away) span id to the span it
+     * ultimately survived as. Returns {@code spanId} unchanged if it was never redirected.
+     */
     private String resolve(String spanId) {
         String current = spanId;
         while (current != null && parentRedirects.containsKey(current)) {
@@ -215,9 +207,7 @@ public class TraceDataBundle {
         }
     }
 
-    /** An evicted real span can no longer be resolved to, so any redirects that folded a
-     * duplicate into it are dead weight - drop them rather than let {@link #parentRedirects}
-     * grow for the trace's whole life regardless of the {@code maxSpans} cap. */
+    /** Redirects into an evicted span can never resolve again. */
     private void pruneRedirectsPointingAt(String evictedSpanId) {
         List<String> redirected = redirectsPointingAt.remove(evictedSpanId);
         if (redirected != null) {
@@ -244,6 +234,7 @@ public class TraceDataBundle {
             hasErrorLog = true;
         }
         logs.add(log);
+        // cheap fast path; the trim re-checks under the lock
         if (logs.size() > maxLogs) {
             synchronized (logs) {
                 if (logs.size() > maxLogs) {
@@ -257,17 +248,18 @@ public class TraceDataBundle {
         this.request = request;
     }
 
-    /** True once the {@code maxSpans} cap in {@link #addSpan} has actually dropped a real
+    /**
+     * True once the {@code maxSpans} cap in {@link #addSpan} has actually dropped a real
      * (post-deduplication) span - never set merely because duplicate artifacts were folded
-     * away. Sticky: a trace that was ever truncated stays marked as such. */
+     * away. Sticky: a trace that was ever truncated stays marked as such.
+     */
     public boolean truncated() {
         synchronized (spansLock) {
             return truncated;
         }
     }
 
-    /** Test-only: exposes the redirect table's size so a bound on its growth can be pinned
-     * without reflection. Package-private - not part of the public API. */
+    /** Test-only: pins a bound on the redirect table's growth without reflection. */
     int parentRedirectCountForTesting() {
         synchronized (spansLock) {
             return parentRedirects.size();
@@ -286,8 +278,10 @@ public class TraceDataBundle {
         }
     }
 
-    /** Rewrites a stored span's parentId if it still points at a span folded away since -
-     * must run under {@code spansLock}, as it consults {@link #parentRedirects}. */
+    /**
+     * Rewrites a stored span's parentId if it still points at a span folded away since -
+     * must run under {@code spansLock}, as it consults {@link #parentRedirects}.
+     */
     private SpanData withResolvedParent(SpanData span) {
         if (span.parentId() == null) {
             return span;
@@ -296,7 +290,24 @@ public class TraceDataBundle {
         return resolvedParentId.equals(span.parentId()) ? span : span.withParentId(resolvedParentId);
     }
 
-    /** Whether any span stored so far carried an error - an incremental read for classification. */
+    /**
+     * The span the tree hangs from: the first stored span whose parent is not stored. Read
+     * under the lock without copying, so the list filters can classify every bundle in a
+     * bucket by its root without a copy and sort per bundle.
+     */
+    public SpanData rootSpan() {
+        synchronized (spansLock) {
+            for (SpanData span : spansById.values()) {
+                String parentId = resolve(span.parentId());
+                if (parentId == null || !spansById.containsKey(parentId)) {
+                    return span;
+                }
+            }
+            return null;
+        }
+    }
+
+    /** Whether any span stored so far carried an error - maintained in {@code store()}, no span copy. */
     public boolean hasErrorSpan() {
         synchronized (spansLock) {
             return hasErrorSpan;

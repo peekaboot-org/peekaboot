@@ -1,9 +1,8 @@
 package org.peekaboot.backend.lifecycle;
 
-import org.springframework.core.env.Environment;
-
 import java.util.Arrays;
 import java.util.List;
+import org.springframework.core.env.Environment;
 
 public class EnvironmentInfo {
 
@@ -24,11 +23,6 @@ public class EnvironmentInfo {
     public List<String> getDefaultProfiles() {
         String[] defaultProfiles = environment.getDefaultProfiles();
         return defaultProfiles != null ? Arrays.asList(defaultProfiles) : List.of();
-    }
-
-    public boolean isDefaultProfile() {
-        String[] activeProfiles = environment.getActiveProfiles();
-        return activeProfiles == null || activeProfiles.length == 0;
     }
 
     public String getActiveProfilesAsString() {

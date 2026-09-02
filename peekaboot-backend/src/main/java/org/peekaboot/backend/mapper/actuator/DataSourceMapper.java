@@ -2,6 +2,8 @@ package org.peekaboot.backend.mapper.actuator;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import net.osslabz.jdbc.Host;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
@@ -23,14 +25,14 @@ public class DataSourceMapper {
         }
 
         return metadataList.stream()
-                .filter(m -> m != null)
+                .filter(Objects::nonNull)
                 .map(m -> mapSingle(m, health, unmask))
                 .toList();
     }
 
     private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthResponse health, boolean unmask) {
         HealthStatus dbHealth = extractDbHealth(health, metadata.getDataSourceName());
-        List<net.osslabz.jdbc.Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
+        List<Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
         Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
 
         return new DataSourceInfo(

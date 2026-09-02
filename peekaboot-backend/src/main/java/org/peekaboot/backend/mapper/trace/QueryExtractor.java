@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.trace;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.QueryInfo;
@@ -23,23 +22,16 @@ public class QueryExtractor {
             return List.of();
         }
 
+        // TraceData's spans are creation-ordered, so each query's row-count search can be
+        // bounded by the next query
         List<SpanData> spans = traceData.spans();
 
-        // Sort spans by creationOrder for proper matching
-        List<SpanData> sortedSpans = spans.stream()
-                .sorted(Comparator.comparingLong(SpanData::creationOrder))
-                .toList();
-
-        // Collect result-set spans for row count matching
-        List<ResultSetInfo> resultSets = sortedSpans.stream()
+        List<ResultSetInfo> resultSets = spans.stream()
                 .filter(this::isResultSetSpan)
                 .map(s -> new ResultSetInfo(s.creationOrder(), extractRowCount(s)))
                 .toList();
 
-        // Query spans in creation order, so each query's row-count search can
-        // be bounded by the next query
-        List<SpanData> querySpans =
-                sortedSpans.stream().filter(DbSpans::isQuery).toList();
+        List<SpanData> querySpans = spans.stream().filter(DbSpans::isQuery).toList();
 
         List<QueryInfo> queries = new ArrayList<>();
         for (int i = 0; i < querySpans.size(); i++) {
@@ -52,11 +44,7 @@ public class QueryExtractor {
     }
 
     private QueryInfo extractQuery(SpanData span, List<ResultSetInfo> resultSets, long nextQueryOrder) {
-        // Value patterns only - not column-aware literal masking. Parsing SQL to find
-        // which literal belongs to a "password" column is a much larger, more
-        // error-prone job; captured traces are documented as containing plaintext SQL.
-        // This still catches a JWT, an AWS key, a PEM block or a credential-bearing URL
-        // pasted into the statement.
+        // value patterns only (MaskingEngine.maskValue), not column-aware literal masking
         String sql = maskingEngine.maskValue(DbSpans.sql(span));
 
         String dbSystem = findDbSystem(span.tags());
@@ -91,7 +79,6 @@ public class QueryExtractor {
     }
 
     private Long findRowCount(long queryCreationOrder, long nextQueryOrder, List<ResultSetInfo> resultSets) {
-        // First result-set created between this query and the next one
         for (ResultSetInfo rs : resultSets) {
             if (rs.creationOrder > queryCreationOrder && rs.creationOrder < nextQueryOrder) {
                 return rs.rowCount;

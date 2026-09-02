@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -42,7 +43,7 @@ class InsightsCollectorTest {
         events = new ArrayList<>();
         InsightsCollector.Listener listener = new InsightsCollector.Listener() {
             @Override
-            public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+            public void onTick(long epochMs, Map<String, Double> values) {
                 events.add("tick:" + values.get("g"));
             }
 
@@ -262,7 +263,9 @@ class InsightsCollectorTest {
         // the first series had the newer sample already; it is the one dropped
         assertThat(snapshot.series().get("first").get(0)[0]).containsExactly(1.0);
         assertThat(snapshot.series().get("second").get(0)[0]).containsExactly(2.0);
-        InsightsSnapshotCodec.write(OutputStream.nullOutputStream(), snapshot);
+        // the codec refuses a snapshot whose columns contradict its header, so a write that
+        // succeeds is the assertion that the trim left it self-consistent
+        InsightsSnapshotCodec.write(new DataOutputStream(OutputStream.nullOutputStream()), snapshot);
     }
 
     private static SeriesDef seriesOf(String meter) {

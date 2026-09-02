@@ -10,15 +10,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 
-/**
- * Auto-configuration for OpenTelemetry span exporter integration.
- * Configures the OtelSpanExporter to capture spans and publish them via Spring events.
- */
+/** Guarded by class name: the OpenTelemetry SDK is only an optional dependency of peekaboot-backend. */
 @AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
-@ConditionalOnBooleanProperty(name = "peekaboot.tracing.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = PeekabootPropertyKeys.TRACING_ENABLED, matchIfMissing = true)
 public class OtelTracingAutoConfiguration {
 
     @Bean

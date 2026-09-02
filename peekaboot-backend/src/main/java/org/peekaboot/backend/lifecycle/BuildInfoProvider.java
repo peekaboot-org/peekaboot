@@ -38,7 +38,7 @@ public class BuildInfoProvider {
         return buildProperties != null;
     }
 
-    /** Every build-info entry, including the ones no view reads today. */
+    /** Every build-info entry, not only the ones the banner shows. */
     public Map<String, String> getAll() {
         return InfoEntries.of(buildProperties);
     }

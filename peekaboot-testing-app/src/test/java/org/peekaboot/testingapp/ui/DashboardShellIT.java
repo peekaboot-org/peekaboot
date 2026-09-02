@@ -102,10 +102,10 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
-     * main.js imports {open, close} directly from trace-detail.js (no
+     * main.js imports {openTraceDetail, closeTraceDetail} directly from trace-detail.js (no
      * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
      * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
-     * imported open() itself, without going through the traces tab - so a
+     * imported openTraceDetail() itself, without going through the traces tab - so a
      * direct navigation to such a link is enough to prove the import actually loaded and
      * ran, independent of whether the trace id resolves to anything real.
      *
@@ -121,6 +121,69 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
                 + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+    }
+
+    /**
+     * A stale or hand-edited "type" param the backend does not know is dropped there
+     * (the list shows every type), so the tab must drop it too - otherwise the banner
+     * claims a filter is active over an unfiltered list. The corrected URL is part of the
+     * contract: a link must never say "type=FOO" over a list that shows the default view.
+     */
+    @Test
+    void aTracesDeepLinkWithAnUnknownTypeFallsBackToTheDefaultFilter() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=FOO");
+        page.waitForSelector("#traces-tab.active");
+        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
+
+        assertThat(page.isVisible("#traces-active-filter")).isFalse();
+        assertThat(page.locator("#traces-filter input:checked").count()).isZero();
+        assertThat(page.url()).endsWith("#traces");
+    }
+
+    /** The backend folds the type's case; a lower-case link selects the same chip an upper-case one does. */
+    @Test
+    void aTracesDeepLinkTypeIsCaseInsensitive() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?type=scheduled_job");
+        page.waitForSelector("#traces-tab.active");
+        page.waitForSelector("#traces-list .pk-trace-item, #no-traces:not(.hidden)");
+
+        @SuppressWarnings("unchecked")
+        List<String> checked = (List<String>) page.evaluate(
+                "() => [...document.querySelectorAll('#traces-filter input:checked')].map(cb => cb.value)");
+        assertThat(checked).containsExactly("SCHEDULED_JOB");
+        assertThat(page.url()).endsWith("#traces?type=SCHEDULED_JOB");
+    }
+
+    /**
+     * The Insights stream reconnects on its own, and the reconnect re-snapshots every
+     * loaded level. That resync is the one path that exists for an application that was
+     * just restarting - exactly when a level request can still fail - so a failed
+     * snapshot must be caught and logged, never escape as an unhandled rejection.
+     *
+     * <p>Both failures are real refusals by Chromium's network stack, not stubbed
+     * responses: the stream's first connection is refused so that EventSource schedules
+     * a reconnect of its own, and once the tab has loaded its level the data endpoint is
+     * refused too, so the resync the reconnect triggers has to fail.
+     */
+    @Test
+    void insightsResyncFailureIsCaughtRatherThanEscapingAsAPageError() {
+        List<String> pageErrors = new ArrayList<>();
+        page.onPageError(pageErrors::add);
+        page.route("**/api/insights/stream", route -> route.abort());
+
+        openDashboard();
+        page.click("#insights-tab-btn");
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+        page.route("**/api/insights/data*", route -> route.abort());
+
+        page.waitForConsoleMessage(
+                new Page.WaitForConsoleMessageOptions()
+                        .setPredicate(msg ->
+                                msg.type().equals("warning") && msg.text().contains("resync"))
+                        .setTimeout(15_000),
+                () -> page.unroute("**/api/insights/stream"));
+
+        assertThat(pageErrors).isEmpty();
     }
 
     /**

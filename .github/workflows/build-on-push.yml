@@ -45,16 +45,13 @@ jobs:
           restore-keys: playwright-${{ runner.os }}-
 
       # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
-      # download happening to work mid-test-run.
-      #
-      # Two steps, not one: `exec:java` ad-hoc goal invocations ignore -pl scoping when
-      # combined with -am (verified locally: it runs the goal against every upstream
-      # reactor module too, and fails on the first one that doesn't have playwright on
-      # its classpath). So the reactor's own SNAPSHOT jars must already be resolvable from
-      # the local repo before the plain (no -am) exec:java call below can resolve
-      # peekaboot-testing-app's own dependency graph.
+      # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
+      # The gates are skipped here because `clean verify` below runs every one of them.
       - name: install-reactor-snapshots
-        run: ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+        run: >
+          ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+          -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
+          -Dmaven.javadoc.skip=true -Dmaven.source.skip=true
 
       # classpathScope=test is required because the playwright dependency is test-scoped;
       # without it exec:java can't find com.microsoft.playwright.CLI.

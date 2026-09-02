@@ -1,7 +1,6 @@
 package org.peekaboot.backend.tracing.store;
 
 import io.micrometer.tracing.Span;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -21,32 +20,30 @@ public record SpanData(
         String errorMessage,
         String errorClass,
         String remoteServiceName,
-        String remoteIp,
-        Integer remotePort,
-        List<LinkData> links,
-        long creationOrder
-) {
+        long creationOrder) {
 
     public record Event(String name, Instant timestamp) {}
-
-    public record LinkData(String traceId, String spanId, Map<String, Object> tags) {}
 
     public boolean hasError() {
         return errorMessage != null || errorClass != null;
     }
 
-    public boolean isComplete() {
-        return endTime != null;
-    }
-
     /** Returns a copy of this span re-parented to {@code newParentId}. */
     public SpanData withParentId(String newParentId) {
         return new SpanData(
-                traceId, spanId, newParentId, name, kind,
-                startTime, endTime, duration,
-                tags, events, errorMessage, errorClass,
-                remoteServiceName, remoteIp, remotePort,
-                links, creationOrder
-        );
+                traceId,
+                spanId,
+                newParentId,
+                name,
+                kind,
+                startTime,
+                endTime,
+                duration,
+                tags,
+                events,
+                errorMessage,
+                errorClass,
+                remoteServiceName,
+                creationOrder);
     }
 }

@@ -34,6 +34,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 
+/**
+ * The ready and stopped summaries, and - with storage - the run history and its API.
+ * Carries no servlet or actuator guard: the summaries must work in a plain non-web
+ * application; only the controller is servlet-gated.
+ */
 @AutoConfiguration(
         after = {ProjectInfoAutoConfiguration.class, PeekabootStorageAutoConfiguration.class},
         afterName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")

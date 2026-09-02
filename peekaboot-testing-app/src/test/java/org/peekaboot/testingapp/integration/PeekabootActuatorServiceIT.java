@@ -67,13 +67,17 @@ class PeekabootActuatorServiceIT {
     private final Logger serviceLogger = (Logger) LoggerFactory.getLogger(PeekabootActuatorService.class);
     private final ListAppender<ILoggingEvent> serviceLog = new ListAppender<>();
     private boolean additivity;
+    private Level level;
 
-    // The throwing endpoint makes every getInsightsData() call log a WARN; capture it so
-    // it can be asserted on and never reaches the console.
+    // The throwing endpoint makes every getInsightsData() call log its failure - WARN with
+    // the cause the first time, DEBUG afterwards; capture both so they can be asserted on
+    // and never reach the console.
     @BeforeEach
     void captureServiceLog() {
         additivity = serviceLogger.isAdditive();
+        level = serviceLogger.getLevel();
         serviceLogger.setAdditive(false);
+        serviceLogger.setLevel(Level.DEBUG);
         serviceLog.start();
         serviceLogger.addAppender(serviceLog);
     }
@@ -81,6 +85,7 @@ class PeekabootActuatorServiceIT {
     @AfterEach
     void releaseServiceLog() {
         serviceLogger.detachAppender(serviceLog);
+        serviceLogger.setLevel(level);
         serviceLogger.setAdditive(additivity);
     }
 
@@ -97,16 +102,29 @@ class PeekabootActuatorServiceIT {
         assertThat(data).doesNotContainKeys("beans", "conditions", "mappings", "threaddump", "metrics");
     }
 
+    /**
+     * The repeat call is what this asserts on: {@code reportedFailures} lives on the
+     * service instance, so whether the first call of a method is the context's first
+     * failure depends on test order, but a call made after one in the same method never
+     * is. That pins the DEBUG half of "WARN once, DEBUG afterwards" against a real
+     * container; PeekabootActuatorServiceTest pins the WARN and its cause.
+     */
     @Test
     void aFailingEndpointIsLeftOutAndLoggedWithoutBreakingTheOthers() {
+        service.getInsightsData();
+        serviceLog.list.clear();
+
         Map<String, Object> data = service.getInsightsData();
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
-        assertThat(serviceLog.list).anySatisfy(event -> {
-            assertThat(event.getLevel()).isEqualTo(Level.WARN);
-            assertThat(event.getFormattedMessage()).contains("loggers").contains("boom");
-        });
+        assertThat(serviceLog.list)
+                .filteredOn(event -> event.getFormattedMessage().contains("'loggers' failed"))
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                    assertThat(event.getFormattedMessage()).contains("boom");
+                });
     }
 
     @Test

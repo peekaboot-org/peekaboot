@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +32,7 @@ public class ToolbarShell {
 
     private static final Logger log = LoggerFactory.getLogger(ToolbarShell.class);
 
-    /** Where the sheets live on the classpath; mirrors the base path they are served under. */
-    private static final String CLASSPATH_ROOT = "/static" + PeekabootPaths.BASE_PATH;
+    private static final String CLASSPATH_ROOT = PeekabootPaths.CLASSPATH_ROOT;
 
     /** Stands in for the base path until {@link #render} knows it; also survives into the inlined CSS. */
     private static final String BASE_TOKEN = "{{BASE}}";
@@ -41,7 +41,7 @@ public class ToolbarShell {
      * Every sheet the bar's own appearance depends on, in cascade order, relative to the base
      * path. components.css is deliberately absent: it styles the status badge and the copy
      * control, both of which only exist once toolbar.js has injected them, so a reader who
-     * cannot load the script cannot reach anything it styles either - and it is 12 KB.
+     * cannot load the script cannot reach anything it styles either - and it is the largest sheet.
      */
     private static final List<String> INLINED_SHEETS =
             List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/toolbar/toolbar.css");
@@ -58,6 +58,16 @@ public class ToolbarShell {
 
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
+
+    /**
+     * A CSS comment block; the sheets carry their design rationale in them, which a host page
+     * need not download. Naive by design: it pairs comment delimiters wherever they appear,
+     * where a CSS parser ignores them inside a string or a {@code url()}. Every sheet in
+     * {@link #INLINED_SHEETS} must therefore keep both delimiters out of its string and
+     * {@code url()} tokens - a {@code content} value spelling an opener, or a data URI
+     * carrying a closer, has the stripper swallow the declarations in between.
+     */
+    private static final Pattern CSS_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
 
     /**
      * The bar's markup with placeholders for everything that varies: the inlined CSS and the
@@ -112,6 +122,7 @@ public class ToolbarShell {
      *
      * @param basePath where the browser reaches Peekaboot from this page: the {@code /peekaboot}
      *     prefix behind the request's context path
+     * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
     public String render(String basePath, String dataJson) {
         return shell.replace(BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
@@ -120,8 +131,7 @@ public class ToolbarShell {
     private static String stylesheetLinks() {
         return LINKED_SHEETS.stream()
                 .map(href -> "        <link rel=\"stylesheet\" href=\"" + BASE_TOKEN + href + "\">")
-                .reduce((a, b) -> a + "\n" + b)
-                .orElse("");
+                .collect(Collectors.joining("\n"));
     }
 
     private static String loadInlinedCss() {
@@ -129,10 +139,15 @@ public class ToolbarShell {
         for (String servedPath : INLINED_SHEETS) {
             String sheet = readSheet(servedPath);
             if (sheet != null) {
-                css.append(resolveRelativeUrls(sheet, servedPath)).append('\n');
+                css.append(resolveRelativeUrls(stripComments(sheet), servedPath))
+                        .append('\n');
             }
         }
         return css.toString();
+    }
+
+    private static String stripComments(String css) {
+        return CSS_COMMENT.matcher(css).replaceAll("");
     }
 
     private static String readSheet(String servedPath) {

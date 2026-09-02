@@ -259,4 +259,42 @@ class ToolbarIT extends PlaywrightTestBase {
 
         toolbar.traceId();
     }
+
+    /**
+     * The bar lives inside pages Peekaboot does not own, and rem resolves against the
+     * host document's root font size - the common html{font-size:62.5%} reset would
+     * shrink a rem-scaled bar to 7.5px. The :host block in tokens.css pins the type scale
+     * in px for the shadow roots, so the bar reads the same on every host.
+     */
+    @Test
+    void toolbarTypeScaleDoesNotFollowTheHostPagesRootFontSize() {
+        openPersonsPage();
+        toolbar.waitUntil("root => root.querySelector('#pk-status').textContent.trim() !== ''");
+        page.addStyleTag(new Page.AddStyleTagOptions().setContent("html { font-size: 62.5%; }"));
+
+        assertThat(toolbar.evaluate("root => getComputedStyle(root.querySelector('.pk-toolbar')).fontSize"))
+                .isEqualTo("12px");
+        assertThat(toolbar.evaluate("root => getComputedStyle(root.querySelector('#pk-status')).fontSize"))
+                .isEqualTo("12px");
+    }
+
+    /**
+     * On a phone-sized viewport the bar wraps instead of pushing its content past the
+     * right edge - a bar that overflows takes the host page's horizontal scroll with it.
+     */
+    @Test
+    void toolbarWrapsInsteadOfOverflowingANarrowViewport() {
+        page.setViewportSize(375, 667);
+        openPersonsPage();
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
+
+        Boolean everythingFits = (Boolean) toolbar.evaluate("root => {"
+                + "const bar = root.querySelector('.pk-toolbar');"
+                + "return bar.scrollWidth <= bar.clientWidth"
+                + "  && [...bar.querySelectorAll('*')].every(el => el.getBoundingClientRect().right <= 375.5);"
+                + "}");
+        assertThat(everythingFits)
+                .as("no part of the bar reaches past the 375px viewport")
+                .isTrue();
+    }
 }

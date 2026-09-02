@@ -6,8 +6,8 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
  * configuration-processor-friendly), the four static-analysis gates at `check`, JaCoCo,
  * reproducible archives, and the unit/IT lifecycle split (`test` runs *Test only,
  * `integrationTest` runs *IT and hangs off `check`). Tool versions and config file
- * locations must stay in lockstep with the Maven build - Maven remains the system of
- * record until the Gradle build is proven equivalent.
+ * locations must stay in lockstep with the Maven build - Maven is the system of record;
+ * the Gradle build mirrors it.
  */
 plugins {
     `java-library`
@@ -66,6 +66,9 @@ dependencies {
     annotationProcessor(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     "mockitoAgent"(platform("org.springframework.boot:spring-boot-dependencies:$springBootVersion"))
     errorprone("com.google.errorprone:error_prone_core:2.50.0")
+    // Reactor-wide like the Maven parent's annotationProcessorPaths, so a
+    // @ConfigurationProperties class in any module ships its metadata from both builds.
+    annotationProcessor("org.springframework.boot:spring-boot-configuration-processor")
     "mockitoAgent"("org.mockito:mockito-core")
     // Gradle 9 no longer puts the launcher on the test runtime classpath itself.
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

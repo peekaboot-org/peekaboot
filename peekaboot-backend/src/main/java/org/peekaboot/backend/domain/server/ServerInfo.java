@@ -9,20 +9,15 @@ import java.time.format.TextStyle;
 import java.util.Locale;
 
 public record ServerInfo(
-    String timezone,
-    String timezoneOffset,
-    String timezoneDisplay,
-    String currentTime,
-    String locale,
-    String localeDisplay,
-    String fileEncoding,
-    String lineSeparator,
-    int availableProcessors
-) {
-    public static ServerInfo current() {
-        return current(Locale.ENGLISH);
-    }
-
+        String timezone,
+        String timezoneOffset,
+        String timezoneDisplay,
+        String currentTime,
+        String locale,
+        String localeDisplay,
+        String fileEncoding,
+        String lineSeparator,
+        int availableProcessors) {
     public static ServerInfo current(Locale requestLocale) {
         Locale effectiveLocale = requestLocale != null ? requestLocale : Locale.ENGLISH;
 
@@ -42,15 +37,14 @@ public record ServerInfo(
         int processors = Runtime.getRuntime().availableProcessors();
 
         return new ServerInfo(
-            zone.getId(),
-            offset,
-            display,
-            currentTime,
-            localeTag,
-            localeDisplayName,
-            encoding,
-            lineSep,
-            processors
-        );
+                zone.getId(),
+                offset,
+                display,
+                currentTime,
+                localeTag,
+                localeDisplayName,
+                encoding,
+                lineSep,
+                processors);
     }
 }

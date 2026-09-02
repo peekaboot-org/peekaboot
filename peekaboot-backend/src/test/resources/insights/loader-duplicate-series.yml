@@ -1,0 +1,8 @@
+panels:
+  - id: heap
+    title: Heap memory
+    series:
+      - id: used
+        meter: jvm.memory.used
+      - id: used
+        meter: jvm.memory.committed

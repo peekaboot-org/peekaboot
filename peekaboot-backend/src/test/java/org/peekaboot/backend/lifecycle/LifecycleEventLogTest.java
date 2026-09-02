@@ -42,10 +42,16 @@ class LifecycleEventLogTest {
         assertThat(loaded(file()).events()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L);
     }
 
+    /**
+     * Recorded before the load has even been submitted: a caller that waited would sit out
+     * the full load wait here and drop the start, and the history would end up empty.
+     */
     @Test
     void theStartIsAppendedWithoutTheCallerWaitingForTheLoad() {
-        LifecycleEventLog log = loaded(file());
+        LifecycleEventLog log = new LifecycleEventLog(file());
         log.recordWhenLoaded(start(1_000));
+
+        log.beginLoad();
 
         await().atMost(Duration.ofSeconds(5)).until(() -> log.events().size() == 1);
     }
