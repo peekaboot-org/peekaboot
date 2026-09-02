@@ -25,6 +25,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 
 /**
  * Auto-configuration for the development toolbar.
@@ -50,9 +51,13 @@ public class DevToolbarAutoConfiguration {
     @Bean
     @ConditionalOnBean(Tracer.class)
     public FilterRegistrationBean<DevToolbarFilter> devToolbarFilter(
-            ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer, Environment environment) {
         FilterRegistrationBean<DevToolbarFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new DevToolbarFilter(toolbarDataProvider, tracer));
+        // read via the Environment: springdoc's SwaggerUiConfigProperties may not be on the classpath
+        registration.setFilter(new DevToolbarFilter(
+                toolbarDataProvider,
+                tracer,
+                environment.getProperty("springdoc.swagger-ui.path", DevToolbarFilter.DEFAULT_SWAGGER_UI_PATH)));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
