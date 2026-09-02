@@ -3,7 +3,6 @@ package org.peekaboot.backend.insights;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,8 +46,7 @@ final class InsightsSnapshotCodec {
      * run reading a double where a series id belongs - so a snapshot that does not match
      * its own header is refused here rather than written.
      */
-    static void write(OutputStream stream, InsightsSnapshot snapshot) throws IOException {
-        DataOutputStream out = stream instanceof DataOutputStream data ? data : new DataOutputStream(stream);
+    static void write(DataOutputStream out, InsightsSnapshot snapshot) throws IOException {
         out.writeInt(MAGIC);
         out.writeInt(SCHEMA_VERSION);
         out.writeLong(snapshot.writtenAtEpochMs());

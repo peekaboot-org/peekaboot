@@ -178,7 +178,7 @@ class InsightsSsePublisherTest {
         slowPublisher.subscribe();
 
         long start = System.nanoTime();
-        slowPublisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        slowPublisher.onTick(1_000, Map.of("a", 1.0));
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
         assertThat(elapsedMs).as("onTick must not block on the emitter send").isLessThan(500);
 
@@ -214,7 +214,7 @@ class InsightsSsePublisherTest {
         firstEmitter.complete();
         publisher.subscribe();
 
-        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        publisher.onTick(1_000, Map.of("a", 1.0));
 
         assertThat(delivered.await(3, TimeUnit.SECONDS))
                 .as("dispatch thread keeps draining after a rapid disconnect/resubscribe")
@@ -235,14 +235,14 @@ class InsightsSsePublisherTest {
         // be queued at all - otherwise a dashboard-less app fills the queue, logs
         // the "queue full" warning, and buries the first viewer under stale events.
         for (int i = 0; i < 300; i++) {
-            publisher.onTick(i, Map.of("a", 1.0), Map.of());
+            publisher.onTick(i, Map.of("a", 1.0));
         }
         publisher.subscribe();
 
         assertThat(broadcasts.poll(500, TimeUnit.MILLISECONDS))
                 .as("no stale burst on the first subscribe")
                 .isNull();
-        publisher.onTick(9_000, Map.of("a", 1.0), Map.of());
+        publisher.onTick(9_000, Map.of("a", 1.0));
         assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
                 .as("fresh events still flow")
                 .isEqualTo("tick");
@@ -273,13 +273,13 @@ class InsightsSsePublisherTest {
         });
 
         SseEmitter first = publisher.subscribe();
-        publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+        publisher.onTick(1_000, Map.of("a", 1.0));
         assertThat(broadcastStarted.await(3, TimeUnit.SECONDS))
                 .as("dispatch wedged in broadcast")
                 .isTrue();
         assertThat(broadcasts.take()).isEqualTo("tick");
 
-        publisher.onTick(2_000, Map.of("a", 2.0), Map.of()); // queues up behind the wedge
+        publisher.onTick(2_000, Map.of("a", 2.0)); // queues up behind the wedge
         first.complete(); // ... and its subscriber leaves
         publisher.subscribe(); // 0 -> 1: must start from an empty queue
         releaseBroadcast.countDown();
@@ -287,7 +287,7 @@ class InsightsSsePublisherTest {
         assertThat(broadcasts.poll(1, TimeUnit.SECONDS))
                 .as("the event queued for the departed subscriber is dropped")
                 .isNull();
-        publisher.onTick(3_000, Map.of("a", 3.0), Map.of());
+        publisher.onTick(3_000, Map.of("a", 3.0));
         assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
                 .as("fresh events still flow")
                 .isEqualTo("tick");
@@ -309,8 +309,8 @@ class InsightsSsePublisherTest {
 
         publisher.subscribe();
         try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
-            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
-            publisher.onTick(2_000, Map.of("a", 2.0), Map.of());
+            publisher.onTick(1_000, Map.of("a", 1.0));
+            publisher.onTick(2_000, Map.of("a", 2.0));
 
             assertThat(broadcasts.poll(3, TimeUnit.SECONDS))
                     .as("the loop keeps running after a step threw")
@@ -356,7 +356,7 @@ class InsightsSsePublisherTest {
         publisher.subscribe();
 
         try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
-            publisher.onTick(0, Map.of("a", 0.0), Map.of());
+            publisher.onTick(0, Map.of("a", 0.0));
             assertThat(wedged.get().await(5, TimeUnit.SECONDS))
                     .as("dispatcher parked at the gate before the flood")
                     .isTrue();
@@ -381,7 +381,7 @@ class InsightsSsePublisherTest {
             // the dispatcher has already drained the whole backlog.
             wedged.set(new CountDownLatch(1));
             gate.set(new CountDownLatch(1));
-            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+            publisher.onTick(1_000, Map.of("a", 1.0));
             assertThat(wedged.get().await(5, TimeUnit.SECONDS))
                     .as("dispatcher parked again before the second flood")
                     .isTrue();
@@ -395,7 +395,7 @@ class InsightsSsePublisherTest {
     /** More events than the dispatch queue holds, so a wedged loop makes it overflow. */
     private static void flood(InsightsSsePublisher publisher) {
         for (int i = 0; i < 400; i++) {
-            publisher.onTick(i, Map.of("a", 1.0), Map.of());
+            publisher.onTick(i, Map.of("a", 1.0));
         }
     }
 
@@ -442,7 +442,7 @@ class InsightsSsePublisherTest {
             publisher.subscribe(); // the peer that stops reading
             publisher.subscribe(); // the healthy dashboard behind it
 
-            publisher.onTick(1_000, Map.of("a", 1.0), Map.of());
+            publisher.onTick(1_000, Map.of("a", 1.0));
 
             assertThat(healthyDeliveries.poll(3, TimeUnit.SECONDS))
                     .as("the healthy subscriber receives while the other peer's send is wedged")
@@ -561,8 +561,8 @@ class InsightsSsePublisherTest {
         Map<String, Double> values = new LinkedHashMap<>();
         values.put("a", 1.5);
         values.put("b", Double.NaN);
-        String json = publisher.tickJson(7_000, values, Map.of());
-        assertThat(json).isEqualTo("{\"epochMs\":7000,\"values\":{\"a\":1.5,\"b\":null},\"tiles\":{}}");
+        String json = publisher.tickJson(7_000, values);
+        assertThat(json).isEqualTo("{\"epochMs\":7000,\"values\":{\"a\":1.5,\"b\":null}}");
     }
 
     private InsightsSsePublisher tracked(InsightsSsePublisher publisher) {

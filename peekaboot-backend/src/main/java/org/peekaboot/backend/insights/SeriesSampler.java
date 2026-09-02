@@ -17,7 +17,8 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
  * re-resolved on every call: Micrometer registers meters lazily and new tag
- * combinations (e.g. new URIs) can appear at any time.
+ * combinations (e.g. new URIs) can appear at any time. Rates divide by the time that
+ * really elapsed since the previous sample, not by the nominal tick interval.
  */
 public final class SeriesSampler {
 
@@ -31,11 +32,11 @@ public final class SeriesSampler {
         this.registry = registry;
     }
 
-    public double sample(long intervalMillis) {
+    public double sample(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
         return switch (def.stat()) {
             case "value" -> sampleValue(meters);
-            case "rate" -> sampleRate(meters, intervalMillis);
+            case "rate" -> sampleRate(meters, elapsedMillis);
             case "avg" -> sampleAvg(meters);
             case "max" -> sampleMax(meters);
             default -> Double.NaN; // loader validated; defensive only
@@ -76,7 +77,7 @@ public final class SeriesSampler {
         return sum;
     }
 
-    private double sampleRate(List<Meter> meters, long intervalMillis) {
+    private double sampleRate(List<Meter> meters, long elapsedMillis) {
         double current = cumulativeCount(meters);
         if (Double.isNaN(current)) {
             previousCount = current;
@@ -92,7 +93,7 @@ public final class SeriesSampler {
             return Double.NaN;
         }
         previousCount = current;
-        return delta * 1000.0 / intervalMillis;
+        return delta * 1000.0 / elapsedMillis;
     }
 
     private double cumulativeCount(List<Meter> meters) {
@@ -129,7 +130,9 @@ public final class SeriesSampler {
         }
 
         double deltaCount = currentCount - previousCountBaseline;
-        if (deltaCount == 0) {
+        if (deltaCount <= 0) {
+            // nothing new, or a meter re-registered behind the baseline: the next
+            // sample averages from the baselines just taken
             return Double.NaN;
         }
         double deltaTotal = currentTotal - previousTotalBaseline;

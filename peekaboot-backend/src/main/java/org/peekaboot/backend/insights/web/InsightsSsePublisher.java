@@ -194,8 +194,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     @Override
-    public void onTick(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
-        enqueue("tick", () -> tickJson(epochMs, values, tiles));
+    public void onTick(long epochMs, Map<String, Double> values) {
+        enqueue("tick", () -> tickJson(epochMs, values));
     }
 
     @Override
@@ -203,11 +203,10 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         enqueue("rollup", () -> rollupJson(level, epochMs, entries));
     }
 
-    String tickJson(long epochMs, Map<String, Double> values, Map<String, Double> tiles) {
+    String tickJson(long epochMs, Map<String, Double> values) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("epochMs", epochMs);
         payload.put("values", nullSafeMap(values));
-        payload.put("tiles", nullSafeMap(tiles));
         return objectMapper.writeValueAsString(payload);
     }
 

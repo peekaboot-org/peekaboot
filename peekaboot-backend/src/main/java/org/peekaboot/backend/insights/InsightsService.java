@@ -185,10 +185,6 @@ public final class InsightsService implements SmartLifecycle {
         return collector.snapshot(level).toResponse();
     }
 
-    public int seriesCount() {
-        return seriesCount;
-    }
-
     public long estimatedMemoryBytes() {
         return InsightsCollector.estimateMemoryBytes(seriesCount, properties.getLevels());
     }
