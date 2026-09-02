@@ -248,9 +248,9 @@ left alone. Two consequences:
 
 ## Tests
 
-Surefire 3.5.6, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the known
-flakes live in [`docs/TESTING.md`](docs/TESTING.md) — this section covers only the build
-mechanics.
+Surefire 3.5.6, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the
+Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md) — this section covers
+only the build mechanics.
 
 - Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
   `peekaboot-testing-app`. Those three resolve `${org.mockito:mockito-core:jar}` via

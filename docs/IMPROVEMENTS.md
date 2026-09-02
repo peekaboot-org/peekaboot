@@ -15,13 +15,13 @@ turned into, with the reasoning.
 
 ### 1.1 Request and response body capture — deferred, deliberately
 
-**Decided 2026-08-24: not now.** The unused domain fields and the `RequestCaptureFilter` call sites
-stay exactly as they are, as the seam for a future improvement. Do not remove them as dead code, and
-do not implement capture as a side effect of another task.
+**Deferred.** The unused domain fields and the `RequestCaptureFilter` call sites stay exactly as
+they are, as the seam for a future improvement. Do not remove them as dead code, and do not
+implement capture as a side effect of another task.
 
-`peekaboot-backend/src/main/java/org/peekaboot/backend/filter/RequestCaptureFilter.java:138,144`
-passes `null` for `requestBody` and `List.of()` for `uploadedFiles`, both marked "not captured yet".
-`HttpRequest.Body` and `HttpRequest.UploadedFile` exist in the domain model; nothing populates them.
+`RequestCaptureFilter.captureRequest` passes `null` for `requestBody` and `List.of()` for
+`uploadedFiles` when it builds the `RequestCompletedEvent`. `HttpRequest.Body` and
+`HttpRequest.UploadedFile` exist in the domain model; nothing populates them.
 
 What *is* captured: method, path, masked query string, masked request headers, query and form
 parameters, resolved controller class and method, response status, masked response headers,
@@ -32,13 +32,16 @@ duration. The documentation describes exactly that, so nothing currently overcla
 structure, a form post is pairs, a file upload is bytes. Sizing and truncation need a cap and the
 `TRUNCATED` signal the UI already renders. It wants its own design pass.
 
-### 1.2 Branch protection on `dev` is not enforcing
+### 1.2 Branch protection on `dev` is enforced, but admins bypass it
 
-Pushes report `Bypassed rule violations … Required status check "build-on-push" is expected`.
+The `green-default-branch` ruleset is active and requires the `build-on-push` status check, but
+its bypass list holds organisation admins and the repository admin role with `bypass_mode: always`,
+so the owner's direct pushes never wait for the check — they report `Bypassed rule violations …
+Required status check "build-on-push" is expected` and land anyway.
 
 This is a GitHub repository setting, not code — it cannot be changed from a working copy. Either
-make the required check block, in which case work goes via PR, or remove the rule as misleading.
-Leaving it advertises a gate the branch does not have.
+remove the bypass actors, in which case work goes via PR, or remove the rule as misleading. A
+public repository advertising a required check its owner bypasses looks worse than either.
 
 ---
 
@@ -51,14 +54,14 @@ Found while proving the read-time dedup pass removable: a harness drove the real
 summarises the result.
 
 On a **triple**-nested mutually-duplicate chain `R←D←X`, arrival orders `R,X,D` and `X,R,D` leave a
-duplicate: `isDuplicateOfStoredParent` (`TraceDataBundle.java:91-99`) returns early without running
-`absorbDuplicateChildrenOf`, so children of the folded span are never re-examined.
+duplicate: `TraceDataBundle.addSpan` returns early when `isDuplicateOfStoredParent` matches, without
+running `absorbDuplicateChildrenOf`, so children of the folded span are never re-examined.
 
-Unreachable today for two independent reasons — either alone closes it:
+Unreachable for two independent reasons — either alone closes it:
 
 1. **It needs a third nesting level.** Only two DataSource decorators exist
-   (`peekaboot-testing-app/pom.xml`), and `SERVICE_IDENTIFIER_KEYS`
-   (`SpanDuplicateMatcher.java:15`) carries exactly one key per decorator.
+   (`peekaboot-testing-app/pom.xml`), and `SpanDuplicateMatcher.SERVICE_IDENTIFIER_KEYS`
+   carries exactly one key per decorator.
 2. **It needs a span to arrive after its own parent**, which `BatchSpanProcessor`'s FIFO end-order
    forbids.
 
@@ -72,9 +75,9 @@ few lines in `TraceDataBundle` — **not** a second dedup implementation.
 ### 2.2 `ToolbarLateSpanIT` depends on timing it does not own
 
 `LateSpanFixture.LateSpanController.LATE_WORK` is 1500ms, chosen against the toolbar's fetch ladder
-(`toolbar.js`, cumulative 250ms / 750ms / 1750ms / 4750ms) and the test profile's 50ms span export
-delay. The margins are in that field's Javadoc, including the point that the ladder's clock starts
-when the ES module graph *executes*, not when the response is sent.
+(`toolbar.js`; the delays are documented in `peekaboot-frontend/README.md`) and the test profile's
+50ms span export delay. The margins are in that field's Javadoc, including the point that the
+ladder's clock starts when the ES module graph *executes*, not when the response is sent.
 
 Not a defect — a dependency that cannot be expressed in code, because the ladder lives only in a
 static JS file with no Java-accessible source of truth. **Changing the ladder, the export delay, or
@@ -82,18 +85,8 @@ static JS file with no Java-accessible source of truth. **Changing the ladder, t
 
 ### 2.3 Counting tests: surefire under-reports `@Nested` classes
 
-For a class using `@Nested`, surefire's per-class `.txt` summary reports `Tests run: 0` while the XML
-carries the real total. In `peekaboot-backend`, `PeekabootControllerTest` and `MaskingEngineTest`
-both report 0 in `.txt`. Counting `@Test` annotations instead is also wrong — it misses
-`@ParameterizedTest` entirely, and `MaskingEngineTest` alone has 7 that expand to 107 invocations.
-
-**Count from the XML, or from the reactor summary. Never from the `.txt` files.**
-
-```bash
-for f in <module>/target/surefire-reports/TEST-*.xml; do
-  grep -m1 -o 'tests="[0-9]*"' "$f" | grep -o '[0-9]*'
-done | paste -sd+ | bc
-```
+Surefire's per-class `.txt` summaries report `Tests run: 0` for `@Nested` classes and annotation
+counts miss `@ParameterizedTest`; the counting recipe lives in [`TESTING.md`](TESTING.md).
 
 ---
 
@@ -102,7 +95,6 @@ done | paste -sd+ | bc
 | Item | Where | Why it stands |
 |---|---|---|
 | Three env vars mask that arguably needn't | `masking/MaskingRules.java` | `XDG_SESSION_ID`, `SSH_AUTH_SOCK`, `CREDENTIALS_DIRECTORY` are caught by the `session-id`, `auth` and `credential` rules. Those rules earn their keep elsewhere and these three are sensitive-adjacent. Revisit only if someone complains. |
-| `concepts.md`'s root-action-type priority table stayed on the site | `peekaboot-org.github.io/docs/concepts.md` | Structurally similar to material relocated into `ARCHITECTURE.md`, but it explains an icon the reader is looking at. Revisit only if the page grows. |
 | `ApplicationMapper.maskBuild`'s `: Collections.emptyMap()` branch is unreachable | `mapper/actuator/ApplicationMapper` | `TreeMasker.mask` always returns a `LinkedHashMap` for `Map` input. Kept because it keeps the `@SuppressWarnings("unchecked")` honest. |
 | Test teardown tolerates `TargetClosedError` and `TimeoutError` | `ui/PlaywrightTestBase.closePage()` | Both log what they swallowed. See §5.6 before narrowing these to per-test `unroute` calls. |
 
@@ -133,12 +125,12 @@ Each looks like a defect and is not. All checked against source.
 - **Bare `key` is not a masking rule.** It would mask `spring.jpa.key-generator` and
   `server.ssl.key-store`. Compound names (`api-key`, `private-key`, `secret-key`) cover the real
   cases, and `key-store-password` is caught by `password`.
-- **Scheduled-job detection is tags-only**, keyed on Spring's `code.function`/`code.namespace`.
-  Quartz and raw threads are not recognised, and a *direct* call to a `@Scheduled` method that also
-  carries `@Observed` classifies `INTERNAL`. Both intentional and documented.
-- **A non-servlet application does not crash.** Reproduced twice, including with `spring-webmvc`
-  absent entirely. The old behaviour was silently registering dead beans; the guard prevents that.
-  Any crash claim you find is stale.
+- **Scheduled-job detection is tags-only**, so Quartz, raw threads and a direct call to a
+  `@Scheduled` method classify `INTERNAL` by design — see *Root Action Type* in
+  [`GLOSSARY.md`](GLOSSARY.md).
+- **A non-servlet application starts cleanly with Peekaboot on the classpath** (reproduced with
+  `spring-webmvc` absent entirely); the servlet guard keeps it from registering beans nothing would
+  call.
 - **`ScreenshotCapture` clicking the reveal control is safe only under a narrow, deliberate scope -
   do not widen it.** It photographs a revealed `spring.datasource.password` on the Environment and
   Config tabs because that value is a placeholder already plaintext in the repository (`compose.yml`,
@@ -206,6 +198,6 @@ prove the wrong thing.
 **5.8 The trace list's `summary.logs` is populated.** `TraceInsightsService.getInsights()`
 never ran the enrichment the single-trace path does, so every list entry kept
 `TraceTreeMapper`'s `0/0/0` placeholder and the Traces tab never showed a log badge. The
-counts are now taken in `mapBucket()` from the logs the bundle already carries — no extra
+counts are now taken in `mapBundle()` from the logs the bundle already carries — no extra
 lookups, since `TraceStore.getTraces` hands the bundle over with its logs — through the same
-`logsSummary` the detail path uses, so the two views cannot disagree.
+`withLogsSummary`/`logsSummary` the detail path uses, so the two views cannot disagree.
