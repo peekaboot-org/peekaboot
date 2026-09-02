@@ -1,8 +1,6 @@
 package org.peekaboot.backend.domain.runtime;
 
-import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -37,32 +35,15 @@ public record MachineInfo(
     }
 
     private static MachineInfo compute() {
+        Cpuinfo cpuinfo = Cpuinfo.read(Path.of("/proc/cpuinfo"));
         return new MachineInfo(
                 Runtime.getRuntime().availableProcessors(),
-                readCpuModel(Path.of("/proc/cpuinfo")),
-                CpuTopology.fromCpuinfo(Path.of("/proc/cpuinfo")),
+                cpuinfo.model(),
+                cpuinfo.topology(),
                 readTotalMemory(),
                 Runtime.getRuntime().maxMemory(),
                 ContainerRuntime.current(),
                 NetworkAddress.discover(NetworkAddress.Signals.fromRuntime()));
-    }
-
-    /** The first {@code model name} line, or {@code null} where the file or line is absent. */
-    static String readCpuModel(Path cpuinfo) {
-        try {
-            for (String line : Files.readAllLines(cpuinfo)) {
-                if (line.startsWith("model name")) {
-                    int colon = line.indexOf(':');
-                    if (colon >= 0) {
-                        return line.substring(colon + 1).trim();
-                    }
-                }
-            }
-            return null;
-        } catch (IOException e) {
-            // not Linux, or /proc not readable - the model is simply unknown
-            return null;
-        }
     }
 
     private static Long readTotalMemory() {
