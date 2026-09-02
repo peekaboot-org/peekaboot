@@ -195,7 +195,6 @@ public class RequestCaptureFilter implements Filter {
 
         RequestCompletedEvent event = new RequestCompletedEvent(
                 traceId,
-                // Request
                 request.getMethod(),
                 request.getRequestURI(),
                 maskingEngine.maskQueryString(request.getQueryString()),
@@ -207,10 +206,8 @@ public class RequestCaptureFilter implements Filter {
                 queryParams,
                 formParams,
                 List.of(), // uploadedFiles - not captured yet
-                // Response
                 response.getStatus(),
                 responseHeaders,
-                // Timing
                 durationMs);
 
         eventPublisher.publishEvent(event);
@@ -232,32 +229,24 @@ public class RequestCaptureFilter implements Filter {
     }
 
     /**
-     * getParameterMap() merges query-string and form-body parameters; splits them
-     * using the actual query string.
+     * getParameterMap() merges query-string and body parameters (form-encoded and
+     * multipart alike); a parameter the query string does not carry came from the body.
      */
     private void splitParameters(
             HttpServletRequest request, Map<String, List<String>> queryParams, Map<String, List<String>> formParams) {
         Set<String> queryStringKeys = parseQueryStringKeys(request.getQueryString());
-        boolean formRequest = isFormRequest(request);
         request.getParameterMap().forEach((key, values) -> {
             if (values == null || values.length == 0) {
                 return;
             }
             List<String> maskedValues =
                     Arrays.stream(values).map(v -> maskingEngine.mask(key, v)).toList();
-            if (queryStringKeys.contains(key) || !formRequest) {
+            if (queryStringKeys.contains(key)) {
                 queryParams.put(key, maskedValues);
             } else {
                 formParams.put(key, maskedValues);
             }
         });
-    }
-
-    private static boolean isFormRequest(HttpServletRequest request) {
-        String contentType = request.getContentType();
-        return contentType != null
-                && contentType.contains("application/x-www-form-urlencoded")
-                && ("POST".equalsIgnoreCase(request.getMethod()) || "PUT".equalsIgnoreCase(request.getMethod()));
     }
 
     private Set<String> parseQueryStringKeys(String queryString) {
