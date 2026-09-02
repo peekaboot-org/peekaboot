@@ -1,11 +1,12 @@
 # Building Peekaboot
 
-Maven is the system of record: one reactor, six gates - five static-analysis and one
-coverage floor; Error Prone runs at compile time, the other five at `verify`. No Node
-toolchain, no codegen beyond annotation processing. A parallel **Gradle build** covers the
-same modules, tests and gates (see [the Gradle build](#the-parallel-gradle-build) below);
-CI runs Maven only, so every Maven statement in this document is authoritative and the
-Gradle build must be kept in lockstep.
+Maven is the system of record: one reactor, seven gates - five static-analysis, one
+dependency check and one coverage floor; the dependency check runs at `validate`, Error
+Prone at compile time, the other five at `verify`. No Node toolchain, no codegen beyond
+annotation processing. A parallel **Gradle build** covers the same modules, tests and
+gates (see [the Gradle build](#the-parallel-gradle-build) below); CI runs Maven only, so
+every Maven statement in this document is authoritative and the Gradle build must be kept
+in lockstep.
 
 Both builds ship wrapper scripts, each pinned by SHA-256 checksum: `./mvnw` (downloads
 Maven 3.9.9, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
@@ -24,7 +25,7 @@ exactly the same.
 ## Commands
 
 ```bash
-mvn clean verify     # compile + all tests + all six gates           <- the real build
+mvn clean verify     # compile + all tests + all seven gates         <- the real build
 mvn clean install    # the same, plus install into ~/.m2
 mvn test             # the fast gate: Error Prone + unit tests only (~1 min);
                      # integration tests (*IT) don't run before `verify`
@@ -44,12 +45,13 @@ mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs D
 
 ### What each command actually checks
 
-Only Error Prone runs during compilation; the other five gates are bound to `verify`.
+The dependency check runs at `validate` and Error Prone during compilation; the other five
+gates are bound to `verify`.
 Tests are split by lifecycle: plain unit tests live in `*Test` classes and run at `test`
 (surefire), while anything that boots a real application — every `@SpringBootTest`, the
 whole Playwright suite — lives in `*IT` classes and runs at `integration-test`
 (failsafe). So `mvn test` is the fast gate — Error Prone plus every unit test, nothing
-else — and `mvn install`/`mvn verify` give you all six gates plus the integration
+else — and `mvn install`/`mvn verify` give you all seven gates plus the integration
 tests. Per module, `verify` runs:
 
 ```
@@ -66,7 +68,7 @@ overlap coordinate through JUnit `@ResourceLock` (see `DashboardTraceViewIT`).
 `-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults
 to 1. The coverage gate sees the same `jacoco.exec` data it would from a serial run.
 
-`peekaboot-coverage` runs last and adds the sixth gate over the whole reactor:
+`peekaboot-coverage` runs last and adds the coverage gate over the whole reactor:
 
 ```
 jacoco:merge -> enforcer (coverage data present?) -> jacoco:check
@@ -107,7 +109,10 @@ starter, and `javadoc:jar` builds nothing for the starter or the frontend. So th
 duplication: its POM re-declares the four verify-bound static-analysis gates, the JaCoCo
 agent wiring, the `spotless-apply-local` profile and the Error Prone compiler config by
 hand, and it picks up Spring Boot's plugin versions for everything else rather than the
-parent's pins. **Any change to the parent's build config has to be mirrored there.**
+parent's pins. **Any change to the parent's build config has to be mirrored there.** The
+one deliberate exception is the dependency check: the sample app is the module that
+violates it (see [the dependency check](#the-dependency-check)), and gating an unpublished
+sample on a third-party version clash would buy nothing but two permanent exclusions.
 
 ## The parallel Gradle build
 
@@ -154,7 +159,9 @@ unpublished sample app, but it is the first thing to reconcile if the Gradle bui
 ever promoted.
 
 Not ported (deliberately, local-first): the `peekaboot-release` profile, publishing,
-and CI wiring - CI still runs Maven only.
+and CI wiring - CI still runs Maven only. Nor the dependency check, which guards a Maven
+resolution behaviour Gradle does not have: Gradle takes the highest requested version, so
+it cannot settle a transitive below what a dependent asked for.
 
 ## Compilation
 
@@ -177,6 +184,7 @@ and CI wiring - CI still runs Maven only.
 | Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.0.0) | `config/checkstyle.xml` | main only |
 | Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.27.0) | `config/pmd-ruleset.xml` | main Java |
 | Coverage floor | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all published classes, reactor-wide |
+| Dependency upper bounds | `maven-enforcer-plugin` 3.6.3 | inline in the parent POM | every module's resolved closure |
 
 Each config file explains its own exclusions; the short version:
 
@@ -186,10 +194,18 @@ Each config file explains its own exclusions; the short version:
   test data builders legitimately mirror wide domain records.
 - **PMD** is `rulesets/java/quickstart.xml` minus `AvoidUsingVolatile` (SpotBugs'
   `AT_STALE_THREAD_WRITE_OF_PRIMITIVE` demands exactly that modifier, so the two tools
-  would deadlock) and `GuardLogStatement` (parameterized SLF4J calls are the project style).
-- **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally: the DTOs are JSON
-  carriers for actuator payloads, and `List.copyOf`/`Map.copyOf` would throw on the nulls
-  real actuator data contains.
+  would deadlock) and `GuardLogStatement` (parameterized SLF4J calls with cheap arguments
+  are the project style), plus two rules the quickstart set leaves out:
+  `InvalidLogMessageFormat`, because a placeholder that does not match its arguments
+  compiles and runs, and `UnnecessaryWarningSuppression`, which fails the build on a PMD
+  suppression that no longer suppresses anything.
+- **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally. Measured, not assumed:
+  the pair reports 190 exposures across the backend, split between the JSON carriers
+  (where `List.copyOf`/`Map.copyOf` would throw on the nulls real actuator data contains),
+  constructors storing Spring-injected collaborators, and framework contracts a servlet
+  response wrapper and Jackson's `CharacterEscapes` have to honour. No store or service
+  leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to
+  `ContainerRuntime$Signals`, the only class that raises it.
 - **Nothing lints the frontend's JS or CSS.** PMD's `pmd-javascript` module is not an
   option: its Rhino parser throws `NullPointerException` on destructuring, which the
   frontend uses throughout (`function formatDateTime(value, {locale, timeZone, ...options}
@@ -200,6 +216,17 @@ Each config file explains its own exclusions; the short version:
 Config paths resolve through `${maven.multiModuleProjectDirectory}`, which Maven sets to the
 directory holding `.mvn/`. That makes them work from the repo root and from inside a module
 directory alike.
+
+### The dependency check
+
+`maven-enforcer-plugin`'s `requireUpperBoundDeps` runs at `validate` in every module that
+inherits the parent. It fails when Maven's nearest-wins resolution settles a transitive
+*below* the version one of its dependents asked for — the shape that reaches a consumer as
+a `NoSuchMethodError` and that a BOM import makes easy to introduce. The published modules
+are clean; the reactor's one violation is springdoc's swagger chain wanting Jackson 2.22.0
+where the Boot BOM pins 2.21.5, and it lives in the sample app, which does not inherit the
+parent. `peekaboot-coverage` skips the rule for the same reason: its dependencies exist to
+force build order, so they drag the sample app's closure in with them.
 
 ### The coverage gate
 
@@ -307,8 +334,8 @@ watches Maven and Gradle daily and GitHub Actions weekly.
 
 Branch model: `dev` is the default and integration branch; `main` is the release trunk, and
 pushing to it releases. The `green-default-branch` ruleset on `dev` requires the
-`build-on-push` check, but admins bypass it unconditionally, so a direct push by the owner
-never waits for it — see [`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md) §1.2.
+`build-on-push` check, but its bypass list holds the organisation admins and the repository
+admin role with `bypass_mode: always`, so a direct push by the owner never waits for it.
 
 ## Releasing
 
@@ -367,7 +394,8 @@ its `spring-boot-starter-parent` pom, so the plain `maven-deploy-plugin` runs fo
 and the upload to Maven Central happen. The workflow passes it
 `-Darguments="-DskipTests -Djacoco.skip=true"`: that tree has passed `verify` twice by then
 (the job's own build, then `preparationGoals`), so the third run would only repeat the
-Playwright suite. The four static-analysis gates still run. Reproducibility depends on
+Playwright suite. The four static-analysis gates and the dependency check still run.
+Reproducibility depends on
 `project.build.outputTimestamp` being pinned in both parent POMs and on every plugin version
 being explicit — including the lifecycle plugins Maven would otherwise bind on its own
 (clean, resources, install, deploy, site), which the parent pins at the versions

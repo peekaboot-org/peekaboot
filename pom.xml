@@ -275,6 +275,31 @@
             </plugins>
         </pluginManagement>
         <plugins>
+            <!-- Guards the published modules' dependency closure against Maven's
+                 nearest-wins resolution: a transitive that some dependency needs at a
+                 newer version than the reactor resolves is silently downgraded, and the
+                 consumer finds out with a NoSuchMethodError. Skipped in
+                 peekaboot-coverage, whose dependencies exist only to force build order
+                 and therefore drag in the sample app's closure as well. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>require-upper-bound-deps</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireUpperBoundDeps/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
