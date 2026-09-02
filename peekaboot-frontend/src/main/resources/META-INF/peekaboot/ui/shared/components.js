@@ -2,17 +2,26 @@ import {escapeHtml, highlightText} from './markup.js';
 
 let groupSequence = 0;
 
+/** Every pill variant components.css styles; the neutral one is the fallback. */
+const BADGE_VARIANTS = ['ok', 'warn', 'error', 'error-soft', 'info', 'muted'];
+const NEUTRAL_BADGE_VARIANT = 'muted';
+
 /** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted. */
-export function badge(text, variant = 'muted') {
+export function badge(text, variant = NEUTRAL_BADGE_VARIANT) {
     const element = document.createElement('span');
     element.className = `pk-badge pk-badge--${variant}`;
     element.textContent = text == null ? '' : String(text);
     return element;
 }
 
-/** badge() as an HTML string, for the surfaces that build their markup as strings. */
-export function badgeHtml(text, variant = 'muted') {
-    return `<span class="pk-badge pk-badge--${variant}">${escapeHtml(text == null ? '' : String(text))}</span>`;
+/**
+ * badge() as an HTML string, for the surfaces that build their markup as strings. The
+ * variant lands in a class attribute of markup bound for innerHTML, so it is whitelisted
+ * rather than escaped: a variant no stylesheet knows is not worth rendering either way.
+ */
+export function badgeHtml(text, variant = NEUTRAL_BADGE_VARIANT) {
+    const known = BADGE_VARIANTS.includes(variant) ? variant : NEUTRAL_BADGE_VARIANT;
+    return `<span class="pk-badge pk-badge--${known}">${escapeHtml(text == null ? '' : String(text))}</span>`;
 }
 
 /** The centred, muted placeholder a list shows when it has nothing to list. */
