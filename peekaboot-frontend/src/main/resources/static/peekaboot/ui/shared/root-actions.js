@@ -5,6 +5,7 @@ const ROOT_ACTIONS = {
     MESSAGE_CONSUMER: {icon: '\u{1F4E9}', label: 'Message Consumer'},
     RPC_CALL:         {icon: '\u{1F517}', label: 'RPC Call'},
     DATABASE:         {icon: '\u{1F5C2}', label: 'Database'},
+    CONNECTION_POOL:  {icon: '\u{1F50C}', label: 'Connection Pool'},
     INTERNAL:         {icon: '⚙',    label: 'Internal'},
     UNKNOWN:          {icon: '❓',    label: 'Unknown'}
 };

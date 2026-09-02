@@ -6,14 +6,22 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class DashboardTabsIT extends PlaywrightTestBase {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** The observed datasource - a connection acquired on it outside any traced work starts a pool trace. */
+    @Autowired
+    private DataSource dataSource;
 
     /** The {@code limit} traces.js requests with (its fetchAndRender). */
     private static final int TRACES_PAGE_SIZE = 50;
@@ -753,5 +761,37 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(page.textContent("#traces-active-filter")).contains("Type:").contains("Target:");
         assertThat(page.isChecked("#traces-filter input[value='SCHEDULED_JOB']"))
                 .isTrue();
+    }
+
+    /**
+     * Connection-pool traces sit in the store but not in the default view: with no type
+     * in the URL, traces.js requests every type except CONNECTION_POOL. Selecting the
+     * type's own chip reveals them and lands in the URL (#traces?type=CONNECTION_POOL),
+     * so the revealed view stays shareable while old typed links keep their meaning.
+     */
+    @Test
+    void connectionPoolTracesAreHiddenByDefaultAndRevealedByTheirChip() throws SQLException {
+        // What an external health probe or HikariCP maintenance does: acquire a pooled
+        // connection outside any traced work, yielding a standalone CONNECTION_POOL trace.
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(connection.isValid(1)).isTrue();
+        }
+
+        openDashboard();
+        Response defaultResponse = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"),
+                () -> page.click(".pk-tab[data-tab='traces']"));
+        assertThat(defaultResponse.url()).contains("rootActionType=").doesNotContain("CONNECTION_POOL");
+        page.waitForSelector("#traces-list .pk-trace-item");
+        assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']")
+                        .count())
+                .isZero();
+
+        page.waitForResponse(
+                response -> response.url().contains("rootActionType=CONNECTION_POOL"),
+                () -> page.check("#traces-filter input[value='CONNECTION_POOL']"));
+
+        assertThat(page.url()).endsWith("#traces?type=CONNECTION_POOL");
+        page.waitForSelector("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']");
     }
 }
