@@ -292,14 +292,6 @@
 .pk-component-grid__details { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); word-break: break-word; white-space: pre-line; }
 
 /* DataSources */
-.pk-datasources {
-    display: grid;
-    gap: var(--pk-space-md);
-    grid-template-columns: 1fr;
-}
-@media (min-width: 768px) {
-    .pk-datasources { grid-template-columns: repeat(2, 1fr); }
-}
 .pk-datasources__toggle { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params { margin-top: var(--pk-space-md); padding-top: var(--pk-space-md); border-top: 1px solid var(--pk-border); }
 .pk-datasources__params[hidden] { display: none; }
