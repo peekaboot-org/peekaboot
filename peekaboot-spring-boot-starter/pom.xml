@@ -41,6 +41,43 @@
 
     <build>
         <plugins>
+            <!-- The starter is where the published modules' <optional> contract becomes
+                 visible: peekaboot declares the servlet stack, spring-webmvc and HikariCP
+                 optional so a consumer never inherits them, and the host application's own
+                 starters decide what is on the classpath. Drop one <optional> flag and, for
+                 instance, HikariCP reaches every consumer, where
+                 @ConditionalOnClass(HikariDataSource.class) fires inside an application
+                 running a different pool. These four are the ones the starter's own
+                 dependencies do not legitimately bring; logback, spring-boot-health,
+                 micrometer-observation and the OpenTelemetry SDK arrive through
+                 spring-boot-starter/-actuator/-opentelemetry and cannot be banned. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>ban-optional-dependency-leaks</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <exclude>jakarta.servlet:jakarta.servlet-api</exclude>
+                                        <exclude>org.springframework:spring-webmvc</exclude>
+                                        <exclude>org.springframework.boot:spring-boot-web-server</exclude>
+                                        <exclude>com.zaxxer:HikariCP</exclude>
+                                    </excludes>
+                                    <message>The starter must not hand a consumer a servlet stack or a connection pool: peekaboot marks those dependencies &lt;optional&gt; so the host application supplies them and the auto-configuration conditions stay meaningful. One of them now reaches the starter transitively - look for an &lt;optional&gt; flag lost in peekaboot-backend or peekaboot-spring-boot-autoconfigure.</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!-- No Java sources, so javadoc:jar produces nothing - and Central requires a
                  -javadoc jar for every jar component. Package the empty javadoc output
                  directory as that jar. Remove this execution the day the module gains
