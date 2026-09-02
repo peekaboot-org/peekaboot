@@ -157,4 +157,13 @@ class ToolbarShellTest {
                 .contains("title=\"The toolbar's script or data did not load — "
                         + "an authorization gate or a strict Content-Security-Policy usually explains it.\"");
     }
+
+    /** The sheets carry their design rationale as comments; no host page needs to download them. */
+    @Test
+    void stripsCommentBlocksFromTheInlinedSheets() {
+        String html = shell.render(BASE_PATH, DATA_JSON);
+
+        String inlined = html.substring(html.indexOf("<style>"), html.indexOf("</style>"));
+        assertThat(inlined).doesNotContain("/*").contains(".pk-toolbar__auth");
+    }
 }
