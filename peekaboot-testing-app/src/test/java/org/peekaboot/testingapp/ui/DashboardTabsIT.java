@@ -59,7 +59,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<String> tileIds = (List<String>) rendered;
 
-        assertThat(tileIds).containsExactly("started-at", "startup-time", "ready-time", "uptime", "cpu-cores");
+        assertThat(tileIds).containsExactly("started-at", "startup-time", "ready-time", "uptime");
         assertThat(tileIds).doesNotContain("heap-max", "disk-total", "pool-min", "pool-max");
         assertThat(page.locator("#insights-tiles .pk-insight-tile__icon").count())
                 .isEqualTo(tileIds.size());

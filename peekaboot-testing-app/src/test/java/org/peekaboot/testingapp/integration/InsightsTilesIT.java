@@ -46,7 +46,7 @@ class InsightsTilesIT {
     void everyTileCarriesAValueBeforeTheFirstTick() {
         JsonNode tiles = api.getJson("/peekaboot/api/insights/config").get("tiles");
 
-        for (String id : List.of("started-at", "startup-time", "ready-time", "uptime", "cpu-cores")) {
+        for (String id : List.of("started-at", "startup-time", "ready-time", "uptime")) {
             JsonNode tile = tileById(tiles, id);
             assertThat(tile).as("tile %s is configured", id).isNotNull();
             assertThat(tile.get("value").isNumber())

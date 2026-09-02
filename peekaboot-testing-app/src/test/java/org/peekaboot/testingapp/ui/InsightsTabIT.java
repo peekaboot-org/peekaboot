@@ -124,7 +124,7 @@ class InsightsTabIT extends PlaywrightTestBase {
                 new Page.WaitForSelectorOptions()
                         .setState(WaitForSelectorState.ATTACHED)
                         .setTimeout(10000));
-        assertThat(page.locator("#insights-tiles .pk-insight-tile").count()).isEqualTo(5);
+        assertThat(page.locator("#insights-tiles .pk-insight-tile").count()).isEqualTo(4);
         assertThat(page.locator("#insights-tiles.hidden").count())
                 .as("the tile row is populated, not left hidden")
                 .isZero();

@@ -20,10 +20,6 @@ tiles:
     meter: process.uptime
     format: duration
     live: true
-  - id: cpu-cores
-    label: CPU cores
-    meter: system.cpu.count
-    format: count
 
 panels:
   - id: cpu
