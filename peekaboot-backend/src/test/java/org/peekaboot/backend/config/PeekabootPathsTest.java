@@ -7,63 +7,94 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 class PeekabootPathsTest {
 
+    private final PeekabootPaths paths = PeekabootPaths.defaults();
+
     @Test
     void staticPathsAreExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/static/")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/static/css/app.css")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/webjars/")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/webjars/bootstrap/5.0.0/css/bootstrap.min.css"))
+        assertThat(paths.isExcluded("/static/")).isTrue();
+        assertThat(paths.isExcluded("/static/css/app.css")).isTrue();
+        assertThat(paths.isExcluded("/webjars/")).isTrue();
+        assertThat(paths.isExcluded("/webjars/bootstrap/5.0.0/css/bootstrap.min.css"))
                 .isTrue();
     }
 
     @Test
     void actuatorPathsAreExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/actuator/")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/actuator/health")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/actuator/info")).isTrue();
+        assertThat(paths.isExcluded("/actuator/")).isTrue();
+        assertThat(paths.isExcluded("/actuator/health")).isTrue();
+        assertThat(paths.isExcluded("/actuator/info")).isTrue();
     }
 
     @Test
     void peekabootsOwnPathsAreExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/peekaboot/")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/peekaboot/api/v1/traces")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/peekaboot/dashboard")).isTrue();
+        assertThat(paths.isExcluded("/peekaboot/")).isTrue();
+        assertThat(paths.isExcluded("/peekaboot/api/v1/traces")).isTrue();
+        assertThat(paths.isExcluded("/peekaboot/dashboard")).isTrue();
     }
 
     @Test
     void errorPathsAreExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/error")).isTrue();
-        assertThat(PeekabootPaths.isExcluded("/error/404")).isTrue();
+        assertThat(paths.isExcluded("/error")).isTrue();
+        assertThat(paths.isExcluded("/error/404")).isTrue();
     }
 
     @Test
     void applicationPathsAreNotExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/api/users")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/api/v1/products")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/persons")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/home")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/dashboard")).isFalse();
+        assertThat(paths.isExcluded("/api/users")).isFalse();
+        assertThat(paths.isExcluded("/api/v1/products")).isFalse();
+        assertThat(paths.isExcluded("/persons")).isFalse();
+        assertThat(paths.isExcluded("/")).isFalse();
+        assertThat(paths.isExcluded("/home")).isFalse();
+        assertThat(paths.isExcluded("/dashboard")).isFalse();
     }
 
     @Test
     void pathsMerelyStartingWithErrorAreNotExcluded() {
-        assertThat(PeekabootPaths.isExcluded("/errors")).isFalse();
-        assertThat(PeekabootPaths.isExcluded("/error-report")).isFalse();
+        assertThat(paths.isExcluded("/errors")).isFalse();
+        assertThat(paths.isExcluded("/error-report")).isFalse();
     }
 
     @Test
     void excludedPrefixesContainsExpectedValues() {
-        assertThat(PeekabootPaths.EXCLUDED_PREFIXES)
+        assertThat(paths.excludedPrefixes())
                 .containsExactlyInAnyOrder("/static/", "/webjars/", "/actuator/", "/peekaboot/", "/error/");
     }
 
     /** The interceptor's MVC patterns are the same exclusions, so the two can never drift apart. */
     @Test
     void excludePatternsMirrorTheExcludedPrefixes() {
-        assertThat(PeekabootPaths.excludePatterns())
+        assertThat(paths.excludePatterns())
                 .containsExactlyInAnyOrder(
                         "/static/**", "/webjars/**", "/actuator/**", "/peekaboot/**", "/error/**", "/error");
+    }
+
+    /** The actuator exclusion follows {@code management.endpoints.web.base-path}, not a fixed prefix. */
+    @Test
+    void aCustomManagementBasePathReplacesTheActuatorExclusion() {
+        PeekabootPaths custom = new PeekabootPaths("/manage");
+
+        assertThat(custom.isExcluded("/manage/health")).isTrue();
+        assertThat(custom.isExcluded("/actuator/health")).isFalse();
+        assertThat(custom.excludePatterns()).contains("/manage/**").doesNotContain("/actuator/**");
+    }
+
+    @Test
+    void theManagementBasePathIsNormalisedToAPrefix() {
+        PeekabootPaths custom = new PeekabootPaths("manage/");
+
+        assertThat(custom.isExcluded("/manage/health")).isTrue();
+        assertThat(custom.isExcluded("/managed")).isFalse();
+    }
+
+    /** Management endpoints at the application root have no prefix of their own; nothing extra is excluded - never everything. */
+    @Test
+    void aRootManagementBasePathExcludesNothingExtra() {
+        PeekabootPaths custom = new PeekabootPaths("/");
+
+        assertThat(custom.isExcluded("/health")).isFalse();
+        assertThat(custom.isExcluded("/peekaboot/api/v1/traces")).isTrue();
+        assertThat(custom.excludedPrefixes())
+                .containsExactlyInAnyOrder("/static/", "/webjars/", "/peekaboot/", "/error/");
     }
 
     /**

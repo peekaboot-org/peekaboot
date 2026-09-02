@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.insights.web.InsightsController;
 import org.peekaboot.backend.insights.web.InsightsSsePublisher;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
@@ -28,12 +30,15 @@ class InsightsAutoConfigurationTest {
 
     @Test
     void activatesWithMeterRegistryAndPeekabootEnabled() {
-        contextRunner.withUserConfiguration(MeterRegistryConfig.class).run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(InsightsService.class);
-            assertThat(context).hasSingleBean(InsightsSsePublisher.class);
-            assertThat(context).hasSingleBean(InsightsController.class);
-        });
+        try (LogCapture startupLog = startupInfoCapture()) {
+            contextRunner.withUserConfiguration(MeterRegistryConfig.class).run(context -> {
+                assertThat(context).hasNotFailed();
+                assertThat(context).hasSingleBean(InsightsService.class);
+                assertThat(context).hasSingleBean(InsightsSsePublisher.class);
+                assertThat(context).hasSingleBean(InsightsController.class);
+            });
+            assertStartupInfo(startupLog);
+        }
     }
 
     @Test
@@ -62,36 +67,42 @@ class InsightsAutoConfigurationTest {
      */
     @Test
     void startsWithPersistenceWiredWhenStorageIsEnabled(@TempDir Path tempDir) {
-        storageRunner(tempDir, true).run(context -> {
-            assertThat(context).hasNotFailed();
-            InsightsService service = context.getBean(InsightsService.class);
-            assertThat(service.isRunning()).isTrue();
+        try (LogCapture startupLog = startupInfoCapture()) {
+            storageRunner(tempDir, true).run(context -> {
+                assertThat(context).hasNotFailed();
+                InsightsService service = context.getBean(InsightsService.class);
+                assertThat(service.isRunning()).isTrue();
 
-            // a snapshot is only written once the rings hold something, so wait for a real tick
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(20))
-                    .until(() -> service.data(0).count() > 0);
-            service.stop();
+                // a snapshot is only written once the rings hold something, so wait for a real tick
+                await().atMost(Duration.ofSeconds(5))
+                        .pollInterval(Duration.ofMillis(20))
+                        .until(() -> service.data(0).count() > 0);
+                service.stop();
 
-            assertThat(tempDir.resolve("insights.snapshot")).exists();
-        });
+                assertThat(tempDir.resolve("insights.snapshot")).exists();
+            });
+            assertThat(assertStartupInfo(startupLog)).contains("persisted across restarts");
+        }
     }
 
     @Test
     void writesNothingWhenStorageIsDisabled(@TempDir Path tempDir) {
-        storageRunner(tempDir, false).run(context -> {
-            assertThat(context).hasNotFailed();
-            InsightsService service = context.getBean(InsightsService.class);
+        try (LogCapture startupLog = startupInfoCapture()) {
+            storageRunner(tempDir, false).run(context -> {
+                assertThat(context).hasNotFailed();
+                InsightsService service = context.getBean(InsightsService.class);
 
-            await().atMost(Duration.ofSeconds(5))
-                    .pollInterval(Duration.ofMillis(20))
-                    .until(() -> service.data(0).count() > 0);
-            service.stop();
+                await().atMost(Duration.ofSeconds(5))
+                        .pollInterval(Duration.ofMillis(20))
+                        .until(() -> service.data(0).count() > 0);
+                service.stop();
 
-            try (var files = Files.list(tempDir)) {
-                assertThat(files.toList()).isEmpty();
-            }
-        });
+                try (var files = Files.list(tempDir)) {
+                    assertThat(files.toList()).isEmpty();
+                }
+            });
+            assertStartupInfo(startupLog);
+        }
     }
 
     @Test
@@ -107,6 +118,19 @@ class InsightsAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(InsightsService.class);
                 });
+    }
+
+    /** The service's one startup INFO summary is deliberate; captured and pinned rather than reaching the console. */
+    private static LogCapture startupInfoCapture() {
+        return LogCapture.attach(InsightsService.class, Level.INFO);
+    }
+
+    private static String assertStartupInfo(LogCapture startupLog) {
+        assertThat(startupLog.appender().list).singleElement().satisfies(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.INFO);
+            assertThat(event.getFormattedMessage()).startsWith("Peekaboot insights:");
+        });
+        return startupLog.appender().list.get(0).getFormattedMessage();
     }
 
     /** A single 100ms level, so one tick arrives in well under the awaits above. */

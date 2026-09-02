@@ -279,8 +279,12 @@ cannot hide the dashboard's own calls from the exclusion, and every URL the tool
 writes into a page — script, stylesheets, dashboard links, the `basePath` in its data blob
 — is prefixed with `request.getContextPath()`. On the browser side `shared/api.js`
 derives the same base path from its own module URL, so the dashboard and the overlay it
-opens need no configuration either. The `/actuator/` exclusion is a fixed prefix and does
-not follow `management.endpoints.web.base-path`. Both filters
+opens need no configuration either. The `/actuator/` exclusion follows
+`management.endpoints.web.base-path`: `PeekabootPathsAutoConfiguration` constructs the
+single `PeekabootPaths` bean with the resolved base path and threads it into both
+filters, the interceptor registration and `OtelSpanExporter`'s span skip (a base path of
+`/`, management endpoints at the application root, excludes nothing extra - there is no
+prefix to tell them apart by). Both filters
 are also registered only inside `DevToolbarAutoConfiguration`, conditional on
 `peekaboot.dev-toolbar` resolving to `true` — neither runs while it's off. Without the
 toolbar on, a trace still carries a basic method/path/status summary (`summary.request`)
@@ -326,6 +330,12 @@ The backend implements a Backend-for-Frontend pattern:
 Actuator Endpoints → Raw Beans → Domain Models → API Response
      (JSON)         (typed)      (clean DTOs)    (dashboard)
 ```
+
+`ConfigMapper` flattens a nested `@ConfigurationProperties` value to one property per leaf
+under a dotted key (`hikari.maximumPoolSize`), indexing list elements the way Spring's own
+property syntax does (`servers[0].host`), so the Config tab's filter matches nested keys
+and values. Masking runs on the tree first (`TreeMasker`, by leaf key), so a sensitive key
+anywhere in it arrives as the single masked leaf its subtree collapsed to.
 
 ### JSON on the wire
 
@@ -612,8 +622,8 @@ When OpenTelemetry is on the classpath, `OtelSpanExporter` is registered:
 ```java
 @Bean
 @ConditionalOnClass(name = "io.opentelemetry.sdk.trace.export.SpanExporter")
-public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher) {
-    return new OtelSpanExporter(eventPublisher);
+public OtelSpanExporter otelSpanExporter(ApplicationEventPublisher eventPublisher, PeekabootPaths peekabootPaths) {
+    return new OtelSpanExporter(eventPublisher, peekabootPaths);
 }
 ```
 
@@ -624,7 +634,7 @@ The exporter:
   `peekaboot.tracing.enabled` off leaves the rest of the app's OpenTelemetry setup
   (sampling, other exporters — Zipkin, Jaeger, an OTLP backend) untouched.
 - Receives finished spans from OTel SDK
-- Filters out peekaboot's own requests (`/peekaboot/**`, `/actuator/**`)
+- Filters out peekaboot's own requests (`/peekaboot/**` and the management base path - `/actuator/**` by default)
 - Converts to `SpanData` and publishes `SpanDataEvent` via Spring's
   `ApplicationEventPublisher`; `TraceStoreEventListener` receives it via an
   `@EventListener` and forwards it to `TraceStore`

@@ -26,7 +26,9 @@ public class DevToolbarFilter implements Filter {
 
     private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
-    private static final String SWAGGER_UI_PREFIX = "/swagger-ui/";
+
+    /** springdoc's own default for {@code springdoc.swagger-ui.path}. */
+    public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
     // Recognised by name: this module depends on neither container.
     private static final Set<String> CLIENT_ABORT_EXCEPTIONS =
             Set.of("org.apache.catalina.connector.ClientAbortException", "org.eclipse.jetty.io.EofException");
@@ -35,13 +37,43 @@ public class DevToolbarFilter implements Filter {
 
     private final ToolbarDataProvider toolbarDataProvider;
     private final Tracer tracer;
+    private final PeekabootPaths paths;
+    private final String swaggerUiPrefix;
     // Reads the bar's stylesheets off the classpath once, at construction, and caches the
     // rendered fragment's CSS; there is one filter instance per application.
     private final ToolbarShell toolbarShell = new ToolbarShell();
 
-    public DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
+    /** Every path default in place - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
+        this(toolbarDataProvider, tracer, DEFAULT_SWAGGER_UI_PATH);
+    }
+
+    /** {@link PeekabootPaths#defaults()} plus the given swagger path - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String swaggerUiPath) {
+        this(toolbarDataProvider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
+    }
+
+    /** @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check */
+    public DevToolbarFilter(
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer, PeekabootPaths paths, String swaggerUiPath) {
         this.toolbarDataProvider = toolbarDataProvider;
         this.tracer = tracer;
+        this.paths = paths;
+        this.swaggerUiPrefix = swaggerUiPrefix(swaggerUiPath);
+    }
+
+    /**
+     * Where springdoc serves the UI for a given {@code springdoc.swagger-ui.path}: the
+     * configured path's directory part plus {@code /swagger-ui/}. springdoc's
+     * {@code AbstractSwaggerWelcome.calculateUiRootCommon} takes everything before the
+     * path's last {@code /} as the UI root, and the swagger-ui resource handlers sit under
+     * that root - so the default {@code /swagger-ui.html} yields {@code /swagger-ui/},
+     * while {@code /admin/docs.html} moves the whole UI to {@code /admin/swagger-ui/}.
+     */
+    static String swaggerUiPrefix(String swaggerUiPath) {
+        int lastSlash = swaggerUiPath.lastIndexOf('/');
+        String directory = lastSlash > 0 ? swaggerUiPath.substring(0, lastSlash) : "";
+        return directory + "/swagger-ui/";
     }
 
     @Override
@@ -121,7 +153,7 @@ public class DevToolbarFilter implements Filter {
         String path = PeekabootPaths.pathWithinApplication(request);
 
         // Skip excluded prefixes
-        if (PeekabootPaths.isExcluded(path)) {
+        if (paths.isExcluded(path)) {
             return true;
         }
 
@@ -220,7 +252,7 @@ public class DevToolbarFilter implements Filter {
     }
 
     private boolean isSwaggerUi(HttpServletRequest request) {
-        return PeekabootPaths.pathWithinApplication(request).startsWith(SWAGGER_UI_PREFIX);
+        return PeekabootPaths.pathWithinApplication(request).startsWith(swaggerUiPrefix);
     }
 
     private String generateSwaggerToolbarHtml(HttpServletRequest request) {

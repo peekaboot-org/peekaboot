@@ -26,8 +26,10 @@ import org.springframework.web.servlet.handler.MappedInterceptor;
 class PeekabootTracingAutoConfigurationTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(
-                    AutoConfigurations.of(PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    PeekabootTracingAutoConfiguration.class,
+                    OtelTracingAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -66,7 +68,9 @@ class PeekabootTracingAutoConfigurationTest {
     void shouldNotCreateBeansWhenNotAServletApplication() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
+                        PeekabootTracingAutoConfiguration.class,
+                        OtelTracingAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -81,7 +85,9 @@ class PeekabootTracingAutoConfigurationTest {
         // default the safe fallback is off
         new WebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
-                        PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class))
+                        PeekabootTracingAutoConfiguration.class,
+                        OtelTracingAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
                 .run(context -> {
                     assertThat(context).doesNotHaveBean(TraceStore.class);
                     assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
@@ -122,7 +128,8 @@ class PeekabootTracingAutoConfigurationTest {
     // --- TracingInterceptorAutoConfiguration ---
 
     private final WebApplicationContextRunner webContextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -145,7 +152,8 @@ class PeekabootTracingAutoConfigurationTest {
     @Test
     void shouldNotRegisterInterceptorWhenNotAWebApplication() {
         new ApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+                .withConfiguration(AutoConfigurations.of(
+                        TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true")
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {
@@ -159,7 +167,8 @@ class PeekabootTracingAutoConfigurationTest {
         // matchIfMissing = false: without the environment post-processor's detected
         // default the safe fallback is off
         new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(TracingInterceptorAutoConfiguration.class))
+                .withConfiguration(AutoConfigurations.of(
+                        TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -207,6 +216,25 @@ class PeekabootTracingAutoConfigurationTest {
                     .containsExactlyInAnyOrder(
                             "/peekaboot/**", "/actuator/**", "/static/**", "/webjars/**", "/error/**", "/error");
         });
+    }
+
+    /** The actuator exclusion follows a relocated management base path, through the shared PeekabootPaths bean. */
+    @Test
+    void theManagementBasePathReachesTheInterceptorExclusions() {
+        webContextRunner
+                .withUserConfiguration(ObservationRegistryConfig.class)
+                .withPropertyValues("management.endpoints.web.base-path=/manage")
+                .run(context -> {
+                    WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
+                    RecordingInterceptorRegistry registry = new RecordingInterceptorRegistry();
+                    configurer.addInterceptors(registry);
+
+                    MappedInterceptor mapped =
+                            (MappedInterceptor) registry.registered().getFirst();
+                    assertThat(mapped.getExcludePathPatterns())
+                            .contains("/manage/**")
+                            .doesNotContain("/actuator/**");
+                });
     }
 
     /**

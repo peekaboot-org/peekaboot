@@ -17,6 +17,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.log.PeekabootLogbackAppender;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
@@ -33,18 +34,23 @@ import org.springframework.boot.context.logging.LoggingApplicationListener;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.support.SpringFactoriesLoader;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 
 class DevToolbarAutoConfigurationTest {
 
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(
-                    AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    DevToolbarAutoConfiguration.class,
+                    PeekabootAutoConfiguration.class,
+                    PeekabootPathsAutoConfiguration.class))
             .withPropertyValues("peekaboot.enabled=true")
             .withUserConfiguration(MockActuatorConfig.class);
 
@@ -56,6 +62,31 @@ class DevToolbarAutoConfigurationTest {
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                });
+    }
+
+    /** The springdoc property decides where idle mode applies; it has to reach the filter. */
+    @Test
+    void theCustomisedSwaggerUiPathReachesTheToolbarFilter() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true", "springdoc.swagger-ui.path=/admin/docs.html")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    DevToolbarFilter filter = ((FilterRegistrationBean<?>)
+                                                    context.getBean("devToolbarFilter", FilterRegistrationBean.class))
+                                            .getFilter()
+                                    instanceof DevToolbarFilter f
+                            ? f
+                            : null;
+                    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/admin/swagger-ui/index.html");
+                    request.setServletPath("/admin/swagger-ui/index.html");
+                    MockHttpServletResponse response = new MockHttpServletResponse();
+                    filter.doFilter(request, response, (req, res) -> {
+                        res.setContentType("text/html");
+                        res.getWriter().write("<html><body></body></html>");
+                    });
+
+                    assertThat(response.getContentAsString()).contains("\"idle\":true");
                 });
     }
 
@@ -285,7 +316,8 @@ class DevToolbarAutoConfigurationTest {
     @Test
     void theCaptureFilterWorksWithoutTheDashboardsMaskingEngineBean() {
         new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(DevToolbarAutoConfiguration.class))
+                .withConfiguration(
+                        AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(MinimalPropertiesConfig.class, MockTracingConfig.class)
                 .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
                 .run(context -> {

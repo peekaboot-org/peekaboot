@@ -418,6 +418,59 @@ class DevToolbarFilterTest {
         assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
     }
 
+    /**
+     * springdoc serves the UI under the configured path's directory plus {@code /swagger-ui}
+     * (a customised {@code springdoc.swagger-ui.path=/admin/docs.html} moves the whole UI to
+     * {@code /admin/swagger-ui/**}); the filter's idle-mode check has to follow it there.
+     */
+    @Test
+    void shouldFollowACustomisedSwaggerUiPathIntoIdleMode() throws Exception {
+        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
+        request = get("/admin/swagger-ui/index.html");
+        chainWritesHtml("<html><body><div id=\"swagger-ui\"></div></body></html>");
+
+        customised.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).contains("\"idle\":true");
+    }
+
+    /** With the UI moved elsewhere, the default location is a regular page again. */
+    @Test
+    void shouldNotUseIdleModeOnTheDefaultPathOnceTheSwaggerUiPathIsCustomised() throws Exception {
+        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
+        request = get("/swagger-ui/index.html");
+        chainWritesHtml("<html><body></body></html>");
+
+        customised.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).doesNotContain("\"idle\":true");
+    }
+
+    /** A customised path without a directory part leaves the UI at springdoc's default location. */
+    @Test
+    void aCustomisedPathWithoutADirectoryKeepsTheDefaultUiLocationIdle() throws Exception {
+        DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/docs");
+        request = get("/swagger-ui/index.html");
+        chainWritesHtml("<html><body></body></html>");
+
+        customised.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).contains("\"idle\":true");
+    }
+
+    /** The idle-mode check matches the container's context-relative path, like every other check here. */
+    @Test
+    void idleModeStillAppliesBehindAContextPath() throws Exception {
+        request.setContextPath("/app");
+        request.setRequestURI("/app/swagger-ui/index.html");
+        request.setServletPath("/swagger-ui/index.html");
+        chainWritesHtml("<html><body></body></html>");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).contains("\"idle\":true");
+    }
+
     @Test
     void shouldNotUseIdleModeForRegularPages() throws Exception {
         chainWritesHtml("<html><body></body></html>");

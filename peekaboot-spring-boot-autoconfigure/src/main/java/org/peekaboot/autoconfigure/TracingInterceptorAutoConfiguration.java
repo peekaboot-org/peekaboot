@@ -35,13 +35,14 @@ public class TracingInterceptorAutoConfiguration {
     }
 
     @Bean
-    public WebMvcConfigurer tracingInterceptorConfigurer(TracingHandlerInterceptor interceptor) {
+    public WebMvcConfigurer tracingInterceptorConfigurer(
+            TracingHandlerInterceptor interceptor, PeekabootPaths peekabootPaths) {
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
                 registry.addInterceptor(interceptor)
                         .addPathPatterns("/**")
-                        .excludePathPatterns(PeekabootPaths.excludePatterns());
+                        .excludePathPatterns(peekabootPaths.excludePatterns());
             }
         };
     }

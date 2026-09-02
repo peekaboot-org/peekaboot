@@ -364,6 +364,20 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
 
+    /** Root-level filtering decides the page and the counts; the limit cuts the page, never the counts. */
+    @Test
+    void theFilteredListRespectsTheLimitWhileCountsSeeEveryMatch() {
+        for (int i = 1; i <= 5; i++) {
+            addTrace("t" + i, 100, false); // HTTP_REQUEST
+        }
+        addConsumerTrace("c1", 100); // MESSAGE_CONSUMER
+
+        TraceInsightsResponse response = service.getInsights(2, TraceBucket.ALL, "http_request", null);
+
+        assertThat(response.traces()).hasSize(2);
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(5, 0, 0));
+    }
+
     @Test
     void filteredBucketCountsAreOmittedWithoutAFilter() {
         addTrace("trace1", 100, false);

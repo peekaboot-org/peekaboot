@@ -8,6 +8,7 @@ import static org.peekaboot.backend.testsupport.Spans.span;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
@@ -132,6 +133,24 @@ class InMemoryTraceStoreTest {
                 .containsExactly("t1");
     }
 
+    /** The error can arrive on any span, not just the one that opens the trace. */
+    @Test
+    void aLateArrivingErrorSpanClassifiesTheTraceIntoTheErrorBucket() {
+        storage.addSpan(spanIn("t1", "s1"));
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
+
+        storage.addSpan(span("s2")
+                .in("t1")
+                .parent("s1")
+                .named("failing-op")
+                .error("boom", "java.lang.RuntimeException")
+                .build());
+
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
     @Test
     void infoLogDoesNotClassifyTraceIntoErrorBucket() {
         storage.addLog(log("t1", "INFO", "fine"));
@@ -186,12 +205,14 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
-    void getTracesAllReturnsNewestFirst() throws InterruptedException {
-        storage.addSpan(spanIn("t1", "s1"));
-        Thread.sleep(5); // createdAt has millisecond resolution; sleep to order deterministically
-        storage.addSpan(spanIn("t2", "s2"));
+    void getTracesAllReturnsNewestFirst() {
+        // createdAt has millisecond resolution; a seeded clock orders the bundles deterministically
+        AtomicLong clock = new AtomicLong();
+        InMemoryTraceStore store = new InMemoryTraceStore(100, 50, Duration.ofMinutes(5), clock::incrementAndGet);
+        store.addSpan(spanIn("t1", "s1"));
+        store.addSpan(spanIn("t2", "s2"));
 
-        List<TraceDataBundle> all = storage.getTraces(TraceBucket.ALL, 10);
+        List<TraceDataBundle> all = store.getTraces(TraceBucket.ALL, 10);
         assertThat(all).extracting(TraceDataBundle::traceId).containsExactly("t2", "t1");
     }
 

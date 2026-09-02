@@ -51,13 +51,32 @@ public class ConfigMapper {
         String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
         List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
         for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
-            properties.add(mapProperty(entry.getKey(), entry.getValue(), unmask));
+            Object rawValue = entry.getValue();
+            Object masked = rawValue != null ? treeMasker.mask(entry.getKey(), rawValue, unmask) : null;
+            flattenInto(properties, entry.getKey(), masked);
         }
     }
 
-    private ConfigProperty mapProperty(String key, Object rawValue, boolean unmask) {
-        Object maskedValue = rawValue != null ? treeMasker.mask(key, rawValue, unmask) : null;
-        String value = maskedValue != null ? maskedValue.toString() : null;
-        return new ConfigProperty(key, value);
+    /**
+     * One property per leaf, under a dotted key ({@code hikari.maximumPoolSize}), with list
+     * elements indexed the way Spring's own property syntax writes them ({@code servers[0]}) -
+     * so the Config tab's filter matches nested keys and values instead of one opaque
+     * {@code Map.toString()} blob. The tree is masked before flattening, so a sensitive key
+     * anywhere in it has already collapsed its whole subtree to the mask, and arrives here
+     * as the single leaf it became. An empty container stays a property of its own rather
+     * than vanishing.
+     */
+    private void flattenInto(List<ConfigProperty> out, String key, Object masked) {
+        if (masked instanceof Map<?, ?> map && !map.isEmpty()) {
+            for (Map.Entry<?, ?> child : map.entrySet()) {
+                flattenInto(out, key + "." + child.getKey(), child.getValue());
+            }
+        } else if (masked instanceof List<?> list && !list.isEmpty()) {
+            for (int i = 0; i < list.size(); i++) {
+                flattenInto(out, key + "[" + i + "]", list.get(i));
+            }
+        } else {
+            out.add(new ConfigProperty(key, masked != null ? masked.toString() : null));
+        }
     }
 }

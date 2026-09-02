@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
@@ -26,14 +27,25 @@ public class InMemoryTraceStore implements TraceStore {
     private final int maxLogsPerTrace;
     private final Map<String, TraceDataBundle> errorTraces;
     private final Map<String, TraceDataBundle> slowTraces;
+    /** Epoch millis for each new bundle's createdAt; the seam keeps creation ordering deterministic in tests. */
+    private final LongSupplier clock;
 
     /** Bucket caps, slow-trace threshold and log cap at their {@link PeekabootTracingProperties} defaults. */
     public InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter) {
-        this(maxTraces, maxSpansPerTrace, expireAfter, new PeekabootTracingProperties());
+        this(maxTraces, maxSpansPerTrace, expireAfter, System::currentTimeMillis);
+    }
+
+    /** {@link #InMemoryTraceStore(int, int, Duration)} with the clock seam - for tests. */
+    InMemoryTraceStore(int maxTraces, int maxSpansPerTrace, Duration expireAfter, LongSupplier clock) {
+        this(maxTraces, maxSpansPerTrace, expireAfter, new PeekabootTracingProperties(), clock);
     }
 
     private InMemoryTraceStore(
-            int maxTraces, int maxSpansPerTrace, Duration expireAfter, PeekabootTracingProperties defaults) {
+            int maxTraces,
+            int maxSpansPerTrace,
+            Duration expireAfter,
+            PeekabootTracingProperties defaults,
+            LongSupplier clock) {
         this(
                 maxTraces,
                 maxSpansPerTrace,
@@ -41,7 +53,8 @@ public class InMemoryTraceStore implements TraceStore {
                 defaults.getMaxErrorTraces(),
                 defaults.getMaxSlowTraces(),
                 defaults.getSlowTraceThresholdMs(),
-                defaults.getMaxLogsPerTrace());
+                defaults.getMaxLogsPerTrace(),
+                clock);
     }
 
     public InMemoryTraceStore(
@@ -52,9 +65,30 @@ public class InMemoryTraceStore implements TraceStore {
             int maxSlowTraces,
             long slowTraceThresholdMs,
             int maxLogsPerTrace) {
+        this(
+                maxTraces,
+                maxSpansPerTrace,
+                expireAfter,
+                maxErrorTraces,
+                maxSlowTraces,
+                slowTraceThresholdMs,
+                maxLogsPerTrace,
+                System::currentTimeMillis);
+    }
+
+    private InMemoryTraceStore(
+            int maxTraces,
+            int maxSpansPerTrace,
+            Duration expireAfter,
+            int maxErrorTraces,
+            int maxSlowTraces,
+            long slowTraceThresholdMs,
+            int maxLogsPerTrace,
+            LongSupplier clock) {
         this.maxSpansPerTrace = maxSpansPerTrace;
         this.slowTraceThresholdMs = slowTraceThresholdMs;
         this.maxLogsPerTrace = maxLogsPerTrace;
+        this.clock = clock;
         this.cache = Caffeine.newBuilder()
                 .maximumSize(maxTraces)
                 .expireAfterWrite(expireAfter)
@@ -110,7 +144,7 @@ public class InMemoryTraceStore implements TraceStore {
             if (retained == null) {
                 retained = slowTraces.get(id);
             }
-            return retained != null ? retained : new TraceDataBundle(id);
+            return retained != null ? retained : new TraceDataBundle(id, clock);
         });
     }
 
@@ -171,14 +205,14 @@ public class InMemoryTraceStore implements TraceStore {
         }
     }
 
-    private boolean hasError(TraceDataBundle bundle) {
-        return bundle.spans().stream().anyMatch(SpanData::hasError)
-                || bundle.logs().stream().anyMatch(LogCapturedEvent::isError);
+    /** Incremental signals the bundle maintains as events arrive; no span copy or sort per span. */
+    private static boolean hasError(TraceDataBundle bundle) {
+        return bundle.hasErrorSpan() || bundle.hasErrorLog();
     }
 
     private boolean isSlow(TraceDataBundle bundle) {
-        TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-        return traceData.duration() != null && traceData.duration().toMillis() >= slowTraceThresholdMs;
+        Duration window = bundle.spanWindow();
+        return window != null && window.toMillis() >= slowTraceThresholdMs;
     }
 
     @Override

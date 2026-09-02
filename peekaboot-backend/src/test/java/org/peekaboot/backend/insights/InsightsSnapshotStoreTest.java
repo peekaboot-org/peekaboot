@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.testsupport.LogCapture;
@@ -174,7 +175,8 @@ class InsightsSnapshotStoreTest {
                 () -> snapshot(System.currentTimeMillis() + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
-        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
+                .isEmpty();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
     }
 
@@ -185,7 +187,8 @@ class InsightsSnapshotStoreTest {
                 () -> snapshot(System.currentTimeMillis() - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
-        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
+                .isEmpty();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
     }
 
@@ -195,8 +198,21 @@ class InsightsSnapshotStoreTest {
         writer.start(() -> snapshot(System.currentTimeMillis(), 30_000, 90), () -> false); // level 0 was 10s
         writer.stop();
 
-        assertThat(loadWith(store(Duration.ofDays(30)))).isEmpty();
+        assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
+                .isEmpty();
         assertThat(directory.resolve(InsightsSnapshotStore.FILE_NAME)).doesNotExist();
+    }
+
+    /** Discarding a file is announced with one INFO line - deliberate; pinned here rather than reaching the console. */
+    private static Optional<InsightsSnapshot> discardIsAnnounced(Supplier<Optional<InsightsSnapshot>> load) {
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            Optional<InsightsSnapshot> restored = load.get();
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.INFO);
+                assertThat(event.getFormattedMessage()).contains("starting with empty history");
+            });
+            return restored;
+        }
     }
 
     @Test

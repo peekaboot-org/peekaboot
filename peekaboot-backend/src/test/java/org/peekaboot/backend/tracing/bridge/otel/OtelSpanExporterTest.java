@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,7 +48,7 @@ class OtelSpanExporterTest {
                 storage.addSpan(spanDataEvent.spanData());
             }
         };
-        exporter = new OtelSpanExporter(eventPublisher);
+        exporter = new OtelSpanExporter(eventPublisher, PeekabootPaths.defaults());
     }
 
     @Test
