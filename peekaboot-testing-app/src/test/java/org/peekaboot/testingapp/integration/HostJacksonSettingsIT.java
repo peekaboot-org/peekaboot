@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -95,7 +96,7 @@ class HostJacksonSettingsIT {
         assertThat(tasks).isNotEmpty();
         JsonNode nextExecution = tasks.get(0).path("nextExecution");
         assertThat(nextExecution.isString()).isTrue();
-        assertThat(Instant.parse(nextExecution.asString())).isNotNull();
+        assertThatCode(() -> Instant.parse(nextExecution.asString())).doesNotThrowAnyException();
     }
 
     @RestController

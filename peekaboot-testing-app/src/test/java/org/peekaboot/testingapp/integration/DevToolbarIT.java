@@ -7,9 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.testingapp.TestingApp;
-import org.peekaboot.testingapp.entity.Person;
-import org.peekaboot.testingapp.repository.PersonRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -38,21 +35,11 @@ class DevToolbarIT {
     @LocalServerPort
     private int port;
 
-    @Autowired
-    private PersonRepository personRepository;
-
     private RestClient restClient;
 
     @BeforeEach
     void setUp() {
         restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
-        personRepository.deleteAll();
-
-        Person person = new Person();
-        person.setFirstName("Test");
-        person.setLastName("User");
-        person.setEmail("test@example.com");
-        personRepository.save(person);
     }
 
     private String getPersonsHtml() {

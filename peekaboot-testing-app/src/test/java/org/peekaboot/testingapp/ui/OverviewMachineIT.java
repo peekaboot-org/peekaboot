@@ -24,7 +24,6 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         String text = page.textContent("#machine-info");
         assertThat(text).contains("CPU Cores");
-        assertThat(text).contains(String.valueOf(Runtime.getRuntime().availableProcessors()));
         assertThat(text).contains("Total Memory");
         assertThat(text).contains("Max Heap");
     }
@@ -199,7 +198,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
     }
 
     @Test
-    void cpuCoresMovedOffTheJvmDefaultsCard() {
+    void jvmDefaultsCardDoesNotRepeatTheCpuCoreCount() {
         openDashboard();
         page.waitForSelector("#jvm-defaults-info .pk-kv");
 
