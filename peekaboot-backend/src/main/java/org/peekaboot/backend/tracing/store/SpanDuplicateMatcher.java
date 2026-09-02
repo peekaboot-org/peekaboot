@@ -12,6 +12,10 @@ import java.util.Set;
  */
 public final class SpanDuplicateMatcher {
 
+    /**
+     * One key per datasource decorator. A third would make the triple-nested fold in
+     * {@link TraceDataBundle} reachable - see docs/ARCHITECTURE.md, <em>Span Deduplication</em>.
+     */
     private static final Set<String> SERVICE_IDENTIFIER_KEYS = Set.of("peer.service", "jdbc.datasource.name");
 
     private SpanDuplicateMatcher() {}
