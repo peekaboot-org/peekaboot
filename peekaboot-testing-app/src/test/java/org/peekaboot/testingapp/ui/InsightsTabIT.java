@@ -457,6 +457,85 @@ class InsightsTabIT extends PlaywrightTestBase {
         assertThat(page.url()).endsWith("#insights");
     }
 
+    /**
+     * The percentiles/restarts checkboxes and per-panel level overrides are URL state
+     * like the global level: a deep link restores all of them, the toolbar stays at the
+     * default global level, and the overridden panel actually charts at its own level
+     * (its level-1 data is fetched), not merely has its buttons repainted.
+     */
+    @Test
+    void deepLinkRestoresTheCheckboxesAndAPanelOverride() {
+        Request request = page.waitForRequest(
+                "**/api/insights/data?level=1",
+                () -> page.navigate(
+                        baseUrl + "/peekaboot/ui/dashboard/index.html#insights?percentiles=1&restarts=0&panels=cpu:1"));
+        assertThat(request.url()).contains("level=1");
+
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        page.waitForSelector(cpu + ".pk-insight-panel--overridden");
+        assertThat(page.isChecked("#insights-percentiles")).isTrue();
+        assertThat(page.isChecked("#insights-markers")).isFalse();
+        assertThat(page.getAttribute(
+                        cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.isVisible(cpu + " .pk-insight-panel-reset")).isTrue();
+        // the override is the panel's own; the toolbar and its neighbours stay at the default
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .isEqualTo("true");
+        assertThat(page.locator("#insights-panels .pk-insight-panel[data-panel-id='load']"
+                                + ".pk-insight-panel--overridden")
+                        .count())
+                .isZero();
+    }
+
+    /**
+     * Checkbox and per-panel override changes rewrite the URL in place (replace, never
+     * push - url-state.js's rule), and every value returning to its default takes its
+     * param out again so a clean state yields a clean "#insights" hash.
+     */
+    @Test
+    void togglingCheckboxesAndOverridesRewritesTheUrlInPlace() {
+        openInsights();
+        String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
+        page.waitForSelector(cpu + " canvas");
+        int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
+
+        page.check("#insights-percentiles");
+        page.waitForFunction("() => window.location.hash.includes('percentiles=1')");
+        page.uncheck("#insights-markers");
+        page.waitForFunction("() => window.location.hash.includes('restarts=0')");
+        page.waitForRequest(
+                "**/api/insights/data?level=1",
+                () -> page.click(cpu + " .pk-insight-panel-levels .pk-insight-level[data-level='1']"));
+        page.waitForFunction("() => new URLSearchParams(window.location.hash.split('?')[1]).get('panels') === 'cpu:1'");
+        assertThat(((Number) page.evaluate("() => window.history.length")).intValue())
+                .isEqualTo(historyLengthBefore);
+
+        page.uncheck("#insights-percentiles");
+        page.check("#insights-markers");
+        page.click(cpu + " .pk-insight-panel-reset");
+        page.waitForFunction("() => window.location.hash === '#insights'");
+    }
+
+    /**
+     * Bogus checkbox values and override entries (an unconfigured level, an unknown
+     * panel) fall back to their defaults, and the URL is corrected to the state that
+     * actually restored - same as the lifecycle pager's out-of-range page.
+     */
+    @Test
+    void bogusCheckboxAndOverrideValuesFallBackAndSelfCorrect() {
+        page.navigate(baseUrl
+                + "/peekaboot/ui/dashboard/index.html#insights?percentiles=yes&restarts=nope&panels=cpu:99,ghost:1");
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu']");
+
+        assertThat(page.isChecked("#insights-percentiles")).isFalse();
+        assertThat(page.isChecked("#insights-markers")).isTrue();
+        assertThat(page.locator("#insights-panels .pk-insight-panel--overridden")
+                        .count())
+                .isZero();
+        page.waitForFunction("() => window.location.hash === '#insights'");
+    }
+
     @Test
     void rapidLevelSwitchingLeavesEveryPanelCharted() {
         openInsights();
