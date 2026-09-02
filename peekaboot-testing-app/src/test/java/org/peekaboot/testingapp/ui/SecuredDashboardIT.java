@@ -105,7 +105,9 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             assertThat(anonymousPage.locator("#peekaboot-toolbar-host").count())
                     .as("the bar is rendered by the filter, so it survives the refused script")
                     .isEqualTo(1);
-            assertThat(authNoticeText(anonymousPage)).isEqualTo("Sign in to see this request");
+            assertThat(authNoticeText(anonymousPage))
+                    .isEqualTo(
+                            "Peekaboot toolbar could not start — sign in, or check that its script is allowed to load");
         }
     }
 
