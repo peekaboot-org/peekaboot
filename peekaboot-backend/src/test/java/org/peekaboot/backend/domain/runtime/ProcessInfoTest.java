@@ -2,8 +2,11 @@ package org.peekaboot.backend.domain.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 class ProcessInfoTest {
@@ -28,16 +31,20 @@ class ProcessInfoTest {
         assertThat(info.pid()).isEqualTo(ProcessHandle.current().pid());
     }
 
+    /**
+     * uid/gid come from the filesystem's "unix" attribute view - never from forking
+     * {@code id -u}/{@code id -g}, which current() must not do on a request thread. Where
+     * the view is unsupported (Windows), both are simply absent.
+     */
     @Test
-    void current_shouldReturnUidAndGid() {
+    void current_shouldReturnUidAndGid() throws IOException {
         ProcessInfo info = ProcessInfo.current();
-        String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        if (osName.contains("win")) {
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("unix")) {
+            assertThat(info.uid()).isEqualTo(String.valueOf(Files.getAttribute(Path.of("."), "unix:uid")));
+            assertThat(info.gid()).isEqualTo(String.valueOf(Files.getAttribute(Path.of("."), "unix:gid")));
+        } else {
             assertThat(info.uid()).isNull();
             assertThat(info.gid()).isNull();
-        } else {
-            assertThat(info.uid()).isNotNull();
-            assertThat(info.gid()).isNotNull();
         }
     }
 

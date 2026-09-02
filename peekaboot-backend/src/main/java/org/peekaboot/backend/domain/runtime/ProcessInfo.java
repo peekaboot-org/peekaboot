@@ -1,13 +1,11 @@
 package org.peekaboot.backend.domain.runtime;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 public record ProcessInfo(String username, String uid, String gid, long pid, List<ParentProcess> parentProcesses) {
 
@@ -15,7 +13,7 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
 
     /**
      * Lazily computed once: the values are static for the JVM's lifetime and
-     * computing them forks subprocesses and walks the parent process chain.
+     * computing them reads filesystem attributes and walks the parent process chain.
      */
     private static final class CurrentHolder {
         private static final ProcessInfo CURRENT = compute();
@@ -28,8 +26,8 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
     private static ProcessInfo compute() {
         String username = System.getProperty("user.name");
         long pid = ProcessHandle.current().pid();
-        String uid = execCommand("id", "-u");
-        String gid = execCommand("id", "-g");
+        String uid = unixAttribute("uid");
+        String gid = unixAttribute("gid");
         List<ParentProcess> parents = resolveParentProcesses();
         return new ProcessInfo(username, uid, gid, pid, parents);
     }
@@ -60,24 +58,17 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
         return lastSlash >= 0 ? fullPath.substring(lastSlash + 1) : fullPath;
     }
 
-    private static String execCommand(String... command) {
-        Process process = null;
+    /**
+     * The working directory's owner id from the "unix" attribute view - the process's own
+     * uid/gid without forking {@code id} from a request thread. Null where the view is
+     * unsupported (Windows) or unreadable.
+     */
+    private static String unixAttribute(String attribute) {
         try {
-            process = new ProcessBuilder(command).redirectErrorStream(true).start();
-            try (BufferedReader reader =
-                    new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String result = reader.readLine();
-                if (!process.waitFor(2, TimeUnit.SECONDS)) {
-                    return null;
-                }
-                return process.exitValue() == 0 && result != null ? result.trim() : null;
-            }
-        } catch (IOException | InterruptedException e) {
+            Object value = Files.getAttribute(Path.of("."), "unix:" + attribute);
+            return value != null ? String.valueOf(value) : null;
+        } catch (UnsupportedOperationException | IllegalArgumentException | IOException e) {
             return null;
-        } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
         }
     }
 }
