@@ -43,6 +43,8 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 tasks.withType<JavaCompile>().configureEach {
     options.release = 25
     options.encoding = "UTF-8"
+    // Error Prone reports its findings as warnings; this is what makes it a gate.
+    options.compilerArgs.add("-Werror")
 }
 
 // Maven <optional>true</optional> deps are visible to the module's own tests; Gradle's

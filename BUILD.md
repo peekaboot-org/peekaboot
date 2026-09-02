@@ -166,12 +166,14 @@ and CI wiring - CI still runs Maven only. Nor the dependency check, which guards
 resolution behaviour Gradle does not have: Gradle takes the highest requested version, so
 it cannot settle a transitive below what a dependent asked for.
 
-Three Maven gates have no Gradle counterpart yet, so the Gradle build is the weaker of
-the two until they are added: `-Werror` (the conventions plugin compiles warnings without
-failing on them), the starter's [optional-dependency
-ban](#the-starters-optional-dependency-contract) - Gradle's `compileOnly` cannot leak, but
-a dependency moved to `api` or `implementation` would - and the
-[configuration-metadata check](#the-configuration-metadata-check).
+The three newest gates are mirrored: `-Werror` in the conventions plugin, and a
+`check`-bound task apiece for the starter's
+[optional-dependency ban](#the-starters-optional-dependency-contract) and the
+[configuration-metadata check](#the-configuration-metadata-check). Gradle has no enforcer
+plugin, so both are plain verification tasks over the resolved runtime classpath and the
+compiler's output directory. Gradle's `compileOnly` cannot leak the way a lost Maven
+`<optional>` can, but a dependency moved to `api` or `implementation` would, so the ban is
+worth having on both sides.
 
 ## Compilation
 

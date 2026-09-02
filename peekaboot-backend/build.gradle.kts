@@ -41,3 +41,20 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-data-jpa")
     testImplementation("org.springframework.boot:spring-boot-starter-thymeleaf")
 }
+
+// The configuration processor turns the @ConfigurationProperties Javadoc into the metadata
+// an IDE offers on peekaboot.* keys. Nothing else notices when it stops running.
+// Mirrors the Maven enforcer rule on this module.
+val checkConfigurationMetadata by tasks.registering {
+    description = "Fails if spring-boot-configuration-processor produced no metadata."
+    group = "verification"
+    dependsOn(tasks.compileJava)
+    val metadata = tasks.compileJava.map {
+        it.destinationDirectory.file("META-INF/spring-configuration-metadata.json").get().asFile
+    }
+    doLast {
+        check(metadata.get().isFile) { "The configuration processor produced no metadata at ${metadata.get()}." }
+    }
+}
+
+tasks.named("check") { dependsOn(checkConfigurationMetadata) }
