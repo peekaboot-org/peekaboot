@@ -27,10 +27,6 @@ public final class DoubleRing {
         return size;
     }
 
-    public int capacity() {
-        return values.length;
-    }
-
     public synchronized double[] toArray() {
         return last(size);
     }

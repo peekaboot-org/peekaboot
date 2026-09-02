@@ -20,8 +20,6 @@ public final class DataSourceMetadata {
 
     private final String dataSourceName;
 
-    private final String url;
-
     private final String username;
 
     private final List<Host> hosts;
@@ -38,11 +36,8 @@ public final class DataSourceMetadata {
 
     private final String driverName;
 
-    private final String driverVersion;
-
     private DataSourceMetadata(
             String dataSourceName,
-            String url,
             String username,
             List<Host> hosts,
             String databaseName,
@@ -50,11 +45,9 @@ public final class DataSourceMetadata {
             Map<String, JdbcProperty> connectionParams,
             String databaseProductName,
             String databaseProductVersion,
-            String driverName,
-            String driverVersion) {
+            String driverName) {
 
         this.dataSourceName = dataSourceName;
-        this.url = url;
         this.username = username;
         this.hosts = hosts;
         this.databaseName = databaseName;
@@ -63,7 +56,6 @@ public final class DataSourceMetadata {
         this.databaseProductName = databaseProductName;
         this.databaseProductVersion = databaseProductVersion;
         this.driverName = driverName;
-        this.driverVersion = driverVersion;
     }
 
     public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
@@ -76,7 +68,6 @@ public final class DataSourceMetadata {
 
             return Optional.of(new DataSourceMetadata(
                     dataSourceName,
-                    url,
                     username,
                     jdbcUrl.hosts(),
                     jdbcUrl.databaseName(),
@@ -84,8 +75,7 @@ public final class DataSourceMetadata {
                     jdbcUrl.properties(),
                     metaData.getDatabaseProductName(),
                     metaData.getDatabaseProductVersion(),
-                    metaData.getDriverName(),
-                    metaData.getDriverVersion()));
+                    metaData.getDriverName()));
         } catch (Exception e) {
             logger.warn("Failed to extract metadata from DataSource '{}': {}", dataSourceName, e.getMessage());
         }
@@ -96,11 +86,6 @@ public final class DataSourceMetadata {
     public String getDataSourceName() {
 
         return dataSourceName;
-    }
-
-    public String getUrl() {
-
-        return url;
     }
 
     public String getUsername() {
@@ -142,10 +127,5 @@ public final class DataSourceMetadata {
     public String getDriverName() {
 
         return driverName;
-    }
-
-    public String getDriverVersion() {
-
-        return driverVersion;
     }
 }

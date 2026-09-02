@@ -9,8 +9,13 @@ import org.junit.jupiter.api.Test;
 
 class InsightsPropertiesTest {
 
+    /**
+     * The level geometry is the persisted snapshot's compatibility key: a file written for
+     * other levels is discarded on load, so a change to these defaults silently invalidates
+     * every user's history and has to be deliberate.
+     */
     @Test
-    void defaultsMatchSpec() {
+    void theDefaultLevelsAreThePersistedHistorysCompatibilityKey() {
         InsightsProperties properties = new InsightsProperties();
         assertThat(properties.isEnabled()).isTrue();
         assertThat(properties.getLevels()).hasSize(3);

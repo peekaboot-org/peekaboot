@@ -26,11 +26,10 @@ class DataSourceMetadataTest {
         assertThat(metadata.get().getDataSourceName()).isEqualTo("primary");
         assertThat(metadata.get().getDatabaseProductName()).isEqualTo("H2");
         assertThat(metadata.get().getDatabaseProduct()).isEqualTo(DatabaseProduct.H2);
-        assertThat(metadata.get().getUrl()).contains("metadata-test");
     }
 
     @Test
-    void extractsRemainingMetadataFieldsFromWorkingDataSource() {
+    void extractsConnectionDetailsAndDriverFromWorkingDataSource() {
         JdbcDataSource dataSource = new JdbcDataSource();
         dataSource.setURL("jdbc:h2:mem:metadata-test-2;DB_CLOSE_DELAY=-1");
 
@@ -48,7 +47,6 @@ class DataSourceMetadataTest {
         assertThat(m.getConnectionParams()).containsKey("MODE");
         assertThat(m.getConnectionParams().get("MODE").value()).isEqualTo("MEMORY");
         assertThat(m.getDriverName()).isEqualTo("H2 JDBC Driver");
-        assertThat(m.getDriverVersion()).isNotBlank();
         assertThat(m.getDatabaseProductVersion()).isNotBlank();
     }
 

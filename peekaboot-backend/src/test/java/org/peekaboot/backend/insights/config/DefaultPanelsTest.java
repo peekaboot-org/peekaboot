@@ -56,8 +56,7 @@ class DefaultPanelsTest {
     }
 
     @Test
-    void everySeriesHasValidStatAndTimerStatsUseMillisOrRate() {
-        // loader already validates enum values; spot-check semantic expectations
+    void theHttpLatencyPanelChartsTheTimersAvgAndMaxInMillis() {
         PanelDef latency = defaults.panels().stream()
                 .filter(p -> p.id().equals("http-latency"))
                 .findFirst()
