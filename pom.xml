@@ -312,11 +312,14 @@
                     <proc>full</proc>
                     <!-- -Xplugin:ErrorProne needs the add-exports/add-opens into
                          jdk.compiler that .mvn/jvm.config carries (that file admits no
-                         comment of its own). -->
+                         comment of its own). -Werror is what makes Error Prone a gate:
+                         its findings are warnings, and a warning nothing fails on is a
+                         warning nobody reads. -->
                     <compilerArgs>
                         <arg>-XDcompilePolicy=simple</arg>
                         <arg>--should-stop=ifError=FLOW</arg>
                         <arg>-Xplugin:ErrorProne</arg>
+                        <arg>-Werror</arg>
                     </compilerArgs>
                     <!-- annotationProcessorPaths replaces classpath scanning, so the
                          configuration processor must be listed here explicitly -->
