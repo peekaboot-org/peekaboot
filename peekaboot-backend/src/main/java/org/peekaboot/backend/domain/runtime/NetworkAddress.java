@@ -74,6 +74,7 @@ public record NetworkAddress(String address, String hostname) {
      * behind (which is also why the executor is shut down rather than close()d - close()
      * would await exactly the stall the budget exists to avoid).
      */
+    @SuppressWarnings("PMD.CloseResource") // shutdownNow instead of close, see above
     private static List<NetworkAddress> withHostnames(
             List<InetAddress> addresses, HostnameResolver resolver, Duration budget) {
         ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
