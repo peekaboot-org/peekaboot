@@ -27,8 +27,8 @@ exactly the same.
 ```bash
 mvn clean verify     # compile + all tests + all seven gates         <- the real build
 mvn clean install    # the same, plus install into ~/.m2
-mvn test             # the fast gate: Error Prone + unit tests only (~1 min);
-                     # integration tests (*IT) don't run before `verify`
+mvn test             # the fast gate: dependency check + Error Prone + unit tests only
+                     # (~1 min); integration tests (*IT) don't run before `verify`
 mvn spotless:apply   # format (local builds already do this for you)
 
 mvn -pl <module> test -Dtest=<Class>              # one unit-test class — never add -am
@@ -50,9 +50,9 @@ gates are bound to `verify`.
 Tests are split by lifecycle: plain unit tests live in `*Test` classes and run at `test`
 (surefire), while anything that boots a real application — every `@SpringBootTest`, the
 whole Playwright suite — lives in `*IT` classes and runs at `integration-test`
-(failsafe). So `mvn test` is the fast gate — Error Prone plus every unit test, nothing
-else — and `mvn install`/`mvn verify` give you all seven gates plus the integration
-tests. Per module, `verify` runs:
+(failsafe). So `mvn test` is the fast gate — the dependency check, Error Prone and every
+unit test, nothing else — and `mvn install`/`mvn verify` give you all seven gates plus
+the integration tests. Per module, `verify` runs:
 
 ```
 unit tests → package → sources jar → javadoc jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
