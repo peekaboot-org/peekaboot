@@ -344,6 +344,7 @@ first.
 | `#error` and its `.message` | `openDashboard()` checks `#error` visibility and reads `.message`'s text to fail fast with the actual error instead of hanging on a later selector wait. |
 | the literal `hidden` class | Used throughout (`.hidden { display: none !important; }` in `dashboard.css`) as the state class Playwright's visibility waits key off. |
 | `#machine-info` | `OverviewMachineIT` waits on and asserts the Machine card's rows here, and checks that `#jvm-defaults-info` carries no second processor-count row. |
+| `#machine-net-tabs`, `#machine-net-ipv4[-btn]`, `#machine-net-ipv6[-btn]` and `.pk-machine-net__addr` | The Machine card's IPv4/IPv6 tab strip and its per-family address rows; `OverviewMachineIT` drives selection, keyboard navigation and the refresh-survival of the open family through these ids. |
 | `#jvm-defaults-card` and `data-datasource` | `OverviewMachineIT` asserts the first datasource card (marked `data-datasource` by `overview.js`) directly follows the JVM Defaults card in the Overview grid. |
 | `#traces-bucket` and `data-bucket` | The All/Errors/Slow bucket filter buttons; tests select and click by `[data-bucket="..."]`. |
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
