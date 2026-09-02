@@ -3,13 +3,13 @@ package org.peekaboot.backend.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
+import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
 import java.util.List;
 import java.util.Locale;
@@ -26,8 +26,6 @@ import org.peekaboot.backend.domain.trace.BucketCounts;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.TraceInsightsResponse;
-import org.peekaboot.backend.domain.trace.TraceStatus;
-import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.masking.MaskingEngine;
@@ -73,17 +71,6 @@ class PeekabootControllerTest {
 
     @Nested
     class GetTracesInsights {
-
-        @Test
-        void shouldReturnInsightsResponse() {
-            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
-            when(traceInsightsService.getInsights(anyInt(), any(), any(), any()))
-                    .thenReturn(expectedResponse);
-
-            TraceInsightsResponse result = controller.getTracesInsights(100, null, null, null);
-
-            assertThat(result).isEqualTo(expectedResponse);
-        }
 
         @Test
         void shouldPassLimitToService() {
@@ -146,7 +133,7 @@ class PeekabootControllerTest {
 
         @Test
         void shouldClampExcessiveLimit() {
-            // huge limits would overflow downstream multiplications
+            // the cap bounds the response size
             controller.getTracesInsights(Integer.MAX_VALUE, null, null, null);
 
             verify(traceInsightsService).getInsights(eq(10_000), any(), any(), any());
@@ -380,24 +367,9 @@ class PeekabootControllerTest {
     private TraceTree createTraceTree(String traceId) {
         SpanNode rootSpan =
                 node("span-" + traceId).named("test-operation").durationMs(100L).build();
-
-        return new TraceTree(
-                traceId,
-                0L,
-                100L,
-                TraceStatus.OK,
-                false,
-                RootActionType.HTTP_REQUEST,
-                "test-operation",
-                rootSpan,
-                new TraceTabSummary(
-                        null,
-                        new TraceTabSummary.SpansSummary(1, 100L, 0),
-                        new TraceTabSummary.QueriesSummary(0, 0L),
-                        new TraceTabSummary.LogsSummary(0, 0, 0)),
-                null,
-                List.of(),
-                List.of(),
-                false);
+        return tree(rootSpan)
+                .traceId(traceId)
+                .rootActionType(RootActionType.HTTP_REQUEST)
+                .build();
     }
 }

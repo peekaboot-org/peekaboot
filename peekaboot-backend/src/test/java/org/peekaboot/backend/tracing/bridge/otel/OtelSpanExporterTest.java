@@ -23,6 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
@@ -426,24 +428,17 @@ class OtelSpanExporterTest {
         assertThat(stored.events().getFirst().timestamp()).isEqualTo(eventInstant);
     }
 
-    @Test
-    void shouldMapSpanKindsToSpecificMicrometerKind() {
-        assertMappedKind(SpanKind.CLIENT, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1", io.micrometer.tracing.Span.Kind.CLIENT);
-        assertMappedKind(SpanKind.SERVER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2", io.micrometer.tracing.Span.Kind.SERVER);
-        assertMappedKind(
-                SpanKind.PRODUCER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3", io.micrometer.tracing.Span.Kind.PRODUCER);
-        assertMappedKind(
-                SpanKind.CONSUMER, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa4", io.micrometer.tracing.Span.Kind.CONSUMER);
-    }
-
-    private void assertMappedKind(SpanKind otelKind, String traceId, io.micrometer.tracing.Span.Kind expected) {
+    /** Micrometer's Span.Kind has no INTERNAL; a null kind is what classifies a root as INTERNAL downstream. */
+    @ParameterizedTest
+    @CsvSource({"CLIENT, CLIENT", "SERVER, SERVER", "PRODUCER, PRODUCER", "CONSUMER, CONSUMER", "INTERNAL,"})
+    void mapsEachSpanKindToItsMicrometerKind(SpanKind otelKind, io.micrometer.tracing.Span.Kind expected) {
+        String traceId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1";
         SpanData span =
                 testSpanBuilder(traceId, "0000000000000001", "op", otelKind).build();
 
         exporter.export(List.of(span));
 
-        org.peekaboot.backend.tracing.store.SpanData stored = storedSpan(traceId);
-        assertThat(stored.kind()).isEqualTo(expected);
+        assertThat(storedSpan(traceId).kind()).isEqualTo(expected);
     }
 
     /**

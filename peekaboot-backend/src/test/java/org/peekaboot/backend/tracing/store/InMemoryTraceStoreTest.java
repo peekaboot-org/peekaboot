@@ -241,15 +241,30 @@ class InMemoryTraceStoreTest {
 
     @Test
     void lastNEvictionDropsOldestErrorTrace() {
-        InMemoryTraceStore store = TraceStores.with(p -> {
-            p.setMaxErrorTraces(2);
-            p.setMaxSlowTraces(2);
-        });
+        InMemoryTraceStore store = TraceStores.with(p -> p.setMaxErrorTraces(2));
         store.addSpan(errorSpan("t1"));
         store.addSpan(errorSpan("t2"));
         store.addSpan(errorSpan("t3"));
 
         assertThat(store.getTraces(TraceBucket.ERRORS, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t3", "t2");
+    }
+
+    @Test
+    void lastNEvictionDropsOldestSlowTrace() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxSlowTraces(2);
+            p.setSlowTraceThresholdMs(100);
+        });
+        for (String traceId : List.of("t1", "t2", "t3")) {
+            store.addSpan(span(traceId + "-s")
+                    .in(traceId)
+                    .at(START, Duration.ofMillis(150))
+                    .build());
+        }
+
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
                 .extracting(TraceDataBundle::traceId)
                 .containsExactly("t3", "t2");
     }

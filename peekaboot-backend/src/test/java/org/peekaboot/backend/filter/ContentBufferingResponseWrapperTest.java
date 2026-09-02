@@ -44,7 +44,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldReturnContentAsString() throws IOException {
+    void flushBufferFlushesThePendingWriter() throws IOException {
         wrapper.getWriter().write("Test Content");
         wrapper.flushBuffer();
 
