@@ -129,7 +129,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `theme.js` | `THEME_STORAGE_KEY`, `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
 | `trace-stats.js` | `traceStatParts(trace, features)` — a trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash` — the `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview/params replace it. |
-| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair, insights.js for its level and lifecycle.js for its page). |
+| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})` — the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation; `reconcileTextFilter`/`writeTextFilter(input, context)` — the single-text-input case built on it (config.js/environment.js/meters.js's own filter; loggers.js composes the lower-level helper directly for its q+checkbox pair, insights.js for its level/percentiles/restarts/panels params and lifecycle.js for its page). |
 
 ## URL state (deep links)
 
@@ -145,7 +145,7 @@ hand-edited bare hash must).
 | View | URL params | Restored / written state |
 |---|---|---|
 | `#overview` | — | no view state of its own |
-| `#insights` | `level` | the global aggregation level (a configured level index; the first level is the default and stays out of the URL — per-panel overrides are not URL state) |
+| `#insights` | `level`, `percentiles`, `restarts`, `panels` | the global aggregation level (a configured level index; the first level is the default and stays out of the URL), the Percentiles checkbox (`percentiles=1` only while on), the Restarts checkbox (`restarts=0` only while off) and the per-panel level overrides (`panels=<id>:<level>,…` — only panels pinned to something other than the global level) |
 | `#lifecycle` | `page` | the pager's 1-based page; page one stays out of the URL, an out-of-range value clamps to the last page and the URL is corrected |
 | `#traces` | `bucket`, `type`, `op` | bucket (`all`/`errors`/`slow`), comma-separated root action types, root operation |
 | `#traces/<traceId>` | — | opens the trace overlay on its Spans tab |
@@ -159,7 +159,8 @@ hand-edited bare hash must).
 
 Theme, locale and timezone are per-browser settings (`localStorage`), never URL
 state — a shared link must not impose the sender's display preferences on the
-reader. An invalid param value (an unknown bucket, level, log level or page) falls
+reader. An invalid param value (an unknown bucket, level, log level, page, checkbox flag or
+panel override) falls
 back to its default instead of reaching the backend or filtering invisibly.
 
 ### Cross-links in the trace overlay

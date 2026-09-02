@@ -24,6 +24,8 @@ export const label = 'Insights';
 
 const STAT_NAMES = ['min', 'max', 'avg', 'median', 'p90', 'p95', 'p99'];
 const EMPTY_PANEL_CLASS = 'pk-insight-panel--empty';
+/** Every param this tab owns in the URL (see reconcileUrlState / writeUrlParams). */
+const URL_KEYS = ['level', 'percentiles', 'restarts', 'panels'];
 const OVERRIDDEN_PANEL_CLASS = 'pk-insight-panel--overridden';
 /** A counter-clockwise arrow, drawn in the button's own ink - every "undo this" reset control. */
 const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
@@ -51,6 +53,8 @@ let showMarkers = true;
 // the level every panel charts at unless pinned to one of its own (see isOverridden)
 let globalLevel = 0;
 let levelGroup = null;
+let percentilesCheckbox = null;
+let markersCheckbox = null;
 // the x-axis window a drag-select zoom pinned every chart to, in uPlot's time scale
 // (epoch seconds) - null while every chart is auto-fitting its own data as usual
 let zoomWindow = null;
@@ -63,11 +67,11 @@ export function isAvailable(data, features) {
 export function render(container, data, context) {
     currentContext = context;
     if (initialized) {
-        // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the global
-        // level is reconciled with the URL - and only while this tab is the one the
+        // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the
+        // URL-owned state is reconciled - and only while this tab is the one the
         // hash currently points at, for the same reason every other tab guards its
         // reconcile (context.urlParams reflects whatever tab is active in the URL).
-        if (config && container.classList.contains('active')) reconcileLevelWithUrl(context);
+        if (config && container.classList.contains('active')) reconcileUrlState(context);
         return;
     }
     if (!container.classList.contains('active')) return;
@@ -85,23 +89,70 @@ export function levelFromUrl(params, configuredLevels, fallback) {
 }
 
 /**
- * Reconciles the global aggregation level with the URL - the same two-direction rule
- * every filter tab applies (see shared/url-filter.js's doc comment), with the first
- * configured level as the default that stays out of the URL.
+ * The URL's panels param ("<id>:<level>[,...]") as {panel id -> level index}. Only pairs
+ * naming a configured panel at a configured level survive - a stale panel id, an
+ * unconfigured level or hand-mangled syntax is dropped, so that panel simply follows the
+ * global level again. Exported for SharedModuleIT.
  */
-function reconcileLevelWithUrl(context) {
-    reconcileFilterWithUrl(context, ['level'], {
-        seed: params => setGlobalLevel(levelFromUrl(params, config.levels, config.levels[0].index)),
-        hasNonDefaultState: () => globalLevel !== config.levels[0].index,
-        writeBack: writeLevelParam
+export function panelOverridesFromUrl(params, {panels, levels}) {
+    const overrides = {};
+    for (const pair of (params?.panels ?? '').split(',')) {
+        const [id, levelText, ...excess] = pair.split(':');
+        const level = Number(levelText);
+        if (excess.length || !/^\d+$/.test(levelText ?? '')
+                || !panels.some(panel => panel.id === id)
+                || !levels.some(configured => configured.index === level)) continue;
+        overrides[id] = level;
+    }
+    return overrides;
+}
+
+/**
+ * Reconciles everything this tab keeps in the URL - the global aggregation level, the
+ * percentiles/restarts checkboxes and the per-panel level overrides - with the same
+ * two-direction rule every filter tab applies (see shared/url-filter.js's doc comment).
+ * Seeding ends with a write-back, so a bogus or non-canonical value is corrected in the
+ * URL to the state that actually restored.
+ */
+function reconcileUrlState(context) {
+    reconcileFilterWithUrl(context, URL_KEYS, {
+        seed: params => {
+            seedFromUrl(params);
+            writeUrlParams();
+        },
+        hasNonDefaultState: () => globalLevel !== config.levels[0].index
+                || showPercentiles || !showMarkers
+                || [...panels.values()].some(isOverridden),
+        writeBack: writeUrlParams
     });
 }
 
-/** Writes the global level to the URL, omitting it at the default so a clean state
-    yields a clean "#insights" hash. A replace, never a push - see url-state.js. */
-function writeLevelParam() {
-    currentContext.setUrlParams(
-            globalLevel === config.levels[0].index ? {} : {level: String(globalLevel)});
+/** Restores every URL-owned piece of state from the given params, missing ones to their defaults. */
+function seedFromUrl(params) {
+    setGlobalLevel(levelFromUrl(params, config.levels, config.levels[0].index));
+    setShowPercentiles(params.percentiles === '1');
+    setShowMarkers(params.restarts !== '0');
+    const overrides = panelOverridesFromUrl(params, config);
+    panels.forEach(panel => {
+        selectPanelLevel(panel, overrides[panel.definition.id] ?? globalLevel);
+        markOverride(panel);
+    });
+}
+
+/**
+ * Writes this tab's URL params, omitting every default - the first configured level,
+ * percentiles off, restarts on, panels following the global level - so a clean state
+ * yields a clean "#insights" hash. A replace, never a push - see url-state.js.
+ */
+function writeUrlParams() {
+    const params = {};
+    if (globalLevel !== config.levels[0].index) params.level = String(globalLevel);
+    if (showPercentiles) params.percentiles = '1';
+    if (!showMarkers) params.restarts = '0';
+    const overridden = [...panels.values()].filter(isOverridden)
+            .map(panel => `${panel.definition.id}:${panel.level}`).join(',');
+    if (overridden) params.panels = overridden;
+    currentContext.setUrlParams(params);
 }
 
 async function init(container, context) {
@@ -111,11 +162,16 @@ async function init(container, context) {
         // tab's tile row carries its own dedupe key); the next refresh cycle retries
         // from scratch
         if (!config) throw new Error('insights config request was superseded');
-        // a deep link may name the level to start at (validated - see levelFromUrl)
+        // a deep link may name the state to start in (each value validated - see
+        // levelFromUrl / panelOverridesFromUrl; anything bogus falls back to the default)
         globalLevel = levelFromUrl(context.urlParams, config.levels, config.levels[0].index);
+        showPercentiles = context.urlParams.percentiles === '1';
+        showMarkers = context.urlParams.restarts !== '0';
         renderToolbar(container);
         renderPanels(container);
-        initPanels(container);
+        initPanels(container, panelOverridesFromUrl(context.urlParams, config));
+        // correct a bogus or non-canonical deep link to the state that actually restored
+        if (URL_KEYS.some(key => key in context.urlParams)) writeUrlParams();
         // the stream is opened before the first snapshot is fetched: the panel
         // readouts then go live with the next tick instead of waiting on a
         // request that carries every series' whole ring. A tick arriving before
@@ -143,6 +199,7 @@ function teardown() {
     sizeObserver?.disconnect();
     themeObserver?.disconnect();
     chartObserver = sizeObserver = themeObserver = levelGroup = zoomResetButton = null;
+    percentilesCheckbox = markersCheckbox = null;
     zoomWindow = null;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
@@ -151,6 +208,7 @@ function teardown() {
     levels.clear();
     levelLoads.clear();
     lifecycleEvents = [];
+    showPercentiles = false;
     showMarkers = true;
 }
 
@@ -199,8 +257,8 @@ function renderToolbar(container) {
     toolbar.innerHTML = `
         <div id="insights-level" class="pk-insight-levels" role="group"
              aria-label="Aggregation level">${levelButtonsHtml(globalLevel, 'pk-btn--bucket')}</div>
-        <label><input type="checkbox" id="insights-percentiles"> Percentiles</label>
-        <label><input type="checkbox" id="insights-markers" checked> Restarts</label>
+        <label><input type="checkbox" id="insights-percentiles"${showPercentiles ? ' checked' : ''}> Percentiles</label>
+        <label><input type="checkbox" id="insights-markers"${showMarkers ? ' checked' : ''}> Restarts</label>
         <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
                 title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
     `;
@@ -208,21 +266,39 @@ function renderToolbar(container) {
     levelGroup = toolbar.querySelector('#insights-level');
     levelGroup.addEventListener('click', event => {
         const button = event.target.closest('.pk-insight-level');
-        if (button) setGlobalLevel(Number(button.dataset.level));
+        if (!button) return;
+        setGlobalLevel(Number(button.dataset.level));
+        writeUrlParams();
     });
 
     zoomResetButton = toolbar.querySelector('#insights-zoom-reset');
     zoomResetButton.addEventListener('click', handleZoomReset);
 
-    toolbar.querySelector('#insights-percentiles').addEventListener('change', event => {
-        showPercentiles = event.target.checked;
-        panels.forEach(panel => panel.chart?.setPercentiles(showPercentiles));
+    percentilesCheckbox = toolbar.querySelector('#insights-percentiles');
+    percentilesCheckbox.addEventListener('change', event => {
+        setShowPercentiles(event.target.checked);
+        writeUrlParams();
     });
 
-    toolbar.querySelector('#insights-markers').addEventListener('change', event => {
-        showMarkers = event.target.checked;
-        panels.forEach(panel => panel.chart?.setMarkers(showMarkers));
+    markersCheckbox = toolbar.querySelector('#insights-markers');
+    markersCheckbox.addEventListener('change', event => {
+        setShowMarkers(event.target.checked);
+        writeUrlParams();
     });
+}
+
+function setShowPercentiles(show) {
+    if (showPercentiles === show) return;
+    showPercentiles = show;
+    percentilesCheckbox.checked = show;
+    panels.forEach(panel => panel.chart?.setPercentiles(show));
+}
+
+function setShowMarkers(show) {
+    if (showMarkers === show) return;
+    showMarkers = show;
+    markersCheckbox.checked = show;
+    panels.forEach(panel => panel.chart?.setMarkers(show));
 }
 
 /**
@@ -239,7 +315,6 @@ function setGlobalLevel(level) {
         if (panel.level === previous) selectPanelLevel(panel, level);
         markOverride(panel);
     });
-    writeLevelParam();
 }
 
 /** Restarts the CSS blink animation, which only replays if the class is re-added. */
@@ -276,10 +351,10 @@ function renderPanels(container) {
     `).join('');
 }
 
-function initPanels(container) {
+function initPanels(container, urlOverrides) {
     container.querySelectorAll('#insights-panels .pk-insight-panel').forEach(element => {
         const definition = config.panels.find(panel => panel.id === element.dataset.panelId);
-        const panel = createPanelState(definition, element);
+        const panel = createPanelState(definition, element, urlOverrides[definition.id]);
         panels.set(definition.id, panel);
 
         updateLevelButtons(panel.levelGroup, panel.level);
@@ -290,15 +365,17 @@ function initPanels(container) {
             if (!button) return;
             selectPanelLevel(panel, Number(button.dataset.level));
             markOverride(panel);
+            writeUrlParams();
         });
         panel.resetButton.addEventListener('click', () => {
             selectPanelLevel(panel, globalLevel);
             markOverride(panel);
+            writeUrlParams();
         });
     });
 }
 
-function createPanelState(definition, element) {
+function createPanelState(definition, element, urlLevel) {
     return {
         definition,
         element,
@@ -306,9 +383,10 @@ function createPanelState(definition, element) {
         readout: element.querySelector('.pk-insight-current'),
         levelGroup: element.querySelector('.pk-insight-panel-levels'),
         resetButton: element.querySelector('.pk-insight-panel-reset'),
-        // a panel-level in the config is an initial override: it already differs
-        // from the global level, so the global switch leaves it alone from the start
-        level: definition.level ?? globalLevel,
+        // a deep-linked override wins over a panel-level in the config; either one is
+        // an initial override, already differing from the global level, so the global
+        // switch leaves it alone from the start
+        level: urlLevel ?? definition.level ?? globalLevel,
         chart: null,
         creating: false,
         // set while the card shows "no data" instead of a chart (see hasData)

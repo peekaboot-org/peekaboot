@@ -347,6 +347,35 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo(0);
     }
 
+    /** insights.js's panels param: only pairs naming a configured panel at a configured level survive. */
+    @Test
+    void insightsPanelOverridesFromUrlAcceptOnlyConfiguredPanelsAndLevels() {
+        String config = "{panels: [{id: 'cpu'}, {id: 'load'}], levels: [{index: 0}, {index: 1}]}";
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js",
+                        "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:1,load:0'}, " + config + "))"))
+                .isEqualTo("{\"cpu\":1,\"load\":0}");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js",
+                        "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:9'}, " + config + "))"))
+                .isEqualTo("{}");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js",
+                        "JSON.stringify(m.panelOverridesFromUrl({panels: 'ghost:1'}, " + config + "))"))
+                .isEqualTo("{}");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js",
+                        "JSON.stringify(m.panelOverridesFromUrl({panels: 'garbage'}, " + config + "))"))
+                .isEqualTo("{}");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js",
+                        "JSON.stringify(m.panelOverridesFromUrl({panels: 'cpu:'}, " + config + "))"))
+                .isEqualTo("{}");
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights.js", "JSON.stringify(m.panelOverridesFromUrl({}, " + config + "))"))
+                .isEqualTo("{}");
+    }
+
     @Test
     void formatDateTimeHandlesUnparseableValueWithoutSayingInvalidDate() {
         Object result = evalModule("format.js", "m.formatDateTime('not-a-timestamp')");
