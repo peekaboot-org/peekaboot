@@ -234,7 +234,7 @@
                         <failOnNoGitDirectory>false</failOnNoGitDirectory>
                         <includeOnlyProperties>
                             <includeOnlyProperty>git.branch</includeOnlyProperty>
-                            <includeOnlyProperty>git.tag</includeOnlyProperty>
+                            <includeOnlyProperty>git.tags</includeOnlyProperty>
                             <includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
                             <includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
                         </includeOnlyProperties>
