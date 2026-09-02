@@ -200,12 +200,13 @@ Each config file explains its own exclusions; the short version:
   compiles and runs, and `UnnecessaryWarningSuppression`, which fails the build on a PMD
   suppression that no longer suppresses anything.
 - **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally. Measured, not assumed:
-  the pair reports 190 exposures across the backend, split between the JSON carriers
-  (where `List.copyOf`/`Map.copyOf` would throw on the nulls real actuator data contains),
-  constructors storing Spring-injected collaborators, and framework contracts a servlet
-  response wrapper and Jackson's `CharacterEscapes` have to honour. No store or service
-  leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to
-  `ContainerRuntime$Signals`, the only class that raises it.
+  the pair reports 190 exposures across the backend — 159 JSON carriers (where
+  `List.copyOf`/`Map.copyOf` would throw on the nulls real actuator data contains), 18
+  constructors storing Spring-injected collaborators, 8 `@ConfigurationProperties` nested
+  bean accessors and 3 framework contracts a servlet response wrapper and Jackson's
+  `CharacterEscapes` have to honour. No store or service leaks a live collection.
+  `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to `ContainerRuntime$Signals`, the only class
+  that raises it.
 - **Nothing lints the frontend's JS or CSS.** PMD's `pmd-javascript` module is not an
   option: its Rhino parser throws `NullPointerException` on destructuring, which the
   frontend uses throughout (`function formatDateTime(value, {locale, timeZone, ...options}

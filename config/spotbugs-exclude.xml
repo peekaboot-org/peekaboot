@@ -6,14 +6,15 @@
 
     <!-- Unscoped on purpose, having been measured: without this match SpotBugs reports 190
          exposures across the backend, and every one of them falls into a category the rule
-         cannot help with. Roughly two thirds are the JSON carriers - the domain records, the
-         parsed actuator payloads, the insights snapshots - which deliberately hold the
-         List/Map they are handed, because List.copyOf/Map.copyOf throw on the null
-         collections and null map values real actuator data contains. Most of the rest is
-         EI_EXPOSE_REP2 on constructors storing Spring-injected collaborators, which is what
-         dependency injection is. The remainder is framework contract: a servlet response
-         wrapper has to hand out its own stream, and Jackson's CharacterEscapes has to hand
-         out its shared escape table. No store or service leaks a live internal collection -
+         cannot help with. 159 are the JSON carriers - the domain records, the parsed
+         actuator payloads, the insights snapshots, the stored spans - which deliberately
+         hold the List/Map they are handed, because List.copyOf/Map.copyOf throw on the null
+         collections and null map values real actuator data contains. 18 are EI_EXPOSE_REP2
+         on constructors storing Spring-injected collaborators, which is what dependency
+         injection is. 8 are the nested bean accessors @ConfigurationProperties binding
+         requires. The last 3 are framework contract: a servlet response wrapper has to hand
+         out its own stream, and Jackson's CharacterEscapes has to hand out its shared
+         escape table. No store or service leaks a live internal collection -
          they copy, which is why none of them appears above. A package-scoped match would
          have to name every package in the module to cover the same ground. -->
     <Match>
@@ -27,9 +28,8 @@
          and /proc/1/cgroup - are absolute by definition: they are where the container
          runtimes put them, not paths the application chooses. The reading code takes them as
          parameters so tests can point it at temporary files. Scoped to the one class
-         SpotBugs actually reports; the other absolute paths in the runtime package
-         (/proc/cpuinfo, /proc/self/status) reach the detector as method arguments and raise
-         nothing. -->
+         SpotBugs actually reports: MachineInfo and ProcessInfo hold absolute literals of
+         their own and raise nothing, measured with the filter emptied. -->
     <Match>
         <Class name="org.peekaboot.backend.domain.runtime.ContainerRuntime$Signals"/>
         <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
