@@ -4,11 +4,18 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/spotbugs/3.1.0/spotbugs/etc/findbugsfilter.xsd">
 
-    <!-- The domain records and DTOs deliberately hold the List/Map instances they are
-         given: they are JSON (de)serialization carriers for actuator payloads, not a
-         mutable-state API. Defensive copies (List.copyOf/Map.copyOf) would throw on the
-         null collections and null map values that real actuator data contains, so the
-         exposure warnings are noise here. -->
+    <!-- Unscoped on purpose, having been measured: without this match SpotBugs reports 190
+         exposures across the backend, and every one of them falls into a category the rule
+         cannot help with. Roughly two thirds are the JSON carriers - the domain records, the
+         parsed actuator payloads, the insights snapshots - which deliberately hold the
+         List/Map they are handed, because List.copyOf/Map.copyOf throw on the null
+         collections and null map values real actuator data contains. Most of the rest is
+         EI_EXPOSE_REP2 on constructors storing Spring-injected collaborators, which is what
+         dependency injection is. The remainder is framework contract: a servlet response
+         wrapper has to hand out its own stream, and Jackson's CharacterEscapes has to hand
+         out its shared escape table. No store or service leaks a live internal collection -
+         they copy, which is why none of them appears above. A package-scoped match would
+         have to name every package in the module to cover the same ground. -->
     <Match>
         <Or>
             <Bug pattern="EI_EXPOSE_REP"/>
@@ -16,16 +23,15 @@
         </Or>
     </Match>
 
-    <!-- The container markers and CPU facts the runtime detection reads - /.dockerenv,
-         /run/.containerenv, /proc/1/cgroup and /proc/cpuinfo - are absolute by definition:
-         they are where the container runtimes and the kernel put them, not paths the
-         application chooses. The reading code takes them as parameters so tests can point
-         it at temporary files. -->
+    <!-- The container markers the runtime detection reads - /.dockerenv, /run/.containerenv
+         and /proc/1/cgroup - are absolute by definition: they are where the container
+         runtimes put them, not paths the application chooses. The reading code takes them as
+         parameters so tests can point it at temporary files. Scoped to the one class
+         SpotBugs actually reports; the other absolute paths in the runtime package
+         (/proc/cpuinfo, /proc/self/status) reach the detector as method arguments and raise
+         nothing. -->
     <Match>
-        <Or>
-            <Class name="org.peekaboot.backend.domain.runtime.ContainerRuntime$Signals"/>
-            <Class name="org.peekaboot.backend.domain.runtime.MachineInfo"/>
-        </Or>
+        <Class name="org.peekaboot.backend.domain.runtime.ContainerRuntime$Signals"/>
         <Bug pattern="DMI_HARDCODED_ABSOLUTE_FILENAME"/>
     </Match>
 
