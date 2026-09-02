@@ -1,8 +1,12 @@
 package org.peekaboot.backend.log;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,11 +14,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Drives the appender through a real Logback logger rather than a stubbed
@@ -69,7 +68,7 @@ class PeekabootLogbackAppenderTest {
 
         assertThat(captured)
                 .as("a TRACE event carrying a traceId reaches the appender, so it must be captured; "
-                  + "Logback's own logger levels already decide what is delivered")
+                        + "Logback's own logger levels already decide what is delivered")
                 .hasSize(1);
         assertThat(captured.getFirst().level()).isEqualTo("TRACE");
         assertThat(captured.getFirst().traceId()).isEqualTo(TRACE_ID);
@@ -87,8 +86,7 @@ class PeekabootLogbackAppenderTest {
         logger.warn("w");
         logger.error("e");
 
-        assertThat(captured).extracting(LogCapturedEvent::level)
-                .containsExactly("DEBUG", "INFO", "WARN", "ERROR");
+        assertThat(captured).extracting(LogCapturedEvent::level).containsExactly("DEBUG", "INFO", "WARN", "ERROR");
     }
 
     @Test
