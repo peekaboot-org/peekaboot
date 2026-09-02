@@ -14,8 +14,8 @@ class MaskingEngineTest {
     @Nested
     class KeyNameRulesPositive {
 
-        // One realistic property/header-shaped key per compound key-name rule from the
-        // design spec, each embedding the rule term at a separator boundary.
+        // One realistic property/header-shaped key per key-name rule, each embedding the
+        // rule term at a separator boundary.
         @ParameterizedTest
         @ValueSource(
                 strings = {
@@ -75,7 +75,7 @@ class MaskingEngineTest {
     @Nested
     class KeyNameRulesNegative {
 
-        // Named in the design spec as cases the dashboard must not over-mask.
+        // Cases the dashboard must not over-mask.
         @ParameterizedTest
         @ValueSource(
                 strings = {
@@ -488,6 +488,15 @@ class MaskingEngineTest {
 
             assertThat(engine.maskValue(value)).isEqualTo(value);
         }
+
+        // The PWD exemption is for the shell variable as a whole key; a parameter name
+        // inside a value (an ODBC connection string's ";PWD=") is judged without it.
+        @Test
+        void maskValue_shouldMaskAnUpperCasePwdParameterInsideAValue() {
+            assertThat(engine.maskValue("Server=db;UID=sa;PWD=hunter2")).isEqualTo("Server=db;UID=sa;PWD=******");
+            assertThat(engine.maskValue("https://example.com/login?PWD=hunter2"))
+                    .isEqualTo("https://example.com/login?PWD=******");
+        }
     }
 
     /**
@@ -518,6 +527,17 @@ class MaskingEngineTest {
         @Test
         void maskQueryString_shouldDecodeTheKeyBeforeJudgingIt() {
             assertThat(engine.maskQueryString("api%5Fkey=xyz&q=a%20b")).isEqualTo("api_key=******&q=a+b");
+        }
+
+        /**
+         * A pair with a malformed percent sequence cannot be decoded, so it cannot be
+         * judged: its value is masked and the rest of the string survives, rather than
+         * the whole request capture being lost.
+         */
+        @Test
+        void maskQueryString_shouldTolerateAMalformedPercentSequence() {
+            assertThat(engine.maskQueryString("q=100%")).isEqualTo("q=******");
+            assertThat(engine.maskQueryString("a=%zz&password=x")).isEqualTo("a=******&password=******");
         }
     }
 
@@ -701,6 +721,15 @@ class MaskingEngineTest {
             String result = engine.mask("Set-Cookie", "session=abc123; Path=/; HttpOnly");
 
             assertThat(result).isEqualTo("******");
+        }
+
+        // The OpenTelemetry header-capture attributes carry the same two headers on a span.
+        @Test
+        void mask_shouldMaskTheHeaderCaptureAttributesOfTheCookieHeaders() {
+            assertThat(engine.mask("http.request.header.cookie", "session=abc123"))
+                    .isEqualTo("******");
+            assertThat(engine.mask("http.response.header.set-cookie", "session=abc123; Path=/"))
+                    .isEqualTo("******");
         }
     }
 

@@ -21,11 +21,7 @@ public final class ConnectionParamsMasker {
         return mask(properties, false);
     }
 
-    /**
-     * Same as {@link #mask(Map)}, except when {@code unmask} is true, in which case every
-     * value is returned verbatim. See {@link MaskingEngine#mask(String, String, boolean)}
-     * for why this shape.
-     */
+    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
     public Map<String, String> mask(Map<String, JdbcProperty> properties, boolean unmask) {
         if (properties == null) {
             return Map.of();

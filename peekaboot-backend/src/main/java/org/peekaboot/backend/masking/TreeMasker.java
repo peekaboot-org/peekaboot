@@ -17,6 +17,10 @@ import java.util.Map;
  * {@code connectionParams.password} entry shaped {@code {value, source}} becomes the single
  * string {@code "******"}. An innocuous key recurses into Maps/Lists and runs the
  * value-pattern rules on String leaves via {@link MaskingEngine#maskValue(String)}.
+ *
+ * <p>A nested key is judged by its dotted path from the root ({@code session.cookie}), not
+ * by its last segment, so the whole-key rules keep meaning the entire key; list elements
+ * share their list's path.
  */
 public final class TreeMasker {
 
@@ -30,11 +34,7 @@ public final class TreeMasker {
         return maskNode(null, node);
     }
 
-    /**
-     * Same as {@link #mask(Object)}, except when {@code unmask} is true, in which case
-     * masking is bypassed entirely and {@code node} is returned unchanged. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
+    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
     public Object mask(Object node, boolean unmask) {
         return unmask ? node : mask(node);
     }
@@ -50,31 +50,28 @@ public final class TreeMasker {
         return maskNode(key, node);
     }
 
-    /**
-     * Same as {@link #mask(String, Object)}, except when {@code unmask} is true, in which
-     * case masking is bypassed entirely and {@code node} is returned unchanged. See
-     * {@link MaskingEngine#mask(String, String, boolean)} for why this shape.
-     */
+    /** Bypasses masking entirely when {@code unmask} is true (see {@link MaskingEngine#mask(String, String, boolean)}). */
     public Object mask(String key, Object node, boolean unmask) {
         return unmask ? node : mask(key, node);
     }
 
-    private Object maskNode(String key, Object value) {
-        if (key != null && maskingEngine.isSensitiveKey(key)) {
+    private Object maskNode(String path, Object value) {
+        if (path != null && maskingEngine.isSensitiveKey(path)) {
             return value == null ? null : MaskingRules.MASK;
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> result = new LinkedHashMap<>();
             for (Map.Entry<?, ?> entry : map.entrySet()) {
                 String childKey = String.valueOf(entry.getKey());
-                result.put(childKey, maskNode(childKey, entry.getValue()));
+                String childPath = path == null ? childKey : path + "." + childKey;
+                result.put(childKey, maskNode(childPath, entry.getValue()));
             }
             return result;
         }
         if (value instanceof List<?> list) {
             List<Object> result = new ArrayList<>(list.size());
             for (Object element : list) {
-                result.add(maskNode(null, element));
+                result.add(maskNode(path, element));
             }
             return result;
         }
