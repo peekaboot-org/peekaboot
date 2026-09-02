@@ -1,5 +1,7 @@
 package org.peekaboot.autoconfigure;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.actuate.autoconfigure.context.properties.ConfigurationPropertiesReportEndpointAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.env.EnvironmentEndpointAutoConfiguration;
@@ -7,8 +9,6 @@ import org.springframework.boot.actuate.context.properties.ConfigurationProperti
 import org.springframework.boot.actuate.env.EnvironmentEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-
-import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Peekaboot invokes actuator endpoints in-process, so the endpoint beans must be
@@ -25,22 +25,18 @@ class PeekabootEndpointExposureContributorTest {
 
     @Test
     void createsEndpointBeansWithoutWebExposureWhenPeekabootEnabled() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=true")
-                .run(context -> {
-                    assertThat(context).hasSingleBean(EnvironmentEndpoint.class);
-                    assertThat(context).hasSingleBean(ConfigurationPropertiesReportEndpoint.class);
-                });
+        contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
+            assertThat(context).hasSingleBean(EnvironmentEndpoint.class);
+            assertThat(context).hasSingleBean(ConfigurationPropertiesReportEndpoint.class);
+        });
     }
 
     @Test
     void doesNotCreateEndpointBeansWhenPeekabootDisabled() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=false")
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(EnvironmentEndpoint.class);
-                    assertThat(context).doesNotHaveBean(ConfigurationPropertiesReportEndpoint.class);
-                });
+        contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
+            assertThat(context).doesNotHaveBean(EnvironmentEndpoint.class);
+            assertThat(context).doesNotHaveBean(ConfigurationPropertiesReportEndpoint.class);
+        });
     }
 
     @Test
@@ -54,9 +50,7 @@ class PeekabootEndpointExposureContributorTest {
     @Test
     void normalWebExposureStillWorksWhenPeekabootDisabled() {
         contextRunner
-                .withPropertyValues(
-                        "peekaboot.enabled=false",
-                        "management.endpoints.web.exposure.include=env")
+                .withPropertyValues("peekaboot.enabled=false", "management.endpoints.web.exposure.include=env")
                 .run(context -> assertThat(context).hasSingleBean(EnvironmentEndpoint.class));
     }
 }
