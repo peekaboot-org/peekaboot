@@ -1,5 +1,6 @@
 package org.peekaboot.backend.service;
 
+import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -188,12 +189,35 @@ public class TraceInsightsService {
      * masking a tree for bundles the response will never carry.
      */
     private boolean matchesFilters(TraceDataBundle bundle, Set<RootActionType> actionTypes, String rootOperation) {
-        if (actionTypes.isEmpty() && rootOperation == null) {
-            return true;
-        }
         SpanData root = bundle.rootSpan();
+        return !isIncompleteFragment(root) && matchesRootFilters(root, actionTypes, rootOperation);
+    }
+
+    /**
+     * The two root-level filters. An empty type set and a null operation each filter
+     * nothing away, and short-circuit before the classification a wildcard has no use for.
+     */
+    private boolean matchesRootFilters(SpanData root, Set<RootActionType> actionTypes, String rootOperation) {
         return (actionTypes.isEmpty() || actionTypes.contains(traceTreeMapper.detectRootActionType(root)))
                 && (rootOperation == null || matchesRootOperation(root != null ? root.name() : null, rootOperation));
+    }
+
+    /**
+     * Whether the bundle holds a piece of a trace rather than a trace of its own.
+     * {@link TraceDataBundle#rootSpan()} answers with the first span whose parent it does
+     * not hold, so a root still carrying a parent id is one whose real parent never
+     * arrived.
+     *
+     * <p>For a SERVER root that is an inbound request continuing a caller's trace: this
+     * application's work starts there and the trace is its own, so it stays listed. For
+     * anything else it is a fragment - a request on an excluded prefix (Peekaboot's own,
+     * the actuator's) has its root span skipped, which leaves whatever it did meanwhile,
+     * typically the connection it acquired, stored alone under that trace id until the
+     * skipped root reaches the exporter and discards it. Listing it in the meantime puts a
+     * phantom entry in front of the user that disappears again on its own.
+     */
+    private static boolean isIncompleteFragment(SpanData root) {
+        return root != null && root.parentId() != null && root.kind() != Span.Kind.SERVER;
     }
 
     private int countMatching(
