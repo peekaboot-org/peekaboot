@@ -1,0 +1,27 @@
+panels:
+  - id: cpu
+    title: CPU usage
+    chart: line
+    unit: percent
+    order: 10
+    series:
+      - id: process
+        label: Process
+        meter: process.cpu.usage
+  - id: heap
+    title: Heap memory
+    chart: line
+    unit: bytes
+    order: 30
+    series:
+      - id: used
+        label: Used
+        meter: jvm.memory.used
+        tags:
+          area: heap
+tiles:
+  - id: uptime
+    label: Uptime
+    meter: process.uptime
+    format: duration
+    live: true

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Orders</title>
+</head>
+<body>
+    <h1>Orders List</h1>
+    <table>
+        <thead>
+            <tr><th>Reference</th><th>Status</th><th>Placed At</th><th>Lines</th><th>Total</th><th>Customer</th></tr>
+        </thead>
+        <tbody>
+            <tr th:each="order : ${orders}">
+                <td th:text="${order.reference}"></td>
+                <td th:text="${order.status}"></td>
+                <td th:text="${order.placedAt}"></td>
+                <td th:text="${order.lineCount}"></td>
+                <td th:text="${order.total}"></td>
+                <td th:text="${order.customerName}"></td>
+            </tr>
+        </tbody>
+    </table>
+</body>
+</html>

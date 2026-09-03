@@ -1,0 +1,41 @@
+{
+  "status": "DOWN",
+  "components": {
+    "db": {
+      "status": "DOWN",
+      "components": {
+        "primary": {
+          "status": "UP",
+          "details": {
+            "database": "PostgreSQL",
+            "validationQuery": "isValid()"
+          }
+        },
+        "reporting": {
+          "status": "DOWN",
+          "details": {
+            "database": "PostgreSQL",
+            "error": "org.postgresql.util.PSQLException: Connection refused"
+          }
+        }
+      }
+    },
+    "diskSpace": {
+      "status": "UP",
+      "details": {
+        "total": 1995218165760,
+        "free": 961848963072,
+        "threshold": 10485760,
+        "path": "/app/.",
+        "exists": true
+      }
+    },
+    "ping": {
+      "status": "UP"
+    }
+  },
+  "groups": [
+    "liveness",
+    "readiness"
+  ]
+}

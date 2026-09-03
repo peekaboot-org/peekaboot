@@ -1,0 +1,505 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.peekaboot</groupId>
+    <artifactId>peekaboot-parent</artifactId>
+    <version>0.0.5-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>peekaboot - A Spring Boot starter for embedded application monitoring UI</description>
+
+    <modules>
+        <module>peekaboot-test-support</module>
+        <module>peekaboot-backend</module>
+        <module>peekaboot-frontend</module>
+        <module>peekaboot-spring-boot-autoconfigure</module>
+        <module>peekaboot-spring-boot-starter</module>
+        <module>peekaboot-testing-app</module>
+        <module>peekaboot-coverage</module>
+    </modules>
+
+    <url>https://github.com/peekaboot-org/peekaboot</url>
+
+    <properties>
+        <peekaboot.encoding>UTF-8</peekaboot.encoding>
+        <peekaboot.java.version>25</peekaboot.java.version>
+
+        <project.build.sourceEncoding>${peekaboot.encoding}</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>${peekaboot.encoding}</project.reporting.outputEncoding>
+
+        <project.build.outputTimestamp>2026-09-01T07:31:12Z</project.build.outputTimestamp>
+
+        <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
+
+        <spring-boot.version>4.1.1</spring-boot.version>
+
+        <jacoco.version>0.8.15</jacoco.version>
+        <!-- The one switch that turns the coverage gate off, data guard included. -->
+        <jacoco.skip>false</jacoco.skip>
+        <!-- Empty default so @{jacocoArgLine} still resolves when JaCoCo is skipped. -->
+        <jacocoArgLine></jacocoArgLine>
+
+        <!-- Spotless ratchets from this commit: only files changed since it are
+             formatted and checked. -->
+        <spotless.ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</spotless.ratchetFrom>
+    </properties>
+
+    <licenses>
+        <license>
+            <name>The Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>rvullriede</id>
+            <name>Raphael</name>
+            <email>raphael@peekaboot.org</email>
+            <organization>peekaboot.org</organization>
+            <organizationUrl>https://www.peekaboot.org</organizationUrl>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/peekaboot-org/peekaboot.git</connection>
+        <developerConnection>scm:git:https://github.com/peekaboot-org/peekaboot.git</developerConnection>
+        <url>https://github.com/peekaboot-org/peekaboot</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <profiles>
+        <profile>
+            <!-- Auto-formats on every local build, so spotless-check can never surprise a
+                 developer at verify time. Deactivated on CI (GitHub Actions sets CI=true):
+                 there the checkout must FAIL on unformatted code rather than be silently
+                 formatted inside the build sandbox and never make it back into the commit. -->
+            <id>spotless-apply-local</id>
+            <activation>
+                <property>
+                    <name>!env.CI</name>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.diffplug.spotless</groupId>
+                        <artifactId>spotless-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>spotless-apply</id>
+                                <phase>process-sources</phase>
+                                <goals>
+                                    <goal>apply</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>peekaboot-release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-release-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>nl.basjes.maven.release</groupId>
+                                <artifactId>conventional-commits-version-policy</artifactId>
+                                <version>1.0.9</version>
+                            </dependency>
+                        </dependencies>
+                        <configuration>
+                            <!-- settings from the maven-release-plugin itself -->
+                            <autoVersionSubmodules>true</autoVersionSubmodules>
+                            <useReleaseProfile>false</useReleaseProfile>
+                            <releaseProfiles>peekaboot-release</releaseProfiles>
+                            <tagNameFormat>@{project.version}</tagNameFormat>
+                            <scmCommentPrefix>[release]</scmCommentPrefix>
+                            <scmReleaseCommitComment>@{prefix} set version to @{releaseLabel}</scmReleaseCommitComment>
+                            <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration</scmDevelopmentCommitComment>
+
+                            <!-- settings from the conventional-commits-version-policy -->
+                            <projectVersionPolicyId>ConventionalCommitsVersionPolicy</projectVersionPolicyId>
+                            <projectVersionPolicyConfig>
+                                <versionTag>([0-9]+\.[0-9]+\.[0-9]+)$</versionTag>
+                            </projectVersionPolicyConfig>
+                            <goals>deploy</goals>
+                        </configuration>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.8</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                                <configuration>
+                                    <keyname>raphael@peekaboot.org</keyname>
+                                    <gpgArguments>
+                                        <arg>--pinentry-mode</arg>
+                                        <arg>loopback</arg>
+                                    </gpgArguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.11.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <autoPublish>false</autoPublish> <!-- true -->
+                            <waitUntil>validated</waitUntil> <!-- published -->
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- The lifecycle plugins Maven binds by itself, pinned so a local Maven
+                     other than the wrapper's 3.9.16 builds the same way. The versions are
+                     the ones spring-boot-dependencies manages, so the testing-app (parented
+                     to spring-boot-starter-parent) runs identical plugins; the site plugin,
+                     which Boot does not manage, is Maven 3.9.16's own binding. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-clean-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-resources-plugin</artifactId>
+                    <version>3.5.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-deploy-plugin</artifactId>
+                    <version>3.1.4</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.22.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.5.6</version>
+                </plugin>
+                <!-- Managed, not bound: only modules with *IT classes (tests that boot a
+                     real application) declare it. Everything in *Test stays a plain unit
+                     test under surefire, which keeps `mvn test` a fast gate. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.5.6</version>
+                    <executions>
+                        <execution>
+                            <id>failsafe-integration-tests</id>
+                            <goals>
+                                <goal>integration-test</goal>
+                                <goal>verify</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
+                <!-- Managed, not bound: git.properties lands at the classpath ROOT, and
+                     Spring Boot resolves "classpath:git.properties" to a SINGLE resource.
+                     A library that ships one competes with the host application's own file
+                     and can win, making the dashboard report peekaboot's branch as the
+                     app's. Only the runnable application declares this plugin. -->
+                <plugin>
+                    <groupId>io.github.git-commit-id</groupId>
+                    <artifactId>git-commit-id-maven-plugin</artifactId>
+                    <version>10.0.0</version>
+                    <executions>
+                        <execution>
+                            <id>git-info</id>
+                            <goals>
+                                <goal>revision</goal>
+                            </goals>
+                            <phase>initialize</phase>
+                        </execution>
+                    </executions>
+                    <configuration>
+                        <generateGitPropertiesFile>true</generateGitPropertiesFile>
+                        <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                        <includeOnlyProperties>
+                            <includeOnlyProperty>git.branch</includeOnlyProperty>
+                            <includeOnlyProperty>git.tags</includeOnlyProperty>
+                            <includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
+                            <includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
+                        </includeOnlyProperties>
+                        <commitIdGenerationMode>full</commitIdGenerationMode>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <!-- Guards the published modules' dependency closure against Maven's
+                 nearest-wins resolution: a transitive that some dependency needs at a
+                 newer version than the reactor resolves is silently downgraded, and the
+                 consumer finds out with a NoSuchMethodError. Skipped in
+                 peekaboot-coverage, whose dependencies exist only to force build order
+                 and therefore drag in the sample app's closure as well. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.6.3</version>
+                <executions>
+                    <execution>
+                        <id>require-upper-bound-deps</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireUpperBoundDeps/>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.16.0</version>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                    <!-- Explicit so a future removal of annotationProcessorPaths does not
+                         silently stop the configuration processor: JDK 23+ runs classpath
+                         annotation processors only when asked to. -->
+                    <proc>full</proc>
+                    <!-- -Xplugin:ErrorProne needs the add-exports/add-opens into
+                         jdk.compiler that .mvn/jvm.config carries (that file admits no
+                         comment of its own). -Werror is what makes Error Prone a gate:
+                         its findings are warnings, and a warning nothing fails on is a
+                         warning nobody reads. -->
+                    <compilerArgs>
+                        <arg>-XDcompilePolicy=simple</arg>
+                        <arg>--should-stop=ifError=FLOW</arg>
+                        <arg>-Xplugin:ErrorProne</arg>
+                        <arg>-Werror</arg>
+                    </compilerArgs>
+                    <!-- annotationProcessorPaths replaces classpath scanning, so the
+                         configuration processor must be listed here explicitly -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>com.google.errorprone</groupId>
+                            <artifactId>error_prone_core</artifactId>
+                            <version>2.50.0</version>
+                        </path>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Not the default `argLine`: every module with tests sets that
+                                 property itself for the Mockito agent, and a literal <argLine>
+                                 in surefire wins over the one prepare-agent injects. Naming the
+                                 property lets those modules late-bind it with @{jacocoArgLine}
+                                 and keep both agents. -->
+                            <propertyName>jacocoArgLine</propertyName>
+                            <!-- jsqlparser's generated token manager has a method too large to
+                                 instrument (MethodTooLargeException at every testing-app JVM
+                                 start); third-party, not measured. -->
+                            <excludes>
+                                <exclude>net.sf.jsqlparser.*</exclude>
+                            </excludes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>3.10.1</version>
+                <configuration>
+                    <ratchetFrom>${spotless.ratchetFrom}</ratchetFrom>
+                    <java>
+                        <palantirJavaFormat>
+                            <version>2.97.0</version>
+                        </palantirJavaFormat>
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>4.10.4.0</version>
+                <configuration>
+                    <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs-exclude.xml</excludeFilterFile>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotbugs-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.6.0</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.puppycrawl.tools</groupId>
+                        <artifactId>checkstyle</artifactId>
+                        <version>14.1.0</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <configLocation>${maven.multiModuleProjectDirectory}/config/checkstyle.xml</configLocation>
+                    <!-- main sources only: test data builders legitimately mirror the
+                         wide domain records they construct -->
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>checkstyle-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-pmd-plugin</artifactId>
+                <version>3.28.0</version>
+                <!-- pmd-java only. The ruleset is Java-only, and pmd-javascript would not
+                     help anyway: its Rhino parser throws NullPointerException on the
+                     destructuring the frontend uses throughout. -->
+                <dependencies>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-core</artifactId>
+                        <version>7.27.0</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>net.sourceforge.pmd</groupId>
+                        <artifactId>pmd-java</artifactId>
+                        <version>7.27.0</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <targetJdk>${peekaboot.java.version}</targetJdk>
+                    <rulesets>
+                        <ruleset>${maven.multiModuleProjectDirectory}/config/pmd-ruleset.xml</ruleset>
+                    </rulesets>
+                    <printFailingErrors>true</printFailingErrors>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>pmd-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Part of every build, not only releases, so a broken javadoc fails here and
+                 not after release:prepare has already pushed the tag. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>3.12.0</version>
+                <configuration>
+                    <!-- every doclint check except "missing": undocumented members are
+                         fine, a broken @link or malformed HTML fails the build -->
+                    <doclint>all,-missing</doclint>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>attach-javadocs</id>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

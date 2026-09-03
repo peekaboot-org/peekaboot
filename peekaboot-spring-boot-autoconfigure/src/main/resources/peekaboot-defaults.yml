@@ -1,0 +1,56 @@
+# These defaults enable full observability for peekaboot.
+# Apps can override any of these in their own application.yml
+
+spring:
+  jpa:
+    properties:
+      # Needed by the hibernate.* meter panels in peekaboot-insights-defaults.yml, which
+      # sample Hibernate's Micrometer meters - and those only exist with statistics on.
+      # Spring default: false
+      "[hibernate.generate_statistics]": true
+
+management:
+  # No management.endpoint.* defaults here, deliberately. Health details need none: the
+  # dashboard reads the HealthEndpoint bean directly (see PeekabootActuatorService), which
+  # always carries the components, so the application's own show-details setting for its
+  # public /actuator/health is left untouched. Env/configprops value visibility follows the
+  # launch context - it is set in the detection property source (see
+  # PeekabootDefaultsEnvironmentPostProcessor), only on a local run and only while
+  # peekaboot.enabled resolves true, so neither an application that switches Peekaboot on in
+  # a shared environment nor a developer who switches it off has their own /actuator/env
+  # widened as a side effect.
+
+  info:
+    env:
+      # Publishes info.* properties (e.g. info.app.* from application.yml) in
+      # /actuator/info - not OS/system environment variables, which is what the
+      # Environment tab (management.endpoint.env) already covers.
+      # Spring default: false | We enable for environment visibility in dashboard
+      enabled: true
+    java:
+      # Exposes JVM vendor, version, runtime info
+      # Spring default: false | We enable for Java runtime details in dashboard
+      enabled: true
+    os:
+      # Exposes OS name, version, architecture
+      # Spring default: false | We enable for system info in dashboard
+      enabled: true
+    process:
+      # Exposes PID, uptime, CPU count, memory usage
+      # Spring default: false | We enable for process metrics in dashboard
+      enabled: true
+
+  tracing:
+    sampling:
+      # Percentage of requests to trace (0.0 to 1.0)
+      # Spring default: 0.1 (10%) | We sample all requests for complete trace visibility
+      probability: 1.0
+
+  observations:
+    annotations:
+      # Enables @Observed, @Timed, @Counted annotations
+      # Spring default: false | We enable for declarative observability
+      enabled: true
+
+  # No OTLP push defaults here: those live in peekaboot-no-push-defaults.yml,
+  # which is applied unconditionally (even when peekaboot is disabled)

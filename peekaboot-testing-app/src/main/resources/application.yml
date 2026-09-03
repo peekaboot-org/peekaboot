@@ -1,0 +1,27 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: peekaboot-testing-app
+  # spring.datasource is configured automatically by spring-boot's compose support
+
+  jpa:
+    open-in-view: false
+
+# peekaboot needs no configuration here: a local run (IDE or spring-boot:run) enables both
+# the dashboard and the dev toolbar by default.
+
+# Both endpoints are already enabled by default (springdoc's own conditionals treat an
+# absent property as enabled) - setting them explicitly only stops SpringDocAppInitializer's
+# startup WARN, which fires whenever the property was left unset. Behaviour is unchanged;
+# the toolbar's Swagger UI integration (the website's dev-toolbar page) still needs both live.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+# observability settings (info contributors, trace sampling,
+# observation annotations, OTLP export off) come from peekaboot's defaults;
+# actuator endpoints are invoked in-process, so no web exposure is needed

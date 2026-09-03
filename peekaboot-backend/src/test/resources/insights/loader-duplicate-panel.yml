@@ -1,0 +1,9 @@
+panels:
+  - id: cpu
+    title: CPU usage
+    series:
+      - meter: process.cpu.usage
+  - id: cpu
+    title: CPU usage again
+    series:
+      - meter: system.cpu.usage

@@ -1,0 +1,84 @@
+spring:
+  # spring-boot-starter-security is on this module's test classpath for
+  # SecuredPeekabootIT and SecuredDashboardIT only (see pom.xml). Left
+  # auto-configured it would put `anyRequest().authenticated()` in front of every test in
+  # this module. Those two tests run under the `security` profile instead, which excludes
+  # nothing.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  # No url: Boot's generate-unique-name default gives every Spring context its own
+  # jdbc:h2:mem:<uuid>, so the dozen contexts this suite caches never drop and re-create
+  # each other's schema mid-test (H2 keys in-memory databases by name per JVM).
+  datasource:
+    # Unused by the in-memory H2 connection itself - bound purely so the Config/Environment
+    # tabs have a real, secret-looking property to prove the masking engine against
+    # (see DashboardTabsIT.configTabMasksSensitiveValues and
+    # ActuatorMaskingIT).
+    password: test-fixture-password
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  flyway:
+    enabled: false
+  docker:
+    compose:
+      enabled: false
+  task:
+    scheduling:
+      pool:
+        size: 1
+
+peekaboot:
+  enabled: true
+  dev-toolbar: true
+  insights:
+    config-location: classpath:insights-test-panels.yml
+    levels:
+      - interval: 250ms
+        size: 90
+      - interval: 1500ms
+        size: 100
+      - interval: 9s
+        size: 50
+
+# Bound to NestedConfigPropertiesFixture purely so ActuatorMaskingIT can prove
+# ConfigMapper masks a sensitive key nested inside a @ConfigurationProperties tree - the
+# shape a real spring.security.oauth2.client.registration bean has.
+nested-fixture:
+  registration:
+    google:
+      client-id: fixture-client-id
+      client-secret: fixture-client-secret
+
+management:
+  endpoint:
+    health:
+      show-details: always
+    env:
+      # Peekaboot defaults this in local development only (see
+      # PeekabootDefaultsEnvironmentPostProcessor); the test profile is not a local-dev
+      # launch context, so it has to opt in explicitly, exactly like a real application
+      # would, for UnmaskingEnabledIT to have real values to unmask.
+      show-values: always
+    configprops:
+      # Same reasoning as endpoint.env above, for the Config tab.
+      show-values: always
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        # Default is 5s (OTel SDK's BatchSpanProcessor); Playwright tests open the trace
+        # overlay right after page load, well inside that window, so spans/queries/logs
+        # would not have reached the TraceStore yet. Shortened so exports are prompt.
+        schedule-delay: 50ms
+
+logging:
+  level:
+    # INFO keeps IT logs readable; no test asserts on DEBUG output
+    org.peekaboot: INFO

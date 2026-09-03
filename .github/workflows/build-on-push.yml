@@ -1,0 +1,66 @@
+name: build-on-push
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+concurrency:
+  group: build-on-push-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-on-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # full history: the spotless ratchet resolves a fixed base commit
+          fetch-depth: 0
+
+      - name: setup-jdk
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          java-version: 25
+          distribution: 'temurin'
+          cache: maven
+
+      # Chromium changes with the Playwright version and nothing else, so the cache is
+      # keyed on that property rather than on every pom.
+      - name: playwright-version
+        id: playwright
+        run: echo "version=$(sed -n 's:.*<playwright.version>\(.*\)</playwright.version>.*:\1:p' peekaboot-testing-app/pom.xml)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
+      # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
+      # The gates are skipped here because `clean verify` below runs every one of them.
+      - name: install-reactor-snapshots
+        run: >
+          ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+          -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
+          -Dmaven.javadoc.skip=true -Dmaven.source.skip=true
+
+      # classpathScope=test is required because the playwright dependency is test-scoped;
+      # without it exec:java can't find com.microsoft.playwright.CLI.
+      - name: install-playwright-browser
+        run: >
+          ./mvnw --batch-mode -pl peekaboot-testing-app exec:java
+          -Dexec.mainClass=com.microsoft.playwright.CLI
+          -Dexec.classpathScope=test
+          -Dexec.args="install chromium"
+
+      - name: maven-build-verify
+        run: ./mvnw --batch-mode clean verify

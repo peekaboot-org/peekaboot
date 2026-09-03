@@ -1,0 +1,79 @@
+# Capture profile for ScreenshotCapture: the real Postgres from compose.yml with Flyway on,
+# so the Flyway tab photographs a genuine migration history instead of an empty state.
+# Requires Docker. Never used by `mvn test`.
+spring:
+  # First under spring: on purpose - the Environment tab renders a property source in
+  # file order, and ScreenshotCapture's masked/revealed pair has to show this row
+  # inside the viewport, above the autoconfigure noise.
+  # Docker Compose's connection-details support wires the real DataSource straight from
+  # the running container, bypassing spring.datasource.* entirely - so without this,
+  # neither the Environment nor the Config tab has a single masked property to
+  # photograph. This mirrors application-test.yml's own fixture (see
+  # UnmaskingControlEnabledIT's doc comment): a real, secret-looking value that binds
+  # into DataSourceProperties and gets masked like any other password, matching
+  # compose.yml's own POSTGRES_PASSWORD so it stays honest about what it is.
+  datasource:
+    password: sample_app_db_pwd
+  # Same servlet-security exclusion as application-test.yml, repeated because
+  # ScreenshotCapture runs with inheritProfiles = false and so never sees that file.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  docker:
+    compose:
+      enabled: true
+      # spring.docker.compose.skip.in-tests defaults to true - Boot skips Docker Compose
+      # lifecycle management under a test run unless this is explicitly turned off, which
+      # would otherwise leave this profile silently falling back to an embedded H2 database.
+      skip:
+        in-tests: false
+  task:
+    scheduling:
+      pool:
+        size: 1
+
+peekaboot:
+  enabled: true
+  dev-toolbar: true
+  # Off by default (see PeekabootProperties); on here so the capture tool can photograph
+  # both the reveal control and, deliberately, one revealed value behind it - see
+  # ScreenshotCapture.captureRevealedGroupIfPresent and its scoping rule (never
+  # systemProperties/systemEnvironment, see MASKED_GROUP_HEADER_SELECTOR's doc comment)
+  # for what makes that safe to publish.
+  enable-unmasking: true
+
+management:
+  endpoint:
+    health:
+      show-details: always
+    # Outside local development (which a JUnit-launched process, this one included, can
+    # never be detected as - see PeekabootDefaultsEnvironmentPostProcessor's LocalDevDetector
+    # and ActuatorValuesMaskedOutsideLocalDevelopmentIT), value visibility is
+    # absent and resolves to Spring's own default of never - which blanket-masks every
+    # property, not just sensitive-looking ones, before MaskingEngine's selective masking
+    # ever runs. Without this, the fixture password below would be indistinguishable from
+    # server.port or any other harmless value, all rendering "******" alike. Mirrors
+    # application-test.yml's own opt-in, for the same reason.
+    env:
+      show-values: always
+    configprops:
+      show-values: always
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        schedule-delay: 50ms
+
+logging:
+  level:
+    org.peekaboot: INFO

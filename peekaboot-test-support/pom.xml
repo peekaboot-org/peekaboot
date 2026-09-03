@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.peekaboot</groupId>
+        <artifactId>peekaboot-parent</artifactId>
+        <version>0.0.5-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>peekaboot-test-support</artifactId>
+
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>Peekaboot Test Support - shared test helpers for the sibling modules' tests, never published</description>
+
+    <properties>
+        <!-- Not a published artifact: it exists so the sibling modules' tests can share
+             LogCapture through a plain test-scope dependency instead of a -tests jar
+             (see README.md). central-publishing-maven-plugin (peekaboot-release profile)
+             replaces the deploy plugin and ignores maven.deploy.skip; skipPublishing is
+             its per-module switch, the same opt-out peekaboot-coverage uses. -->
+        <skipPublishing>true</skipPublishing>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+    </dependencies>
+</project>

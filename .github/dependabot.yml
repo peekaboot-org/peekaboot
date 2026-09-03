@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    # One pull request for the whole Boot line: its version is declared twice on the Maven
+    # side (the parent property and the testing-app's parent), and a bump that lands in one
+    # place only leaves the reactor building two Boot versions. The auto-merge workflow
+    # excludes this group - see its comment for why Boot is reviewed by a person.
+    groups:
+      spring-boot:
+        patterns:
+          - "org.springframework.boot:*"
+  # The parallel Gradle build must stay in lockstep with Maven (BUILD.md); it reads
+  # buildSrc, every build.gradle.kts and gradle.properties.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "daily"

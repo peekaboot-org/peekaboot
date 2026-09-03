@@ -1,0 +1,16 @@
+# Applied only when the dev toolbar resolves on. Everything here trades throughput for
+# latency, which is the right trade for a toolbar a developer is watching and the wrong
+# one for anything else.
+# Apps can override any of these in their own application.yml
+
+management:
+  opentelemetry:
+    tracing:
+      export:
+        # How long Spring Boot's BatchSpanProcessor holds spans before handing them to
+        # the exporters - Peekaboot's OtelSpanExporter among them, so this is the delay
+        # between a span ending and the toolbar being able to see it.
+        # Spring default: 5s | We shorten it so a trace is readable while the developer
+        # is still looking at the page. Not lower: the processor's timer is free-running
+        # rather than per-request, and a flush per span costs more than it buys.
+        schedule-delay: 200ms

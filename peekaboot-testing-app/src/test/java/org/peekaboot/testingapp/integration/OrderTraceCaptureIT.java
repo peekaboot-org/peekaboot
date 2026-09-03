@@ -1,0 +1,344 @@
+package org.peekaboot.testingapp.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
+import org.peekaboot.testingapp.TestingApp;
+import org.peekaboot.testingapp.entity.CustomerOrder;
+import org.peekaboot.testingapp.entity.OrderLine;
+import org.peekaboot.testingapp.order.NewOrder;
+import org.peekaboot.testingapp.order.OrderReconciler;
+import org.peekaboot.testingapp.repository.OrderLineRepository;
+import org.peekaboot.testingapp.repository.OrderRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
+import org.springframework.test.context.ActiveProfiles;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * The demo endpoints exist to make Peekaboot's trace view worth looking at. These tests
+ * assert what Peekaboot <em>captured</em> from them, not what the endpoints returned - a
+ * green run here is evidence the Traces tab, the buckets and the query counters work end
+ * to end.
+ */
+@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+class OrderTraceCaptureIT {
+
+    private static final int SEEDED_ORDERS = 8;
+    private static final int CONCURRENT_ORDERS = 16;
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
+
+    @LocalServerPort
+    private int port;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderLineRepository orderLineRepository;
+
+    @Autowired
+    private OrderReconciler reconciler;
+
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
+
+    private TraceApiClient traces;
+
+    /**
+     * Seeded once: every save outside a request is a root trace of its own in the store
+     * the UI classes read, and no test here changes the seeded rows.
+     */
+    @BeforeAll
+    void seedOrders() {
+        for (int i = 1; i <= SEEDED_ORDERS; i++) {
+            CustomerOrder order = new CustomerOrder();
+            order.setReference("PK-200" + i);
+            order.setCustomerId(1L);
+            order.setStatus("PLACED");
+            order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z").plusSeconds(i * 60L));
+            CustomerOrder saved = orderRepository.save(order);
+
+            OrderLine line = new OrderLine();
+            line.setOrderId(saved.getId());
+            line.setSku("WIDGET-" + i);
+            line.setQuantity(i);
+            line.setUnitPrice(new BigDecimal("19.99"));
+            orderLineRepository.save(line);
+        }
+        traces = new TraceApiClient(port);
+    }
+
+    @Test
+    void ordersPageTripsTheHighTraceQueryCountThreshold() {
+        String traceId = traces.triggerAndCaptureTraceId("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId);
+
+        assertThat(trace.path("summary").path("queries").path("count").asInt())
+                .as("the deliberate N+1 on /orders must exceed the default "
+                        + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
+                        + "Traces tab has no high-query-count warning to show")
+                .isGreaterThan(20);
+    }
+
+    /**
+     * The other assertions against {@code /orders} check {@code summary.queries.count},
+     * which passes whether {@code QueryExtractor.findSql} reads {@code db.query.text} or
+     * merely falls back to a SQL-shaped span name - both produce a non-zero count. This
+     * test is the one that actually exercises the fix: it runs against
+     * {@code peekaboot-testing-app}'s real JDBC instrumentation
+     * (datasource-micrometer-opentelemetry over the H2 datasource, the same library
+     * {@code db.query.text} priority in {@code QueryExtractor.findSql} targets - see
+     * {@code docs/ARCHITECTURE.md}'s <em>Query Extraction</em> section), not a hand-built
+     * {@link org.peekaboot.backend.tracing.store.SpanData}.
+     *
+     * <p>Hibernate's real generated statement is lower-case ({@code "select
+     * co1_0.id,co1_0.customer_id,...,co1_0.status from customer_order co1_0"} for the
+     * orders page's primary query, confirmed by printing the live response), with a
+     * comma-separated column list and table alias. OpenTelemetry's span-name summary -
+     * what {@code findSql} falls back to only when no {@code db.*}/{@code jdbc.query[N]}
+     * tag is present - is upper-case and bare, e.g. {@code "SELECT customer_order"}: no
+     * column list, no alias, no lower-case {@code "from"}. Asserting the lower-case
+     * {@code "select "}/{@code " from "} shape below is what a summary like that would
+     * fail, so a regression back to the fallback (or a stack that stops emitting
+     * {@code db.query.text}) breaks this test rather than passing it silently.
+     */
+    @Test
+    void ordersPageQueriesCarryRealSqlNotASpanNameSummary() {
+        String traceId = traces.triggerAndCaptureTraceId("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId);
+
+        List<String> sqlTexts = new ArrayList<>();
+        trace.path("queries").forEach(query -> sqlTexts.add(query.path("sql").asString("")));
+
+        assertThat(sqlTexts)
+                .as("QueryExtractor must find at least one query on a page that trips real "
+                        + "Hibernate/JDBC traffic, or there is nothing here to assert against")
+                .isNotEmpty();
+
+        assertThat(sqlTexts)
+                .as(
+                        "every query on /orders must carry Hibernate's real, lower-case SQL text "
+                                + "from db.query.text, not OpenTelemetry's upper-case span-name summary "
+                                + "(e.g. \"SELECT customer_order\") - queries seen: %s",
+                        sqlTexts)
+                .allSatisfy(sql ->
+                        assertThat(sql).as("sql: %s", sql).startsWith("select ").contains(" from "));
+
+        String customerOrderQuery = sqlTexts.stream()
+                .filter(sql -> sql.contains("from customer_order"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no query against customer_order among: " + sqlTexts));
+
+        assertThat(customerOrderQuery)
+                .as("the customer_order query must be the real generated statement, with its "
+                        + "column list and alias, not the bare span-name summary")
+                .isNotEqualTo("SELECT customer_order")
+                .contains(",");
+    }
+
+    @Test
+    void slowReportLandsInTheSlowBucket() {
+        Long orderId = orderRepository.findAll().getFirst().getId();
+
+        traces.trigger("/api/orders/" + orderId + "/report");
+
+        JsonNode trace = traces.awaitTraceInBucket("slow", "/api/orders/{id}/report");
+
+        assertThat(trace.path("durationMs").asLong())
+                .as("the report endpoint must exceed the default "
+                        + "peekaboot.tracing.slow-trace-threshold-ms of 1000, or the Slow bucket "
+                        + "has nothing to show")
+                .isGreaterThanOrEqualTo(1000L);
+
+        List<String> spanNames = new ArrayList<>();
+        collectSpanNames(trace.path("rootSpan"), spanNames);
+
+        assertThat(spanNames)
+                .as(
+                        "the report's three stages must each show up as their own span, or the "
+                                + "Slow bucket trace is just one opaque span again - spans seen: %s",
+                        spanNames)
+                .contains("order.report.load-lines", "order.report.price-lines", "order.report.apply-discounts");
+    }
+
+    @Test
+    void failingEndpointLandsInTheErrorsBucket() {
+        traces.trigger("/boom");
+
+        JsonNode trace = traces.awaitTraceInBucket("errors", "/boom");
+
+        assertThat(trace.path("status").asString(""))
+                .as("a trace in the Errors bucket must be classified as having errors, "
+                        + "otherwise the bucket filter and the status badge disagree")
+                .isEqualTo("HAS_ERRORS");
+    }
+
+    @Test
+    void ordersPageTraceIncludesTheOutboundCustomerLookup() {
+        String traceId = traces.triggerAndCaptureTraceId("/orders");
+
+        JsonNode trace = traces.awaitTrace(traceId);
+
+        assertThat(spanNames(trace))
+                .as("the outbound customer lookup must appear as its own span, or the demo "
+                        + "trace shows only in-process work and the span tree looks flat")
+                .anySatisfy(name -> assertThat(name).contains("/api/person/"));
+    }
+
+    @Test
+    void placingAnOrderIsCapturedAsItsOwnTrace() {
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-NEW", 2));
+
+        JsonNode trace = traces.awaitTrace(traceIdOf(response));
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("a POST handled by a controller must be classified as an HTTP request")
+                .isEqualTo("HTTP_REQUEST");
+        assertThat(spanNames(trace))
+                .as("the order-placed listener runs inside the request, so its span belongs to this trace")
+                .contains("order.placed");
+        JsonNode placed = JSON.readTree(response.getBody());
+        assertThat(placed.path("lineCount").asInt()).isEqualTo(1);
+        assertThat(placed.path("total").decimalValue())
+                .as("the summary describes the line that was persisted: 2 x 19.99")
+                .isEqualByComparingTo("39.98");
+    }
+
+    /**
+     * The order and its line are written in one transaction, so the trace shows a single
+     * pooled connection for the request rather than one per save.
+     */
+    @Test
+    void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
+        ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-TX", 1));
+
+        JsonNode trace = traces.awaitTrace(traceIdOf(response));
+
+        assertThat(spanNames(trace))
+                .as("spans of the POST trace")
+                .filteredOn("connection"::equals)
+                .hasSize(1);
+    }
+
+    /**
+     * Order references are unique in the schema, so two orders placed in the same instant
+     * must still get their own; a colliding reference fails the second request outright.
+     */
+    @Test
+    void ordersPlacedAtTheSameInstantGetDistinctReferences() throws Exception {
+        List<String> references = new ArrayList<>();
+        try (ExecutorService placers = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<String>> placed = placers.invokeAll(Collections.nCopies(
+                    CONCURRENT_ORDERS,
+                    () -> JSON.readTree(placeOrder(new NewOrder(1L, "WIDGET-BURST", 1))
+                                    .getBody())
+                            .path("reference")
+                            .asString()));
+            for (Future<String> reference : placed) {
+                references.add(reference.get());
+            }
+        }
+
+        assertThat(references).hasSize(CONCURRENT_ORDERS).doesNotHaveDuplicates();
+    }
+
+    /**
+     * Calls {@link OrderReconciler#reconcileOrders()} directly rather than going through
+     * Spring's scheduler, so this method's own {@code @Observed} span (named
+     * {@code order.reconcile.job}) is the trace root. That span carries only its own
+     * {@code class}/{@code method} tags, not the {@code code.function}/
+     * {@code code.namespace} pair Spring's {@code DefaultScheduledTaskObservationConvention}
+     * sets - so, correctly, it does <em>not</em> classify SCHEDULED_JOB, as a classifier
+     * keyed on the span's name containing "job" would.
+     * {@link #reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace()} covers
+     * the shape that does classify SCHEDULED_JOB.
+     */
+    @Test
+    void directReconciliationCallDoesNotClassifyAsScheduledJob() {
+        reconciler.reconcileOrders();
+
+        JsonNode trace = traces.awaitTraceInBucket("all", "order.reconcile.job");
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("a direct call carries none of Spring's scheduled-task tags, so its "
+                        + "root span must not be misclassified as SCHEDULED_JOB just because "
+                        + "its name contains \"job\"")
+                .isEqualTo("INTERNAL");
+    }
+
+    /**
+     * Fires {@code reconcileOrders()} through the scheduler's own {@link Runnable} (see
+     * {@link ScheduledJobs}), so the trace root is Spring's scheduled-task observation
+     * with its {@code code.function}/{@code code.namespace} tags - the same tree a live
+     * timer produces.
+     */
+    @Test
+    void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
+        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+
+        JsonNode trace = traces.awaitTraceInBucket("all", "task orderReconciler.reconcileOrders");
+
+        assertThat(trace.path("rootActionType").asString(""))
+                .as("Spring's scheduled-task observation wraps the call and becomes the "
+                        + "trace root when the scheduler fires it; that root span's "
+                        + "code.function/code.namespace tags must still classify SCHEDULED_JOB")
+                .isEqualTo("SCHEDULED_JOB");
+    }
+
+    private ResponseEntity<String> placeOrder(NewOrder order) {
+        return traces.restClient()
+                .post()
+                .uri("/api/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(order)
+                .retrieve()
+                .toEntity(String.class);
+    }
+
+    private static String traceIdOf(ResponseEntity<?> response) {
+        String serverTiming = response.getHeaders().getFirst("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        assertThat(matcher.find())
+                .as("Server-Timing must carry the trace id, or the request was never captured: %s", serverTiming)
+                .isTrue();
+        return matcher.group(1);
+    }
+
+    private static List<String> spanNames(JsonNode trace) {
+        List<String> names = new ArrayList<>();
+        collectSpanNames(trace.path("rootSpan"), names);
+        return names;
+    }
+
+    private static void collectSpanNames(JsonNode span, List<String> out) {
+        out.add(span.path("name").asString(""));
+        for (JsonNode child : span.path("children")) {
+            collectSpanNames(child, out);
+        }
+    }
+}

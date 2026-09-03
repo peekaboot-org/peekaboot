@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <title>pk component fixture</title>
+    <link rel="stylesheet" href="/peekaboot/ui/assets/tokens.css">
+    <link rel="stylesheet" href="/peekaboot/ui/assets/base.css">
+    <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
+    <!-- dashboard chrome, for the unmask toggle's pressed (danger) state below -->
+    <link rel="stylesheet" href="/peekaboot/ui/dashboard/dashboard.css">
+    <!-- overlay chrome, for the gantt kind and tag pills in the contrast sweep below -->
+    <link rel="stylesheet" href="/peekaboot/ui/trace-detail/trace-detail.css">
+</head>
+<body>
+    <span class="pk-badge pk-badge--ok" id="badge-ok">UP</span>
+    <span class="pk-badge pk-badge--error" id="badge-error">DOWN</span>
+    <span class="pk-badge pk-badge--warn" id="badge-warn">SLOW</span>
+    <span class="pk-badge pk-badge--error-soft" id="badge-error-soft">404</span>
+    <span class="pk-badge pk-badge--info" id="badge-info">Deployment</span>
+    <span class="pk-badge pk-badge--muted" id="badge-muted">still counting</span>
+
+    <!-- the trace-detail overlay's own pills: badges in all but class name -->
+    <span class="pk-gantt-kind pk-gantt-kind--server" id="kind-server">server</span>
+    <span class="pk-gantt-kind pk-gantt-kind--client" id="kind-client">client</span>
+    <span class="pk-gantt-kind pk-gantt-kind--internal" id="kind-internal">internal</span>
+    <span class="pk-gantt-kind pk-gantt-kind--producer" id="kind-producer">producer</span>
+    <span class="pk-tag-badge" id="tag-badge"><span class="pk-tag-badge__key" id="tag-badge-key">http.method</span>=<span class="pk-tag-badge__value">GET</span></span>
+    <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
+
+    <div class="pk-group" id="group">
+        <button class="pk-group__header" id="group-header" aria-expanded="false" aria-controls="group-list">
+            <span class="pk-group__name">application.yml</span>
+            <span class="pk-group__count">3 properties</span>
+        </button>
+        <div class="pk-group__list" id="group-list" hidden>
+            <div class="pk-kv">
+                <span class="pk-kv__key">server.port</span>
+                <span class="pk-kv__value pk-kv__value--mono">8080</span>
+            </div>
+            <div class="pk-kv">
+                <span class="pk-kv__key">spring.datasource.password</span>
+                <span class="pk-kv__value">******</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="pk-group" id="group-expanded">
+        <button class="pk-group__header" id="group-header-expanded" aria-expanded="true" aria-controls="group-list-expanded">
+            <span class="pk-group__name">application-dev.yml</span>
+            <span class="pk-group__count">1 property</span>
+        </button>
+        <div class="pk-group__list" id="group-list-expanded">
+            <div class="pk-kv">
+                <span class="pk-kv__key">debug</span>
+                <span class="pk-kv__value pk-kv__value--mono">true</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="pk-meter" id="meter-base">
+        <div class="pk-meter__fill" id="meter-fill-base" style="width:40%"></div>
+    </div>
+    <div class="pk-meter" id="meter-danger">
+        <div class="pk-meter__fill pk-meter__fill--danger" id="meter-fill-danger" style="width:95%"></div>
+    </div>
+
+    <div class="pk-tabs" id="tabs">
+        <button class="pk-tab" id="tab-selected" aria-selected="true">Overview</button>
+        <button class="pk-tab" id="tab-unselected" aria-selected="false">Details</button>
+    </div>
+
+    <!-- the generic pressed (green) toggle state every selection button shares,
+         e.g. the Insights aggregation-level switch -->
+    <button type="button" class="pk-btn" id="btn-pressed" aria-pressed="true">Errors</button>
+
+    <!-- the Environment/Config "Secrets shown" reveal toggle in its pressed (danger) state,
+         exactly as shared/unmask-control.js builds it -->
+    <button type="button" class="pk-btn pk-btn--small pk-unmask-toggle" id="unmask-pressed" aria-pressed="true">
+        <span class="pk-unmask-toggle__icon" aria-hidden="true">&#128065;</span>
+        <span class="pk-unmask-toggle__label">Secrets shown &mdash; click to hide</span>
+    </button>
+</body>
+</html>

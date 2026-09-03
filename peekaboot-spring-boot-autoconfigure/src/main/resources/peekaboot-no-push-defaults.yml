@@ -1,0 +1,17 @@
+# Applied unconditionally, even when peekaboot itself is disabled: the starter
+# puts Micrometer's OTLP registry on the classpath, and without any
+# configuration it would push metrics to http://localhost:4318. Telemetry must
+# never leave the process unless the app explicitly opts in.
+# Apps can override any of these in their own application.yml
+#
+# Traces and logs need no equivalent here: Spring Boot only creates OTLP
+# exporters for them when an endpoint is explicitly configured
+# (management.opentelemetry.tracing.export.otlp.endpoint etc.)
+
+management:
+  otlp:
+    metrics:
+      export:
+        # Auto-export metrics to OTLP collector
+        # Spring default: true | We disable so metrics stay in-process only
+        enabled: false

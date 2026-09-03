@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- OrderController's deliberately failing /boom endpoint (populating Peekaboot's Errors
+         bucket in OrderTraceCaptureIT) escapes as an unhandled exception, which
+         embedded Tomcat logs as a full stack trace. Spring Boot numbers each embedded Tomcat
+         per JVM (Tomcat, Tomcat-1, ...), so an instance-specific logger name only matches an
+         isolated run; Logback has no wildcard matching, and the numbered segment sits directly
+         under ContainerBase, so that ancestor is the narrowest static name that works across
+         runs. This silences ALL of ContainerBase's logging, not just per-request stack traces -
+         also cluster, realm, child and threaded start/stop failures, and background-process
+         errors, none of which any assertion here would catch. Accepted because this application
+         configures no clustering and no custom realm, so those paths never fire, and because the
+         application's own error logging is unaffected - a real application failure still prints
+         and is still asserted. -->
+    <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
+
+    <!-- Playwright teardown (PlaywrightTestBase.closePage's about:blank navigation and
+         context close) aborts in-flight JSON responses, and Spring's resolver WARNs
+         "Ignoring exception ... Broken pipe" for each aborted write - teardown noise, not
+         application behaviour. Any failure this resolver really handles still reaches the
+         client as a 4xx/5xx and fails the asserting test, so only that advisory WARN is
+         lost by raising the level to ERROR. -->
+    <logger name="org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver" level="ERROR"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

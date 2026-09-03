@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>peekaboot</title>
+    <!-- Stamps the theme before the stylesheets apply, so a dark-theme reader never sees
+         the light palette painted first. Classic and non-deferred on purpose: it has to
+         run ahead of first paint, which a module script does not. -->
+    <script src="../assets/theme-boot.js"></script>
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
+    <link rel="stylesheet" href="../assets/tokens.css">
+    <link rel="stylesheet" href="../assets/base.css">
+    <link rel="stylesheet" href="../assets/components.css">
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <header class="pk-header">
+        <div class="pk-container">
+            <div class="pk-header__content">
+                <div class="pk-header__brand">
+                    <span class="pk-header__logo" aria-hidden="true"></span>
+                    <h1>peekaboot</h1>
+                </div>
+                <div class="pk-header__actions">
+                    <span class="pk-header__time" id="last-updated"></span>
+                    <!-- Timezone Toggle. Every control below carries an aria-label: the
+                         accessible name otherwise falls to the glyph inside it ("↻",
+                         "❚❚", "☾"), because text content outranks title. main.js keeps
+                         the labels of the three stateful ones in step with their icon. -->
+                    <button class="pk-btn pk-btn--small" id="timezone-toggle" title="Toggle timezone"
+                            aria-label="Timezone: browser. Switch to server timezone">
+                        <span id="timezone-icon" aria-hidden="true">&#127760;</span>
+                        <span id="timezone-label">Browser</span>
+                    </button>
+                    <span class="pk-header__tz-info" id="tz-info"></span>
+                    <select class="pk-btn pk-btn--select" id="locale-select" title="Language" aria-label="Language">
+                        <option value="en-US">EN</option>
+                        <option value="de-DE">DE</option>
+                        <option value="fr-FR">FR</option>
+                        <option value="es-ES">ES</option>
+                    </select>
+                    <button class="pk-btn pk-btn--icon" id="refresh-btn" title="Refresh now" aria-label="Refresh now">
+                        <span id="refresh-icon" aria-hidden="true">&#8635;</span>
+                    </button>
+                    <button class="pk-btn pk-btn--icon" id="pause-btn" title="Pause auto-refresh" aria-label="Pause auto-refresh">
+                        <span id="pause-icon" aria-hidden="true">&#10074;&#10074;</span>
+                    </button>
+                    <button class="pk-btn pk-btn--icon" id="theme-toggle" title="Toggle theme" aria-label="Switch to dark theme">
+                        <span id="theme-icon" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="pk-container">
+        <nav aria-label="Dashboard sections">
+        <div class="pk-tabs" id="main-tabs" role="tablist">
+            <button class="pk-tab" role="tab" id="overview-tab-btn" data-tab="overview" aria-controls="overview-tab" aria-selected="true">Overview</button>
+            <button class="pk-tab hidden" role="tab" id="insights-tab-btn" data-tab="insights" aria-controls="insights-tab" aria-selected="false">Insights</button>
+            <button class="pk-tab" role="tab" id="lifecycle-tab-btn" data-tab="lifecycle" aria-controls="lifecycle-tab" aria-selected="false">Lifecycle</button>
+            <button class="pk-tab hidden" role="tab" id="traces-tab-btn" data-tab="traces" aria-controls="traces-tab" aria-selected="false">Traces</button>
+            <button class="pk-tab hidden" role="tab" id="meters-tab-btn" data-tab="meters" aria-controls="meters-tab" aria-selected="false">Meters</button>
+            <button class="pk-tab" role="tab" id="environment-tab-btn" data-tab="environment" aria-controls="environment-tab" aria-selected="false">Environment</button>
+            <button class="pk-tab hidden" role="tab" id="flyway-tab-btn" data-tab="flyway" aria-controls="flyway-tab" aria-selected="false">Flyway</button>
+            <button class="pk-tab hidden" role="tab" id="loggers-tab-btn" data-tab="loggers" aria-controls="loggers-tab" aria-selected="false">Loggers</button>
+            <button class="pk-tab hidden" role="tab" id="config-tab-btn" data-tab="config" aria-controls="config-tab" aria-selected="false">Config</button>
+            <button class="pk-tab hidden" role="tab" id="scheduled-tasks-tab-btn" data-tab="scheduled-tasks" aria-controls="scheduled-tasks-tab" aria-selected="false">Scheduled Tasks</button>
+        </div>
+        </nav>
+
+        <!-- Static rather than built by shared/components.js's loadingBlock(): it is on
+             screen before main.js has run, and the browser tests read it as the
+             dashboard's readiness signal. -->
+        <div id="loading" class="pk-loading">
+            <div class="pk-spinner"></div>
+            <p>Loading data...</p>
+        </div>
+
+        <!-- role="alert" so a failed refresh is announced. Without it the banner just
+             un-hides and a screen-reader user is left on silently stale data. -->
+        <div id="error" class="pk-error-banner hidden" role="alert">
+            <span class="message"></span>
+            <button class="pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
+        </div>
+
+        <!-- Overview Tab -->
+        <section class="pk-tab-panel active" id="overview-tab" role="tabpanel" aria-labelledby="overview-tab-btn">
+            <!-- Insights stat tiles - filled by overview.js from /api/insights/config,
+                 and left hidden when the insights feature is off (see its renderInsightTiles). -->
+            <div id="insights-tiles" class="pk-insight-tiles hidden"></div>
+
+            <div class="pk-grid">
+                <div class="pk-card" id="build-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#128230;</span>
+                        <h2 class="pk-card__title">Build</h2>
+                    </div>
+                    <div class="pk-card__body" id="build-info"></div>
+                </div>
+
+                <div class="pk-card" id="git-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#128256;</span>
+                        <h2 class="pk-card__title">Git</h2>
+                    </div>
+                    <div class="pk-card__body" id="git-info"></div>
+                </div>
+
+                <div class="pk-card" id="spring-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#127807;</span>
+                        <h2 class="pk-card__title">Spring</h2>
+                    </div>
+                    <div class="pk-card__body" id="spring-info"></div>
+                </div>
+
+                <div class="pk-card" id="java-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#9749;</span>
+                        <h2 class="pk-card__title">Java</h2>
+                    </div>
+                    <div class="pk-card__body" id="java-info"></div>
+                </div>
+
+                <div class="pk-card" id="os-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#128187;</span>
+                        <h2 class="pk-card__title">System</h2>
+                    </div>
+                    <div class="pk-card__body" id="os-info"></div>
+                </div>
+
+                <div class="pk-card" id="machine-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#128421;&#65039;</span>
+                        <h2 class="pk-card__title">Machine</h2>
+                    </div>
+                    <div class="pk-card__body" id="machine-info"></div>
+                </div>
+
+                <div class="pk-card" id="jvm-defaults-card">
+                    <div class="pk-card__header">
+                        <span class="pk-card__icon" aria-hidden="true">&#9881;</span>
+                        <h2 class="pk-card__title">JVM Defaults</h2>
+                    </div>
+                    <div class="pk-card__body" id="jvm-defaults-info"></div>
+                </div>
+            </div>
+
+            <div class="pk-card pk-section" id="memory-card">
+                <div class="pk-card__header">
+                    <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
+                    <h2 class="pk-card__title">Memory &amp; Storage</h2>
+                    <span class="pk-card__meta" id="process-info"></span>
+                </div>
+                <div class="pk-card__body" id="memory-info"></div>
+            </div>
+
+            <!-- Health Banner (a real button so it is keyboard operable; expands the details region below) -->
+            <button type="button" class="pk-health pk-section" id="health-banner"
+                    aria-expanded="false" aria-controls="health-components">
+                <span class="pk-health__status">
+                    <span class="pk-health__dot" id="health-dot"></span>
+                    <span class="pk-health__text">Health: <span id="health-status-container"></span></span>
+                </span>
+                <span class="pk-health__right">
+                    <span class="pk-health__summary" id="health-summary"></span>
+                    <span class="pk-health__expand" id="health-expand" aria-hidden="true">&#9654;</span>
+                </span>
+            </button>
+
+            <!-- Health Components (hidden by default, shown on click) -->
+            <div id="health-components" class="pk-section" hidden>
+                <div class="pk-component-grid" id="components-grid"></div>
+            </div>
+        </section>
+
+        <!-- Insights Tab -->
+        <section class="pk-tab-panel" id="insights-tab" role="tabpanel" aria-labelledby="insights-tab-btn">
+            <div id="insights-toolbar"></div>
+            <div id="insights-panels"></div>
+        </section>
+
+        <!-- Lifecycle Tab -->
+        <section class="pk-tab-panel" id="lifecycle-tab" role="tabpanel" aria-labelledby="lifecycle-tab-btn">
+            <div id="lifecycle-runs"></div>
+        </section>
+
+        <!-- Traces Tab -->
+        <section class="pk-tab-panel" id="traces-tab" role="tabpanel" aria-labelledby="traces-tab-btn">
+            <!-- filled by traces.js's loadingBlock() -->
+            <div id="traces-loading" class="hidden"></div>
+            <div id="traces-bucket" class="pk-filter-row">
+                <button class="pk-btn pk-btn--bucket" data-bucket="all" aria-pressed="true">All</button>
+                <button class="pk-btn pk-btn--bucket" data-bucket="errors" aria-pressed="false">Errors</button>
+                <button class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
+            </div>
+            <div id="traces-filter" class="pk-filter-row">
+                <span class="pk-filter-row__label">Filter by type:</span>
+                <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
+                <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
+            </div>
+            <div id="traces-active-filter" class="pk-filter-banner hidden">
+                <span class="pk-filter-banner__text"></span>
+            </div>
+            <div id="traces-list"></div>
+            <div id="no-traces" class="pk-empty hidden">
+                <p>No traces recorded</p>
+            </div>
+        </section>
+
+        <!-- Meters Tab -->
+        <section class="pk-tab-panel" id="meters-tab" role="tabpanel" aria-labelledby="meters-tab-btn">
+            <div class="pk-filter">
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="meters-filter" placeholder="Filter metrics..." aria-label="Filter metrics">
+                <span class="pk-filter__count" id="meters-count"></span>
+            </div>
+            <div id="meters-list"></div>
+        </section>
+
+        <!-- Environment Tab -->
+        <section class="pk-tab-panel" id="environment-tab" role="tabpanel" aria-labelledby="environment-tab-btn">
+            <div class="pk-filter">
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="env-filter" placeholder="Filter properties..." aria-label="Filter properties">
+                <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
+                     is true - empty, not hidden, when the backend gate is off. -->
+                <span id="env-unmask-slot"></span>
+            </div>
+            <div id="property-sources"></div>
+        </section>
+
+        <!-- Flyway Tab -->
+        <section class="pk-tab-panel" id="flyway-tab" role="tabpanel" aria-labelledby="flyway-tab-btn">
+            <div id="flyway-timeline"></div>
+            <div id="no-flyway" class="pk-empty hidden">
+                <p>No Flyway migrations found</p>
+            </div>
+        </section>
+
+        <!-- Loggers Tab -->
+        <section class="pk-tab-panel" id="loggers-tab" role="tabpanel" aria-labelledby="loggers-tab-btn">
+            <div class="pk-filter">
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="loggers-filter" placeholder="Filter loggers..." aria-label="Filter loggers">
+            </div>
+            <div class="pk-loggers-controls">
+                <label class="pk-checkbox-label">
+                    <input type="checkbox" id="loggers-configured-only">
+                    Show only configured loggers
+                </label>
+            </div>
+            <div id="loggers-list"></div>
+        </section>
+
+        <!-- Config Tab -->
+        <section class="pk-tab-panel" id="config-tab" role="tabpanel" aria-labelledby="config-tab-btn">
+            <div class="pk-filter">
+                <span class="pk-filter__icon" aria-hidden="true">&#128269;</span>
+                <input class="pk-filter__input" type="text" id="config-filter" placeholder="Filter config properties..." aria-label="Filter config properties">
+                <!-- Populated by shared/unmask-control.js only when features.unmaskingEnabled
+                     is true - empty, not hidden, when the backend gate is off. -->
+                <span id="config-unmask-slot"></span>
+            </div>
+            <div id="config-groups"></div>
+        </section>
+
+        <!-- Scheduled Tasks Tab -->
+        <section class="pk-tab-panel" id="scheduled-tasks-tab" role="tabpanel" aria-labelledby="scheduled-tasks-tab-btn">
+            <div id="scheduled-tasks-summary" class="pk-tasks-summary"></div>
+            <div id="scheduled-tasks-groups"></div>
+        </section>
+    </main>
+
+    <footer class="pk-footer">
+        <p>peekaboot - Application Monitoring Dashboard</p>
+    </footer>
+
+    <script src="main.js" type="module"></script>
+</body>
+</html>

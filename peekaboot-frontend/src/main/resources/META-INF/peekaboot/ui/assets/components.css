@@ -1,0 +1,314 @@
+/* Shared Peekaboot UI primitives. Consumed by the dashboard document and by
+   the toolbar and trace-detail shadow roots. */
+
+/* Badge — one pill, six semantic variants. Each variant uses its own --pk-on-* ink:
+   the fills are fill-tuned, not text-tuned, so neither white nor --pk-text-strong
+   clears WCAG AA on all of them (see tokens.css for the pairs).
+
+   --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
+   would sit beside a green --pk-success UP pill and read as the same state.
+   Holding --pk-info in the cyan range keeps the two apart at pill size. */
+.pk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-space-xs);
+    padding: 2px 8px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+.pk-badge--ok      { background: var(--pk-success); color: var(--pk-on-success); }
+.pk-badge--warn    { background: var(--pk-warning); color: var(--pk-on-warning); }
+.pk-badge--error   { background: var(--pk-danger);  color: var(--pk-on-danger); }
+/* 4xx. Its fill sits close to the page in both themes (~1.4:1) by design - it is meant to
+   recede next to a 5xx pill - so the pill's edge comes from a --pk-danger ring. An inset
+   shadow rather than a border: a border would make this one variant a pixel taller than
+   the pills beside it in the overlay's meta line. */
+.pk-badge--error-soft { background: var(--pk-danger-soft); color: var(--pk-on-danger-soft);
+                        box-shadow: inset 0 0 0 1px var(--pk-danger); }
+.pk-badge--info    { background: var(--pk-info); color: var(--pk-on-info); }
+.pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text); }
+
+/* A trace's stat line (shared/trace-stats.js): a count with a mono duration beside it,
+   coloured by the duration's severity. Rendered by the toolbar and the Traces tab alike. */
+.pk-stat { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
+.pk-stat__duration { font-family: var(--pk-font-mono); }
+.pk-stat--slow .pk-stat__duration { color: var(--pk-warning-text); }
+.pk-stat--very-slow .pk-stat__duration { color: var(--pk-danger); }
+
+/* Collapsible group. State is aria-expanded + [hidden], not a class. */
+.pk-group {
+    margin-bottom: var(--pk-space-md);
+}
+.pk-group__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-space-md);
+    width: 100%;
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius) var(--pk-radius) 0 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color var(--pk-transition);
+}
+.pk-group__header:hover { background: var(--pk-bg-hover); }
+.pk-group__header:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-group__header[aria-expanded="false"] { border-radius: var(--pk-radius); }
+.pk-group__header::before {
+    content: '\25BE';
+    color: var(--pk-text-muted);
+    transition: transform var(--pk-transition);
+}
+.pk-group__header[aria-expanded="false"]::before { transform: rotate(-90deg); }
+.pk-group__name  { flex: 1; font-weight: 600; color: var(--pk-primary-text); font-size: var(--pk-text-sm); }
+/* Group-name variants: plain .pk-group__name is primary-coloured (property and
+   config groups); --strong for logger packages; --mono for metric names
+   (strong-coloured, monospace, ellipsis-truncated). */
+.pk-group__name--strong { color: var(--pk-text-strong); }
+/* Monospace only. The colour stays the primary of .pk-group__name: every group header
+   is expandable, so they must all carry the same affordance. */
+.pk-group__name--mono {
+    font-family: var(--pk-font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.pk-group__count { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+/* Trailing metadata as fixed columns. Each group is its own subtree, so grid cannot
+   align across rows - only fixed track widths keep the left edge of each column steady
+   from row to row instead of shifting with the content's length. */
+.pk-group__meta {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 5.5rem 5rem 8.5rem;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    justify-items: start;
+}
+.pk-group__meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-group__meta .pk-group__count { justify-self: end; font-variant-numeric: tabular-nums; }
+.pk-group__list {
+    border: 1px solid var(--pk-border);
+    border-top: none;
+    border-radius: 0 0 var(--pk-radius) var(--pk-radius);
+}
+
+/* Key/value row. Values are mono by default because property/config rows
+   always render source values in monospace — --mono is the rule on nearly
+   every row, not the exception. */
+.pk-kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--pk-space-md);
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    border-bottom: 1px solid var(--pk-border);
+}
+.pk-kv:last-child { border-bottom: none; }
+/* Denser row for lists that pack more items into the same space. The
+   border-between-items, none-after-last behaviour is already handled by
+   .pk-kv/.pk-kv:last-child above — --tight only overrides padding. */
+.pk-kv--tight { padding: var(--pk-space-xs) 0; }
+.pk-kv__key {
+    flex-shrink: 0;
+    max-width: 50%;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-strong);
+    word-break: break-word;
+}
+.pk-kv__value {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    text-align: right;
+    word-break: break-word;
+}
+.pk-kv__value--mono      { font-family: var(--pk-font-mono); }
+
+@media (max-width: 767px) {
+    .pk-kv { flex-direction: column; gap: var(--pk-space-xs); }
+    .pk-kv__key, .pk-kv__value { max-width: 100%; text-align: left; }
+}
+
+/* Meter — usage bar for memory and storage */
+.pk-meter {
+    height: 8px;
+    background: var(--pk-bg-alt);
+    border-radius: var(--pk-radius);
+    overflow: hidden;
+}
+.pk-meter__fill {
+    height: 100%;
+    background: var(--pk-success);
+    border-radius: var(--pk-radius);
+    transition: width var(--pk-transition);
+}
+/* The text-tuned amber, mirroring the health banner's --unknown stripe, so the meter
+   matches the warning text beside it. */
+.pk-meter__fill--warning { background: var(--pk-warning-text); }
+.pk-meter__fill--danger  { background: var(--pk-danger); }
+
+/* Button */
+.pk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-space-xs);
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: inherit;
+    font-size: var(--pk-text-sm);
+    cursor: pointer;
+    transition: background-color var(--pk-transition), filter var(--pk-transition);
+}
+/* Pressed buttons are excluded: their fill IS their state (the green selection fill
+   below, the unmask toggle's danger fill in dashboard.css), each paired with its own
+   --pk-on-* ink. This rule outranks those pairings by specificity, so without the
+   guard a hover swaps the fill for the neutral --pk-bg-hover under ink tuned for a
+   saturated fill - white on near-white light, dark-on-dark dark. */
+.pk-btn:not(:disabled):not([aria-pressed="true"]):hover { background: var(--pk-bg-hover); }
+/* The pressed-button hover cue: a brightness() filter shifts fill and ink together, so
+   the pairing above survives instead of the fill being swapped out from under its ink.
+   Direction follows each theme's own hover polarity (--pk-bg-hover sits darker than
+   --pk-bg light, lighter dark), at a strength computed to hold every pressed pairing
+   at AA's 4.5:1: light 0.92 takes primary/on-primary 7.25:1 -> 6.24:1 and the unmask
+   toggle's danger/on-danger 5.31:1 -> 5.07:1; dark 1.12 improves both outright
+   (9.89:1 -> 12.29:1, 5.65:1 -> 6.08:1). Pinned in ComponentPrimitiveIT's rendered
+   pressed+hover sweep. */
+.pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(0.92); }
+[data-theme="dark"] .pk-btn:not(:disabled)[aria-pressed="true"]:hover,
+:host([data-theme="dark"]) .pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(1.12); }
+.pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+/* 0.65, not 0.5: the dimmed label still clears 4.5:1 on --pk-bg/--pk-bg-alt, so it
+   reads as off rather than as maybe-clickable. */
+.pk-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+.pk-btn[aria-pressed="true"] { background: var(--pk-primary); color: var(--pk-on-primary); }
+.pk-btn--icon  { width: 32px; height: 32px; padding: 0; font-size: var(--pk-text-base); }
+/* min-height, not more padding: 2px padding measured 20px tall, under WCAG 2.2's
+   24px target floor, and the extra height must not push the label off-centre. */
+.pk-btn--small { padding: 2px var(--pk-space-sm); min-height: 24px; font-size: var(--pk-text-xs); }
+/* Primary bucket/segment selector - a top-level filter, so it carries more weight
+   and a comfortable hit area rather than the compact --small treatment. */
+.pk-btn--bucket { padding: var(--pk-space-sm) var(--pk-space-md); font-size: var(--pk-text-sm); font-weight: 600; }
+/* Extra right padding clears room for a dropdown-style caret/chevron the
+   consumer places absolutely inside the button. */
+.pk-btn--select { padding-right: var(--pk-space-md); }
+
+/* Copyable identifier - a labelled, full-length trace/span id that copies on click.
+   Reads as text until hovered, so a row full of ids does not look like a row of buttons. */
+.pk-copy {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--pk-space-xs);
+    max-width: 100%;
+    /* 22px measured; the inline-target exception arguably covers it, but a copy control
+       is a real click target rather than a word in a sentence, so give it the floor. */
+    min-height: 24px;
+    padding: 1px var(--pk-space-xs);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.pk-copy:hover { background: var(--pk-bg-hover); border-color: var(--pk-border); }
+.pk-copy:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+.pk-copy__label { flex: 0 0 auto; color: var(--pk-text-muted); font-size: var(--pk-text-xs); }
+.pk-copy__value { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
+/* Only where the container is genuinely narrow; the id stays fully copyable either way. */
+.pk-copy--truncate .pk-copy__value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-copy__icon { flex: 0 0 auto; opacity: 0; font-size: var(--pk-text-xs); transition: opacity var(--pk-transition); }
+.pk-copy:hover .pk-copy__icon,
+.pk-copy:focus-visible .pk-copy__icon,
+.pk-copy--copied .pk-copy__icon { opacity: 0.75; }
+.pk-copy--copied { color: var(--pk-success-text); }
+.pk-copy--copied .pk-copy__icon { opacity: 1; }
+.pk-copy--failed { color: var(--pk-danger); }
+.pk-copy--empty { color: var(--pk-text-muted); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
+/* Announced to screen readers on copy; never shown. */
+.pk-copy__status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+/* Data table: one row per record, for tabs that list uniform items. Shared so any
+   such tab reads the same. --kv is the two-column, header-less key/value form the
+   trace-detail overlay's Request tab uses. */
+.pk-table { width: 100%; border-collapse: collapse; font-size: var(--pk-text-xs); }
+.pk-table th {
+    padding: var(--pk-space-sm);
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--pk-border);
+}
+.pk-table td { padding: var(--pk-space-sm); border-bottom: 1px solid var(--pk-border); }
+.pk-table tbody tr:last-child td { border-bottom: none; }
+.pk-table__mono { font-family: var(--pk-font-mono); }
+/* Numeric columns line up on the decimal, so scanning a column does not jitter. */
+.pk-table__num { text-align: right; font-family: var(--pk-font-mono); font-variant-numeric: tabular-nums; }
+.pk-table__shrink { width: 1%; white-space: nowrap; }
+.pk-table--kv td:first-child { width: 200px; color: var(--pk-text-muted); }
+.pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
+/* Wide tables scroll inside their own box rather than widening the page. */
+.pk-table-scroll { overflow-x: auto; }
+
+/* Tab strip */
+.pk-tabs {
+    display: flex;
+    gap: var(--pk-space-xs);
+    border-bottom: 1px solid var(--pk-border);
+    overflow-x: auto;
+}
+.pk-tab {
+    padding: var(--pk-space-sm) var(--pk-space-md);
+    margin-bottom: -1px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--pk-text-muted);
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.pk-tab:hover { color: var(--pk-text); }
+.pk-tab:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary-text); }
+/* The count tabStrip() renders beside a tab's label. Explicit ink: inherited from .pk-tab
+   this would be --pk-text-muted, which is only 3.6:1 on the --pk-border fill - body ink
+   clears AA on it in both themes. */
+.pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); color: var(--pk-text); border-radius: 10px; font-size: var(--pk-text-xs); }
+
+/* Empty state — centred, muted placeholder text shown when a list has no data */
+.pk-empty {
+    color: var(--pk-text-muted);
+    font-style: italic;
+    padding: var(--pk-space-md);
+    text-align: center;
+}
+
+/* Spinner, shared by every loading state */
+@keyframes pk-spin { to { transform: rotate(360deg); } }
+.pk-spinning { animation: pk-spin 1s linear infinite; }

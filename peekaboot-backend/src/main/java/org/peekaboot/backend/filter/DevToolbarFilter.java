@@ -1,0 +1,254 @@
+package org.peekaboot.backend.filter;
+
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import jakarta.servlet.Filter;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Set;
+import org.peekaboot.backend.config.PeekabootPaths;
+import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.devtoolbar.ToolbarShell;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class DevToolbarFilter implements Filter {
+
+    private static final Logger log = LoggerFactory.getLogger(DevToolbarFilter.class);
+
+    private static final String CONTENT_TYPE_HTML = "text/html";
+    private static final String BODY_END_TAG = "</body>";
+
+    /** springdoc's own default for {@code springdoc.swagger-ui.path}. */
+    public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
+    // Recognised by simple name: this module depends on no container, and shaded or
+    // repackaged copies move the classes around.
+    private static final Set<String> CLIENT_ABORT_EXCEPTION_NAMES = Set.of("ClientAbortException", "EofException");
+    private static final Set<String> EXCLUDED_EXTENSIONS =
+            Set.of(".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot");
+
+    private final ToolbarDataProvider toolbarDataProvider;
+    private final Tracer tracer;
+    private final PeekabootPaths paths;
+    private final String swaggerUiPrefix;
+    // Reads the bar's stylesheets off the classpath once, at construction, and caches the
+    // rendered fragment's CSS; there is one filter instance per application.
+    private final ToolbarShell toolbarShell = new ToolbarShell();
+
+    /** Every path default in place - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer) {
+        this(toolbarDataProvider, tracer, DEFAULT_SWAGGER_UI_PATH);
+    }
+
+    /** {@link PeekabootPaths#defaults()} plus the given swagger path - plain construction for tests. */
+    DevToolbarFilter(ToolbarDataProvider toolbarDataProvider, Tracer tracer, String swaggerUiPath) {
+        this(toolbarDataProvider, tracer, PeekabootPaths.defaults(), swaggerUiPath);
+    }
+
+    /** @param swaggerUiPath the effective {@code springdoc.swagger-ui.path}, for the idle-mode check */
+    public DevToolbarFilter(
+            ToolbarDataProvider toolbarDataProvider, Tracer tracer, PeekabootPaths paths, String swaggerUiPath) {
+        this.toolbarDataProvider = toolbarDataProvider;
+        this.tracer = tracer;
+        this.paths = paths;
+        this.swaggerUiPrefix = swaggerUiPrefix(swaggerUiPath);
+    }
+
+    /**
+     * Where springdoc serves the UI for a given {@code springdoc.swagger-ui.path}: the
+     * configured path's directory part plus {@code /swagger-ui/}. springdoc's
+     * {@code AbstractSwaggerWelcome.calculateUiRootCommon} takes everything before the
+     * path's last {@code /} as the UI root, and the swagger-ui resource handlers sit under
+     * that root - so the default {@code /swagger-ui.html} yields {@code /swagger-ui/},
+     * while {@code /admin/docs.html} moves the whole UI to {@code /admin/swagger-ui/}.
+     */
+    static String swaggerUiPrefix(String swaggerUiPath) {
+        int lastSlash = swaggerUiPath.lastIndexOf('/');
+        String directory = lastSlash > 0 ? swaggerUiPath.substring(0, lastSlash) : "";
+        return directory + "/swagger-ui/";
+    }
+
+    @Override
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+
+        if (!(request instanceof HttpServletRequest httpRequest)
+                || !(response instanceof HttpServletResponse httpResponse)) {
+            log.trace("Skipping non-HTTP request");
+            chain.doFilter(request, response);
+            return;
+        }
+
+        if (shouldSkip(httpRequest)) {
+            chain.doFilter(request, response);
+            return;
+        }
+
+        log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), httpRequest.getRequestURI());
+        ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
+
+        // Deliberately not a finally: a handler that throws mid-render leaves a partial page
+        // in the buffer, and committing it as a 200 would take the container's error page
+        // away from the developer. The buffer is dropped and the exception propagates.
+        chain.doFilter(request, wrappedResponse);
+
+        try {
+            if (httpRequest.isAsyncStarted()) {
+                // async handlers keep writing after this filter returns;
+                // hand the response over and skip injection
+                wrappedResponse.enablePassthrough();
+            } else if (!wrappedResponse.isPassthrough()) {
+                processResponse(httpRequest, wrappedResponse);
+            }
+        } catch (Exception e) {
+            if (isClientAbort(e)) {
+                log.debug(
+                        "Client closed the connection before the toolbar could be written: {} {}",
+                        httpRequest.getMethod(),
+                        httpRequest.getRequestURI());
+            } else {
+                log.warn("Failed to inject dev toolbar, returning original response", e);
+                if (!httpResponse.isCommitted()) {
+                    wrappedResponse.copyBodyToResponse();
+                }
+            }
+        }
+    }
+
+    /**
+     * Whether the write failed because the client hung up - a browser navigating away
+     * mid-response - rather than because of anything on this side. Tomcat wraps that in
+     * its own ClientAbortException, Jetty throws its EofException; other containers
+     * surface the socket error itself.
+     */
+    private static boolean isClientAbort(Throwable failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof IOException
+                    && (CLIENT_ABORT_EXCEPTION_NAMES.contains(t.getClass().getSimpleName())
+                            || saysClientWentAway(t.getMessage()))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean saysClientWentAway(String message) {
+        if (message == null) {
+            return false;
+        }
+        String lower = message.toLowerCase(Locale.ROOT);
+        // "connection was aborted": Windows' "An established connection was aborted by
+        // the software in your host machine", passed through by the JDK
+        return lower.contains("broken pipe")
+                || lower.contains("connection reset")
+                || lower.contains("connection was aborted");
+    }
+
+    private boolean shouldSkip(HttpServletRequest request) {
+        String path = PeekabootPaths.pathWithinApplication(request);
+
+        if (paths.isExcluded(path)) {
+            return true;
+        }
+
+        String lowerPath = path.toLowerCase(Locale.ROOT);
+        for (String ext : EXCLUDED_EXTENSIONS) {
+            if (lowerPath.endsWith(ext)) {
+                return true;
+            }
+        }
+
+        String xRequestedWith = request.getHeader("X-Requested-With");
+        return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
+    }
+
+    private void processResponse(HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse)
+            throws IOException {
+
+        wrappedResponse.flushBuffer();
+
+        String contentType = wrappedResponse.getContentType();
+        log.trace("Response content-type: {} for {}", contentType, request.getRequestURI());
+
+        if (contentType == null || !contentType.contains(CONTENT_TYPE_HTML)) {
+            log.trace("Skipping toolbar injection - not HTML: {}", contentType);
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+
+        String content = wrappedResponse.getContentAsString();
+        log.trace("Response content length: {} chars", content.length());
+
+        int bodyEndIndex = lastIndexOfIgnoreCase(content, BODY_END_TAG);
+
+        if (bodyEndIndex == -1) {
+            log.trace("Skipping toolbar injection - no </body> tag found");
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+
+        String traceId = null;
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan != null) {
+            traceId = currentSpan.context().traceId();
+        }
+        log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, traceId);
+
+        String toolbarHtml;
+        try {
+            if (isSwaggerUi(request)) {
+                toolbarHtml = generateSwaggerToolbarHtml(request);
+            } else {
+                toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to generate toolbar HTML", e);
+            wrappedResponse.copyBodyToResponse();
+            return;
+        }
+
+        String modifiedContent = content.substring(0, bodyEndIndex) + toolbarHtml + content.substring(bodyEndIndex);
+
+        // encode with the response's declared charset, not blindly UTF-8
+        byte[] modifiedBytes = modifiedContent.getBytes(wrappedResponse.charset());
+        wrappedResponse.copyBodyToResponse(modifiedBytes);
+
+        log.trace("Toolbar injected successfully for {}", request.getRequestURI());
+    }
+
+    /**
+     * Case-insensitive lastIndexOf on the original string; a lowercased copy
+     * is not length-preserving for all characters (e.g. U+0130).
+     */
+    private static int lastIndexOfIgnoreCase(String content, String search) {
+        for (int i = content.length() - search.length(); i >= 0; i--) {
+            if (content.regionMatches(true, i, search, 0, search.length())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String generateToolbarHtml(
+            HttpServletRequest request, ContentBufferingResponseWrapper response, String traceId) {
+        String basePath = PeekabootPaths.basePath(request);
+        String summaryJson = toolbarDataProvider.getToolbarSummaryJson(
+                basePath, request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
+        return toolbarShell.render(basePath, summaryJson);
+    }
+
+    private boolean isSwaggerUi(HttpServletRequest request) {
+        return PeekabootPaths.pathWithinApplication(request).startsWith(swaggerUiPrefix);
+    }
+
+    private String generateSwaggerToolbarHtml(HttpServletRequest request) {
+        String basePath = PeekabootPaths.basePath(request);
+        return toolbarShell.render(basePath, toolbarDataProvider.getIdleModeJson(basePath));
+    }
+}
