@@ -164,6 +164,18 @@ Pinning to a traceId does not mean searching the store for it: a JSON endpoint a
 with `Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
 `OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
 
+Two shared things have no lock and need care instead. The JVM-wide Logback context is one:
+every context that starts re-initialises it, which detaches peekaboot's capture appender
+until `LogbackCaptureReinstaller` puts it back (see `docs/ARCHITECTURE.md`, *Log Capture*),
+so a request served in that window is traced with no logs against it. A test must therefore
+establish that its trace carries the log rather than assume it —
+`PlaywrightTestBase.openPageThatLogsAnError()` reloads until the trace does, checked against
+the endpoint the overlay itself reads. The same context is why
+`PeekabootActuatorServiceIT` re-levels and redirects one logger for the length of each of
+its methods, which every concurrently running class sees; it is inert there because only
+that class's own context has an endpoint that throws, and the only real remedy —
+`@Isolated` — stops the whole suite for the class.
+
 The database needs no such discipline: `application-test.yml` and `application-security.yml`
 set no `spring.datasource.url`, so Boot's `generate-unique-name` default gives every context its
 own `jdbc:h2:mem:<uuid>` (H2 keys in-memory databases by name per JVM — a shared fixed name

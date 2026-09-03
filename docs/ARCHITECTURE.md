@@ -90,6 +90,15 @@ collector's `fillMissed()` — the same code that pads a suspended
 laptop or a stalled sampler — runs at that level's next tick or roll-up and pads exactly
 the missed interval, capped at the ring size.
 
+A run whose restore did not complete keeps its history: `InsightsSnapshotStore` refuses to
+write over a file it never claimed, so a process that started with a handful of samples
+cannot replace a full retention window. The guard is deliberately blunt — it is keyed on
+whether the restore completed, not on how complete the live rings have since become, so a
+run whose restore timed out (a snapshot parse slower than the five-second wait) never
+persists again however long it then runs. Lifting it once every level's ring is as full as
+the persisted header says the file is would keep the protection and end the starvation;
+until then the file on disk is only ever as good as the last run that restored it.
+
 ### `lifecycle.jsonl`
 
 The application's start/stop history: one JSON object per line, at most 1000 events
@@ -702,6 +711,16 @@ Because `LogbackAppenderRegistrar` is registered only inside `DevToolbarAutoConf
 correlated logs require `peekaboot.dev-toolbar=true` — a trace's Logs tab stays empty
 without it, independent of `peekaboot.tracing.enabled`.
 
+Capture is off for as long as any application in the JVM is re-initialising Logback. Spring
+Boot resets the JVM-wide logger context on every application start, which detaches the
+appender; `LogbackCaptureReinstaller` reattaches it on that same event, but a request served
+in between is traced with no logs against it. One application never sees this — its
+re-initialisation happens before it serves anything — so it belongs to test suites, where
+contexts start while other contexts serve requests. A test that asserts on a specific
+request's log must therefore establish that the trace carries it rather than assume it (see
+`docs/TESTING.md`); closing the window from outside Logback is not possible, because Boot
+stops the logger context before resetting it, which drops even reset-resistant listeners.
+
 ### Span Deduplication
 
 Deduplication runs primarily **on write**, in `TraceDataBundle.addSpan`: as each span
@@ -792,6 +811,21 @@ SpanData
 ├── remoteServiceName
 └── creationOrder: long
 ```
+
+### The insights SSE stream
+
+`InsightsSsePublisher` fans the collector's ticks and roll-ups out to every open dashboard
+over `/peekaboot/api/insights/stream`. A tick carries series values only — tiles are read
+from `/peekaboot/api/insights/config`, not streamed. Each subscriber gets its own bounded
+send lane and sender thread, so one wedged peer drops its own events instead of stalling
+the stream; a 15-second heartbeat keeps idle connections open, and the publisher refuses
+past `MAX_SUBSCRIBERS` with a 503.
+
+Emitters carry a five-minute timeout. It only reclaims a peer that vanished without closing
+its socket — the heartbeat and the lane overflow already detect one that is merely wedged —
+and every expiry costs a full resync, which for the default 39 series is roughly 393,000
+values per open dashboard at level 1. Thirty minutes would cut that by an order of magnitude
+with nothing functional lost; five is simply the value it was built with.
 
 ### Insights Domain
 
