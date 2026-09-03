@@ -35,8 +35,11 @@ thread — and for a *direct* call to a `@Scheduled` method, which carries only 
 own `class`/`method` tags, not Spring's pair) instead of duplicating them here.
 
 `CONNECTION_POOL` marks a trace whose root is datasource-micrometer's `connection` span
-&mdash; a pooled connection acquired outside any traced work (an external health probe,
-HikariCP maintenance). It is the one type the listing endpoint leaves out of its default
+&mdash; a pooled connection acquired outside any traced work (HikariCP maintenance), which
+means a span carrying no parent at all. A connection acquired while serving a request whose
+root span Peekaboot skips &mdash; its own, the actuator's &mdash; is the only span stored
+under that trace id and so *looks* like a root, but it happened inside traced work and is
+not this type. It is the one type the listing endpoint leaves out of its default
 view: a request naming no root action type gets every other type, so with no `type` in the
 URL the Traces tab shows everything but these, and selecting the Connection Pool chip both
 reveals them and puts `type=CONNECTION_POOL` in the shareable URL. A client that wants the

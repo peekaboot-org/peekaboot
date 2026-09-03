@@ -105,8 +105,14 @@ class TraceApiClient {
                 "a trace whose rootOperation contains '" + rootOperationFragment + "' in the " + bucket + " bucket");
     }
 
-    JsonNode awaitTraceOfType(RootActionType type) {
-        return awaitListedTrace("rootActionType=" + type.name(), trace -> true, "a " + type + " trace");
+    /**
+     * The first listed {@code type} trace that {@code match} accepts. The predicate is not
+     * optional decoration: the listing is shared with every other test exercising the same
+     * application, so the type alone names a trace some other actor produced just as readily
+     * as the one the caller is asserting about.
+     */
+    JsonNode awaitTraceOfType(RootActionType type, Predicate<JsonNode> match) {
+        return awaitListedTrace("rootActionType=" + type.name(), match, "a " + type + " trace");
     }
 
     /** Polls the listing endpoint with {@code query} until a listed trace satisfies {@code match}. */

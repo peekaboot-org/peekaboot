@@ -778,8 +778,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void connectionPoolTracesAreHiddenByDefaultAndRevealedByTheirChip() throws SQLException {
-        // What an external health probe or HikariCP maintenance does: acquire a pooled
-        // connection outside any traced work, yielding a standalone CONNECTION_POOL trace.
+        // What HikariCP maintenance does: acquire a pooled connection outside any traced
+        // work, yielding a standalone CONNECTION_POOL trace.
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.isValid(1)).isTrue();
         }

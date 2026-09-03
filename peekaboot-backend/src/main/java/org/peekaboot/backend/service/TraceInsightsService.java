@@ -37,9 +37,9 @@ public class TraceInsightsService {
 
     /**
      * The types a request that names none asks for. A connection-pool trace is routine
-     * maintenance - an external health probe, a HikariCP refill acquiring a connection
-     * outside any traced work - and enough of them arrive to drown everything else, so
-     * they are kept in the store but out of the default view.
+     * maintenance - a HikariCP refill or keepalive acquiring a connection outside any
+     * traced work - and enough of them arrive to drown everything else, so they are kept
+     * in the store but out of the default view.
      */
     private static final Set<RootActionType> DEFAULT_VIEW_TYPES =
             Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(RootActionType.CONNECTION_POOL)));

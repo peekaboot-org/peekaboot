@@ -151,7 +151,7 @@ public class TraceTreeMapper {
         if (kind == Span.Kind.SERVER) {
             return detectServerActionType(tags);
         }
-        return detectNonServerActionType(kind, rootSpan.name(), tags);
+        return detectNonServerActionType(kind, rootSpan.name(), rootSpan.parentId(), tags);
     }
 
     /**
@@ -161,7 +161,8 @@ public class TraceTreeMapper {
      * been exported yet, so they say nothing about what started the trace - UNKNOWN is
      * the honest answer there, not HTTP_REQUEST.
      */
-    private static RootActionType detectNonServerActionType(Span.Kind kind, String name, Map<String, String> tags) {
+    private static RootActionType detectNonServerActionType(
+            Span.Kind kind, String name, String parentId, Map<String, String> tags) {
         // Spring's scheduled-task observation tag pair -> SCHEDULED_JOB. A genuine
         // @Scheduled invocation carries no Span.Kind (Micrometer only assigns one for
         // Sender/Receiver-style contexts), so this can't be pre-empted by the CLIENT-kind
@@ -180,7 +181,17 @@ public class TraceTreeMapper {
         // every datasource observation in a HikariCP app carries jdbc.datasource.*; the fixed
         // contextual name "connection" (JdbcObservationDocumentation.CONNECTION) singles out
         // the acquisition.
-        if (kind == Span.Kind.CLIENT && "connection".equals(name) && hasTagPrefix(tags, "jdbc.datasource.")) {
+        //
+        // The parent check is what makes "outside traced work" true rather than merely
+        // apparent, and it is the same caveat the http./rpc. note above states. A request on
+        // an excluded prefix - Peekaboot's own, or the actuator's - has its root span skipped,
+        // so a connection acquired while serving it is the only span stored under that trace
+        // id and becomes the bundle's apparent root. Only a span that carried no parent at all
+        // was really acquired outside a trace.
+        if (kind == Span.Kind.CLIENT
+                && parentId == null
+                && "connection".equals(name)
+                && hasTagPrefix(tags, "jdbc.datasource.")) {
             return RootActionType.CONNECTION_POOL;
         }
         // null kind -> INTERNAL (Micrometer's Span.Kind enum has no INTERNAL value;
