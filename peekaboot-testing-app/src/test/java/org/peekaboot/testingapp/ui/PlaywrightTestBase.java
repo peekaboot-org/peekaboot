@@ -192,6 +192,46 @@ abstract class PlaywrightTestBase {
     }
 
     /**
+     * Loads the page that logs one ERROR line, and returns its trace id once that trace
+     * actually carries the log.
+     *
+     * <p>Reloads until it does. Every application context that starts in this JVM has Spring
+     * Boot re-initialise Logback, which detaches peekaboot's capture appender until
+     * {@code LogbackCaptureReinstaller} puts it back; a request served in that window is
+     * traced with no logs against it. Test classes run concurrently here, so contexts start
+     * throughout a suite run. The toolbar publishes its trace id from the server-rendered
+     * blob before it has fetched anything, and the overlay fetches its trace once and never
+     * refreshes - so a caller that navigates and opens the Logs tab on that signal alone
+     * renders a tab that stays empty, with nothing left to bring the rows in.
+     */
+    protected String openPageThatLogsAnError() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            page.navigate(baseUrl + "/?error=true");
+            String traceId = toolbar.traceId();
+            if (traceCarriesALog(traceId)) {
+                return traceId;
+            }
+        }
+        throw new AssertionError("no /?error=true request produced a trace carrying its own ERROR log");
+    }
+
+    /** Polls the endpoint the overlay itself reads, so a caller sees what the overlay would. */
+    private boolean traceCarriesALog(String traceId) {
+        return (Boolean) page.evaluate("""
+                async traceId => {
+                    for (let attempt = 0; attempt < 20; attempt++) {
+                        const response = await fetch('/peekaboot/api/traces/' + traceId + '/insights');
+                        if (response.ok && ((await response.json()).logs || []).length > 0) {
+                            return true;
+                        }
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    return false;
+                }
+                """, traceId);
+    }
+
+    /**
      * Resolved value of a CSS custom property on the first match of {@code selector}.
      * Throws if the property does not resolve to a value, since an empty string is
      * indistinguishable from "both sides of a comparison are missing the token".

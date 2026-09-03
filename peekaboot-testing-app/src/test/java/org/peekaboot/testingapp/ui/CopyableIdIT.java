@@ -106,7 +106,7 @@ class CopyableIdIT extends PlaywrightTestBase {
      * path), then switches to the Logs tab.
      */
     private void openLogsTabWithAtLeastOneLogRow() {
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
     }

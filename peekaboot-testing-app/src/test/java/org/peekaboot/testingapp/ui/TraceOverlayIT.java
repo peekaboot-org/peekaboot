@@ -90,8 +90,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * toolbar-path counterpart, which asserts only the DOM hand-off for that reason.
      */
     private String openOverlayForTheMultiSpanLogTrace() {
-        page.navigate(baseUrl + "/?error=true");
-        toolbar.traceId();
+        openPageThatLogsAnError();
 
         String traceId = waitForMultiSpanLogTraceId();
 
@@ -149,12 +148,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * kind - only OtelSpanExporter does that - so .pk-gantt-kind.server never actually
      * renders here, and a result-set row-count badge needs a JDBC instrumentation detail
      * this test has no reason to depend on. The logs-tab span-filter chip needs only one
-     * real log entry attached to the trace, which /?error=true reliably provides.
+     * real log entry attached to the trace, which openPageThatLogsAnError() guarantees.
      */
     @Test
     void logsFilterChipUsesTheContrastTunedForeground() {
         setStoredTheme("light");
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
         overlay.click(".pk-log__span");
@@ -175,7 +174,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void logsFilterChipShowsTheSpanNameWithItsShortenedId() {
         setStoredTheme("light");
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
         overlay.click(".pk-log__span");
@@ -532,8 +531,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void spanLogsToggleOpensTheLogsTabFilteredToThatSpanFromTheToolbar() {
-        page.navigate(baseUrl + "/?error=true");
-        toolbar.traceId();
+        openPageThatLogsAnError();
         waitForMultiSpanLogTraceId();
 
         toolbar.openOverlay();
@@ -617,8 +615,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void logRowSpanLinkJumpsToTheSpanTree() {
-        page.navigate(baseUrl + "/?error=true");
-        toolbar.traceId();
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
         overlay.waitFor(".pk-log__goto-span");

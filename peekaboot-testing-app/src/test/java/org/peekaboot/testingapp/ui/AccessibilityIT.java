@@ -186,7 +186,7 @@ class AccessibilityIT extends PlaywrightTestBase {
      */
     @Test
     void logRowCopyControlsKeepTheMinimumHitTarget() {
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
         page.waitForSelector(".pk-log__span-cell .pk-copy");
@@ -211,7 +211,7 @@ class AccessibilityIT extends PlaywrightTestBase {
             assertThat(page.getAttribute(field, "aria-label")).as(field).isNotBlank();
         }
 
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
 
@@ -229,7 +229,7 @@ class AccessibilityIT extends PlaywrightTestBase {
      */
     @Test
     void overlayGlyphControlsKeepTheMinimumHitTarget() {
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-link");
         for (String control :

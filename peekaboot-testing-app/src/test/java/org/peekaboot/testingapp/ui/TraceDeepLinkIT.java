@@ -112,8 +112,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // unlike deepLinkToATraceLogsTabRestoresTabAndFilters this test isn't checking
         // filter correctness, only that changing a filter rewrites the URL without pushing
         // a new history entry.
-        page.navigate(baseUrl + "/?error=true");
-        String traceId = toolbar.traceId();
+        String traceId = openPageThatLogsAnError();
 
         openDashboard();
         // Establishes a real pushed '#traces' history entry - the state Back below must
@@ -216,7 +215,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
     @Test
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {
         setStoredTheme("light");
-        page.navigate(baseUrl + "/?error=true");
+        openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
 
