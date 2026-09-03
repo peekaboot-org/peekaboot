@@ -324,6 +324,46 @@ class TraceInsightsServiceTest {
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
 
+    /**
+     * A fragment is somebody else's trace seen through a hole, not a trace of its own, so
+     * no listing carries it - the wildcard, which exists to show the store as it stands,
+     * included. Left in, it would surface as a phantom entry that vanishes again once the
+     * skipped root reaches the exporter and discards the id.
+     */
+    @Test
+    void anIncompleteFragmentIsListedByNoRequest() {
+        addTrace("http1", 100, false);
+        addExcludedRequestFragment("fragment1");
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(TraceTree::traceId)
+                .containsExactly("http1");
+        assertThat(service.getInsights(10, TraceBucket.ALL, null, null).traces())
+                .extracting(TraceTree::traceId)
+                .containsExactly("http1");
+    }
+
+    /**
+     * The case the fragment rule must not catch: an inbound request continuing a caller's
+     * trace carries a parent id that never arrives either, but a SERVER root is the start
+     * of this application's work and a trace in its own right.
+     */
+    @Test
+    void anInboundTraceContinuingARemoteCallerIsStillListed() {
+        store.addSpan(span("span-inbound")
+                .in("remote1")
+                .parent("caller-span-in-another-service")
+                .named("GET /users/{id}")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tags(Map.of("http.method", "GET"))
+                .build());
+
+        assertThat(service.getInsights(10, TraceBucket.ALL, "*", null).traces())
+                .extracting(TraceTree::traceId)
+                .containsExactly("remote1");
+    }
+
     /** The way past the default view's exclusion for a client that wants the store as it is. */
     @Test
     void aWildcardTypeFilterListsConnectionPoolTracesAlongsideEveryOther() {
@@ -524,6 +564,25 @@ class TraceInsightsServiceTest {
                 .tags(Map.of(
                         "code.function", "reconcileOrders",
                         "code.namespace", "org.peekaboot.example.OrderReconciler"))
+                .build());
+    }
+
+    /**
+     * The fragment an excluded request leaves behind. Peekaboot skips the root span of a
+     * request on an excluded prefix - its own, the actuator's - so a connection acquired
+     * while serving it is the only span stored under that trace id, and reads as the
+     * bundle's root despite carrying a parent id that never arrives.
+     */
+    private void addExcludedRequestFragment(String traceId) {
+        store.addSpan(span("span-fragment-" + traceId)
+                .in(traceId)
+                .parent("root-span-never-exported")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tags(Map.of(
+                        "jdbc.datasource.name", "dataSource",
+                        "jdbc.datasource.pool", "HikariPool-1"))
                 .build());
     }
 

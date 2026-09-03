@@ -848,9 +848,9 @@ class TraceTreeMapperTest {
 
     /**
      * The exact shape datasource-micrometer exports when a pooled connection is acquired
-     * outside any traced work (an external health probe, HikariCP maintenance): contextual
-     * name "connection", CLIENT kind, and only the {@code jdbc.datasource.*} connection
-     * keys as tags - no {@code db.*}, no {@code jdbc.query[N]}.
+     * outside any traced work (HikariCP maintenance): contextual name "connection", CLIENT
+     * kind, no parent span, and only the {@code jdbc.datasource.*} connection keys as tags
+     * - no {@code db.*}, no {@code jdbc.query[N]}.
      */
     @Test
     void map_shouldClassifyAStandaloneConnectionSpanAsConnectionPool() {
@@ -867,6 +867,32 @@ class TraceTreeMapperTest {
         TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(rootSpan)), false);
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.CONNECTION_POOL);
+    }
+
+    /**
+     * The fragment an excluded request leaves behind. Peekaboot skips the root span of its
+     * own and the actuator's requests, and a child span ends before its parent does, so the
+     * connection acquired inside such a request can be the only span stored under that trace
+     * id - which makes it the bundle's apparent root. Its parent id says what the tags cannot:
+     * the acquisition happened inside traced work, so it is not the standalone acquisition
+     * CONNECTION_POOL names.
+     */
+    @Test
+    void map_shouldNotClassifyAConnectionSpanWithAnUnexportedParentAsConnectionPool() {
+        var connectionSpan = span("child")
+                .parent("root-span-never-exported")
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tags(Map.of(
+                        "jdbc.datasource.name", "dataSource",
+                        "jdbc.datasource.pool", "HikariPool-1",
+                        "jdbc.datasource.driver", "org.h2.Driver"))
+                .build();
+
+        TraceTree result = mapper.map(TraceData.fromSpans("trace1", List.of(connectionSpan)), false);
+
+        assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
     @Test
