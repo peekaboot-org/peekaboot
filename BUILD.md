@@ -10,7 +10,7 @@ every Maven statement in this document is authoritative and the Gradle build mus
 in lockstep.
 
 Both builds ship wrapper scripts, each pinned by SHA-256 checksum: `./mvnw` (downloads
-Maven 3.9.9, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
+Maven 3.9.16, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
 9.7.0, `gradle/wrapper/gradle-wrapper.properties`). A locally installed Maven 3.9+ works
 exactly the same.
 
@@ -19,7 +19,7 @@ exactly the same.
 | | |
 | --- | --- |
 | JDK | **25** — `maven.compiler.release=25` / Gradle `options.release = 25`, no toolchains, no fallback |
-| Maven / Gradle | via the checked-in wrappers (`./mvnw`, `./gradlew`); a local Maven 3.9+ (verified on 3.9.9) also works |
+| Maven / Gradle | via the checked-in wrappers (`./mvnw`, `./gradlew`); a local Maven 3.9+ (verified on 3.9.16) also works |
 | Docker | Only for running the sample app and for `ScreenshotCapture`. **Not** needed by `mvn verify` |
 | Network | First run only: the wrappers download their build tool, and Playwright downloads Chromium into `~/.cache/ms-playwright` |
 
@@ -196,7 +196,7 @@ worth having on both sides.
 | Formatting | `spotless-maven-plugin` 3.10.1 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
 | Bug patterns, compile-time | `error_prone_core` 2.50.0 via the compiler plugin | defaults | main + test |
 | Bug patterns, bytecode | `spotbugs-maven-plugin` 4.10.4.0 | `config/spotbugs-exclude.xml` | main classes |
-| Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.0.0) | `config/checkstyle.xml` | main only |
+| Complexity metrics | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.1.0) | `config/checkstyle.xml` | main only |
 | Code smells | `maven-pmd-plugin` 3.28.0 (PMD 7.27.0) | `config/pmd-ruleset.xml` | main Java |
 | Coverage floor | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all published classes, reactor-wide |
 | Dependency upper bounds | `maven-enforcer-plugin` 3.6.3 | inline in the parent POM | every module's resolved closure |

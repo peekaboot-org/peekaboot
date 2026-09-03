@@ -186,10 +186,10 @@
         <pluginManagement>
             <plugins>
                 <!-- The lifecycle plugins Maven binds by itself, pinned so a local Maven
-                     other than the wrapper's 3.9.9 builds the same way. The versions are
+                     other than the wrapper's 3.9.16 builds the same way. The versions are
                      the ones spring-boot-dependencies manages, so the testing-app (parented
                      to spring-boot-starter-parent) runs identical plugins; the site plugin,
-                     which Boot does not manage, is Maven 3.9.9's own binding. -->
+                     which Boot does not manage, is Maven 3.9.16's own binding. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>
