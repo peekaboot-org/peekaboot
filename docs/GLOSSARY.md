@@ -26,7 +26,7 @@ The category of work initiated by the root span. Used to classify and filter tra
 `detectRootActionType()` checks a fixed set of rules in priority order and returns the
 first match — a span matching more than one row always gets the one checked first, not
 the most specific-sounding one. See
-[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#root-action-type) for
+[www.peekaboot.org/docs/concepts](https://www.peekaboot.org/docs/concepts/#root-action-type) for
 the full priority table and the classification gotchas (`HTTP_REQUEST` occupying two
 priorities, `SCHEDULED_JOB` keyed on the `code.function`/`code.namespace` tag pair
 Spring's own scheduled-task observation sets rather than a name match, and the resulting
@@ -73,7 +73,7 @@ last two dot-segments of `target` matched against `rootOperation`), which is wha
 the Scheduled Tasks tab's "View traces" link (`dashboard/tabs/scheduled-tasks.js`) filter
 correctly to a task's own runs; see `DashboardTabsIT.schedulerTracesLinkArrivesFiltered`
 for the end-to-end proof, and
-[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/) for the trace-side
+[www.peekaboot.org/docs/concepts](https://www.peekaboot.org/docs/concepts/) for the trace-side
 vocabulary.
 
 ## Data Representations
@@ -110,8 +110,8 @@ A detected problem or concern within a span, identified by analysis.
 ### Issue Type
 Category of detected issue: `SLOW`, `VERY_SLOW`, `ERROR`, `SLOW_QUERY`, and
 `HIGH_QUERY_COUNT`. See
-[peekaboot.org/docs/concepts](https://peekaboot.org/docs/concepts/#issues) for what each
-one fires on, and [peekaboot.org/docs/configuration](https://peekaboot.org/docs/configuration/)
+[www.peekaboot.org/docs/concepts](https://www.peekaboot.org/docs/concepts/#issues) for what each
+one fires on, and [www.peekaboot.org/docs/configuration](https://www.peekaboot.org/docs/configuration/)
 for the current default thresholds and their property names.
 
 **Usage:** `IssueType` enum
@@ -142,7 +142,7 @@ How many traces each store bucket holds, carried twice on every list response: `
 |-------|-------------|
 | `all` | Traces in the All bucket |
 | `errors` | Traces in the Errors bucket — an errored span or an error-level log anywhere in the trace |
-| `slow` | Traces in the Slow bucket — a whole-trace duration check against `slow-trace-threshold-ms`, **not** the same as a `SLOW`/`VERY_SLOW` issue on a span; see [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) |
+| `slow` | Traces in the Slow bucket — a whole-trace duration check against `slow-trace-threshold-ms`, **not** the same as a `SLOW`/`VERY_SLOW` issue on a span; see [www.peekaboot.org/docs/tracing](https://www.peekaboot.org/docs/tracing/) |
 
 **Usage:** `BucketCounts` record, `bucketCounts`/`filteredBucketCounts` fields on `TraceInsightsResponse`
 

@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.APIResponse;
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
 import java.util.ArrayList;
@@ -10,6 +11,37 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class DashboardShellIT extends PlaywrightTestBase {
+
+    /**
+     * The dashboard is the one Peekaboot surface a user reaches without already knowing the
+     * project, so it carries the single link out to the documentation site. It opens in a new
+     * tab because the dashboard holds live auto-refreshing state that navigating away discards.
+     */
+    @Test
+    void footerLinksToTheDocumentationSite() {
+        openDashboard();
+
+        Locator docs = page.locator(".pk-footer a");
+
+        assertThat(docs.textContent()).isEqualTo("Documentation");
+        assertThat(docs.getAttribute("href")).isEqualTo("https://www.peekaboot.org/docs/");
+        assertThat(docs.getAttribute("target")).isEqualTo("_blank");
+        assertThat(docs.getAttribute("rel")).contains("noopener");
+    }
+
+    /**
+     * --pk-primary-text, never --pk-primary: the fill green measures 2.61:1 as text (see
+     * peekaboot-frontend/README.md). The underline is not decoration either - without it
+     * colour alone would mark the link, which WCAG 1.4.1 does not allow.
+     */
+    @Test
+    void documentationLinkIsDrawnInTheOnBackgroundGreenAndUnderlined() {
+        setStoredTheme("light");
+        openDashboard();
+
+        assertThat(cssVar(".pk-footer a", "color")).isEqualTo("rgb(68, 119, 24)");
+        assertThat(cssVar(".pk-footer a", "text-decoration-line")).isEqualTo("underline");
+    }
 
     @Test
     void dashboardRendersHeaderAndDefaultTab() {

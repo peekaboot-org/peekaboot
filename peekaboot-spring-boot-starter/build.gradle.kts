@@ -25,7 +25,7 @@ val bannedFromConsumers = setOf(
     "com.zaxxer:HikariCP",
 )
 
-val checkOptionalDependencyContract by tasks.registering {
+val checkOptionalDependencyContract = tasks.register("checkOptionalDependencyContract") {
     description = "Fails if the starter would hand a consumer a servlet stack or a connection pool."
     group = "verification"
     val resolved = configurations.runtimeClasspath.map { conf ->

@@ -45,7 +45,7 @@ dependencies {
 // The configuration processor turns the @ConfigurationProperties Javadoc into the metadata
 // an IDE offers on peekaboot.* keys. Nothing else notices when it stops running.
 // Mirrors the Maven enforcer rule on this module.
-val checkConfigurationMetadata by tasks.registering {
+val checkConfigurationMetadata = tasks.register("checkConfigurationMetadata") {
     description = "Fails if spring-boot-configuration-processor produced no metadata."
     group = "verification"
     dependsOn(tasks.compileJava)
