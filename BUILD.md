@@ -134,14 +134,18 @@ applies the same convention plus the Spring Boot and git-properties plugins — 
 consume-the-starter-as-a-published-artifact proof stays with Maven, which is why the
 Maven module keeps its `spring-boot-starter-parent` parent.
 
-**Lockstep.** Two values live once, in `gradle.properties`: `version` (the eight poms'
-`<version>` — `maven-release-plugin` rewrites only the poms, so **bump it by hand after every
-release**, see the checklist under [Releasing](#releasing), or `./gradlew build` keeps
-producing pre-release jars) and `springBootVersion` (the root pom's `spring-boot.version` and the testing-app's
-parent version), which the convention plugin turns into the BOM import every module gets
-and `buildSrc` reads for the Boot plugin. Mockito's agent jar takes its version from that
+**Lockstep.** The module version and the build instant are *derived*, not copied:
+`settings.gradle.kts` reads `<version>` and `project.build.outputTimestamp` out of the root
+`pom.xml` and hands both to every Gradle project. `maven-release-plugin` rewrites the poms
+alone, so a hand-kept copy on the Gradle side went stale at every release and nothing
+noticed — CI runs Maven only. `BuildVersionLockstepTest` fails if such a copy reappears.
+One value still lives once in `gradle.properties`: `springBootVersion` (the root pom's
+`spring-boot.version` and the testing-app's parent version), which the convention plugin
+turns into the BOM import every module gets and `buildSrc` reads for the Boot plugin; the
+same test compares it against the version Maven resolves, because Dependabot cannot group
+the two ecosystems into one pull request. Mockito's agent jar takes its version from that
 BOM, as Maven does. Every other shared literal — Error Prone, palantir, the ratchet SHA,
-Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors, the build timestamp, Playwright,
+Checkstyle, SpotBugs, JaCoCo, PMD, the coverage floors, Playwright,
 springdoc and the testing-app's direct dependencies — is written on both sides and has to
 change on both. Dependabot watches the `gradle` ecosystem next to `maven`, so version bumps
 arrive as paired PRs; the Gradle half is never auto-merged, because nothing in CI would
@@ -151,8 +155,8 @@ build it — check it against the merged Maven bump by hand.
 cross-diffing): both builds are self-reproducible - byte-identical jars across
 rebuilds - via `project.build.outputTimestamp` (Maven) and
 `preserveFileTimestamps=false` + `reproducibleFileOrder=true` (Gradle), with the
-testing-app's `build-info.properties`/`git.properties` build times pinned to the same
-instant on both sides. Across systems, every class file and resource in the published
+testing-app's `build-info.properties`/`git.properties` build times taking that same pom
+property on both sides. Across systems, every class file and resource in the published
 jars is byte-identical; the remaining, expected differences are `META-INF/MANIFEST.MF`
 (Maven adds `Created-By`/`Build-Jdk-Spec` lines) and Maven's `META-INF/maven/**`
 metadata. The testing-app boot jar additionally differs in dependency resolution:
@@ -404,17 +408,13 @@ which is how recursion is prevented) runs:
    `GITHUB_TOKEN` trigger no workflows — so until the job runs with a token that does, the
    PR waits for a human merge (an open one is reused by the next release)
 
-Nothing automates what follows a release; do it on `dev` once the merge-back has landed:
+Nothing automates what follows a release; do it on `dev` once the merge-back has landed. The
+Gradle build needs no step here — it takes the version and the build instant from the poms:
 
-1. Set `version` in `gradle.properties` to the new `-SNAPSHOT` version the poms carry.
-2. `release:prepare` also rewrites `project.build.outputTimestamp` in both parent poms; copy
-   the new instant into `peekaboot-testing-app/build.gradle.kts` (two places: the
-   `buildInfo` `time` and the `git.build.time` custom property), or the two builds' jars
-   stop being byte-identical.
-3. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
+1. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
    to the released version — every dependency snippet on the site reads it.
-4. Remove the pre-release callout from the site's `quick-start.md`.
-5. Put the released version into the two quick-start snippets in `README.md`.
+2. Remove the pre-release callout from the site's `quick-start.md`.
+3. Put the released version into the two quick-start snippets in `README.md`.
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
