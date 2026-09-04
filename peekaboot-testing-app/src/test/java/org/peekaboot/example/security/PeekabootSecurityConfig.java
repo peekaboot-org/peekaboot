@@ -13,7 +13,7 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * The worked example published on the website's <a
- * href="https://peekaboot.org/docs/security/">security page</a>, kept here as compiled,
+ * href="https://www.peekaboot.org/docs/security/">security page</a>, kept here as compiled,
  * executed code so the page cannot drift from something that works.
  * {@code SecuredPeekabootIT} and {@code SecuredDashboardIT} are its proof;
  * change one and change the other.

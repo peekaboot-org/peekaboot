@@ -421,10 +421,10 @@ The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 messages since the last `x.y.z` tag, so **commit message discipline decides the version bump**.
 Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
 GPG-signs with `raphael@peekaboot.org` and publishes through
-`central-publishing-maven-plugin`. That plugin runs with `autoPublish=false` /
-`waitUntil=validated`, so a green run leaves a *validated* deployment awaiting a manual
-publish in the Portal; the production values sit in trailing comments beside them
-(`true` / `published`) and make the build wait until the artifacts are live. The sources and
+`central-publishing-maven-plugin`. That plugin runs with `autoPublish=true` /
+`waitUntil=published`, so the job does not go green until the artifacts are live on Central.
+Flipping the pair to `false`/`validated` rehearses an upload instead: the run stops at a
+validated deployment that waits for a manual publish in the Portal. The sources and
 javadoc jars are *not* release-only: both are attached on every build of the published
 modules, and javadoc runs with `doclint` at `all,-missing` and fails the build on an error, so
 a broken `@link` surfaces at `mvn package` rather than after `release:prepare` has pushed the

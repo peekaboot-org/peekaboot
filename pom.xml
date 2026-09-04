@@ -21,7 +21,7 @@
         <module>peekaboot-coverage</module>
     </modules>
 
-    <url>https://github.com/peekaboot-org/peekaboot</url>
+    <url>https://www.peekaboot.org</url>
 
     <properties>
         <peekaboot.encoding>UTF-8</peekaboot.encoding>
@@ -70,6 +70,11 @@
         <url>https://github.com/peekaboot-org/peekaboot</url>
         <tag>HEAD</tag>
     </scm>
+
+    <issueManagement>
+        <system>GitHub Issues</system>
+        <url>https://github.com/peekaboot-org/peekaboot/issues</url>
+    </issueManagement>
 
     <dependencyManagement>
         <dependencies>
@@ -173,8 +178,11 @@
                         <version>0.11.0</version>
                         <extensions>true</extensions>
                         <configuration>
-                            <autoPublish>false</autoPublish> <!-- true -->
-                            <waitUntil>validated</waitUntil> <!-- published -->
+                            <!-- Rehearse an upload without releasing it by flipping these to
+                                 false/validated: the run then stops at a validated deployment
+                                 that waits for a manual publish in the Portal. -->
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
                         </configuration>
                     </plugin>
                 </plugins>

@@ -4,7 +4,7 @@ Technical documentation for contributors and maintainers.
 
 > This file and its siblings in `docs/` are for people changing the code. Consumer
 > documentation — quick start, configuration, security, the dashboard tour — lives at
-> [peekaboot.org](https://peekaboot.org).
+> [www.peekaboot.org](https://www.peekaboot.org).
 
 ## Module Structure
 
@@ -246,7 +246,7 @@ org.peekaboot.backend/
 │   ├── actuator/           # Actuator → domain mappers, CronDescriber (cron expressions in words, for ScheduledTasksMapper)
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate)
 ├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
-│                           # ConnectionParamsMasker — the one place "is this key/value sensitive" is decided; see peekaboot.org/docs/security
+│                           # ConnectionParamsMasker — the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── storage/                # StorageDirectory — resolves peekaboot.storage.dir; OwnerOnlyFiles — owner-only, symlink-safe writes (see Persisted state)
 ├── tracing/                # In-memory tracing
@@ -419,7 +419,7 @@ all: see *Default Properties* below — value visibility comes from the
 `peekabootDetection` property source and applies only on a local run, not from a blanket
 default in `peekaboot-defaults.yml`.
 
-See [peekaboot.org/docs/security](https://peekaboot.org/docs/security/) for what this
+See [www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/) for what this
 exposure model means in practice for securing a deployment.
 
 ## peekaboot-frontend
@@ -450,7 +450,7 @@ only the headline decisions. The file inventory — every module under
   in `shared/theme.js` from `localStorage['peekaboot-theme']` (falling back to
   `prefers-color-scheme`) and shared across all three same-origin surfaces
 
-See [peekaboot.org/docs/theming](https://peekaboot.org/docs/theming/) for how a consuming
+See [www.peekaboot.org/docs/theming](https://www.peekaboot.org/docs/theming/) for how a consuming
 application overrides `tokens.css` to re-theme all three surfaces.
 
 ## peekaboot-spring-boot-autoconfigure
@@ -917,7 +917,7 @@ class DevToolbarAutoConfigurationIT {
 1. **No external dependencies for tracing**: Works without Zipkin, Jaeger, or other collectors
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
-4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All, Errors and Slow — each an insertion-ordered map capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so once a trace qualifies it can outlive its own eviction from All. See [peekaboot.org/docs/tracing](https://peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
+4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets — All, Errors and Slow — each an insertion-ordered map capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so once a trace qualifies it can outlive its own eviction from All. See [www.peekaboot.org/docs/tracing](https://www.peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
 5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Plain bounded maps for storage**: Memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
 7. **Shadow DOM**: Toolbar cannot interfere with host application

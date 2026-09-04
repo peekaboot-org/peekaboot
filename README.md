@@ -54,14 +54,14 @@ override the detection in either direction.
 ## Documentation
 
 Full docs — configuration reference, security guidance, the dashboard tour, and more — live
-at **[peekaboot.org](https://peekaboot.org)**.
+at **[www.peekaboot.org](https://www.peekaboot.org)**.
 
 | Page | |
 | --- | --- |
-| [Quick start](https://peekaboot.org/docs/quick-start/) | One dependency, no configuration, the toolbar on your next run |
-| [Configuration](https://peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
-| [Security](https://peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
-| [The dashboard](https://peekaboot.org/docs/dashboard/) | A tour of every tab |
+| [Quick start](https://www.peekaboot.org/docs/quick-start/) | One dependency, no configuration, the toolbar on your next run |
+| [Configuration](https://www.peekaboot.org/docs/configuration/) | Every `peekaboot.*` property, grouped by prefix, with its default |
+| [Security](https://www.peekaboot.org/docs/security/) | What Peekaboot exposes when it's on, and how to lock it down |
+| [The dashboard](https://www.peekaboot.org/docs/dashboard/) | A tour of every tab |
 
 ## Working on Peekaboot
 
