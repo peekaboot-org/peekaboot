@@ -125,6 +125,15 @@ the capture and can carry real usernames, paths, hostnames or credentials. Befor
 another group, confirm that every value in it - not only the one being added - originates in
 a file already committed here. When in doubt, don't click it.
 
+The Overview tab has the same problem without a click: it renders the OS user with its uid
+and gid, the pid, the whole parent-process chain and every non-local IP address with its
+reverse-resolved hostname, all read from the capture machine. `ScreenshotIdentityScrub`
+replaces those rows with placeholders before the Overview shot, and
+`ScreenshotIdentityScrubIT` pins its selectors against the real DOM - the failure it guards
+against is silent, since a renamed row would leave the capture green and the real value in
+the published image. Anything else that starts photographing the host belongs in that scrub,
+not in a note asking the next person to remember.
+
 The tool's file names are canonical and follow the dashboard's own tab ids:
 `dashboard-<tab>-<theme>.png` (`overview`, `insights`, `lifecycle`, `traces`, `meters`,
 `environment`, `flyway`, `loggers`, `config`, `scheduled-tasks`),

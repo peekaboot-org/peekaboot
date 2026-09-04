@@ -55,8 +55,10 @@ class ScreenshotCapture extends PlaywrightTestBase {
     // and Lifecycle, which would photograph a chart with one or two points. The tabs
     // here are ordered to match the tab strip's own order (see dashboard/main.js's TABS
     // array).
+    private static final String OVERVIEW_TAB = "overview";
+
     private static final List<String> DASHBOARD_TABS = List.of(
-            "overview",
+            OVERVIEW_TAB,
             "lifecycle",
             "traces",
             "meters",
@@ -224,6 +226,10 @@ class ScreenshotCapture extends PlaywrightTestBase {
             page.click(".pk-tab[data-tab=\"" + tabId + "\"]");
             page.waitForSelector("#" + tabId + "-tab.active");
             page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
+            if (OVERVIEW_TAB.equals(tabId)) {
+                // Overview is the one tab that photographs the machine it ran on
+                ScreenshotIdentityScrub.applyTo(page);
+            }
             expandMaskedGroupIfPresent(tabId);
             shoot(outputDir, "dashboard-" + tabId + "-" + theme);
             captureRevealedGroupIfPresent(outputDir, tabId, theme);
