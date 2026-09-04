@@ -20,8 +20,8 @@ plugins {
 }
 
 group = "org.peekaboot"
-// version comes from gradle.properties, next to the Spring Boot line read below.
-val springBootVersion: String by project
+// version comes from the poms via settings.gradle.kts; the Spring Boot line is read below.
+val springBootVersion = providers.gradleProperty("springBootVersion").get()
 
 java {
     withSourcesJar()

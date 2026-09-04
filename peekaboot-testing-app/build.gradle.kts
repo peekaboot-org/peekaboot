@@ -11,7 +11,7 @@ description = "Peekaboot Testing App - sample application for manual and automat
 // that proof either way (project() substitution is inherent here), so it simply shares
 // the conventions; the Maven build remains the consume-as-a-user check.
 
-val springBootVersion: String by project
+val springBootVersion = providers.gradleProperty("springBootVersion").get()
 
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-web")
@@ -52,12 +52,15 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-parameters")
 }
 
+// project.build.outputTimestamp, read from the poms by settings.gradle.kts.
+val outputTimestamp = extra["outputTimestamp"] as String
+
 springBoot {
-    // Fixed build.time (same instant as Maven's project.build.outputTimestamp), so the
-    // boot jar is byte-identical across rebuilds.
+    // Fixed build.time (the same instant Maven stamps), so the boot jar is byte-identical
+    // across rebuilds and across the two build systems.
     buildInfo {
         properties {
-            time = "2026-09-01T07:31:12Z"
+            time = outputTimestamp
         }
     }
 }
@@ -73,7 +76,7 @@ gitProperties {
     failOnNoGitDirectory = false
     // Pinned like build.time above: git-commit-id on the Maven side derives
     // git.build.time from project.build.outputTimestamp for reproducible builds.
-    customProperty("git.build.time", "2026-09-01T07:31:12Z")
+    customProperty("git.build.time", outputTimestamp)
     keys = listOf(
         "git.branch",
         "git.tags",
