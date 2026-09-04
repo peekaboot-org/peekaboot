@@ -421,7 +421,10 @@ The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 messages since the last `x.y.z` tag, so **commit message discipline decides the version bump**.
 Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
 GPG-signs with `raphael@peekaboot.org` and publishes through
-`central-publishing-maven-plugin` (`autoPublish`, waits until published). The sources and
+`central-publishing-maven-plugin`. That plugin runs with `autoPublish=false` /
+`waitUntil=validated`, so a green run leaves a *validated* deployment awaiting a manual
+publish in the Portal; the production values sit in trailing comments beside them
+(`true` / `published`) and make the build wait until the artifacts are live. The sources and
 javadoc jars are *not* release-only: both are attached on every build of the published
 modules, and javadoc runs with `doclint` at `all,-missing` and fails the build on an error, so
 a broken `@link` surfaces at `mvn package` rather than after `release:prepare` has pushed the
@@ -487,6 +490,17 @@ Secrets consumed by the workflow: `OSSRH_USERNAME`, `OSSRH_TOKEN`, `OSSRH_GPG_SE
 the Central Portal (`server-id: central`) and the first two hold a Portal user token, not
 OSSRH credentials. The names live in the repository settings as well as in the workflow, so a
 rename has to touch both.
+
+`OSSRH_GPG_SECRET_KEY` is only half the signing story. Central verifies every `.asc` by
+looking the signing key up **by fingerprint** on a public keyserver, so the public half has to
+be distributed before the first release — otherwise the deployment fails validation with
+*"Could not find a public key by the key fingerprint"*, for every artifact of every module at
+once, and it fails long after `release:prepare` has tagged and pushed. Distribute it with
+`gpg --keyserver keyserver.ubuntu.com --send-keys <FINGERPRINT>`. Central queries
+`keyserver.ubuntu.com`, `keys.openpgp.org` and `pgp.mit.edu`; the last has been unreachable
+for years, so treat the first as mandatory and the second as the backup. Confirm it landed
+*before* releasing, not after:
+`curl -sf "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x<FINGERPRINT>"`.
 
 ## Things that will bite you
 
