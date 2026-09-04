@@ -127,6 +127,19 @@
     margin-top: var(--pk-space-xl);
 }
 
+/* The dashboard's one outbound link. --pk-primary-text, never --pk-primary: the fill
+   green measures 2.61:1 as text. Underlined because colour alone must not be what marks
+   a link (WCAG 1.4.1) - the footer's muted grey is otherwise the only contrast. */
+.pk-footer__link {
+    color: var(--pk-primary-text);
+    text-decoration: underline;
+}
+
+.pk-footer__link:focus-visible {
+    outline: 2px solid var(--pk-primary-text);
+    outline-offset: 1px;
+}
+
 /* Loading */
 .pk-loading {
     display: flex;
