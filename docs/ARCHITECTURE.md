@@ -778,7 +778,7 @@ which is what the Spans tab's SQL toggle shows. `findDbSystem` mirrors this prio
 `db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Matching is
 value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS`
 carries the reasoning), so a credential with no provider-recognisable shape sitting in an
-ordinary column is not caught. peekaboot.org's security page states that as a caveat and
+ordinary column is not caught. www.peekaboot.org's security page states that as a caveat and
 tells readers to assume a captured trace carries plaintext SQL; it is a caveat, not a
 promise waiting to be strengthened.
 

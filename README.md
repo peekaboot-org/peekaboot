@@ -18,14 +18,14 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 <dependency>
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-spring-boot-starter</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 
 **Gradle**
 
 ```groovy
-implementation("org.peekaboot:peekaboot-spring-boot-starter:0.0.5-SNAPSHOT")
+implementation("org.peekaboot:peekaboot-spring-boot-starter:0.1.0")
 ```
 
 Run your app the way you already do. Peekaboot detects local development and turns itself
