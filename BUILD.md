@@ -412,9 +412,9 @@ Nothing automates what follows a release; do it on `dev` once the merge-back has
 Gradle build needs no step here — it takes the version and the build instant from the poms:
 
 1. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in `_config.yml`
-   to the released version — every dependency snippet on the site reads it.
-2. Remove the pre-release callout from the site's `quick-start.md`.
-3. Put the released version into the two quick-start snippets in `README.md`.
+   to the released version — every dependency snippet on the site reads it. The site
+   publishes from its `main`, so merge `dev` into it and push.
+2. Put the released version into the two quick-start snippets in `README.md`.
 
 The profile adds `maven-release-plugin` 3.3.1 with Basjes'
 `conventional-commits-version-policy` — the next version is derived from the conventional-commit
