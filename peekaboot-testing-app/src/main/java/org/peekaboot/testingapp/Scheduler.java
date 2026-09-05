@@ -9,9 +9,11 @@ import org.springframework.stereotype.Component;
 /**
  * Demo signals for the dashboard's Errors bucket and the trace overlay's log filters:
  * {@link #fixedRate()} logs an ERROR without failing (a trace with INFO and ERROR rows on
- * one span), {@link #fixedDelay()} throws (a scheduled-job trace with an exception). Both
- * are asserted on in the UI suite; the cron methods only give the Scheduled Tasks tab
- * schedules to render.
+ * one span), {@link #fixedDelay()} throws (a scheduled-job trace with an exception). The UI
+ * suite runs fixedRate() itself and asserts on the trace it leaves; fixedDelay() only shows
+ * up on a dashboard a human opens, and the cron methods only give the Scheduled Tasks tab
+ * schedules to render. Nothing here goes off on its own during a test run - the suite defers
+ * every timer.
  */
 @Component
 public class Scheduler {
