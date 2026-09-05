@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <!-- don't use the parent project as parent to mimic a regular spring boot app -->
@@ -9,12 +7,12 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>4.1.1</version>
-        <relativePath/>
+        <relativePath />
     </parent>
 
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-testing-app</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Peekaboot Testing App - sample application for manual and automated UI testing</description>
@@ -23,10 +21,10 @@
         <java.version>25</java.version>
         <!-- duplicated from peekaboot-parent (different parent pom): reproducible
              archives - spring-boot-starter-parent does not set this -->
-        <project.build.outputTimestamp>2026-09-01T07:31:12Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-09-04T09:43:15Z</project.build.outputTimestamp>
         <!-- duplicated from peekaboot-parent (different parent pom) -->
         <jacoco.version>0.8.15</jacoco.version>
-        <jacocoArgLine></jacocoArgLine>
+        <jacocoArgLine />
         <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
              across forks: one JVM means one Spring context cache, so the ~12 distinct
              application contexts boot once instead of once per fork - and concurrent
