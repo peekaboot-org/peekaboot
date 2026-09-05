@@ -13,7 +13,7 @@ lockstep.
 
 Both builds ship wrapper scripts, each pinned by SHA-256 checksum: `./mvnw` (downloads
 Maven 3.9.16, `.mvn/wrapper/maven-wrapper.properties`) and `./gradlew` (downloads Gradle
-9.7.0, `gradle/wrapper/gradle-wrapper.properties`). A locally installed Maven 3.9+ works
+9.7.1, `gradle/wrapper/gradle-wrapper.properties`). A locally installed Maven 3.9+ works
 exactly the same.
 
 ## Prerequisites
@@ -320,7 +320,7 @@ with per-module drill-down. Nothing publishes it.
 
 ### The Spotless ratchet
 
-`ratchetFrom` is pinned to commit `b1a96cc` (where formatting was introduced). Only files
+`ratchetFrom` is pinned to commit `e05e0f97`, the last commit before Spotless landed. Only files
 whose content differs from that commit are formatted and checked; untouched legacy files are
 left alone. Two consequences:
 
@@ -334,7 +334,7 @@ left alone. Two consequences:
 
 ## Tests
 
-Surefire 3.5.6, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the
+Surefire 3.6.0, JUnit 5 + AssertJ. Conventions, the pristine-output policy and the
 Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). This section covers
 only the build mechanics.
 
@@ -509,7 +509,7 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
   lands at the classpath root and Spring resolves `classpath:git.properties` to a single
   resource, so a library shipping one can beat the host application's own file and make the
   dashboard report Peekaboot's branch as the app's. Only `peekaboot-testing-app`, the one
-  runnable application, declares it, and it re-pins version 10.0.0 with
+  runnable application, declares it, and it re-pins version 10.0.1 with
   `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
 - A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
   everywhere thanks to that `failOnNoGitDirectory=false`.
