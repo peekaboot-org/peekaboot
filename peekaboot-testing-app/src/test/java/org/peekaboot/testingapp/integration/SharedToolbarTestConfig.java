@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import io.micrometer.tracing.Tracer;
+import org.peekaboot.autoconfigure.DevToolbarAutoConfiguration.LogbackAppenderRegistrar;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -36,5 +37,18 @@ public class SharedToolbarTestConfig {
     @Bean
     Tracer testTracer() {
         return new DeterministicTracer(FIXED_TRACE_ID, FIXED_SPAN_ID);
+    }
+
+    /**
+     * Throws away what this context's log appender captures. Logback's {@code LoggerContext}
+     * is JVM-wide while the appender is per application context, so every appender in the
+     * test JVM also sees the log events of every context running beside it - without this,
+     * a request served by a concurrently running IT's app lands here as a log-only trace and
+     * breaks {@link DashboardTraceViewIT}'s trace counts. Log capture itself is covered by
+     * {@code LogCaptureIT}, which boots a context of its own.
+     */
+    @Bean
+    LogbackAppenderRegistrar logbackAppenderRegistrar() {
+        return new LogbackAppenderRegistrar(event -> {});
     }
 }
