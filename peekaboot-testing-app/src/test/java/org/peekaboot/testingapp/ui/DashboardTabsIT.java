@@ -13,7 +13,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.testingapp.Scheduler;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -24,6 +27,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** The observed datasource - a connection acquired on it outside any traced work starts a pool trace. */
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private ScheduledTaskHolder scheduledTaskHolder;
 
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
 
@@ -480,8 +486,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * data either: the backend's error-bucket membership is driven by any ERROR-level
      * *log* during the trace, while the frontend's HAS_ERRORS badge is driven only by an
      * actual span exception - the scheduler's fixedRate() logs an error without throwing
-     * and lands in the errors bucket with an error-log count but no status badge, alongside fixedDelay()'s real
-     * exception, which does get one.
+     * and lands in the errors bucket with an error-log count but no status badge, while a
+     * job that really throws does get one.
      * <p>
      * What genuinely differs between bucket responses is the item count, so the list is
      * checked against the count carried by the very response that rendered it: the
@@ -491,11 +497,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * out, and such a hidden trace that logs an ERROR is counted in {@code bucketCounts} but
      * never listed. The sanity assertion that the errors count is smaller than the all count
      * is what keeps this non-vacuous: the store always holds a mix of error and non-error
-     * traces (the scheduler's deliberate failures alongside ordinary HTTP request traces for
-     * the dashboard's own page loads).
+     * traces - the fixedRate() run below, whose ERROR log puts it in the errors bucket the
+     * moment it is captured, alongside ordinary HTTP request traces for the dashboard's own
+     * page loads.
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
+        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
         page.waitForSelector("#traces-list .pk-trace-item");

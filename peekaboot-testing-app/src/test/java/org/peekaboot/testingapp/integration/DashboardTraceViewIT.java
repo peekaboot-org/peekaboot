@@ -17,6 +17,8 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -25,10 +27,12 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Asserts on the dashboard's trace API against a {@link TraceStore} that holds only
- * what the test itself injects. Two things keep it that way: {@link #setUp} clears the
- * store before every single test, and {@link SharedToolbarTestConfig}'s stand-in
+ * what the test itself injects. Three things keep it that way: {@link #setUp} clears the
+ * store before every single test, {@link SharedToolbarTestConfig}'s stand-in
  * {@code Tracer} means the app's own request handling never produces a span for the
- * exporter to publish.
+ * exporter to publish, and that same configuration drops every captured log - which would
+ * otherwise arrive from the other application contexts sharing this JVM's Logback root
+ * logger, as {@link #aLogFromAnotherApplicationContextDoesNotReachThisStore} pins down.
  */
 @SpringBootTest(
         classes = {TestingApp.class, SharedToolbarTestConfig.class},
@@ -75,10 +79,7 @@ class DashboardTraceViewIT {
 
         assertThat(traces).isNotNull();
         assertThat(traces.isArray()).isTrue();
-
-        List<String> traceIds = new ArrayList<>();
-        traces.forEach(t -> traceIds.add(t.get("traceId").asString()));
-        assertThat(traceIds).containsExactly(testTraceId);
+        assertThat(traceIdsOf(traces)).containsExactly(testTraceId);
     }
 
     @Test
@@ -152,12 +153,35 @@ class DashboardTraceViewIT {
         JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
         JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
 
-        assertThat(errors.get("traces")).hasSize(1);
-        assertThat(errors.get("traces").get(0).get("traceId").asString()).isEqualTo("berr");
-        assertThat(all.get("traces")).hasSize(3);
+        assertThat(traceIdsOf(errors.get("traces"))).containsExactly("berr");
+        assertThat(traceIdsOf(all.get("traces"))).containsExactlyInAnyOrder("berr", "bok", testTraceId);
         assertThat(all.get("bucketCounts").get("all").asInt()).isEqualTo(3);
         assertThat(all.get("bucketCounts").get("errors").asInt()).isEqualTo(1);
         assertThat(all.get("bucketCounts").get("slow").asInt()).isZero();
+    }
+
+    /**
+     * The one thing {@code setUp()}'s {@code clear()} cannot keep out. Every application
+     * context in this JVM attaches its own appender to the single Logback root logger, so
+     * each one captures the log events of every other context running beside it - a request
+     * served by a concurrently running IT's app arrives here as a log-only trace and breaks
+     * the exact counts the tests above assert. A log carrying an MDC trace id this context
+     * never issued is exactly what that looks like from the store's side.
+     */
+    @Test
+    void aLogFromAnotherApplicationContextDoesNotReachThisStore() {
+        MDC.put("traceId", "ffffffffffffffffffffffffffffffff");
+        MDC.put("spanId", "ffffffffffffffff");
+        try {
+            LoggerFactory.getLogger(DashboardTraceViewIT.class).info("served by another context's app");
+        } finally {
+            MDC.remove("traceId");
+            MDC.remove("spanId");
+        }
+
+        JsonNode traces = api.getJson("/peekaboot/api/traces/insights").get("traces");
+
+        assertThat(traceIdsOf(traces)).containsExactly(testTraceId);
     }
 
     @Test
@@ -171,6 +195,12 @@ class DashboardTraceViewIT {
         assertThat(features.get("devToolbar").asBoolean())
                 .as("DevToolbar feature should be enabled")
                 .isTrue();
+    }
+
+    private static List<String> traceIdsOf(JsonNode traces) {
+        List<String> traceIds = new ArrayList<>();
+        traces.forEach(trace -> traceIds.add(trace.get("traceId").asString()));
+        return traceIds;
     }
 
     private void injectTestSpan() {
