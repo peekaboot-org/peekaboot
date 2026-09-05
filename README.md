@@ -7,7 +7,7 @@
 
 # Peekaboot
 
-Embedded application introspection for Spring Boot — health, config, migrations, logs,
+Embedded application introspection for Spring Boot. Health, config, migrations, logs,
 schedules, metrics and traces in one dashboard, with no external infrastructure.
 
 ## Quick start
@@ -28,33 +28,29 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 implementation("org.peekaboot:peekaboot-spring-boot-starter:0.1.0")
 ```
 
-Run your app the way you already do. Peekaboot detects local development and turns itself
-on — open the dashboard at `http://localhost:8080/peekaboot/`. Local development means an
-IDE run, `mvn spring-boot:run` or `gradle bootRun` on your own machine; a packaged jar, a
-container, a test, an AOT build or a native image counts as not local. Set
-`peekaboot.enabled=true|false` (and `peekaboot.dev-toolbar` for the toolbar alone) to
-override the detection in either direction.
+Run your app the way you already do. Peekaboot detects local development and turns
+itself on. Open the dashboard at `http://localhost:8080/peekaboot/`. Local development
+means an IDE run, `mvn spring-boot:run` or `gradle bootRun` on your own machine; a
+packaged jar, a container, a test, an AOT build or a native image counts as not local.
+Set `peekaboot.enabled=true|false` (and `peekaboot.dev-toolbar` for the toolbar alone)
+to override the detection in either direction.
 
 ![The Peekaboot dashboard](docs/images/dashboard.png)
 
 ## What you get
 
-- A dev toolbar, on by default in local development, docked to every page: request status,
-  duration, query count, and a click-through to the full trace — plus correlated logs and
-  request/response detail (headers and params, not bodies), neither of which is captured
-  without it
-- App-insights dashboard: health, environment, config, Flyway, loggers and scheduled tasks,
-  read from Actuator in-process, plus metrics read directly from Micrometer's
-  `MeterRegistry` — nothing exposed under `/actuator/**`
-- In-memory request tracing via Micrometer/OpenTelemetry, no collector to run
-- Restart-aware insights: charts mark every application start and stop, annotated with
-  what changed about the build, and the metric history itself survives a restart
-- Zero configuration: on automatically in local development, off everywhere else
+- A dev toolbar docked to every page, with request status, duration, query count and a
+  link to the full trace.
+- An app-insights dashboard for health, environment, config, Flyway, loggers, scheduled
+  tasks and metrics, read in-process with nothing exposed under `/actuator/**`.
+- In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
+- Charts that mark every application start and stop, with metric history surviving a
+  restart.
+- Zero configuration, on in local development and off everywhere else.
 
 ## Documentation
 
-Full docs — configuration reference, security guidance, the dashboard tour, and more — live
-at **[www.peekaboot.org](https://www.peekaboot.org)**.
+Full docs live at [www.peekaboot.org](https://www.peekaboot.org).
 
 | Page | |
 | --- | --- |
@@ -78,34 +74,35 @@ peekaboot/
 
 ```bash
 mvn clean install   # full build, all modules
-mvn test             # unit tests only (~1 min); integration tests need `mvn verify`
+mvn test            # unit tests only (~1 min); integration tests need `mvn verify`
 
 cd peekaboot-testing-app && mvn spring-boot:run   # run the sample app; needs a prior
                                                   # `mvn install` and a running Docker
 ```
 
-`mvn verify` also enforces six gates: Spotless (palantir-java-format, ratcheted to files
-changed since its introduction - run `mvn spotless:apply` to format), Error Prone (during
-compilation), SpotBugs, Checkstyle (complexity metrics from `config/checkstyle.xml`), PMD
-(quickstart rules from `config/pmd-ruleset.xml`), and the reactor-wide JaCoCo coverage
-floor in `peekaboot-coverage`.
+`mvn verify` also enforces nine gates: five static-analysis tools (Spotless, Error
+Prone, SpotBugs, Checkstyle, PMD), three dependency and output checks, and the
+reactor-wide JaCoCo coverage floor in `peekaboot-coverage`. Local builds format your
+sources for you; run `mvn spotless:apply` to do it by hand.
 
-See [`BUILD.md`](BUILD.md) for the full build: reactor layout, compiler and gate
-configuration, CI and the release pipeline.
+Further reading:
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module/event/data flow,
-[`docs/TESTING.md`](docs/TESTING.md) for testing conventions,
-[`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms,
-[`peekaboot-frontend/README.md`](peekaboot-frontend/README.md) for the frontend's design
-system, and [`peekaboot-testing-app/README.md`](peekaboot-testing-app/README.md) for the
-sample app's demo scenarios and the screenshot-capture command.
+- [`BUILD.md`](BUILD.md) for the full build: reactor layout, compiler and gate
+  configuration, CI and the release pipeline.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the module, event and data flow.
+- [`docs/TESTING.md`](docs/TESTING.md) for testing conventions.
+- [`docs/GLOSSARY.md`](docs/GLOSSARY.md) for domain terms.
+- [`peekaboot-frontend/README.md`](peekaboot-frontend/README.md) for the frontend's
+  design system.
+- [`peekaboot-testing-app/README.md`](peekaboot-testing-app/README.md) for the sample
+  app's demo scenarios and the screenshot-capture command.
 
 ## Requirements
 
-- Java 25+ — the baseline is the current LTS on purpose: the build compiles with
+- Java 25+. The baseline is the current LTS on purpose. The build compiles with
   `release 25` and has no toolchain fallback, Peekaboot's collectors run on virtual
-  threads, and nothing below 25 is built or tested
-- Spring Boot 4.1 (built and tested against)
+  threads, and nothing below 25 is built or tested.
+- Spring Boot 4.1 (built and tested against).
 
 ## License
 
