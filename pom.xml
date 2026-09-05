@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.peekaboot</groupId>
     <artifactId>peekaboot-parent</artifactId>
-    <version>0.0.5-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>${project.groupId}:${project.artifactId}</name>
@@ -30,7 +29,7 @@
         <project.build.sourceEncoding>${peekaboot.encoding}</project.build.sourceEncoding>
         <project.reporting.outputEncoding>${peekaboot.encoding}</project.reporting.outputEncoding>
 
-        <project.build.outputTimestamp>2026-09-01T07:31:12Z</project.build.outputTimestamp>
+        <project.build.outputTimestamp>2026-09-04T09:43:15Z</project.build.outputTimestamp>
 
         <maven.compiler.release>${peekaboot.java.version}</maven.compiler.release>
 
@@ -40,7 +39,7 @@
         <!-- The one switch that turns the coverage gate off, data guard included. -->
         <jacoco.skip>false</jacoco.skip>
         <!-- Empty default so @{jacocoArgLine} still resolves when JaCoCo is skipped. -->
-        <jacocoArgLine></jacocoArgLine>
+        <jacocoArgLine />
 
         <!-- Spotless ratchets from this commit: only files changed since it are
              formatted and checked. -->
@@ -302,7 +301,7 @@
                         </goals>
                         <configuration>
                             <rules>
-                                <requireUpperBoundDeps/>
+                                <requireUpperBoundDeps />
                             </rules>
                         </configuration>
                     </execution>
