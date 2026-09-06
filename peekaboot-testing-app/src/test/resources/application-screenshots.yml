@@ -54,18 +54,6 @@ management:
   endpoint:
     health:
       show-details: always
-    # Outside local development (which a JUnit-launched process, this one included, can
-    # never be detected as - see PeekabootDefaultsEnvironmentPostProcessor's LocalDevDetector
-    # and ActuatorValuesMaskedOutsideLocalDevelopmentIT), value visibility is
-    # absent and resolves to Spring's own default of never - which blanket-masks every
-    # property, not just sensitive-looking ones, before MaskingEngine's selective masking
-    # ever runs. Without this, the fixture password below would be indistinguishable from
-    # server.port or any other harmless value, all rendering "******" alike. Mirrors
-    # application-test.yml's own opt-in, for the same reason.
-    env:
-      show-values: always
-    configprops:
-      show-values: always
   tracing:
     sampling:
       probability: 1.0
