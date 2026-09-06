@@ -94,9 +94,9 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   failure still prints and is still asserted.
 - The same file raises `org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver`
   to `ERROR`. Playwright teardown aborts in-flight JSON responses, and the resolver WARNs
-  `Ignoring exception ... Broken pipe` for each aborted write: Spring-side teardown noise, 5-20
-  lines per suite run. A failure the resolver really handles still reaches the client as a
-  4xx/5xx and fails the asserting test, so only that advisory WARN is lost.
+  `Ignoring exception ... Broken pipe` for each aborted write. That is Spring-side teardown
+  noise. A failure the resolver really handles still reaches the client as a 4xx/5xx and fails
+  the asserting test, so only that advisory WARN is lost.
 
 ### Accepted, unavoidable noise
 Third-party output and deliberate demo signal. This is not a list of known flaky tests, and
@@ -134,7 +134,7 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
 `PlaywrightTestBase.closePage()` navigates to `about:blank` before `context().close()`, and
 catches `TargetClosedError` around the close as insurance. The collapsed toolbar's fetch ladder
 (`toolbar.js`) polls `/api/traces/{id}/insights` for up to 4.75s after page load, independent of
-any one test's lifetime. Three tests route that traffic and never unroute it:
+any one test's lifetime. The tests that route that traffic never unroute it:
 `TraceOverlayIT.closeButtonDismissesTheOverlayOnTheErrorPath`;
 `ToolbarIT.toolbarShowsPendingWhenTheTraceRequestFails`, which deliberately waits out all four
 ladder attempts before teardown; and
@@ -179,8 +179,8 @@ mid-flight. Only `FlywayTabIT` names its database, because it needs `MODE=Postgr
 The `TraceStore` is the only state the shared context's classes contend for.
 
 ## Spring Security on the testing-app classpath
-`peekaboot-testing-app` carries `spring-boot-starter-security` in test scope for two tests only:
-`SecuredPeekabootIT` and `SecuredDashboardIT`, which prove the `SecurityFilterChain` the
+`peekaboot-testing-app` carries `spring-boot-starter-security` in test scope for
+`SecuredPeekabootIT` and `SecuredDashboardIT` alone, which prove the `SecurityFilterChain` the
 website's security page publishes. Test scope keeps it out of the repackaged jar and out of
 `spring-boot:run`, so the sample app itself still starts unsecured.
 
@@ -189,7 +189,7 @@ Left auto-configured, it would put `anyRequest().authenticated()` in front of ev
 exclude the servlet security auto-configuration (`UserDetailsServiceAutoConfiguration`,
 `ServletWebSecurityAutoConfiguration`, `ManagementWebSecurityAutoConfiguration`). Two files
 rather than one, because `ScreenshotCapture` runs with `inheritProfiles = false` and never sees
-the first. The two security tests run under their own `security` profile, which excludes nothing,
+the first. The security tests run under their own `security` profile, which excludes nothing,
 so neither has to undo a module-wide setting.
 
 One gotcha: an inlined `@SpringBootTest(properties = "spring.autoconfigure.exclude=...")`
@@ -200,8 +200,8 @@ is missed: Boot logs `Using generated security password` for that context.
 
 The example config itself, `PeekabootSecurityConfig`, lives in `org.peekaboot.example.security`,
 outside `TestingApp`'s component-scan root on purpose, since a stray `SecurityFilterChain` bean
-would fail the context of every test that excluded the auto-configuration. The two tests name it
-in `@SpringBootTest(classes = ...)`.
+would fail the context of every test that excluded the auto-configuration. Both name it in
+`@SpringBootTest(classes = ...)`.
 
 ## Running
 [`BUILD.md`](../BUILD.md#quality-gates) owns the gate list and what each command checks. What a
@@ -236,9 +236,9 @@ test author needs on top of it:
 ## Counting tests
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`
 (`PeekabootControllerTest`, `MaskingEngineTest`), so summing them under-reports. Counting `@Test`
-annotations is also wrong: it misses `@ParameterizedTest`, and `MaskingEngineTest` alone has ten
-of those, each expanding to many invocations. Count from the XML, or from the reactor summary,
-never from the `.txt` files:
+annotations is also wrong: it misses `@ParameterizedTest`, and `MaskingEngineTest`'s
+parameterized tests each expand to many invocations. Count from the XML, or from the reactor
+summary, never from the `.txt` files:
 
 ```bash
 for f in <module>/target/surefire-reports/TEST-*.xml; do

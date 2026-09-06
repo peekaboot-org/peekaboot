@@ -116,11 +116,10 @@ default 10s interval, so a chart shows a real line instead of a first point. Exp
 to take a few minutes.
 
 The output directory is required (the tool refuses to guess) and is created if missing. A
-successful run writes 30 PNGs, each surface in light and dark. That is one per dashboard
-tab (10, Insights and Lifecycle included), the trace-detail overlay's Spans and Queries
-views (2), the collapsed toolbar (1), and a revealed counterpart of the Environment and
-Config tab shots (2). The revealed pair shows the `spring.datasource.password` fixture
-after the "Show secrets" control is clicked. See
+successful run writes every surface in light and dark: one shot per dashboard tab, the
+trace-detail overlay's Spans and Queries views, the collapsed toolbar, and a revealed
+counterpart of the Environment and Config tab shots. The revealed pair shows the
+`spring.datasource.password` fixture after the "Show secrets" control is clicked. See
 `ScreenshotCapture.MASKED_GROUP_HEADER_SELECTOR`'s doc comment for exactly which group that
 is and is not, and why.
 
