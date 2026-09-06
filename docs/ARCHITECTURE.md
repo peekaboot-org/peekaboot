@@ -376,7 +376,7 @@ returns the `Features` record and `InsightsController`'s 400 body is a record in
 
 Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
 list of `InsightsSource` beans, one per endpoint id (`spring`, `health`, `info`,
-`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`) — each a record
+`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`). Each is a record
 pairing that id with a `Supplier` that reads an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs. Reading a source calls that endpoint
 object directly. There is no discovery step and no HTTP call; a source that reads
@@ -388,8 +388,8 @@ object directly. There is no discovery step and no HTTP call; a source that read
 `new ConfigurationPropertiesReportEndpoint(sanitizingFunctions, Show.ALWAYS)`, so
 the application's `show-values` settings and endpoint `roles` restriction never
 reach them. The application's `SanitizingFunction` beans are passed into both
-constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS` —
-a host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
+constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS`.
+A host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
 Short of that, what decides whether a value reaches the dashboard unmasked is
 `MaskingEngine` alone, gated by `peekaboot.enable-unmasking` and the request's
 `unmask` parameter (`PeekabootController.resolveUnmask`).
@@ -421,12 +421,12 @@ Borrowing the bean still needs it to exist. Spring Boot only *creates* the
 Spring defaults `health` is the only endpoint exposed over the web.
 `PeekabootEndpointExposureOutcomeContributor` reports the health endpoint as
 exposed while `peekaboot.enabled=true`, closing that gap. The regular HTTP mapping
-under `/actuator` still applies `management.endpoints.web.exposure`, so this makes
-`health` no more reachable over the web than it already was. Every other endpoint
-Peekaboot reads it constructs itself, so nothing else needs forcing here. This does
-not override access: `OnAvailableEndpointCondition` resolves
-`management.endpoint.health.access` before exposure contributors run, so
-`access=none` still removes the bean.
+under `/actuator` still applies `management.endpoints.web.exposure` on its own,
+unaffected by the contributor, so `health`'s reachability over HTTP is governed by
+that property alone. Every other endpoint Peekaboot reads it constructs itself, so
+nothing else needs forcing here. The contributor does not decide access either.
+`OnAvailableEndpointCondition` resolves `management.endpoint.health.access` before
+exposure contributors run. `access=none` still removes the bean.
 
 See [www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/) for what this
 exposure model means in practice for securing a deployment.
@@ -617,14 +617,19 @@ precedence, all overridable by an app's own `application.yml`:
   default `5s`), trading export throughput for latency so a trace is readable in the
   toolbar while the developer is still looking at the page.
 
-`peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot reads
-`env`, `configprops` and the rest through endpoint instances it constructs itself (see
-*In-Process Actuator Invocation*), so none of the application's endpoint settings —
-`show-values`, `show-details`, `roles`, exposure, access — decide what the dashboard
-sees, and Peekaboot has no reason to touch any of them. Its `management.info.*`,
-`management.tracing.*` and `management.observations.*` defaults turn on the
-`InfoContributor` beans the `info` source reads and configure trace sampling and
-`@Observed` support — none of them decides value visibility.
+`peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot builds
+`env`, `configprops`, `info`, `loggers`, `scheduledtasks` and `flyway` as endpoint
+instances of its own (see *In-Process Actuator Invocation*), so none of the
+application's exposure or access settings decide whether the dashboard sees one of
+them, and `env`/`configprops`'s own `show-values` and `roles` settings never reach
+the instances Peekaboot builds. Peekaboot has no reason to touch any of these
+settings. Health is the one exception. Its bean is borrowed rather than built, and
+`management.endpoint.health.access=none` still removes it, as described above.
+
+`peekaboot-defaults.yml`'s `management.info.*`, `management.tracing.*` and
+`management.observations.*` defaults turn on the `InfoContributor` beans the `info`
+source reads and configure trace sampling and `@Observed` support. None of them
+decides value visibility.
 
 `peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
 sensitive value it sees; `enable-unmasking` combined with the request's `unmask`
