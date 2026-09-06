@@ -10,15 +10,11 @@ spring:
       "[hibernate.generate_statistics]": true
 
 management:
-  # No management.endpoint.* defaults here, deliberately. Health details need none: the
-  # dashboard reads the HealthEndpoint bean directly (see PeekabootActuatorService), which
-  # always carries the components, so the application's own show-details setting for its
-  # public /actuator/health is left untouched. Env/configprops value visibility follows the
-  # launch context - it is set in the detection property source (see
-  # PeekabootDefaultsEnvironmentPostProcessor), only on a local run and only while
-  # peekaboot.enabled resolves true, so neither an application that switches Peekaboot on in
-  # a shared environment nor a developer who switches it off has their own /actuator/env
-  # widened as a side effect.
+  # No management.endpoint.* defaults here, deliberately. Peekaboot reads health, env,
+  # configprops and the rest through endpoint instances it constructs itself (see
+  # ActuatorSourcesAutoConfiguration), so none of the application's endpoint settings -
+  # show-details, show-values, exposure, access - decides what the dashboard sees, and
+  # Peekaboot has no reason to change any of them. MaskingEngine is what masks a value.
 
   info:
     env:
