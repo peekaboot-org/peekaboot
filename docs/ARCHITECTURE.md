@@ -6,9 +6,8 @@
 
 ## Module Structure
 
-Seven reactor modules; the reactor table in [`BUILD.md`](../BUILD.md) says what each one
-contains and which are published. The sections below follow the same split: backend,
-frontend, auto-configuration.
+The reactor table in [`BUILD.md`](../BUILD.md) says what each module contains and which are
+published. The sections below follow the same split: backend, frontend, auto-configuration.
 
 ## Persisted state
 
@@ -241,8 +240,8 @@ registrations live only in `DevToolbarAutoConfiguration`, so neither filter runs
 
 `PeekabootPaths` is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix,
 the excluded prefixes, and those same exclusions as MVC patterns for the tracing interceptor.
-The exclusions are five prefixes, `/static/`, `/webjars/`, `/peekaboot/`, `/error/` and the
-resolved management base path (`/actuator/` by default). Note what is not there: Boot's other
+The exclusions are `/static/`, `/webjars/`, `/peekaboot/`, `/error/` and the resolved
+management base path (`/actuator/` by default). Note what is not there: Boot's other
 default static locations, `/public/`, `/resources/` and `/META-INF/resources/`. As MVC patterns
 each prefix gains a `**` suffix, and `/x/**` matches bare `/x`, so `/error` is excluded while
 `/errors` stays an application path.
@@ -415,9 +414,9 @@ change together. Changing one without its pair is how an accessibility regressio
 
 ## peekaboot-spring-boot-autoconfigure
 
-Auto-configuration classes that wire everything together. The nine `@AutoConfiguration` classes
+Auto-configuration classes that wire everything together. The `@AutoConfiguration` classes
 are registered in
-`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`; the three
+`META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`; the
 hooks that run before or outside the application context are registered in
 `META-INF/spring.factories`.
 
@@ -444,11 +443,11 @@ Peekaboot default instead of colliding with it.
 
 ### Conditional Loading
 
-Seven of the nine classes carry the same two class-level conditions, the servlet guard and
-the master switch: `PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`,
-`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
-`InsightsAutoConfiguration`.
+Most of the auto-configuration classes carry the same two class-level conditions, the
+servlet guard and the master switch: `PeekabootAutoConfiguration`,
+`PeekabootPathsAutoConfiguration`, `DevToolbarAutoConfiguration`,
+`TracingInterceptorAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
+`OtelTracingAutoConfiguration` and `InsightsAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -603,7 +602,7 @@ finished span it sees into `TraceStore` as well. Turning `peekaboot.tracing.enab
 the rest of the app's OpenTelemetry setup (sampling, other exporters such as Zipkin, Jaeger or
 an OTLP backend) untouched.
 
-It skips Peekaboot's own requests span by span, using the same five `PeekabootPaths` prefixes
+It skips Peekaboot's own requests span by span, using the same `PeekabootPaths` prefixes
 the filters and the interceptor use. A child of such a request carries neither the path tag nor
 the route name, so skipping a *root* also publishes a `TraceDiscardedEvent`;
 `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
@@ -642,7 +641,7 @@ skips `postHandle`, so `afterCompletion` ends the handler observation and record
 `TracingInterceptorAutoConfiguration` registers two beans: the interceptor, and an anonymous
 `WebMvcConfigurer` named `tracingInterceptorConfigurer` that adds it with
 `addPathPatterns("/**")` and `excludePathPatterns(peekabootPaths.excludePatterns())`, which is
-where the five exclusion prefixes reach the interceptor. That configurer's
+where the exclusion prefixes reach the interceptor. That configurer's
 `@ConditionalOnMissingBean` matches by *name*, not by type: a type check on `WebMvcConfigurer`
 would let any of the application's own configurers back the registration off.
 
@@ -801,9 +800,9 @@ and sender thread, so one wedged peer drops its own events instead of stalling t
 
 Emitters carry a five-minute timeout. It only reclaims a peer that vanished without closing its
 socket, since the heartbeat and the lane overflow already detect one that is merely wedged.
-Every expiry costs a full resync, which for the default 39 series is roughly 393,000 values per
-open dashboard at level 1. Thirty minutes would cut that by an order of magnitude with nothing
-functional lost; five is the value it was built with, nothing more.
+Every expiry costs a full resync of every series' level-1 ring, for every open dashboard.
+Thirty minutes would cut that by an order of magnitude with nothing functional lost; five is
+the value it was built with, nothing more.
 
 ### Insights Domain
 
@@ -879,7 +878,7 @@ Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 `AnnotationConfigApplicationContext` or an `ApplicationContextRunner` covers the cases where a
 bean-name lookup or endpoint discovery needs a real container (`PeekabootActuatorServiceTest`,
 `ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner unit tests
-per auto-configuration, plus three `*IT`s that boot its own `TestApplication`
+per auto-configuration, plus the `*IT`s that boot its own `TestApplication`
 (`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
 through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
 under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real

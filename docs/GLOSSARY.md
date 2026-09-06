@@ -29,7 +29,7 @@ stored spans with deduplication redirects resolved, used to classify a bundle fo
 without building a tree. `TraceTree.rootSpan` is the mapped `SpanNode` at the top.
 
 ### Root Action Type
-`RootActionType`, eight constants, serialised by name. `TraceTreeMapper.detectRootActionType`
+`RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
 assigns one from the root span's kind and tag prefixes, never from its name. Labels and icons
 live only in the frontend's `shared/root-actions.js`, keyed by constant name. The priority rules
 and their gotchas are on the site:
@@ -54,8 +54,8 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
 `SpanIssue(IssueType type, String message, IssueSeverity severity)`, held in `SpanNode.issues`.
-`IssueType` has five constants (`SLOW`, `VERY_SLOW`, `ERROR`, `SLOW_QUERY`,
-`HIGH_QUERY_COUNT`); `IssueSeverity` has two and serialises lowercase through `@JsonValue`.
+`IssueType`'s constants are `SLOW`, `VERY_SLOW`, `ERROR`, `SLOW_QUERY` and
+`HIGH_QUERY_COUNT`; `IssueSeverity` has two and serialises lowercase through `@JsonValue`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
 `issues` empty on every node it builds, and leaves `logs` empty too. Firing conditions:
@@ -206,7 +206,7 @@ one that did not.
 
 ### Dashboard
 The standalone UI at `/peekaboot/`. "Dashboard" always names the whole thing, never one tab. Its
-ten tab modules register in strip order: Overview, Insights, Lifecycle, Traces, Meters,
+tab modules register in strip order: Overview, Insights, Lifecycle, Traces, Meters,
 Environment, Flyway, Loggers, Config, Scheduled Tasks. Each exports `id`, `label` and `render`,
 and optionally `isAvailable` to hide its own strip button.
 

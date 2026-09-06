@@ -1,8 +1,8 @@
 # Building Peekaboot
 
-Maven is the system of record. One reactor and nine gates: five static-analysis tools,
-three dependency/output checks and one coverage floor, spread over four lifecycle phases
-(see [Quality gates](#quality-gates)). No Node toolchain, no codegen beyond annotation
+Maven is the system of record. One reactor. Static-analysis tools, dependency and output
+checks and a coverage floor run as gates across the build lifecycle (see
+[Quality gates](#quality-gates)). No Node toolchain, no codegen beyond annotation
 processing.
 
 A parallel Gradle build covers the same modules, tests and gates (see
@@ -14,17 +14,17 @@ statement in this document is authoritative and the Gradle build must be kept in
 | | |
 | --- | --- |
 | JDK | **25**. `maven.compiler.release=25` / Gradle `options.release = 25`, no toolchains, no fallback |
-| Maven / Gradle | The checked-in wrappers, each pinned by SHA-256: `./mvnw` fetches Maven 3.9.16, `./gradlew` fetches Gradle 9.7.1. A local Maven 3.9+ works the same |
+| Maven / Gradle | The checked-in wrappers. Each fetches its own build tool at the version and SHA-256 pinned in `.mvn/wrapper/maven-wrapper.properties` and `gradle/wrapper/gradle-wrapper.properties`. A local Maven 3.9+ works the same |
 | Docker | Only for running the sample app and for `ScreenshotCapture`. Not needed by `mvn verify` |
 | Network | First run only: the wrappers fetch their build tool, and Playwright fetches Chromium into `~/.cache/ms-playwright` |
 
 ## Commands
 
 ```bash
-mvn clean verify     # compile + all tests + all nine gates          <- the real build
+mvn clean verify     # compile + all tests + every gate               <- the real build
 mvn clean install    # the same, plus install into ~/.m2
-mvn test             # the fast gate: the three dependency/output checks + Error Prone
-                     # + unit tests only (~1 min); integration tests (*IT) don't run
+mvn test             # the fast gate: the dependency/output checks + Error Prone
+                     # + unit tests only; integration tests (*IT) don't run
                      # before `verify`
 mvn spotless:apply   # format (local builds already do this for you)
 
@@ -45,9 +45,9 @@ mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs D
 Tests are split by lifecycle. Unit tests live in `*Test` classes and run at `test` under
 surefire. Anything that boots a real application (every `@SpringBootTest`, the whole
 Playwright suite) lives in `*IT` classes and runs at `integration-test` under failsafe.
-That is what makes `mvn test` the fast gate: the three dependency/output checks, Error
-Prone and every unit test, nothing else. `mvn verify` adds the integration tests and the
-other five gates. Per module, `verify` runs:
+That is what makes `mvn test` the fast gate: the dependency/output checks, Error Prone
+and every unit test, nothing else. `mvn verify` adds the integration tests and the
+remaining gates. Per module, `verify` runs:
 
 ```
 unit tests → package → sources jar → javadoc jar → integration tests (*IT) → spotless:check → spotbugs:check → checkstyle:check → pmd:check
@@ -71,22 +71,22 @@ jacoco:merge -> enforcer (coverage data present?) -> jacoco:report-aggregate -> 
 
 Gates run *after* the tests, so a failing unit test hides every gate failure behind it. A
 failing `*IT` differs: the test itself ran at `integration-test`, and `failsafe:verify`
-only reports the result, at `verify`. Where that report lands relative to the four gates
-is POM declaration order, which is what Maven follows within a phase. Modules inheriting
-the gates from the parent get them first, so there the gates still run.
-`peekaboot-testing-app` declares all four itself in the opposite order, so
+only reports the result, at `verify`. Where that report lands relative to the verify-bound
+gates is POM declaration order, which is what Maven follows within a phase. Modules
+inheriting the gates from the parent get them first, so there the gates still run.
+`peekaboot-testing-app` declares them itself in the opposite order, so
 `failsafe:verify` comes first and a broken `*IT` stops the build ahead of
 pmd → checkstyle → spotbugs → spotless. That module also adds `spring-boot:repackage`, so
 it is the only one producing an executable jar.
 
-A cold `mvn clean verify` takes roughly 3-5 minutes on a warm local repository, the
-Playwright suite being the bulk of it; `mvn test` alone stays around a minute.
+The Playwright suite is the bulk of a cold `mvn clean verify`. `mvn test` alone is a
+fraction of it.
 
 ## The reactor
 
 | Module | Artifact | Published | Contains |
 | --- | --- | --- | --- |
-| `peekaboot-parent` | pom | yes | Shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
+| `peekaboot-parent` | pom | yes | Shared build config, dependency management (the `spring-boot-dependencies` BOM) |
 | `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only, consumed at test scope by the backend and autoconfigure suites. See its [README](peekaboot-test-support/README.md) |
 | `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/health/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step, no test sources. Empty `-javadoc` jar (below) |
@@ -103,7 +103,7 @@ as the `-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is in
 
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, so it
 consumes the starter exactly as a real user would. The cost is duplication: its POM
-re-declares the four verify-bound static-analysis gates, the JaCoCo agent wiring, the
+re-declares the verify-bound static-analysis gates, the JaCoCo agent wiring, the
 `spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks
 up Spring Boot's plugin versions for everything else rather than the parent's pins. Any
 change to the parent's build config has to be mirrored there. The one deliberate exception
@@ -116,9 +116,9 @@ third-party version clash would buy nothing but two permanent exclusions.
 `settings.gradle.kts` mirrors the reactor module for module. `./gradlew build` is the
 `mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` only) and integration
 tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
-`peekaboot.it.threads` in `gradle.properties`). It runs all five static-analysis gates at
-the same tool versions, reading the same `config/` files, plus the reactor-wide coverage
-gate (`:peekaboot-coverage:coverageGate`, same 90%/75% floors on merged execution data).
+`peekaboot.it.threads` in `gradle.properties`). It runs the static-analysis gates at the
+same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
+(`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
 `./gradlew test` is the fast gate, `./gradlew assemble` just builds the jars.
 
 `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the role of
@@ -161,16 +161,17 @@ Across systems, verified by building each twice and cross-diffing, every class f
 resource in the published jars is byte-identical. The expected differences are
 `META-INF/MANIFEST.MF` (Maven adds `Created-By`/`Build-Jdk-Spec`) and Maven's
 `META-INF/maven/**`. The testing-app boot jar also differs in dependency resolution:
-Maven's nearest-wins picks Jackson 2.21.x for springdoc's transitives where Gradle's
-highest-wins picks 2.22.0 and includes `aopalliance-1.0`. Acceptable for an unpublished
-sample app, and the first thing to reconcile if the Gradle build is ever promoted.
+Maven's nearest-wins settles springdoc's transitive Jackson at the version the Boot BOM
+pins, where Gradle's highest-wins takes the newer one springdoc asks for and pulls in
+`aopalliance` besides. Acceptable for an unpublished sample app, and the first thing to
+reconcile if the Gradle build is ever promoted.
 
 Not ported, deliberately, because the Gradle build is local-first: the `peekaboot-release`
 profile, publishing, and CI wiring. Nor the dependency check, which guards a Maven
 resolution behaviour Gradle does not have. Gradle takes the highest requested version, so
 it cannot settle a transitive below what a dependent asked for.
 
-The three newest gates are mirrored: `-Werror` in the conventions plugin, and a
+The remaining gates are mirrored too: `-Werror` in the conventions plugin, and a
 `check`-bound task apiece for the starter's
 [optional-dependency ban](#the-starters-optional-dependency-contract) and the
 [configuration-metadata check](#the-configuration-metadata-check). Gradle has no enforcer
@@ -188,24 +189,27 @@ worth having on both sides.
   and `spring-boot-configuration-processor` has to keep running; the
   [configuration-metadata check](#the-configuration-metadata-check) verifies the outcome.
 - `annotationProcessorPaths` replaces classpath scanning entirely, so both processors are
-  listed explicitly: `error_prone_core` 2.50.0 and `spring-boot-configuration-processor`.
+  listed explicitly: `error_prone_core` and `spring-boot-configuration-processor`.
 - `.mvn/jvm.config` carries the `--add-exports`/`--add-opens` into `jdk.compiler` that
   Error Prone needs since JDK 16 sealed those packages. They apply to the *Maven* JVM
   because javac is not forked. Deleting that file breaks every compile.
 
 ## Quality gates
 
-| Gate | Phase | Plugin (tool version) | Config | Scope |
+| Gate | Phase | Plugin (tool) | Config | Scope |
 | --- | --- | --- | --- | --- |
-| Formatting | `verify` | `spotless-maven-plugin` 3.10.1 (palantir-java-format 2.97.0) | inline in the POM | Java, ratcheted (below) |
-| Bug patterns, compile-time | `compile` | `error_prone_core` 2.50.0 via the compiler plugin | defaults | main + test |
-| Bug patterns, bytecode | `verify` | `spotbugs-maven-plugin` 4.10.4.0 | `config/spotbugs-exclude.xml` | main classes |
-| Complexity metrics | `verify` | `maven-checkstyle-plugin` 3.6.0 (checkstyle 14.1.0) | `config/checkstyle.xml` | main only |
-| Code smells | `verify` | `maven-pmd-plugin` 3.28.0 (PMD 7.27.0) | `config/pmd-ruleset.xml` | main Java |
-| Coverage floor | `verify` | `jacoco-maven-plugin` 0.8.15 | inline in `peekaboot-coverage/pom.xml` | all measured classes, reactor-wide |
-| Dependency upper bounds | `validate` | `maven-enforcer-plugin` 3.6.3 | inline in the parent POM | every module's resolved closure |
-| Optional-dependency leaks | `validate` | `maven-enforcer-plugin` 3.6.3 | inline in `peekaboot-spring-boot-starter/pom.xml` | the starter's transitive closure |
-| Configuration metadata present | `process-classes` | `maven-enforcer-plugin` 3.6.3 | inline in `peekaboot-backend/pom.xml` | `peekaboot-backend/target/classes` |
+| Formatting | `verify` | `spotless-maven-plugin` (palantir-java-format) | inline in the POM | Java, ratcheted (below) |
+| Bug patterns, compile-time | `compile` | `error_prone_core` via the compiler plugin | defaults | main + test |
+| Bug patterns, bytecode | `verify` | `spotbugs-maven-plugin` | `config/spotbugs-exclude.xml` | main classes |
+| Complexity metrics | `verify` | `maven-checkstyle-plugin` (checkstyle) | `config/checkstyle.xml` | main only |
+| Code smells | `verify` | `maven-pmd-plugin` (PMD) | `config/pmd-ruleset.xml` | main Java |
+| Coverage floor | `verify` | `jacoco-maven-plugin` | inline in `peekaboot-coverage/pom.xml` | all measured classes, reactor-wide |
+| Dependency upper bounds | `validate` | `maven-enforcer-plugin` | inline in the parent POM | every module's resolved closure |
+| Optional-dependency leaks | `validate` | `maven-enforcer-plugin` | inline in `peekaboot-spring-boot-starter/pom.xml` | the starter's transitive closure |
+| Configuration metadata present | `process-classes` | `maven-enforcer-plugin` | inline in `peekaboot-backend/pom.xml` | `peekaboot-backend/target/classes` |
+
+Each gate's plugin and tool version is pinned in the root `pom.xml`, and again in
+`buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` for the Gradle build.
 
 Each config file explains its own exclusions; the short version:
 
@@ -221,18 +225,17 @@ Each config file explains its own exclusions; the short version:
   compiles and runs, and `UnnecessaryWarningSuppression`, which fails the build on a PMD
   suppression that no longer suppresses anything.
 - **SpotBugs** excludes `EI_EXPOSE_REP`/`EI_EXPOSE_REP2` globally. Measured, not assumed:
-  the pair reports 190 exposures across the backend, all of them in categories the rule
-  cannot help with. 159 are JSON carriers, which must hold the nulls real actuator data
-  contains and so cannot use `List.copyOf`/`Map.copyOf`; 18 are constructors storing
-  injected collaborators; 8 are `@ConfigurationProperties` accessors; 3 are framework
-  contracts. No store or service leaks a live collection.
-  `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to `ContainerRuntime$Signals`, the only class
-  that raises it.
+  every exposure the pair reports across the backend falls in a category the rule cannot
+  help with. Most are JSON carriers, which must hold the nulls real actuator data contains
+  and so cannot use `List.copyOf`/`Map.copyOf`. The rest are constructors storing injected
+  collaborators, `@ConfigurationProperties` accessors and framework contracts. No store or
+  service leaks a live collection. `DMI_HARDCODED_ABSOLUTE_FILENAME` is scoped to
+  `ContainerRuntime$Signals`, the only class that raises it.
 - **Nothing lints the frontend's JS or CSS.** PMD's `pmd-javascript` module is not an
   option: its Rhino parser throws `NullPointerException` on the destructuring the frontend
-  uses throughout, and fails outright on four files. A real JS linter means ESLint and
-  therefore a Node toolchain, which this build deliberately does not have. An open
-  decision, not an oversight.
+  uses throughout, and fails outright on the files carrying it. A real JS linter means
+  ESLint and therefore a Node toolchain, which this build deliberately does not have. An
+  open decision, not an oversight.
 
 Config paths resolve through `${maven.multiModuleProjectDirectory}`, which Maven sets to
 the directory holding `.mvn/`. That makes them work from the repo root and from inside a
@@ -245,31 +248,31 @@ inherits the parent. It fails when Maven's nearest-wins resolution settles a tra
 *below* the version one of its dependents asked for. That is the shape that reaches a
 consumer as a `NoSuchMethodError`, and a BOM import makes it easy to introduce. The
 published modules are clean. The reactor's one violation is springdoc's swagger chain
-wanting Jackson 2.22.0 where the Boot BOM pins 2.21.5, and it lives in the sample app,
-which does not inherit the parent. `peekaboot-coverage` skips the rule for the same
-reason: its dependencies exist to force build order, so they drag the sample app's closure
-in with them.
+wanting a newer Jackson than the Boot BOM pins, and it lives in the sample app, which does
+not inherit the parent. `peekaboot-coverage` skips the rule for the same reason: its
+dependencies exist to force build order, so they drag the sample app's closure in with
+them.
 
 ### The starter's optional-dependency contract
 
-Fourteen `<optional>` declarations across `peekaboot-backend` and
-`peekaboot-spring-boot-autoconfigure`, covering ten distinct artifacts, promise a consumer
-that these arrive from the host application's own starters. The promise matters because
-the auto-configuration reads the classpath: lose the flag on HikariCP and
+The `<optional>` declarations across `peekaboot-backend` and
+`peekaboot-spring-boot-autoconfigure` promise a consumer that the artifacts they mark
+arrive from the host application's own starters. The promise matters because the
+auto-configuration reads the classpath: lose the flag on HikariCP and
 `@ConditionalOnClass(HikariDataSource.class)` fires inside an application running a
 different pool.
 
 `bannedDependencies` with `searchTransitive` on `peekaboot-spring-boot-starter` is where
 that becomes checkable, because the starter is what a consumer actually depends on. It
 bans `jakarta.servlet:jakarta.servlet-api`, `org.springframework:spring-webmvc`,
-`org.springframework.boot:spring-boot-web-server` and `com.zaxxer:HikariCP`. Five of the
-remaining six cannot be banned, because the starter's own dependencies bring them: logback
-through `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation`
-through `spring-boot-starter-actuator`, the OpenTelemetry SDK and
-`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. The
-sixth, `spring-boot-configuration-processor`, is absent and left unbanned: it is an
-annotation processor, so a leak costs a compile-time annoyance rather than a wrong
-auto-configuration decision. Re-check the split after a dependency change with
+`org.springframework.boot:spring-boot-web-server` and `com.zaxxer:HikariCP`. The others
+cannot be banned, because the starter's own dependencies bring them: logback through
+`spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through
+`spring-boot-starter-actuator`, the OpenTelemetry SDK and
+`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. One more,
+`spring-boot-configuration-processor`, is absent and left unbanned: it is an annotation
+processor, so a leak costs a compile-time annoyance rather than a wrong auto-configuration
+decision. Re-check the split after a dependency change with
 `mvn -pl peekaboot-spring-boot-starter -am dependency:tree`.
 
 ### The configuration-metadata check
@@ -285,9 +288,9 @@ either and the jar ships without metadata, silently. `requireFilesExist` at
 
 `peekaboot-coverage` holds it: line >= 90%, branch >= 75% over every published class,
 measured on the merged data of the whole reactor. The floors sit well below actual
-coverage (about 95% line, 82% branch) on purpose. They catch a substantial regression, not
-a few uncovered lines. Both are properties (`jacoco.min.line` and `jacoco.min.branch`), so
-raising the floor is a one-line commit. Lowering one to make a build pass is not a fix.
+coverage on purpose. They catch a substantial regression, not a few uncovered lines. Both
+are properties (`jacoco.min.line` and `jacoco.min.branch`), so raising the floor is a
+one-line commit. Lowering one to make a build pass is not a fix.
 
 Three deliberate things about that module:
 
@@ -299,9 +302,8 @@ Three deliberate things about that module:
 - **It depends on every measured module, including the sample app**, which is what forces
   it to build last, after every `jacoco.exec` has been written. `peekaboot-testing-app`'s
   own code is excluded from the report and the gate, but its tests run peekaboot
-  in-process, so its execution data carries about five points of backend coverage: on its
-  own tests alone `peekaboot-backend` covers 90.3% of lines, merged 95.6%. Per-module
-  reporting would throw that away.
+  in-process, so its execution data carries a meaningful share of the backend's covered
+  lines. Per-module reporting would throw that away.
 - **A missing data file makes `jacoco:check` pass silently**, turning the gate into
   decoration the moment the merge breaks. `maven-enforcer-plugin` fails the build first if
   `target/jacoco-merged.exec` is absent. So `mvn verify -DskipTests` fails on purpose; pass
@@ -326,7 +328,7 @@ files are left alone. Two consequences:
 
 ## Tests
 
-Surefire and failsafe 3.6.0, JUnit 5 + AssertJ. Conventions, the pristine-output policy
+Surefire and failsafe, JUnit 5 + AssertJ. Conventions, the pristine-output policy
 and the Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). This section
 covers only the build mechanics.
 
@@ -355,7 +357,7 @@ covers only the build mechanics.
 
 ## CI
 
-Three workflows, all under `.github/workflows/`. Both build workflows use the checked-in
+The workflows live under `.github/workflows/`. Both build workflows use the checked-in
 `./mvnw`, and every action is pinned to a commit SHA with the tag in a trailing comment;
 Dependabot's `github-actions` updates move the pins.
 
@@ -370,7 +372,7 @@ The Chromium install is split into two steps on purpose. `exec:java` ignores `-p
 when combined with `-am`: it runs the goal against every upstream reactor module too and
 fails on the first one without Playwright on its classpath. So the reactor's SNAPSHOTs are
 installed first (`-pl peekaboot-testing-app -am install -Dmaven.test.skip=true`, with the
-four static-analysis gates and the sources/javadoc jars skipped because the `verify` that
+static-analysis gates and the sources/javadoc jars skipped because the `verify` that
 follows runs them all anyway), and the plain `exec:java` call resolves against the local
 repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
 `pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
@@ -423,7 +425,7 @@ the poms:
    The site publishes from its `main`, so merge `dev` into it and push.
 2. Put the released version into the two quick-start snippets in `README.md`.
 
-The profile adds `maven-release-plugin` 3.3.1 with Basjes'
+The profile adds `maven-release-plugin` with Basjes'
 `conventional-commits-version-policy`, so commit message discipline decides the version
 bump. Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
 GPG-signs with `raphael@peekaboot.org` and publishes through
@@ -452,7 +454,7 @@ version; it deploys nothing. `release:perform` checks the tag out into `target/c
 and runs the configured `<goals>` (`deploy`) there, which is where signing and the upload
 to Central happen. The workflow passes it `-Darguments="-DskipTests -Djacoco.skip=true"`.
 That tree has passed `verify` twice by then (the job's own build, then `preparationGoals`),
-so a third run would only repeat the Playwright suite. The four static-analysis gates, both
+so a third run would only repeat the Playwright suite. The static-analysis gates, both
 dependency checks and the configuration-metadata check still run.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
@@ -502,7 +504,7 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
   lands at the classpath root and Spring resolves `classpath:git.properties` to a single
   resource, so a library shipping one can beat the host application's own file and make the
   dashboard report Peekaboot's branch as the app's. Only `peekaboot-testing-app`, the one
-  runnable application, declares it, and it re-pins version 10.0.1 with
+  runnable application, declares it, and it pins the version itself with
   `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
 - A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
   everywhere thanks to that `failOnNoGitDirectory=false`.

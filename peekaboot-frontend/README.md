@@ -17,8 +17,8 @@ META-INF/peekaboot/ui/
 ├── assets/          tokens.css, base.css, components.css: the shared design system
 │                    theme-boot.js: the dashboard's pre-paint theme stamp
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png: the icon set
-├── shared/          17 modules used by two or more surfaces; see the inventory below
-├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (10 tabs, plus the
+├── shared/          the modules used by two or more surfaces; see the inventory below
+├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (one per tab, plus the
 │                    Insights tab's own insights-store.js, insights-chart.js,
 │                    insights-markers.js and insights-colors.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
@@ -85,8 +85,8 @@ leaving the element with no fill or no ink.
 
 ## The icon set
 
-`assets/` holds four PNGs, all derived from one piece of source artwork: the simplified
-Peekaboot mark (green hexagon, slate magnifier, green bars). The detailed logo is
+`assets/` holds the icon set, every file derived from one piece of source artwork: the
+simplified Peekaboot mark (green hexagon, slate magnifier, green bars). The detailed logo is
 deliberately *not* used. Below roughly 96px its interior detail (list rows, line chart,
 gloss) turns to noise, and the two places the UI shows a logo are 26px and 18px.
 
@@ -368,8 +368,8 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
 
 ## Ids the test suite depends on
 
-Renaming any of these silently breaks roughly a dozen Playwright test classes under
-`peekaboot-testing-app`. Grep `peekaboot-testing-app/src/test` before you do.
+Renaming any of these breaks Playwright test classes under `peekaboot-testing-app`, and
+breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 
 | Id / selector | Why it matters |
 |---|---|
