@@ -7,10 +7,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.actuator.InsightsSource;
+import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesBeanDescriptor;
 import org.springframework.boot.actuate.context.properties.ConfigurationPropertiesReportEndpoint.ConfigurationPropertiesDescriptor;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.env.EnvironmentEndpoint.EnvironmentDescriptor;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.actuate.endpoint.AdditionalHealthEndpointPath;
 import org.springframework.boot.health.actuate.endpoint.CompositeHealthDescriptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
@@ -31,15 +34,8 @@ import org.springframework.context.annotation.Configuration;
 
 class ActuatorSourcesAutoConfigurationTest {
 
-    /**
-     * {@code LoggingSystem} is a bean only because {@code LoggingApplicationListener} puts it
-     * there during {@code SpringApplication} startup; {@link WebApplicationContextRunner}
-     * never runs that listener, so the loggers source needs a stand-in for what every real
-     * Peekaboot-enabled application already has.
-     */
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(ActuatorSourcesAutoConfiguration.class))
-            .withBean(LoggingSystem.class, () -> LoggingSystem.get(getClass().getClassLoader()))
             .withPropertyValues("peekaboot.enabled=true");
 
     private static Object read(ApplicationContext context, String id) {
@@ -73,9 +69,20 @@ class ActuatorSourcesAutoConfigurationTest {
     @Test
     void configpropsSourceReadsRealValuesWhileTheApplicationHidesThemFromItsOwnActuator() {
         contextRunner
-                .withPropertyValues("management.endpoint.configprops.show-values=never")
-                .run(context ->
-                        assertThat(read(context, "configprops")).isInstanceOf(ConfigurationPropertiesDescriptor.class));
+                .withUserConfiguration(FixturePropertiesConfig.class)
+                .withPropertyValues("management.endpoint.configprops.show-values=never", "fixture.value=readable")
+                .run(context -> {
+                    Object descriptor = read(context, "configprops");
+
+                    assertThat(descriptor).isInstanceOfSatisfying(ConfigurationPropertiesDescriptor.class, config -> {
+                        ConfigurationPropertiesBeanDescriptor bean = config.getContexts().values().stream()
+                                .flatMap(ctx -> ctx.getBeans().values().stream())
+                                .filter(candidate -> "fixture".equals(candidate.getPrefix()))
+                                .findFirst()
+                                .orElseThrow(() -> new AssertionError("no bean with prefix 'fixture'"));
+                        assertThat(bean.getProperties()).containsEntry("value", "readable");
+                    });
+                });
     }
 
     /**
@@ -103,9 +110,30 @@ class ActuatorSourcesAutoConfigurationTest {
         contextRunner.run(context -> assertThat(read(context, "health")).isNull());
     }
 
+    /**
+     * {@code LoggingSystem} is a bean only because {@code LoggingApplicationListener} puts it
+     * there during {@code SpringApplication} startup; {@link WebApplicationContextRunner} never
+     * runs that listener, so this test supplies the stand-in every real Peekaboot-enabled
+     * application already has, local to the one test that needs it - the shared
+     * {@code contextRunner} deliberately leaves it absent so
+     * {@link #loggersSourceReadsNullWhenTheApplicationHasNoLoggingSystemBean} stays meaningful.
+     */
+    @Test
+    void loggersSourceReadsFromTheApplicationsLoggingSystem() {
+        contextRunner
+                .withBean(
+                        LoggingSystem.class, () -> LoggingSystem.get(getClass().getClassLoader()))
+                .run(context -> assertThat(read(context, "loggers")).isNotNull());
+    }
+
+    @Test
+    void loggersSourceReadsNullWhenTheApplicationHasNoLoggingSystemBean() {
+        contextRunner.run(context -> assertThat(read(context, "loggers")).isNull());
+    }
+
     /** The sources with no visibility gate of their own: present, and reading something. */
     @ParameterizedTest
-    @ValueSource(strings = {"spring", "info", "loggers", "scheduledtasks"})
+    @ValueSource(strings = {"spring", "info", "scheduledtasks"})
     void readsEverySourceThatNeedsNoBackingBean(String id) {
         contextRunner.run(context -> assertThat(read(context, id)).isNotNull());
     }
@@ -116,6 +144,14 @@ class ActuatorSourcesAutoConfigurationTest {
                 .withPropertyValues("peekaboot.enabled=false")
                 .run(context -> assertThat(context).doesNotHaveBean(InsightsSource.class));
     }
+
+    /** A bound {@code @ConfigurationProperties} bean, so a sanitized value has something to hide. */
+    @ConfigurationProperties("fixture")
+    record FixtureProperties(String value) {}
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(FixtureProperties.class)
+    static class FixturePropertiesConfig {}
 
     @Configuration(proxyBeanMethods = false)
     static class HealthEndpointConfig {
