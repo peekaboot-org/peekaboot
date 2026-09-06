@@ -2,6 +2,7 @@ package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.List;
+import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.config.PeekabootWebConfig;
@@ -29,11 +30,6 @@ import org.peekaboot.backend.service.TraceInsightsService;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.actuate.endpoint.invoke.OperationInvokerAdvisor;
-import org.springframework.boot.actuate.endpoint.invoke.ParameterValueMapper;
-import org.springframework.boot.actuate.endpoint.web.AdditionalPathsMapper;
-import org.springframework.boot.actuate.endpoint.web.EndpointMediaTypes;
-import org.springframework.boot.actuate.endpoint.web.PathMapper;
 import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -42,7 +38,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
 /**
@@ -86,16 +81,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public PeekabootActuatorService peekabootActuatorService(
-            ApplicationContext context,
-            ObjectProvider<HealthEndpoint> healthEndpoint,
-            ParameterValueMapper parameterMapper,
-            EndpointMediaTypes mediaTypes,
-            ObjectProvider<PathMapper> pathMappers,
-            ObjectProvider<AdditionalPathsMapper> additionalPathsMappers,
-            ObjectProvider<OperationInvokerAdvisor> advisors) {
-        return new PeekabootActuatorService(
-                context, healthEndpoint, parameterMapper, mediaTypes, pathMappers, additionalPathsMappers, advisors);
+    public PeekabootActuatorService peekabootActuatorService(ObjectProvider<InsightsSource> sources) {
+        return new PeekabootActuatorService(sources.orderedStream().toList());
     }
 
     @Bean
