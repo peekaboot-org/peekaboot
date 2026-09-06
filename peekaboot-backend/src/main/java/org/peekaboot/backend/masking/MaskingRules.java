@@ -117,8 +117,14 @@ final class MaskingRules {
                     "JWT",
                     Pattern.compile(
                             "\\bey[A-Za-z0-9]{17,}\\.ey[A-Za-z0-9/\\\\_-]{17,}\\.(?:[A-Za-z0-9/\\\\_-]{10,}={0,2})?")),
+            // Header through footer, DOTALL so the base64 body's newlines are inside the match
+            // and reluctant so two adjacent keys stay two matches. A key whose footer is missing
+            // (a truncated log line, a value cut short) masks to the end of the value: there is
+            // nothing left that could be safe to show after a BEGIN marker.
             new ValuePattern(
-                    "PEM private key", Pattern.compile("(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----")),
+                    "PEM private key",
+                    Pattern.compile("(?is)-----BEGIN[ A-Z0-9_-]{0,100}?PRIVATE KEY(?: BLOCK)?-----"
+                            + ".*?(?:-----END[ A-Z0-9_-]{0,100}?PRIVATE KEY(?: BLOCK)?-----|\\z)")),
             new ValuePattern(
                     "AWS access key", Pattern.compile("\\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z2-7]{16}\\b")),
             new ValuePattern("GitHub token", Pattern.compile("\\b(?:ghp|gho|ghu|ghs|ghr)_[0-9A-Za-z]{36}\\b")),

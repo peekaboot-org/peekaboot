@@ -283,6 +283,30 @@ class MaskingEngineTest {
         }
 
         @Test
+        void maskValue_shouldMaskPemPrivateKeyBody() {
+            String body = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDb\n".repeat(5);
+            String value = "-----BEGIN RSA PRIVATE KEY-----\n" + body + "-----END RSA PRIVATE KEY-----";
+
+            assertThat(engine.maskValue(value)).isEqualTo("******").doesNotContain("MIIEvQIBADAN");
+        }
+
+        @Test
+        void maskValue_shouldMaskEachOfTwoAdjacentPemKeysSeparately() {
+            String value = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----"
+                    + " between "
+                    + "-----BEGIN PRIVATE KEY-----\nBBBB\n-----END PRIVATE KEY-----";
+
+            assertThat(engine.maskValue(value)).isEqualTo("****** between ******");
+        }
+
+        @Test
+        void maskValue_shouldMaskToEndOfValueWhenPemFooterIsMissing() {
+            String value = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIBt3\n";
+
+            assertThat(engine.maskValue(value)).isEqualTo("******");
+        }
+
+        @Test
         void maskValue_shouldMaskAwsAccessKey() {
             // AWS's own documentation placeholder, not a real key.
             String value = "aws_access_key_id=AKIAIOSFODNN7EXAMPLE";
