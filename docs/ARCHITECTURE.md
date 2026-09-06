@@ -374,47 +374,59 @@ returns the `Features` record and `InsightsController`'s 400 body is a record in
 
 ### In-Process Actuator Invocation
 
-Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` builds
-its own `WebEndpointDiscoverer` with empty endpoint filters, bypassing
-`management.endpoints.web.exposure` *filtering*, and invokes each endpoint's
-READ operation directly (`operation.invoke(...)`). Data therefore flows without
-any actuator endpoint being reachable over the web.
+Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
+list of `InsightsSource` beans, one per endpoint id (`spring`, `health`, `info`,
+`env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`) — each a record
+pairing that id with a `Supplier` that reads an endpoint object
+`ActuatorSourcesAutoConfiguration` constructs. Reading a source calls that endpoint
+object directly. There is no discovery step and no HTTP call; a source that reads
+`null` contributes no entry, which is how an endpoint whose backing bean is absent
+(`flyway` without a Flyway bean) reports that it has nothing rather than failing.
 
-Health is the one exception to the discoverer path. The web operation the discoverer
-finds under `health` is `HealthEndpointWebExtension`, which applies the application's
-`management.endpoint.health.show-details`, a setting that belongs to the application's
-own public `/actuator/health` and that Peekaboot must not widen. The service therefore
-reads the `HealthEndpoint` bean itself. `HealthEndpoint.health()` always carries the
-components and their details, so the dashboard has full health while `/actuator/health`
-keeps answering anonymous callers with the aggregate status only.
-`ActuatorResponseParser` accordingly parses the bare `HealthDescriptor` shape (`status`,
-`components`, `groups`), not a `WebEndpointResponse` wrapper. A composite contributor
-(Spring's `db` as soon as there are two DataSources, or any custom composite) nests its
-children under a further `components` map. `HealthMapper` flattens them to `db/<name>`
-for the dashboard's single list, and `DataSourceMapper` reads each DataSource's own
-child status rather than the composite's aggregate.
+`ActuatorSourcesAutoConfiguration` builds `env` and `configprops` as
+`new EnvironmentEndpoint(environment, sanitizingFunctions, Show.ALWAYS)` and
+`new ConfigurationPropertiesReportEndpoint(sanitizingFunctions, Show.ALWAYS)`, so
+the application's `show-values` settings and endpoint `roles` restriction never
+reach them. The application's `SanitizingFunction` beans are passed into both
+constructors, and Boot's `Sanitizer` still runs them regardless of `Show.ALWAYS` —
+a host `SanitizingFunction` bean still masks a value before Peekaboot sees it.
+Short of that, what decides whether a value reaches the dashboard unmasked is
+`MaskingEngine` alone, gated by `peekaboot.enable-unmasking` and the request's
+`unmask` parameter (`PeekabootController.resolveUnmask`).
 
-Bypassing exposure filtering is not enough on its own. Spring Boot only
-*creates* an endpoint bean when `@ConditionalOnAvailableEndpoint` matches, i.e.
-the endpoint is accessible and exposed via web, JMX (only when
-`spring.jmx.enabled=true`), or a custom contributor. Spring Boot's default web
-exposure is `health` only, so without help the `env`, `configprops`, `loggers`,
-`flyway`, and `scheduledtasks` beans would never exist.
+The endpoint objects `ActuatorSourcesAutoConfiguration` builds are not beans. A
+second bean carrying `@Endpoint(id = "env")` would collide with the application's
+own `EndpointDiscoverer`, which fails at startup on a duplicate id. Each endpoint
+is built inside its supplier, once per read, which also keeps this
+auto-configuration free of any ordering dependency on Boot's endpoint
+auto-configurations.
 
-`PeekabootEndpointExposureOutcomeContributor` (registered under
-`EndpointExposureOutcomeContributor` in `META-INF/spring.factories`, a Spring
-Boot 3.4+ extension point) closes that gap. While `peekaboot.enabled=true` it
-reports every web-capable endpoint as exposed, so the beans are created. The
-regular HTTP mapping under `/actuator` still applies the
-`management.endpoints.web.exposure` property, so this does not expose any
-endpoint over the web. With Spring defaults only `/actuator/health` is
-reachable via HTTP while the dashboard has full data.
+Health is the one endpoint whose bean is borrowed from the application rather
+than built. `HealthEndpoint.health()` already ignores
+`management.endpoint.health.show-details`, a setting that belongs to the
+application's own public `/actuator/health`, so building a separate instance
+would only duplicate the contributor registry and the group configuration for
+nothing. The dashboard therefore has full health while `/actuator/health` keeps
+answering anonymous callers with the aggregate status only.
+`ActuatorResponseParser` accordingly parses the bare `HealthDescriptor` shape
+(`status`, `components`, `groups`), not a `WebEndpointResponse` wrapper. A
+composite contributor (Spring's `db` as soon as there are two DataSources, or any
+custom composite) nests its children under a further `components` map.
+`HealthMapper` flattens them to `db/<name>` for the dashboard's single list, and
+`DataSourceMapper` reads each DataSource's own child status rather than the
+composite's aggregate.
 
-Whether the `env` and `configprops` beans' own values are visible to this in-process
-invocation, rather than masked, is a separate question from whether the beans exist at
-all. See *Default Properties* below. Value visibility comes from the
-`peekabootDetection` property source and applies only on a local run, not from a blanket
-default in `peekaboot-defaults.yml`.
+Borrowing the bean still needs it to exist. Spring Boot only *creates* the
+`HealthEndpoint` bean when `@ConditionalOnAvailableEndpoint` matches, and with
+Spring defaults `health` is the only endpoint exposed over the web.
+`PeekabootEndpointExposureOutcomeContributor` reports the health endpoint as
+exposed while `peekaboot.enabled=true`, closing that gap. The regular HTTP mapping
+under `/actuator` still applies `management.endpoints.web.exposure`, so this makes
+`health` no more reachable over the web than it already was. Every other endpoint
+Peekaboot reads it constructs itself, so nothing else needs forcing here. This does
+not override access: `OnAvailableEndpointCondition` resolves
+`management.endpoint.health.access` before exposure contributors run, so
+`access=none` still removes the bean.
 
 See [www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/) for what this
 exposure model means in practice for securing a deployment.
@@ -452,7 +464,7 @@ application overrides `tokens.css` to re-theme all three surfaces.
 
 ## peekaboot-spring-boot-autoconfigure
 
-Auto-configuration classes that wire everything together. The nine `@AutoConfiguration`
+Auto-configuration classes that wire everything together. The ten `@AutoConfiguration`
 classes are registered in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`;
 the three hooks that run before or outside the application context are registered in
 `META-INF/spring.factories`.
@@ -460,6 +472,7 @@ the three hooks that run before or outside the application context are registere
 | Class | Registered via | Purpose |
 |-------|----------------|---------|
 | `PeekabootAutoConfiguration` | `.imports` | Core beans (controller, services, mappers, web config) as explicit `@Bean` methods, each `@ConditionalOnMissingBean` |
+| `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar filter registration, `LogbackAppenderRegistrar` |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`, where the insights snapshot and lifecycle log are kept; no web/actuator conditions |
@@ -468,8 +481,8 @@ the three hooks that run before or outside the application context are registere
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (plus, on a local servlet run, the `env`/`configprops` `show-values` keys) + default property values |
-| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes actuator endpoint beans available without web/JMX exposure |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` + default property values |
+| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes the health endpoint bean available without web/JMX exposure |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Spring Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LocalDevDetector` | — (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
@@ -480,23 +493,24 @@ or name replaces any Peekaboot default instead of colliding with it.
 
 ### Conditional Loading
 
-Auto-configuration uses Spring Boot conditionals. Seven of the nine classes carry the
+Auto-configuration uses Spring Boot conditionals. Eight of the ten classes carry the
 same two class-level conditions, the servlet guard and the master switch:
-`PeekabootAutoConfiguration`, `PeekabootPathsAutoConfiguration`,
-`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
-`InsightsAutoConfiguration`.
+`PeekabootAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
+`PeekabootPathsAutoConfiguration`, `DevToolbarAutoConfiguration`,
+`TracingInterceptorAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
+`OtelTracingAutoConfiguration` and `InsightsAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 ```
 
-Each adds its own on top: `PeekabootAutoConfiguration` needs the `HealthEndpoint` and
-`InfoEndpoint` classes, `DevToolbarAutoConfiguration` additionally requires
-`peekaboot.dev-toolbar`, `TracingInterceptorAutoConfiguration` an `ObservationRegistry`
-bean, `InsightsAutoConfiguration` a `MeterRegistry` bean and `peekaboot.insights.enabled`,
-`OtelTracingAutoConfiguration` the OpenTelemetry SDK's `SpanExporter` class.
+Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
+need the `HealthEndpoint` and `InfoEndpoint` classes, `DevToolbarAutoConfiguration`
+additionally requires `peekaboot.dev-toolbar`, `TracingInterceptorAutoConfiguration` an
+`ObservationRegistry` bean, `InsightsAutoConfiguration` a `MeterRegistry` bean and
+`peekaboot.insights.enabled`, `OtelTracingAutoConfiguration` the OpenTelemetry SDK's
+`SpanExporter` class.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods, each
@@ -517,9 +531,9 @@ non-web application would otherwise fill an `InMemoryTraceStore` for nobody.
 class-level servlet guard, because the ready/stopped summaries, the run history and the
 storage directory must work in a plain non-web application. Only the lifecycle
 API's `LifecycleController` bean is servlet-gated on its own. `PeekabootDefaultsEnvironmentPostProcessor`
-applies the same split to the property defaults: the activation, storage and value-visibility
-detection is web-type independent, while `peekaboot-defaults.yml` and the dev-toolbar defaults
-are skipped for a non-servlet application (see *Default Properties*).
+applies the same split to the property defaults: the activation and storage detection is
+web-type independent, while `peekaboot-defaults.yml` and the dev-toolbar defaults are
+skipped for a non-servlet application (see *Default Properties*).
 
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
 `TracingInterceptorAutoConfiguration` additionally require `peekaboot.tracing.enabled`
@@ -532,13 +546,12 @@ and nothing is captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or
 `peekaboot.dev-toolbar`. Both default from `PeekabootDefaultsEnvironmentPostProcessor`,
-which adds them (and, on a local run, actuator value visibility; see *Default
-Properties*) to a `peekabootDetection` property source at lowest precedence, so any
+which adds them to a `peekabootDetection` property source at lowest precedence, so any
 explicit application setting always wins, in either direction. The toolbar deliberately
 keys on the same local-development detection as `peekaboot.enabled`, not on
 `peekaboot.enabled`'s own resolved value. An application that turns Peekaboot on
-explicitly in a shared environment does not get the toolbar injected into every page, or
-its own `/actuator/env` widened, as a side effect.
+explicitly in a shared environment does not get the toolbar injected into every page as
+a side effect.
 
 `LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds
 two signals of its own, checked in order:
@@ -604,24 +617,19 @@ precedence, all overridable by an app's own `application.yml`:
   default `5s`), trading export throughput for latency so a trace is readable in the
   toolbar while the developer is still looking at the page.
 
-`management.endpoint.env.show-values` and the `configprops` equivalent are deliberately
-not in `peekaboot-defaults.yml`. They're set by the `peekabootDetection` property source
-instead (the same one that resolves `peekaboot.enabled` and `peekaboot.dev-toolbar`; see
-*Conditional Loading*), and only on a local servlet run whose `peekaboot.enabled` also
-resolves true, never as an explicit `never` off-local. An application that switches
-Peekaboot on in a shared environment therefore doesn't have its own `/actuator/env`
-widened as a side effect. Off-local, Spring's own default (`never`) applies and every
-property masks, exactly as it would without Peekaboot at all: `server.port` and `os.name`
-along with the passwords. Emitting an explicit `never` there instead of leaving the key
-absent would pin Spring's current default into applications that never asked Peekaboot to
-decide it.
+`peekaboot-defaults.yml` carries no `management.endpoint.*` property. Peekaboot reads
+`env`, `configprops` and the rest through endpoint instances it constructs itself (see
+*In-Process Actuator Invocation*), so none of the application's endpoint settings —
+`show-values`, `show-details`, `roles`, exposure, access — decide what the dashboard
+sees, and Peekaboot has no reason to touch any of them. Its `management.info.*`,
+`management.tracing.*` and `management.observations.*` defaults turn on the
+`InfoContributor` beans the `info` source reads and configure trace sampling and
+`@Observed` support — none of them decides value visibility.
 
-`show-values` and `peekaboot.enable-unmasking` are two switches, and only the first is
-about visibility. `show-values` decides whether the actuator hands Peekaboot a real value
-at all; `enable-unmasking` decides only whether the dashboard's reveal step is offered and
-honoured. `PeekabootController.resolveUnmask` combines it with the request's `unmask`
-parameter, and neither half suffices alone. With `show-values` at `never` a reveal has
-nothing left to reveal.
+`peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
+sensitive value it sees; `enable-unmasking` combined with the request's `unmask`
+parameter (`PeekabootController.resolveUnmask`) is what reveals one. Neither half
+suffices alone.
 
 How those sources are contributed matters. Boot moves `defaultProperties`, the source
 `SpringApplication.setDefaultProperties` fills, to the end of the environment once every
@@ -868,9 +876,8 @@ Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 - `*IT`: anything that boots a server, run by failsafe at `integration-test`.
 
 Where the Spring-backed tests live: `peekaboot-backend`'s suite uses no `@SpringBootTest`
-and no embedded server. A bare `AnnotationConfigApplicationContext` or an
-`ApplicationContextRunner` is fine where a bean-name lookup or endpoint discovery needs a
-real container (`PeekabootActuatorServiceTest`, `ServerUrlResolverTest`).
+and no embedded server. A bare `AnnotationConfigApplicationContext` is fine where a
+bean-name lookup needs a real container (`ServerUrlResolverTest`).
 `peekaboot-spring-boot-autoconfigure` has context-runner unit tests per auto-configuration
 plus three `*IT`s that boot its own `TestApplication` (`DevToolbarAutoConfigurationIT` and
 `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT` through `SpringApplicationBuilder`)
@@ -914,7 +921,7 @@ class DevToolbarAutoConfigurationIT {
 2. **Micrometer-based**: Uses Micrometer's `Tracer` API for trace context on the request path; only the Logback appender reads MDC (see *Micrometer Tracer Integration*)
 3. **Spring Events**: Uses `ApplicationEventPublisher` instead of custom event bus
 4. **Bucketed Storage**: `InMemoryTraceStore` handles spans, logs, and request data across three buckets (All, Errors and Slow), each an insertion-ordered map capped at its own size and evicting its oldest trace once full. Errors and Slow hold references to the same bundles as All, so once a trace qualifies it can outlive its own eviction from All. See [www.peekaboot.org/docs/tracing](https://www.peekaboot.org/docs/tracing/) for bucket sizing, the slow-trace threshold, and the `bucket=all|errors|slow` filter.
-5. **Actuator not web-exposed**: All data accessed in-process through an internal `WebEndpointDiscoverer`; `PeekabootEndpointExposureOutcomeContributor` makes the endpoint beans available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
+5. **Actuator not web-exposed**: All data read in-process from endpoint instances Peekaboot constructs itself, except `HealthEndpoint`, which is borrowed from the application; `PeekabootEndpointExposureOutcomeContributor` makes only that borrowed bean available without `management.endpoints.web.exposure` (see "In-Process Actuator Invocation")
 6. **Plain bounded maps for storage**: Memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
 7. **Shadow DOM**: Toolbar cannot interfere with host application
 8. **Lowest-priority defaults**: Apps can always override peekaboot settings
