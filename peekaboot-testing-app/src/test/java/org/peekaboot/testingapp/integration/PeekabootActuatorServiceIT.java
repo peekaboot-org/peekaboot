@@ -8,10 +8,13 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
@@ -19,6 +22,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.InsightsSource;
+import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.service.ActuatorInsightsService;
@@ -83,12 +87,17 @@ class PeekabootActuatorServiceIT {
         serviceLogger.setAdditive(additivity);
     }
 
+    // flyway.enabled: false in the test profile leaves the flyway source absent from
+    // data.keySet(), so this can only assert a subset, not equality; deriving allowed from
+    // ActuatorParsedData's own record components means an id that stops matching one fails
+    // here instead of silently feeding the mappers a null.
     @Test
-    void insightsDataCarriesExactlyTheConsumedEndpointIds() {
+    void insightsDataIsASubsetOfTheConsumedEndpointIds() {
         Map<String, Object> data = service.getInsightsData();
 
-        Set<String> allowed =
-                Set.of("spring", "health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
+        Set<String> allowed = Arrays.stream(ActuatorParsedData.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .collect(Collectors.toSet());
         assertThat(data.keySet()).isSubsetOf(allowed);
         assertThat(data).containsKeys("health", "info", "env");
     }
