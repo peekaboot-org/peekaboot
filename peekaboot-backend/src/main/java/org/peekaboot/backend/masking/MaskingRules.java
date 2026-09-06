@@ -155,7 +155,13 @@ final class MaskingRules {
             // two for JDBC; ";" covers SQL Server's property separator. Every pair is a
             // candidate - group 1 is judged by the key-name rules, and only group 2 (the
             // value) is masked, leaving the parameter name and the rest of the URL intact.
-            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;\\s]+)=([^&;\\s]+)")),
+            // The "^" alternative catches a bare "name=value" pair with no URL around it at
+            // all (OTEL_EXPORTER_OTLP_HEADERS=api-key=secret), which never sits after a
+            // "?"/"&"/";"; group 1 excludes "/" and ":" so that alternative cannot instead
+            // swallow a whole scheme://host/path prefix as "the key" up to the URL's own
+            // first "=".
+            ValuePattern.keyed(
+                    "Credentials in a URL query", 1, 2, Pattern.compile("(?:^|[?&;])([^=&;\\s/:]+)=([^&;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless
