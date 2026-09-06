@@ -14,6 +14,8 @@ dependencies {
 
     // compile-only reference for @ConditionalOnClass(HealthEndpoint)
     compileOnly("org.springframework.boot:spring-boot-health")
+    compileOnly("org.springframework.boot:spring-boot-flyway")
+    compileOnly("org.flywaydb:flyway-core")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("org.springframework:spring-webmvc")
