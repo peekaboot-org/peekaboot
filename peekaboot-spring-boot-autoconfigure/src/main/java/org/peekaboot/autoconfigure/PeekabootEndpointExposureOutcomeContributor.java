@@ -11,9 +11,9 @@ import org.springframework.core.env.Environment;
 /**
  * Reports the health endpoint as exposed while peekaboot is enabled, so
  * {@code @ConditionalOnAvailableEndpoint} creates its bean without requiring
- * {@code management.endpoints.web.exposure.include}. The regular HTTP mapping
- * under {@code /actuator} still applies that property, so health becomes no
- * more reachable over the web through this contributor than it already was.
+ * {@code management.endpoints.web.exposure.include}. The {@code /actuator} HTTP mapping
+ * applies {@code management.endpoints.web.exposure} on its own, so this contributor
+ * changes nothing about HTTP reachability.
  */
 public class PeekabootEndpointExposureOutcomeContributor implements EndpointExposureOutcomeContributor {
 
