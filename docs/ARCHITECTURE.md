@@ -381,7 +381,8 @@ pairing that id with a `Supplier` that reads an endpoint object
 `ActuatorSourcesAutoConfiguration` constructs. Reading a source calls that endpoint
 object directly. There is no discovery step and no HTTP call; a source that reads
 `null` contributes no entry, which is how an endpoint whose backing bean is absent
-(`flyway` without a Flyway bean) reports that it has nothing rather than failing.
+(`flyway` without a Flyway bean, `health` without a `HealthEndpoint` bean, `loggers`
+without a `LoggingSystem` bean) reports that it has nothing rather than failing.
 
 `ActuatorSourcesAutoConfiguration` builds `env` and `configprops` as
 `new EnvironmentEndpoint(environment, sanitizingFunctions, Show.ALWAYS)` and
@@ -418,7 +419,10 @@ composite's aggregate.
 
 Borrowing the bean still needs it to exist. Spring Boot only *creates* the
 `HealthEndpoint` bean when `@ConditionalOnAvailableEndpoint` matches, and with
-Spring defaults `health` is the only endpoint exposed over the web.
+Spring defaults `health` is exposed, so the bean exists without any help. The gap
+is an application that narrows `management.endpoints.web.exposure.include` to
+exclude health: without the contributor, the bean would not exist and the
+dashboard would show no health data either.
 `PeekabootEndpointExposureOutcomeContributor` reports the health endpoint as
 exposed while `peekaboot.enabled=true`, closing that gap. The regular HTTP mapping
 under `/actuator` still applies `management.endpoints.web.exposure` on its own,
@@ -629,7 +633,10 @@ settings. Health is the one exception. Its bean is borrowed rather than built, a
 `peekaboot-defaults.yml`'s `management.info.*`, `management.tracing.*` and
 `management.observations.*` defaults turn on the `InfoContributor` beans the `info`
 source reads and configure trace sampling and `@Observed` support. None of them
-decides value visibility.
+decides value visibility. `management.info.<x>.enabled=false` is the one host lever
+left over dashboard content: it removes an `InfoContributor` bean outright and so
+narrows the Application tab, and an explicit host setting wins because Peekaboot's
+own four `management.info.*` defaults apply at lowest precedence.
 
 `peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
 sensitive value it sees; `enable-unmasking` combined with the request's `unmask`

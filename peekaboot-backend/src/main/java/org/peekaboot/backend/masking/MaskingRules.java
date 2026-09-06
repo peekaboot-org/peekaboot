@@ -117,8 +117,11 @@ final class MaskingRules {
                     "JWT",
                     Pattern.compile(
                             "\\bey[A-Za-z0-9]{17,}\\.ey[A-Za-z0-9/\\\\_-]{17,}\\.(?:[A-Za-z0-9/\\\\_-]{10,}={0,2})?")),
-            // Header through footer, DOTALL so the base64 body's newlines are inside the match
-            // and reluctant so two adjacent keys stay two matches. A key whose footer is missing
+            // Header through footer, DOTALL so the base64 body's newlines are inside the match.
+            // Both the ".*?" body and the "{0,100}?" header/footer charsets are reluctant: under
+            // (?i) that charset also matches lowercase, so a greedy quantifier would let the
+            // "-----END" branch of one key skip across the gap and swallow the next key's header
+            // too, merging two adjacent keys into one match. A key whose footer is missing
             // (a truncated log line, a value cut short) masks to the end of the value: there is
             // nothing left that could be safe to show after a BEGIN marker.
             new ValuePattern(

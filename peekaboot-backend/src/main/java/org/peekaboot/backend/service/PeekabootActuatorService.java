@@ -17,7 +17,10 @@ import org.slf4j.LoggerFactory;
  * application's endpoint beans, so no {@code management.endpoint.*} setting decides what the
  * dashboard may read or whether a value arrives masked - {@code MaskingEngine} alone does.
  * Health is the one endpoint whose bean is borrowed rather than built, because it carries no
- * value-visibility gate of its own.
+ * value-visibility gate of its own. Borrowing still leaves one lever: {@code
+ * management.endpoint.health.access=none} is resolved before the bean exists, so it removes
+ * the bean and the source then contributes no entry, same as an absent Flyway or logging
+ * system.
  */
 public final class PeekabootActuatorService {
 
