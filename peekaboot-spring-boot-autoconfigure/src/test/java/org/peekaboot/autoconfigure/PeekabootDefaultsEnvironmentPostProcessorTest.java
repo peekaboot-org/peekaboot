@@ -8,6 +8,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.env.DefaultPropertiesPropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.mock.env.MockEnvironment;
@@ -218,10 +219,13 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isNull();
-        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
-                .isNull();
+        EnumerablePropertySource<?> detection =
+                (EnumerablePropertySource<?>) environment.getPropertySources().get("peekabootDetection");
+        assertThat(detection.getPropertyNames())
+                .containsExactlyInAnyOrder(
+                        PeekabootPropertyKeys.ENABLED,
+                        PeekabootPropertyKeys.DEV_TOOLBAR,
+                        PeekabootPropertyKeys.STORAGE_ENABLED);
     }
 
     @Test
