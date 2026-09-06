@@ -226,6 +226,10 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         PeekabootPropertyKeys.ENABLED,
                         PeekabootPropertyKeys.DEV_TOOLBAR,
                         PeekabootPropertyKeys.STORAGE_ENABLED);
+        assertThat(environment.getProperty("management.endpoint.env.show-values"))
+                .isNull();
+        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
+                .isNull();
     }
 
     @Test

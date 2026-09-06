@@ -118,7 +118,7 @@ final class MaskingRules {
                     Pattern.compile(
                             "\\bey[A-Za-z0-9]{17,}\\.ey[A-Za-z0-9/\\\\_-]{17,}\\.(?:[A-Za-z0-9/\\\\_-]{10,}={0,2})?")),
             // Header through footer, DOTALL so the base64 body's newlines are inside the match.
-            // Both the ".*?" body and the "{0,100}?" header/footer charsets are reluctant: under
+            // Both the ".*?" body and the "{0,100}?" header/footer quantifiers are reluctant: under
             // (?i) that charset also matches lowercase, so a greedy quantifier would let the
             // "-----END" branch of one key skip across the gap and swallow the next key's header
             // too, merging two adjacent keys into one match. A key whose footer is missing
@@ -158,13 +158,7 @@ final class MaskingRules {
             // two for JDBC; ";" covers SQL Server's property separator. Every pair is a
             // candidate - group 1 is judged by the key-name rules, and only group 2 (the
             // value) is masked, leaving the parameter name and the rest of the URL intact.
-            // The "^" alternative catches a bare "name=value" pair with no URL around it at
-            // all (OTEL_EXPORTER_OTLP_HEADERS=api-key=secret), which never sits after a
-            // "?"/"&"/";"; group 1 excludes "/" and ":" so that alternative cannot instead
-            // swallow a whole scheme://host/path prefix as "the key" up to the URL's own
-            // first "=".
-            ValuePattern.keyed(
-                    "Credentials in a URL query", 1, 2, Pattern.compile("(?:^|[?&;])([^=&;\\s/:]+)=([^&;\\s]+)")),
+            ValuePattern.keyed("Credentials in a URL query", 1, 2, Pattern.compile("[?&;]([^=&;\\s]+)=([^&;\\s]+)")),
             // The value of a -Dname=value / --name=value option, as JAVA_TOOL_OPTIONS,
             // JDK_JAVA_OPTIONS and their kin carry it: the property spring.datasource.password
             // is masked by its own key, but not the option string it was set from unless

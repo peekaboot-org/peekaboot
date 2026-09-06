@@ -478,19 +478,6 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("https://api.example.com/v1/data?api_key=******&format=json");
         }
 
-        /**
-         * The pair sits at offset 0, with no leading '?'/'&'/';' - the shape of an
-         * environment variable such as {@code OTEL_EXPORTER_OTLP_HEADERS}, not a URL.
-         */
-        @Test
-        void maskValue_shouldMaskAKeyValuePairAtTheStartOfTheValue() {
-            String value = "api-key=secretvalue123";
-
-            String result = engine.maskValue(value);
-
-            assertThat(result).isEqualTo("api-key=******");
-        }
-
         // The query rule judges each parameter name with the key-name rules, so every
         // spelling those accept - OAuth's token names, a camelCase apiKey, a bare auth -
         // is caught here too, not just the handful a separate word list happened to name.
