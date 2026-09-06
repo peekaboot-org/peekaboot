@@ -14,8 +14,8 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * The independence contract, end to end through the real HTTP API. Every actuator setting
- * that used to decide what the dashboard could see is turned all the way down here: values
- * hidden, every endpoint excluded from web exposure, the env and configprops endpoints denied
+ * that could decide what the dashboard sees is turned all the way down here: values hidden,
+ * every endpoint excluded from web exposure, the env and configprops endpoints denied
  * outright. Health survives that exclusion only because
  * {@code PeekabootEndpointExposureOutcomeContributor} keeps its bean alive, which this test
  * exercises in passing.
@@ -76,13 +76,21 @@ class ActuatorValuesIgnoreApplicationSettingsIT {
     }
 
     @Test
-    void theConfigTabStillReachesTheConfigurationPropertiesBeans() {
+    void theConfigTabShowsANonSensitiveValueAndStillMasksItsSensitiveSibling() {
         JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
+
+        JsonNode clientId =
+                ActuatorInsightsJson.findConfigInfoProperty(config, "nested-fixture", "registration.google.client-id");
+        assertThat(clientId)
+                .as("the nested-fixture bean is bound in application-test.yml")
+                .isNotNull();
+        assertThat(clientId.path("value").asString()).isEqualTo("fixture-client-id");
 
         JsonNode clientSecret = ActuatorInsightsJson.findConfigInfoProperty(
                 config, "nested-fixture", "registration.google.client-secret");
         assertThat(clientSecret)
                 .as("the nested-fixture bean is bound in application-test.yml")
                 .isNotNull();
+        assertThat(clientSecret.path("value").asString()).isEqualTo("******");
     }
 }
