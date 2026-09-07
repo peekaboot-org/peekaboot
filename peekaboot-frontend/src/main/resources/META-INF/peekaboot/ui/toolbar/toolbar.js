@@ -190,9 +190,11 @@ function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived})
  */
 function installServerTimingInterceptor(basePath, onRequest) {
     // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
-    // the prefixes to ignore have to be put behind it too. '/actuator/' is Boot's default
-    // path, not the configured management base path: a relocated actuator is merely
-    // treated like any other API call and lands its own trace id on the bar.
+    // the prefixes to ignore have to be put behind it too. '/actuator/' matches only Boot's
+    // default management base path - a relocated one is excluded server-side instead, since
+    // RequestCaptureFilter resolves the configured base path itself and never sets the
+    // Server-Timing header this interceptor reads, so a relocated actuator call is silently
+    // ignored either way.
     const contextPath = basePath.slice(0, basePath.lastIndexOf('/'));
     const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
         .map(prefix => contextPath + prefix);
