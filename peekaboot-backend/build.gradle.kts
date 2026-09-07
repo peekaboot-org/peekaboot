@@ -6,7 +6,6 @@ description = "Peekaboot Backend - Spring Boot controllers, services, and lifecy
 
 dependencies {
     api("org.springframework.boot:spring-boot")
-    api("org.springframework.boot:spring-boot-actuator")
     api("tools.jackson.core:jackson-databind")
     api("io.micrometer:micrometer-core")
     api("io.micrometer:micrometer-tracing")
@@ -20,7 +19,6 @@ dependencies {
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
-    compileOnly("org.springframework.boot:spring-boot-health")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
     compileOnly("org.springframework.boot:spring-boot-configuration-processor")
 
