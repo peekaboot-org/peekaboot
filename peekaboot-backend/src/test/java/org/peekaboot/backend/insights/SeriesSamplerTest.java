@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
@@ -13,6 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.testsupport.LogCapture;
 
 class SeriesSamplerTest {
 
@@ -96,6 +98,42 @@ class SeriesSamplerTest {
         Gauge.builder("disk.free", () -> 400).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
         SeriesSampler sampler = new SeriesSampler(diff, registry);
+        assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+    }
+
+    /** A misnamed subtract-meter can't be caught at config load: Micrometer registers meters lazily. */
+    @Test
+    void unresolvedSubtractMeterIsLoggedOnceNotPerSample() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free.typo", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: series 'used' (meter 'disk.total'): "
+                                + "subtract-meter 'disk.free.typo' did not resolve to any meter");
+            });
+        }
+    }
+
+    /** Once the meter appears, later samples resolve normally without needing a fresh SeriesSampler. */
+    @Test
+    void subtractMeterRegisteredAfterConstructionStopsBeingUnresolved() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(capture.appender().list).hasSize(1);
+        }
+        Gauge.builder("disk.free", () -> 400).register(registry);
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);
     }
 

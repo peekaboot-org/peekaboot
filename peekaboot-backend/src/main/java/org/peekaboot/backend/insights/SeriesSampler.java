@@ -13,6 +13,8 @@ import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
@@ -22,10 +24,13 @@ import org.peekaboot.backend.insights.config.SeriesDef;
  */
 public final class SeriesSampler {
 
+    private static final Logger log = LoggerFactory.getLogger(SeriesSampler.class);
+
     private final SeriesDef def;
     private final MeterRegistry registry;
     private double previousCount = Double.NaN;
     private double previousTotal = Double.NaN;
+    private boolean subtractMeterUnresolvedLogged;
 
     public SeriesSampler(SeriesDef def, MeterRegistry registry) {
         this.def = def;
@@ -55,7 +60,19 @@ public final class SeriesSampler {
         if (def.subtractMeter() == null) {
             return value;
         }
-        double other = currentValue(matching(def.subtractMeter()));
+        List<Meter> subtractMeters = matching(def.subtractMeter());
+        if (subtractMeters.isEmpty() && !subtractMeterUnresolvedLogged) {
+            // meters can register after this series was defined, so an empty match here is not
+            // necessarily a config error; report it once so a genuine typo is still discoverable
+            log.warn(
+                    "Peekaboot insights: series '{}' (meter '{}'): subtract-meter '{}' did not resolve"
+                            + " to any meter",
+                    def.id(),
+                    def.meter(),
+                    def.subtractMeter());
+            subtractMeterUnresolvedLogged = true;
+        }
+        double other = currentValue(subtractMeters);
         return value - other; // NaN propagates if either side is unresolved
     }
 

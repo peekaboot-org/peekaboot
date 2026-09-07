@@ -115,4 +115,25 @@ class PanelConfigLoaderTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bogus");
     }
+
+    /** subtract-meter changes what value.currentValue subtracts from; rate/avg/max have no such term to subtract from. */
+    @Test
+    void rejectsSubtractMeterOnAStatOtherThanValue() {
+        assertThatThrownBy(() ->
+                        PanelConfigLoader.load(new ClassPathResource("insights/loader-subtract-meter-rate.yml"), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("panel 'net'")
+                .hasMessageContaining("series 'throughput'")
+                .hasMessageContaining("stat 'rate'")
+                .hasMessageContaining("subtract-meter");
+    }
+
+    /** The overview maps tile values by id in a flat map, so a second definition would silently replace the first. */
+    @Test
+    void rejectsDuplicateTileIdsWithinOneFile() {
+        assertThatThrownBy(
+                        () -> PanelConfigLoader.load(new ClassPathResource("insights/loader-duplicate-tile.yml"), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("duplicate tile id 'uptime'");
+    }
 }

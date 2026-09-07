@@ -7,7 +7,8 @@ import java.util.Map;
  *
  * @param stat          one of {@code value|rate|avg|max}; defaults to {@code value} when null
  * @param unit          optionally overrides the panel unit ({@code bytes|percent|millis|count|persec|bytes-persec})
- * @param subtractMeter only meaningful when {@code stat} is {@code value}
+ * @param subtractMeter rejected at load unless {@code stat} is {@code value}: rate/avg/max have no
+ *                       single unambiguous meaning for subtracting one meter from another
  */
 public record SeriesDef(
         String id,
