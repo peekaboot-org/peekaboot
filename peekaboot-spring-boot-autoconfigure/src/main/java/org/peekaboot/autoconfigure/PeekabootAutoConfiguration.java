@@ -27,6 +27,7 @@ import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.MetricsService;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.backend.service.TraceInsightsService;
+import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
@@ -48,7 +49,7 @@ import org.springframework.context.annotation.Bean;
  * name, e.g. {@code ServerUrlResolver#DASHBOARD_CONFIG_BEAN_NAME}), so an application
  * bean of the same type or name replaces the default instead of colliding with it.
  */
-@AutoConfiguration(after = PeekabootTracingAutoConfiguration.class)
+@AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
@@ -214,7 +215,8 @@ public class PeekabootAutoConfiguration {
             PeekabootProperties properties,
             UiTracingProperties uiTracingProperties,
             ObjectProvider<PeekabootTracingProperties> tracingProperties,
-            ObjectProvider<InsightsService> insightsService) {
+            ObjectProvider<InsightsService> insightsService,
+            ObjectProvider<OtelSpanExporter> otelSpanExporter) {
         return new PeekabootController(
                 actuatorInsightsService,
                 traceInsightsService,
@@ -222,6 +224,7 @@ public class PeekabootAutoConfiguration {
                 properties,
                 uiTracingProperties,
                 tracingProperties.getIfAvailable(),
-                insightsService.getIfAvailable());
+                insightsService.getIfAvailable(),
+                otelSpanExporter.getIfAvailable() != null);
     }
 }
