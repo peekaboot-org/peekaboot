@@ -120,7 +120,9 @@ class LocalDevDetectorTest {
      */
     @Test
     void rejectsADevToolsRestartInsideAContainer() {
-        LaunchSignals signals = new LaunchSignals(JIB_LAUNCH.classPath(), true);
+        // build output present, so only the container marker can produce the rejection -
+        // a Jib-shaped class path would pass through buildOutputOnClassPath() alone
+        LaunchSignals signals = new LaunchSignals(IDE_LAUNCH.classPath(), true);
 
         assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, signals))
                 .isFalse();
