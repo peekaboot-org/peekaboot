@@ -568,11 +568,14 @@ two signals of its own, checked in order:
 
 1. Running as a native image always resolves to `false`, before anything else is checked.
 2. Otherwise, if the current thread's context class loader is DevTools' `RestartClassLoader`
-   (the `restartedMain` thread DevTools relaunches the app on), only the container check
-   below is left to decide. DevTools relaunches like that for a local launch, so the class
-   loader stands in for the class-path proof. But a Jib image and Boot's `extract` layout
-   ship DevTools whenever the application has it as a runtime dependency, so a container
-   marker still resolves `false`.
+   (the `restartedMain` thread DevTools relaunches the app on), the thread-name, class-loader
+   and stack-trace checks in step 3 are skipped: DevTools only reaches that relaunch after its
+   own gate has already required them, the stack-trace check included (it skips the identical
+   set of frames). The class-path check in step 4 still applies, though: DevTools' own
+   class-path signal accepts any directory on the class path, not just a build tool's output
+   directory, so it says yes for a Jib image or an `extract` layout too. Combined with the
+   container check, a Jib image or Boot's `extract` layout that ships DevTools as a runtime
+   dependency still resolves `false`.
 3. Otherwise, the result is `true` only when *all* of the following hold: the thread is
    named `main`; its context class loader is the JDK's own `AppClassLoader`, not Spring
    Boot's `LaunchedClassLoader` (a packaged, executable jar) and not a servlet container's
