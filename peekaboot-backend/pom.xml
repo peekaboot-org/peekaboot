@@ -23,10 +23,6 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-actuator</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-web-server</artifactId>
             <optional>true</optional>
         </dependency>
@@ -65,11 +61,6 @@
             <artifactId>micrometer-tracing</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-health</artifactId>
-            <optional>true</optional>
-        </dependency>
         <!-- OpenTelemetry SDK (optional - for OTel integration) -->
         <dependency>
             <groupId>io.opentelemetry</groupId>
