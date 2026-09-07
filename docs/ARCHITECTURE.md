@@ -683,6 +683,14 @@ public class OtelTracingAutoConfiguration {
 }
 ```
 
+`OtelSpanExporter` is `TraceStore`'s only span source, so an application without the
+OpenTelemetry SDK has a store that exists (`features.tracing`, gated only by
+`peekaboot.tracing.enabled`) but can never receive one. `PeekabootController` exposes that
+gap as `features.tracingSpansPossible`: false is a hard guarantee (the bean this section
+describes was never created), true only means the bridge exists, not that anything
+downstream - sampling, the rest of the host's OpenTelemetry wiring - will actually produce
+a span.
+
 The exporter:
 - Is one more `SpanExporter` bean alongside whatever Spring Boot's own OpenTelemetry
   auto-configuration already registered. It doesn't stand up its own tracing stack; it

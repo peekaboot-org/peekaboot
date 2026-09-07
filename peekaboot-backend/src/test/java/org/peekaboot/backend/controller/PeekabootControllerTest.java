@@ -66,7 +66,8 @@ class PeekabootControllerTest {
                 properties,
                 uiTracingProperties,
                 tracingProperties,
-                null);
+                null,
+                false);
     }
 
     @Nested
@@ -227,7 +228,8 @@ class PeekabootControllerTest {
                     properties,
                     uiTracingProperties,
                     tracingProperties,
-                    mock(InsightsService.class));
+                    mock(InsightsService.class),
+                    false);
 
             assertThat(controllerWithInsights.getFeatures().insights()).isTrue();
         }
@@ -269,9 +271,30 @@ class PeekabootControllerTest {
                     properties,
                     uiTracingProperties,
                     null,
-                    null);
+                    null,
+                    false);
 
             assertThat(withoutTracing.getFeatures().slowTraceThresholdMs()).isNull();
+        }
+
+        @Test
+        void shouldReportTracingSpansPossibleWhenASpanSourceIsWired() {
+            PeekabootController withSpanSource = new PeekabootController(
+                    actuatorInsightsService,
+                    traceInsightsService,
+                    metricsService,
+                    properties,
+                    uiTracingProperties,
+                    tracingProperties,
+                    null,
+                    true);
+
+            assertThat(withSpanSource.getFeatures().tracingSpansPossible()).isTrue();
+        }
+
+        @Test
+        void shouldReportTracingSpansNotPossibleWithoutASpanSource() {
+            assertThat(controller.getFeatures().tracingSpansPossible()).isFalse();
         }
     }
 
