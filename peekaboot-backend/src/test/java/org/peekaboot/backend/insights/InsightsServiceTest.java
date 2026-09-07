@@ -28,7 +28,6 @@ class InsightsServiceTest {
     void setUp() {
         registry = new SimpleMeterRegistry();
         Gauge.builder("process.cpu.usage", () -> 1.0).register(registry); // resolves the cpu panel's first series
-        Gauge.builder("disk.free", () -> 0).register(registry); // resolves the disk panel's subtract-meter
         service = new InsightsService(
                 registry,
                 new InsightsProperties(),
@@ -86,6 +85,37 @@ class InsightsServiceTest {
                 assertThat(event.getLevel()).isEqualTo(Level.ERROR);
                 assertThat(event.getFormattedMessage()).contains("loader-invalid.yml");
                 assertThat(event.getThrowableProxy().getMessage()).contains("bogus");
+            });
+        }
+    }
+
+    /**
+     * PanelConfigLoader rejects subtract-meter on a non-value stat at load time, but that
+     * exception reaches InsightsService through the same user-override path as any other
+     * invalid file - a typo and a rejected combination cost the operator their whole panel
+     * customisation exactly alike, silently, with the stock panels served in its place.
+     */
+    @Test
+    void aSubtractMeterOnANonValueStatCostsTheWholeUserOverride() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setConfigLocation("classpath:insights/loader-subtract-meter-rate.yml");
+
+        try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
+            InsightsService fallback = new InsightsService(
+                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+
+            assertThat(fallback.config().panels())
+                    .extracting(InsightsConfigResponse.Panel::id)
+                    .as("the bundled panels, none of them from the rejected file")
+                    .contains("cpu", "heap")
+                    .doesNotContain("net");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getFormattedMessage())
+                        .contains("loader-subtract-meter-rate.yml")
+                        .contains("discarding it entirely")
+                        .contains("bundled panels");
+                assertThat(event.getThrowableProxy().getMessage()).contains("subtract-meter");
             });
         }
     }
