@@ -63,11 +63,12 @@ class ThemeTokenIT extends PlaywrightTestBase {
     }
 
     /**
-     * If tokens.css fails to load - blocked, 404, a stale cache - before these rules apply,
-     * every var() reading one of its tokens still has the light-theme literal as a
-     * fallback, so the loss costs the dark palette for that rule and nothing more - a
-     * search highlight without ink, an error banner without its wash, or a hover wash
-     * without its ink, would be unreadable rather than merely un-themed.
+     * Serves a tokens.css with four declarations stripped - the shape a stale cached copy,
+     * predating those tokens, would take; a blocked or 404 load would lose the whole
+     * palette, not four tokens. Every var() reading one of the missing tokens still has the
+     * light-theme literal as a fallback, so the loss costs the dark palette for that rule
+     * and nothing more - a search highlight without ink, an error banner without its wash,
+     * or a hover wash without its ink, would be unreadable rather than merely un-themed.
      */
     @Test
     void aTokensFileMissingTheHighlightTintAndWashTokensStillPaintsTheirRules() {
