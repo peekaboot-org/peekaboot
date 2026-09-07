@@ -24,10 +24,16 @@ import org.springframework.core.NativeDetector;
  *
  * <p>With DevTools on the classpath the application is relaunched on the
  * {@code restartedMain} thread under DevTools' {@code RestartClassLoader}
- * before the environment is built; since DevTools only enables itself in a
- * local launch, that classloader stands in for the class-path check. The
- * container check still applies: DevTools has none of its own, and Jib or an
- * extracted layout ships it whenever it is a runtime dependency.
+ * before the environment is built. DevTools only reaches that relaunch after
+ * its own gate ({@code RestartApplicationListener}, {@code DefaultRestartInitializer})
+ * has required a thread named {@code main}, an {@code AppClassLoader} and a
+ * stack free of the same frames this class skips - so the restart branch does
+ * not repeat those three. Its class-path signal is not equivalent, though:
+ * DevTools' {@code ChangeableUrls} treats every directory URL on the class
+ * path as reloadable, not just a build tool's output directory, so it says yes
+ * for a Jib image or an extracted layout too - the exact shapes the build-output
+ * check exists to reject. The class-path and container checks below both still
+ * apply to this branch.
  *
  * <p>A container marker is a container marker wherever it comes from, so a checkout worked on
  * inside a devcontainer - VS Code Dev Containers, GitHub Codespaces - is not a local launch by
@@ -104,7 +110,7 @@ final class LocalDevDetector {
             return false;
         }
         if (classLoader.getClass().getName().contains("RestartClassLoader")) {
-            return !signals.containerMarkers();
+            return isDeveloperLaunch(signals);
         }
         if (!"main".equals(thread.getName())) {
             return false;
@@ -119,6 +125,11 @@ final class LocalDevDetector {
                 }
             }
         }
+        return isDeveloperLaunch(signals);
+    }
+
+    /** The two signals a class loader and a clean stack cannot see, shared by every branch that gets this far. */
+    private static boolean isDeveloperLaunch(LaunchSignals signals) {
         return signals.buildOutputOnClassPath() && !signals.containerMarkers();
     }
 }

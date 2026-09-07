@@ -93,11 +93,24 @@ class LocalDevDetectorTest {
 
     @Test
     void detectsLocalDevForDevToolsRestartedThread() {
-        // DevTools relaunches the app on "restartedMain" with its RestartClassLoader and only
-        // ever enables itself in a local launch - proof on its own, whatever the classpath
-        // says, unless the process shows a container marker
-        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, JIB_LAUNCH))
+        // DevTools only reaches the restartedMain/RestartClassLoader relaunch after its own
+        // gate required a "main" thread, an AppClassLoader and a clean stack, so this branch
+        // does not repeat those - but its class-path signal (any directory URL) is looser
+        // than Peekaboot's, so an IDE-shaped launch is what proves this true
+        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, IDE_LAUNCH))
                 .isTrue();
+    }
+
+    /**
+     * DevTools' own class-path signal ({@code ChangeableUrls}) treats every directory URL as
+     * reloadable, not just a build tool's output directory - the same gap the base branch
+     * closes with {@code buildOutputOnClassPath()} for a Jib image or an extracted layout
+     * that ships DevTools by accident. The restart branch must close it too.
+     */
+    @Test
+    void rejectsADevToolsRestartWithoutBuildOutputOnClassPath() {
+        assertThat(LocalDevDetector.isLocalDevelopment(devToolsRestartedThread(), CLEAN_STACK, JIB_LAUNCH))
+                .isFalse();
     }
 
     /**
