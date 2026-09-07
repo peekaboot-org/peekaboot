@@ -192,9 +192,9 @@ function installServerTimingInterceptor(basePath, onRequest) {
     // basePath is <context-path>/peekaboot; fetched paths carry the same context path, so
     // the prefixes to ignore have to be put behind it too. '/actuator/' matches only Boot's
     // default management base path - a relocated one is excluded server-side instead, since
-    // RequestCaptureFilter resolves the configured base path itself and never sets the
-    // Server-Timing header this interceptor reads, so a relocated actuator call is silently
-    // ignored either way.
+    // RequestCaptureFilter is given a PeekabootPaths built from the configured base path and
+    // never sets the Server-Timing header this interceptor reads, so a relocated actuator
+    // call is silently ignored either way.
     const contextPath = basePath.slice(0, basePath.lastIndexOf('/'));
     const skipPrefixes = ['/v3/api-docs', '/swagger-ui/', '/peekaboot/', '/webjars/', '/actuator/']
         .map(prefix => contextPath + prefix);
