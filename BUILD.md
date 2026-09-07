@@ -96,7 +96,7 @@ stays around a minute.
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | All shared build config, dependency management (`spring-boot-dependencies` 4.1.1) |
 | `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only, the shared test helpers the backend and autoconfigure tests consume at test scope. See its [README](peekaboot-test-support/README.md) |
-| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class (and therefore the `spring-boot-configuration-processor` metadata). Web/servlet/logback/Hikari/health-endpoint/OTel deps are `<optional>`; the host app supplies them, and auto-configuration conditions guard their use |
+| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class (and therefore the `spring-boot-configuration-processor` metadata). Web/servlet/logback/Hikari/OTel deps are `<optional>`; the host app supplies them, and auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only (outside every default static location, so a consumer with Peekaboot off serves none of it). No build step: plain ES modules and CSS, copied as-is, no test sources. Its `-javadoc` jar is empty on purpose (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator with no sources. Maven logs `JAR will be empty`, which is correct. Its `-sources` and `-javadoc` jars are empty on purpose (below) |
@@ -258,12 +258,15 @@ in with them.
 
 ### The starter's optional-dependency contract
 
-Fourteen `<optional>` declarations across `peekaboot-backend` and
-`peekaboot-spring-boot-autoconfigure`, covering ten distinct artifacts, promise a consumer
-that these arrive from the host application's own starters and not from peekaboot. The
-promise matters because the auto-configuration reads the classpath. Lose the flag on
-HikariCP and `@ConditionalOnClass(HikariDataSource.class)` fires inside an application
-running a different pool.
+`<optional>` declarations in `peekaboot-backend` and `peekaboot-spring-boot-autoconfigure`
+promise a consumer that these arrive from the host application's own starters and not
+from peekaboot. Both modules carry the flag for the artifacts they share, such as
+`jakarta.servlet-api` and `logback-classic`, because Maven does not propagate `<optional>`
+transitively: a module that touches the class at compile time needs its own copy of the
+flag to keep the promise down the chain to the starter. The promise matters because the
+auto-configuration reads the classpath. Lose the flag on HikariCP and
+`@ConditionalOnClass(HikariDataSource.class)` fires inside an application running a
+different pool.
 
 `bannedDependencies` with `searchTransitive` on `peekaboot-spring-boot-starter` is where
 that becomes checkable, because the starter is what a consumer actually depends on. It
