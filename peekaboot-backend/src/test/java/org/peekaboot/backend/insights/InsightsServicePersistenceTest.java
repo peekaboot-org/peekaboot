@@ -44,7 +44,14 @@ class InsightsServicePersistenceTest {
     }
 
     private InsightsService service(boolean enabled) {
-        return service(enabled, new SimpleMeterRegistry());
+        return service(enabled, bareRegistry());
+    }
+
+    /** A bare registry with just the disk panel's subtract-meter resolved, so real ticks stay quiet. */
+    private static MeterRegistry bareRegistry() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Gauge.builder("disk.free", () -> 0).register(registry);
+        return registry;
     }
 
     private InsightsService service(boolean enabled, MeterRegistry registry) {
@@ -65,7 +72,7 @@ class InsightsServicePersistenceTest {
      * silently turn every later sample into NaN.
      */
     private static MeterRegistry registryReading(long heapUsed) {
-        MeterRegistry registry = new SimpleMeterRegistry();
+        MeterRegistry registry = bareRegistry();
         Gauge.builder("jvm.memory.used", () -> heapUsed)
                 .tags(Tags.of("area", "heap"))
                 .register(registry);

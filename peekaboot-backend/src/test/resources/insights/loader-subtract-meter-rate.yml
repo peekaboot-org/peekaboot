@@ -1,0 +1,12 @@
+panels:
+  - id: net
+    title: Network
+    chart: line
+    unit: persec
+    order: 10
+    series:
+      - id: throughput
+        label: Throughput
+        meter: net.bytes.total
+        stat: rate
+        subtract-meter: net.bytes.dropped

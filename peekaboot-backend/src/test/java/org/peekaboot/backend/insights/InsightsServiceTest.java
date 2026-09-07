@@ -28,6 +28,7 @@ class InsightsServiceTest {
     void setUp() {
         registry = new SimpleMeterRegistry();
         Gauge.builder("process.cpu.usage", () -> 1.0).register(registry); // resolves the cpu panel's first series
+        Gauge.builder("disk.free", () -> 0).register(registry); // resolves the disk panel's subtract-meter
         service = new InsightsService(
                 registry,
                 new InsightsProperties(),
