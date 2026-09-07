@@ -178,7 +178,8 @@ class LifecycleEventLogTest {
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).startsWith("Peekaboot lifecycle: cannot write the event log");
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");
             });
         }
     }
@@ -194,7 +195,8 @@ class LifecycleEventLogTest {
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
-                assertThat(event.getFormattedMessage()).startsWith("Peekaboot lifecycle: cannot write the event log");
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");
             });
         }
     }
