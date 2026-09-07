@@ -47,11 +47,8 @@ class InsightsServicePersistenceTest {
         return service(enabled, bareRegistry());
     }
 
-    /** A bare registry with just the disk panel's subtract-meter resolved, so real ticks stay quiet. */
     private static MeterRegistry bareRegistry() {
-        MeterRegistry registry = new SimpleMeterRegistry();
-        Gauge.builder("disk.free", () -> 0).register(registry);
-        return registry;
+        return new SimpleMeterRegistry();
     }
 
     private InsightsService service(boolean enabled, MeterRegistry registry) {

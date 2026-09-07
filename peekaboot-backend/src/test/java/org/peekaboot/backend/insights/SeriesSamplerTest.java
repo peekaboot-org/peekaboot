@@ -101,9 +101,9 @@ class SeriesSamplerTest {
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);
     }
 
-    /** A misnamed subtract-meter can't be caught at config load: Micrometer registers meters lazily. */
+    /** Micrometer registers meters lazily, so a few ticks are given to let one still appear. */
     @Test
-    void unresolvedSubtractMeterIsLoggedOnceNotPerSample() {
+    void unresolvedSubtractMeterIsNotLoggedBeforeTheWarningThreshold() {
         Gauge.builder("disk.total", () -> 1000).register(registry);
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free.typo", null);
         SeriesSampler sampler = new SeriesSampler(diff, registry);
@@ -111,14 +111,43 @@ class SeriesSamplerTest {
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
             assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** A misnamed subtract-meter can't be caught at config load, so it is reported once it has stayed unresolved. */
+    @Test
+    void unresolvedSubtractMeterIsLoggedOnceAfterTheWarningThresholdNotPerSample() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free.typo", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN(); // 3rd consecutive unresolved tick: threshold reached
+            assertThat(sampler.sample(10_000)).isNaN(); // a further tick must not log again
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
                 assertThat(event.getFormattedMessage())
                         .isEqualTo("Peekaboot insights: series 'used' (meter 'disk.total'): "
-                                + "subtract-meter 'disk.free.typo' did not resolve to any meter");
+                                + "subtract-meter 'disk.free.typo' did not resolve to any meter across 3 ticks");
             });
+        }
+    }
+
+    /** A series whose own meter never resolved is already NaN and separately reported; no need to also warn about its subtract-meter. */
+    @Test
+    void unresolvedSubtractMeterIsNotLoggedWhileThePrimaryMeterIsAlsoUnresolved() {
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            for (int tick = 0; tick < 5; tick++) {
+                assertThat(sampler.sample(10_000)).isNaN();
+            }
+            assertThat(capture.appender().list).isEmpty();
         }
     }
 
@@ -131,10 +160,12 @@ class SeriesSamplerTest {
 
         try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
             assertThat(sampler.sample(10_000)).isNaN();
-            assertThat(capture.appender().list).hasSize(1);
+            assertThat(capture.appender().list).isEmpty(); // below the warning threshold
+
+            Gauge.builder("disk.free", () -> 400).register(registry);
+            assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+            assertThat(capture.appender().list).isEmpty();
         }
-        Gauge.builder("disk.free", () -> 400).register(registry);
-        assertThat(sampler.sample(10_000)).isEqualTo(600.0);
     }
 
     @Test

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import ch.qos.logback.classic.Level;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -184,10 +183,7 @@ class InsightsAutoConfigurationTest {
     static class MeterRegistryConfig {
         @Bean
         SimpleMeterRegistry meterRegistry() {
-            SimpleMeterRegistry registry = new SimpleMeterRegistry();
-            // resolves the disk panel's subtract-meter, so a real tick stays quiet
-            Gauge.builder("disk.free", () -> 0).register(registry);
-            return registry;
+            return new SimpleMeterRegistry();
         }
     }
 }
