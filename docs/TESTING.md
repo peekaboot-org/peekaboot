@@ -245,7 +245,7 @@ the auto-configuration. The two tests name it in `@SpringBootTest(classes = ...)
 Surefire's per-class `.txt` summaries report `Tests run: 0` for classes using `@Nested`
 (`PeekabootControllerTest`, `MaskingEngineTest`), so summing them under-reports. Counting
 `@Test` annotations is also wrong. It misses `@ParameterizedTest`, and `MaskingEngineTest`
-alone has 7 that expand to 107 invocations. Count from the XML, or from the reactor
+alone has 10 that expand to 92 invocations. Count from the XML, or from the reactor
 summary, never from the `.txt` files:
 
 ```bash

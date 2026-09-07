@@ -490,10 +490,16 @@ the three hooks that run before or outside the application context are registere
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Spring Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LocalDevDetector` | — (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
-Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`,
-matched by name for the anonymous `WebMvcConfigurer` registration and by the deduced
-generic type for the `FilterRegistrationBean`s, so an application bean of the same type
-or name replaces any Peekaboot default instead of colliding with it.
+Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`. Most
+match by type, so an application bean of the same type replaces the default outright; the
+`FilterRegistrationBean`s match by their deduced generic type, so an application's other
+filter registrations never back one of them off. A named set matches by name instead:
+`tracingInterceptorConfigurer`, because several `WebMvcConfigurer` beans coexist and a type
+match would let one suppress them all; `databaseMetadataList`, because a
+`List<DataSourceMetadata>` bean cannot be conditioned reliably by type; and each
+`InsightsSource` bean in `ActuatorSourcesAutoConfiguration`, because they share that one
+type and a type match would let an application overriding a single source suppress every
+reading.
 
 ### Conditional Loading
 
