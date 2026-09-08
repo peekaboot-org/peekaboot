@@ -356,7 +356,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.10.4.0</version>
+                <version>4.10.4.1</version>
                 <configuration>
                     <excludeFilterFile>${maven.multiModuleProjectDirectory}/config/spotbugs-exclude.xml</excludeFilterFile>
                 </configuration>
@@ -401,7 +401,7 @@
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
                 <artifactId>spotless-maven-plugin</artifactId>
-                <version>3.10.1</version>
+                <version>3.10.2</version>
                 <configuration>
                     <ratchetFrom>e05e0f97c3ab75a43bf493a8f841df74f4b648f1</ratchetFrom>
                     <java>
