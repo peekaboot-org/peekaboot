@@ -69,7 +69,11 @@ public final class PanelConfigLoader {
             validatePanel(panel);
             require(panelIds.add(panel.id()), "duplicate panel id '" + panel.id() + "'");
         }
-        file.tiles().forEach(PanelConfigLoader::validateTile);
+        Set<String> tileIds = new HashSet<>();
+        for (TileDef tile : file.tiles()) {
+            validateTile(tile);
+            require(tileIds.add(tile.id()), "duplicate tile id '" + tile.id() + "'");
+        }
         return withDefaults(file);
     }
 
@@ -90,6 +94,10 @@ public final class PanelConfigLoader {
             require(
                     series.unit() == null || UNITS.contains(series.unit()),
                     "panel '" + panel.id() + "': unknown series unit '" + series.unit() + "'");
+            require(
+                    series.subtractMeter() == null || series.stat() == null || "value".equals(series.stat()),
+                    "panel '" + panel.id() + "': series '" + idOf(series) + "': subtract-meter is not supported"
+                            + " for stat '" + series.stat() + "'");
             require(
                     seriesIds.add(idOf(series)),
                     "panel '" + panel.id() + "': duplicate series id '" + idOf(series) + "'");

@@ -8,6 +8,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
 
 /**
  * The application's start/stop history: at most {@link #MAX_EVENTS} events in memory,
@@ -31,6 +32,7 @@ public final class LifecycleEventLog {
     private final Duration loadWait;
     private final List<LifecycleEvent> events = new ArrayList<>();
     private final CompletableFuture<Void> loaded = new CompletableFuture<>();
+    private volatile boolean writeFailureLogged;
 
     public LifecycleEventLog(LifecycleEventFile file) {
         this(file, LOAD_WAIT);
@@ -127,8 +129,15 @@ public final class LifecycleEventLog {
         }
         try {
             file.write(snapshot);
-        } catch (IOException e) {
-            log.warn("Peekaboot lifecycle: cannot write the event log; this run will not be remembered", e);
+        } catch (IOException | JacksonException e) {
+            // JacksonException extends RuntimeException, not IOException, so a
+            // serialization failure inside file.write() needs its own catch to keep the
+            // same promise IOException already gets here: no failure to write this file
+            // reaches the application embedding Peekaboot.
+            if (!writeFailureLogged) {
+                writeFailureLogged = true;
+                log.warn("Peekaboot lifecycle: cannot write the event log; this run will not be remembered", e);
+            }
         }
     }
 

@@ -13,6 +13,8 @@ import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Derives one chart series value per tick from the MeterRegistry. Meters are
@@ -22,10 +24,23 @@ import org.peekaboot.backend.insights.config.SeriesDef;
  */
 public final class SeriesSampler {
 
+    private static final Logger log = LoggerFactory.getLogger(SeriesSampler.class);
+
+    /**
+     * Consecutive ticks a subtract-meter must stay unmatched before it is reported. Three
+     * gives a lazily-registered meter (Micrometer binders resolve some meters only once the
+     * thing they measure first happens) a few sampling passes to appear, while still
+     * reporting a genuine typo within a small multiple of the panel's own tick interval
+     * rather than letting it go unnoticed indefinitely.
+     */
+    private static final int UNRESOLVED_SUBTRACT_METER_WARNING_TICKS = 3;
+
     private final SeriesDef def;
     private final MeterRegistry registry;
     private double previousCount = Double.NaN;
     private double previousTotal = Double.NaN;
+    private int consecutiveUnresolvedSubtractMeterTicks;
+    private boolean subtractMeterUnresolvedLogged;
 
     public SeriesSampler(SeriesDef def, MeterRegistry registry) {
         this.def = def;
@@ -55,8 +70,39 @@ public final class SeriesSampler {
         if (def.subtractMeter() == null) {
             return value;
         }
-        double other = currentValue(matching(def.subtractMeter()));
+        List<Meter> subtractMeters = matching(def.subtractMeter());
+        if (!meters.isEmpty()) {
+            trackSubtractMeterResolution(subtractMeters.isEmpty());
+        }
+        double other = currentValue(subtractMeters);
         return value - other; // NaN propagates if either side is unresolved
+    }
+
+    /**
+     * A series whose own meter has not resolved is already NaN and separately worth looking
+     * at; warning about its subtract-meter too would only be noise on top of that, so this is
+     * only called once the series' own meter did resolve.
+     */
+    private void trackSubtractMeterResolution(boolean unresolved) {
+        if (!unresolved) {
+            consecutiveUnresolvedSubtractMeterTicks = 0;
+            return;
+        }
+        if (subtractMeterUnresolvedLogged) {
+            return;
+        }
+        consecutiveUnresolvedSubtractMeterTicks++;
+        if (consecutiveUnresolvedSubtractMeterTicks < UNRESOLVED_SUBTRACT_METER_WARNING_TICKS) {
+            return;
+        }
+        log.warn(
+                "Peekaboot insights: series '{}' (meter '{}'): subtract-meter '{}' did not resolve"
+                        + " to any meter across {} ticks",
+                def.id(),
+                def.meter(),
+                def.subtractMeter(),
+                UNRESOLVED_SUBTRACT_METER_WARNING_TICKS);
+        subtractMeterUnresolvedLogged = true;
     }
 
     private double currentValue(List<Meter> meters) {

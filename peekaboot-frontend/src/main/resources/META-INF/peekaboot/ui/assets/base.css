@@ -16,9 +16,9 @@ body {
     transition: background-color var(--pk-transition), color var(--pk-transition);
 }
 
-/* The literals repeat the light palette: a consuming application that shadows tokens.css
-   with a copy of its own predating a token would otherwise leave the highlight with
-   neither fill nor ink. Same reasoning for --pk-danger-tint in dashboard.css. */
+/* Literal fallbacks, not the light theme baked in: if tokens.css fails to load - blocked,
+   404, a stale cache - before this rule applies, mark still gets a highlight instead of
+   transparent-on-transparent. Same reasoning for --pk-danger-tint in dashboard.css. */
 mark {
     background: var(--pk-mark-bg, #fef08a);
     color: var(--pk-on-mark, #111827);

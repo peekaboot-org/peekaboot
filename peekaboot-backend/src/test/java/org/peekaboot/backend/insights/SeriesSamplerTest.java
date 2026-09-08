@@ -3,6 +3,7 @@ package org.peekaboot.backend.insights;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.LongTaskTimer;
@@ -13,6 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.testsupport.LogCapture;
 
 class SeriesSamplerTest {
 
@@ -97,6 +99,73 @@ class SeriesSamplerTest {
         SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
         SeriesSampler sampler = new SeriesSampler(diff, registry);
         assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+    }
+
+    /** Micrometer registers meters lazily, so a few ticks are given to let one still appear. */
+    @Test
+    void unresolvedSubtractMeterIsNotLoggedBeforeTheWarningThreshold() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free.typo", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** A misnamed subtract-meter can't be caught at config load, so it is reported once it has stayed unresolved. */
+    @Test
+    void unresolvedSubtractMeterIsLoggedOnceAfterTheWarningThresholdNotPerSample() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free.typo", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(sampler.sample(10_000)).isNaN(); // 3rd consecutive unresolved tick: threshold reached
+            assertThat(sampler.sample(10_000)).isNaN(); // a further tick must not log again
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot insights: series 'used' (meter 'disk.total'): "
+                                + "subtract-meter 'disk.free.typo' did not resolve to any meter across 3 ticks");
+            });
+        }
+    }
+
+    /** A series whose own meter never resolved is already NaN and separately reported; no need to also warn about its subtract-meter. */
+    @Test
+    void unresolvedSubtractMeterIsNotLoggedWhileThePrimaryMeterIsAlsoUnresolved() {
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            for (int tick = 0; tick < 5; tick++) {
+                assertThat(sampler.sample(10_000)).isNaN();
+            }
+            assertThat(capture.appender().list).isEmpty();
+        }
+    }
+
+    /** Once the meter appears, later samples resolve normally without needing a fresh SeriesSampler. */
+    @Test
+    void subtractMeterRegisteredAfterConstructionStopsBeingUnresolved() {
+        Gauge.builder("disk.total", () -> 1000).register(registry);
+        SeriesDef diff = new SeriesDef("used", "Used", "disk.total", Map.of(), "value", "disk.free", null);
+        SeriesSampler sampler = new SeriesSampler(diff, registry);
+
+        try (LogCapture capture = LogCapture.attach(SeriesSampler.class)) {
+            assertThat(sampler.sample(10_000)).isNaN();
+            assertThat(capture.appender().list).isEmpty(); // below the warning threshold
+
+            Gauge.builder("disk.free", () -> 400).register(registry);
+            assertThat(sampler.sample(10_000)).isEqualTo(600.0);
+            assertThat(capture.appender().list).isEmpty();
+        }
     }
 
     @Test

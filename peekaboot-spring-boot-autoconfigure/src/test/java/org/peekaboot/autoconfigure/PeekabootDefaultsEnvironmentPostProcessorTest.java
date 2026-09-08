@@ -8,6 +8,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.env.DefaultPropertiesPropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.mock.env.MockEnvironment;
@@ -170,8 +171,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
      * defaults - Hibernate statistics, full sampling and the observation annotations would
      * only cost. Detection (the activation switches, storage) and the no-push default
      * still apply: they gate the lifecycle and storage beans, which are not
-     * servlet-bound. Actuator value visibility is servlet-gated too - see
-     * {@code doesNotShowActuatorValuesForANonServletApplication}.
+     * servlet-bound.
      */
     @Test
     void skipsTheObservabilityDefaultsForAReactiveApplication() {
@@ -207,111 +207,29 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isFalse();
     }
 
+    /**
+     * Peekaboot reads {@code env} and {@code configprops} through endpoints it constructs
+     * itself (see {@code ActuatorSourcesAutoConfiguration}), so it has no reason to decide
+     * value visibility for the application's own actuator - and must not, on a local run
+     * or anywhere else.
+     */
     @Test
-    void showsActuatorValuesSoTheEnvironmentAndConfigTabsAreReadable() {
+    void leavesActuatorValueVisibilityEntirelyToTheApplication() {
         ConfigurableEnvironment environment = new MockEnvironment();
 
         postProcessor(true).postProcessEnvironment(environment, servletApplication());
 
-        // Value visibility follows the launch context, not peekaboot.enabled: local
-        // development is exactly when the Environment and Config tabs should show real
-        // values rather than "******" for every entry.
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isEqualTo("always");
-        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
-                .isEqualTo("always");
-    }
-
-    /**
-     * The dashboard - the only reader of the widened values - is servlet-only, so a
-     * reactive or non-web local launch keeps Spring's defaults for them, like it skips
-     * the other observability defaults.
-     */
-    @Test
-    void doesNotShowActuatorValuesForANonServletApplication() {
-        MockEnvironment environment = new MockEnvironment();
-
-        postProcessor(true).postProcessEnvironment(environment, application(WebApplicationType.REACTIVE));
-
+        EnumerablePropertySource<?> detection =
+                (EnumerablePropertySource<?>) environment.getPropertySources().get("peekabootDetection");
+        assertThat(detection.getPropertyNames())
+                .containsExactlyInAnyOrder(
+                        PeekabootPropertyKeys.ENABLED,
+                        PeekabootPropertyKeys.DEV_TOOLBAR,
+                        PeekabootPropertyKeys.STORAGE_ENABLED);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
                 .isNull();
-    }
-
-    /**
-     * The placement decision: an application that switches Peekaboot on deliberately outside a
-     * local run must not have its own /actuator/env widened as a side effect.
-     */
-    @Test
-    void doesNotShowActuatorValuesOutsideLocalDevelopment() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("peekaboot.enabled", "true");
-
-        postProcessor(false).postProcessEnvironment(environment, servletApplication());
-
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isNull();
-        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
-                .isNull();
-    }
-
-    /**
-     * Absent, not an explicit "never": Peekaboot must not pin Spring's default into an
-     * application that is not using it.
-     */
-    @Test
-    void setsNoActuatorValueVisibilityWhenPeekabootIsDisabled() {
-        MockEnvironment environment = new MockEnvironment();
-
-        postProcessor(false).postProcessEnvironment(environment, servletApplication());
-
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isNull();
-        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
-                .isNull();
-    }
-
-    /** A developer who opts out on their own machine must not have their /actuator/env widened either. */
-    @Test
-    void explicitEnabledFalseLeavesActuatorValueVisibilityAlone() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("peekaboot.enabled", "false");
-
-        postProcessor(true).postProcessEnvironment(environment, servletApplication());
-
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isNull();
-        assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
-                .isNull();
-    }
-
-    @Test
-    void explicitShowValuesNeverWinsInLocalDevelopment() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("management.endpoint.env.show-values", "never");
-
-        postProcessor(true).postProcessEnvironment(environment, servletApplication());
-
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isEqualTo("never");
-    }
-
-    /**
-     * Not a precedence proof like {@code explicitShowValuesNeverWinsInLocalDevelopment} -
-     * outside local development the detection source never writes this key at all, so
-     * nothing competes with the explicit value here. This only pins that an application's
-     * own setting survives untouched.
-     */
-    @Test
-    void explicitShowValuesAlwaysSurvivesOutsideLocalDevelopment() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("management.endpoint.env.show-values", "always");
-
-        postProcessor(false).postProcessEnvironment(environment, servletApplication());
-
-        assertThat(environment.getProperty("management.endpoint.env.show-values"))
-                .isEqualTo("always");
     }
 
     @Test

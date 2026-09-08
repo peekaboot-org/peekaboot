@@ -188,9 +188,9 @@
     background: none; border: none; padding: 0 2px; font-size: inherit; color: inherit;
     border-radius: 2px; }
 /* An ink-tinted wash, not a colour swap: any danger/warning tone on the green fill is
-   under 2:1. The literal is --pk-on-primary's rgb - the same dark ink in both themes -
-   so the glyph keeps 5.5:1+ on the washed fill. */
-.pk-logs-filter-span-clear:hover { background: rgba(13, 17, 23, 0.15); }
+   under 2:1. --pk-on-primary-wash carries the same dark ink as --pk-on-primary, invariant
+   across themes, so the glyph keeps 5.5:1+ on the washed fill. */
+.pk-logs-filter-span-clear:hover { background: var(--pk-on-primary-wash, rgba(13, 17, 23, 0.15)); }
 .pk-logs-filter-span-clear:focus-visible { outline: 2px solid var(--pk-on-primary); outline-offset: 1px; }
 
 /* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). */
