@@ -2,9 +2,12 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.opentelemetry.sdk.trace.export.SpanExporter;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.PeekabootProperties;
 import org.peekaboot.backend.controller.PeekabootController;
+import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
 import org.springframework.boot.actuate.info.InfoEndpoint;
@@ -175,5 +178,47 @@ class PeekabootAutoConfigurationTest {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
                 });
+    }
+
+    /**
+     * {@code features.tracing} only says the trace store exists; it says nothing about
+     * whether anything can fill it. The store is wired by {@code PeekabootTracingAutoConfiguration}
+     * alone, with no class-path guard, while {@code OtelSpanExporter} - the only span source
+     * the store has - is wired by {@code OtelTracingAutoConfiguration}, guarded by the
+     * OpenTelemetry SDK's presence. These two tests pin that {@code tracingSpansPossible}
+     * tracks the guarded bean, not the unguarded one.
+     */
+    @Nested
+    class TracingSpansPossible {
+
+        private final WebApplicationContextRunner tracingContextRunner = new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        PeekabootAutoConfiguration.class,
+                        PeekabootTracingAutoConfiguration.class,
+                        OtelTracingAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class))
+                .withUserConfiguration(MockActuatorConfig.class)
+                .withPropertyValues("peekaboot.enabled=true");
+
+        @Test
+        void isTrueWhenTheOpenTelemetrySdkIsOnTheClassPath() {
+            tracingContextRunner.run(context -> {
+                Features features = context.getBean(PeekabootController.class).getFeatures();
+                assertThat(features.tracing()).isTrue();
+                assertThat(features.tracingSpansPossible()).isTrue();
+            });
+        }
+
+        @Test
+        void isFalseWithoutTheOpenTelemetrySdkEvenThoughTheStoreStillExists() {
+            tracingContextRunner
+                    .withClassLoader(new FilteredClassLoader(SpanExporter.class))
+                    .run(context -> {
+                        Features features =
+                                context.getBean(PeekabootController.class).getFeatures();
+                        assertThat(features.tracing()).isTrue();
+                        assertThat(features.tracingSpansPossible()).isFalse();
+                    });
+        }
     }
 }

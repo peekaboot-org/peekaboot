@@ -88,7 +88,7 @@ fraction of it.
 | --- | --- | --- | --- |
 | `peekaboot-parent` | pom | yes | Shared build config, dependency management (the `spring-boot-dependencies` BOM) |
 | `peekaboot-test-support` | jar | **no** (`skipPublishing`, see [Releasing](#releasing)) | `LogCapture` only, consumed at test scope by the backend and autoconfigure suites. See its [README](peekaboot-test-support/README.md) |
-| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/health/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
+| `peekaboot-backend` | jar | yes | Controllers, services, trace store, lifecycle listeners, every `@ConfigurationProperties` class and therefore the configuration metadata. Its web/servlet/logback/Hikari/OTel deps are `<optional>`: the host app supplies them, and the auto-configuration conditions guard their use |
 | `peekaboot-frontend` | jar | yes | `src/main/resources/META-INF/peekaboot/ui/**` only, outside every default static location, so a consumer with Peekaboot off serves none of it. Plain ES modules and CSS copied as-is: no build step, no test sources. Empty `-javadoc` jar (below) |
 | `peekaboot-spring-boot-autoconfigure` | jar | yes | Auto-configuration classes, `AutoConfiguration.imports` and `spring.factories` |
 | `peekaboot-spring-boot-starter` | jar | yes | Dependency aggregator, no sources. Maven logs `JAR will be empty`, which is correct. Empty `-sources` and `-javadoc` jars (below) |
@@ -257,10 +257,13 @@ them.
 
 The `<optional>` declarations across `peekaboot-backend` and
 `peekaboot-spring-boot-autoconfigure` promise a consumer that the artifacts they mark
-arrive from the host application's own starters. The promise matters because the
-auto-configuration reads the classpath: lose the flag on HikariCP and
-`@ConditionalOnClass(HikariDataSource.class)` fires inside an application running a
-different pool.
+arrive from the host application's own starters. Both modules carry the flag for the
+artifacts they share, such as `jakarta.servlet-api` and `logback-classic`, because Maven
+does not propagate `<optional>` transitively. A module that touches the class at compile
+time needs its own copy of the flag to keep the promise down the chain to the starter.
+The promise matters because the auto-configuration reads the classpath: lose the flag on
+HikariCP and `@ConditionalOnClass(HikariDataSource.class)` fires inside an application
+running a different pool.
 
 `bannedDependencies` with `searchTransitive` on `peekaboot-spring-boot-starter` is where
 that becomes checkable, because the starter is what a consumer actually depends on. It
@@ -388,8 +391,8 @@ Auto-approves and auto-merges Dependabot PRs targeting `dev`. Three kinds wait f
 human: semver-major updates, every `gradle`-ecosystem update (CI never builds Gradle, so a
 merged Gradle bump would be unverified), and the `spring-boot` dependency group. Boot is a
 compatibility event rather than a bump, because peekaboot implements
-`EndpointExposureOutcomeContributor`, discovers actuator endpoints through a private
-`WebEndpointDiscoverer` and depends on Boot's property-source ordering. That whole line
+`EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
+depends on Boot's property-source ordering. That whole line
 arrives as one grouped PR: its version is declared twice on the Maven side, and a bump
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
 Maven and Gradle daily, GitHub Actions weekly.

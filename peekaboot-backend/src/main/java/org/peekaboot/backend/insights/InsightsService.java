@@ -93,7 +93,11 @@ public final class InsightsService implements SmartLifecycle {
         try {
             return withKnownLevels(PanelConfigLoader.load(defaults, userOverride), levelCount);
         } catch (RuntimeException e) {
-            log.error("Ignoring invalid insights panel config {}; using the bundled defaults", userOverride, e);
+            log.error(
+                    "Insights panel config {} is invalid; discarding it entirely and serving the bundled panels"
+                            + " instead of the operator's customisation",
+                    userOverride,
+                    e);
             return bundled;
         }
     }

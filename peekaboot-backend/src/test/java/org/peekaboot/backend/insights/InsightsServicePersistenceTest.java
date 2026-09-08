@@ -44,7 +44,11 @@ class InsightsServicePersistenceTest {
     }
 
     private InsightsService service(boolean enabled) {
-        return service(enabled, new SimpleMeterRegistry());
+        return service(enabled, bareRegistry());
+    }
+
+    private static MeterRegistry bareRegistry() {
+        return new SimpleMeterRegistry();
     }
 
     private InsightsService service(boolean enabled, MeterRegistry registry) {
@@ -65,7 +69,7 @@ class InsightsServicePersistenceTest {
      * silently turn every later sample into NaN.
      */
     private static MeterRegistry registryReading(long heapUsed) {
-        MeterRegistry registry = new SimpleMeterRegistry();
+        MeterRegistry registry = bareRegistry();
         Gauge.builder("jvm.memory.used", () -> heapUsed)
                 .tags(Tags.of("area", "heap"))
                 .register(registry);

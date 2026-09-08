@@ -47,11 +47,13 @@ public class ToolbarShell {
             List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/toolbar/toolbar.css");
 
     /**
-     * Linked as well as inlined. A host page whose CSP omits {@code style-src 'unsafe-inline'}
-     * drops the inline copy; the toolbar works on such a page because toolbar.js creates
-     * its link elements through the CSSOM, which CSP does not govern. Keeping the links means
-     * that reader loses nothing, while the inline copy serves the reader whose gate refuses
-     * links. Both come from the same file, so there is nothing to keep in sync.
+     * Linked as well as inlined. The {@code style-src} directive's {@code 'unsafe-inline'}
+     * keyword governs only inline {@code <style>} elements and style attributes; a
+     * {@code <link rel="stylesheet">} is governed by the directive's source list instead, so
+     * dropping {@code 'unsafe-inline'} alone leaves it untouched. A host whose CSP omits that
+     * keyword therefore loses only the inline copy above - the link elements already written
+     * into this markup keep the bar styled. Both come from the same file, so there is nothing
+     * to keep in sync.
      */
     private static final List<String> LINKED_SHEETS = List.of(
             "/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css", "/ui/toolbar/toolbar.css");

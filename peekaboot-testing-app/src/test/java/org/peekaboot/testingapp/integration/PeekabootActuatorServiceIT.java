@@ -8,16 +8,21 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import java.lang.reflect.RecordComponent;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.actuator.InsightsSource;
+import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
 import org.peekaboot.backend.service.ActuatorInsightsService;
@@ -25,8 +30,6 @@ import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.endpoint.annotation.Endpoint;
-import org.springframework.boot.actuate.endpoint.annotation.ReadOperation;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -36,16 +39,11 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
         classes = TestingApp.class,
         properties = {
-            "management.endpoints.web.exposure.include=*",
-            // ThrowingLoggersEndpoint below stands in for the real "loggers" endpoint - both
-            // sharing the id would otherwise fail context startup ("Found two endpoints with
-            // the id 'loggers'").
             // An inlined property replaces application-test.yml's value for the same key
             // rather than merging with it, so this list has to repeat that file's servlet
             // security exclusions too - without them this context alone would start with
             // Spring Security auto-configured. Anything added there belongs here as well.
             "spring.autoconfigure.exclude="
-                    + "org.springframework.boot.actuate.autoconfigure.logging.LoggersEndpointAutoConfiguration,"
                     + "org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration,"
                     + "org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration,"
                     + "org.springframework.boot.security.autoconfigure.actuate.web.servlet"
@@ -54,7 +52,7 @@ import org.springframework.test.context.ActiveProfiles;
 @ActiveProfiles("test")
 @Import({
     PeekabootActuatorServiceIT.DataSourceMetadataFixtureConfig.class,
-    PeekabootActuatorServiceIT.ThrowingEndpointConfig.class
+    PeekabootActuatorServiceIT.ThrowingSourceConfig.class
 })
 class PeekabootActuatorServiceIT {
 
@@ -89,17 +87,19 @@ class PeekabootActuatorServiceIT {
         serviceLogger.setAdditive(additivity);
     }
 
+    // flyway.enabled: false in the test profile leaves the flyway source absent from
+    // data.keySet(), so this can only assert a subset, not equality; deriving allowed from
+    // ActuatorParsedData's own record components means an id that stops matching one fails
+    // here instead of silently feeding the mappers a null.
     @Test
-    void insightsDataInvokesOnlyConsumedEndpoints() {
+    void insightsDataIsASubsetOfTheConsumedEndpointIds() {
         Map<String, Object> data = service.getInsightsData();
 
-        // spring is built locally, the rest must be limited to the endpoints the insights
-        // mappers actually consume.
-        Set<String> allowed =
-                Set.of("spring", "health", "info", "env", "loggers", "flyway", "configprops", "scheduledtasks");
+        Set<String> allowed = Arrays.stream(ActuatorParsedData.class.getRecordComponents())
+                .map(RecordComponent::getName)
+                .collect(Collectors.toSet());
         assertThat(data.keySet()).isSubsetOf(allowed);
         assertThat(data).containsKeys("health", "info", "env");
-        assertThat(data).doesNotContainKeys("beans", "conditions", "mappings", "threaddump", "metrics");
     }
 
     /**
@@ -140,25 +140,16 @@ class PeekabootActuatorServiceIT {
     }
 
     /**
-     * Overrides the real "loggers" actuator endpoint with a bean that always throws, to
-     * pin the guarantee that one broken endpoint doesn't break the whole insights payload.
-     * Named after a real INSIGHTS_ENDPOINTS id (not a synthetic one) because
-     * getInsightsData() only invokes endpoints in that set; a fresh id would never reach
-     * the catch block.
+     * Replaces Peekaboot's own loggers source by bean name - the way an application would -
+     * to pin that one broken source does not break the rest of the insights payload.
      */
     @TestConfiguration
-    static class ThrowingEndpointConfig {
+    static class ThrowingSourceConfig {
         @Bean
-        ThrowingLoggersEndpoint throwingLoggersEndpoint() {
-            return new ThrowingLoggersEndpoint();
-        }
-    }
-
-    @Endpoint(id = "loggers")
-    static class ThrowingLoggersEndpoint {
-        @ReadOperation
-        public String read() {
-            throw new IllegalStateException("boom");
+        InsightsSource loggersInsightsSource() {
+            return new InsightsSource("loggers", () -> {
+                throw new IllegalStateException("boom");
+            });
         }
     }
 

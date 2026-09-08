@@ -1,0 +1,9 @@
+tiles:
+  - id: uptime
+    label: Uptime
+    meter: process.uptime
+    format: duration
+  - id: uptime
+    label: Uptime again
+    meter: process.start.time
+    format: datetime

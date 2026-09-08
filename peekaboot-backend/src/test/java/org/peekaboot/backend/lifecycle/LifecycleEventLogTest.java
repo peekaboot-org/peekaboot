@@ -1,13 +1,16 @@
 package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
 
+import ch.qos.logback.classic.Level;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -26,6 +29,20 @@ class LifecycleEventLogTest {
 
     private static LifecycleEvent start(long epochMs) {
         return LifecycleEvent.start(epochMs, 4711, Map.of("version", "1.2.3"), Map.of("branch", "dev"));
+    }
+
+    /**
+     * {@code build} is typed {@code Map<String, String>}, but generics are erased at
+     * runtime, so a caller that bypasses {@link LifecycleEvent#start} can still hand it a
+     * value Jackson refuses to serialize. This is the only way to reach that failure
+     * deliberately; nothing built through the public factories can trigger it.
+     */
+    private static LifecycleEvent unserializable() {
+        Map<String, Object> sneaky = new HashMap<>();
+        sneaky.put("k", new Object());
+        @SuppressWarnings("unchecked")
+        Map<String, String> build = (Map<String, String>) (Map<?, ?>) sneaky;
+        return new LifecycleEvent(LifecycleEvent.Type.START, 1_000, 4711, build, Map.of());
     }
 
     private static LifecycleEventLog loaded(LifecycleEventFile file) {
@@ -143,6 +160,45 @@ class LifecycleEventLogTest {
 
         assertThat(log.events()).hasSize(2 * perRecorder);
         assertThat(file.read()).containsExactlyElementsOf(log.events());
+    }
+
+    /**
+     * Jackson 3's {@code JacksonException} extends {@code RuntimeException}, not
+     * {@code IOException}, so a serialization failure inside {@code file.write()} would
+     * reach this call unchecked if {@code persist()} caught only {@code IOException}.
+     * Nothing an application does through the public API can cause one; this is here so
+     * the guarantee holds by construction, not by accident.
+     */
+    @Test
+    void aSerializationFailureNeverReachesTheCaller() {
+        LifecycleEventLog log = loaded(file());
+
+        try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class)) {
+            assertThatCode(() -> log.recordAndPersist(unserializable())).doesNotThrowAnyException();
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");
+            });
+        }
+    }
+
+    @Test
+    void aPersistentWriteFailureCostsOneWarningNotEveryAttempt() throws IOException {
+        Path blocked = Files.createFile(directory.resolve("blocked"));
+        LifecycleEventLog log = loaded(new LifecycleEventFile(blocked.resolve(LifecycleEventFile.FILE_NAME)));
+
+        try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class)) {
+            log.recordAndPersist(start(1_000));
+            log.recordAndPersist(start(2_000));
+
+            assertThat(capture.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                assertThat(event.getFormattedMessage())
+                        .isEqualTo("Peekaboot lifecycle: cannot write the event log; this run will not be remembered");
+            });
+        }
     }
 
     @Test

@@ -90,6 +90,37 @@ class InsightsServiceTest {
     }
 
     /**
+     * PanelConfigLoader rejects subtract-meter on a non-value stat at load time, but that
+     * exception reaches InsightsService through the same user-override path as any other
+     * invalid file - a typo and a rejected combination cost the operator their whole panel
+     * customisation exactly alike, silently, with the stock panels served in its place.
+     */
+    @Test
+    void aSubtractMeterOnANonValueStatCostsTheWholeUserOverride() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setConfigLocation("classpath:insights/loader-subtract-meter-rate.yml");
+
+        try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
+            InsightsService fallback = new InsightsService(
+                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+
+            assertThat(fallback.config().panels())
+                    .extracting(InsightsConfigResponse.Panel::id)
+                    .as("the bundled panels, none of them from the rejected file")
+                    .contains("cpu", "heap")
+                    .doesNotContain("net");
+            assertThat(logs.appender().list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getFormattedMessage())
+                        .contains("loader-subtract-meter-rate.yml")
+                        .contains("discarding it entirely")
+                        .contains("bundled panels");
+                assertThat(event.getThrowableProxy().getMessage()).contains("subtract-meter");
+            });
+        }
+    }
+
+    /**
      * The bundled panels reach the service through the injected {@link ResourceLoader},
      * not through a classloader of its own choosing: a host application that supplies its
      * own loader has to be able to see, and to answer, the request.

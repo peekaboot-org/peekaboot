@@ -47,8 +47,6 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
     private static final String DEV_TOOLBAR_PROPERTY = PeekabootPropertyKeys.DEV_TOOLBAR;
     private static final String STORAGE_ENABLED_PROPERTY = PeekabootPropertyKeys.STORAGE_ENABLED;
-    private static final String ENV_SHOW_VALUES_PROPERTY = "management.endpoint.env.show-values";
-    private static final String CONFIGPROPS_SHOW_VALUES_PROPERTY = "management.endpoint.configprops.show-values";
     private static final String WEB_APPLICATION_TYPE_PROPERTY = "spring.main.web-application-type";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
@@ -69,21 +67,13 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         boolean enabled = environment.getProperty(ENABLED_PROPERTY, Boolean.class, localDevelopment);
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
 
-        // The toolbar, persistence and actuator value visibility follow the launch context
-        // rather than peekaboot.enabled, so switching Peekaboot on deliberately in a shared
-        // environment neither injects a toolbar into every page, nor writes files into that
-        // host's home directory, nor widens the application's own /actuator/env.
+        // The toolbar and persistence follow the launch context rather than peekaboot.enabled,
+        // so switching Peekaboot on deliberately in a shared environment neither injects a
+        // toolbar into every page nor writes files into that host's home directory.
         Map<String, Object> detected = new HashMap<>();
         detected.put(ENABLED_PROPERTY, localDevelopment);
         detected.put(DEV_TOOLBAR_PROPERTY, localDevelopment);
         detected.put(STORAGE_ENABLED_PROPERTY, localDevelopment);
-        if (localDevelopment && enabled && servlet) {
-            // Absent rather than an explicit "never" off-local: Peekaboot must not pin Spring's
-            // own default into an application that is not using it. Servlet-gated like the
-            // defaults yml, because the dashboard is the only reader of the widened values.
-            detected.put(ENV_SHOW_VALUES_PROPERTY, "always");
-            detected.put(CONFIGPROPS_SHOW_VALUES_PROPERTY, "always");
-        }
         contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
                 + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default");
