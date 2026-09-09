@@ -107,7 +107,7 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // land on once it unwinds the trace-open, tab-switch and filter-change entry that
         // were all written via replaceState.
         page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        page.waitForSelector("#traces-list .pk-trace-item[data-trace-id='" + traceId + "']");
 
         // Deep-link (rather than clicking the trace's own open button): a real navigation,
         // like Back/Forward, so this test can drive main.js's hash-routing path - the one
@@ -176,13 +176,15 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
-        String traceId =
-                (String) page.evaluate("() => document.querySelector('#traces-list .pk-trace-item').dataset.traceId");
+        String ownRow = "#traces-list .pk-trace-item[data-trace-id='" + traceId + "']";
+        page.waitForSelector(ownRow);
 
-        page.click("#traces-list .pk-trace-item__open");
+        page.click(ownRow + " .pk-trace-item__open");
         page.waitForFunction(
                 "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
         overlay.openTab("request");

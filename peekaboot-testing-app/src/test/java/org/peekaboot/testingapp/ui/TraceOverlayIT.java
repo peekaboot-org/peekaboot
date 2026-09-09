@@ -600,12 +600,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(focusedRowSpanId).isEqualTo(spanId);
     }
 
+    /** The query span lands after the response, so the overlay is opened once the store serves it. */
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
-        openOverlayFromToolbar();
-        overlay.click(".pk-tab[data-tab=\"queries\"]");
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-code-block");
 
-        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-code-block')?.textContent ?? ''");
+        String sql = overlay.text(".pk-code-block");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 
@@ -766,15 +770,15 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
-     * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
-     * anything this test constructed. Whichever trace turns up first is fair game: the
-     * assertions below hold for any correctly-captured scheduled-job trace, not
-     * specifically the one the test just fired, so a trace left behind
-     * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
+     * The listed trace of the run of {@link OrderReconciler#reconcileOrders()} just fired,
+     * named by its root operation the way the Traces tab's chip filter names it. The listing
+     * is shared with every class, and the first SCHEDULED_JOB trace listed is as likely to be
+     * {@code Scheduler.fixedRate}'s (no query at all) as this test's own.
      */
     private String waitForScheduledJobTraceId() {
-        return awaitListedTrace("bucket=all&rootActionType=SCHEDULED_JOB", "trace => true");
+        return awaitListedTrace(
+                "bucket=all&rootActionType=SCHEDULED_JOB",
+                "trace => trace.rootOperation === 'task orderReconciler.reconcileOrders'");
     }
 
     /**
