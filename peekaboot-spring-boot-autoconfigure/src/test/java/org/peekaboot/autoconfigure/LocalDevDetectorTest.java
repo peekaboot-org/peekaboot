@@ -3,8 +3,16 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.autoconfigure.LocalDevDetector.LaunchSignals;
@@ -67,6 +75,56 @@ class LocalDevDetectorTest {
     }
 
     @Test
+    void detectsLocalDevForABuildOutputDirectoryWithATrailingSlash() {
+        LaunchSignals signals = signals("/home/dev/app/target/classes/", "/home/dev/.m2/repository/a.jar");
+
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isTrue();
+    }
+
+    /**
+     * IntelliJ's "JAR manifest" command-line shortening (the usual choice on Windows once a
+     * Boot class path exceeds the 32K limit) leaves a single temp jar on {@code java.class.path}
+     * and moves the real entries, {@code target/classes} included, into its manifest as
+     * absolute {@code file:} URLs.
+     */
+    @Test
+    void detectsLocalDevBehindAManifestClassPath(@TempDir Path tempDir) throws IOException {
+        Path classpathJar = jarWithClassPath(
+                tempDir,
+                tempDir.resolve("app/target/classes").toUri() + "/",
+                tempDir.resolve("lib/spring-core.jar").toUri().toString());
+        LaunchSignals signals = signals(classpathJar.toString());
+
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isTrue();
+    }
+
+    /**
+     * The JAR spec makes Class-Path entries relative to the jar's own location. The entry
+     * here is {@code classes/} alone, which matches no output-directory suffix by itself;
+     * only resolving it against the jar's {@code app/target} directory makes it one.
+     */
+    @Test
+    void resolvesRelativeManifestEntriesAgainstTheJarDirectory(@TempDir Path tempDir) throws IOException {
+        Path classpathJar = jarWithClassPath(tempDir.resolve("app/target"), "classes/", "lib/spring-core.jar");
+        LaunchSignals signals = signals(classpathJar.toString());
+
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isTrue();
+    }
+
+    /** One entry that is not a valid URI must not hide the jar's other entries. */
+    @Test
+    void skipsAMalformedManifestEntryAndReadsTheRest(@TempDir Path tempDir) throws IOException {
+        Path classpathJar = jarWithClassPath(tempDir.resolve("app/target"), "%zz", "classes/");
+        LaunchSignals signals = signals(classpathJar.toString());
+
+        assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
+                .isTrue();
+    }
+
+    @Test
     void rejectsAJibShapedLaunch() {
         // same thread name and class loader as an IDE run - only the classpath tells them apart
         assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, JIB_LAUNCH))
@@ -74,10 +132,11 @@ class LocalDevDetectorTest {
     }
 
     @Test
-    void rejectsTheExtractedJarLayout() {
+    void rejectsTheExtractedJarLayout(@TempDir Path tempDir) throws IOException {
         // java -Djarmode=tools -jar app.jar extract, then java -jar app/app.jar: the thin jar's
-        // Class-Path manifest puts everything on the application class loader
-        LaunchSignals signals = signals("/app/app.jar");
+        // Class-Path manifest puts everything on the application class loader, jars only
+        Path thinJar = jarWithClassPath(tempDir, "lib/spring-core.jar", "lib/spring-boot.jar");
+        LaunchSignals signals = signals(thinJar.toString());
 
         assertThat(LocalDevDetector.isLocalDevelopment(mainThreadWithAppClassLoader(), CLEAN_STACK, signals))
                 .isFalse();
@@ -196,6 +255,19 @@ class LocalDevDetectorTest {
 
     private static LaunchSignals signals(String... classPathEntries) {
         return new LaunchSignals(String.join(File.pathSeparator, classPathEntries), false);
+    }
+
+    /** An empty jar whose manifest carries the given space-separated Class-Path entries. */
+    private static Path jarWithClassPath(Path directory, String... classPathEntries) throws IOException {
+        Manifest manifest = new Manifest();
+        manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        manifest.getMainAttributes().put(Attributes.Name.CLASS_PATH, String.join(" ", classPathEntries));
+        Path jar = Files.createDirectories(directory).resolve("classpath1.jar");
+        try (OutputStream out = Files.newOutputStream(jar);
+                JarOutputStream ignored = new JarOutputStream(out, manifest)) {
+            // the manifest is all this jar carries
+        }
+        return jar;
     }
 
     private static Thread mainThreadWithAppClassLoader() {

@@ -553,9 +553,13 @@ signals of its own, checked in order:
    `java.class.path` must contain a build tool's output directory: an entry ending in
    `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main`,
    `build/classes/groovy/main`, `build/classes/scala/main` or `bin/main`, or containing
-   `out/production/`. An IDE, `spring-boot:run` and `bootRun` always put one there; a Jib image
-   (`/app/classes`) and Boot's `extract` layout (a thin jar with a `Class-Path` manifest) never
-   do. And `ContainerRuntime.current()` must report `NONE`: no `/.dockerenv`, no Podman
+   `out/production/`. A jar's `Class-Path` manifest attribute counts as part of the class
+   path, resolved relative to the jar: IntelliJ's "JAR manifest" command-line shortening
+   leaves one temp jar on `java.class.path` and moves every real entry into its manifest. An
+   IDE, `spring-boot:run` and `bootRun` always put an output directory there, directly or
+   through that manifest; a Jib image (`/app/classes`) and Boot's `extract` layout (a thin
+   jar whose `Class-Path` manifest names only `lib/*.jar`) never do. And
+   `ContainerRuntime.current()` must report `NONE`: no `/.dockerenv`, no Podman
    `/run/.containerenv`, no `KUBERNETES_SERVICE_HOST`, and no `/proc/1/cgroup` naming `docker`,
    `kubepods` or `containerd`.
 
