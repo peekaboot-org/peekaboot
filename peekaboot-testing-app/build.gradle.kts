@@ -44,6 +44,8 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-security")
     testImplementation("com.h2database:h2")
     testImplementation("io.micrometer:micrometer-observation-test")
+    // shared test support (LogCapture)
+    testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:1.62.0")
 }
 
