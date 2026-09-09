@@ -8,6 +8,7 @@ import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
+import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
 public class IssueDetector {
@@ -23,15 +24,29 @@ public class IssueDetector {
             return trace;
         }
 
-        int traceDbQueryCount = trace.summary() != null && trace.summary().queries() != null
-                ? trace.summary().queries().count()
-                : 0;
-        SpanNode processedRoot = processSpan(trace.rootSpan(), true, traceDbQueryCount);
+        SpanNode processedRoot = withTraceQueryCountIssue(processSpan(trace.rootSpan()), trace.summary());
 
         return trace.withRootSpan(processedRoot, hasSlowIssue(processedRoot));
     }
 
-    private SpanNode processSpan(SpanNode span, boolean isRoot, int traceDbQueryCount) {
+    /** The one trace-level issue, carried by the root span since the tree has nowhere else to show it. */
+    private SpanNode withTraceQueryCountIssue(SpanNode root, TraceTabSummary summary) {
+        int traceDbQueryCount =
+                summary != null && summary.queries() != null ? summary.queries().count() : 0;
+        if (traceDbQueryCount <= properties.getHighTraceQueryCountThreshold()) {
+            return root;
+        }
+        List<SpanIssue> issues = new ArrayList<>(root.issues());
+        issues.add(new SpanIssue(
+                IssueType.HIGH_QUERY_COUNT,
+                String.format(
+                        "Trace has %d database queries (threshold: %d)",
+                        traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
+                IssueSeverity.WARNING));
+        return root.withIssues(issues, root.children());
+    }
+
+    private SpanNode processSpan(SpanNode span) {
         List<SpanIssue> issues = new ArrayList<>();
 
         if (span.durationMs() >= properties.getVerySlowSpanThresholdMs()) {
@@ -62,15 +77,6 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        if (isRoot && traceDbQueryCount > properties.getHighTraceQueryCountThreshold()) {
-            issues.add(new SpanIssue(
-                    IssueType.HIGH_QUERY_COUNT,
-                    String.format(
-                            "Trace has %d database queries (threshold: %d)",
-                            traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
-                    IssueSeverity.WARNING));
-        }
-
         long directQueryChildren =
                 span.children().stream().filter(DbSpans::isQuery).count();
         if (directQueryChildren > properties.getHighQueryCountThreshold()) {
@@ -82,9 +88,8 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        List<SpanNode> processedChildren = span.children().stream()
-                .map(child -> processSpan(child, false, traceDbQueryCount))
-                .toList();
+        List<SpanNode> processedChildren =
+                span.children().stream().map(this::processSpan).toList();
 
         return span.withIssues(issues, processedChildren);
     }
@@ -99,12 +104,7 @@ public class IssueDetector {
         if (span.errorMessage() != null && !span.errorMessage().isBlank()) {
             return span.errorMessage();
         }
-        if (span.tags() != null) {
-            Object errorMessage = span.tags().get("error.message");
-            if (errorMessage != null) {
-                return errorMessage.toString();
-            }
-        }
-        return "Span ended with error";
+        String taggedMessage = span.tags().get("error.message");
+        return taggedMessage != null ? taggedMessage : "Span ended with error";
     }
 }

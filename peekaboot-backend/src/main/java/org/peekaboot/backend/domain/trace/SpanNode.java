@@ -1,17 +1,18 @@
 package org.peekaboot.backend.domain.trace;
 
+import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
 
 public record SpanNode(
         String spanId,
         String name,
-        String kind,
+        Span.Kind kind,
         long startTimeMs,
         long durationMs,
         SpanStatus status,
         List<SpanNode> children,
-        Map<String, Object> tags,
+        Map<String, String> tags,
         List<SpanEvent> events,
         List<SpanIssue> issues,
         long creationOrder,

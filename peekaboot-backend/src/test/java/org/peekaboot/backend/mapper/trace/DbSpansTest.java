@@ -51,17 +51,17 @@ class DbSpansTest {
     @Test
     void theMappedTwinAppliesTheSameRule() {
         assertThat(DbSpans.isQuery(node("s1")
-                        .kind("CLIENT")
+                        .kind(Span.Kind.CLIENT)
                         .tags(Map.of("db.system", "postgresql"))
                         .build()))
                 .isTrue();
         assertThat(DbSpans.isQuery(node("s1")
-                        .kind("CLIENT")
+                        .kind(Span.Kind.CLIENT)
                         .tags(Map.of("jdbc.row-count", "10"))
                         .build()))
                 .isFalse();
         assertThat(DbSpans.isQuery(node("s1")
-                        .kind("SERVER")
+                        .kind(Span.Kind.SERVER)
                         .tags(Map.of("db.system", "postgresql"))
                         .build()))
                 .isFalse();
@@ -113,6 +113,19 @@ class DbSpansTest {
                         .tags(Map.of("db.system", "postgresql"))
                         .build()))
                 .isNull();
+    }
+
+    /** The same priority as {@link DbSpans#sql}: the current OpenTelemetry name, its superseded spelling, then datasource-proxy's. */
+    @Test
+    void systemPrefersTheCurrentOpenTelemetryTagThenTheSupersededOneThenDatasourceProxyNames() {
+        assertThat(DbSpans.system(Map.of("db.system.name", "postgresql", "db.system", "other")))
+                .isEqualTo("postgresql");
+        assertThat(DbSpans.system(Map.of("db.system", "mysql", "jdbc.datasource.name", "primary")))
+                .isEqualTo("mysql");
+        assertThat(DbSpans.system(Map.of("jdbc.datasource.name", "primary", "peer.service", "orders_db")))
+                .isEqualTo("primary");
+        assertThat(DbSpans.system(Map.of("peer.service", "orders_db"))).isEqualTo("orders_db");
+        assertThat(DbSpans.system(Map.of("db.query.text", "SELECT 1"))).isNull();
     }
 
     private static org.peekaboot.backend.tracing.store.SpanData clientSpan(Map<String, String> tags) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
+import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -300,7 +301,7 @@ class IssueDetectorTest {
     @Test
     void detectIssues_shouldDetectMultipleIssuesOnSameSpan() {
         SpanNode span = node("span1")
-                .kind("CLIENT")
+                .kind(Span.Kind.CLIENT)
                 .durationMs(200)
                 .status(SpanStatus.ERROR)
                 .tags(Map.of("db.system", "postgresql"))
@@ -326,7 +327,7 @@ class IssueDetectorTest {
     }
 
     private SpanNode createSpan(
-            String spanId, long durationMs, SpanStatus status, Map<String, Object> tags, List<SpanNode> children) {
+            String spanId, long durationMs, SpanStatus status, Map<String, String> tags, List<SpanNode> children) {
         return node(spanId)
                 .durationMs(durationMs)
                 .status(status)
@@ -336,8 +337,12 @@ class IssueDetectorTest {
     }
 
     /** A CLIENT span, the only kind {@code DbSpans.isQuery} accepts. */
-    private SpanNode querySpan(String spanId, long durationMs, Map<String, Object> tags) {
-        return node(spanId).kind("CLIENT").durationMs(durationMs).tags(tags).build();
+    private SpanNode querySpan(String spanId, long durationMs, Map<String, String> tags) {
+        return node(spanId)
+                .kind(Span.Kind.CLIENT)
+                .durationMs(durationMs)
+                .tags(tags)
+                .build();
     }
 
     private TraceTree createTrace(SpanNode rootSpan, TraceTabSummary summary) {

@@ -3,7 +3,6 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,19 +23,23 @@ import org.peekaboot.backend.tracing.store.SpanData;
  */
 public final class DbSpans {
 
-    private static final String CLIENT_KIND = Span.Kind.CLIENT.name();
-
     /** datasource-proxy's per-statement tag; a batch carries one per statement. */
     private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
 
     private DbSpans() {}
 
     public static boolean isQuery(SpanData span) {
-        return span.kind() == Span.Kind.CLIENT && hasQueryTag(span.tags());
+        return isQuery(span.kind(), span.tags());
     }
 
     public static boolean isQuery(SpanNode span) {
-        return CLIENT_KIND.equals(span.kind()) && hasQueryTag(span.tags());
+        return isQuery(span.kind(), span.tags());
+    }
+
+    private static boolean isQuery(Span.Kind kind, Map<String, String> tags) {
+        return kind == Span.Kind.CLIENT
+                && tags != null
+                && tags.keySet().stream().anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     /**
@@ -49,10 +52,7 @@ public final class DbSpans {
     public static String sql(SpanData span) {
         Map<String, String> tags = span.tags();
         if (tags != null) {
-            String sql = tags.get("db.query.text");
-            if (sql == null) {
-                sql = tags.get("db.statement");
-            }
+            String sql = Tags.first(tags, "db.query.text", "db.statement");
             if (sql == null) {
                 sql = batchStatements(tags);
             }
@@ -61,6 +61,15 @@ public final class DbSpans {
             }
         }
         return isSqlShaped(span.name()) ? span.name() : null;
+    }
+
+    /**
+     * The database a query span names, with the same priority as {@link #sql}: the current
+     * OpenTelemetry {@code db.system.name} ahead of its superseded spelling {@code db.system},
+     * then datasource-proxy's datasource name or peer service. Null when nothing named one.
+     */
+    public static String system(Map<String, String> tags) {
+        return Tags.first(tags, "db.system.name", "db.system", "jdbc.datasource.name", "peer.service");
     }
 
     private static String batchStatements(Map<String, String> tags) {
@@ -72,14 +81,6 @@ public final class DbSpans {
             }
         }
         return byIndex.isEmpty() ? null : String.join(";\n", byIndex.values());
-    }
-
-    private static boolean hasQueryTag(Map<String, ?> tags) {
-        return tags != null && hasQueryTag(tags.keySet());
-    }
-
-    private static boolean hasQueryTag(Set<String> keys) {
-        return keys.stream().anyMatch(key -> key.startsWith("db.") || key.startsWith("jdbc.query"));
     }
 
     private static boolean isSqlShaped(String name) {

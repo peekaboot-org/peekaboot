@@ -3,7 +3,6 @@ package org.peekaboot.backend.mapper.trace;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.SpanData;
@@ -43,7 +42,7 @@ public class QueryExtractor {
         // value patterns only (MaskingEngine.maskValue), not column-aware literal masking
         String sql = maskingEngine.maskValue(DbSpans.sql(span));
 
-        String dbSystem = findDbSystem(span.tags());
+        String dbSystem = DbSpans.system(span.tags());
 
         Instant timestamp = span.startTime();
         long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
@@ -62,16 +61,13 @@ public class QueryExtractor {
                 && span.tags().containsKey("jdbc.row-count");
     }
 
-    private Long extractRowCount(SpanData span) {
-        String rowCountStr = span.tags().get("jdbc.row-count");
-        if (rowCountStr != null) {
-            try {
-                return Long.parseLong(rowCountStr);
-            } catch (NumberFormatException e) {
-                return null;
-            }
+    /** Only called for a span {@link #isResultSetSpan} accepted, so the tag is present. */
+    private static Long extractRowCount(SpanData span) {
+        try {
+            return Long.parseLong(span.tags().get("jdbc.row-count"));
+        } catch (NumberFormatException e) {
+            return null;
         }
-        return null;
     }
 
     private Long findRowCount(long queryCreationOrder, long nextQueryOrder, List<ResultSetInfo> resultSets) {
@@ -80,35 +76,6 @@ public class QueryExtractor {
                 return rs.rowCount;
             }
         }
-        return null;
-    }
-
-    private String findDbSystem(Map<String, String> tags) {
-        // 1. Current OpenTelemetry semantic convention, ahead of db.system, which is the
-        // same convention's superseded spelling: when a library emits both, the current
-        // one is authoritative.
-        String system = tags.get("db.system.name");
-        if (system != null) {
-            return system;
-        }
-
-        // 2. Superseded OpenTelemetry convention
-        system = tags.get("db.system");
-        if (system != null) {
-            return system;
-        }
-
-        // 3. datasource-proxy: jdbc.datasource.name or peer.service
-        system = tags.get("jdbc.datasource.name");
-        if (system != null) {
-            return system;
-        }
-
-        system = tags.get("peer.service");
-        if (system != null) {
-            return system;
-        }
-
         return null;
     }
 
