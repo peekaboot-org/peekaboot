@@ -277,6 +277,32 @@ class ContentBufferingResponseWrapperTest {
     }
 
     /**
+     * The writer's encoder is mid-flush when its bytes tip the buffer over the cap, so the
+     * hand-over happens from inside a write. Nothing may be dropped or repeated on the way.
+     */
+    @Test
+    void writerContentBeyondTheCapSwitchesToPassthroughIntact() throws IOException {
+        wrapper.setContentType("text/html");
+        char[] chunk = new char[64 * 1024];
+        Arrays.fill(chunk, 'x');
+        int chunks = ContentBufferingResponseWrapper.MAX_BUFFERED_BYTES / chunk.length + 1;
+        StringBuilder expected = new StringBuilder();
+
+        PrintWriter writer = wrapper.getWriter();
+        for (int i = 0; i < chunks; i++) {
+            writer.write(chunk);
+            expected.append(chunk);
+        }
+        writer.write('!');
+        expected.append('!');
+        writer.flush();
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalResponse.getContentAsString()).isEqualTo(expected.toString());
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
      * An async handler's worker can write while the request thread is still handing the
      * buffered bytes over. The real response below stalls the hand-over inside its write,
      * starts the worker there, and resumes once the worker has either finished (it overtook
