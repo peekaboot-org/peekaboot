@@ -1,5 +1,6 @@
 package org.peekaboot.backend.lifecycle;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -23,15 +24,22 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationStoppedListener.class);
 
-    private static final DateTimeFormatter TIMESTAMP =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
-
     private final BuildInfoProvider buildInfoProvider;
     private final ApplicationContext ownContext;
+    private final Clock clock;
+    private final DateTimeFormatter timestamp;
 
+    /** The server's own zone is what the banner is read in, so the default zone is the right one here. */
     public ApplicationStoppedListener(BuildInfoProvider buildInfoProvider, ApplicationContext ownContext) {
+        this(buildInfoProvider, ownContext, Clock.system(ZoneId.systemDefault()));
+    }
+
+    /** {@code clock} supplies the stop instant and the zone both timestamps are rendered in; tests fix it. */
+    ApplicationStoppedListener(BuildInfoProvider buildInfoProvider, ApplicationContext ownContext, Clock clock) {
         this.buildInfoProvider = buildInfoProvider;
         this.ownContext = ownContext;
+        this.clock = clock;
+        this.timestamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(clock.getZone());
     }
 
     @Override
@@ -41,7 +49,7 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
         }
 
         Instant started = Instant.ofEpochMilli(ownContext.getStartupDate());
-        Instant stopped = Instant.now();
+        Instant stopped = clock.instant();
 
         StringBuilder report = LifecycleBanner.open("ApplicationStopped");
         report.append(String.format(
@@ -50,10 +58,10 @@ public class ApplicationStoppedListener implements ApplicationListener<ContextCl
                 .append("\n");
         report.append(LifecycleBanner.LINE).append("\n");
         report.append(" Up since (context start): ")
-                .append(TIMESTAMP.format(started))
+                .append(timestamp.format(started))
                 .append("\n");
         report.append(" Stopped:                  ")
-                .append(TIMESTAMP.format(stopped))
+                .append(timestamp.format(stopped))
                 .append("\n");
         LifecycleBanner.close(report);
 

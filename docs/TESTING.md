@@ -16,6 +16,16 @@
 - Live threads: wait for the condition the assertion needs (Awaitility; a sample count, say),
   never a fixed `Thread.sleep`. Where a test would otherwise sit out a production timeout, the
   class offers a package-private seam instead (`LifecycleEventLog(file, loadWait)`).
+- Wall clocks and host facts come through seams, never through `System.currentTimeMillis()`
+  read inside the class under test. `LifecycleRuns` and `InsightsCollector` take a
+  `LongSupplier` clock; `IntervalBoundary` takes that clock plus a `Sleeper`, so a schedule is
+  asserted exactly, and `InsightsSnapshotStore` takes an `IntervalBoundary` built on a fixed
+  clock, which dates the file and paces the writer alike; `ApplicationStoppedListener` and
+  `ServerInfo.current(Locale, Clock)` take a `java.time.Clock`, whose zone is the one the
+  timestamps render in. `ContainerRuntime`, `NetworkAddress`, `MachineInfo` and `ProcessInfo`
+  each read the host through a package-private `Signals` record a test states outright. A test
+  that computes its expected value with the same call the production code makes proves
+  nothing; it gets a seam instead.
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
   holds `obj` weakly and samples turn NaN after a GC. Use `Gauge.builder(name, supplier)`, or
   keep the returned object in a field.
@@ -36,8 +46,8 @@ already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the mapped `TraceTree` ar
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
-rather than the events; the collector itself has no test-only constructor. A test names only what it
-asserts on. A new record component is added to the builder once, not to every test class. The
+rather than the events; the collector's only package-private constructor argument is its clock.
+A test names only what it asserts on. A new record component is added to the builder once, not to every test class. The
 domain records carry no test-only constructors.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.

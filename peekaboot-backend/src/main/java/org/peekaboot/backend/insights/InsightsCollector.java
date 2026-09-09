@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -53,6 +54,7 @@ public final class InsightsCollector implements SmartLifecycle {
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
     private final SnapshotRestoreBarrier restoreBarrier;
+    private final IntervalBoundary schedule;
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
@@ -61,8 +63,21 @@ public final class InsightsCollector implements SmartLifecycle {
             MeterRegistry registry,
             Listener listener,
             SnapshotSource snapshotSource) {
+        this(levels, series, tiles, registry, listener, snapshotSource, System::currentTimeMillis);
+    }
+
+    /** {@code clock} supplies the epoch millis the level threads schedule their boundaries from; tests fix it. */
+    InsightsCollector(
+            List<InsightsProperties.Level> levels,
+            List<SeriesDef> series,
+            List<TileDef> tiles,
+            MeterRegistry registry,
+            Listener listener,
+            SnapshotSource snapshotSource,
+            LongSupplier clock) {
         this.listener = listener;
         this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
+        this.schedule = new IntervalBoundary(clock, Thread::sleep);
         this.intervalMillis = new long[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
             intervalMillis[i] = levels.get(i).intervalMillis();
@@ -134,7 +149,7 @@ public final class InsightsCollector implements SmartLifecycle {
         while (!Thread.currentThread().isInterrupted()) {
             long boundary;
             try {
-                boundary = IntervalBoundary.sleepUntilNext(intervalMs, offsetMs);
+                boundary = schedule.sleepUntilNext(intervalMs, offsetMs);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;

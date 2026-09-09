@@ -6,23 +6,48 @@ import org.junit.jupiter.api.Test;
 
 class IntervalBoundaryTest {
 
-    @Test
-    void wakesAtTheNextMultipleOfTheIntervalAndReturnsIt() throws InterruptedException {
-        long before = System.currentTimeMillis();
+    /** Records the one sleep the boundary asks for instead of sleeping. */
+    private static final class RecordingSleeper implements IntervalBoundary.Sleeper {
+        long sleptMs = -1;
 
-        long boundary = IntervalBoundary.sleepUntilNext(40, 0);
-
-        assertThat(boundary % 40).isZero();
-        assertThat(boundary).isGreaterThan(before);
-        assertThat(System.currentTimeMillis()).isGreaterThanOrEqualTo(boundary);
+        @Override
+        public void sleep(long millis) {
+            sleptMs = millis;
+        }
     }
 
-    /** An aggregation level waits past the boundary so the finer level's write has landed. */
+    @Test
+    void sleepsToTheNextMultipleOfTheIntervalAndReturnsIt() throws InterruptedException {
+        RecordingSleeper sleeper = new RecordingSleeper();
+        IntervalBoundary boundary = new IntervalBoundary(() -> 10_030, sleeper);
+
+        assertThat(boundary.sleepUntilNext(10_000, 0)).isEqualTo(20_000);
+        assertThat(sleeper.sleptMs).isEqualTo(9_970);
+    }
+
+    @Test
+    void reportsTheClockItSchedulesBy() {
+        assertThat(new IntervalBoundary(() -> 10_030, new RecordingSleeper()).now())
+                .isEqualTo(10_030);
+    }
+
+    /** A clock sitting on a boundary has already been woken for it; the next one is a whole interval away. */
+    @Test
+    void aClockOnTheBoundaryWaitsForTheFollowingOne() throws InterruptedException {
+        RecordingSleeper sleeper = new RecordingSleeper();
+        IntervalBoundary boundary = new IntervalBoundary(() -> 20_000, sleeper);
+
+        assertThat(boundary.sleepUntilNext(10_000, 0)).isEqualTo(30_000);
+        assertThat(sleeper.sleptMs).isEqualTo(10_000);
+    }
+
+    /** An aggregation level wakes past the boundary so the finer level's write has landed, but reports the boundary itself. */
     @Test
     void theOffsetDelaysTheWakeUpButNotTheBoundaryItReports() throws InterruptedException {
-        long boundary = IntervalBoundary.sleepUntilNext(40, 15);
+        RecordingSleeper sleeper = new RecordingSleeper();
+        IntervalBoundary boundary = new IntervalBoundary(() -> 10_030, sleeper);
 
-        assertThat(boundary % 40).isZero();
-        assertThat(System.currentTimeMillis()).isGreaterThanOrEqualTo(boundary + 15);
+        assertThat(boundary.sleepUntilNext(60_000, 5_000)).isEqualTo(60_000);
+        assertThat(sleeper.sleptMs).isEqualTo(54_970);
     }
 }

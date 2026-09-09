@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -21,13 +22,15 @@ import org.peekaboot.testsupport.LogCapture;
 class InsightsSnapshotStoreTest {
 
     private static final List<InsightsSnapshot.Level> GEOMETRY = List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0));
+    private static final long NOW = Instant.parse("2026-09-09T12:00:00Z").toEpochMilli();
+    private static final IntervalBoundary FIXED_CLOCK = new IntervalBoundary(() -> NOW, Thread::sleep);
 
     @TempDir
     Path directory;
 
     private InsightsSnapshotStore store(Duration maxAge) {
         return new InsightsSnapshotStore(
-                directory.resolve(InsightsSnapshotStore.FILE_NAME), GEOMETRY, Duration.ofHours(1), maxAge);
+                directory.resolve(InsightsSnapshotStore.FILE_NAME), GEOMETRY, Duration.ofHours(1), maxAge, FIXED_CLOCK);
     }
 
     private static InsightsSnapshot snapshot(long writtenAtEpochMs, long intervalMs, int size) {
@@ -40,7 +43,7 @@ class InsightsSnapshotStoreTest {
     /** One sample of {@code value}, the shape a run that restored nothing would capture. */
     private static InsightsSnapshot ownSamplesOnly(double value) {
         return new InsightsSnapshot(
-                System.currentTimeMillis(),
+                NOW,
                 List.of(new InsightsSnapshot.Level(10_000, 90, 30_000, 1)),
                 Map.of("cpu.process", List.<double[][]>of(new double[][] {{value}})));
     }
@@ -72,15 +75,18 @@ class InsightsSnapshotStoreTest {
             // completeLoaded's finally already released awaitSnapshot before rethrowing
         }
 
-        long startNanos = System.nanoTime();
-        assertThat(store.awaitSnapshot(Duration.ofSeconds(5))).isEmpty();
-        assertThat(Duration.ofNanos(System.nanoTime() - startNanos)).isLessThan(Duration.ofSeconds(1));
+        // a zero timeout returns at once either way; only a load still pending announces it
+        try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class, Level.INFO)) {
+            assertThat(store.awaitSnapshot(Duration.ZERO)).isEmpty();
+
+            assertThat(capture.appender().list).isEmpty();
+        }
     }
 
     @Test
     void whatOneRunWritesTheNextRunReads() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         Optional<InsightsSnapshot> restored = loadWith(store(Duration.ofDays(30)));
@@ -93,14 +99,13 @@ class InsightsSnapshotStoreTest {
     @Test
     void aRunThatNeverSampledDoesNotReplaceGoodHistory() throws IOException {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
         long size = Files.size(directory.resolve(InsightsSnapshotStore.FILE_NAME));
 
         InsightsSnapshotStore empty = store(Duration.ofDays(30));
         empty.start(
-                () -> new InsightsSnapshot(
-                        System.currentTimeMillis(), List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of()),
+                () -> new InsightsSnapshot(NOW, List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0)), Map.of()),
                 () -> false);
         empty.stop();
 
@@ -115,7 +120,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aRunThatNeverTookThePersistedHistoryOverDoesNotReplaceIt() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshotStore second = store(Duration.ofDays(30));
@@ -132,7 +137,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aRunThatTookThePersistedHistoryOverReplacesIt() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshotStore second = store(Duration.ofDays(30));
@@ -153,7 +158,7 @@ class InsightsSnapshotStoreTest {
         // a snapshot that contradicts its own header: the codec refuses it mid-write
         store.start(
                 () -> new InsightsSnapshot(
-                        System.currentTimeMillis(),
+                        NOW,
                         List.of(new InsightsSnapshot.Level(10_000, 90, 20_000, 3)),
                         Map.of("cpu.process", List.<double[][]>of(new double[][] {{1.0, 2.0}}))),
                 () -> false);
@@ -176,8 +181,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aSnapshotDatedInTheFutureIsDeletedUnread() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(
-                () -> snapshot(System.currentTimeMillis() + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW + Duration.ofDays(1).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -188,8 +192,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aSnapshotOlderThanTheCutoffIsDeletedUnread() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(
-                () -> snapshot(System.currentTimeMillis() - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
+        writer.start(() -> snapshot(NOW - Duration.ofDays(31).toMillis(), 10_000, 90), () -> false);
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -200,7 +203,7 @@ class InsightsSnapshotStoreTest {
     @Test
     void aReshapedRingGeometryDiscardsTheWholeFile() {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(System.currentTimeMillis(), 30_000, 90), () -> false); // level 0 was 10s
+        writer.start(() -> snapshot(NOW, 30_000, 90), () -> false); // level 0 was 10s
         writer.stop();
 
         assertThat(discardIsAnnounced(() -> loadWith(store(Duration.ofDays(30)))))
@@ -247,8 +250,9 @@ class InsightsSnapshotStoreTest {
                 stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME),
                 GEOMETRY,
                 Duration.ofHours(1),
-                Duration.ofDays(30));
-        store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+                Duration.ofDays(30),
+                FIXED_CLOCK);
+        store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
 
         store.stop();
 
@@ -266,7 +270,7 @@ class InsightsSnapshotStoreTest {
         Files.writeString(victim, "untouched");
         Files.createSymbolicLink(directory.resolve("insights.snapshot.tmp"), victim);
         InsightsSnapshotStore store = store(Duration.ofDays(30));
-        store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+        store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
 
         store.stop();
 
@@ -279,10 +283,10 @@ class InsightsSnapshotStoreTest {
         Path blocked = Files.createFile(directory.resolve("blocked"));
 
         InsightsSnapshotStore store = new InsightsSnapshotStore(
-                blocked.resolve("insights.snapshot"), GEOMETRY, Duration.ofHours(1), Duration.ofDays(30));
+                blocked.resolve("insights.snapshot"), GEOMETRY, Duration.ofHours(1), Duration.ofDays(30), FIXED_CLOCK);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
-            store.start(() -> snapshot(System.currentTimeMillis(), 10_000, 90), () -> false);
+            store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
             store.writeNow();
             store.stop();
 

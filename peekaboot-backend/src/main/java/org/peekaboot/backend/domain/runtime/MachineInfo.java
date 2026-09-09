@@ -1,6 +1,7 @@
 package org.peekaboot.backend.domain.runtime;
 
 import java.lang.management.ManagementFactory;
+import java.lang.management.OperatingSystemMXBean;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -25,29 +26,54 @@ public record MachineInfo(
         ContainerRuntime container,
         List<NetworkAddress> networkAddresses) {
 
+    /**
+     * The host facts, read once ({@link #current()} caches the result: they are static for
+     * the JVM's lifetime). A record so tests can state a machine outright instead of running
+     * on one.
+     */
+    record Signals(
+            Path cpuinfo,
+            int cpuCount,
+            OperatingSystemMXBean os,
+            long maxHeap,
+            ContainerRuntime container,
+            NetworkAddress.Signals network) {
+
+        static Signals fromRuntime() {
+            Runtime runtime = Runtime.getRuntime();
+            return new Signals(
+                    Path.of("/proc/cpuinfo"),
+                    runtime.availableProcessors(),
+                    ManagementFactory.getOperatingSystemMXBean(),
+                    runtime.maxMemory(),
+                    ContainerRuntime.current(),
+                    NetworkAddress.Signals.fromRuntime());
+        }
+    }
+
     /** Lazily computed once: the values are static for the JVM's lifetime. */
     private static final class CurrentHolder {
-        private static final MachineInfo CURRENT = compute();
+        private static final MachineInfo CURRENT = read(Signals.fromRuntime());
     }
 
     public static MachineInfo current() {
         return CurrentHolder.CURRENT;
     }
 
-    private static MachineInfo compute() {
-        Cpuinfo cpuinfo = Cpuinfo.read(Path.of("/proc/cpuinfo"));
+    static MachineInfo read(Signals signals) {
+        Cpuinfo cpuinfo = Cpuinfo.read(signals.cpuinfo());
         return new MachineInfo(
-                Runtime.getRuntime().availableProcessors(),
+                signals.cpuCount(),
                 cpuinfo.model(),
                 cpuinfo.topology(),
-                readTotalMemory(),
-                Runtime.getRuntime().maxMemory(),
-                ContainerRuntime.current(),
-                NetworkAddress.discover(NetworkAddress.Signals.fromRuntime()));
+                readTotalMemory(signals.os()),
+                signals.maxHeap(),
+                signals.container(),
+                NetworkAddress.discover(signals.network()));
     }
 
-    private static Long readTotalMemory() {
-        if (ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean bean) {
+    private static Long readTotalMemory(OperatingSystemMXBean os) {
+        if (os instanceof com.sun.management.OperatingSystemMXBean bean) {
             long total = bean.getTotalMemorySize();
             return total > 0 ? total : null;
         }

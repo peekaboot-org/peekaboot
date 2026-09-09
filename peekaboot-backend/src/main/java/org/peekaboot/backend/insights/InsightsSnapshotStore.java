@@ -41,6 +41,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     private final List<InsightsSnapshot.Level> geometry;
     private final Duration interval;
     private final Duration maxAge;
+    private final IntervalBoundary schedule;
     /** Released once the load has ended, however it ended; {@link #persisted} no longer changes by then. */
     private final CountDownLatch loaded = new CountDownLatch(1);
 
@@ -53,10 +54,24 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     private volatile boolean unclaimedHistory;
 
     public InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
+        this(file, geometry, interval, maxAge, new IntervalBoundary(System::currentTimeMillis, Thread::sleep));
+    }
+
+    /**
+     * {@code schedule} is the writer's cadence and the clock a file's age is judged against;
+     * tests build it on a fixed clock.
+     */
+    InsightsSnapshotStore(
+            Path file,
+            List<InsightsSnapshot.Level> geometry,
+            Duration interval,
+            Duration maxAge,
+            IntervalBoundary schedule) {
         this.file = file;
         this.geometry = List.copyOf(geometry);
         this.interval = interval;
         this.maxAge = maxAge;
+        this.schedule = schedule;
     }
 
     /** The store for {@code properties}' persistence settings, or {@link SnapshotStore#NONE} while storage is off. */
@@ -193,7 +208,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
         long intervalMs = interval.toMillis();
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                IntervalBoundary.sleepUntilNext(intervalMs, 0);
+                schedule.sleepUntilNext(intervalMs, 0);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -241,7 +256,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
      * ever filled and the newest samples keep timestamps that never arrive.
      */
     private boolean isImplausiblyDated(InsightsSnapshotCodec.Header header) {
-        long now = System.currentTimeMillis();
+        long now = schedule.now();
         return header.writtenAtEpochMs() < now - maxAge.toMillis()
                 || header.writtenAtEpochMs() > now + CLOCK_SKEW.toMillis();
     }
