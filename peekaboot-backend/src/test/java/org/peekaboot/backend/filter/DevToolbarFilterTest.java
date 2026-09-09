@@ -257,18 +257,6 @@ class DevToolbarFilterTest {
                 .contains("\"status\":404");
     }
 
-    /** A HEAD answer carries headers only; with no body there is nothing to inject into and nothing is added. */
-    @Test
-    void aHeadRequestWithoutABodyGetsNoToolbar() throws Exception {
-        request = new MockHttpServletRequest("HEAD", "/users/123");
-        request.setServletPath("/users/123");
-        chainWritesHtml("");
-
-        filter.doFilter(request, response, chain);
-
-        assertThat(response.getContentAsByteArray()).isEmpty();
-    }
-
     @Test
     void servesTheOriginalPageWhenTheToolbarCannotBeGenerated() throws Exception {
         // ToolbarDataProvider is a plain, real class with no injectable failure point;

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Spans.query;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -20,10 +21,9 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindQueryWithDbStatementTag() {
-        var querySpan = span("span1")
+        var querySpan = query("span1")
                 .named("SELECT users")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 100)
+                .at(0, 100)
                 .tags(Map.of("db.statement", "SELECT * FROM users WHERE id = ?", "db.system", "postgresql"))
                 .order(10)
                 .build();
@@ -40,10 +40,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindQueryWithJdbcQueryTag() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(2000, 50)
+        var querySpan = query("span1")
                 .tags(Map.of("jdbc.query[0]", "INSERT INTO orders (user_id) VALUES (?)", "peer.service", "orders_db"))
                 .order(20)
                 .build();
@@ -60,10 +57,7 @@ class QueryExtractorTest {
     /** A statement batch is one span carrying jdbc.query[0..N]; every statement belongs to it, in index order. */
     @Test
     void extract_shouldJoinTheStatementsOfABatchInIndexOrder() {
-        var batchSpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(2000, 50)
+        var batchSpan = query("span1")
                 .tags(Map.of(
                         "jdbc.query[10]", "INSERT INTO t VALUES (10)",
                         "jdbc.query[0]", "INSERT INTO t VALUES (0)",
@@ -101,10 +95,7 @@ class QueryExtractorTest {
     @Test
     void extract_shouldMatchResultSetToQuery() {
         // Query span created first (creationOrder=10)
-        var querySpan = span("query1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var querySpan = query("query1")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "mydb"))
                 .order(10)
                 .build();
@@ -131,17 +122,11 @@ class QueryExtractorTest {
     void extract_shouldNotAttributeRowCountToEarlierQueryWithoutResultSet() {
         // An UPDATE produces no result-set span; the following SELECT's
         // result set must not be attributed to it.
-        var update = span("q1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 10)
+        var update = query("q1")
                 .tags(Map.of("jdbc.query[0]", "UPDATE users SET active = true", "peer.service", "db"))
                 .order(10)
                 .build();
-        var select = span("q2")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(2000, 20)
+        var select = query("q2")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(20)
                 .build();
@@ -166,10 +151,7 @@ class QueryExtractorTest {
     @Test
     void extract_shouldMatchMultipleResultSetsToQueries() {
         // First query + result set
-        var query1 = span("q1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var query1 = query("q1")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(10)
                 .build();
@@ -182,10 +164,7 @@ class QueryExtractorTest {
                 .build();
 
         // Second query + result set
-        var query2 = span("q2")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(2000, 30)
+        var query2 = query("q2")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"))
                 .order(20)
                 .build();
@@ -218,10 +197,7 @@ class QueryExtractorTest {
                 .tags(Map.of("jdbc.row-count", "99", "peer.service", "db"))
                 .order(5)
                 .build();
-        var querySpan = span("q1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var querySpan = query("q1")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(10)
                 .build();
@@ -236,10 +212,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldReturnNullRowCountWhenNoResultSet() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var querySpan = query("span1")
                 .tags(Map.of("db.statement", "UPDATE users SET active = true", "db.system", "postgresql"))
                 .order(10)
                 .build();
@@ -290,13 +263,8 @@ class QueryExtractorTest {
      */
     @Test
     void extract_shouldListAQuerySpanWithoutAStatementWithNullSql() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 30)
-                .tags(Map.of("db.system", "postgresql"))
-                .order(10)
-                .build();
+        var querySpan =
+                query("span1").tags(Map.of("db.system", "postgresql")).order(10).build();
 
         List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
 
@@ -319,24 +287,15 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldListQueriesInCreationOrder() {
-        var query1 = span("q1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 10)
+        var query1 = query("q1")
                 .tags(Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "db"))
                 .order(10)
                 .build();
-        var query2 = span("q2")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(2000, 10)
+        var query2 = query("q2")
                 .tags(Map.of("jdbc.query[0]", "SELECT 2", "peer.service", "db"))
                 .order(20)
                 .build();
-        var query3 = span("q3")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(3000, 10)
+        var query3 = query("q3")
                 .tags(Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"))
                 .order(30)
                 .build();
@@ -353,10 +312,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldFindDbSystemFromDatasourceName() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var querySpan = query("span1")
                 .tags(Map.of("jdbc.query[0]", "SELECT 1", "jdbc.datasource.name", "primary_db"))
                 .order(10)
                 .build();
@@ -378,10 +334,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
-        var querySpan = span("q1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 50)
+        var querySpan = query("q1")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(10)
                 .build();
@@ -413,10 +366,7 @@ class QueryExtractorTest {
             SELECT * FROM users WHERE email = ?                                                    | SELECT * FROM users WHERE email = ?
             """)
     void extract_shouldMaskOnlyProviderShapedCredentialsEmbeddedInSql(String statement, String expected) {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 20)
+        var querySpan = query("span1")
                 .tags(Map.of("db.statement", statement, "db.system", "postgresql"))
                 .order(10)
                 .build();
@@ -428,10 +378,7 @@ class QueryExtractorTest {
 
     @Test
     void extract_shouldPreferDbSystemNameOverDbSystem() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 40)
+        var querySpan = query("span1")
                 .tags(Map.of(
                         "db.query.text", "SELECT 1",
                         "db.system.name", "postgresql",

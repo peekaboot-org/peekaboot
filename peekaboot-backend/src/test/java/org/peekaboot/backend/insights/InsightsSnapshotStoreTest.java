@@ -26,14 +26,18 @@ class InsightsSnapshotStoreTest {
 
     private static final List<InsightsSnapshot.Level> GEOMETRY = List.of(new InsightsSnapshot.Level(10_000, 90, 0, 0));
     private static final long NOW = Instant.parse("2026-09-09T12:00:00Z").toEpochMilli();
-    private static final IntervalBoundary FIXED_CLOCK = new IntervalBoundary(() -> NOW, Thread::sleep);
+    private static final IntervalBoundary FIXED_SCHEDULE = new IntervalBoundary(() -> NOW, Thread::sleep);
 
     @TempDir
     Path directory;
 
     private InsightsSnapshotStore store(Duration maxAge) {
         return new InsightsSnapshotStore(
-                directory.resolve(InsightsSnapshotStore.FILE_NAME), GEOMETRY, Duration.ofHours(1), maxAge, FIXED_CLOCK);
+                directory.resolve(InsightsSnapshotStore.FILE_NAME),
+                GEOMETRY,
+                Duration.ofHours(1),
+                maxAge,
+                FIXED_SCHEDULE);
     }
 
     private static InsightsSnapshot snapshot(long writtenAtEpochMs, long intervalMs, int size) {
@@ -245,7 +249,7 @@ class InsightsSnapshotStoreTest {
                 GEOMETRY,
                 Duration.ofHours(1),
                 Duration.ofDays(30),
-                FIXED_CLOCK);
+                FIXED_SCHEDULE);
         store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
 
         store.stop();
@@ -275,7 +279,11 @@ class InsightsSnapshotStoreTest {
         Path blocked = Files.createFile(directory.resolve("blocked"));
 
         InsightsSnapshotStore store = new InsightsSnapshotStore(
-                blocked.resolve("insights.snapshot"), GEOMETRY, Duration.ofHours(1), Duration.ofDays(30), FIXED_CLOCK);
+                blocked.resolve("insights.snapshot"),
+                GEOMETRY,
+                Duration.ofHours(1),
+                Duration.ofDays(30),
+                FIXED_SCHEDULE);
 
         try (LogCapture capture = LogCapture.attach(InsightsSnapshotStore.class)) {
             store.start(() -> snapshot(NOW, 10_000, 90), () -> false);
