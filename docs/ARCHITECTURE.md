@@ -469,11 +469,12 @@ match by type, so an application bean of the same type replaces the default outr
 `FilterRegistrationBean`s match by their deduced generic type, so an application's other
 filter registrations never back one of them off. A named set matches by name instead:
 `tracingInterceptorConfigurer`, because several `WebMvcConfigurer` beans coexist and a type
-match would let one suppress them all; `databaseMetadataList`, because a
-`List<DataSourceMetadata>` bean cannot be conditioned reliably by type; and each
-`InsightsSource` bean in `ActuatorSourcesAutoConfiguration`, because they share that one
-type and a type match would let an application overriding a single source suppress every
-reading.
+match would let one suppress them all; and each `InsightsSource` bean in
+`ActuatorSourcesAutoConfiguration`, because they share that one type and a type match would
+let an application overriding a single source suppress every reading. The datasource
+metadata is a bean of its own type, `DataSourceMetadataList`, rather than a
+`List<DataSourceMetadata>`: Spring resolves the list type by collecting `DataSourceMetadata`
+beans first, so one application bean of that type would have replaced the whole list.
 
 ### Conditional Loading
 

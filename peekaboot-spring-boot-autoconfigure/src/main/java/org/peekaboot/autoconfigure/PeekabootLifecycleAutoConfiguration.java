@@ -9,6 +9,7 @@ import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.lifecycle.EnvironmentInfo;
 import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventFile;
@@ -71,17 +72,17 @@ public class PeekabootLifecycleAutoConfiguration {
             EnvironmentInfo environmentInfo,
             BuildInfoProvider buildInfoProvider,
             ServerUrlResolver serverUrlResolver,
-            ObjectProvider<List<DataSourceMetadata>> databaseMetadataListProvider,
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider,
             ObjectProvider<Map<String, DataSource>> dataSourcesProvider,
             ObjectProvider<HikariPoolInfo> hikariPoolInfoProvider) {
-        List<DataSourceMetadata> dataSourceMetadataList =
-                databaseMetadataListProvider.getIfAvailable(Collections::emptyList);
+        DataSourceMetadataList dataSourceMetadataList =
+                dataSourceMetadataListProvider.getIfAvailable(() -> DataSourceMetadataList.EMPTY);
         Map<String, DataSource> dataSources = dataSourcesProvider.getIfAvailable(Collections::emptyMap);
         return new ApplicationReadyListener(
                 environmentInfo,
                 buildInfoProvider,
                 serverUrlResolver,
-                dataSourceMetadataList,
+                dataSourceMetadataList.entries(),
                 dataSources,
                 hikariPoolInfoProvider.getIfAvailable());
     }
@@ -115,12 +116,12 @@ public class PeekabootLifecycleAutoConfiguration {
     static class DatabaseMetadataConfiguration {
 
         @Bean
-        @ConditionalOnMissingBean(name = "databaseMetadataList")
-        public List<DataSourceMetadata> databaseMetadataList(Map<String, DataSource> dataSources) {
-            List<DataSourceMetadata> metadataList = new ArrayList<>();
+        @ConditionalOnMissingBean
+        public DataSourceMetadataList dataSourceMetadataList(Map<String, DataSource> dataSources) {
+            List<DataSourceMetadata> entries = new ArrayList<>();
             dataSources.forEach((name, dataSource) ->
-                    DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(metadataList::add));
-            return metadataList;
+                    DataSourceMetadata.fromDataSource(name, dataSource).ifPresent(entries::add));
+            return new DataSourceMetadataList(entries);
         }
     }
 

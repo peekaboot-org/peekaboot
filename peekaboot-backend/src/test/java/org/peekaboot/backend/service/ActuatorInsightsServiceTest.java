@@ -18,6 +18,7 @@ import org.peekaboot.backend.domain.health.HealthStatus;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.loggers.LoggerGroup;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
 import org.peekaboot.backend.mapper.actuator.ConfigMapper;
 import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
@@ -39,8 +40,8 @@ class ActuatorInsightsServiceTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         actuatorService = mock(PeekabootActuatorService.class);
-        ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
-        when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of());
+        ObjectProvider<DataSourceMetadataList> dataSourceProvider = mock(ObjectProvider.class);
+        when(dataSourceProvider.getIfAvailable(any())).thenReturn(DataSourceMetadataList.EMPTY);
 
         insightsService = newInsightsService(dataSourceProvider);
     }
@@ -114,8 +115,8 @@ class ActuatorInsightsServiceTest {
         when(metadata.getDataSourceName()).thenReturn("primaryDS");
         when(metadata.getHosts()).thenReturn(List.of());
 
-        ObjectProvider<List<DataSourceMetadata>> dataSourceProvider = mock(ObjectProvider.class);
-        when(dataSourceProvider.getIfAvailable(any())).thenReturn(List.of(metadata));
+        ObjectProvider<DataSourceMetadataList> dataSourceProvider = mock(ObjectProvider.class);
+        when(dataSourceProvider.getIfAvailable(any())).thenReturn(new DataSourceMetadataList(List.of(metadata)));
 
         ActuatorInsightsService serviceWithDataSource = newInsightsService(dataSourceProvider);
         when(actuatorService.getInsightsData()).thenReturn(Map.of());
@@ -174,7 +175,7 @@ class ActuatorInsightsServiceTest {
                 .isNotNull();
     }
 
-    private ActuatorInsightsService newInsightsService(ObjectProvider<List<DataSourceMetadata>> dataSourceProvider) {
+    private ActuatorInsightsService newInsightsService(ObjectProvider<DataSourceMetadataList> dataSourceProvider) {
         MaskingEngine maskingEngine = new MaskingEngine();
         return new ActuatorInsightsService(
                 actuatorService,

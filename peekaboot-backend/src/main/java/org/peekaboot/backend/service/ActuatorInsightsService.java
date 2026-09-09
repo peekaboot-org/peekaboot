@@ -8,6 +8,7 @@ import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
 import org.peekaboot.backend.mapper.actuator.ConfigMapper;
 import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
@@ -46,7 +47,7 @@ public final class ActuatorInsightsService {
             FlywayMapper flywayMapper,
             ConfigMapper configMapper,
             ScheduledTasksMapper scheduledTasksMapper,
-            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider) {
         this.actuatorService = actuatorService;
         this.responseParser = responseParser;
         this.healthMapper = healthMapper;
@@ -58,7 +59,9 @@ public final class ActuatorInsightsService {
         this.flywayMapper = flywayMapper;
         this.configMapper = configMapper;
         this.scheduledTasksMapper = scheduledTasksMapper;
-        this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
+        this.dataSourceMetadataList = dataSourceMetadataListProvider
+                .getIfAvailable(() -> DataSourceMetadataList.EMPTY)
+                .entries();
     }
 
     /**
