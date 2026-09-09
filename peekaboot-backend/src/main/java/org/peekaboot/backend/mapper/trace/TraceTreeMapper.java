@@ -60,7 +60,7 @@ public class TraceTreeMapper {
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
         TraceTabSummary summary = calculateSummary(spans, rootSpanData);
-        TraceStatus status = determineStatus(spans);
+        TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
 
@@ -188,7 +188,7 @@ public class TraceTreeMapper {
      * HTTP request than anything else Peekaboot can name.
      */
     private static RootActionType detectServerActionType(Map<String, String> tags) {
-        if (HttpSpanTags.describeHttpRequest(tags)) {
+        if (HttpSpanTags.describesHttpRequest(tags)) {
             return RootActionType.HTTP_REQUEST;
         }
         if (hasTagPrefix(tags, "rpc.")) {
@@ -223,14 +223,13 @@ public class TraceTreeMapper {
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
-        String kind = spanData.kind() != null ? spanData.kind().name() : null;
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
         long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
         return new SpanNode(
                 spanData.spanId(),
                 spanData.name(),
-                kind,
+                spanData.kind(),
                 startTimeMs,
                 durationMs,
                 status,
@@ -251,8 +250,8 @@ public class TraceTreeMapper {
      * credential the key name alone can't catch. A span's errorMessage and query text are
      * masked the same way: an exception message can echo back the failing request's URL.
      */
-    private Map<String, Object> maskedTags(SpanData spanData) {
-        return spanData.tags() == null ? Map.of() : Map.<String, Object>copyOf(tagMasker.mask(spanData.tags()));
+    private Map<String, String> maskedTags(SpanData spanData) {
+        return spanData.tags() == null ? Map.of() : tagMasker.mask(spanData.tags());
     }
 
     private static List<SpanEvent> mapEvents(SpanData spanData) {
@@ -306,14 +305,5 @@ public class TraceTreeMapper {
             return null;
         }
         return new TraceTabSummary.RequestSummary(method, path, statusCode);
-    }
-
-    private TraceStatus determineStatus(List<SpanData> spans) {
-        for (SpanData span : spans) {
-            if (span.hasError()) {
-                return TraceStatus.HAS_ERRORS;
-            }
-        }
-        return TraceStatus.OK;
     }
 }

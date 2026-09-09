@@ -89,13 +89,13 @@ class HttpSpanTagsTest {
 
     @Test
     void describesAnHttpRequestUnderEitherNamingScheme() {
-        assertThat(HttpSpanTags.describeHttpRequest(SPRING_DEFAULT)).isTrue();
-        assertThat(HttpSpanTags.describeHttpRequest(Map.of("method", "GET", "uri", "/x", "status", "200")))
+        assertThat(HttpSpanTags.describesHttpRequest(SPRING_DEFAULT)).isTrue();
+        assertThat(HttpSpanTags.describesHttpRequest(Map.of("method", "GET", "uri", "/x", "status", "200")))
                 .isTrue();
-        assertThat(HttpSpanTags.describeHttpRequest(Map.of("http.request.method", "GET")))
+        assertThat(HttpSpanTags.describesHttpRequest(Map.of("http.request.method", "GET")))
                 .isTrue();
-        assertThat(HttpSpanTags.describeHttpRequest(Map.of("rpc.system", "grpc", "method", "Greet")))
+        assertThat(HttpSpanTags.describesHttpRequest(Map.of("rpc.system", "grpc", "method", "Greet")))
                 .isFalse();
-        assertThat(HttpSpanTags.describeHttpRequest(Map.of())).isFalse();
+        assertThat(HttpSpanTags.describesHttpRequest(Map.of())).isFalse();
     }
 }
