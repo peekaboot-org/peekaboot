@@ -28,8 +28,7 @@ class PeekabootAutoConfigurationTest {
     // this class exercises it through a servlet web application context; only
     // shouldNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-            .withUserConfiguration(MockActuatorConfig.class);
+            .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class));
 
     /**
      * The lifecycle switch is read by {@code PeekabootLifecycleAutoConfiguration}'s condition
@@ -115,7 +114,6 @@ class PeekabootAutoConfigurationTest {
         // partially activating a servlet-only component (PeekabootWebConfig).
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -136,7 +134,6 @@ class PeekabootAutoConfigurationTest {
         // PeekabootWebConfig with a NoClassDefFoundError.
         new ReactiveWebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withClassLoader(new FilteredClassLoader(
                         WebMvcConfigurer.class, ResourceHandlerRegistry.class, ViewControllerRegistry.class))
                 .withPropertyValues("peekaboot.enabled=true")
@@ -175,7 +172,6 @@ class PeekabootAutoConfigurationTest {
                         PeekabootTracingAutoConfiguration.class,
                         OtelTracingAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withPropertyValues("peekaboot.enabled=true");
 
         @Test

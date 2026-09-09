@@ -51,8 +51,7 @@ class DevToolbarAutoConfigurationTest {
                     DevToolbarAutoConfiguration.class,
                     PeekabootAutoConfiguration.class,
                     PeekabootPathsAutoConfiguration.class))
-            .withPropertyValues("peekaboot.enabled=true")
-            .withUserConfiguration(MockActuatorConfig.class);
+            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
     void shouldCreateBeansWhenDevToolbarEnabled() {
@@ -186,7 +185,6 @@ class DevToolbarAutoConfigurationTest {
                         PeekabootAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class,
                         BraveAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
