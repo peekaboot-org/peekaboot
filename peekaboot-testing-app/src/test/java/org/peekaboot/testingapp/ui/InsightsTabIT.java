@@ -10,6 +10,7 @@ import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -99,37 +100,47 @@ class InsightsTabIT extends PlaywrightTestBase {
     }
 
     /**
-     * Deep-linking straight to "#insights" makes both readers of /api/insights/config
-     * fire inside one render cycle: this tab's init() and the Overview tab's stat-tile
-     * row. They de-duplicate independently (each passes its own dedupeKey, see
-     * shared/api.js), so neither may be left holding the null - the tab renders *and*
-     * the tile row fills, on the first cycle.
+     * Deep-linking straight to "#insights" renders the tab on the first cycle, and the
+     * Overview tile row, which reads the same /api/insights/config, fills the moment
+     * Overview is switched to - never before (see DashboardTabsIT's
+     * overviewSkipsTheTileFetchWhileAnotherTabIsShowing). The two readers de-duplicate
+     * independently (each passes its own dedupeKey, see shared/api.js), so a switch to
+     * Overview while this tab's own config request is still in flight leaves neither
+     * holding the null: the tab's request is parked until the tile row has asked too.
      *
      * <p>Every wait is deliberately shorter than the 30s auto-refresh: something that
      * only appears once the next refresh cycle rebuilds it has still failed this. The
-     * tile row is asserted ATTACHED rather than visible - it lives in the Overview
-     * panel, which this deep link leaves hidden.
+     * tab's own controls are asserted ATTACHED rather than visible - by then the Insights
+     * panel is the hidden one.
      */
     @Test
     void deepLinkingStraightToInsightsRendersTheTabAndTheOverviewTiles() {
+        AtomicReference<Route> parkedTabRequest = new AtomicReference<>();
+        page.route("**/api/insights/config", route -> {
+            if (!parkedTabRequest.compareAndSet(null, route)) {
+                route.resume();
+            }
+        });
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#insights");
         page.waitForSelector("#insights-tab.active");
+        page.waitForCondition(() -> parkedTabRequest.get() != null);
 
-        page.waitForSelector("#insights-level .pk-insight-level", new Page.WaitForSelectorOptions().setTimeout(10000));
-        page.waitForSelector(
-                "#insights-panels .pk-insight-panel[data-panel-id='cpu']",
-                new Page.WaitForSelectorOptions().setTimeout(10000));
-        assertThat(page.locator("#insights-level .pk-insight-level").count()).isEqualTo(3);
-
+        page.click("#overview-tab-btn");
         page.waitForSelector(
                 "#insights-tiles .pk-insight-tile[data-tile-id='uptime']",
-                new Page.WaitForSelectorOptions()
-                        .setState(WaitForSelectorState.ATTACHED)
-                        .setTimeout(10000));
+                new Page.WaitForSelectorOptions().setTimeout(10000));
         assertThat(page.locator("#insights-tiles .pk-insight-tile").count()).isEqualTo(4);
         assertThat(page.locator("#insights-tiles.hidden").count())
                 .as("the tile row is populated, not left hidden")
                 .isZero();
+
+        parkedTabRequest.get().resume();
+        Page.WaitForSelectorOptions attached = new Page.WaitForSelectorOptions()
+                .setState(WaitForSelectorState.ATTACHED)
+                .setTimeout(10000);
+        page.waitForSelector("#insights-level .pk-insight-level", attached);
+        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu']", attached);
+        assertThat(page.locator("#insights-level .pk-insight-level").count()).isEqualTo(3);
     }
 
     @Test
