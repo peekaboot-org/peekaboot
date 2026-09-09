@@ -9,15 +9,15 @@
  * This file holds only the shell (open/close, the chrome, tab wiring); each tab's
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
  */
-import {escapeHtml} from '../shared/markup.js';
+import {el, button} from '../shared/dom.js';
 import {formatCount, formatDurationMs} from '../shared/format.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
-import {badgeHtml, tabStrip} from '../shared/components.js';
-import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
+import {badge, tabStrip} from '../shared/components.js';
+import {copyableId, bindCopyables} from '../shared/copyable.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
@@ -120,7 +120,8 @@ export function openTraceDetail(traceId, options = {}) {
 
     const content = document.createElement('div');
     shadow.appendChild(content);
-    content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
+    content.replaceChildren(el('div', {className: 'pk-overlay'},
+        el('div', {className: 'pk-overlay__loading', text: 'Loading trace data...'})));
 
     const display = {locale: options.locale, timeZone: options.timeZone, features: options.features};
     fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState, display});
@@ -169,30 +170,27 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
         // which never was one either - but this screen is reachable and has a working
         // control, so it needs a role and a name at minimum for a screen-reader user to
         // know what landed on the page.
-        content.innerHTML = `<div class="pk-overlay" role="alertdialog" aria-modal="true" aria-label="Failed to load trace">`
-            + `<div class="pk-overlay__error">`
-            + `Failed to load trace: ${escapeHtml(error.message)}<br><br>`
-            + `<button type="button" class="pk-btn">Close</button></div></div>`;
-        content.querySelector('.pk-overlay__error button').addEventListener('click', closeTraceDetail);
+        const close = button({className: 'pk-btn', text: 'Close'});
+        close.addEventListener('click', closeTraceDetail);
+        content.replaceChildren(el('div', {
+            className: 'pk-overlay',
+            attrs: {role: 'alertdialog', 'aria-modal': 'true', 'aria-label': 'Failed to load trace'}
+        }, el('div', {className: 'pk-overlay__error'}, `Failed to load trace: ${error.message}`, el('br'), el('br'), close)));
     }
 }
 
 function render(content, trace, urlState, display) {
-    // delegated once on the container, which outlives every innerHTML swap below
+    // delegated once on the container, which outlives every re-render below
     bindCopyables(content);
 
-    content.innerHTML = `
-        <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
-            <div class="pk-overlay__container">
-                ${headerHtml(trace, display)}
-                <div class="pk-tabs"></div>
-                <div class="pk-overlay__content" id="pk-tab-content"></div>
-            </div>
-        </div>
-    `;
-
-    const container = content.querySelector('.pk-overlay');
-    container.querySelector('.pk-overlay__title-icon').textContent = rootActionIcon(trace.rootActionType);
+    const container = el('div', {
+        className: 'pk-overlay',
+        attrs: {role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pk-overlay-title', tabindex: '-1'}
+    }, el('div', {className: 'pk-overlay__container'},
+        header(trace, display),
+        el('div', {className: 'pk-tabs'}),
+        el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content'}})));
+    content.replaceChildren(container);
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
     container.addEventListener('click', (e) => {
@@ -219,7 +217,7 @@ function render(content, trace, urlState, display) {
     container.focus();
 }
 
-function headerHtml(trace, display) {
+function header(trace, display) {
     const rootSpan = trace.rootSpan || {};
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
@@ -232,37 +230,40 @@ function headerHtml(trace, display) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-    // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
-    // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
-    // trace's total would call a 120 ms request slow here while the list did not.
-    const durationClass = trace.slow ? 'slow' : '';
 
     const queryCount = (trace.queries || []).length;
     const logCount = (trace.logs || []).length;
     const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
 
-    return `
-        <div class="pk-overlay__header">
-            <div class="pk-overlay__header-main">
-                <h2 class="pk-overlay__title" id="pk-overlay-title">
-                    <span class="pk-overlay__title-icon" aria-hidden="true"></span>
-                    <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
-                    <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                    <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                </h2>
-                <div class="pk-overlay__meta">
-                    <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
-                    ${badgeHtml(statusLabel(status), statusVariant(status))}
-                    ${trace.slow ? badgeHtml('SLOW', 'warn') : ''}
-                    <span>${formatCount(spanCount, 'span')}</span>
-                    <span>${formatCount(queryCount, 'query', 'queries')}</span>
-                    <span>${formatCount(logCount, 'log')}</span>
-                    ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
-                </div>
-            </div>
-            <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
-        </div>
-    `;
+    const title = el('h2', {className: 'pk-overlay__title', attrs: {id: 'pk-overlay-title'}},
+        el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(trace.rootActionType), attrs: {'aria-hidden': 'true'}}),
+        el('span', {className: 'pk-overlay__title-method', text: method ?? rootActionLabel(trace.rootActionType)}),
+        el('span', {className: 'pk-overlay__title-path', text: path, title: path}),
+        el('span', {className: 'pk-overlay__title-traceid'}, copyableId(trace.traceId, {label: 'traceId'})));
+
+    // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
+    // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
+    // trace's total would call a 120 ms request slow here while the list did not.
+    const truncated = trace.truncated ? badge('Truncated', 'warn') : null;
+    if (truncated) {
+        truncated.title = 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped,'
+            + ' so span, query and log counts above may be incomplete.';
+    }
+    const meta = el('div', {className: 'pk-overlay__meta'},
+        el('span', {
+            className: 'pk-overlay__duration' + (trace.slow ? ' pk-overlay__duration--slow' : ''),
+            text: formatDurationMs(trace.durationMs)
+        }),
+        badge(statusLabel(status), statusVariant(status)),
+        trace.slow ? badge('SLOW', 'warn') : null,
+        el('span', {text: formatCount(spanCount, 'span')}),
+        el('span', {text: formatCount(queryCount, 'query', 'queries')}),
+        el('span', {text: formatCount(logCount, 'log')}),
+        truncated);
+
+    return el('div', {className: 'pk-overlay__header'},
+        el('div', {className: 'pk-overlay__header-main'}, title, meta),
+        button({className: 'pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
 }
 
 /**

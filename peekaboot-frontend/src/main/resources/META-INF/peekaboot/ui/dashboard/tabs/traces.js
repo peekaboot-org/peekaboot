@@ -9,7 +9,7 @@
  * self-fetching-tab.js contract: a background render skips the round trip, and a slow
  * older response never overwrites a newer one.
  */
-import {badge, emptyStateHtml, loadingBlock, iconLink} from '../../shared/components.js';
+import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
@@ -47,7 +47,7 @@ const tab = selfFetchingTab({
         container.querySelector('#traces-loading').classList.add('hidden');
     },
     renderError: (container, error) => {
-        container.querySelector('#traces-list').innerHTML = emptyStateHtml(`Failed to load traces: ${error.message}`);
+        container.querySelector('#traces-list').replaceChildren(emptyState(`Failed to load traces: ${error.message}`));
         container.querySelector('#traces-loading').classList.add('hidden');
     }
 });

@@ -14,21 +14,29 @@ export function traceStatParts(trace, features) {
     const queries = summary.queries || {};
     const logs = summary.logs || {};
     const parts = [];
-    if (queries.count > 0) parts.push(queryStat(queries, features));
+    if (queries.count > 0) {
+        parts.push(durationStat(
+                formatCount(queries.count, 'query', 'queries'),
+                queries.totalDurationMs,
+                durationSeverity(queries.totalDurationMs, features)));
+    }
     if (logs.errorCount > 0) parts.push(badge(formatCount(logs.errorCount, 'error'), logLevelVariant('ERROR')));
     if (logs.warnCount > 0) parts.push(badge(formatCount(logs.warnCount, 'warning'), logLevelVariant('WARN')));
     return parts;
 }
 
-function queryStat({count, totalDurationMs}, features) {
-    const severity = durationSeverity(totalDurationMs, features);
+/**
+ * A `.pk-stat`: `lead` (a string or an element, the count or an icon) followed by the
+ * duration in monospace, coloured by `severity` (a severity.js suffix, or '').
+ */
+export function durationStat(lead, ms, severity) {
     const stat = document.createElement('span');
     stat.className = 'pk-stat' + (severity ? ` pk-stat--${severity}` : '');
-    stat.append(formatCount(count, 'query', 'queries'), ' ');
+    stat.append(lead, ' ');
 
     const duration = document.createElement('span');
     duration.className = 'pk-stat__duration';
-    duration.textContent = formatDurationMs(totalDurationMs);
+    duration.textContent = formatDurationMs(ms);
     stat.appendChild(duration);
     return stat;
 }

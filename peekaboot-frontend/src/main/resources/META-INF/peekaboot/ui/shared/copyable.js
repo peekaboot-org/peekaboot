@@ -3,44 +3,37 @@
  * copies itself when clicked.
  *
  * Ids appear on three surfaces - the dashboard document, the toolbar's shadow root and
- * the overlay's shadow root - and two of them build markup as HTML strings rather than
- * DOM nodes. So the primitive ships in both shapes over one piece of markup, and the
- * click is handled by a single delegated listener per root: content re-renders freely
- * without leaking listeners or needing to re-bind.
+ * the overlay's shadow root - and the click is handled by a single delegated listener per
+ * root: content re-renders freely without leaking listeners or needing to re-bind.
  */
-import {escapeHtml} from './markup.js';
+import {el, button} from './dom.js';
 
 const COPY_ICON = '⧉';
 const COPIED_ICON = '✓';
 const COPIED_FEEDBACK_MS = 1500;
 
 const boundRoots = new WeakSet();
+/** The feedback timer of each control, keyed by the element so the DOM carries no expando. */
+const feedbackTimers = new WeakMap();
 
 /**
- * Markup for a copyable id. `label` names the kind of id ("traceId", "spanId") and is
- * shown as a prefix, so the value is never a bare hex string with no explanation.
+ * The control as a detached element. `label` names the kind of id ("traceId", "spanId")
+ * and is shown as a prefix, so the value is never a bare hex string with no explanation.
  */
-export function copyableIdHtml(value, {label, truncate = false} = {}) {
+export function copyableId(value, {label, truncate = false} = {}) {
     if (!value) {
-        return `<span class="pk-copy pk-copy--empty">${escapeHtml(label || '')} -</span>`;
+        return el('span', {className: 'pk-copy pk-copy--empty', text: `${label || ''} -`});
     }
-    const safeValue = escapeHtml(String(value));
-    const safeLabel = label ? escapeHtml(label) : '';
-    return `<button type="button" class="pk-copy${truncate ? ' pk-copy--truncate' : ''}"`
-         + ` data-pk-copy="${safeValue}"`
-         + ` aria-label="Copy ${safeLabel} ${safeValue}" title="Copy ${safeLabel}">`
-         + (safeLabel ? `<span class="pk-copy__label">${safeLabel}</span>` : '')
-         + `<span class="pk-copy__value">${safeValue}</span>`
-         + `<span class="pk-copy__icon" aria-hidden="true">${COPY_ICON}</span>`
-         + `<span class="pk-copy__status" role="status"></span>`
-         + `</button>`;
-}
-
-/** The same control as a detached element, for call sites that build DOM. */
-export function copyableId(value, options = {}) {
-    const holder = document.createElement('span');
-    holder.innerHTML = copyableIdHtml(value, options);
-    return holder.firstElementChild;
+    const id = String(value);
+    return button({
+        className: 'pk-copy' + (truncate ? ' pk-copy--truncate' : ''),
+        title: `Copy ${label || ''}`,
+        attrs: {'data-pk-copy': id, 'aria-label': `Copy ${label || ''} ${id}`}
+    },
+    label ? el('span', {className: 'pk-copy__label', text: label}) : null,
+    el('span', {className: 'pk-copy__value', text: id}),
+    el('span', {className: 'pk-copy__icon', text: COPY_ICON, attrs: {'aria-hidden': 'true'}}),
+    el('span', {className: 'pk-copy__status', attrs: {role: 'status'}}));
 }
 
 /**
@@ -77,12 +70,12 @@ function showResult(button, ok) {
     button.classList.toggle('pk-copy--copied', ok);
     button.classList.toggle('pk-copy--failed', !ok);
 
-    clearTimeout(button.pkCopyTimer);
-    button.pkCopyTimer = setTimeout(() => {
+    clearTimeout(feedbackTimers.get(button));
+    feedbackTimers.set(button, setTimeout(() => {
         if (icon) icon.textContent = COPY_ICON;
         if (status) status.textContent = '';
         button.classList.remove('pk-copy--copied', 'pk-copy--failed');
-    }, COPIED_FEEDBACK_MS);
+    }, COPIED_FEEDBACK_MS));
 }
 
 /**

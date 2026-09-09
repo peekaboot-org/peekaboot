@@ -1,10 +1,11 @@
 /**
  * Trace-detail overlay - Request tab: the whole HTTP exchange on one page, request
  * details first and the two header tables last. Every section is the same
- * `<table class="pk-table pk-table--kv">` shape; renderTable/tableRow build it.
+ * `<table class="pk-table pk-table--kv">` shape; kvTable/tableRow build it.
  */
-import {escapeHtml, MASK_LITERAL} from '../../shared/markup.js';
-import {badgeHtml, emptyStateHtml} from '../../shared/components.js';
+import {MASK_LITERAL} from '../../shared/markup.js';
+import {badge, emptyState} from '../../shared/components.js';
+import {el} from '../../shared/dom.js';
 import {formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
@@ -12,20 +13,22 @@ import {statusLabel, statusVariant} from '../../shared/http-status.js';
 // two readers must not see the same trace's headers and parameters in different orders.
 const byKey = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
 
-function renderTable(rows) {
-    return `<table class="pk-table pk-table--kv">${rows.join('')}</table>`;
+function kvTable(rows) {
+    return el('table', {className: 'pk-table pk-table--kv'}, ...rows);
 }
 
-function tableRowHtml(key, valueHtml, valueClass) {
-    return `<tr><td>${escapeHtml(key)}</td><td${valueClass ? ` class="${valueClass}"` : ''}>${valueHtml}</td></tr>`;
-}
-
+/** `value` is text, or an element for a cell that holds a control or a pill. */
 function tableRow(key, value, valueClass) {
-    return tableRowHtml(key, escapeHtml(value), valueClass);
+    const cell = el('td', {className: valueClass || undefined});
+    cell.append(value);
+    return el('tr', {}, el('td', {text: key}), cell);
 }
 
-function section(title, body) {
-    return `<div class="pk-request-section"><h3>${title}</h3>${body}</div>`;
+/** `note` is the muted aside a title can carry ("(truncated)"). */
+function section(title, body, note) {
+    const heading = el('h3', {text: title});
+    if (note) heading.append(' ', el('span', {className: 'pk-request-masked', text: note}));
+    return el('div', {className: 'pk-request-section'}, heading, body);
 }
 
 export function render(container, trace, view = {}) {
@@ -35,18 +38,20 @@ export function render(container, trace, view = {}) {
     const res = httpExchange?.response;
 
     if (!req && !res) {
-        container.innerHTML = emptyStateHtml('No request details available');
+        container.replaceChildren(emptyState('No request details available'));
         return;
     }
 
-    container.innerHTML = renderRequestDetails(req, res, trace)
-        + renderController(req)
-        + renderParams('Query Parameters', req?.params?.query)
-        + renderParams('Form Parameters', req?.params?.form)
-        + renderUploadedFiles(req?.params?.upload)
-        + renderRequestBody(req?.body)
-        + renderRequestHeaders(req, maskLiteral)
-        + renderResponseHeaders(res);
+    container.replaceChildren(...[
+        renderRequestDetails(req, res, trace),
+        renderController(req),
+        renderParams('Query Parameters', req?.params?.query),
+        renderParams('Form Parameters', req?.params?.form),
+        renderUploadedFiles(req?.params?.upload),
+        renderRequestBody(req?.body),
+        renderHeaders('Request Headers', req?.headers, maskLiteral),
+        renderHeaders('Response Headers', res?.headers, maskLiteral)
+    ].filter(Boolean));
 }
 
 /** Header names are stored as the container spelled them, so the lookup ignores case. */
@@ -59,59 +64,48 @@ function renderRequestDetails(req, res, trace) {
         tableRow('Method', req?.method || '-'),
         tableRow('Path', req?.path || '-'),
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
-        tableRowHtml('Status', badgeHtml(statusLabel(res?.status), statusVariant(res?.status))),
+        tableRow('Status', badge(statusLabel(res?.status), statusVariant(res?.status))),
         tableRow('Content-Type', headerValue(req?.headers, 'content-type') || '-'),
         tableRow('Duration', formatDurationMs(trace.durationMs))
     ];
-    return section('Request', renderTable(rows));
+    return section('Request', kvTable(rows));
 }
 
 function renderController(req) {
-    if (!req?.controller?.class && !req?.controller?.method) return '';
-    const signature = `${escapeHtml(req.controller.class || 'Unknown')}.${escapeHtml(req.controller.method || 'unknown')}()`;
-    return section('Controller', `<div class="pk-controller-info">${signature}</div>`);
+    if (!req?.controller?.class && !req?.controller?.method) return null;
+    const signature = `${req.controller.class || 'Unknown'}.${req.controller.method || 'unknown'}()`;
+    return section('Controller', el('div', {className: 'pk-controller-info', text: signature}));
 }
 
 function renderParams(title, params) {
     const entries = Object.entries(params || {});
-    if (entries.length === 0) return '';
-    return section(title, renderTable(entries.sort(byKey).map(([key, value]) =>
-        tableRow(key, Array.isArray(value) ? value.join(', ') : value))));
+    if (entries.length === 0) return null;
+    return section(title, kvTable(entries.sort(byKey).map(([key, value]) =>
+        tableRow(key, Array.isArray(value) ? value.join(', ') : String(value)))));
 }
 
 function renderUploadedFiles(files) {
-    if (!files?.length) return '';
-    return section('Uploaded Files', renderTable(files.map(file =>
+    if (!files?.length) return null;
+    return section('Uploaded Files', kvTable(files.map(file =>
         tableRow(file.originalFilename || file.name || 'unknown',
             `${file.contentType || '-'} (${String(file.size || 0)} bytes)`))));
 }
 
 function renderRequestBody(body) {
-    if (!body?.content) return '';
-    const title = 'Request Body' + (body.truncated ? ' <span class="pk-request-masked">(truncated)</span>' : '');
-    return section(title, `<div class="pk-query__sql">${escapeHtml(body.content)}</div>`);
-}
-
-function renderRequestHeaders(req, maskLiteral) {
-    const headers = Object.entries(req?.headers || {});
-    const rows = headers.length > 0
-        ? headers.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
-        : [noHeadersRow()];
-    return section('Request Headers', renderTable(rows));
-}
-
-function renderResponseHeaders(res) {
-    const headers = Object.entries(res?.headers || {});
-    const rows = headers.length > 0
-        ? headers.sort(byKey).map(([key, value]) => tableRow(key, value))
-        : [noHeadersRow()];
-    return section('Response Headers', renderTable(rows));
+    if (!body?.content) return null;
+    return section('Request Body', el('div', {className: 'pk-query__sql', text: body.content}),
+        body.truncated ? '(truncated)' : null);
 }
 
 /**
  * Both header sections render even when empty: "nothing was captured" is itself worth
  * seeing, and a section that vanishes reads as a missing feature rather than an answer.
+ * A value the masking engine replaced is marked, so the mask tests can count them.
  */
-function noHeadersRow() {
-    return '<tr><td colspan="2" class="pk-request-empty">No headers captured</td></tr>';
+function renderHeaders(title, headers, maskLiteral) {
+    const entries = Object.entries(headers || {});
+    const rows = entries.length > 0
+        ? entries.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
+        : [el('tr', {}, el('td', {className: 'pk-request-empty', text: 'No headers captured', attrs: {colspan: '2'}}))];
+    return section(title, kvTable(rows));
 }
