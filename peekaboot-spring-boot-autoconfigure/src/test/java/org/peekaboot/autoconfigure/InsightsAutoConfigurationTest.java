@@ -26,7 +26,6 @@ class InsightsAutoConfigurationTest {
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
                     PeekabootAutoConfiguration.class, InsightsAutoConfiguration.class, JacksonAutoConfiguration.class))
-            .withUserConfiguration(MockActuatorConfig.class)
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
@@ -141,7 +140,7 @@ class InsightsAutoConfigurationTest {
                         PeekabootAutoConfiguration.class,
                         InsightsAutoConfiguration.class,
                         JacksonAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class, MeterRegistryConfig.class)
+                .withUserConfiguration(MeterRegistryConfig.class)
                 .withPropertyValues("peekaboot.enabled=false")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -170,7 +169,7 @@ class InsightsAutoConfigurationTest {
                         PeekabootStorageAutoConfiguration.class,
                         InsightsAutoConfiguration.class,
                         JacksonAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class, MeterRegistryConfig.class)
+                .withUserConfiguration(MeterRegistryConfig.class)
                 .withPropertyValues(
                         "peekaboot.enabled=true",
                         "peekaboot.storage.enabled=" + storageEnabled,
