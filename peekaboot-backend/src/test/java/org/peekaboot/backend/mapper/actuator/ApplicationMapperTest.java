@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
 import org.peekaboot.backend.actuator.parsed.SpringInfo;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
+import org.peekaboot.backend.domain.application.GitInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class ApplicationMapperTest {
@@ -47,13 +48,15 @@ class ApplicationMapperTest {
                 null,
                 null);
         ApplicationInfo result = mapper.map(info, null, false);
-        assertThat(result.git()).containsEntry("branch", "main");
-        assertThat(result.git()).containsKey("commit");
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> commit = (Map<String, Object>) result.git().get("commit");
-        assertThat(commit).containsEntry("id", "abc123");
-        assertThat(commit).containsEntry("time", "2024-01-01T10:00:00Z");
+        assertThat(result.git()).isEqualTo(new GitInfo("main", new GitInfo.Commit("abc123", "2024-01-01T10:00:00Z")));
+    }
+
+    @Test
+    void map_shouldLeaveTheCommitAbsentWhenGitCarriesNone() {
+        InfoResponse info = new InfoResponse(new InfoResponse.GitInfo("main", null), null, null, null, null);
+
+        assertThat(mapper.map(info, null, false).git()).isEqualTo(new GitInfo("main", null));
     }
 
     @Test
@@ -81,7 +84,7 @@ class ApplicationMapperTest {
     void map_shouldHandleNullInputs() {
         ApplicationInfo result = mapper.map(null, null, false);
         assertThat(result.build()).isEmpty();
-        assertThat(result.git()).isEmpty();
+        assertThat(result.git()).isNull();
         assertThat(result.javaVersion()).isNull();
         assertThat(result.springBootVersion()).isNull();
     }
