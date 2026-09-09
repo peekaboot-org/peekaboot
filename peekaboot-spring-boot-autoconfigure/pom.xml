@@ -54,6 +54,18 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- compile-only: the Tomcat context customizer that keeps forwards working, see
+             TomcatForwardResponseCustomizer -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-tomcat</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-core</artifactId>
+            <optional>true</optional>
+        </dependency>
         <dependency>
             <groupId>jakarta.annotation</groupId>
             <artifactId>jakarta.annotation-api</artifactId>
