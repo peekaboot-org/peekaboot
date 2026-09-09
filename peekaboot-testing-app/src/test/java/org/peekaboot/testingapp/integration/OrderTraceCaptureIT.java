@@ -10,8 +10,6 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -46,9 +44,6 @@ class OrderTraceCaptureIT {
     private static final int SEEDED_ORDERS = 8;
     private static final int CONCURRENT_ORDERS = 16;
     private static final JsonMapper JSON = JsonMapper.builder().build();
-
-    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
-    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     @LocalServerPort
     private int port;
@@ -93,7 +88,7 @@ class OrderTraceCaptureIT {
 
     @Test
     void ordersPageTripsTheHighTraceQueryCountThreshold() {
-        String traceId = traces.triggerAndCaptureTraceId("/orders");
+        String traceId = traces.get("/orders");
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
@@ -128,7 +123,7 @@ class OrderTraceCaptureIT {
      */
     @Test
     void ordersPageQueriesCarryRealSqlNotASpanNameSummary() {
-        String traceId = traces.triggerAndCaptureTraceId("/orders");
+        String traceId = traces.get("/orders");
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
@@ -165,7 +160,7 @@ class OrderTraceCaptureIT {
     void slowReportLandsInTheSlowBucket() {
         Long orderId = orderRepository.findAll().getFirst().getId();
 
-        traces.trigger("/api/orders/" + orderId + "/report");
+        traces.get("/api/orders/" + orderId + "/report");
 
         JsonNode trace = traces.awaitTraceInBucket("slow", "/api/orders/{id}/report");
 
@@ -188,7 +183,7 @@ class OrderTraceCaptureIT {
 
     @Test
     void failingEndpointLandsInTheErrorsBucket() {
-        traces.trigger("/boom");
+        traces.get("/boom");
 
         JsonNode trace = traces.awaitTraceInBucket("errors", "/boom");
 
@@ -200,7 +195,7 @@ class OrderTraceCaptureIT {
 
     @Test
     void ordersPageTraceIncludesTheOutboundCustomerLookup() {
-        String traceId = traces.triggerAndCaptureTraceId("/orders");
+        String traceId = traces.get("/orders");
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
@@ -214,7 +209,8 @@ class OrderTraceCaptureIT {
     void placingAnOrderIsCapturedAsItsOwnTrace() {
         ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-NEW", 2));
 
-        JsonNode trace = traces.awaitTrace(traceIdOf(response), TraceApiClient.ROOT_SPAN_EXPORTED);
+        JsonNode trace =
+                traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
@@ -237,7 +233,8 @@ class OrderTraceCaptureIT {
     void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
         ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-TX", 1));
 
-        JsonNode trace = traces.awaitTrace(traceIdOf(response), TraceApiClient.ROOT_SPAN_EXPORTED);
+        JsonNode trace =
+                traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(spanNames(trace))
                 .as("spans of the POST trace")
@@ -318,15 +315,6 @@ class OrderTraceCaptureIT {
                 .body(order)
                 .retrieve()
                 .toEntity(String.class);
-    }
-
-    private static String traceIdOf(ResponseEntity<?> response) {
-        String serverTiming = response.getHeaders().getFirst("Server-Timing");
-        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
-        assertThat(matcher.find())
-                .as("Server-Timing must carry the trace id, or the request was never captured: %s", serverTiming)
-                .isTrue();
-        return matcher.group(1);
     }
 
     private static List<String> spanNames(JsonNode trace) {

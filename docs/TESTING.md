@@ -185,9 +185,11 @@ way MUST hold the corresponding `@ResourceLock(..., mode = READ_WRITE)`, and eve
 its own data in that same store holds the `READ` side. `DashboardTraceViewIT` and `DevToolbarIT`
 are the pattern. A class on its own context configuration needs no lock.
 
-Pinning to a traceId does not mean searching the store for it. A JSON endpoint answers with
-`Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
-`OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
+Pinning to a traceId does not mean searching the store for it. Every captured request answers
+with `Server-Timing: trace;desc="00-<traceId>-..."`, whatever its content type or status.
+`TraceApiClient.get(path)` returns that id for a GET and `traceIdOf(headers)` reads it off a
+response made some other way, so an integration test names the trace its own call produced
+before it reads anything back.
 
 Spans reach the store asynchronously (the OTel batch processor, 50 ms in the test profile), so
 a test waits for the fact it is about to assert on, never for a delay.
