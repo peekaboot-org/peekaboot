@@ -21,6 +21,7 @@ import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
 import org.peekaboot.backend.insights.config.TileFormat;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorTest {
 
@@ -54,7 +55,13 @@ class InsightsCollectorTest {
                 events.add("rollup:" + level + ":" + entries.get("g").avg());
             }
         };
-        collector = new InsightsCollector(levels, List.of(series), List.of(staticTile, liveTile), registry, listener);
+        collector = new InsightsCollector(
+                levels,
+                List.of(series),
+                List.of(staticTile, liveTile),
+                registry,
+                listener,
+                InsightsCollector.SnapshotSource.NONE);
     }
 
     @Test
@@ -135,9 +142,7 @@ class InsightsCollectorTest {
 
     @Test
     void rateSampledAfterAGapSpansTheRealElapsedTime() {
-        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null);
-        InsightsCollector rateCollector =
-                new InsightsCollector(levels, List.of(rate), List.of(), registry, InsightsCollector.Listener.NO_OP);
+        InsightsCollector rateCollector = rateCollector();
         Counter counter = registry.counter("test.counter");
 
         rateCollector.tick(10_000); // baseline
@@ -146,6 +151,28 @@ class InsightsCollectorTest {
 
         double[] values = rateCollector.snapshot(0).tickValues().get("r");
         assertThat(values[3]).isEqualTo(1.0);
+    }
+
+    /**
+     * A clock stepped back hands the tick a boundary older than the last stamp. There is no
+     * gap to pad, and a rate must divide by the nominal interval rather than by the negative
+     * time that "passed".
+     */
+    @Test
+    void aBoundaryOlderThanTheLastStampPadsNoGapAndRatesOverTheNominalInterval() {
+        InsightsCollector rateCollector = rateCollector();
+        Counter counter = registry.counter("test.counter");
+        rateCollector.tick(10_000); // baseline
+        rateCollector.tick(20_000);
+
+        counter.increment(10);
+        rateCollector.tick(15_000);
+
+        LevelSnapshot snapshot = rateCollector.snapshot(0);
+        assertThat(snapshot.count()).as("no gap for a boundary in the past").isEqualTo(3);
+        assertThat(snapshot.tickValues().get("r")[2])
+                .as("10 counts over the nominal 10s, not over -5s")
+                .isEqualTo(1.0);
     }
 
     @Test
@@ -239,7 +266,8 @@ class InsightsCollectorTest {
                 List.of(seriesOf("first"), seriesOf("second")),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP);
+                InsightsCollectors.noOpListener(),
+                InsightsCollector.SnapshotSource.NONE);
         midTick.tick(10_000);
         first.set(5);
         parkSecond.set(true);
@@ -258,6 +286,18 @@ class InsightsCollectorTest {
         // the codec refuses a snapshot whose columns contradict its header, so a write that
         // succeeds is the assertion that the trim left it self-consistent
         InsightsSnapshotCodec.write(new DataOutputStream(OutputStream.nullOutputStream()), snapshot);
+    }
+
+    /** One rate series over {@code test.counter}, on the same registry and levels as the fixture collector. */
+    private InsightsCollector rateCollector() {
+        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null);
+        return new InsightsCollector(
+                levels,
+                List.of(rate),
+                List.of(),
+                registry,
+                InsightsCollectors.noOpListener(),
+                InsightsCollector.SnapshotSource.NONE);
     }
 
     private static SeriesDef seriesOf(String meter) {

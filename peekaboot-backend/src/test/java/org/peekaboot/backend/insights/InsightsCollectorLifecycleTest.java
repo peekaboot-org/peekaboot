@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorLifecycleTest {
 
@@ -40,7 +41,8 @@ class InsightsCollectorLifecycleTest {
                 List.of(new SeriesDef("g", "G", "g", Map.of(), Stat.VALUE, null, null)),
                 List.of(),
                 registry,
-                listener);
+                listener,
+                InsightsCollector.SnapshotSource.NONE);
         collector.start();
         try {
             assertThat(ticks.await(3, TimeUnit.SECONDS)).as("ticks arrived").isTrue();
@@ -62,7 +64,8 @@ class InsightsCollectorLifecycleTest {
                 List.of(),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP);
+                InsightsCollectors.noOpListener(),
+                InsightsCollector.SnapshotSource.NONE);
         assertThat(collector.threadNames())
                 .containsExactly("peekaboot-insights-tick", "peekaboot-insights-agg-1m", "peekaboot-insights-agg-1h");
     }

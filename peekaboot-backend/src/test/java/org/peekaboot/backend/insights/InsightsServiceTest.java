@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.insights.config.Unit;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -32,7 +34,7 @@ class InsightsServiceTest {
                 registry,
                 new InsightsProperties(),
                 new DefaultResourceLoader(),
-                InsightsCollector.Listener.NO_OP,
+                InsightsCollectors.noOpListener(),
                 null);
     }
 
@@ -47,6 +49,29 @@ class InsightsServiceTest {
                 .extracting(InsightsConfigResponse.Panel::id)
                 .doesNotContain("thread-states"); // disabled by default
         assertThat(config.tiles()).hasSize(4);
+    }
+
+    /** The frontend renders a series by unit; the shipped latency panel must keep saying millis. */
+    @Test
+    void theHttpLatencyPanelChartsItsSeriesInMillis() {
+        InsightsConfigResponse.Panel latency = service.config().panels().stream()
+                .filter(panel -> panel.id().equals("http-latency"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
+        assertThat(latency.series())
+                .extracting(InsightsConfigResponse.Series::id)
+                .containsExactly("http-latency.avg", "http-latency.max");
+    }
+
+    /** No shipped tile resolves on a bare registry; each has to leave as null, never as NaN. */
+    @Test
+    void configMapsAnUnresolvedTileValueToNull() {
+        List<InsightsConfigResponse.Tile> tiles = service.config().tiles();
+
+        assertThat(tiles).isNotEmpty();
+        assertThat(tiles).extracting(InsightsConfigResponse.Tile::value).containsOnlyNulls();
     }
 
     @Test
@@ -74,7 +99,7 @@ class InsightsServiceTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
             InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -102,7 +127,7 @@ class InsightsServiceTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
             InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -137,7 +162,7 @@ class InsightsServiceTest {
         };
 
         InsightsService loaded = new InsightsService(
-                registry, new InsightsProperties(), recording, InsightsCollector.Listener.NO_OP, null);
+                registry, new InsightsProperties(), recording, InsightsCollectors.noOpListener(), null);
 
         assertThat(requested).contains("classpath:peekaboot-insights-defaults.yml");
         assertThat(loaded.config().panels())
@@ -158,7 +183,7 @@ class InsightsServiceTest {
         };
 
         assertThatThrownBy(() -> new InsightsService(
-                        registry, new InsightsProperties(), deepDefaults, InsightsCollector.Listener.NO_OP, null))
+                        registry, new InsightsProperties(), deepDefaults, InsightsCollectors.noOpListener(), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("panel 'deep': level 7");
     }
@@ -170,7 +195,7 @@ class InsightsServiceTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
             InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -196,7 +221,7 @@ class InsightsServiceTest {
         };
 
         assertThatThrownBy(() -> new InsightsService(
-                        registry, new InsightsProperties(), brokenDefaults, InsightsCollector.Listener.NO_OP, null))
+                        registry, new InsightsProperties(), brokenDefaults, InsightsCollectors.noOpListener(), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bogus");
     }
