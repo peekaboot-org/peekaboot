@@ -301,6 +301,21 @@
    clears AA on it in both themes. */
 .pk-tab__count { margin-left: 6px; padding: 1px 6px; background: var(--pk-border); color: var(--pk-text); border-radius: 10px; font-size: var(--pk-text-xs); }
 
+/* An icon-only link between two views (components.js's iconLink): the emoji is the whole
+   content, the accessible name comes from aria-label. Text-tuned green: it is drawn on the
+   page background, never on a fill. */
+.pk-icon-link {
+    display: inline-block;
+    margin-left: var(--pk-space-sm);
+    padding: 2px 6px;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-primary-text);
+    text-decoration: none;
+    border-radius: var(--pk-radius);
+    transition: background-color var(--pk-transition);
+}
+.pk-icon-link:hover { background: var(--pk-bg-alt); }
+
 /* Empty state — centred, muted placeholder text shown when a list has no data */
 .pk-empty {
     color: var(--pk-text-muted);

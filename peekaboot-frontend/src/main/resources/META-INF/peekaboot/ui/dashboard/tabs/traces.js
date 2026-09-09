@@ -1,20 +1,20 @@
 /**
  * The "Traces" tab: recent request/job/message traces, bucketed (all/errors/slow) and
  * filterable by root action type, each opening the shared trace-detail overlay when
- * clicked. Owns its bucket control, type filter and list, but exposes one entry point -
- * applyFilter() - for another tab (via context.navigate's payload) to pre-select a type
- * and root operation without reaching into this module's private filter state.
+ * clicked. Owns its bucket control, type filter and list; another tab pre-selects a
+ * filter here with a plain "#traces?type=...&op=..." link, which the URL reconciliation
+ * below restores like any deep link.
  *
  * Fetched from its own endpoint (not part of the main dashboard payload), on the
  * self-fetching-tab.js contract: a background render skips the round trip, and a slow
  * older response never overwrites a newer one.
  */
-import {badge, emptyStateHtml, loadingBlock} from '../../shared/components.js';
+import {badge, emptyStateHtml, loadingBlock, iconLink} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {traceStatParts} from '../../shared/trace-stats.js';
-import {parseAppHash} from '../../shared/url-state.js';
+import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
@@ -61,30 +61,6 @@ export function render(container, data, context) {
     bindCopyables(container);
     wireControls(container);
     tab.render(container, data, context);
-}
-
-/**
- * Pre-selects a root action type and/or root operation, called from another tab's
- * cross-link via context.navigate(tabId, detail, payload) - see main.js's navigate().
- * Needs a prior render() to have wired the controls; a link that lands here only exists
- * once this tab is available, which is after its first render.
- */
-export function applyFilter({rootActionType, rootOperation} = {}, context) {
-    const container = tab.container();
-    if (!container) return;
-
-    selectedRootActionTypes.clear();
-    if (rootActionType) selectedRootActionTypes.add(rootActionType);
-    currentRootOperationFilter = rootOperation || null;
-
-    container.querySelectorAll('#traces-filter input').forEach(cb => {
-        cb.checked = cb.value === rootActionType;
-    });
-
-    // main.js's navigate() already pushed the plain "#traces" hash before calling this -
-    // the render's reconcile writes the filter's own params over it, so the cross-tab
-    // link lands on a shareable URL without a second history entry for one navigation.
-    tab.render(container, null, context);
 }
 
 /**
@@ -319,7 +295,7 @@ function renderTraceItem(trace, context) {
     }
     header.appendChild(openBtn);
 
-    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink(context));
+    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink());
 
     item.appendChild(header);
     return item;
@@ -372,24 +348,13 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
     return mainLine;
 }
 
-/** Plain "jump to Scheduled Tasks" navigation, deliberately unfiltered. */
-function renderSchedulerLink(context) {
-    const link = document.createElement('a');
-    link.href = '#';
-    link.className = 'pk-trace-item__scheduler-link';
-    // title alone would not become the accessible name here: the emoji textContent is
-    // itself real content, so it (its Unicode name) would win instead. aria-label pins
-    // the name to the same text title already carries.
-    link.title = 'View Scheduled Tasks';
-    link.setAttribute('aria-label', 'View Scheduled Tasks');
-    link.textContent = '\u{1F551}';
-    // No stopPropagation needed: the link is header's sibling, not a descendant of
-    // .pk-trace-item__open, so its click never reaches that button's own listener.
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        context.navigate('scheduled-tasks');
+/** Plain "jump to Scheduled Tasks" link, deliberately unfiltered. A sibling of the open button, not a descendant, so its click never reaches that button's listener. */
+function renderSchedulerLink() {
+    return iconLink(buildAppHash({tab: 'scheduled-tasks'}), {
+        label: 'View Scheduled Tasks',
+        icon: '\u{1F551}',
+        className: 'pk-trace-item__scheduler-link'
     });
-    return link;
 }
 
 function renderStats(trace, context) {

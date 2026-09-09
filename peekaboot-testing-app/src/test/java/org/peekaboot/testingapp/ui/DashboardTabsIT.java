@@ -791,9 +791,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     /**
      * The scheduled-tasks "view traces" link pre-filters the Traces tab to that
-     * scheduler's own SCHEDULED_JOB traces (rootActionType + rootOperation), via
-     * context.navigate's payload argument routed to traces.js's applyFilter(). Proves
-     * the link actually arrives filtered, not just that it switches tabs.
+     * scheduler's own SCHEDULED_JOB traces (rootActionType + rootOperation): a plain
+     * "#traces?type=...&op=..." href the hash router lands on, restored by traces.js's own
+     * URL reconciliation. Proves the link actually arrives filtered, not just that it
+     * switches tabs.
      */
     @Test
     void schedulerTracesLinkArrivesFiltered() {
