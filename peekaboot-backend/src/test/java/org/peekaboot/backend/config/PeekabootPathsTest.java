@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.server.PathContainer;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -185,6 +186,13 @@ class PeekabootPathsTest {
     void requestPathsMatchDirectlyAtTheRootContextPath() {
         assertThat(paths.isExcludedRequestPath("/actuator/health")).isTrue();
         assertThat(paths.isExcludedRequestPath("/api/users")).isFalse();
+    }
+
+    /** Every spelling a {@code server.servlet.context-path} property can carry, as the one strippable prefix. */
+    @ParameterizedTest
+    @CsvSource({"/app, /app", "/app/, /app", "/app//, /app", "app, /app", "/, ''", "'', ''"})
+    void theContextPathNormalisesToOnePrefixForm(String configured, String prefix) {
+        assertThat(PeekabootPaths.normaliseContextPath(configured)).isEqualTo(prefix);
     }
 
     /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */

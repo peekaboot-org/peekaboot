@@ -62,7 +62,7 @@ public class DevToolbarAutoConfiguration {
                 toolbarDataProvider,
                 tracer,
                 peekabootPaths,
-                environment.getProperty("springdoc.swagger-ui.path", DevToolbarFilter.DEFAULT_SWAGGER_UI_PATH)));
+                environment.getProperty("springdoc.swagger-ui.path", PeekabootPaths.DEFAULT_SWAGGER_UI_PATH)));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");

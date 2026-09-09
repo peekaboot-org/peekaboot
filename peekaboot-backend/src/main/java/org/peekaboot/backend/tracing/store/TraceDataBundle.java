@@ -280,7 +280,8 @@ public class TraceDataBundle {
                             .map(this::withResolvedParent)
                             .sorted(Comparator.comparingLong(SpanData::creationOrder))
                             .toList();
-            return new TraceData(traceId, minSpanStart, spanWindow(), rootOf(spansById.values()), spans, truncated);
+            // the root is one of the resolved copies, so the mapper's equality skip finds it in the list
+            return new TraceData(traceId, minSpanStart, spanWindow(), rootOf(spans), spans, truncated);
         }
     }
 
@@ -312,7 +313,10 @@ public class TraceDataBundle {
         }
     }
 
-    /** The one definition of the root; must run under {@code spansLock}, as it consults {@link #parentRedirects}. */
+    /**
+     * The one definition of the root, over stored spans or their resolved copies; must run
+     * under {@code spansLock}, as it consults {@link #parentRedirects}.
+     */
     private SpanData rootOf(Collection<SpanData> spans) {
         SpanData root = null;
         SpanData earliest = null;

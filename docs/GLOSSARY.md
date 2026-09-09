@@ -9,8 +9,9 @@ term twice and letting the two copies drift.
 
 ### Trace
 There is no `Trace` class. A trace is a `traceId` and whatever is filed under it, in three
-shapes: `TraceDataBundle` while the store is writing, `TraceData` when its spans are read back
-flat and creation-ordered (`TraceData.fromSpans`), and `TraceTree` once mapped for the UI. Only
+shapes: `TraceDataBundle` while the store is writing, `TraceData` when the bundle is read back
+in one go (`TraceDataBundle.snapshot()`: the spans flat and creation-ordered, the root, the
+window and the truncated flag), and `TraceTree` once mapped for the UI. Only
 the third leaves the process. What lands in the store is on the site:
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured).
 
@@ -18,15 +19,16 @@ the third leaves the process. What lands in the store is on the site:
 Two records, one concept. `SpanData` is the store's copy of an exported OpenTelemetry span:
 `spanId` and `parentId`, `Map<String, String>` tags, a nullable Micrometer `Span.Kind` (OTel's
 `INTERNAL` has no Micrometer constant and maps to null), and a `creationOrder` minted in export
-order. `SpanNode` is the mapped tree node the API serves: `kind` as a plain string, plus
-`children`, `issues`, `logs` and a masked `query`. Issues and logs hang off the node;
+order. `SpanNode` is the mapped tree node the API serves: the same `Span.Kind` and tag map,
+plus `children`, `issues`, `logs` and a masked `query`. Issues and logs hang off the node;
 `SpanData` carries neither.
 
 ### Root Span
-`TraceTreeMapper.findRootSpan` takes the first span in creation order whose parent is not in the
-trace, falling back to the first span. `TraceDataBundle.rootSpan()` is the store-side twin over
-stored spans with deduplication redirects resolved, used to classify a bundle for filtering
-without building a tree. `TraceTree.rootSpan` is the mapped `SpanNode` at the top.
+`TraceDataBundle` chooses it, once: the earliest-created stored span whose parent is not stored,
+with deduplication redirects resolved, else the earliest-created span. `snapshot()` carries that
+choice to `TraceTreeMapper` as `TraceData.rootSpan`, and `rootSpan()` answers the same rule
+without a copy so the list filters can classify a bundle without building a tree.
+`TraceTree.rootSpan` is the mapped `SpanNode` at the top.
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
