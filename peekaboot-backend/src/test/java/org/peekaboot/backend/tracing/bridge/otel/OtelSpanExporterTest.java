@@ -183,9 +183,12 @@ class OtelSpanExporterTest {
         assertThat(storage.getTrace(traceId)).isEmpty();
     }
 
-    /** Only a root decides a trace's fate; a skipped span under some other root leaves the trace alone. */
+    /**
+     * The exclusions describe inbound requests. An outbound call is never Peekaboot's own
+     * request, however its name is spelled, so a CLIENT span stays in its trace.
+     */
     @Test
-    void skippingAChildSpanLeavesTheRestOfItsTraceStored() {
+    void keepsAClientSpanWhoseNameSpellsThePeekabootPrefix() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String rootSpanId = "0000000000000001";
         SpanContext rootContext =
@@ -202,7 +205,32 @@ class OtelSpanExporterTest {
 
         assertThat(storedSpans(traceId))
                 .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
-                .containsExactly(rootSpanId);
+                .containsExactly("0000000000000002", rootSpanId);
+    }
+
+    /**
+     * A health check against another service carries a remote URL whose path starts with an
+     * excluded prefix. Dropping it would leave a silent gap where the slowest call may be.
+     */
+    @Test
+    void keepsAClientSpanWhoseRemotePathStartsWithAnExcludedPrefix() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData healthCheck = testSpanBuilder(traceId, "0000000000000002", "GET", SpanKind.CLIENT)
+                .parentSpanContext(rootContext)
+                .attributes(Attributes.of(HTTP_URL_KEY, "http://other/actuator/health"))
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
+                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .build();
+
+        exporter.export(List.of(healthCheck, root));
+
+        assertThat(storedSpans(traceId))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("0000000000000002", rootSpanId);
     }
 
     /**

@@ -653,8 +653,11 @@ the rest of the app's OpenTelemetry setup (sampling, other exporters such as Zip
 an OTLP backend) untouched.
 
 It skips Peekaboot's own requests span by span, using the same `PeekabootPaths` prefixes
-the filters and the interceptor use. A child of such a request carries neither the path tag nor
-the route name, so skipping a *root* also publishes a `TraceDiscardedEvent`;
+the filters and the interceptor use. Only SERVER spans are judged: the prefixes describe
+inbound requests, so an outbound call whose remote path happens to start with one (a health
+check against another service, say) stays in its trace. A child of such a request carries
+neither the path tag nor the route name, so skipping a *root* also publishes a
+`TraceDiscardedEvent`;
 `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
 three buckets. Everything else becomes a `SpanData` published as a `SpanDataEvent`. An error is
 recorded only for a span whose status code is `ERROR`: the message is the status description,
