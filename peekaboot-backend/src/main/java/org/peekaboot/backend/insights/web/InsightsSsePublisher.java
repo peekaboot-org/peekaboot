@@ -63,8 +63,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * How long stop() waits for a send in flight before detaching the peer instead. A
      * healthy peer's socket write takes milliseconds; one that has stopped reading holds
      * its write far longer than this. The waits run one subscriber after another, so
-     * shutdown is held for at most this times {@link #MAX_SUBSCRIBERS} (6.4s), inside a
-     * container's default 30s graceful shutdown.
+     * shutdown is held for at most this times {@link #MAX_SUBSCRIBERS} (6.4s), inside
+     * Spring's default {@code spring.lifecycle.timeout-per-shutdown-phase} of 30s.
      */
     static final Duration STOP_GRACE = Duration.ofMillis(200);
 
@@ -340,16 +340,14 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             completeUnlessSendingWithin(Duration.ZERO);
         }
 
-        /** Completes once the write lock is free within {@code grace}; a peer still sending after that is only detached. */
+        /**
+         * Completes once the write lock is free within {@code grace}; a peer still sending
+         * after that is only detached. The untimed attempt goes first: the timed one throws
+         * on entry for an interrupted caller, and stop() can arrive interrupted with every
+         * idle emitter still to complete.
+         */
         private void completeUnlessSendingWithin(Duration grace) {
-            boolean acquired;
-            try {
-                acquired = writeLock.tryLock(grace.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                acquired = false;
-            }
-            if (!acquired) {
+            if (!writeLock.tryLock() && !awaitWriteLock(grace)) {
                 removeSubscriber(this);
                 return;
             }
@@ -357,6 +355,15 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 complete();
             } finally {
                 writeLock.unlock();
+            }
+        }
+
+        private boolean awaitWriteLock(Duration grace) {
+            try {
+                return writeLock.tryLock(grace.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
             }
         }
     }
