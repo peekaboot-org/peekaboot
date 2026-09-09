@@ -9,15 +9,6 @@ import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
 import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
-import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
-import org.peekaboot.backend.mapper.actuator.ConfigMapper;
-import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
-import org.peekaboot.backend.mapper.actuator.EnvironmentMapper;
-import org.peekaboot.backend.mapper.actuator.FlywayMapper;
-import org.peekaboot.backend.mapper.actuator.HealthMapper;
-import org.peekaboot.backend.mapper.actuator.LoggersMapper;
-import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
-import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
 import org.peekaboot.backend.mapper.trace.IssueDetector;
 import org.peekaboot.backend.mapper.trace.QueryExtractor;
 import org.peekaboot.backend.mapper.trace.TraceTreeMapper;
@@ -86,60 +77,6 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public HealthMapper healthMapper(MaskingEngine maskingEngine) {
-        return new HealthMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public RuntimeMapper runtimeMapper() {
-        return new RuntimeMapper();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public DataSourceMapper dataSourceMapper(MaskingEngine maskingEngine) {
-        return new DataSourceMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ApplicationMapper applicationMapper(MaskingEngine maskingEngine) {
-        return new ApplicationMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public EnvironmentMapper environmentMapper(MaskingEngine maskingEngine) {
-        return new EnvironmentMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public LoggersMapper loggersMapper() {
-        return new LoggersMapper();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public FlywayMapper flywayMapper() {
-        return new FlywayMapper();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ConfigMapper configMapper(MaskingEngine maskingEngine) {
-        return new ConfigMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public ScheduledTasksMapper scheduledTasksMapper(MaskingEngine maskingEngine) {
-        return new ScheduledTasksMapper(maskingEngine);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
     public TraceTreeMapper traceTreeMapper(MaskingEngine maskingEngine) {
         return new TraceTreeMapper(maskingEngine);
     }
@@ -161,29 +98,10 @@ public class PeekabootAutoConfiguration {
     public ActuatorInsightsService actuatorInsightsService(
             PeekabootActuatorService peekabootActuatorService,
             ActuatorResponseParser actuatorResponseParser,
-            HealthMapper healthMapper,
-            RuntimeMapper runtimeMapper,
-            DataSourceMapper dataSourceMapper,
-            ApplicationMapper applicationMapper,
-            EnvironmentMapper environmentMapper,
-            LoggersMapper loggersMapper,
-            FlywayMapper flywayMapper,
-            ConfigMapper configMapper,
-            ScheduledTasksMapper scheduledTasksMapper,
+            MaskingEngine maskingEngine,
             ObjectProvider<DataSourceMetadataList> dataSourceMetadataList) {
         return new ActuatorInsightsService(
-                peekabootActuatorService,
-                actuatorResponseParser,
-                healthMapper,
-                runtimeMapper,
-                dataSourceMapper,
-                applicationMapper,
-                environmentMapper,
-                loggersMapper,
-                flywayMapper,
-                configMapper,
-                scheduledTasksMapper,
-                dataSourceMetadataList);
+                peekabootActuatorService, actuatorResponseParser, maskingEngine, dataSourceMetadataList);
     }
 
     /** The registry is absent on an application without Boot's metrics auto-configuration; the service then reports itself unavailable. */
