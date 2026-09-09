@@ -222,10 +222,19 @@
                     <artifactId>maven-site-plugin</artifactId>
                     <version>3.22.0</version>
                 </plugin>
+                <!-- Both test runners start their JVM with the JaCoCo agent (late-bound,
+                     see jacoco-prepare-agent below) and the Mockito agent, whose jar path
+                     the dependency plugin's properties goal resolves in every module. The
+                     agent keeps Mockito's inline mock-maker from self-attaching and
+                     warning about it. A module without tests never forks a test JVM, so
+                     the placeholder left unresolved there is harmless. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.6.0</version>
+                    <configuration>
+                        <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                    </configuration>
                 </plugin>
                 <!-- Managed, not bound: only modules with *IT classes (tests that boot a
                      real application) declare it. Everything in *Test stays a plain unit
@@ -234,6 +243,9 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>3.6.0</version>
+                    <configuration>
+                        <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                    </configuration>
                     <executions>
                         <execution>
                             <id>failsafe-integration-tests</id>
@@ -274,6 +286,20 @@
                                 <requireUpperBoundDeps />
                             </rules>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Sets ${org.mockito:mockito-core:jar} to the agent jar's local-repo path
+                 for the managed surefire/failsafe argLine above. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>mockito-agent-path</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
@@ -329,11 +355,11 @@
                             <goal>prepare-agent</goal>
                         </goals>
                         <configuration>
-                            <!-- Not the default `argLine`: every module with tests sets that
-                                 property itself for the Mockito agent, and a literal <argLine>
-                                 in surefire wins over the one prepare-agent injects. Naming the
-                                 property lets those modules late-bind it with @{jacocoArgLine}
-                                 and keep both agents. -->
+                            <!-- Not the default `argLine`: the managed surefire/failsafe
+                                 argLine adds the Mockito agent, and a literal <argLine> wins
+                                 over the one prepare-agent injects. Naming the property lets
+                                 that argLine late-bind it with @{jacocoArgLine} and keep both
+                                 agents. -->
                             <propertyName>jacocoArgLine</propertyName>
                             <!-- jsqlparser's generated token manager has a method too large to
                                  instrument (MethodTooLargeException at every testing-app JVM
