@@ -1,6 +1,7 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findConfigInfoProperty;
 import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvironmentPropertyValue;
 
@@ -11,6 +12,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.web.client.HttpClientErrorException;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -101,5 +103,21 @@ class ActuatorValuesIgnoreApplicationSettingsIT {
         assertThat(health.path("status").asString())
                 .as("health must be readable even though every endpoint is excluded from web exposure")
                 .isEqualTo("UP");
+    }
+
+    /**
+     * The contributor keeps the bean, not the mapping: {@code exclude=*} must still leave the
+     * application's own {@code /actuator/health} unreachable in the very context whose
+     * dashboard reads health above. Reachability is Boot's web filter's decision, and this is
+     * what would catch a Boot change that let the contributor's match leak into it.
+     */
+    @Test
+    void theApplicationsOwnHealthEndpointStaysOffTheWeb() {
+        assertThatThrownBy(() -> api.restClient()
+                        .get()
+                        .uri("/actuator/health")
+                        .retrieve()
+                        .toBodilessEntity())
+                .isInstanceOf(HttpClientErrorException.NotFound.class);
     }
 }
