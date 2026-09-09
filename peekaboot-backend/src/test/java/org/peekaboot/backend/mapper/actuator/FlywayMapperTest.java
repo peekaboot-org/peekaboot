@@ -103,4 +103,15 @@ class FlywayMapperTest {
         FlywayInfo result = mapper.map(null);
         assertThat(result.migrations()).isEmpty();
     }
+
+    /** A context without beans and a bean without migrations bind as empty; the tab shows nothing rather than failing. */
+    @Test
+    void absentBeansAndMigrationsReadAsNoMigrations() {
+        FlywayResponse flywayData = new FlywayResponse(Map.of(
+                "empty", new FlywayResponse.FlywayContext(null, null),
+                "application",
+                        new FlywayResponse.FlywayContext(Map.of("flyway", new FlywayResponse.FlywayBean(null)), null)));
+
+        assertThat(mapper.map(flywayData).migrations()).isEmpty();
+    }
 }

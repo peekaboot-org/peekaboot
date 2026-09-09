@@ -210,4 +210,58 @@ class ConfigMapperTest {
         ConfigInfo result = mapper.map(configprops, true);
         assertThat(result.groups().get(0).properties().get(0).value()).isEqualTo("secret123");
     }
+
+    /** A parent and a child context each bind the same prefix; the Config tab shows one group, not two. */
+    @Test
+    void map_shouldMergeBeansSharingAPrefixAcrossContexts() {
+        Map<String, ConfigPropsResponse.ConfigContext> contexts = new LinkedHashMap<>();
+        contexts.put(
+                "parent",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("port", "8080"))), null));
+        contexts.put(
+                "child",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", Map.of("address", "0.0.0.0"))),
+                        "parent"));
+
+        ConfigInfo result = mapper.map(new ConfigPropsResponse(contexts), false);
+
+        assertThat(result.groups()).hasSize(1);
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactlyInAnyOrder(tuple("port", "8080"), tuple("address", "0.0.0.0"));
+    }
+
+    @Test
+    void map_shouldKeepANullPropertyValueAsNull() {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        properties.put("address", null);
+        ConfigPropsResponse configprops = new ConfigPropsResponse(Map.of(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("server", new ConfigPropsResponse.ConfigBean("server", properties)), null)));
+
+        ConfigInfo result = mapper.map(configprops, false);
+
+        assertThat(result.groups().get(0).properties())
+                .extracting(ConfigProperty::key, ConfigProperty::value)
+                .containsExactly(tuple("address", null));
+    }
+
+    /** A context without beans and a bean without properties bind as empty; neither is an error. */
+    @Test
+    void map_shouldTreatAbsentBeansAndPropertiesAsEmpty() {
+        Map<String, ConfigPropsResponse.ConfigContext> contexts = new LinkedHashMap<>();
+        contexts.put("empty", new ConfigPropsResponse.ConfigContext(null, null));
+        contexts.put(
+                "application",
+                new ConfigPropsResponse.ConfigContext(
+                        Map.of("bare", new ConfigPropsResponse.ConfigBean("bare", null)), null));
+
+        ConfigInfo result = mapper.map(new ConfigPropsResponse(contexts), false);
+
+        assertThat(result.groups()).extracting(ConfigGroup::prefix).containsExactly("bare");
+        assertThat(result.groups().get(0).properties()).isEmpty();
+    }
 }
