@@ -15,9 +15,15 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.xpath.XPathExpressionException;
+import javax.xml.xpath.XPathFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.boot.SpringBootVersion;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
 
 /**
  * Build metadata both build systems need is declared once, in the poms, because
@@ -29,6 +35,10 @@ import org.springframework.boot.SpringBootVersion;
  * <p>The Spring Boot version is the one value still declared on both sides, because Dependabot
  * cannot group the two ecosystems into one pull request and a bump can land on one side alone.
  * That one is guarded by comparing the values instead.
+ *
+ * <p>The testing-app pom does not inherit {@code peekaboot-parent}, so it repeats the build
+ * instant, the JaCoCo version and the Spring Boot line by hand. Those copies are compared
+ * against the root pom the same way.
  */
 class BuildVersionLockstepTest {
 
@@ -62,6 +72,54 @@ class BuildVersionLockstepTest {
                 .as("project.build.outputTimestamp in the poms is the only build instant; "
                         + "release:prepare rewrites it and leaves any Gradle-side copy behind")
                 .isEmpty();
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppPinsTheSameBuildInstantAsTheRootPom() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/project.build.outputTimestamp",
+                "/project/properties/project.build.outputTimestamp",
+                "release:prepare rewrites the root pom's build instant; the testing-app copy moves by hand");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppPinsTheSameJacocoVersionAsTheRootPom() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/jacoco.version",
+                "/project/properties/jacoco.version",
+                "peekaboot-coverage merges the testing-app's execution data; both agents must agree");
+    }
+
+    @Test
+    @Timeout(10)
+    void testingAppParentsToTheSpringBootVersionTheRootPomImports() throws IOException {
+        assertTestingAppMatchesRoot(
+                "/project/properties/spring-boot.version",
+                "/project/parent/version",
+                "the testing-app's spring-boot-starter-parent must be the Boot line the root pom imports");
+    }
+
+    private void assertTestingAppMatchesRoot(String rootExpression, String testingAppExpression, String why)
+            throws IOException {
+        assertThat(pomValue(reactorRoot().resolve("peekaboot-testing-app/pom.xml"), testingAppExpression))
+                .as(why)
+                .isEqualTo(pomValue(reactorRoot().resolve("pom.xml"), rootExpression));
+    }
+
+    private String pomValue(Path pom, String expression) throws IOException {
+        try {
+            Document document =
+                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(pom.toFile());
+            String value = XPathFactory.newInstance().newXPath().evaluate(expression, document);
+            assertThat(value)
+                    .as("%s in %s", expression, reactorRoot().relativize(pom))
+                    .isNotBlank();
+            return value.strip();
+        } catch (ParserConfigurationException | SAXException | XPathExpressionException e) {
+            throw new IllegalStateException(pom + " is not a readable pom", e);
+        }
     }
 
     private List<String> gradleScriptsPinningAnInstant() throws IOException {
