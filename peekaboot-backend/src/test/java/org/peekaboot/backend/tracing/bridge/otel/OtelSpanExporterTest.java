@@ -104,8 +104,12 @@ class OtelSpanExporterTest {
         exporter.export(List.of(span1, span2, span3));
 
         assertThat(publishedEvents).hasSize(3);
-        assertThat(storage.getTrace(traceId1).orElseThrow().spans()).hasSize(2);
-        assertThat(storage.getTrace(traceId2).orElseThrow().spans()).hasSize(1);
+        assertThat(storedSpans(traceId1))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("aaaa000000000001", "aaaa000000000002");
+        assertThat(storedSpans(traceId2))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("aaaa000000000003");
     }
 
     /**

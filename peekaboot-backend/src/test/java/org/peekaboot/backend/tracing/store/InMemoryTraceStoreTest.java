@@ -217,7 +217,9 @@ class InMemoryTraceStoreTest {
             storage.addSpan(spanIn("trace-" + i, "span-" + i));
         }
 
-        assertThat(storage.getTraces(TraceBucket.ALL, 3)).hasSize(3);
+        assertThat(storage.getTraces(TraceBucket.ALL, 3))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("trace-4", "trace-3", "trace-2");
     }
 
     @Test
@@ -226,7 +228,9 @@ class InMemoryTraceStoreTest {
             storage.addSpan(errorSpan("trace-" + i));
         }
 
-        assertThat(storage.getTraces(TraceBucket.ERRORS, 3)).hasSize(3);
+        assertThat(storage.getTraces(TraceBucket.ERRORS, 3))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("trace-4", "trace-3", "trace-2");
     }
 
     @Test

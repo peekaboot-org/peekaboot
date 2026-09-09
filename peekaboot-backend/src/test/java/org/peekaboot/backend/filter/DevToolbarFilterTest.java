@@ -212,6 +212,18 @@ class DevToolbarFilterTest {
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
     }
 
+    /** A Content-Length counted in characters would cut a UTF-8 page short of its last bytes. */
+    @Test
+    void contentLengthCountsTheEncodedBytesOfAMultibyteBody() throws Exception {
+        chainWrites("text/html;charset=UTF-8", "<html><body>Käse €</body></html>");
+
+        filter.doFilter(request, response, chain);
+
+        byte[] body = response.getContentAsByteArray();
+        assertThat(body.length).isGreaterThan(new String(body, StandardCharsets.UTF_8).length());
+        assertThat(response.getContentLength()).isEqualTo(body.length);
+    }
+
     @Test
     void shouldHandleResponseWithoutBodyTag() throws Exception {
         request = get("/fragment");

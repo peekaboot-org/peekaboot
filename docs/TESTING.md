@@ -26,6 +26,11 @@
   each read the host through a package-private `Signals` record a test states outright. A test
   that computes its expected value with the same call the production code makes proves
   nothing; it gets a seam instead.
+- `Locale.setDefault` is JVM-global. `ApplicationReadyListenerTest` and `ByteFormatTest` set
+  it to prove a banner reads the same under any default, restore it in `finally`, and say so in
+  their Javadoc. That is safe only because `peekaboot-backend`'s surefire runs its classes one
+  at a time on one thread (the pom configures no parallelism). Turn parallel execution on for
+  that module and those two tests have to lose the global write first.
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
   holds `obj` weakly and samples turn NaN after a GC. Use `Gauge.builder(name, supplier)`, or
   keep the returned object in a field.

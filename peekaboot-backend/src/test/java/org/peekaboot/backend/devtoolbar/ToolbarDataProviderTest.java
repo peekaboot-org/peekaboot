@@ -59,11 +59,9 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldGenerateIdleModeJson() {
-        String json = provider.getIdleModeJson("/peekaboot");
+        JsonNode parsed = PeekabootJson.MAPPER.readTree(provider.getIdleModeJson("/peekaboot"));
 
-        assertThat(json).startsWith("{");
-        assertThat(json).endsWith("}");
-        assertThat(json).contains("\"idle\":true");
-        assertThat(json).contains("\"basePath\":\"/peekaboot\"");
+        assertThat(parsed.path("idle").asBoolean()).isTrue();
+        assertThat(parsed.path("basePath").asString()).isEqualTo("/peekaboot");
     }
 }
