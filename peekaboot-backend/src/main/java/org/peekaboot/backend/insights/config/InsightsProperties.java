@@ -201,6 +201,11 @@ public class InsightsProperties {
             this.interval = interval;
         }
 
+        /** The interval as the rings, the snapshot and the API carry it. */
+        public long intervalMillis() {
+            return interval.toMillis();
+        }
+
         public int getSize() {
             return size;
         }

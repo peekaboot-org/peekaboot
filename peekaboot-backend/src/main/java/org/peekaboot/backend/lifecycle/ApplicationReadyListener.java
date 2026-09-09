@@ -97,10 +97,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
     private void appendBuildInfo(StringBuilder report) {
 
-        String info = buildInfoProvider.isBuildInfoAvailable()
-                ? buildInfoProvider.getFormattedInfo()
-                : "Build information not available";
-        LifecycleBanner.line(report, " Application Info: " + info);
+        LifecycleBanner.line(report, " Application Info: " + buildInfoProvider.getFormattedInfo());
     }
 
     private void appendSystemInfo(StringBuilder report) {

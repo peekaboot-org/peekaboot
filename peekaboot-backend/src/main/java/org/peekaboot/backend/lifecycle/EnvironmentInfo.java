@@ -1,9 +1,9 @@
 package org.peekaboot.backend.lifecycle;
 
-import java.util.Arrays;
 import java.util.List;
 import org.springframework.core.env.Environment;
 
+/** The profiles line of the ready banner. */
 public class EnvironmentInfo {
 
     private final Environment environment;
@@ -12,21 +12,10 @@ public class EnvironmentInfo {
         this.environment = environment;
     }
 
-    public List<String> getActiveProfiles() {
-        String[] activeProfiles = environment.getActiveProfiles();
-        if (activeProfiles != null && activeProfiles.length > 0) {
-            return Arrays.asList(activeProfiles);
-        }
-        return getDefaultProfiles();
-    }
-
-    public List<String> getDefaultProfiles() {
-        String[] defaultProfiles = environment.getDefaultProfiles();
-        return defaultProfiles != null ? Arrays.asList(defaultProfiles) : List.of();
-    }
-
+    /** The active profiles, or the default ones when none is active, since those are what Spring then runs. */
     public String getActiveProfilesAsString() {
-        List<String> profiles = getActiveProfiles();
+        String[] active = environment.getActiveProfiles();
+        List<String> profiles = List.of(active.length > 0 ? active : environment.getDefaultProfiles());
         return profiles.isEmpty() ? "none" : String.join(", ", profiles);
     }
 }
