@@ -54,7 +54,7 @@ class DevToolbarAutoConfigurationTest {
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
-    void shouldCreateBeansWhenDevToolbarEnabled() {
+    void createsBeansWhenDevToolbarEnabled() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
@@ -119,7 +119,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenDevToolbarDisabled() {
+    void doesNotCreateBeansWhenDevToolbarDisabled() {
         contextRunner.withPropertyValues("peekaboot.dev-toolbar=false").run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
             assertThat(context).doesNotHaveBean("devToolbarFilter");
@@ -127,7 +127,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenDevToolbarPropertyMissing() {
+    void doesNotCreateBeansWhenDevToolbarPropertyMissing() {
         contextRunner.run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
             assertThat(context).doesNotHaveBean("devToolbarFilter");
@@ -153,7 +153,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateFilterBeansWhenTracerBeanMissing() {
+    void doesNotCreateFilterBeansWhenTracerBeanMissing() {
         // TraceStore is on the classpath and present as a bean, but no Tracer
         // bean exists: devToolbarFilter/requestCaptureFilter's
         // @ConditionalOnBean(Tracer.class) must keep them unregistered, while
@@ -357,7 +357,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateLogbackRegistrarWhenLogbackMissing() {
+    void doesNotCreateLogbackRegistrarWhenLogbackMissing() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)

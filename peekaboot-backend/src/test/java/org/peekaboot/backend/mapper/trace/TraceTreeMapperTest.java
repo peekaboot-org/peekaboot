@@ -30,7 +30,7 @@ class TraceTreeMapperTest {
     private final TraceTreeMapper mapper = new TraceTreeMapper(new MaskingEngine());
 
     @Test
-    void map_shouldBuildTreeFromFlatSpans() {
+    void buildsATreeFromFlatSpans() {
         // A trace with root -> child1 -> grandchild, and root -> child2
         var rootSpan = span("span-root")
                 .named("root-op")
@@ -79,7 +79,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldAttachOrphanSubtreesToRoot() {
+    void attachesOrphanSubtreesToRoot() {
         // Spans can arrive before their parent is exported; a subtree whose
         // parent is missing must not silently vanish from the tree.
         var root =
@@ -111,7 +111,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldIdentifyRootSpanWithNullParentId() {
+    void identifiesRootSpanWithNullParentId() {
         var rootSpan = span("root-id")
                 .named("root-op")
                 .kind(Span.Kind.SERVER)
@@ -134,7 +134,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldKeepTagsOnEachSpan() {
+    void keepsTagsOnEachSpan() {
         // Parent span with two children, each with their own tags
         var parent = span("parent")
                 .named("parent-op")
@@ -173,7 +173,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldMaskASensitiveShapedTagValue() {
+    void masksASensitiveShapedTagValue() {
         var root = span("root")
                 .named("root-op")
                 .kind(Span.Kind.SERVER)
@@ -189,7 +189,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldNotMaskOrdinaryTagsLikeHttpMethod() {
+    void doesNotMaskOrdinaryTagsLikeHttpMethod() {
         var root = span("root")
                 .named("root-op")
                 .kind(Span.Kind.SERVER)
@@ -206,7 +206,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldApplyValuePatternRulesToATagValueUnderAnInnocuousKey() {
+    void appliesValuePatternRulesToATagValueUnderAnInnocuousKey() {
         var root = span("root")
                 .named("root-op")
                 .kind(Span.Kind.SERVER)
@@ -222,7 +222,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldCalculateTraceSummary() {
+    void calculatesTheTraceSummary() {
         // A trace with DB queries and HTTP calls
         var root = span("root")
                 .named("GET /api/users")
@@ -261,7 +261,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldCalculateTraceSummary_withJdbcQueryTags() {
+    void calculatesTheTraceSummaryFromJdbcQueryTags() {
         // A trace with datasource-proxy/Micrometer style jdbc.query tags
         var root = span("root")
                 .named("http get /")
@@ -299,7 +299,7 @@ class TraceTreeMapperTest {
      * mixing every span shape the JDBC instrumentations emit reports one number, not three.
      */
     @Test
-    void map_countsExactlyTheSpansTheQueriesTabListsAndTheIssueDetectorInspects() {
+    void countsExactlyTheSpansTheQueriesTabListsAndTheIssueDetectorInspects() {
         var root = span("root")
                 .named("GET /orders")
                 .kind(Span.Kind.SERVER)
@@ -371,7 +371,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_putsTheMaskedStatementOnQuerySpansOnly() {
+    void putsTheMaskedStatementOnQuerySpansOnly() {
         var root = span("root")
                 .named("GET /orders")
                 .kind(Span.Kind.SERVER)
@@ -405,7 +405,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldCountErrors() {
+    void countsErrors() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
         var errorSpan = span("error")
@@ -428,7 +428,7 @@ class TraceTreeMapperTest {
     // message can itself carry a credential, e.g. an HTTP client exception that echoes the
     // failing request's URL back with a query-string API key attached.
     @Test
-    void map_shouldMaskACredentialEmbeddedInTheSpanErrorMessage() {
+    void masksACredentialEmbeddedInTheSpanErrorMessage() {
         var root =
                 span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
         var errorSpan = span("error")
@@ -450,7 +450,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldHandleEmptyTrace() {
+    void mapsAnEmptyTraceToARootlessTree() {
         var traceData = new TraceData("trace1", null, null, null, List.of(), false);
 
         TraceTree result = mapper.map(traceData);
@@ -464,7 +464,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldHandleSingleSpanTrace() {
+    void mapsASingleSpanTrace() {
         var singleSpan = span("only-span")
                 .named("single-op")
                 .kind(Span.Kind.SERVER)
@@ -484,7 +484,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_reportsNotTruncatedForATraceTheCapNeverTouched() {
+    void reportsNotTruncatedForATraceTheCapNeverTouched() {
         var singleSpan = span("only-span")
                 .named("single-op")
                 .kind(Span.Kind.SERVER)
@@ -497,7 +497,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_carriesTheTruncatedFlagOffTheSnapshot() {
+    void carriesTheTruncatedFlagOffTheSnapshot() {
         var singleSpan = span("only-span")
                 .named("single-op")
                 .kind(Span.Kind.SERVER)
@@ -512,7 +512,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_carriesTheTruncatedFlagEvenForAnEmptyTrace() {
+    void carriesTheTruncatedFlagEvenForAnEmptyTrace() {
         var traceData = new TraceData("trace1", null, null, null, List.of(), true);
 
         TraceTree result = mapper.map(traceData);
@@ -521,7 +521,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldConvertTimesToMilliseconds() {
+    void convertsTimesToMilliseconds() {
         var baseTime = Instant.parse("2024-01-15T10:00:00Z");
         var span = span("span1")
                 .kind(Span.Kind.SERVER)
@@ -539,7 +539,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldSetSpanStatusBasedOnError() {
+    void setsSpanStatusBasedOnError() {
         var okSpan = span("ok").named("ok-op").kind(Span.Kind.SERVER).at(0, 100).build();
         var errorChild = span("error")
                 .parent("ok")
@@ -558,7 +558,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldHandleOrphanSpans() {
+    void attachesOrphanSpansToTheRoot() {
         // A span whose parent doesn't exist in the trace (orphan)
         var orphan = span("orphan")
                 .parent("missing-parent")
@@ -591,8 +591,7 @@ class TraceTreeMapperTest {
      */
     @ParameterizedTest(name = "{0} kind with tags {1} -> {2}")
     @MethodSource("rootActionTypeGrid")
-    void map_shouldClassifyRootActionTypeFromKindAndTags(
-            Span.Kind kind, Map<String, String> tags, RootActionType expected) {
+    void classifiesRootActionTypeFromKindAndTags(Span.Kind kind, Map<String, String> tags, RootActionType expected) {
         var rootSpan =
                 span("root").named("root-op").kind(kind).at(0, 100).tags(tags).build();
 
@@ -638,7 +637,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldDetectScheduledJobRootActionTypeFromScheduledTaskTags() {
+    void detectsScheduledJobRootActionTypeFromScheduledTaskTags() {
         // The shape Spring's DefaultScheduledTaskObservationConvention actually produces:
         // no Span.Kind (it isn't a Sender/Receiver-style context) plus the code.function/
         // code.namespace low-cardinality tag pair.
@@ -658,7 +657,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldNotDetectScheduledJobFromNameAloneWithoutTags() {
+    void doesNotDetectScheduledJobFromNameAloneWithoutTags() {
         // A bean that merely happens to have "job" in its name must not be misclassified;
         // detection is tag-only. No scheduled-task tags -> falls through to the SERVER
         // default (HTTP_REQUEST), same as any other untagged SERVER-kind root span.
@@ -676,7 +675,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldNotDetectScheduledJobFromPartialTagPair() {
+    void doesNotDetectScheduledJobFromPartialTagPair() {
         // Both code.function and code.namespace must be present; code.function alone is not
         // enough (it's a generic low-cardinality key other conventions could also set).
         var rootSpan = span("root")
@@ -693,7 +692,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldNotDetectScheduledJobFromCodeTagsOnAServerKindRoot() {
+    void doesNotDetectScheduledJobFromCodeTagsOnAServerKindRoot() {
         // Scheduled-task detection is deliberately confined to the kind-less path, because
         // that is the only shape Spring's convention produces. code.function/code.namespace
         // are ordinary OTel source-code attributes any instrumentation may set, so on a
@@ -721,7 +720,7 @@ class TraceTreeMapperTest {
      * {@code http.url} carries the request URI and is the path worth showing.
      */
     @Test
-    void map_shouldExtractRequestSummaryFromSpringsDefaultObservationTags() {
+    void extractsRequestSummaryFromSpringsDefaultObservationTags() {
         var root = span("root")
                 .named("http get /api/users/{id}")
                 .kind(Span.Kind.SERVER)
@@ -746,7 +745,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldMapSpanEventsFromNonEmptyEventsList() {
+    void mapsSpanEventsFromNonEmptyEventsList() {
         var eventTime = Instant.parse("2024-01-15T10:00:00.500Z");
         var span = span("span1")
                 .kind(Span.Kind.SERVER)
@@ -770,7 +769,7 @@ class TraceTreeMapperTest {
      * - no {@code db.*}, no {@code jdbc.query[N]}.
      */
     @Test
-    void map_shouldClassifyAStandaloneConnectionSpanAsConnectionPool() {
+    void classifiesAStandaloneConnectionSpanAsConnectionPool() {
         var rootSpan = jdbcConnection("root").build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
@@ -787,7 +786,7 @@ class TraceTreeMapperTest {
      * CONNECTION_POOL names.
      */
     @Test
-    void map_shouldNotClassifyAConnectionSpanWithAnUnexportedParentAsConnectionPool() {
+    void doesNotClassifyAConnectionSpanWithAnUnexportedParentAsConnectionPool() {
         var connectionSpan =
                 jdbcConnection("child").parent("root-span-never-exported").build();
 
@@ -797,7 +796,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldKeepAQueryRootCarryingPoolTagsAsDatabase() {
+    void keepsAQueryRootCarryingPoolTagsAsDatabase() {
         // In a HikariCP app every datasource observation gets jdbc.datasource.* added
         // (HikariJdbcObservationFilter tags query contexts too) - db.* still marks this
         // root as real database work, not pool maintenance.
@@ -817,7 +816,7 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldNotClassifyAConnectionNamedSpanWithoutDatasourceTagsAsConnectionPool() {
+    void doesNotClassifyAConnectionNamedSpanWithoutDatasourceTagsAsConnectionPool() {
         // The name only counts together with the jdbc.datasource.* tags the
         // datasource-micrometer convention sets - a bare span that happens to share the
         // name says nothing about what started the trace.

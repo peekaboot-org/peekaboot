@@ -67,7 +67,7 @@ class DevToolbarFilterTest {
                 "/peekaboot/ui/dashboard/index.html",
                 "/error"
             })
-    void shouldSkipExcludedPaths(String path) throws Exception {
+    void skipsExcludedPaths(String path) throws Exception {
         request = get(path);
 
         filter.doFilter(request, response, chain);
@@ -79,7 +79,7 @@ class DevToolbarFilterTest {
     @ValueSource(
             strings = {".css", ".js", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot"
             })
-    void shouldSkipStaticFileExtensions(String extension) throws Exception {
+    void skipsStaticFileExtensions(String extension) throws Exception {
         request = get("/app/file" + extension);
 
         filter.doFilter(request, response, chain);
@@ -88,7 +88,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldSkipAjaxRequests() throws Exception {
+    void skipsAjaxRequests() throws Exception {
         request.addHeader("X-Requested-With", "XMLHttpRequest");
 
         filter.doFilter(request, response, chain);
@@ -102,7 +102,7 @@ class DevToolbarFilterTest {
      * is also what keeps a {@code /x/../peekaboot/...} spelling from slipping past.
      */
     @Test
-    void shouldSkipPeekabootPathsBehindAContextPath() throws Exception {
+    void skipsPeekabootPathsBehindAContextPath() throws Exception {
         request.setContextPath("/app");
         request.setRequestURI("/app/peekaboot/ui/dashboard/index.html");
         request.setServletPath("/peekaboot/ui/dashboard/index.html");
@@ -114,7 +114,7 @@ class DevToolbarFilterTest {
 
     /** Every URL the bar carries - script, sheets, links, API base - has to sit behind the context path. */
     @Test
-    void shouldPrefixTheBarsUrlsWithTheContextPath() throws Exception {
+    void prefixesTheBarsUrlsWithTheContextPath() throws Exception {
         request.setContextPath("/app");
         request.setRequestURI("/app/users/123");
         request.setServletPath("/users/123");
@@ -130,7 +130,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldSkipNonHtmlResponses() throws Exception {
+    void skipsNonHtmlResponses() throws Exception {
         request = get("/api/users");
         chainWrites("application/json", "{\"id\":1}");
 
@@ -156,7 +156,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldInjectToolbarIntoHtmlResponse() throws Exception {
+    void injectsToolbarIntoHtmlResponse() throws Exception {
         chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
 
         filter.doFilter(request, response, chain);
@@ -170,7 +170,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldResolveTraceIdFromCurrentSpanWhenPresent() throws Exception {
+    void resolvesTraceIdFromCurrentSpanWhenPresent() throws Exception {
         Span span = mock(Span.class);
         TraceContext context = mock(TraceContext.class);
         when(context.traceId()).thenReturn("abc123traceid");
@@ -185,7 +185,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldInjectBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
+    void injectsBeforeBodyTagDespiteLengthChangingLowercase() throws Exception {
         // 'İ' (U+0130) lowercases to two characters; the </body> index must be
         // computed on the original string, not a lowercased copy
         chainWrites("text/html;charset=UTF-8", "<html><BODY>İİİ</BODY></html>");
@@ -200,7 +200,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldPreserveResponseCharsetWhenInjecting() throws Exception {
+    void preservesResponseCharsetWhenInjecting() throws Exception {
         chainWrites("text/html;charset=ISO-8859-1", "<html><body>Käse</body></html>");
 
         filter.doFilter(request, response, chain);
@@ -224,7 +224,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldHandleResponseWithoutBodyTag() throws Exception {
+    void leavesAResponseWithoutABodyTagAlone() throws Exception {
         request = get("/fragment");
         String htmlFragment = "<div>Just a fragment</div>";
         chainWritesHtml(htmlFragment);
@@ -270,7 +270,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldHandleToolbarGenerationError() throws Exception {
+    void servesTheOriginalPageWhenTheToolbarCannotBeGenerated() throws Exception {
         // ToolbarDataProvider is a plain, real class with no injectable failure point;
         // a locally-scoped mock is needed here to force the error path this test targets.
         ToolbarDataProvider throwingProvider = mock(ToolbarDataProvider.class);
@@ -299,7 +299,7 @@ class DevToolbarFilterTest {
      * table; the buffer is dropped and the exception left to the container instead.
      */
     @Test
-    void shouldNotCommitAPartialPageWhenTheChainThrows() throws Exception {
+    void doesNotCommitAPartialPageWhenTheChainThrows() throws Exception {
         doAnswer(invocation -> {
                     ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
                     wrapper.setContentType("text/html");
@@ -417,7 +417,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldPassthroughAsyncResponsesWithoutInjection() throws Exception {
+    void passesAsyncResponsesThroughWithoutInjection() throws Exception {
         request = get("/sse/stream");
         request.setAsyncStarted(true);
 
@@ -434,7 +434,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldStreamNonHtmlResponsesDuringRequest() throws Exception {
+    void streamsNonHtmlResponsesDuringRequest() throws Exception {
         request = get("/api/stream");
         doAnswer(invocation -> {
                     ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
@@ -454,7 +454,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldInjectIdleModeToolbarForSwaggerUi() throws Exception {
+    void injectsIdleModeToolbarForSwaggerUi() throws Exception {
         request = get("/swagger-ui/index.html");
         chainWritesHtml("<html><body><div id=\"swagger-ui\"></div></body></html>");
 
@@ -472,7 +472,7 @@ class DevToolbarFilterTest {
      * {@code /admin/swagger-ui/**}); the filter's idle-mode check has to follow it there.
      */
     @Test
-    void shouldFollowACustomisedSwaggerUiPathIntoIdleMode() throws Exception {
+    void followsACustomisedSwaggerUiPathIntoIdleMode() throws Exception {
         DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
         request = get("/admin/swagger-ui/index.html");
         chainWritesHtml("<html><body><div id=\"swagger-ui\"></div></body></html>");
@@ -484,7 +484,7 @@ class DevToolbarFilterTest {
 
     /** With the UI moved elsewhere, the default location is a regular page again. */
     @Test
-    void shouldNotUseIdleModeOnTheDefaultPathOnceTheSwaggerUiPathIsCustomised() throws Exception {
+    void doesNotUseIdleModeOnTheDefaultPathOnceTheSwaggerUiPathIsCustomised() throws Exception {
         DevToolbarFilter customised = new DevToolbarFilter(toolbarDataProvider, tracer, "/admin/docs.html");
         request = get("/swagger-ui/index.html");
         chainWritesHtml("<html><body></body></html>");
@@ -520,7 +520,7 @@ class DevToolbarFilterTest {
     }
 
     @Test
-    void shouldNotUseIdleModeForRegularPages() throws Exception {
+    void doesNotUseIdleModeForRegularPages() throws Exception {
         chainWritesHtml("<html><body></body></html>");
 
         filter.doFilter(request, response, chain);
