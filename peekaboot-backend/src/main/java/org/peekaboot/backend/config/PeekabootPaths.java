@@ -52,7 +52,7 @@ public final class PeekabootPaths {
             prefixes.add(managementPrefix);
         }
         this.excludedPrefixes = Set.copyOf(prefixes);
-        this.contextPath = normalisedContextPath(contextPath);
+        this.contextPath = normaliseContextPath(contextPath);
     }
 
     /** The exclusions at Spring Boot's defaults - {@code /actuator}, root context path - for plain construction in tests. */
@@ -60,14 +60,21 @@ public final class PeekabootPaths {
         return new PeekabootPaths(DEFAULT_MANAGEMENT_BASE_PATH, "");
     }
 
-    /** {@code /app} as a strippable prefix, tolerating the trailing-slash and bare-root spellings a property can carry. */
-    private static String normalisedContextPath(String contextPath) {
+    /**
+     * {@code /app} as a strippable prefix, tolerating the trailing-slash and bare-root
+     * spellings a {@code server.servlet.context-path} property can carry. Static, so the
+     * lifecycle banner can use it in an application that has no {@code PeekabootPaths} bean.
+     */
+    public static String normaliseContextPath(String contextPath) {
         String path = contextPath == null ? "" : contextPath.strip();
         if (path.isEmpty() || "/".equals(path)) {
             return "";
         }
         path = path.startsWith("/") ? path : "/" + path;
-        return path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
+        while (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return path;
     }
 
     /**

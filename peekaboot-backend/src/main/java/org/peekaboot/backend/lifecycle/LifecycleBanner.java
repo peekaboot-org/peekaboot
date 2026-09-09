@@ -24,6 +24,11 @@ final class LifecycleBanner {
                 .append("\n");
     }
 
+    /** One line of the report, closed by the rule that separates it from the next. */
+    static void line(StringBuilder report, String text) {
+        report.append(text).append("\n").append(LINE).append("\n");
+    }
+
     static void close(StringBuilder report) {
         report.append(SEPARATOR);
     }

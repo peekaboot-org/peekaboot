@@ -224,14 +224,13 @@ public class TraceTreeMapper {
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
-        long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
         return new SpanNode(
                 spanData.spanId(),
                 spanData.name(),
                 spanData.kind(),
                 startTimeMs,
-                durationMs,
+                spanData.durationMs(),
                 status,
                 children,
                 maskedTags(spanData),
@@ -277,7 +276,7 @@ public class TraceTreeMapper {
             if (span.hasError()) {
                 errorCount++;
             }
-            long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
+            long durationMs = span.durationMs();
             totalDurationMs += durationMs;
             if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
