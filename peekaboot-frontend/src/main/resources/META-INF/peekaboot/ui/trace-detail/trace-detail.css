@@ -58,7 +58,6 @@
 
 .pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: var(--pk-text-base); }
 .pk-overlay__duration--slow { color: var(--pk-warning-text); }
-.pk-overlay__duration--very-slow { color: var(--pk-danger); }
 
 .pk-overlay__close {
     background: transparent;

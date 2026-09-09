@@ -10,7 +10,6 @@
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
  */
 import {escapeHtml} from '../shared/markup.js';
-import {durationSeverity} from '../shared/severity.js';
 import {formatCount, formatDurationMs} from '../shared/format.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
@@ -233,7 +232,10 @@ function headerHtml(trace, display) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-    const durationClass = durationSeverity(trace.durationMs, display.features);
+    // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
+    // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
+    // trace's total would call a 120 ms request slow here while the list did not.
+    const durationClass = trace.slow ? 'slow' : '';
 
     const queryCount = (trace.queries || []).length;
     const logCount = (trace.logs || []).length;
@@ -251,6 +253,7 @@ function headerHtml(trace, display) {
                 <div class="pk-overlay__meta">
                     <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
                     ${badgeHtml(statusLabel(status), statusVariant(status))}
+                    ${trace.slow ? badgeHtml('SLOW', 'warn') : ''}
                     <span>${formatCount(spanCount, 'span')}</span>
                     <span>${formatCount(queryCount, 'query', 'queries')}</span>
                     <span>${formatCount(logCount, 'log')}</span>

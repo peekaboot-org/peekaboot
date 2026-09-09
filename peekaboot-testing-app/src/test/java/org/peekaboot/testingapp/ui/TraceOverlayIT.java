@@ -25,6 +25,8 @@ import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -951,5 +953,45 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         .doubleValue())
                 .as("the track keeps a usable width")
                 .isGreaterThan(40.0);
+    }
+
+    /**
+     * Serves the toolbar's current trace with its trace-level {@code slow} flag and total
+     * duration replaced, so the header can be driven through both verdicts on one real trace.
+     */
+    private void openOverlayWithTracePatched(boolean slow, long durationMs) {
+        page.route("**/api/traces/*/insights", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode trace = (ObjectNode) JsonMapper.builder().build().readTree(response.text());
+            trace.put("slow", slow).put("durationMs", durationMs);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
+        });
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-overlay__meta");
+        page.unroute("**/api/traces/*/insights");
+    }
+
+    /**
+     * The header's SLOW marking is the backend's per-trace verdict ({@code trace.slow}: some
+     * span carries a SLOW or VERY_SLOW issue), the very flag the Traces tab's badge reads.
+     * Applying the span thresholds to the trace's total instead called a 120 ms request slow
+     * in the header while the list beside it did not, and a 5 s trace with no slow span
+     * (the toolbar's own fetch ladder, say) the other way round.
+     */
+    @Test
+    void headerSlowMarkingFollowsTheBackendsVerdict() {
+        openPersonsPage();
+        toolbar.traceId();
+
+        openOverlayWithTracePatched(true, 5);
+        assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");
+        assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
+                .contains("slow");
+
+        openOverlayWithTracePatched(false, 5000);
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__meta .pk-badge--warn')"))
+                .isFalse();
+        assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
+                .doesNotContain("slow");
     }
 }
