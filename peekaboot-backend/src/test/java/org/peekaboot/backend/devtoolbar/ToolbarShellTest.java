@@ -153,9 +153,7 @@ class ToolbarShellTest {
     void theNoticeTooltipCoversTheGateAndTheBlockedScript() {
         String html = shell.render(BASE_PATH, DATA_JSON);
 
-        assertThat(html)
-                .contains("title=\"The toolbar's script or data did not load — "
-                        + "an authorization gate or a strict Content-Security-Policy usually explains it.\"");
+        assertThat(html).containsPattern("<a [^>]*title=\"[^\"]*authorization[^\"]*Content-Security-Policy[^\"]*\"");
     }
 
     /** The sheets carry their design rationale as comments; no host page needs to download them. */

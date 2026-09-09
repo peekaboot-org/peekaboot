@@ -12,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
+import org.peekaboot.backend.domain.trace.HttpExchange;
+import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -447,10 +449,10 @@ class TraceInsightsServiceTest {
 
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
-        assertThat(result).isPresent();
-        assertThat(result.get().httpExchange()).isNotNull();
-        assertThat(result.get().httpExchange().request().method()).isEqualTo("GET");
-        assertThat(result.get().httpExchange().response().status()).isEqualTo(200);
+        HttpExchange exchange = result.orElseThrow().httpExchange();
+        assertThat(exchange.request().path()).isEqualTo("/users");
+        assertThat(exchange.request().controller()).isEqualTo(new HttpRequest.Controller("UserController", "list"));
+        assertThat(exchange.response().status()).isEqualTo(200);
     }
 
     @Test

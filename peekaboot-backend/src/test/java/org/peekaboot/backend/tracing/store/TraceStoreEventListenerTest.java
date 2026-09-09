@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
 import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 
@@ -41,10 +42,11 @@ class TraceStoreEventListenerTest {
 
     @Test
     void onRequestCompleted_forwardsRequestToStore() {
-        listener.onRequestCompleted(RequestCompletedEvents.minimal("trace1"));
+        RequestCompletedEvent event = RequestCompletedEvents.minimal("trace1");
 
-        assertThat(store.getTrace("trace1")).isPresent();
-        assertThat(store.getTrace("trace1").get().request()).isNotNull();
+        listener.onRequestCompleted(event);
+
+        assertThat(store.getTrace("trace1").orElseThrow().request()).isSameAs(event);
     }
 
     @Test
