@@ -20,7 +20,7 @@ class DataSourceMapperTest {
     private final DataSourceMapper mapper = new DataSourceMapper(new MaskingEngine());
 
     @Test
-    void map_shouldMaskSensitiveProperties() {
+    void masksSensitiveProperties() {
         DataSourceMetadata metadata = metadata(
                 "ds",
                 DatabaseProduct.H2,
@@ -35,7 +35,7 @@ class DataSourceMapperTest {
     }
 
     @Test
-    void map_shouldAggregateHealthStatus() {
+    void aggregatesHealthStatus() {
         DataSourceMetadata metadata = metadata("primaryDS");
 
         HealthResponse health =
@@ -51,7 +51,7 @@ class DataSourceMapperTest {
      * aggregate - otherwise one DataSource being down marks both rows down.
      */
     @Test
-    void map_shouldReadEachDataSourcesOwnStatusFromInsideACompositeDb() {
+    void readsEachDataSourcesOwnStatusFromInsideACompositeDb() {
         HealthResponse health = new HealthResponse(
                 "DOWN",
                 Map.of(
@@ -72,7 +72,7 @@ class DataSourceMapperTest {
 
     /** A DataSource the composite does not know (a bean Spring's indicator skipped) gets the composite's status. */
     @Test
-    void map_shouldFallBackToTheCompositesStatusForADataSourceWithoutItsOwnChild() {
+    void fallsBackToTheCompositesStatusForADataSourceWithoutItsOwnChild() {
         HealthResponse health = new HealthResponse(
                 "UP",
                 Map.of(
@@ -89,27 +89,27 @@ class DataSourceMapperTest {
 
     /** The health endpoint may be off; the row then says unknown rather than guessing UP. */
     @Test
-    void map_reportsUnknownHealthWithoutAHealthResponse() {
+    void reportsUnknownHealthWithoutAHealthResponse() {
         List<DataSourceInfo> result = mapper.map(List.of(metadata("ds")), null, false);
 
         assertThat(result).extracting(DataSourceInfo::health).containsExactly(HealthStatus.UNKNOWN);
     }
 
     @Test
-    void map_shouldHandleEmptyList() {
+    void mapsAnEmptyListToNoDataSources() {
         List<DataSourceInfo> result = mapper.map(List.of(), null, false);
         assertThat(result).isEmpty();
     }
 
     @Test
-    void map_shouldHandleNullList() {
+    void mapsANullListToNoDataSources() {
         List<DataSourceInfo> result = mapper.map(null, null, false);
         assertThat(result).isEmpty();
     }
 
     /** The product comes from the parsed JDBC URL, which DataSourceMetadata already carries. */
     @Test
-    void map_carriesTheDatabaseProductOfTheJdbcUrl() {
+    void carriesTheDatabaseProductOfTheJdbcUrl() {
         DataSourceMetadata metadata = metadata("ds", DatabaseProduct.POSTGRESQL, Map.of());
 
         List<DataSourceInfo> result = mapper.map(List.of(metadata), null, false);
@@ -118,7 +118,7 @@ class DataSourceMapperTest {
     }
 
     @Test
-    void map_shouldReturnRealValueWhenUnmaskIsTrue() {
+    void returnsRealValueWhenUnmaskIsTrue() {
         DataSourceMetadata metadata = metadata(
                 "ds", DatabaseProduct.H2, Map.of("password", new JdbcProperty(PropertySource.QUERY, "secret123")));
 

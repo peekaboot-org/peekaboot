@@ -29,7 +29,7 @@ class FlywayMapperTest {
     }
 
     @Test
-    void map_shouldExtractMigrations() {
+    void extractsMigrations() {
         FlywayResponse flywayData = flyway(
                 new FlywayResponse.Migration(
                         "Initial schema",
@@ -84,7 +84,7 @@ class FlywayMapperTest {
      * version overflowed int and sorted first, and repeatables (no version) moved to the front.
      */
     @Test
-    void map_keepsFlywaysOwnMigrationOrder() {
+    void keepsFlywaysOwnMigrationOrder() {
         FlywayResponse flywayData = flyway(
                 migration("Second", "SUCCESS", "2.0"),
                 migration("Tenth", "SUCCESS", "10.0"),
@@ -99,7 +99,7 @@ class FlywayMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullInput() {
+    void mapsANullResponseToNoMigrations() {
         FlywayInfo result = mapper.map(null);
         assertThat(result.migrations()).isEmpty();
     }

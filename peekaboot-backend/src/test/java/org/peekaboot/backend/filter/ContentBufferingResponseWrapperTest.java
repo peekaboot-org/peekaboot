@@ -36,7 +36,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldBufferOutputStreamContent() throws IOException {
+    void buffersOutputStreamContent() throws IOException {
         ServletOutputStream outputStream = wrapper.getOutputStream();
         outputStream.write("Hello World".getBytes(StandardCharsets.UTF_8));
 
@@ -46,7 +46,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldBufferWriterContent() throws IOException {
+    void buffersWriterContent() throws IOException {
         PrintWriter writer = wrapper.getWriter();
         writer.write("Hello Writer");
         writer.flush();
@@ -78,7 +78,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldCopyBufferedContentToOriginalResponse() throws IOException {
+    void copiesBufferedContentToOriginalResponse() throws IOException {
         wrapper.getWriter().write("Buffered Content");
         wrapper.flushBuffer();
         wrapper.copyBodyToResponse();
@@ -89,7 +89,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldCopyModifiedContentToResponse() throws IOException {
+    void copiesModifiedContentToResponse() throws IOException {
         byte[] modifiedContent = "Modified Content".getBytes(StandardCharsets.UTF_8);
         wrapper.copyBodyToResponse(modifiedContent);
 
@@ -99,7 +99,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldPreventGetWriterAfterGetOutputStream() throws IOException {
+    void preventsGetWriterAfterGetOutputStream() throws IOException {
         wrapper.getOutputStream();
 
         assertThatThrownBy(() -> wrapper.getWriter())
@@ -108,7 +108,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldPreventGetOutputStreamAfterGetWriter() throws IOException {
+    void preventsGetOutputStreamAfterGetWriter() throws IOException {
         wrapper.getWriter();
 
         assertThatThrownBy(() -> wrapper.getOutputStream())
@@ -117,7 +117,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldReturnSameOutputStreamOnMultipleCalls() throws IOException {
+    void returnsTheSameOutputStreamOnEveryCall() throws IOException {
         ServletOutputStream first = wrapper.getOutputStream();
         ServletOutputStream second = wrapper.getOutputStream();
 
@@ -125,7 +125,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldReturnSameWriterOnMultipleCalls() throws IOException {
+    void returnsTheSameWriterOnEveryCall() throws IOException {
         PrintWriter first = wrapper.getWriter();
         PrintWriter second = wrapper.getWriter();
 
@@ -133,7 +133,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldResetBuffer() throws IOException {
+    void resetBufferClearsTheBufferedBody() throws IOException {
         wrapper.getWriter().write("Initial Content");
         wrapper.flushBuffer();
         wrapper.resetBuffer();

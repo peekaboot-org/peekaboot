@@ -37,7 +37,7 @@ class IssueDetectorTest {
     /** One span past exactly one rule: the issue carries that rule's type, severity and wording. */
     @ParameterizedTest
     @MethodSource("spansPastOneThreshold")
-    void detectIssues_shouldRaiseTheOneIssueASpanTrips(SpanNode span, SpanIssue expected) {
+    void raisesTheOneIssueASpanTrips(SpanNode span, SpanIssue expected) {
         TraceTree result = detector.detectIssues(tree(span).build());
 
         assertThat(result.rootSpan().issues()).containsExactly(expected);
@@ -76,7 +76,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldUseErrorMessageFromSpanAttributeIfAvailable() {
+    void usesErrorMessageFromSpanAttributeIfAvailable() {
         SpanNode span = node("span1")
                 .durationMs(50)
                 .status(SpanStatus.ERROR)
@@ -92,7 +92,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldPreferErrorMessageFieldOverTag() {
+    void prefersErrorMessageFieldOverTag() {
         // The exporter stores the error in SpanNode.errorMessage and never writes an
         // error.message tag; another instrumentation may, and the field still wins.
         SpanNode span = node("span1")
@@ -111,7 +111,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotFlagResultSetSpansAsSlowQuery() {
+    void doesNotFlagResultSetSpansAsSlowQuery() {
         // datasource-proxy connection/result-set spans carry jdbc.* tags but
         // are not queries (same distinction as the trace summary)
         SpanNode span = querySpan("span1", 80, Map.of("jdbc.row-count", "10"));
@@ -123,7 +123,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotDetectSlowQueryOnTheServerSideOfADbTaggedExchange() {
+    void doesNotDetectSlowQueryOnTheServerSideOfADbTaggedExchange() {
         // DbSpans.isQuery: only the CLIENT side of a database call is a query
         SpanNode span = node("span1")
                 .durationMs(80)
@@ -137,7 +137,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotDetectSlowQueryOnNonDbSpan() {
+    void doesNotDetectSlowQueryOnNonDbSpan() {
         // 80ms would be a slow query, but this is not a DB span
         SpanNode span =
                 node("span1").durationMs(80).tags(Map.of("http.method", "GET")).build();
@@ -150,7 +150,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldDetectHighQueryCountOnRootSpan() {
+    void detectsHighQueryCountOnRootSpan() {
         // 25 queries: over the 20-query trace threshold
         SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
         SpanNode root = node("root").durationMs(50).children(List.of(child)).build();
@@ -166,7 +166,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotAddHighQueryCountToChildSpans() {
+    void doesNotAddHighQueryCountToChildSpans() {
         SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
         SpanNode root = node("root").durationMs(50).children(List.of(child)).build();
         TraceTree trace = tree(root).queries(25, 500L).build();
@@ -177,7 +177,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldFlagSpanWithManyDirectQueryChildren() {
+    void flagsSpanWithManyDirectQueryChildren() {
         // Default highQueryCountThreshold is 5; six direct query children exceed it
         List<SpanNode> queries = new java.util.ArrayList<>();
         for (int i = 0; i < 6; i++) {
@@ -200,7 +200,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotFlagSpanWithQueryChildrenAtThreshold() {
+    void doesNotFlagSpanWithQueryChildrenAtThreshold() {
         List<SpanNode> queries = new java.util.ArrayList<>();
         for (int i = 0; i < 5; i++) {
             queries.add(querySpan("q" + i, 10, Map.of("jdbc.query[0]", "SELECT " + i)));
@@ -222,7 +222,7 @@ class IssueDetectorTest {
      * rule, so a threshold the detector stopped reading would show up here.
      */
     @Test
-    void detectIssues_shouldSupportCustomThresholds() {
+    void everyThresholdIsRead() {
         List<SpanNode> queries = new java.util.ArrayList<>();
         for (int i = 0; i < 6; i++) {
             queries.add(querySpan("q" + i, 80, Map.of("db.system", "postgresql")));
@@ -253,7 +253,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldReturnNoIssuesWhenUnderAllThresholds() {
+    void raisesNothingUnderEveryThreshold() {
         SpanNode span = node("span1").durationMs(50).build();
         TraceTree trace = tree(span).build();
 
@@ -263,7 +263,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldProcessNestedSpansRecursively() {
+    void processesNestedSpansRecursively() {
         SpanNode grandchild = node("gc").durationMs(200).build();
         SpanNode child =
                 node("child").durationMs(300).children(List.of(grandchild)).build();
@@ -289,7 +289,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_marksTheTraceSlowWhenAnySpanIsSlowOrVerySlow() {
+    void marksTheTraceSlowWhenAnySpanIsSlowOrVerySlow() {
         SpanNode slowChild = node("child").durationMs(150).build();
         SpanNode root = node("root").durationMs(50).children(List.of(slowChild)).build();
 
@@ -297,7 +297,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_leavesTheTraceNotSlowWhenNoSpanReachesTheSlowThreshold() {
+    void leavesTheTraceNotSlowWhenNoSpanReachesTheSlowThreshold() {
         // a slow query or an error is not what the SLOW badge reports
         SpanNode child = querySpan("child", 80, Map.of("db.system", "postgresql"));
         SpanNode root = node("root")
@@ -311,7 +311,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldDetectMultipleIssuesOnSameSpan() {
+    void detectsMultipleIssuesOnSameSpan() {
         SpanNode span = node("span1")
                 .kind(Span.Kind.CLIENT)
                 .durationMs(200)
@@ -330,7 +330,7 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldHandleNullRootSpan() {
+    void leavesATreeWithoutARootSpanAlone() {
         TraceTree trace = tree(null).build();
 
         TraceTree result = detector.detectIssues(trace);

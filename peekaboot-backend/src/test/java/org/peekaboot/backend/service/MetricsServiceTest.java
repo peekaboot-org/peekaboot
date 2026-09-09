@@ -22,7 +22,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 class MetricsServiceTest {
 
     @Test
-    void isAvailable_returnsTrue_whenMeterRegistryPresent() {
+    void isAvailableWithAMeterRegistry() {
         MeterRegistry registry = new SimpleMeterRegistry();
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
@@ -30,7 +30,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_returnsEmpty_whenNoMeterRegistry() {
+    void reportsNoMetricsWithoutAMeterRegistry() {
         MetricsService service = new MetricsService(null, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
@@ -42,7 +42,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_returnsMetrics_groupedByName() {
+    void groupsMetersByName() {
         MeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong memoryUsed = new AtomicLong(1024);
 
@@ -77,7 +77,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_reportsActualStatisticValueForGauge() {
+    void reportsAGaugesValueStatistic() {
         MeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong memoryUsed = new AtomicLong(1024);
 
@@ -94,7 +94,7 @@ class MetricsServiceTest {
 
     /** A gauge with nothing to measure yields NaN; JSON has no NaN, so the wire carries null. */
     @Test
-    void getMetrics_reportsANaNStatisticAsNull() {
+    void reportsANaNStatisticAsNull() {
         MeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("cache.hit.ratio", () -> Double.NaN).register(registry);
 
@@ -106,7 +106,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_includesCounters() {
+    void reportsACounterWithItsDescriptionTagsAndCount() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Counter.builder("http.requests")
@@ -133,7 +133,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_sortsByName() {
+    void sortsGroupsByName() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Counter.builder("z.metric").register(registry);
@@ -148,7 +148,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_preservesTags() {
+    void preservesTags() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Gauge.builder("test.metric", () -> 100)
@@ -171,7 +171,7 @@ class MetricsServiceTest {
      * same conditional risk as a custom HealthIndicator's details.
      */
     @Test
-    void getMetrics_masksASensitiveShapedTag() {
+    void masksASensitiveShapedTag() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Gauge.builder("custom.upstream.calls", () -> 1)
@@ -189,7 +189,7 @@ class MetricsServiceTest {
 
     /** A timer measures three statistics at once; every one reaches the wire, in the registry's base unit. */
     @Test
-    void getMetrics_reportsEveryStatisticOfATimer() {
+    void reportsEveryStatisticOfATimer() {
         MeterRegistry registry = new SimpleMeterRegistry();
         Timer timer = Timer.builder("http.server.requests").register(registry);
         timer.record(Duration.ofMillis(120));

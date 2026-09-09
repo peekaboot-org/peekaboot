@@ -74,7 +74,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldConvertAndPublishOtelSpan() {
+    void convertsAndPublishesAnOtelSpan() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String spanId = "0123456789abcdef";
         SpanData otelSpan = createTestSpan(traceId, spanId, "test-operation", SpanKind.SERVER);
@@ -95,7 +95,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExportMultipleSpans() {
+    void exportsEachSpanIntoItsOwnTrace() {
         String traceId1 = "aaaabbbbccccddddeeeeffffaaaabbbb";
         String traceId2 = "aaaabbbbccccddddeeeeffffaaaabbbc";
 
@@ -139,7 +139,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldSkipSpanWhenPathAttributeMatchesAnExcludedPrefix() {
+    void skipsSpanWhenPathAttributeMatchesAnExcludedPrefix() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/health", SpanKind.SERVER)
                 .setAttributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
@@ -152,7 +152,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldSkipSpanWhenNameContainsPeekabootPath() {
+    void skipsSpanWhenNameContainsPeekabootPath() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /peekaboot/api/traces", SpanKind.SERVER)
                 .build();
@@ -265,7 +265,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExportSpanWhenPathDoesNotMatchAnyExclusionRule() {
+    void exportsSpanWhenPathDoesNotMatchAnyExclusionRule() {
         // Negative control for the skip tests above: a span whose path clearly
         // isn't excluded must actually be exported, not just "not asserted".
         String traceId = "0123456789abcdef0123456789abcdef";
@@ -280,7 +280,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldPreferUrlPathOverHttpTargetTagWhenBothPresent() {
+    void prefersUrlPathOverHttpTargetTagWhenBothPresent() {
         // url.path is present but doesn't itself match any exclusion rule; if
         // extractPath() genuinely checks url.path first (short-circuiting
         // before ever consulting http.target), the span must NOT be skipped
@@ -300,7 +300,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldPreferUrlPathOverHttpUrlTagWhenBothPresent() {
+    void prefersUrlPathOverHttpUrlTagWhenBothPresent() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /keep-me", SpanKind.SERVER)
                 .setAttributes(Attributes.builder()
@@ -316,7 +316,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractPathFromHttpTargetTagWhenUrlPathAbsent() {
+    void extractsPathFromHttpTargetTagWhenUrlPathAbsent() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/info", SpanKind.SERVER)
                 .setAttributes(Attributes.of(HTTP_TARGET_KEY, "/actuator/info"))
@@ -329,7 +329,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractPathFromHttpUrlTagAsFallback() {
+    void extractsPathFromHttpUrlTagAsFallback() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/metrics", SpanKind.SERVER)
                 .setAttributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/actuator/metrics?x=1"))
@@ -347,7 +347,7 @@ class OtelSpanExporterTest {
      * The span names deliberately carry no matchable route, so the path tags alone decide.
      */
     @Test
-    void shouldSkipTheSameSpansBehindAContextPath() {
+    void skipsTheSameSpansBehindAContextPath() {
         OtelSpanExporter behindContext = new OtelSpanExporter(eventPublisher, new PeekabootPaths("/actuator", "/app"));
         String traceId = "0123456789abcdef0123456789abcdef";
 
@@ -367,7 +367,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldConvertErrorStatusToErrorMessageAndClass() {
+    void convertsErrorStatusToErrorMessageAndClass() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String spanId = "0000000000000001";
         SpanData span = testSpanBuilder(traceId, spanId, "op", SpanKind.SERVER)
@@ -424,7 +424,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractParentSpanIdWhenParentContextIsValid() {
+    void extractsParentSpanIdWhenParentContextIsValid() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String parentSpanId = "aaaaaaaaaaaaaaaa";
         SpanContext parentContext =
@@ -440,7 +440,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractServiceNameFromResource() {
+    void extractsServiceNameFromResource() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
                 .setResource(Resource.create(Attributes.of(SERVICE_NAME_KEY, "orders-service")))
@@ -453,7 +453,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractAttributesAsTags() {
+    void extractsAttributesAsTags() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
                 .setAttributes(Attributes.of(AttributeKey.stringKey("db.system"), "postgresql"))
@@ -466,7 +466,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractEventsFromSpanData() {
+    void extractsEventsFromSpanData() {
         String traceId = "0123456789abcdef0123456789abcdef";
         // A fixed, realistic epoch-nanos value (not System.nanoTime(), which is
         // an arbitrary monotonic reading unrelated to wall-clock time) so the

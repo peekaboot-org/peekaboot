@@ -40,7 +40,7 @@ class PeekabootTracingAutoConfigurationTest {
             .withPropertyValues("peekaboot.enabled=true");
 
     @Test
-    void shouldCreateCoreBeans() {
+    void createsCoreBeans() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(TraceStore.class);
             assertThat(context).hasSingleBean(TraceStoreEventListener.class);
@@ -48,14 +48,14 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldCreateOtelSpanExporterWhenOtelOnClasspath() {
+    void createsOtelSpanExporterWhenOtelOnClasspath() {
         contextRunner.run(context -> {
             assertThat(context).hasSingleBean(OtelSpanExporter.class);
         });
     }
 
     @Test
-    void shouldNotCreateBeansWhenDisabled() {
+    void doesNotCreateBeansWhenDisabled() {
         contextRunner.withPropertyValues("peekaboot.tracing.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(TraceStore.class);
             assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
@@ -63,7 +63,7 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenPeekabootGloballyDisabled() {
+    void doesNotCreateBeansWhenPeekabootGloballyDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
             assertThat(context).doesNotHaveBean(TraceStore.class);
             assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
@@ -72,7 +72,7 @@ class PeekabootTracingAutoConfigurationTest {
 
     /** Everything that reads the store is servlet-only; a WebFlux or non-web app would fill it for nobody. */
     @Test
-    void shouldNotCreateBeansWhenNotAServletApplication() {
+    void doesNotCreateBeansWhenNotAServletApplication() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         PeekabootTracingAutoConfiguration.class,
@@ -117,7 +117,7 @@ class PeekabootTracingAutoConfigurationTest {
     // --- TracingInterceptorAutoConfiguration ---
 
     @Test
-    void shouldRegisterInterceptorWhenObservationRegistryBeanPresentInWebApp() {
+    void registersInterceptorWhenObservationRegistryBeanPresentInWebApp() {
         webContextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(TracingHandlerInterceptor.class);
@@ -126,7 +126,7 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterInterceptorWhenNoObservationRegistryBean() {
+    void doesNotRegisterInterceptorWhenNoObservationRegistryBean() {
         webContextRunner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
@@ -134,7 +134,7 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterInterceptorWhenNotAWebApplication() {
+    void doesNotRegisterInterceptorWhenNotAWebApplication() {
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
@@ -147,7 +147,7 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterInterceptorWhenPeekabootDisabled() {
+    void doesNotRegisterInterceptorWhenPeekabootDisabled() {
         webContextRunner
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .withPropertyValues("peekaboot.enabled=false")
@@ -159,7 +159,7 @@ class PeekabootTracingAutoConfigurationTest {
 
     /** Handler and view observations are tracing; with tracing off there is no store to land in. */
     @Test
-    void shouldNotRegisterInterceptorWhenTracingDisabled() {
+    void doesNotRegisterInterceptorWhenTracingDisabled() {
         webContextRunner
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .withPropertyValues("peekaboot.tracing.enabled=false")
@@ -170,7 +170,7 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldRegisterInterceptorWithExpectedPathPatterns() {
+    void registersInterceptorWithExpectedPathPatterns() {
         webContextRunner.withUserConfiguration(ObservationRegistryConfig.class).run(context -> {
             WebMvcConfigurer configurer = context.getBean(WebMvcConfigurer.class);
             RecordingInterceptorRegistry registry = new RecordingInterceptorRegistry();

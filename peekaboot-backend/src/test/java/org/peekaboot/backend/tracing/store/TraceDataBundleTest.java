@@ -46,7 +46,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_collapsesDuplicateChildArrivingBeforeItsRealParent() {
+    void collapsesADuplicateChildArrivingBeforeItsRealParent() {
         // The expected OTel BatchSpanProcessor export ordering: a duplicate span is a
         // direct child of the real span it duplicates, and a span cannot end (and so
         // export) before the ancestor containing it does - so the duplicate normally
@@ -62,7 +62,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_collapsesDuplicateWhoseRealParentIsAlreadyStored() {
+    void collapsesADuplicateWhoseRealParentIsAlreadyStored() {
         // The uncommon ordering - covered for robustness, not because it's expected in
         // production, since a faithful fold must not assume the child-before-parent
         // ordering is the only one it will ever see.
@@ -77,7 +77,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_reparentsAGrandchildThatArrivedBeforeItsDuplicateAncestorWasFolded() {
+    void reparentsAGrandchildThatArrivedBeforeItsDuplicateAncestorWasFolded() {
         // Nesting depth means the grandchild ends (and so exports) before the duplicate
         // that contains it, which in turn ends before the real span - so all three arrive
         // in the reverse of their logical parent-child order.
@@ -102,7 +102,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void resolveSpanId_followsTheRedirectChainToTheSurvivingSpan() {
+    void resolveSpanIdFollowsTheRedirectChainToTheSurvivingSpan() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
         SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
@@ -116,7 +116,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_doesNotCollapseAChildWithDifferentTagsFromItsParent() {
+    void doesNotCollapseAChildWithDifferentTagsFromItsParent() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData parent = jdbcSpan("parent1", null, "query", "SELECT * FROM person", "sample_app_db", 1);
         SpanData child = jdbcSpan("child1", "parent1", "query", "SELECT * FROM orders", "dataSource", 2);
@@ -128,7 +128,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_capCountsRealSpansNotDuplicateArtifacts() {
+    void theCapCountsRealSpansNotDuplicateArtifacts() {
         // Five real spans, each followed by its double-instrumented duplicate arriving
         // first (as in production) - ten raw addSpan calls against a cap of five. If the
         // cap counted raw arrivals rather than folded spans, this trace would truncate.
@@ -149,7 +149,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_boundsTheRedirectTableAsRealSpansAreEvicted() {
+    void theRedirectTableIsPrunedAsRealSpansAreEvicted() {
         // The redirect table gains one entry per fold; unless it is pruned as spans are
         // evicted it grows for the trace's whole life regardless of maxSpans. Here 500
         // real+duplicate pairs are folded against a cap of 10 - unpruned, the table would
@@ -173,7 +173,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_boundsTheRedirectTableAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
+    void theRedirectTableIsPrunedAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
         // Chained-redirect residue: when a duplicate (dup1) is itself
         // later folded into a further survivor, an earlier fold that had targeted dup1
         // (gc -> dup1) stays keyed on dup1 in the reverse index. dup1 was folded away and

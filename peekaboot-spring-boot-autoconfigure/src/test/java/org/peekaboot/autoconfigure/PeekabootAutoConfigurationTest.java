@@ -26,7 +26,7 @@ class PeekabootAutoConfigurationTest {
 
     // PeekabootAutoConfiguration is @ConditionalOnWebApplication(SERVLET), so most of
     // this class exercises it through a servlet web application context; only
-    // shouldNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
+    // doesNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class));
 
@@ -52,7 +52,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldRegisterBeansWhenEnabledAndEndpointClassesPresent() {
+    void registersBeansWhenEnabledAndEndpointClassesPresent() {
         contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(PeekabootProperties.class);
@@ -99,7 +99,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenPeekabootDisabled() {
+    void doesNotRegisterBeansWhenPeekabootDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(PeekabootController.class);
@@ -108,7 +108,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansOnNonServletApplication() {
+    void doesNotRegisterBeansOnNonServletApplication() {
         // peekaboot.enabled=true is the default in local development; on a reactive or
         // non-web application PeekabootAutoConfiguration must stay inactive rather than
         // partially activating a servlet-only component (PeekabootWebConfig).
@@ -123,8 +123,8 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenSpringWebmvcAbsentEntirely() {
-        // shouldNotRegisterBeansOnNonServletApplication only proves the guard works when
+    void doesNotRegisterBeansWhenSpringWebmvcAbsentEntirely() {
+        // doesNotRegisterBeansOnNonServletApplication only proves the guard works when
         // spring-webmvc is present but simply unused by a plain, non-web context — this
         // module's own test classpath always carries spring-webmvc. A genuinely reactive
         // application doesn't have spring-webmvc on the classpath at all, so hide
@@ -145,7 +145,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenHealthEndpointClassMissing() {
+    void doesNotRegisterBeansWhenHealthEndpointClassMissing() {
         contextRunner
                 .withPropertyValues("peekaboot.enabled=true")
                 .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
