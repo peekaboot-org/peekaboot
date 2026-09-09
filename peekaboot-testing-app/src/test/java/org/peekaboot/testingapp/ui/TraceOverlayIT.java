@@ -368,8 +368,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // rather than a second independent fetch that could race the trace being evicted
         // from the store (a bounded ring buffer under constant pressure from this app's
         // own background scheduler). Reads the id from the copy button's data-pk-copy
-        // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon baked
-        // in by copyableIdHtml), not the bare id a URL path segment needs.
+        // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon built
+        // in by copyableId), not the bare id a URL path segment needs.
         int spanCount = ((Number) toolbar.evaluate("async root => {"
                         + "for (let i = 0; i < 150; i++) {"
                         + "  const copyEl = root.querySelector('#pk-trace .pk-copy');"

@@ -18,12 +18,13 @@
  * The bar never fetches /api/features: it colours durations by the shared defaults
  * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults.
  */
-import {formatDurationMs} from '../shared/format.js';
+import {badge} from '../shared/components.js';
+import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
-import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
-import {traceStatParts} from '../shared/trace-stats.js';
+import {copyableId, bindCopyables} from '../shared/copyable.js';
+import {traceStatParts, durationStat} from '../shared/trace-stats.js';
 
 // Four fixed attempts rather than backoff-until-complete: every one runs, so a span that
 // ends after the root - an @Async continuation, a streamed body - still reaches the bar
@@ -66,7 +67,7 @@ function initToolbar(host, data) {
         currentTraceId = traceId;
         openButton.setAttribute('aria-disabled', traceId ? 'false' : 'true');
         renderRequest(traceId, method, path, status);
-        metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
+        metricsEl.replaceChildren(el('span', {className: 'pk-toolbar__loading', text: 'loading'}));
         if (traceId) {
             pollTrace(data.basePath, traceId, {
                 stillCurrent: () => currentTraceId === traceId,
@@ -79,9 +80,11 @@ function initToolbar(host, data) {
     function renderRequest(traceId, method, path, status) {
         // The bar has room for the number alone; the overlay's own pill spells the
         // status out. The colouring is shared, so a 404 reads the same in both places.
-        const statusEl = shadow.getElementById('pk-status');
-        statusEl.textContent = status;
-        statusEl.className = 'pk-badge pk-badge--' + statusVariant(status);
+        // The server-rendered placeholder is swapped for the shared builder's pill,
+        // keeping the id the rest of this module looks it up by.
+        const statusEl = badge(status, statusVariant(status));
+        statusEl.id = 'pk-status';
+        shadow.getElementById('pk-status').replaceWith(statusEl);
 
         // textContent/title are safe sinks on their own; escaping before assigning to them
         // would double-escape (e.g. a literal "&" in the path would render as "&amp;").
@@ -93,7 +96,7 @@ function initToolbar(host, data) {
         shadow.getElementById('pk-controller').textContent = '';
         // full id, labelled and copyable - a truncated id cannot be pasted into a log
         // search, which is the only reason to show it on the bar at all
-        shadow.getElementById('pk-trace').innerHTML = copyableIdHtml(traceId, {label: 'traceId'});
+        shadow.getElementById('pk-trace').replaceChildren(copyableId(traceId, {label: 'traceId'}));
         bindCopyables(shadow);
     }
 
@@ -104,19 +107,17 @@ function initToolbar(host, data) {
             shadow.getElementById('pk-controller').textContent = '→ ' + className + '.' + controller.method;
         }
 
-        const durationClass = durationSeverity(trace.durationMs);
-        const durationStat = document.createElement('span');
-        durationStat.className = 'pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '');
-        durationStat.innerHTML = '<span aria-hidden="true">⏱</span><span class="pk-stat__duration"></span>';
-        durationStat.querySelector('.pk-stat__duration').textContent = formatDurationMs(trace.durationMs);
-
-        metricsEl.replaceChildren(durationStat, ...traceStatParts(trace));
+        const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
+        const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace));
     }
 
     // Nothing ever arrived: replace "loading" with the placeholder row rather than
     // leaving a spinner up forever.
     function renderPending() {
-        metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
+        metricsEl.replaceChildren(el('span', {
+            className: 'pk-toolbar__pending', text: '[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]'
+        }));
     }
 
     async function openOverlay() {
