@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
+import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.testsupport.InsightsCollectors;
@@ -63,6 +64,16 @@ class InsightsServiceTest {
         assertThat(latency.series())
                 .extracting(InsightsConfigResponse.Series::id)
                 .containsExactly("http-latency.avg", "http-latency.max");
+    }
+
+    /** The one shipped panel drawn as bars behind a line; its YAML word only binds through lenient matching. */
+    @Test
+    void theGcPanelIsChartedAsBarsBehindALine() {
+        assertThat(service.config().panels())
+                .filteredOn(panel -> panel.id().equals("gc"))
+                .singleElement()
+                .extracting(InsightsConfigResponse.Panel::chart)
+                .isEqualTo(Chart.BARS_LINE);
     }
 
     /** No shipped tile resolves on a bare registry; each has to leave as null, never as NaN. */
