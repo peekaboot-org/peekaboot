@@ -1,10 +1,12 @@
 package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -837,5 +839,27 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(page.getAttribute(".pk-tab[data-tab='overview']", "aria-selected"))
                 .isEqualTo("true");
         assertThat(page.isVisible(".pk-tab[data-tab='flyway']")).isFalse();
+    }
+
+    /**
+     * The Overview tile row reads /api/insights/config on the dashboard's own refresh
+     * cycle, but only while it is the tab on screen: a refresh with another tab showing
+     * must not spend a request on tiles nobody is looking at. Switching back renders the
+     * tab again, which is when the row catches up.
+     */
+    @Test
+    void overviewSkipsTheTileFetchWhileAnotherTabIsShowing() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#environment");
+        page.waitForSelector("#property-sources .pk-group__header");
+
+        assertThatThrownBy(() -> page.waitForRequest(
+                        "**/api/insights/config**",
+                        new Page.WaitForRequestOptions().setTimeout(1000),
+                        () -> page.click("#refresh-btn")))
+                .as("no tile fetch while the Overview tab is hidden")
+                .isInstanceOf(TimeoutError.class);
+
+        page.waitForRequest("**/api/insights/config**", () -> page.click(".pk-tab[data-tab='overview']"));
+        page.waitForSelector("#insights-tiles .pk-insight-tile");
     }
 }
