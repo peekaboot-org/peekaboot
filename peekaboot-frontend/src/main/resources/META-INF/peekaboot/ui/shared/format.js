@@ -100,6 +100,13 @@ function formatMetricCount(value) {
     return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** A property or detail value as one line of text: '-' for nothing, JSON for a structured value. */
+export function formatPlainValue(value) {
+    if (value === null || value === undefined) return '-';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+}
+
 /** Formats "n noun(s)" - plural defaults to singular + 's', override it for irregular nouns (e.g. 'query'/'queries'). */
 export function formatCount(n, singular, plural = singular + 's') {
     return `${n} ${n === 1 ? singular : plural}`;

@@ -2,37 +2,23 @@
  * The "Environment" tab: property sources grouped and filterable, each expandable to
  * its key/value pairs, with the active Spring profiles shown as a banner above them.
  */
-import {kvRow, badge} from '../../shared/components.js';
-import {formatCount} from '../../shared/format.js';
-import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
-import {renderUnmaskControl} from '../../shared/unmask-control.js';
+import {badge} from '../../shared/components.js';
+import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'environment';
 export const label = 'Environment';
 
-const tab = filteredGroupTab({
+const tab = propertyGroupTab({
     inputId: 'env-filter',
     listId: 'property-sources',
+    unmaskSlotId: 'env-unmask-slot',
     select: data => data?.environment?.propertySources,
-    filterGroup: (source, query) => {
-        const properties = (source.properties || []).filter(prop => matches(prop, query));
-        return properties.length > 0 ? {name: source.name || 'Unknown Source', properties} : null;
-    },
-    key: source => source.name,
-    header: (source, query) => ({
-        name: source.name,
-        count: formatCount(source.properties.length, 'property', 'properties'),
-        highlight: query
-    }),
-    items: (source, list, query) => source.properties.forEach(prop =>
-        list.appendChild(kvRow(prop.key, formatValue(prop.value), {highlight: query}))),
+    groupName: source => source.name || 'Unknown Source',
     extraTop: data => renderActiveProfiles(data.environment.activeProfiles),
-    emptyMessage: 'No environment properties available',
-    noMatchMessage: query => `No properties matching "${query}"`
+    emptyMessage: 'No environment properties available'
 });
 
 export function render(container, data, context) {
-    renderUnmaskControl(container.querySelector('#env-unmask-slot'), context);
     tab.render(container, data, context);
 }
 
@@ -47,16 +33,4 @@ function renderActiveProfiles(activeProfiles) {
 
     activeProfiles.forEach(profile => profilesEl.appendChild(badge(profile, 'info')));
     return profilesEl;
-}
-
-function matches(prop, query) {
-    if (!query) return true;
-    const needle = query.toLowerCase();
-    return prop.key.toLowerCase().includes(needle) || String(prop.value).toLowerCase().includes(needle);
-}
-
-function formatValue(value) {
-    if (value === null || value === undefined) return '-';
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
 }
