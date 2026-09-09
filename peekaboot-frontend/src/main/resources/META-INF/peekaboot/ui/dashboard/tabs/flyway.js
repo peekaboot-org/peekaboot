@@ -7,7 +7,6 @@
  */
 import {badge, table} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
-import {durationSeverity} from '../../shared/severity.js';
 
 export const id = 'flyway';
 export const label = 'Flyway';
@@ -25,7 +24,7 @@ const MIGRATION_STATE_VARIANTS = Object.freeze({
 
 export const MIGRATION_STATES = Object.keys(MIGRATION_STATE_VARIANTS);
 
-export function render(container, data, {locale, timeZone, features} = {}) {
+export function render(container, data, {locale, timeZone} = {}) {
     const migrations = data?.flyway?.migrations || [];
     const target = container.querySelector('#flyway-timeline');
     target.innerHTML = '';
@@ -34,11 +33,11 @@ export function render(container, data, {locale, timeZone, features} = {}) {
         return;
     }
 
-    const rows = migrations.map(migration => renderRow(migration, {locale, timeZone, features}));
+    const rows = migrations.map(migration => renderRow(migration, {locale, timeZone}));
     target.appendChild(table(COLUMNS, rows, {className: 'pk-flyway-table'}));
 }
 
-function renderRow(migration, {locale, timeZone, features}) {
+function renderRow(migration, {locale, timeZone}) {
     const row = document.createElement('tr');
     if (migration.state === 'FAILED') row.classList.add('pk-flyway-row--failed');
     if (migration.state === 'PENDING') row.classList.add('pk-flyway-row--pending');
@@ -48,7 +47,7 @@ function renderRow(migration, {locale, timeZone, features}) {
         cell(migration.description, 'pk-flyway-row__description'),
         cell(migration.script, 'pk-table__mono pk-flyway-row__script'),
         cell(migration.type, 'pk-table__shrink'),
-        durationCell(migration.executionTime, features),
+        durationCell(migration.executionTime),
         cell(formatDateTime(migration.installedOn, {locale, timeZone}), 'pk-table__shrink'),
         statusCell(migration.state)
     );
@@ -65,16 +64,14 @@ function cell(text, className) {
     return td;
 }
 
-function durationCell(executionTime, features) {
+/**
+ * Uncoloured on purpose: the span thresholds describe request spans, and a migration
+ * that takes seconds is doing its job, not misbehaving.
+ */
+function durationCell(executionTime) {
     const td = document.createElement('td');
     td.className = 'pk-table__num pk-table__shrink';
-    if (executionTime == null) {
-        td.textContent = '';
-        return td;
-    }
-    const severity = durationSeverity(executionTime, features);
-    if (severity) td.classList.add(`pk-flyway-row__time--${severity}`);
-    td.textContent = formatDurationMs(executionTime);
+    td.textContent = executionTime == null ? '' : formatDurationMs(executionTime);
     return td;
 }
 

@@ -206,7 +206,10 @@ SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
 default thresholds, a 50 ms query already slow. Where a span's own issues are in hand,
 `issueSeverity(span.issues)` is the backend's verdict and colours the gantt duration cells;
 `durationSeverity()` re-derives a severity only for durations no issue describes, meaning a
-trace's total, a trace's total query time and a Flyway migration's execution time. The
+trace's total query time and the dev toolbar's trace duration. The overlay's header marks a
+trace SLOW by the backend's per-trace `slow` flag (below), the same flag the Traces tab's
+badge reads. A Flyway migration's execution time is not coloured at all: the span
+thresholds describe request spans, and a migration that takes seconds is doing its job. The
 Queries tab's per-query SLOW label uses `querySeverity()`, the threshold behind the
 backend's SLOW_QUERY issue (`slowQueryThresholdMs`, 50 ms by default), never the span
 thresholds.

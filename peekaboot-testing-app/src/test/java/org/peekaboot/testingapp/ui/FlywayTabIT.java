@@ -55,4 +55,28 @@ class FlywayTabIT extends PlaywrightTestBase {
                 .as("one table row per migration file on the classpath")
                 .hasSize(migrations.length);
     }
+
+    /**
+     * A migration's execution time is coloured by nothing. The span thresholds (100 ms and
+     * 500 ms by default) describe request spans; a schema migration that takes seconds is
+     * doing its job, and painting it in the danger colour made every real migration history
+     * read as a page of problems.
+     */
+    @Test
+    void migrationDurationsAreNotColouredBySpanThresholds() {
+        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+
+        Object durationCellClass = page.evaluate("""
+            async () => {
+                const m = await import('/peekaboot/ui/dashboard/tabs/flyway.js');
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="flyway-timeline"></div>';
+                m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
+                    script: 'V1__init.sql', type: 'SQL', executionTime: 5000, installedOn: 0, state: 'SUCCESS'}]}}, {});
+                return container.querySelector('td.pk-table__num').className;
+            }
+            """);
+
+        assertThat((String) durationCellClass).doesNotContain("slow");
+    }
 }
