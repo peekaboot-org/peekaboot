@@ -23,14 +23,14 @@ class PanelConfigLoaderTest {
         assertThat(file.panels()).extracting(PanelDef::id).containsExactly("cpu", "heap");
         assertThat(file.tiles()).extracting(TileDef::id).containsExactly("uptime");
         PanelDef heap = file.panels().get(1);
-        assertThat(heap.unit()).isEqualTo("bytes");
+        assertThat(heap.unit()).isEqualTo(Unit.BYTES);
         assertThat(heap.series().get(0).tags()).containsEntry("area", "heap");
     }
 
     @Test
     void defaultsStatToValue() {
         PanelsFile file = PanelConfigLoader.load(defaults, null);
-        assertThat(file.panels().get(0).series().get(0).stat()).isEqualTo("value");
+        assertThat(file.panels().get(0).series().get(0).stat()).isEqualTo(Stat.VALUE);
     }
 
     @Test
@@ -46,7 +46,7 @@ class PanelConfigLoaderTest {
         PanelsFile file = PanelConfigLoader.load(defaults, user);
         PanelDef custom = file.panels().get(2);
         assertThat(custom.enabled()).isFalse();
-        assertThat(custom.series().get(0).stat()).isEqualTo("rate");
+        assertThat(custom.series().get(0).stat()).isEqualTo(Stat.RATE);
     }
 
     /** The website's first by-id example: {@code - id: thread-states / enabled: true}, nothing else. */
@@ -58,7 +58,7 @@ class PanelConfigLoaderTest {
         assertThat(threadStates.enabled()).isTrue();
         // everything the entry did not mention is the shipped panel's
         assertThat(threadStates.title()).isEqualTo("Thread states");
-        assertThat(threadStates.chart()).isEqualTo("bars");
+        assertThat(threadStates.chart()).isEqualTo(Chart.BARS);
         assertThat(threadStates.order()).isEqualTo(60);
         assertThat(threadStates.level()).isEqualTo(1);
         assertThat(threadStates.series()).extracting(SeriesDef::meter).containsExactly("jvm.threads.states");
@@ -108,11 +108,13 @@ class PanelConfigLoaderTest {
                 .hasMessageContaining("panel 'heap': duplicate series id 'used'");
     }
 
+    /** The binder rejects the word; the message still has to say where and what, since it is what the operator reads. */
     @Test
-    void rejectsInvalidStat() {
+    void rejectsInvalidStatNamingThePropertyAndTheWord() {
         // loader-invalid.yml: single panel whose series has stat: bogus
         assertThatThrownBy(() -> PanelConfigLoader.load(new ClassPathResource("insights/loader-invalid.yml"), null))
                 .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("panels[0].series[0].stat")
                 .hasMessageContaining("bogus");
     }
 

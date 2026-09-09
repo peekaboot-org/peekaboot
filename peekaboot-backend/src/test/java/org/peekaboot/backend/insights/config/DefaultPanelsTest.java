@@ -61,7 +61,7 @@ class DefaultPanelsTest {
                 .filter(p -> p.id().equals("http-latency"))
                 .findFirst()
                 .orElseThrow();
-        assertThat(latency.unit()).isEqualTo("millis");
-        assertThat(latency.series()).extracting(SeriesDef::stat).containsExactly("avg", "max");
+        assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
+        assertThat(latency.series()).extracting(SeriesDef::stat).containsExactly(Stat.AVG, Stat.MAX);
     }
 }
