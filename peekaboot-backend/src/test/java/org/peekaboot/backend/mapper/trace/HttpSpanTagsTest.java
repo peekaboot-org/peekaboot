@@ -75,10 +75,20 @@ class HttpSpanTagsTest {
                 .isEqualTo("/");
     }
 
+    /** A query right after the authority leaves no path segment to take; a bare query leaves none at all. */
     @Test
-    void statusIsNullWhenAbsentOrNotANumber() {
+    void aUrlWithAQueryButNoPathReadsAsTheRootAndABareQueryAsEmpty() {
+        assertThat(HttpSpanTags.path(Map.of("http.url", "https://h?x=1"))).isEqualTo("/");
+        assertThat(HttpSpanTags.path(Map.of("http.target", "?x=1"))).isEmpty();
+    }
+
+    /** An instrumentation that stringifies the code its own way yields no status rather than a wrong one. */
+    @Test
+    void statusIsNullWhenAbsentOrNotAPlainInteger() {
         assertThat(HttpSpanTags.statusCode(Map.of())).isNull();
         assertThat(HttpSpanTags.statusCode(Map.of("status", "not-a-number"))).isNull();
+        assertThat(HttpSpanTags.statusCode(Map.of("status", "200.0"))).isNull();
+        assertThat(HttpSpanTags.statusCode(Map.of("status", " 200"))).isNull();
     }
 
     @Test

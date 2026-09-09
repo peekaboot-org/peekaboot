@@ -314,6 +314,44 @@ class InMemoryTraceStoreTest {
     }
 
     @Test
+    void slowTraceSurvivesAllBucketEviction() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxTraces(1);
+            p.setSlowTraceThresholdMs(100);
+        });
+        store.addSpan(spanIn("t1", "s1")); // 100ms, on the threshold
+        store.addSpan(span("s2").in("t2").at(START, Duration.ofMillis(10)).build());
+
+        assertThat(store.getTraces(TraceBucket.ALL, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t2");
+        assertThat(store.getTrace("t1")).isPresent();
+        assertThat(store.getTraces(TraceBucket.SLOW, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    /** A late event finds the bundle the Slow bucket kept and puts it back at the newest end of All. */
+    @Test
+    void lateEventAfterAllBucketEvictionReusesTheSlowBucketsBundle() {
+        InMemoryTraceStore store = TraceStores.with(p -> {
+            p.setMaxTraces(1);
+            p.setSlowTraceThresholdMs(100);
+        });
+        store.addSpan(spanIn("t1", "s1"));
+        store.addSpan(span("s2").in("t2").at(START, Duration.ofMillis(10)).build());
+
+        store.addLog(log("t1", "INFO", "late"));
+
+        TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
+        assertThat(bundle.spans()).hasSize(1);
+        assertThat(bundle.logs()).hasSize(1);
+        assertThat(store.getTraces(TraceBucket.ALL, 10))
+                .extracting(TraceDataBundle::traceId)
+                .containsExactly("t1");
+    }
+
+    @Test
     void discardRemovesTheTraceFromEveryBucket() {
         InMemoryTraceStore store = storeWithSlowThreshold(100);
         store.addSpan(span("s1")

@@ -230,6 +230,32 @@ class TraceInsightsServiceTest {
     }
 
     @Test
+    void aLogEmittedInAGrandchildSpanIsAttachedToThatSpanAlone() {
+        store.addSpan(rootSpan("t1", "GET /x", Span.Kind.SERVER, 100).build());
+        store.addSpan(span("child")
+                .in("t1")
+                .parent("span-t1")
+                .named("service")
+                .at(10, 50)
+                .build());
+        store.addSpan(span("grandchild")
+                .in("t1")
+                .parent("child")
+                .named("repository")
+                .at(20, 20)
+                .build());
+        store.addLog(new LogCapturedEvent("t1", "grandchild", Instant.EPOCH, "INFO", "Repo", "deep", "main"));
+
+        TraceTree tree = service.getTraceInsights("t1").orElseThrow();
+
+        SpanNode child = tree.rootSpan().children().getFirst();
+        SpanNode grandchild = child.children().getFirst();
+        assertThat(grandchild.logs()).extracting(TraceLog::message).containsExactly("deep");
+        assertThat(tree.rootSpan().logs()).isNull();
+        assertThat(child.logs()).isNull();
+    }
+
+    @Test
     void theDetailExtractsQueries() {
         // A trace with a DB span
         addTraceWithDbSpan("trace1", 100);
@@ -318,6 +344,73 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("http1");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    /** The counting pass over the buckets a request did not ask for runs against Slow too, and only a slow match counts. */
+    @Test
+    void theSlowBucketIsFilteredAndCountedLikeTheOthers() {
+        InMemoryTraceStore slowStore = TraceStores.with(p -> p.setSlowTraceThresholdMs(100));
+        slowStore.addSpan(
+                rootSpan("slow-http", "GET /orders", Span.Kind.SERVER, 150).build());
+        slowStore.addSpan(
+                rootSpan("slow-consumer", "receive", Span.Kind.CONSUMER, 150).build());
+        slowStore.addSpan(
+                rootSpan("fast-http", "GET /users", Span.Kind.SERVER, 50).build());
+        TraceInsightsService slowService = newService(slowStore);
+
+        TraceInsightsResponse response = slowService.getInsights(10, TraceBucket.SLOW, "http_request", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("slow-http");
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 0, 2));
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 0, 1));
+    }
+
+    /** Beside the wildcard type, a blank operation is the other half of "nothing filtered", so no counting pass runs. */
+    @Test
+    void aBlankRootOperationFilterIsNoFilterAtAll() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", "   ");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.filteredBucketCounts()).isNull();
+    }
+
+    @Test
+    void aRootActionTypeFilterIsTrimmedAndReadCaseInsensitively() {
+        addTrace("trace1", 100, false);
+        addConsumerTrace("trace2", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, " Http_Request ", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    /** A root span without a name cannot match an operation filter, and must not throw trying. */
+    @Test
+    void aRootSpanWithoutANameNeverMatchesAnOperationFilter() {
+        store.addSpan(span("span-unnamed")
+                .in("unnamed")
+                .named(null)
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build());
+        addTraceWithOperation("named", "GET /users", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("named");
+    }
+
+    /** The limit bounds the page only; the counts describe the store either way. */
+    @Test
+    void aZeroLimitListsNothingButStillCounts() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(0, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces()).isEmpty();
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
 
     /**
