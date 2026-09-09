@@ -39,6 +39,15 @@ public record DataSourceMetadata(
         connectionParams = connectionParams == null ? Map.of() : connectionParams;
     }
 
+    /** Leaves out connectionParams: a JDBC URL can carry the password, and a record's toString reaches logs. */
+    @Override
+    public String toString() {
+        return "DataSourceMetadata[dataSourceName=" + dataSourceName + ", username=" + username + ", hosts=" + hosts
+                + ", databaseName=" + databaseName + ", databaseProduct=" + databaseProduct
+                + ", databaseProductName=" + databaseProductName + ", databaseProductVersion="
+                + databaseProductVersion + ", driverName=" + driverName + "]";
+    }
+
     public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
 
         try (Connection connection = dataSource.getConnection()) {

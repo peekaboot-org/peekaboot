@@ -27,6 +27,20 @@ class PanelConfigLoaderTest {
         assertThat(heap.series().get(0).tags()).containsEntry("area", "heap");
     }
 
+    /**
+     * The YAML words carry a hyphen the enum constants cannot; the binder's lenient matching
+     * is what bridges them, and nothing else in the loader does.
+     */
+    @Test
+    void hyphenatedWordsBindToTheirConstants() {
+        PanelsFile file = PanelConfigLoader.load(new ClassPathResource("insights/loader-hyphenated-words.yml"), null);
+
+        PanelDef net = panelNamed(file, "net");
+        assertThat(net.chart()).isEqualTo(Chart.BARS_LINE);
+        assertThat(net.unit()).isEqualTo(Unit.BYTES_PERSEC);
+        assertThat(net.series()).extracting(SeriesDef::unit).containsExactly(null, Unit.PERSEC);
+    }
+
     @Test
     void defaultsStatToValue() {
         PanelsFile file = PanelConfigLoader.load(defaults, null);
