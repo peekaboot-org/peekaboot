@@ -19,6 +19,7 @@ import org.peekaboot.backend.lifecycle.ApplicationReadyListener;
 import org.peekaboot.backend.lifecycle.ApplicationStoppedListener;
 import org.peekaboot.backend.lifecycle.BuildInfoProvider;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.lifecycle.HikariPoolInfo;
 import org.peekaboot.backend.lifecycle.LifecycleEventLog;
 import org.peekaboot.backend.lifecycle.LifecycleEventRecorder;
@@ -100,13 +101,28 @@ class PeekabootLifecycleAutoConfigurationTest {
     }
 
     @Test
-    void databaseMetadataListCreatedForAutoConfiguredDataSource() {
+    void dataSourceMetadataListCreatedForAutoConfiguredDataSource() {
         contextRunner
                 .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecycletest;DB_CLOSE_DELAY=-1")
                 .run(context -> {
-                    assertThat(context).hasBean("databaseMetadataList");
+                    assertThat(context).hasSingleBean(DataSourceMetadataList.class);
                     assertThat(context).hasSingleBean(ApplicationReadyListener.class);
                 });
+    }
+
+    /**
+     * Spring resolves a {@code List<DataSourceMetadata>} by collecting the
+     * {@code DataSourceMetadata} beans first and falls back to a list bean only when there
+     * are none, so one application bean of that type would replace the whole
+     * auto-configured list with itself. The list is a bean type of its own to stay clear of
+     * that.
+     */
+    @Test
+    void anApplicationDataSourceMetadataBeanDoesNotReplaceTheAutoConfiguredList() {
+        contextRunner
+                .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecyclelist;DB_CLOSE_DELAY=-1")
+                .withUserConfiguration(StrayMetadataBeanConfig.class)
+                .run(context -> assertThat(readyBanner(context)).contains(" DB Connection [dataSource]"));
     }
 
     @Test
@@ -191,8 +207,8 @@ class PeekabootLifecycleAutoConfigurationTest {
         try (LogCapture capture = LogCapture.attach(DataSourceMetadata.class)) {
             contextRunner.withUserConfiguration(BrokenDataSourceConfig.class).run(context -> {
                 assertThat(context).hasNotFailed();
-                assertThat(context).hasBean("databaseMetadataList");
-                assertThat(context.getBean("databaseMetadataList", List.class)).isEmpty();
+                assertThat(context.getBean(DataSourceMetadataList.class).entries())
+                        .isEmpty();
             });
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
@@ -222,6 +238,18 @@ class PeekabootLifecycleAutoConfigurationTest {
             JdbcDataSource dataSource = new JdbcDataSource();
             dataSource.setURL("jdbc:h2:mem:plainpool;DB_CLOSE_DELAY=-1");
             return dataSource;
+        }
+    }
+
+    @Configuration
+    static class StrayMetadataBeanConfig {
+
+        @Bean
+        DataSourceMetadata strayMetadata() {
+            DataSourceMetadata metadata = mock(DataSourceMetadata.class);
+            when(metadata.getDataSourceName()).thenReturn("stray");
+            when(metadata.getHosts()).thenReturn(List.of());
+            return metadata;
         }
     }
 

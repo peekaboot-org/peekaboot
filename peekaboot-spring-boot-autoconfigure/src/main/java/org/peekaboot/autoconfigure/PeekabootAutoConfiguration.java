@@ -1,7 +1,6 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.List;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.config.PeekabootProperties;
@@ -9,7 +8,7 @@ import org.peekaboot.backend.config.PeekabootWebConfig;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.insights.InsightsService;
-import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
 import org.peekaboot.backend.mapper.actuator.ConfigMapper;
 import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
@@ -171,7 +170,7 @@ public class PeekabootAutoConfiguration {
             FlywayMapper flywayMapper,
             ConfigMapper configMapper,
             ScheduledTasksMapper scheduledTasksMapper,
-            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataList) {
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataList) {
         return new ActuatorInsightsService(
                 peekabootActuatorService,
                 actuatorResponseParser,

@@ -25,6 +25,7 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
@@ -154,10 +155,10 @@ class PeekabootActuatorServiceIT {
     }
 
     /**
-     * The bean name matches the one {@code PeekabootLifecycleAutoConfiguration}
-     * guards with {@code @ConditionalOnMissingBean(name = "databaseMetadataList")},
-     * so this fixture bean wins over the real one and this module's real, H2-backed
-     * DataSource is never consulted. A mock (same pattern as {@code DataSourceMapperTest})
+     * {@code PeekabootLifecycleAutoConfiguration} backs its {@code DataSourceMetadataList}
+     * bean off for one of the same type, so this fixture bean wins over the real one and
+     * this module's real, H2-backed DataSource is never consulted. A mock (same pattern as
+     * {@code DataSourceMapperTest})
      * is used instead of a live DataSource so a real {@link Host} and a password
      * parameter can be stubbed in - the H2 in-memory URL this module's test DataSource
      * actually uses yields neither.
@@ -165,7 +166,7 @@ class PeekabootActuatorServiceIT {
     @TestConfiguration
     static class DataSourceMetadataFixtureConfig {
         @Bean
-        List<DataSourceMetadata> databaseMetadataList() {
+        DataSourceMetadataList dataSourceMetadataList() {
             DataSourceMetadata metadata = mock(DataSourceMetadata.class);
             when(metadata.getDataSourceName()).thenReturn("primary");
             when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
@@ -173,7 +174,7 @@ class PeekabootActuatorServiceIT {
                     .thenReturn(Map.of(
                             "MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY"),
                             "password", new JdbcProperty(PropertySource.QUERY, "hunter2")));
-            return List.of(metadata);
+            return new DataSourceMetadataList(List.of(metadata));
         }
     }
 }
