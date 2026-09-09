@@ -52,17 +52,11 @@ public class PeekabootLifecycleAutoConfiguration {
         return new EnvironmentInfo(environment);
     }
 
+    /** Without build-info.properties the provider reports no build info and the banners leave those lines out. */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBean(BuildProperties.class)
-    public BuildInfoProvider buildInfoProvider(BuildProperties buildProperties) {
-        return new BuildInfoProvider(buildProperties);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(BuildInfoProvider.class)
-    public BuildInfoProvider buildInfoProviderFallback() {
-        return new BuildInfoProvider(null);
+    public BuildInfoProvider buildInfoProvider(ObjectProvider<BuildProperties> buildProperties) {
+        return new BuildInfoProvider(buildProperties.getIfAvailable());
     }
 
     @Bean
