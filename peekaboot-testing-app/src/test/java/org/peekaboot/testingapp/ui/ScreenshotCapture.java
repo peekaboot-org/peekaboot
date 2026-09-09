@@ -185,7 +185,27 @@ class ScreenshotCapture extends PlaywrightTestBase {
             captureInsights(outputDir, theme);
         }
 
-        assertThat(outputDir).isDirectoryContaining(path -> path.toString().endsWith(".png"));
+        for (String name : expectedFileNames(themes)) {
+            assertThat(outputDir.resolve(name + ".png")).as(name).isRegularFile();
+        }
+    }
+
+    /** The canonical file names the website ships (see the module README); a shot that silently did not happen fails here. */
+    private static List<String> expectedFileNames(List<String> themes) {
+        List<String> names = new ArrayList<>();
+        for (String theme : themes) {
+            for (String tabId : DASHBOARD_TABS) {
+                names.add("dashboard-" + tabId + "-" + theme);
+            }
+            names.add("dashboard-" + INSIGHTS_TAB + "-" + theme);
+            for (String tabId : REVEAL_BUTTON_SELECTOR.keySet()) {
+                names.add("dashboard-" + tabId + "-revealed-" + theme);
+            }
+            names.add("trace-detail-" + theme);
+            names.add("trace-detail-queries-" + theme);
+            names.add("toolbar-collapsed-" + theme);
+        }
+        return names;
     }
 
     private Path resolveOutputDir() throws Exception {
@@ -294,36 +314,19 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * is derived from the configured level-0 interval rather than assumed: a dozen ticks
      * plus one for the one in flight, so a profile with a slower cadence waits
      * proportionally longer instead of failing.
-     *
-     * <p>Polled with {@code page.evaluate} in a plain loop, not {@code waitForFunction}:
-     * the predicate has to await a fetch, and waitForFunction does not await an async
-     * predicate - the pending Promise itself is truthy, so such a wait "passes" on its
-     * first poll.
      */
     private void waitForInsightsHistory() {
-        Number intervalMs = (Number) page.evaluate("""
-                async () => {
-                    const response = await fetch('/peekaboot/api/insights/config');
-                    return (await response.json()).levels[0].intervalMs;
-                }
-                """);
-        long deadline = System.currentTimeMillis() + intervalMs.longValue() * (MIN_INSIGHTS_SAMPLES + 1);
-        while (true) {
-            Number count = (Number) page.evaluate("""
-                    async () => {
-                        const response = await fetch('/peekaboot/api/insights/data?level=0');
-                        return (await response.json()).count;
-                    }
-                    """);
-            if (count.intValue() >= MIN_INSIGHTS_SAMPLES) {
-                return;
-            }
-            if (System.currentTimeMillis() > deadline) {
-                throw new IllegalStateException("insights level 0 still holds only " + count + " of the "
-                        + MIN_INSIGHTS_SAMPLES + " samples required for a chart worth photographing");
-            }
-            page.waitForTimeout(1000);
-        }
+        int intervalMs = awaitJson("/peekaboot/api/insights/config", "config => config", "the insights config")
+                .path("levels")
+                .get(0)
+                .path("intervalMs")
+                .asInt();
+        awaitJson(
+                "/peekaboot/api/insights/data?level=0",
+                "data => data.count >= " + MIN_INSIGHTS_SAMPLES + " ? data : null",
+                "insights level 0 never held the " + MIN_INSIGHTS_SAMPLES
+                        + " samples required for a chart worth photographing",
+                intervalMs * (MIN_INSIGHTS_SAMPLES + 1));
     }
 
     /**
@@ -420,11 +423,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
                     + "cannot deep-link the flagship trace-detail screenshot");
         }
         // The toolbar payload above is read the instant the response committed; the
-        // /orders trace's ~80+ spans arrive at the store asynchronously afterward via
-        // Spring's event listener. No element on this page flips state when that finishes,
-        // so there's nothing to waitForSelector/waitForFunction on - a fixed pause is the
-        // only option to let span capture settle before the dashboard/trace-detail
-        // screenshots below read this trace back.
-        page.waitForTimeout(500);
+        // /orders trace's ~80+ spans arrive at the store asynchronously afterward.
+        awaitTrace(flagshipTraceId, ROOT_SPAN_EXPORTED);
     }
 }

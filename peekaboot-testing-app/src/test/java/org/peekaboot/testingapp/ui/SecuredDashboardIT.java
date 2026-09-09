@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.options.LoadState;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -92,7 +91,8 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             });
 
             Response response = anonymousPage.navigate(baseUrl + "/persons");
-            anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
+            anonymousPage.waitForCondition(() -> !toolbarScriptStatuses.isEmpty());
+            awaitAuthNoticeVisible(new Toolbar(anonymousPage));
 
             assertThat(response.status()).isEqualTo(200);
             assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons");
@@ -117,10 +117,11 @@ class SecuredDashboardIT extends PlaywrightTestBase {
         try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
             Page anonymousPage = anonymous.newPage();
             anonymousPage.navigate(baseUrl + "/persons");
-            anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
+            Toolbar anonymousToolbar = new Toolbar(anonymousPage);
+            anonymousToolbar.waitFor("#pk-auth a");
 
-            String href = (String) new Toolbar(anonymousPage)
-                    .evaluate("root => root.querySelector('#pk-auth a').getAttribute('href')");
+            String href =
+                    (String) anonymousToolbar.evaluate("root => root.querySelector('#pk-auth a').getAttribute('href')");
 
             assertThat(href).isEqualTo("/peekaboot/");
         }
