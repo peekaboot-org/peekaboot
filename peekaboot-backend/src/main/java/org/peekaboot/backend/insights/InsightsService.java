@@ -39,7 +39,7 @@ public final class InsightsService implements SmartLifecycle {
 
     private final InsightsProperties properties;
     private final InsightsCollector collector;
-    private final InsightsSnapshotStore store;
+    private final SnapshotStore store;
     private final List<PanelDef> panels;
     private final List<TileDef> tiles;
     private final int seriesCount;
@@ -70,13 +70,8 @@ public final class InsightsService implements SmartLifecycle {
         this.seriesCount = namespacedSeries.size();
 
         this.store = InsightsSnapshotStore.create(storage, properties);
-        this.collector = new InsightsCollector(
-                properties.getLevels(),
-                namespacedSeries,
-                tiles,
-                registry,
-                listener,
-                store != null ? store : InsightsCollector.SnapshotSource.NONE);
+        this.collector =
+                new InsightsCollector(properties.getLevels(), namespacedSeries, tiles, registry, listener, store);
     }
 
     /**
@@ -126,20 +121,16 @@ public final class InsightsService implements SmartLifecycle {
 
     @Override
     public void start() {
-        if (store != null) {
-            store.beginLoad();
-        }
+        store.beginLoad();
         collector.start();
-        if (store != null) {
-            store.start(collector::capture, collector::hasRestoredHistory);
-        }
+        store.start(collector::capture, collector::hasRestoredHistory);
         log.info(
                 "Peekaboot insights: {} series across {} panels, levels [{}], ring buffers ~{}{}",
                 seriesCount,
                 panels.size(),
                 levelsDescription(),
                 ByteFormat.humanize(estimatedMemoryBytes()),
-                store != null ? ", persisted across restarts" : "");
+                store.startupNote());
     }
 
     /**
@@ -149,9 +140,7 @@ public final class InsightsService implements SmartLifecycle {
     @Override
     public void stop() {
         collector.stop();
-        if (store != null) {
-            store.stop();
-        }
+        store.stop();
     }
 
     @Override

@@ -61,7 +61,9 @@ small versioned binary format: magic `"PKIN"`, a schema version, then the header
 each boundary of `peekaboot.insights.persistence.interval` (default: the coarsest level's own
 interval), and once more synchronously at shutdown after the collector has stopped, so the
 final write sees quiesced rings. A run that never ticked skips the write rather than
-overwriting a good file with an empty one.
+overwriting a good file with an empty one. With storage off, `InsightsSnapshotStore.create`
+hands the service `SnapshotStore.NONE`, a store that loads, writes and restores nothing, so
+`InsightsService` drives one store the same way in both cases.
 
 The snapshot is a cache, never a source of truth, so anything wrong with it costs only the
 history. Four things count as wrong: a bad magic number, a schema version this build doesn't
