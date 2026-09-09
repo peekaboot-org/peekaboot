@@ -11,10 +11,11 @@ import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class ScheduledTasksMapperTest {
 
-    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper();
+    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper(new MaskingEngine());
 
     @Test
     void map_shouldExtractCronTasks() {
@@ -105,6 +106,31 @@ class ScheduledTasksMapperTest {
 
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.FAILED);
         assertThat(result.tasks().get(0).lastException()).isEqualTo("java.lang.NullPointerException: Task failed");
+    }
+
+    // A failed task's message routinely echoes what failed: a JDBC URL, a request line.
+    // It runs through the value rules like any other free text on the dashboard.
+    @Test
+    void map_shouldMaskACredentialInsideTheExceptionMessage() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        1000L,
+                        new ScheduledTasksResponse.TaskExecution(
+                                new ScheduledTasksResponse.TaskExceptionInfo(
+                                        "Connection to jdbc:postgresql://dbuser:hunter2@db.example.com/orders refused",
+                                        "java.sql.SQLException"),
+                                "ERROR",
+                                Instant.parse("2026-01-11T06:49:20Z")),
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.reconcile"))),
+                List.of());
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks().get(0).lastException())
+                .isEqualTo(
+                        "java.sql.SQLException: Connection to jdbc:postgresql://******@db.example.com/orders refused");
     }
 
     @Test

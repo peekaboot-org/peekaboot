@@ -136,8 +136,8 @@ public class PeekabootAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public ScheduledTasksMapper scheduledTasksMapper() {
-        return new ScheduledTasksMapper();
+    public ScheduledTasksMapper scheduledTasksMapper(MaskingEngine maskingEngine) {
+        return new ScheduledTasksMapper(maskingEngine);
     }
 
     @Bean

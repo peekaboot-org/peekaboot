@@ -10,10 +10,16 @@ import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 public class ScheduledTasksMapper {
 
     private final CronDescriber cronDescriber = new CronDescriber();
+    private final MaskingEngine maskingEngine;
+
+    public ScheduledTasksMapper(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
 
     public ScheduledTasksInfo map(ScheduledTasksResponse response, Locale locale) {
         if (response == null) {
@@ -90,9 +96,13 @@ public class ScheduledTasksMapper {
             return null;
         }
         var ex = execution.exception();
+        String text;
         if (ex.type() != null && ex.message() != null) {
-            return ex.type() + ": " + ex.message();
+            text = ex.type() + ": " + ex.message();
+        } else {
+            text = ex.message() != null ? ex.message() : ex.type();
         }
-        return ex.message() != null ? ex.message() : ex.type();
+        // The message echoes what failed: a JDBC URL, a request line with its query.
+        return maskingEngine.maskValue(text);
     }
 }
