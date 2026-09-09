@@ -113,4 +113,45 @@ class RuntimeMapperTest {
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
     }
+
+    /** A JVM without -Xmx reports an unbounded heap as -1; the share is then unknown, never negative. */
+    @Test
+    void map_shouldReportAnUnboundedHeapWithoutAPercentage() {
+        InfoResponse info = new InfoResponse(
+                null,
+                null,
+                null,
+                null,
+                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
+                        new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 100_000_000L), null)));
+        RuntimeInfo result = mapper.map(info, null);
+        assertThat(result.memory().heapMax()).isEqualTo(-1L);
+        assertThat(result.memory().heapUsedPercent()).isZero();
+    }
+
+    @Test
+    void map_shouldReturnNullMemoryWhenOnlyNonHeapIsKnown() {
+        InfoResponse info = new InfoResponse(
+                null,
+                null,
+                null,
+                null,
+                new InfoResponse.ProcessInfo(new InfoResponse.ProcessInfo.MemoryInfo(
+                        null, new InfoResponse.ProcessInfo.MemoryInfo.HeapInfo(-1L, 50_000_000L))));
+        RuntimeInfo result = mapper.map(info, null);
+        assertThat(result.memory()).isNull();
+    }
+
+    /** A custom disk indicator may render its sizes as text; a total that is not a number is no total. */
+    @Test
+    void map_shouldSkipDiskEntryWhoseTotalIsNotANumber() {
+        HealthResponse health = new HealthResponse(
+                "UP",
+                Map.of(
+                        "diskSpace",
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("total", "500 GB", "free", "200 GB", "path", "/"), null)));
+        RuntimeInfo result = mapper.map(null, health);
+        assertThat(result.storage()).isEmpty();
+    }
 }

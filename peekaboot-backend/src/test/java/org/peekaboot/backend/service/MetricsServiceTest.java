@@ -2,12 +2,15 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.Assertions.within;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
@@ -182,6 +185,24 @@ class MetricsServiceTest {
         assertThat(result.metrics().get(0).measurements().get(0).tags())
                 .containsEntry("api-key", "******")
                 .containsEntry("region", "eu-west-1");
+    }
+
+    /** A timer measures three statistics at once; every one reaches the wire, in the registry's base unit. */
+    @Test
+    void getMetrics_reportsEveryStatisticOfATimer() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Timer timer = Timer.builder("http.server.requests").register(registry);
+        timer.record(Duration.ofMillis(120));
+        timer.record(Duration.ofMillis(80));
+
+        MetricMeasurement measurement = firstMeasurement(registry);
+
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::name)
+                .containsExactly("COUNT", "TOTAL_TIME", "MAX");
+        assertThat(measurement.statistics().get(0).value()).isEqualTo(2.0);
+        assertThat(measurement.statistics().get(1).value()).isCloseTo(0.2, within(1e-9));
+        assertThat(measurement.statistics().get(2).value()).isCloseTo(0.12, within(1e-9));
     }
 
     /** The one measurement of the one meter a test registered. */

@@ -60,6 +60,16 @@ class ApplicationMapperTest {
     }
 
     @Test
+    void map_shouldLeaveTheVendorAbsentWhenJavaCarriesNone() {
+        InfoResponse info = new InfoResponse(null, null, new InfoResponse.JavaInfo(null, "21.0.1"), null, null);
+
+        ApplicationInfo result = mapper.map(info, null, false);
+
+        assertThat(result.javaVersion()).isEqualTo("21.0.1");
+        assertThat(result.javaVendor()).isNull();
+    }
+
+    @Test
     void map_shouldExtractJavaInfo() {
         InfoResponse info = new InfoResponse(
                 null,

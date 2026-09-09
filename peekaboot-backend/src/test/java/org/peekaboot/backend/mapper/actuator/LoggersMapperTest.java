@@ -90,4 +90,17 @@ class LoggersMapperTest {
         assertThat(result.packages()).hasSize(1);
         assertThat(result.packages().get(0).packageName()).isEqualTo("ROOT");
     }
+
+    /** The group is the first two segments; a logger named by exactly two is its own group. */
+    @Test
+    void map_shouldGroupATwoSegmentLoggerUnderItsOwnName() {
+        Map<String, LoggersResponse.LoggerInfo> loggers = new LinkedHashMap<>();
+        loggers.put("com.example", new LoggersResponse.LoggerInfo("DEBUG", "DEBUG"));
+        loggers.put("com.example.Foo", new LoggersResponse.LoggerInfo(null, "DEBUG"));
+
+        LoggersInfo result = mapper.map(new LoggersResponse(loggers));
+
+        assertThat(result.packages()).extracting(LoggerGroup::packageName).containsExactly("com.example");
+        assertThat(result.packages().get(0).loggers()).hasSize(2);
+    }
 }

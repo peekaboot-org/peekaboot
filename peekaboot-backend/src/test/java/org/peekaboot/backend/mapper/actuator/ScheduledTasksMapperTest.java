@@ -206,6 +206,42 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
     }
 
+    /** Boot omits the runnable for a task it cannot describe; the row still has a name. */
+    @Test
+    void map_shouldNameAnUnknownTargetWhenTheRunnableIsMissing() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(), List.of(new ScheduledTasksResponse.FixedTask(1000L, null, null, null)), List.of());
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::target).containsExactly("unknown");
+    }
+
+    /** An exception reported with only one of its two halves is rendered as that half, with no dangling separator. */
+    @Test
+    void map_shouldRenderAnExceptionCarryingOnlyAMessageOrOnlyAType() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(),
+                List.of(
+                        failedTask("a", new ScheduledTasksResponse.TaskExceptionInfo("Task failed", null)),
+                        failedTask("b", new ScheduledTasksResponse.TaskExceptionInfo(null, "java.io.IOException"))),
+                List.of());
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks())
+                .extracting(ScheduledTaskInfo::lastException)
+                .containsExactly("Task failed", "java.io.IOException");
+    }
+
+    private ScheduledTasksResponse.FixedTask failedTask(String target, ScheduledTasksResponse.TaskExceptionInfo ex) {
+        return new ScheduledTasksResponse.FixedTask(
+                1000L,
+                new ScheduledTasksResponse.TaskExecution(ex, "ERROR", Instant.parse("2026-01-11T06:49:20Z")),
+                null,
+                new ScheduledTasksResponse.RunnableTarget(target));
+    }
+
     private ScheduledTasksResponse.CronTask createCronTask(String expr, String target) {
         return new ScheduledTasksResponse.CronTask(expr, null, null, new ScheduledTasksResponse.RunnableTarget(target));
     }
