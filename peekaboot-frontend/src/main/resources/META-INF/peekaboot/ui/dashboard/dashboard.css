@@ -352,8 +352,6 @@
 .pk-flyway-row__script { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pk-text-muted); }
 .pk-flyway-row--failed td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
 .pk-flyway-row--pending td:first-child { box-shadow: inset 3px 0 0 var(--pk-text-muted); }
-.pk-flyway-row__time--slow { color: var(--pk-warning-text); }
-.pk-flyway-row__time--very-slow { color: var(--pk-danger); }
 
 /* Traces controls - the bucket buttons row and the type filter checkbox row share this
    layout, hence one shared class rather than two near-identical rules. */
