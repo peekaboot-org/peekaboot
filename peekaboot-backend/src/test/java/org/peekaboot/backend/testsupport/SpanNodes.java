@@ -80,6 +80,11 @@ public final class SpanNodes {
             return this;
         }
 
+        public Builder events(List<SpanEvent> events) {
+            this.events = events;
+            return this;
+        }
+
         public Builder issues(List<SpanIssue> issues) {
             this.issues = issues;
             return this;

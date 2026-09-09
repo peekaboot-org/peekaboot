@@ -24,10 +24,5 @@ public record HealthResponse(String status, Map<String, HealthComponent> compone
             details = Absent.orEmpty(details);
             components = Absent.orEmpty(components);
         }
-
-        /** An indicator: details and no children. */
-        public HealthComponent(String status, Map<String, Object> details) {
-            this(status, details, null);
-        }
     }
 }
