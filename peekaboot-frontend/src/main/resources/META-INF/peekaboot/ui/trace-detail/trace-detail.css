@@ -1,7 +1,8 @@
-/* Trace-detail overlay. Tokens come from ../assets/tokens.css; tabs, the status pill
-   and the empty-state message reuse .pk-tabs/.pk-tab, .pk-badge and .pk-empty from
-   ../assets/components.css. The host's own fixed-fullscreen sizing is set inline by
-   trace-detail.js (see the comment at that call site); .pk-overlay simply fills it. */
+/* Trace-detail overlay. Tokens come from ../assets/tokens.css; tabs, the status pill,
+   the empty-state message, the coloured durations, labels and icon buttons reuse
+   ../assets/components.css, the focus ring and the button reset ../assets/base.css. The
+   host's own fixed-fullscreen sizing is set inline by trace-detail.js (see the comment at
+   that call site); .pk-overlay simply fills it. */
 
 .pk-overlay {
     position: absolute;
@@ -57,19 +58,15 @@
 }
 
 .pk-overlay__duration { font-family: var(--pk-font-mono); font-weight: 600; font-size: var(--pk-text-base); }
-.pk-overlay__duration--slow { color: var(--pk-warning-text); }
 
+/* A .pk-unbutton with the header's own padding. */
 .pk-overlay__close {
-    background: transparent;
-    border: none;
     color: var(--pk-text-muted);
     font-size: 28px;
-    cursor: pointer;
     padding: var(--pk-space-xs) var(--pk-space-sm);
     line-height: 1;
 }
 .pk-overlay__close:hover { color: var(--pk-danger); }
-.pk-overlay__close:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 /* The overlay's tab strip reuses shared .pk-tabs/.pk-tab and adds its own chrome
    (padding, alt background). The direct-child selector keeps that chrome off any strip
@@ -87,7 +84,7 @@
 /* Gantt view styles */
 .pk-gantt { display: flex; flex-direction: column; gap: 2px; --pk-gantt-name-width: 350px; --pk-gantt-duration-width: 90px; }
 .pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
-.pk-gantt-header__name { width: var(--pk-gantt-name-width); color: var(--pk-text-muted); font-size: var(--pk-text-xs); text-transform: uppercase; }
+.pk-gantt-header__name { width: var(--pk-gantt-name-width); }
 /* Same side margin as .pk-gantt-track below, so the ticks land right above the
    start/end of the bars they describe instead of further out. */
 .pk-gantt-header__timeline { flex: 1; display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
@@ -96,13 +93,9 @@
 .pk-gantt-row { display: flex; align-items: center; padding: var(--pk-space-xs) 0; border-radius: var(--pk-space-xs); }
 .pk-gantt-row:hover { background: var(--pk-bg-alt); }
 
-/* Real <button>s with the browser's button chrome reset away and a focus ring added -
-   they look like the plain glyphs they are; the keyboard reachability is the point. The
-   24px box is WCAG 2.2's target-size floor (2.5.8) - the glyph stays small, the target does not. */
-.pk-gantt-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 24px; min-height: 24px;
-    cursor: pointer; user-select: none; color: var(--pk-text-muted);
-    background: none; border: none; padding: 0; font: inherit; line-height: inherit; }
-.pk-gantt-toggle:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
+/* A .pk-unbutton .pk-icon-btn: it looks like the plain glyph it is; the keyboard
+   reachability is the point. */
+.pk-gantt-toggle { user-select: none; color: var(--pk-text-muted); line-height: inherit; }
 .pk-gantt-toggle:hover { color: var(--pk-text); }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: 24px; }
@@ -123,15 +116,12 @@
 .pk-gantt-bar--error { background: var(--pk-danger); }
 
 .pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
-.pk-gantt-duration--slow { color: var(--pk-warning-text); }
-.pk-gantt-duration--very-slow { color: var(--pk-danger); }
 
-/* A 2px line is the visible marker; the ::before box around it is the click target,
-   sized to the same 24px floor as the other overlay controls. */
-.pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; cursor: pointer;
-    border: none; padding: 0; }
+/* A .pk-unbutton whose 2px line is the visible marker; the ::before box around it is the
+   click target, sized to the same 24px floor as the other overlay controls. */
+.pk-gantt-event-marker { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--pk-success); z-index: 1; }
 .pk-gantt-event-marker::before { content: ''; position: absolute; inset: -1px -11px; }
-.pk-gantt-event-marker:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 2px; }
+.pk-gantt-event-marker:focus-visible { outline-offset: 2px; }
 .pk-gantt-event-marker::after { content: ''; position: absolute; top: -3px; left: -3px; width: 8px; height: 8px; background: var(--pk-success); border-radius: 50%; border: 1px solid var(--pk-bg); }
 .pk-gantt-event-marker:hover::after { transform: scale(1.3); }
 .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
@@ -150,17 +140,16 @@
 .pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; margin-left: var(--pk-space-xs); user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
 .pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 .pk-span-action:active { background: var(--pk-bg-alt); }
-.pk-span-action:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 /* Indented by spans.js to its row's own depth. */
 .pk-span-query-detail { padding: var(--pk-space-sm) var(--pk-space-md); margin: var(--pk-space-xs) 0; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); white-space: pre-wrap; word-break: break-all; display: none; }
 .pk-span-query-detail--expanded { display: block; }
-.pk-span-query-detail .pk-query-label { color: var(--pk-text-muted); font-size: var(--pk-text-xs); text-transform: uppercase; margin-bottom: var(--pk-space-xs); }
+.pk-span-query-detail .pk-query-label { margin-bottom: var(--pk-space-xs); }
 .pk-span-query-detail .pk-query-text { color: var(--pk-text-strong); }
 
 /* Request tab styles */
 .pk-request-section { margin-bottom: var(--pk-space-lg); }
-.pk-request-section h3 { font-size: var(--pk-text-xs); color: var(--pk-text-muted); margin: 0 0 var(--pk-space-sm) 0; text-transform: uppercase; letter-spacing: 0.5px; }
+.pk-request-section h3 { margin: 0 0 var(--pk-space-sm) 0; }
 /* Two muted-italic notes that must not share a class: --masked marks a value the
    masking engine replaced, and the mask tests count those. --empty is the placeholder
    row a header section shows when nothing was captured, which is not a masked value. */
@@ -173,7 +162,6 @@
 .pk-query-system { color: var(--pk-text-muted); }
 .pk-query-meta { display: flex; gap: var(--pk-space-md); align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
-.pk-query__duration--slow { color: var(--pk-warning-text); }
 .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: var(--pk-text-xs); }
 .pk-query__sql { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 
@@ -183,14 +171,15 @@
 .pk-logs-filter input { flex: 1; max-width: 300px; }
 .pk-logs-filter input::placeholder { color: var(--pk-text-muted); }
 .pk-logs-filter-span { display: flex; align-items: center; gap: 6px; padding: var(--pk-space-xs) 10px; background: var(--pk-primary); color: var(--pk-on-primary); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); }
-.pk-logs-filter-span-clear { cursor: pointer; font-weight: bold;
-    background: none; border: none; padding: 0 2px; font-size: inherit; color: inherit;
-    border-radius: 2px; }
+/* A .pk-unbutton on the chip's green fill. */
+.pk-logs-filter-span-clear { font-weight: bold; padding: 0 2px; border-radius: 2px; }
 /* An ink-tinted wash, not a colour swap: any danger/warning tone on the green fill is
    under 2:1. --pk-on-primary-wash carries the same dark ink as --pk-on-primary, invariant
    across themes, so the glyph keeps 5.5:1+ on the washed fill. */
 .pk-logs-filter-span-clear:hover { background: var(--pk-on-primary-wash, rgba(13, 17, 23, 0.15)); }
-.pk-logs-filter-span-clear:focus-visible { outline: 2px solid var(--pk-on-primary); outline-offset: 1px; }
+/* The one focus ring not drawn in --pk-primary-text: on the green fill that colour is
+   invisible, so the ring takes the fill's own ink. */
+.pk-logs-filter-span-clear:focus-visible { outline-color: var(--pk-on-primary); }
 
 /* Logs tab row, one per trace log entry (see renderLogRows in tabs/logs.js). */
 .pk-log { display: flex; gap: var(--pk-space-md); padding: 6px var(--pk-space-md); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); border-bottom: 1px solid var(--pk-bg-alt); }
@@ -200,10 +189,9 @@
 /* Name button (filters to the span) stacked over its copyable full id - the span tree
    shows no ids (too crowded with one on every row), so this is the id's only home. */
 .pk-log__span-cell { width: 140px; flex: none; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-.pk-log__span { width: 100%; color: var(--pk-primary-text); cursor: pointer; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    background: none; border: none; padding: 0; text-align: left; flex: none; }
+/* A .pk-unbutton that reads as the link it acts like. */
+.pk-log__span { width: 100%; color: var(--pk-primary-text); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: none; }
 .pk-log__span:hover { text-decoration: underline; }
-.pk-log__span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 /* Trimmed down from the default .pk-copy chrome (components.css), but only as far as the
    horizontal padding and the gap: components.css's 24px min-height is a deliberate
    hit-target floor (WCAG 2.2 §2.5.8), not chrome, so it stays even though it costs this
@@ -213,9 +201,9 @@
    column flow, so the copyable id below keeps its own line. */
 .pk-log__span-row { display: flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-log__span-row .pk-log__span { flex: 1; min-width: 0; width: auto; }
-.pk-log__goto-span { display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 24px; min-height: 24px; background: none; border: none; padding: 0; color: var(--pk-primary-text); font-size: var(--pk-text-xs); cursor: pointer; }
+/* A .pk-unbutton .pk-icon-btn. */
+.pk-log__goto-span { color: var(--pk-primary-text); font-size: var(--pk-text-xs); }
 .pk-log__goto-span:hover { color: var(--pk-text); }
-.pk-log__goto-span:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
 .pk-log__level { width: 50px; font-weight: 600; }
 .pk-log__level--trace, .pk-log__level--debug { color: var(--pk-text-muted); }

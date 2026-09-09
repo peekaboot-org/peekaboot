@@ -83,7 +83,7 @@ public class ToolbarShell {
                     <style>{{CSS}}</style>
             {{LINKS}}
                     <div class="pk-toolbar">
-                        <button type="button" class="pk-toolbar__open" aria-label="Open request trace details" aria-disabled="true">
+                        <button type="button" class="pk-unbutton pk-toolbar__open" aria-label="Open request trace details" aria-disabled="true">
                             <span class="pk-toolbar__side">
                                 <span class="pk-badge" id="pk-status"></span>
                                 <span class="pk-toolbar__method" id="pk-method"></span>
@@ -96,7 +96,7 @@ public class ToolbarShell {
                         </button>
                         <span class="pk-toolbar__auth" id="pk-auth"><a href="{{BASE}}/" target="_blank" title="The toolbar's script or data did not load — an authorization gate or a strict Content-Security-Policy usually explains it.">Peekaboot toolbar could not start — sign in, or check that its script is allowed to load</a></span>
                         <span class="pk-toolbar__trace" id="pk-trace">-</span>
-                        <a class="pk-toolbar__link" href="{{BASE}}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
+                        <a class="pk-toolbar__link pk-logo-mark" href="{{BASE}}/" target="_blank" title="Open Dashboard" aria-label="Open Peekaboot dashboard"></a>
                     </div>
                 </template>
             </div>

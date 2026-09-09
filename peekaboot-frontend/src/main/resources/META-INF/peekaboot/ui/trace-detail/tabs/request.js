@@ -26,7 +26,7 @@ function tableRow(key, value, valueClass) {
 
 /** `note` is the muted aside a title can carry ("(truncated)"). */
 function section(title, body, note) {
-    const heading = el('h3', {text: title});
+    const heading = el('h3', {className: 'pk-label', text: title});
     if (note) heading.append(' ', el('span', {className: 'pk-request-masked', text: note}));
     return el('div', {className: 'pk-request-section'}, heading, body);
 }

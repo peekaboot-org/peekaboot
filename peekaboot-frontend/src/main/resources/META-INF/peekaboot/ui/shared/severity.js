@@ -35,6 +35,11 @@ export function durationSeverity(ms, features) {
     return '';
 }
 
+/** A severity suffix as the components.css class that colours a duration by it; '' for none. */
+export function severityClass(severity) {
+    return severity ? `pk-duration--${severity}` : '';
+}
+
 /**
  * Severity of a query's duration at the query threshold - the one behind the backend's
  * SLOW_QUERY issue, which knows a single tier: a query at or above it (>=) is slow.

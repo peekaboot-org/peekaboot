@@ -6,7 +6,7 @@
  */
 import {emptyState} from '../../shared/components.js';
 import {el, button} from '../../shared/dom.js';
-import {querySeverity} from '../../shared/severity.js';
+import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 
 export function render(container, trace, view = {}) {
@@ -28,7 +28,7 @@ function queryItem(query, index, view) {
 
     const meta = el('span', {className: 'pk-query-meta'},
         el('span', {
-            className: 'pk-query__duration' + (durationClass ? ' pk-query__duration--' + durationClass : ''),
+            className: 'pk-query__duration' + (durationClass ? ` ${severityClass(durationClass)}` : ''),
             text: formatDurationMs(duration) + (durationClass ? ' SLOW' : '')
         }));
     if (query.rowCount != null) {

@@ -3,11 +3,8 @@
 
 /* Badge — one pill, six semantic variants. Each variant uses its own --pk-on-* ink:
    the fills are fill-tuned, not text-tuned, so neither white nor --pk-text-strong
-   clears WCAG AA on all of them (see tokens.css for the pairs).
-
-   --info deliberately does not reuse --pk-primary: a primary-filled INFO pill
-   would sit beside a green --pk-success UP pill and read as the same state.
-   Holding --pk-info in the cyan range keeps the two apart at pill size. */
+   clears WCAG AA on all of them (see tokens.css for the pairs and for why --pk-info
+   is its own hue). */
 .pk-badge {
     display: inline-flex;
     align-items: center;
@@ -31,12 +28,37 @@
 .pk-badge--info    { background: var(--pk-info); color: var(--pk-on-info); }
 .pk-badge--muted   { background: var(--pk-bg-hover); color: var(--pk-text); }
 
-/* A trace's stat line (shared/trace-stats.js): a count with a mono duration beside it,
-   coloured by the duration's severity. Rendered by the toolbar and the Traces tab alike. */
+/* A duration coloured by its severity (severity.js's severityClass): the text-tuned amber
+   and the danger red, both drawn on the page background. One pair for every surface that
+   shows a duration - the stat line, the overlay header, the gantt cells, the Queries tab. */
+.pk-duration--slow { color: var(--pk-warning-text); }
+.pk-duration--very-slow { color: var(--pk-danger); }
+
+/* A trace's stat line (shared/trace-stats.js): a count with a mono duration beside it.
+   Rendered by the toolbar and the Traces tab alike. */
 .pk-stat { display: inline-flex; align-items: center; gap: var(--pk-space-xs); }
 .pk-stat__duration { font-family: var(--pk-font-mono); }
-.pk-stat--slow .pk-stat__duration { color: var(--pk-warning-text); }
-.pk-stat--very-slow .pk-stat__duration { color: var(--pk-danger); }
+
+/* A small uppercase caption: card headers, filter-row labels, the tile and gantt column
+   labels, the overlay's section headings. */
+.pk-label {
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--pk-text-muted);
+}
+
+/* A 24px icon-only control: WCAG 2.2's target-size floor (2.5.8), measured - the glyph
+   stays small, the target does not. Pairs with .pk-unbutton for the chrome-less ones. */
+.pk-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    min-width: 24px;
+    min-height: 24px;
+}
 
 /* Collapsible group. State is aria-expanded + [hidden], not a class. */
 .pk-group {
@@ -60,7 +82,7 @@
     transition: background-color var(--pk-transition);
 }
 .pk-group__header:hover { background: var(--pk-bg-hover); }
-.pk-group__header:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-group__header:focus-visible { outline-offset: -2px; }
 .pk-group__header[aria-expanded="false"] { border-radius: var(--pk-radius); }
 .pk-group__header::before {
     content: '\25BE';
@@ -188,7 +210,6 @@
 .pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(0.92); }
 [data-theme="dark"] .pk-btn:not(:disabled)[aria-pressed="true"]:hover,
 :host([data-theme="dark"]) .pk-btn:not(:disabled)[aria-pressed="true"]:hover { filter: brightness(1.12); }
-.pk-btn:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 /* 0.65, not 0.5: the dimmed label still clears 4.5:1 on --pk-bg/--pk-bg-alt, so it
    reads as off rather than as maybe-clickable. */
 .pk-btn:disabled { opacity: 0.65; cursor: not-allowed; }
@@ -224,7 +245,6 @@
     cursor: pointer;
 }
 .pk-copy:hover { background: var(--pk-bg-hover); border-color: var(--pk-border); }
-.pk-copy:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 .pk-copy__label { flex: 0 0 auto; color: var(--pk-text-muted); font-size: var(--pk-text-xs); }
 .pk-copy__value { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); }
 /* Only where the container is genuinely narrow; the id stays fully copyable either way. */
@@ -272,6 +292,13 @@
 .pk-table__shrink { width: 1%; white-space: nowrap; }
 .pk-table--kv td:first-child { width: 200px; color: var(--pk-text-muted); }
 .pk-table--kv td:last-child { font-family: var(--pk-font-mono); word-break: break-all; }
+/* A table that is a card of its own (Flyway's migrations, Lifecycle's runs). The stripe
+   modifiers go on a row: a state moves to a row-leading border so a failed migration or an
+   unclean run is still findable at a glance in a history hundreds of rows long. */
+.pk-table--card { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
+.pk-table__stripe--danger td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
+.pk-table__stripe--muted td:first-child { box-shadow: inset 3px 0 0 var(--pk-text-muted); }
+.pk-table__stripe--primary td:first-child { box-shadow: inset 3px 0 0 var(--pk-primary); }
 /* Wide tables scroll inside their own box rather than widening the page. */
 .pk-table-scroll { overflow-x: auto; }
 
@@ -294,7 +321,7 @@
     white-space: nowrap;
 }
 .pk-tab:hover { color: var(--pk-text); }
-.pk-tab:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-tab:focus-visible { outline-offset: -2px; }
 .pk-tab[aria-selected="true"] { color: var(--pk-text-strong); border-bottom-color: var(--pk-primary-text); }
 /* The count tabStrip() renders beside a tab's label. Explicit ink: inherited from .pk-tab
    this would be --pk-text-muted, which is only 3.6:1 on the --pk-border fill - body ink
@@ -324,6 +351,24 @@
     text-align: center;
 }
 
-/* Spinner, shared by every loading state */
+/* Loading state (components.js's loadingBlock, and the dashboard's static boot placeholder):
+   the spinner with its caption. */
 @keyframes pk-spin { to { transform: rotate(360deg); } }
 .pk-spinning { animation: pk-spin 1s linear infinite; }
+.pk-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--pk-space-xl);
+    color: var(--pk-text-muted);
+    gap: var(--pk-space-md);
+}
+.pk-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--pk-border);
+    border-top-color: var(--pk-primary-text);
+    border-radius: 50%;
+    animation: pk-spin 1s linear infinite;
+}

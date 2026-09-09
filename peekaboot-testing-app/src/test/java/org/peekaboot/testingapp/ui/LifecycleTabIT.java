@@ -46,7 +46,7 @@ import org.springframework.test.context.DynamicPropertySource;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LifecycleTabIT extends PlaywrightTestBase {
 
-    private static final String ROWS = "#lifecycle-runs .pk-lifecycle-table tbody tr";
+    private static final String ROWS = "#lifecycle-runs .pk-table--card tbody tr";
 
     private static final int SEEDED_RUN_COUNT = 45;
     private static final int UNCLEAN_INDEX = 40;

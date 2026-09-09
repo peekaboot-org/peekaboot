@@ -287,7 +287,7 @@ function renderTraceItem(trace, context) {
     // button cannot contain interactive content (see ToolbarShell for the same shape).
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
-    openBtn.className = 'pk-trace-item__open';
+    openBtn.className = 'pk-unbutton pk-trace-item__open';
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
     openBtn.appendChild(renderStats(trace, context));
     if (trace.traceId) {

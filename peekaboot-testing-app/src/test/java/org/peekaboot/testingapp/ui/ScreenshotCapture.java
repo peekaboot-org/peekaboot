@@ -78,7 +78,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
      */
     private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
             "overview", "#memory-info .pk-meter__fill",
-            "lifecycle", "#lifecycle-runs .pk-lifecycle-table tbody tr",
+            "lifecycle", "#lifecycle-runs .pk-table--card tbody tr",
             "environment", "#property-sources .pk-group__header",
             "flyway", "#flyway-timeline .pk-table tbody tr",
             "loggers", "#loggers-list .pk-group",
