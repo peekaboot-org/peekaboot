@@ -140,6 +140,22 @@ class DevToolbarFilterTest {
         assertThat(response.getContentAsString()).isEqualTo("{\"id\":1}");
     }
 
+    /** A body written under no declared content type is not known to be HTML; it is served as written. */
+    @Test
+    void aBodyWithoutADeclaredContentTypeGetsNoToolbar() throws Exception {
+        doAnswer(invocation -> {
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
+                    wrapper.getWriter().write("<html><body>untyped</body></html>");
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsString()).isEqualTo("<html><body>untyped</body></html>");
+    }
+
     @Test
     void shouldInjectToolbarIntoHtmlResponse() throws Exception {
         chainWritesHtml("<html><body><h1>Hello</h1></body></html>");
