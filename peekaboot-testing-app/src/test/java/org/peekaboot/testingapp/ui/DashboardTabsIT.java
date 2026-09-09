@@ -38,6 +38,45 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** Mirrors the limit traces.js sends with every listing request. */
     private static final int TRACES_PAGE_SIZE = 50;
 
+    /**
+     * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
+     * toolbar, and returns once the store serves it. Nothing else guarantees a trace: the
+     * failing scheduled jobs run once at startup, whether or not the tracer was ready to
+     * capture them, so a test waiting for a listed trace would otherwise depend on the
+     * tests that happened to run before it.
+     */
+    private void seedAnHttpTrace() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        page.waitForFunction("""
+                async traceId => (await fetch('/peekaboot/api/traces/' + traceId + '/insights')).ok
+                """, traceId);
+    }
+
+    /**
+     * Puts a failed SCHEDULED_JOB trace in the store by running the sample app's failing
+     * job, and returns once the Errors bucket lists one - the same reasoning as
+     * seedAnHttpTrace for a test that opens that bucket.
+     */
+    private void seedAnErrorTrace() {
+        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+        page.waitForFunction("""
+                async () => {
+                    const response = await fetch('/peekaboot/api/traces/insights?bucket=errors');
+                    return response.ok && (await response.json()).traces.length > 0;
+                }
+                """);
+    }
+
+    /** Opens the Traces tab with at least one trace listed (see seedAnHttpTrace). */
+    private void openTracesTabWithATrace() {
+        seedAnHttpTrace();
+        openDashboard();
+        page.click(".pk-tab[data-tab='traces']");
+        page.waitForSelector("#traces-list .pk-trace-item");
+    }
+
     @Test
     void overviewShowsJavaAndSystemCards() {
         openDashboard();
@@ -505,11 +544,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void tracesTabListsTracesAndBucketsThem() {
-        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-
-        openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        seedAnErrorTrace();
+        openTracesTabWithATrace();
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
                 .contains("All (");
 
@@ -568,6 +604,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
+        seedAnHttpTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
         page.waitForSelector("#traces-list .pk-trace-item");
 
@@ -581,9 +618,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     @Test
     void clickingATraceOpensTheOverlayAndDeepLinks() {
-        openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        openTracesTabWithATrace();
 
         page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
@@ -593,9 +628,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     @Test
     void closingTheOverlayCleansTheHash() {
-        openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        openTracesTabWithATrace();
         page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
 
@@ -620,9 +653,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
-        openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        openTracesTabWithATrace();
 
         page.click("#traces-list .pk-trace-item__open");
         page.waitForSelector("#peekaboot-trace-overlay");
@@ -662,6 +693,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
+        seedAnErrorTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
         page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
         page.waitForSelector("#traces-list .pk-trace-item");
@@ -721,9 +753,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay() {
-        openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        seedAnHttpTrace();
+        openTracesTabWithATrace();
 
         Object idsRaw = page.evaluate(
                 "() => [...document.querySelectorAll('#traces-list .pk-trace-item')].map(el => el.dataset.traceId)");
