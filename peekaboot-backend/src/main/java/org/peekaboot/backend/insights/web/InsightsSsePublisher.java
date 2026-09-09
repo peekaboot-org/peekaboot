@@ -95,11 +95,13 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     /**
      * Stops the loops and completes every open emitter, so nothing outlives the context.
      *
-     * <p>The loops go first, and each sender is interrupted before its emitter is
-     * completed: a sender wedged in a blocking send() holds that emitter's write lock,
-     * and complete() would then queue up behind it while events kept feeding the same
-     * wedge. Subscribers are snapshotted and cleared under the monitor before either
-     * step, so a broadcast racing this has nothing left to iterate.
+     * <p>The loops go first and each sender is interrupted before its emitter is
+     * completed, so no further event feeds a wedged send once shutdown has begun. The
+     * interrupt cannot end a send already inside the container's socket write, and
+     * complete() would wait behind it on that emitter's write lock, so such a peer is
+     * only detached, exactly as on timeout. Subscribers are snapshotted and cleared
+     * under the monitor before either step, so a broadcast racing this has nothing
+     * left to iterate.
      */
     @Override
     public void stop() {
@@ -115,7 +117,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         for (Subscriber subscriber : open) {
             subscriber.sender.interrupt();
             try {
-                subscriber.emitter.complete();
+                subscriber.emitter.completeUnlessSending();
             } catch (RuntimeException e) {
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
@@ -132,7 +134,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * that gets it simply retries later; nothing is lost since there is no replay anyway.
      */
     public SseEmitter subscribe() {
-        SseEmitter emitter = newEmitter();
+        SubscriberEmitter emitter = newEmitter();
         Subscriber subscriber = new Subscriber(emitter);
         boolean accepted;
         synchronized (lock) {
@@ -166,7 +168,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /** Package-visible (rather than inlined into subscribe()) so tests can override the emitter's send behavior. */
-    SseEmitter newEmitter() {
+    SubscriberEmitter newEmitter() {
         return new SubscriberEmitter();
     }
 
@@ -295,8 +297,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * while the write lock is free: a sender wedged in send() holds it, and waiting behind
      * that send on the container's thread is what the per-subscriber lanes exist to
      * prevent. Such a peer is only detached, and Spring's own timeout handling ends it.
+     * {@link #stop()} completes emitters under the same guard, for the same reason.
+     *
+     * <p>Package-visible so tests can subclass it with a send() of their own.
      */
-    private final class SubscriberEmitter extends SseEmitter {
+    class SubscriberEmitter extends SseEmitter {
 
         SubscriberEmitter() {
             super(EMITTER_TIMEOUT.toMillis());
@@ -350,11 +355,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      */
     private final class Subscriber {
 
-        private final SseEmitter emitter;
+        private final SubscriberEmitter emitter;
         private final BlockingQueue<OutboundEvent> lane = new ArrayBlockingQueue<>(SUBSCRIBER_QUEUE_CAPACITY);
         private final Thread sender;
 
-        Subscriber(SseEmitter emitter) {
+        Subscriber(SubscriberEmitter emitter) {
             this.emitter = emitter;
             this.sender = Thread.ofVirtual().name("peekaboot-insights-sse-send").unstarted(this::drainLane);
         }
