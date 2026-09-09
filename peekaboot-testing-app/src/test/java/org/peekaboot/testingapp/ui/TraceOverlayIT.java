@@ -996,31 +996,39 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The row count beside a result-set span comes from a tag string the instrumentation
-     * wrote; one that does not parse as a number renders no count at all rather than
-     * "NaN rows".
+     * The Spans tab renders the facts the backend serves rather than re-deriving them from
+     * tags and names: the row count is {@code span.rowCount} (parsed server-side, null for
+     * a count that did not parse), an error bar follows {@code span.status} alone, and
+     * every tag on the span is shown - the backend already keeps the statement tags out,
+     * so the tab does not sniff for them.
      */
     @Test
-    void spansTabShowsARowCountOnlyWhenItIsANumber() {
+    void spansTabTrustsTheBackendsSpanFacts() {
         page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
 
-        Object counts = page.evaluate("""
+        Object facts = page.evaluate("""
             async () => {
                 const m = await import('/peekaboot/ui/trace-detail/tabs/spans.js');
-                const rowCountOf = span => {
+                const rendered = span => {
                     const container = document.createElement('div');
                     m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span});
-                    return container.querySelector('.pk-span-row-count')?.textContent ?? null;
+                    return container;
                 };
+                const rowCountOf = span => rendered(span).querySelector('.pk-span-row-count')?.textContent ?? null;
+                const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
+                const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
                 return [
-                    rowCountOf({spanId: 'a', name: 'result-set', tags: {'jdbc.row-count': '3'}}),
-                    rowCountOf({spanId: 'b', name: 'result-set', tags: {'jdbc.row-count': 'abc'}})
+                    rowCountOf({spanId: 'a', name: 'result-set', rowCount: 3, tags: {'jdbc.row-count': '3'}}),
+                    rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
+                    errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
+                    errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
+                    tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
                 ];
             }
             """);
 
         @SuppressWarnings("unchecked")
-        List<String> rowCounts = (List<String>) counts;
-        assertThat(rowCounts).containsExactly("3 rows", null);
+        List<Object> spanFacts = (List<Object>) facts;
+        assertThat(spanFacts).containsExactly("3 rows", null, true, false, "system,statement");
     }
 }

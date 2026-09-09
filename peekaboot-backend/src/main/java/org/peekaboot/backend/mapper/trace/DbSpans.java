@@ -26,14 +26,49 @@ public final class DbSpans {
     /** datasource-proxy's per-statement tag; a batch carries one per statement. */
     private static final Pattern BATCH_STATEMENT_TAG = Pattern.compile("jdbc\\.query\\[(\\d+)\\]");
 
+    private static final String RESULT_SET_SPAN_NAME = "result-set";
+    private static final String ROW_COUNT_TAG = "jdbc.row-count";
+
     private DbSpans() {}
 
     public static boolean isQuery(SpanData span) {
         return isQuery(span.kind(), span.tags());
     }
 
+    /**
+     * The mapped twin. {@link TraceTreeMapper} drops the statement tags (see
+     * {@link #isStatementTag}) once the statement is served as {@link SpanNode#query}, so a
+     * datasource-proxy query span, whose only qualifying tag was {@code jdbc.query[0]}, is
+     * recognised by that field instead.
+     */
     public static boolean isQuery(SpanNode span) {
-        return isQuery(span.kind(), span.tags());
+        return span.query() != null || isQuery(span.kind(), span.tags());
+    }
+
+    /** The tags {@link #sql} reads the statement from; served once as {@code SpanNode.query}, not again as a tag. */
+    public static boolean isStatementTag(String key) {
+        return "db.query.text".equals(key)
+                || "db.statement".equals(key)
+                || BATCH_STATEMENT_TAG.matcher(key).matches();
+    }
+
+    /** datasource-proxy's result-set span: the one that carries the row count of the query before it. */
+    public static boolean isResultSet(SpanData span) {
+        return RESULT_SET_SPAN_NAME.equals(span.name())
+                && span.tags() != null
+                && span.tags().containsKey(ROW_COUNT_TAG);
+    }
+
+    /** The parsed row count of a result-set span; null for any other span, or a count that does not parse. */
+    public static Long rowCount(SpanData span) {
+        if (!isResultSet(span)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(span.tags().get(ROW_COUNT_TAG));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static boolean isQuery(Span.Kind kind, Map<String, String> tags) {

@@ -20,6 +20,7 @@ public record SpanNode(
         String errorClass,
         String remoteServiceName,
         String query,
+        Long rowCount,
         List<TraceLog> logs) {
 
     public SpanNode withLogs(List<TraceLog> newLogs) {
@@ -39,6 +40,7 @@ public record SpanNode(
                 errorClass,
                 remoteServiceName,
                 query,
+                rowCount,
                 newLogs);
     }
 
@@ -59,6 +61,7 @@ public record SpanNode(
                 errorClass,
                 remoteServiceName,
                 query,
+                rowCount,
                 logs);
     }
 
@@ -80,6 +83,7 @@ public record SpanNode(
                 errorClass,
                 remoteServiceName,
                 query,
+                rowCount,
                 logs);
     }
 }

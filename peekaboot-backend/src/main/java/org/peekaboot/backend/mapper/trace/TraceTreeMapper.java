@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -241,16 +242,28 @@ public class TraceTreeMapper {
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
                 queryText(spanData),
+                DbSpans.rowCount(spanData),
                 null);
     }
 
     /**
-     * Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
-     * credential the key name alone can't catch. A span's errorMessage and query text are
-     * masked the same way: an exception message can echo back the failing request's URL.
+     * Every tag stays on its own span, masked - http.url etc. may carry a credential the
+     * key name alone can't catch. A span's errorMessage and query text are masked the same
+     * way: an exception message can echo back the failing request's URL. The statement
+     * tags are the exception: the statement is served once, masked, as the span's
+     * {@code query}, and shipping the raw tag beside it would say it twice.
      */
     private Map<String, String> maskedTags(SpanData spanData) {
-        return spanData.tags() == null ? Map.of() : tagMasker.mask(spanData.tags());
+        if (spanData.tags() == null) {
+            return Map.of();
+        }
+        Map<String, String> kept = new LinkedHashMap<>();
+        spanData.tags().forEach((key, value) -> {
+            if (!DbSpans.isStatementTag(key)) {
+                kept.put(key, value);
+            }
+        });
+        return tagMasker.mask(kept);
     }
 
     private static List<SpanEvent> mapEvents(SpanData spanData) {
