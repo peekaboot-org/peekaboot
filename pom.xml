@@ -231,13 +231,20 @@
                      the dependency plugin's properties goal resolves in every module. The
                      agent keeps Mockito's inline mock-maker from self-attaching and
                      warning about it. A module without tests never forks a test JVM, so
-                     the placeholder left unresolved there is harmless. -->
+                     the placeholder left unresolved there is harmless.
+                     The includes replace the runners' defaults (Test*, *TestCase, IT*,
+                     *ITCase besides) with the same patterns the Gradle build uses, so a
+                     class runs under both builds or under neither. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.6.0</version>
                     <configuration>
                         <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                        <includes>
+                            <include>**/*Test.java</include>
+                            <include>**/*Tests.java</include>
+                        </includes>
                     </configuration>
                 </plugin>
                 <!-- Managed, not bound: only modules with *IT classes (tests that boot a
@@ -249,6 +256,9 @@
                     <version>3.6.0</version>
                     <configuration>
                         <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
+                        <includes>
+                            <include>**/*IT.java</include>
+                        </includes>
                     </configuration>
                     <executions>
                         <execution>
