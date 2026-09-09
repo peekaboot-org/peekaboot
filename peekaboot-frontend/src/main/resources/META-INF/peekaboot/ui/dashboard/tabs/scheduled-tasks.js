@@ -3,8 +3,9 @@
  * delay, fixed rate), each expandable to its individual task rows, with a summary badge
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
-import {groupList, expandedKeys, badge, emptyState} from '../../shared/components.js';
+import {groupList, expandedKeys, badge, emptyState, iconLink} from '../../shared/components.js';
 import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
+import {buildAppHash} from '../../shared/url-state.js';
 
 export const id = 'scheduled-tasks';
 export const label = 'Scheduled Tasks';
@@ -121,7 +122,7 @@ function renderTaskRow(task, type, context) {
     targetRow.appendChild(targetEl);
 
     if (context.features?.tracing) {
-        targetRow.appendChild(renderTracesLink(context, task));
+        targetRow.appendChild(renderTracesLink(task));
     }
 
     item.appendChild(targetRow);
@@ -144,25 +145,16 @@ function timingEl(labelText, value) {
 }
 
 /**
- * Navigates to the Traces tab pre-filtered to this scheduler's own SCHEDULED_JOB
- * traces, via context.navigate's third (payload) argument - routed by main.js to
- * traces.js's applyFilter(), which owns the actual filter state (see its doc comment).
+ * A plain deep link into the Traces tab, pre-filtered to this scheduler's own
+ * SCHEDULED_JOB traces: the same "#traces?type=...&op=..." a shared link carries, restored
+ * by traces.js's own URL reconciliation once the hash router lands there.
  */
-function renderTracesLink(context, task) {
-    const link = document.createElement('a');
-    link.href = '#';
-    link.className = 'pk-task__traces-link';
-    // title alone would not become the accessible name here: the emoji textContent is
-    // itself real content, so it (its Unicode name) would win instead. aria-label pins
-    // the name to the same text title already carries.
-    link.title = 'View traces for this scheduler';
-    link.setAttribute('aria-label', 'View traces for this scheduler');
-    link.textContent = '\u{1F50D}';
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        context.navigate('traces', null, {rootActionType: 'SCHEDULED_JOB', rootOperation: task.target});
+function renderTracesLink(task) {
+    return iconLink(buildAppHash({tab: 'traces', params: {type: 'SCHEDULED_JOB', op: task.target}}), {
+        label: 'View traces for this scheduler',
+        icon: '\u{1F50D}',
+        className: 'pk-task__traces-link'
     });
-    return link;
 }
 
 function renderException(lastException) {

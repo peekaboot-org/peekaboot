@@ -118,33 +118,13 @@ function openTrace(traceId) {
     expandTraceById(traceId);
 }
 
-/**
- * Passed to every tab module as context.navigate. `payload`, when given, goes to the
- * target tab's own applyFilter(payload, context) instead of the generic render - the
- * target is expected to fetch for itself, and doing both would fire two overlapping
- * fetches. A tab that was already active is not re-rendered either: nothing new to
- * show, and self-fetching tabs would pay an extra round trip.
- */
-function navigate(tabId, detail = null, payload = null) {
-    const resolvedId = resolveTabId(tabId);
-    const wasAlreadyActive = document.getElementById(`${resolvedId}-tab`)?.classList.contains('active') ?? false;
-    mainTabs.select(resolvedId, {silent: true});
-    showTab(resolvedId);
-    pushAppHash({tab: resolvedId, detail});
-    if (payload) {
-        TABS.find(tab => tab.id === resolvedId)?.applyFilter?.(payload, currentContext({active: true}));
-    } else if (!wasAlreadyActive) {
-        renderTabById(resolvedId);
-    }
-}
-
 // --- Tab strip ----------------------------------------------------------------------
 
 /**
- * tabId comes straight from the URL hash (see handleHashChange) or from another tab
- * module's navigate() call - never trusted outright, so an unknown id (e.g. a stale
- * or hand-edited hash) falls back to the overview tab instead of leaving every panel
- * hidden or the tab strip's selection pointing at nothing.
+ * tabId comes straight from the URL hash (see handleHashChange) - never trusted
+ * outright, so an unknown id (e.g. a stale or hand-edited hash) falls back to the
+ * overview tab instead of leaving every panel hidden or the tab strip's selection
+ * pointing at nothing.
  */
 function resolveTabId(tabId) {
     return TAB_IDS.includes(tabId) ? tabId : 'overview';
@@ -194,7 +174,6 @@ function currentContext({active = false} = {}) {
         client,
         locale,
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
-        navigate,
         openTrace,
         features,
         active,

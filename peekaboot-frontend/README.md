@@ -126,7 +126,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | Module | Exports |
 |---|---|
 | `api.js` | `createClient({basePath})`, a fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH`, the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
-| `components.js` | `badge`, `badgeHtml`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `emptyState`, `emptyStateHtml`, `loadingBlock`. The JS builders behind the `.pk-*` primitives; the `*Html` variants serve the surfaces that build their markup as strings. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). |
+| `components.js` | `badge`, `badgeHtml`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `emptyState`, `emptyStateHtml`, `loadingBlock`, `iconLink`. The JS builders behind the `.pk-*` primitives; the `*Html` variants serve the surfaces that build their markup as strings. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). `iconLink(href, {label, icon})` is the icon-only link with a real accessible name (see the a11y rules below). |
 | `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables`. The click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
 | `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js`, `loggers.js` and `meters.js` are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
@@ -420,9 +420,9 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
 
 1. Create `dashboard/tabs/<id>.js` exporting `id`, `label` and
    `render(container, data, context)`. `context` comes from `main.js`'s `currentContext()`
-   and carries `{client, locale, timeZone, navigate, openTrace, features, active,
-   unmaskRequested, toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`. The five
-   that need explaining:
+   and carries `{client, locale, timeZone, openTrace, features, active, unmaskRequested,
+   toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`. The five that need
+   explaining:
    - `active`: whether the tab being rendered is the visible one. Every tab is rendered on
      the 30s cycle whichever is showing, so a tab only reconciles its filter with
      `urlParams` (which reflect the URL's tab, not this one) and only fetches its own data
@@ -442,12 +442,14 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
      (hash push, URL sync of the overlay's own tabs and filters, hash cleanup on close), so
      a tab's click-to-open path cannot drift from the deep-link one.
 
-   Two optional exports: `isAvailable(data, features)` gates whether the tab's strip button
-   is shown at all (`meters.js`, `traces.js` gate on a feature flag), and
-   `applyFilter(payload, context)` lets another tab jump here with a pre-selected filter via
-   `context.navigate(id, detail, payload)` (see `traces.js`). A tab that is a filterable list
-   of collapsible groups builds on `shared/filtered-group-tab.js` rather than hand-rolling
-   the shell: `config.js` is the smallest example, `loggers.js` one with a second control.
+   One optional export: `isAvailable(data, features)` gates whether the tab's strip button
+   is shown at all (`meters.js`, `traces.js` gate on a feature flag). A tab links into
+   another tab with a plain `<a href>` built by `buildAppHash(...)` (`shared/components.js`'s
+   `iconLink` for the icon-only ones); the hash router restores the target's filters from
+   the URL like any deep link, so there is no hand-off channel to wire (`scheduled-tasks.js`
+   and `traces.js` link each other this way). A tab that is a filterable list of
+   collapsible groups builds on `shared/filtered-group-tab.js` rather than hand-rolling the
+   shell: `config.js` is the smallest example, `loggers.js` one with a second control.
 2. In `dashboard/main.js`, `import * as <name> from './tabs/<id>.js';` and add `<name>` to
    the `TABS` array. `main.js` never renders domain data itself; it only decides which tab
    module gets the fetched payload, so this is the only wiring the file needs.

@@ -432,21 +432,6 @@
     .pk-task__right { width: 100%; justify-content: flex-start; }
 }
 
-/* Cross-linking between the scheduled-tasks and traces tabs */
-.pk-task__traces-link, .pk-trace-item__scheduler-link {
-    display: inline-block;
-    margin-left: var(--pk-space-sm);
-    padding: 2px 6px;
-    font-size: var(--pk-text-xs);
-    color: var(--pk-primary-text);
-    text-decoration: none;
-    border-radius: var(--pk-radius);
-    transition: background-color var(--pk-transition);
-}
-.pk-task__traces-link:hover, .pk-trace-item__scheduler-link:hover {
-    background: var(--pk-bg-alt);
-}
-
 /* Metric group. The collapsible header/body is the shared .pk-group primitive (see its
    --mono name modifier, reserved for metric names) - only the type-badge/unit slot and
    the measurement rows inside the group's list are metric-specific. */

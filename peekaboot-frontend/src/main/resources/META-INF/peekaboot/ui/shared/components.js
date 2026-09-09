@@ -24,6 +24,21 @@ export function badgeHtml(text, variant = NEUTRAL_BADGE_VARIANT) {
     return `<span class="pk-badge pk-badge--${known}">${escapeHtml(text == null ? '' : String(text))}</span>`;
 }
 
+/**
+ * A real link whose only content is an icon: `label` becomes both the tooltip and the
+ * accessible name, since the glyph's own Unicode name would otherwise be announced. `href`
+ * is an app hash (see url-state.js's buildAppHash), so the hash router does the rest.
+ */
+export function iconLink(href, {label, icon, className}) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.className = 'pk-icon-link' + (className ? ` ${className}` : '');
+    link.title = label;
+    link.setAttribute('aria-label', label);
+    link.textContent = icon;
+    return link;
+}
+
 /** The centred, muted placeholder a list shows when it has nothing to list. */
 export function emptyState(message) {
     const element = document.createElement('p');
