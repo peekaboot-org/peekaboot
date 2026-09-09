@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * configuration has since changed - costs the history and nothing else: the file is
  * deleted, the rings start empty, and the application never notices.
  */
-public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSource {
+public final class InsightsSnapshotStore implements SnapshotStore {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsSnapshotStore.class);
 
@@ -59,18 +59,18 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         this.maxAge = maxAge;
     }
 
-    /** The store for {@code properties}' persistence settings, or null while storage is off. */
-    static InsightsSnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
+    /** The store for {@code properties}' persistence settings, or {@link SnapshotStore#NONE} while storage is off. */
+    static SnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
         if (storage == null) {
-            return null;
+            return NONE;
         }
         return storage.file(FILE_NAME)
-                .map(path -> new InsightsSnapshotStore(
+                .<SnapshotStore>map(path -> new InsightsSnapshotStore(
                         path,
                         geometry(properties),
                         properties.resolvePersistenceInterval(),
                         properties.resolvePersistenceMaxAge()))
-                .orElse(null);
+                .orElse(NONE);
     }
 
     /** The ring shape a persisted snapshot has to match; endEpochMs and count play no part. */
@@ -80,7 +80,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
                 .toList();
     }
 
-    /** Submits the parse; returns immediately, so no context refresh ever waits on a file. */
+    @Override
     public void beginLoad() {
         Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> completeLoaded(this::load));
     }
@@ -121,11 +121,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         return Optional.empty();
     }
 
-    /**
-     * Starts the periodic writer against {@code capture}, the collector's current state.
-     * {@code historyRestored} reports whether that collector has taken the persisted rings
-     * over, which is what decides whether its state may replace them.
-     */
+    @Override
     public void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored) {
         this.historyRestored = historyRestored;
         this.capture = capture;
@@ -135,10 +131,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     }
 
     /**
-     * Stops the writer and takes the final snapshot. Called after the collector has
-     * stopped, so what it captures is quiesced; synchronous, because there is no later
-     * to defer to - the JVM is on its way out.
+     * Synchronous, because there is no later to defer to - the JVM is on its way out. What
+     * it captures is quiesced, since the collector has stopped by then.
      */
+    @Override
     public void stop() {
         Thread thread = writer;
         writer = null;
@@ -151,6 +147,11 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             }
         }
         writeNow();
+    }
+
+    @Override
+    public String startupNote() {
+        return ", persisted across restarts";
     }
 
     synchronized void writeNow() {
