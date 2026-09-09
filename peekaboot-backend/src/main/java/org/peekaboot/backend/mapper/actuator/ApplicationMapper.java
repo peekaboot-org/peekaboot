@@ -25,7 +25,8 @@ public class ApplicationMapper {
 
         if (info != null) {
             if (info.build() != null) {
-                build = maskBuild(info.build(), unmask);
+                // free-form: a consuming app supplies info.build itself, so it is masked as a tree
+                build = treeMasker.maskMap(info.build(), unmask);
             }
             if (info.git() != null) {
                 git = mapGitInfo(info.git());
@@ -42,21 +43,6 @@ public class ApplicationMapper {
         String frameworkVersion = spring != null ? spring.frameworkVersion() : null;
 
         return new ApplicationInfo(build, git, bootVersion, frameworkVersion, javaVersion, javaVendor);
-    }
-
-    /**
-     * Unlike git and the JVM/Spring version fields, which are all populated here, {@code
-     * info.build} is a free-form map a consuming app supplies itself - not controlled by
-     * this mapper at all.
-     *
-     * <p>The {@code instanceof Map} check is total in practice: {@link TreeMasker} returns a
-     * {@code LinkedHashMap} for a map input and hands the input straight back when unmasking.
-     * It stands to keep the unchecked cast above honest.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> maskBuild(Map<String, Object> build, boolean unmask) {
-        Object masked = treeMasker.mask(build, unmask);
-        return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
     }
 
     private Map<String, Object> mapGitInfo(InfoResponse.GitInfo gitInfo) {

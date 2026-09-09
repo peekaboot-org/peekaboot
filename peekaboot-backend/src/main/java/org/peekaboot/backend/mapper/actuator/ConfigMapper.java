@@ -51,9 +51,7 @@ public class ConfigMapper {
         String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
         List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
         for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {
-            Object rawValue = entry.getValue();
-            Object masked = rawValue != null ? treeMasker.mask(entry.getKey(), rawValue, unmask) : null;
-            flattenInto(properties, entry.getKey(), masked);
+            flattenInto(properties, entry.getKey(), treeMasker.mask(entry.getKey(), entry.getValue(), unmask));
         }
     }
 

@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.function.LongSupplier;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.masking.TagMasker;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,7 @@ public class RequestCaptureFilter implements Filter {
     private static final Logger log = LoggerFactory.getLogger(RequestCaptureFilter.class);
 
     private final MaskingEngine maskingEngine;
+    private final TagMasker tagMasker;
 
     private final Tracer tracer;
     private final ApplicationEventPublisher eventPublisher;
@@ -65,6 +67,7 @@ public class RequestCaptureFilter implements Filter {
         this.tracer = tracer;
         this.eventPublisher = eventPublisher;
         this.maskingEngine = maskingEngine;
+        this.tagMasker = new TagMasker(maskingEngine);
         this.paths = paths;
         this.clock = clock;
     }
@@ -217,18 +220,15 @@ public class RequestCaptureFilter implements Filter {
     private Map<String, String> maskedRequestHeaders(HttpServletRequest request) {
         Map<String, String> headers = new HashMap<>();
         Collections.list(request.getHeaderNames())
-                .forEach(name -> headers.put(
-                        name, maskingEngine.mask(name, String.join(", ", Collections.list(request.getHeaders(name))))));
-        return headers;
+                .forEach(name -> headers.put(name, String.join(", ", Collections.list(request.getHeaders(name)))));
+        return tagMasker.mask(headers);
     }
 
     /** A header sent more than once (Set-Cookie, typically) is captured as one comma-joined value. */
     private Map<String, String> maskedResponseHeaders(HttpServletResponse response) {
         Map<String, String> headers = new HashMap<>();
-        response.getHeaderNames()
-                .forEach(name ->
-                        headers.put(name, maskingEngine.mask(name, String.join(", ", response.getHeaders(name)))));
-        return headers;
+        response.getHeaderNames().forEach(name -> headers.put(name, String.join(", ", response.getHeaders(name))));
+        return tagMasker.mask(headers);
     }
 
     /**
