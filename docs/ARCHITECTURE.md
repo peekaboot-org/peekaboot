@@ -314,6 +314,11 @@ syntax does (`servers[0].host`), so the Config tab's filter matches nested keys 
 Masking runs on the tree first (`TreeMasker`, by leaf key), so a sensitive key anywhere in it
 arrives as the single masked leaf its subtree collapsed to.
 
+`ApplicationMapper` copies only `branch`, `commit.id` and `commit.time` off `info.git` into the
+`GitInfo` record, for the reason the lifecycle log whitelists its `GitProperties` entries (see
+*`lifecycle.jsonl`*): a remote URL can carry a token and a committer's address is personal data.
+`info.build` stays a free-form map, masked, because the consuming app fills it itself.
+
 ### The two `insights` URL shapes
 
 Two unrelated things share the word, and only the position in the path tells them apart.
