@@ -118,11 +118,18 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
                 .orElse(application.getWebApplicationType());
     }
 
+    /** Overridable for tests: the bundled file of that name. */
+    Resource bundledDefaults(String resourceName) {
+        return new ClassPathResource(resourceName);
+    }
+
     private void applyDefaults(ConfigurableEnvironment environment, String propertySourceName, String resourceName) {
-        Resource resource = new ClassPathResource(resourceName);
+        Resource resource = bundledDefaults(resourceName);
         if (!resource.exists()) {
-            log.warn("Peekaboot defaults resource not found: " + resourceName);
-            return;
+            // only a consumer's shade or repackage filter removes a bundled file; for the
+            // no-push defaults that would start pushing telemetry to localhost silently
+            throw new IllegalStateException(
+                    "Peekaboot defaults resource " + resourceName + " is missing from the classpath");
         }
 
         try {
