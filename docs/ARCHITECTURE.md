@@ -908,13 +908,6 @@ reached over a `jdbc:mysql:` URL reports MySQL; `databaseProductName` is the dri
 answer and can disagree. Any exception at all is logged at WARN and yields `Optional.empty()`,
 so a DataSource that cannot hand out a connection costs its card and nothing else.
 
-`scheduledTasks` carries each task's last failure verbatim.
-`ScheduledTasksMapper.parseException` builds that field as the exception type, a colon and the
-exception message, taken straight off the actuator response. There is no `MaskingEngine`
-anywhere in that class. An exception message that echoes a JDBC URL, a query or a credential reaches the
-dashboard unmasked. Treat it as a known exposure alongside the rest of the model at
-[www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/).
-
 ## Testing
 
 ### Test Categories
