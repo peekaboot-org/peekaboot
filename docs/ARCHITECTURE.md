@@ -882,9 +882,12 @@ SpanData
 
 `InsightsSsePublisher` fans the collector's ticks and roll-ups out to every open dashboard over
 `/peekaboot/api/insights/stream`. A tick carries series values only; tiles are read from
-`/peekaboot/api/insights/config`, not streamed. Each subscriber gets its own bounded send lane
-and sender thread, so one wedged peer drops its own events instead of stalling the stream. A
-15-second heartbeat keeps idle connections open, and the publisher refuses past
+`/peekaboot/api/insights/config`, not streamed. One dispatch thread renders each event once
+and offers it to every `Subscriber`'s bounded send lane, whose own sender thread performs the
+blocking write, so one wedged peer drops its own events instead of stalling the stream. The
+same dispatch thread sends the heartbeat: it polls the event queue with a 15-second timeout,
+and a poll that comes back empty means the stream has been idle that long and gets a
+keep-alive comment instead. A busy stream never needs one. The publisher refuses past
 `MAX_SUBSCRIBERS` with a 503.
 
 Emitters carry a thirty-minute timeout. It only reclaims a peer that vanished without closing
