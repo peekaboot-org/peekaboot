@@ -157,9 +157,10 @@ final class MaskingRules {
             new ValuePattern("Legacy OpenAI key", Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
             // Group 1 is the userinfo, so MaskingEngine masks it alone and leaves
             // scheme://host:port/path intact. The user may be empty: redis://:secret@host is
-            // the common Redis shape.
+            // the common Redis shape. The scheme is case-insensitive (RFC 3986), so an
+            // upper-cased JDBC:POSTGRESQL:// still counts.
             new ValuePattern(
-                    "Credentials in a URL", 1, Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
+                    "Credentials in a URL", 1, Pattern.compile("(?i)[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
             // Oracle's thin URL (jdbc:oracle:thin:user/password@host) has no "://" ahead of
             // the credentials, so the rule above never sees it. Group 2 is the password.
             new ValuePattern(

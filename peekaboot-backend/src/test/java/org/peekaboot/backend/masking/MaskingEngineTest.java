@@ -450,6 +450,17 @@ class MaskingEngineTest {
             assertThat(result).contains("localhost", "5432", "mydb").doesNotContain("dbuser", "S3cr3tPassw0rd");
         }
 
+        // A scheme is case-insensitive (RFC 3986), and a JDBC URL pasted from a Windows
+        // tool or an upper-cased env var spells it that way.
+        @Test
+        void maskValue_shouldMaskUserinfoBehindAnUpperCaseScheme() {
+            String value = "JDBC:POSTGRESQL://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("JDBC:POSTGRESQL://******@localhost:5432/mydb");
+        }
+
         /** The common Redis shape: no user at all, only a password in front of the '@'. */
         @Test
         void maskValue_shouldMaskUserinfoWithAnEmptyUser() {
