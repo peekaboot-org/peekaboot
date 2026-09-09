@@ -324,22 +324,10 @@ class DevToolbarFilterTest {
      */
     @Test
     void aClientAbortWhileWritingTheInjectedPageIsNotAFailure() throws Exception {
-        FailingWriteResponse aborted =
-                new FailingWriteResponse(new org.apache.catalina.connector.ClientAbortException(), false);
-        response = aborted;
-        chainWritesHtml("<html><body></body></html>");
+        String message = assertHandledAsClientAbort(new org.apache.catalina.connector.ClientAbortException());
 
-        try (LogCapture capture = LogCapture.attach(DevToolbarFilter.class, Level.DEBUG)) {
-            filter.doFilter(request, response, chain);
-
-            assertThat(capture.appender().list).singleElement().satisfies(event -> {
-                assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
-                assertThat(event.getFormattedMessage())
-                        .isEqualTo("Client closed the connection before the toolbar could be written: GET /users/123");
-                assertThat(event.getThrowableProxy()).isNull();
-            });
-        }
-        assertThat(aborted.writeAttempts()).isEqualTo(1);
+        assertThat(message)
+                .isEqualTo("Client closed the connection before the toolbar could be written: GET /users/123");
     }
 
     /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
@@ -370,8 +358,8 @@ class DevToolbarFilterTest {
                 new IOException("An established connection was aborted by the software in your host machine"));
     }
 
-    /** A client abort surfaces as a single DEBUG line without a stack trace, and no retry. */
-    private void assertHandledAsClientAbort(IOException failure) throws Exception {
+    /** A client abort surfaces as a single DEBUG line without a stack trace, and no retry; returns that line. */
+    private String assertHandledAsClientAbort(IOException failure) throws Exception {
         FailingWriteResponse aborted = new FailingWriteResponse(failure, false);
         response = aborted;
         chainWritesHtml("<html><body></body></html>");
@@ -383,8 +371,9 @@ class DevToolbarFilterTest {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getThrowableProxy()).isNull();
             });
+            assertThat(aborted.writeAttempts()).isEqualTo(1);
+            return capture.appender().list.get(0).getFormattedMessage();
         }
-        assertThat(aborted.writeAttempts()).isEqualTo(1);
     }
 
     /** Once bytes have gone out there is no response left to fall back to; the failure is reported once. */

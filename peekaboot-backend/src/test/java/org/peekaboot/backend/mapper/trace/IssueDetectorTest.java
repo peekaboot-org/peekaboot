@@ -8,8 +8,13 @@ import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.IssueSeverity;
 import org.peekaboot.backend.domain.trace.IssueType;
@@ -29,48 +34,45 @@ class IssueDetectorTest {
         detector = new IssueDetector(properties);
     }
 
-    @Test
-    void detectIssues_shouldDetectSlowSpan() {
-        // 150ms sits between the 100ms slow and the 500ms very-slow threshold
-        SpanNode span = node("span1").durationMs(150).build();
-        TraceTree trace = tree(span).build();
+    /** One span past exactly one rule: the issue carries that rule's type, severity and wording. */
+    @ParameterizedTest
+    @MethodSource("spansPastOneThreshold")
+    void detectIssues_shouldRaiseTheOneIssueASpanTrips(SpanNode span, SpanIssue expected) {
+        TraceTree result = detector.detectIssues(tree(span).build());
 
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.SLOW);
-        assertThat(issue.severity()).isEqualTo(IssueSeverity.WARNING);
-        assertThat(issue.message()).isEqualTo("Span took 150ms (threshold: 100ms)");
+        assertThat(result.rootSpan().issues()).containsExactly(expected);
     }
 
-    @Test
-    void detectIssues_shouldDetectVerySlowSpan() {
-        // 600ms is at or above the 500ms very-slow threshold
-        SpanNode span = node("span1").durationMs(600).build();
-        TraceTree trace = tree(span).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.VERY_SLOW);
-        assertThat(issue.severity()).isEqualTo(IssueSeverity.ERROR);
-        assertThat(issue.message()).isEqualTo("Span took 600ms (threshold: 500ms)");
-    }
-
-    @Test
-    void detectIssues_shouldDetectErrorSpan() {
-        SpanNode span = node("span1").durationMs(50).status(SpanStatus.ERROR).build();
-        TraceTree trace = tree(span).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.ERROR);
-        assertThat(issue.severity()).isEqualTo(IssueSeverity.ERROR);
-        assertThat(issue.message()).isEqualTo("Span ended with error");
+    static Stream<Arguments> spansPastOneThreshold() {
+        return Stream.of(
+                Arguments.of(
+                        Named.of(
+                                "150ms, between the slow and very-slow thresholds",
+                                node("span1").durationMs(150).build()),
+                        new SpanIssue(IssueType.SLOW, "Span took 150ms (threshold: 100ms)", IssueSeverity.WARNING)),
+                Arguments.of(
+                        Named.of(
+                                "600ms, past the very-slow threshold",
+                                node("span1").durationMs(600).build()),
+                        new SpanIssue(IssueType.VERY_SLOW, "Span took 600ms (threshold: 500ms)", IssueSeverity.ERROR)),
+                Arguments.of(
+                        Named.of(
+                                "an error without a message",
+                                node("span1")
+                                        .durationMs(50)
+                                        .status(SpanStatus.ERROR)
+                                        .build()),
+                        new SpanIssue(IssueType.ERROR, "Span ended with error", IssueSeverity.ERROR)),
+                Arguments.of(
+                        Named.of(
+                                "an 80ms query, past the slow-query threshold",
+                                node("span1")
+                                        .kind(Span.Kind.CLIENT)
+                                        .durationMs(80)
+                                        .tags(Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"))
+                                        .build()),
+                        new SpanIssue(
+                                IssueType.SLOW_QUERY, "Query took 80ms (threshold: 50ms)", IssueSeverity.WARNING)));
     }
 
     @Test
@@ -118,22 +120,6 @@ class IssueDetectorTest {
         TraceTree result = detector.detectIssues(trace);
 
         assertThat(result.rootSpan().issues()).noneMatch(issue -> issue.type() == IssueType.SLOW_QUERY);
-    }
-
-    @Test
-    void detectIssues_shouldDetectSlowQuery() {
-        // 80ms is at or above the 50ms slow-query threshold
-        SpanNode span =
-                querySpan("span1", 80, Map.of("db.system", "postgresql", "db.statement", "SELECT * FROM users"));
-        TraceTree trace = tree(span).queries(1, 80L).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.SLOW_QUERY);
-        assertThat(issue.severity()).isEqualTo(IssueSeverity.WARNING);
-        assertThat(issue.message()).isEqualTo("Query took 80ms (threshold: 50ms)");
     }
 
     @Test

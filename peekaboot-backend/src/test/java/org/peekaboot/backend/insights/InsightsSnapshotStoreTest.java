@@ -12,8 +12,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
@@ -113,40 +118,31 @@ class InsightsSnapshotStoreTest {
 
     /**
      * A restore that never landed leaves the rings holding only this run's own samples,
-     * which is less than the file already has.
+     * which is less than the file already has; once the history was taken over, this run's
+     * rings are the newer record and replace it.
      */
-    @Test
-    void aRunThatNeverTookThePersistedHistoryOverDoesNotReplaceIt() {
+    @ParameterizedTest
+    @MethodSource("takeOverOutcomes")
+    void aRunReplacesThePersistedHistoryOnlyOnceItTookItOver(boolean historyRestored, double[] expected) {
         InsightsSnapshotStore writer = store(Duration.ofDays(30));
         writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
         writer.stop();
 
         InsightsSnapshotStore second = store(Duration.ofDays(30));
         assertThat(loadWith(second)).isPresent();
-        second.start(() -> ownSamplesOnly(9.0), () -> false);
+        second.start(() -> ownSamplesOnly(9.0), () -> historyRestored);
         second.stop();
 
         assertThat(loadWith(store(Duration.ofDays(30))))
                 .get()
                 .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
-                .isEqualTo(new double[] {1.0, 2.0});
+                .isEqualTo(expected);
     }
 
-    @Test
-    void aRunThatTookThePersistedHistoryOverReplacesIt() {
-        InsightsSnapshotStore writer = store(Duration.ofDays(30));
-        writer.start(() -> snapshot(NOW, 10_000, 90), () -> false);
-        writer.stop();
-
-        InsightsSnapshotStore second = store(Duration.ofDays(30));
-        assertThat(loadWith(second)).isPresent();
-        second.start(() -> ownSamplesOnly(9.0), () -> true);
-        second.stop();
-
-        assertThat(loadWith(store(Duration.ofDays(30))))
-                .get()
-                .extracting(restored -> restored.series().get("cpu.process").get(0)[0])
-                .isEqualTo(new double[] {9.0});
+    static Stream<Arguments> takeOverOutcomes() {
+        return Stream.of(
+                Arguments.of(Named.of("history never taken over: the file stays", false), new double[] {1.0, 2.0}),
+                Arguments.of(Named.of("history taken over: this run's samples replace it", true), new double[] {9.0}));
     }
 
     /** A write that fails part way must not leave megabytes of nothing in the user's home. */
