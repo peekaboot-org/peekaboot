@@ -4,6 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+  # "/" covers .github/workflows and a root action.yml only; the composite action's own
+  # pins need their directory listed.
+  - package-ecosystem: "github-actions"
+    directory: "/.github/actions/prepare-build"
+    schedule:
+      interval: "weekly"
   - package-ecosystem: "maven"
     directory: "/"
     schedule:
