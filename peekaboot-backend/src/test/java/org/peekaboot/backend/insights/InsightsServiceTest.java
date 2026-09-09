@@ -94,12 +94,8 @@ class InsightsServiceTest {
      */
     @Test
     void invalidUserPanelFileIsIgnoredInFavourOfTheDefaults() {
-        InsightsProperties properties = new InsightsProperties();
-        properties.setConfigLocation("classpath:insights/loader-invalid.yml");
-
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
-            InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
+            InsightsService fallback = withUserPanels("classpath:insights/loader-invalid.yml");
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -122,12 +118,8 @@ class InsightsServiceTest {
      */
     @Test
     void aSubtractMeterOnANonValueStatCostsTheWholeUserOverride() {
-        InsightsProperties properties = new InsightsProperties();
-        properties.setConfigLocation("classpath:insights/loader-subtract-meter-rate.yml");
-
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
-            InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
+            InsightsService fallback = withUserPanels("classpath:insights/loader-subtract-meter-rate.yml");
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -237,5 +229,13 @@ class InsightsServiceTest {
                 assertThat(event.getFormattedMessage()).containsPattern("~\\d+(\\.\\d+)? MB");
             });
         }
+    }
+
+    /** The service over the bundled panels plus the operator's override at {@code location}. */
+    private InsightsService withUserPanels(String location) {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setConfigLocation(location);
+        return new InsightsService(
+                registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
     }
 }

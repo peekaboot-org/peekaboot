@@ -7,6 +7,8 @@ import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.TraceDatas;
@@ -405,44 +407,23 @@ class QueryExtractorTest {
      * provider-shaped credentials (a JWT, an AWS key, a PEM block, a credential-bearing
      * URL) embedded in the SQL text.
      */
-    @Test
-    void extract_shouldMaskACredentialBearingUrlEmbeddedInSql() {
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook') | INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')
+            SELECT * FROM users WHERE email = ?                                                    | SELECT * FROM users WHERE email = ?
+            """)
+    void extract_shouldMaskOnlyProviderShapedCredentialsEmbeddedInSql(String statement, String expected) {
         var querySpan = span("span1")
                 .named("query")
                 .kind(Span.Kind.CLIENT)
                 .at(1000, 20)
-                .tags(Map.of(
-                        "db.statement",
-                        "INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook')",
-                        "db.system",
-                        "postgresql"))
+                .tags(Map.of("db.statement", statement, "db.system", "postgresql"))
                 .order(10)
                 .build();
 
-        var traceData = TraceDatas.of("trace1", querySpan);
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
 
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql())
-                .isEqualTo("INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')");
-    }
-
-    @Test
-    void extract_shouldLeaveOrdinarySqlWithNoEmbeddedCredentialUntouched() {
-        var querySpan = span("span1")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(1000, 20)
-                .tags(Map.of("db.statement", "SELECT * FROM users WHERE email = ?", "db.system", "postgresql"))
-                .order(10)
-                .build();
-
-        var traceData = TraceDatas.of("trace1", querySpan);
-
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE email = ?");
+        assertThat(queries).extracting(QueryInfo::sql).containsExactly(expected);
     }
 
     @Test

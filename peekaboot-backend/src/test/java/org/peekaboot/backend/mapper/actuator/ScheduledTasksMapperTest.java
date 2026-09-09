@@ -22,7 +22,8 @@ class ScheduledTasksMapperTest {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(new ScheduledTasksResponse.CronTask(
                         "0 0 * * * *",
-                        null,
+                        new ScheduledTasksResponse.TaskExecution(
+                                null, "SUCCESS", Instant.parse("2026-01-11T06:00:00Z")),
                         new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:00:00Z")),
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
                 List.of(),
@@ -35,6 +36,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).type()).isEqualTo(TaskType.CRON);
         assertThat(result.tasks().get(0).schedule()).isEqualTo("0 0 * * * *");
         assertThat(result.tasks().get(0).target()).isEqualTo("com.example.Scheduler.cronTask");
+        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:00:00Z"));
+        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
     }
 
     @Test
@@ -186,24 +189,6 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).scheduleDescription()).isNotNull();
         assertThat(result.tasks().get(0).scheduleDescription().toLowerCase(Locale.ROOT))
                 .contains("hour");
-    }
-
-    @Test
-    void map_shouldParseLastAndNextExecutionTimesForCronTask() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(new ScheduledTasksResponse.CronTask(
-                        "0 0 * * * *",
-                        new ScheduledTasksResponse.TaskExecution(
-                                null, "SUCCESS", Instant.parse("2026-01-11T06:00:00Z")),
-                        new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:00:00Z")),
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
-                List.of(),
-                List.of());
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:00:00Z"));
-        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
     }
 
     /** Boot omits the runnable for a task it cannot describe; the row still has a name. */
