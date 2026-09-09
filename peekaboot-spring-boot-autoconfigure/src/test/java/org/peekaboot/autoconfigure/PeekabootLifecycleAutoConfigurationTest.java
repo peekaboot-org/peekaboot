@@ -36,10 +36,10 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Verifies that the lifecycle auto-configuration is ordered after the Boot
- * auto-configurations providing the beans its conditions depend on
- * (BuildProperties, DataSource). Without explicit ordering, alphabetical
- * sorting evaluates org.peekaboot.* conditions before org.springframework.*
- * registers those beans, so they could never match.
+ * auto-configuration providing the bean its condition depends on (DataSource).
+ * Without explicit ordering, alphabetical sorting evaluates org.peekaboot.*
+ * conditions before org.springframework.* registers that bean, so it could
+ * never match.
  */
 class PeekabootLifecycleAutoConfigurationTest {
 
@@ -81,7 +81,6 @@ class PeekabootLifecycleAutoConfigurationTest {
                 .withPropertyValues("spring.info.build.location=classpath:test-build-info.properties")
                 .run(context -> {
                     assertThat(context).hasBean("buildInfoProvider");
-                    assertThat(context).doesNotHaveBean("buildInfoProviderFallback");
                     assertThat(context.getBean(BuildInfoProvider.class).isBuildInfoAvailable())
                             .isTrue();
                     assertThat(context.getBean(BuildInfoProvider.class).getVersion())
@@ -89,11 +88,14 @@ class PeekabootLifecycleAutoConfigurationTest {
                 });
     }
 
+    /** The same bean, reporting no build info, so an application without build-info.properties still gets its banners. */
     @Test
-    void fallbackBuildInfoProviderUsedWithoutBuildProperties() {
+    void buildInfoProviderReportsNoBuildInfoWithoutBuildProperties() {
         contextRunner.run(context -> {
-            assertThat(context).hasBean("buildInfoProviderFallback");
+            assertThat(context).hasBean("buildInfoProvider");
             assertThat(context).hasSingleBean(BuildInfoProvider.class);
+            assertThat(context.getBean(BuildInfoProvider.class).isBuildInfoAvailable())
+                    .isFalse();
         });
     }
 
