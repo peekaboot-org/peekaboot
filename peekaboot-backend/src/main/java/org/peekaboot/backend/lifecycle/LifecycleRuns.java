@@ -42,7 +42,7 @@ public class LifecycleRuns {
             if (event.type() != LifecycleEvent.Type.START) {
                 continue;
             }
-            BuildFacts effective = BuildFacts.of(event).orElse(carried);
+            BuildFacts effective = BuildFacts.of(event).withFallback(carried);
             LifecycleEvent previous = i == 0 ? null : events.get(i - 1);
             LifecycleEvent next = i + 1 < events.size() ? events.get(i + 1) : null;
             runs.add(toRun(event, previous, next, effective, changed(effective, carried), clock.getAsLong()));
