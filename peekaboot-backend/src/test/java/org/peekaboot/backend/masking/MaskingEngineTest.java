@@ -55,6 +55,28 @@ class MaskingEngineTest {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
+        // A @ConfigurationProperties group or an env-var prefix is often named in the
+        // plural (app.secrets.*, DB_PASSWORDS). Matching is whole-token, so the singular
+        // rule never sees "secrets": each plural is listed as a rule of its own.
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "passwords",
+                    "app.passwds",
+                    "app.secrets.db",
+                    "app.tokens.github",
+                    "app.api-keys",
+                    "apikeys",
+                    "app.access-keys",
+                    "app.private-keys",
+                    "app.secret-keys",
+                    "app.client-secrets",
+                    "DB_PASSWORDS",
+                })
+        void isSensitiveKey_shouldMatchThePluralOfARuleWord(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
+
         // The three environment variables a developer meets on the systemEnvironment
         // property source that the rules catch without being secrets themselves; see
         // MaskingRules.KEY_NAME_EXCEPTIONS for why none of them is exempted.

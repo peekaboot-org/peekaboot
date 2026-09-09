@@ -53,6 +53,24 @@ class TreeMaskerTest {
         assertThat((Map<String, Object>) items.get(1)).containsEntry("name", "ok");
     }
 
+    // A plural key names a group of secrets, so the whole subtree under it is replaced,
+    // not only the leaves whose own key happens to be sensitive.
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldReplaceAListUnderAPluralSensitiveKey() {
+        Object masked = treeMasker.mask(Map.of("passwords", List.of("hunter2", "hunter3")));
+
+        assertThat((Map<String, Object>) masked).containsEntry("passwords", "******");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldReplaceANestedMapUnderAPluralSensitiveKey() {
+        Object masked = treeMasker.mask(Map.of("secrets", Map.of("db", "hunter2")));
+
+        assertThat((Map<String, Object>) masked).containsEntry("secrets", "******");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldLeaveNonStringScalarsUntouched() {
