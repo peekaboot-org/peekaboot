@@ -141,7 +141,8 @@ function nameCellHtml(span) {
         html += `<span class="pk-gantt-kind pk-gantt-kind--${escapeHtml(kind)}">${escapeHtml(kind)}</span>`;
     }
     html += `<span class="pk-gantt-name__text" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
-    if (rowCount !== undefined) {
+    // a tag is a string the instrumentation wrote; one that is not a number shows nothing
+    if (rowCount !== undefined && Number.isFinite(Number(rowCount))) {
         html += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
     }
     if (span.query) {
