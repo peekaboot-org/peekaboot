@@ -19,8 +19,9 @@ META-INF/peekaboot/ui/
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png: the icon set
 ├── shared/          the modules used by two or more surfaces; see the inventory below
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (one per tab, plus the
-│                    Insights tab's own insights-store.js, insights-chart.js,
-│                    insights-markers.js and insights-colors.js)
+│                    Insights tab's own insights-stream.js, insights-panels.js,
+│                    insights-store.js, insights-chart.js, insights-markers.js and
+│                    insights-colors.js)
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/: the only third-party code, loaded on demand (see below)
