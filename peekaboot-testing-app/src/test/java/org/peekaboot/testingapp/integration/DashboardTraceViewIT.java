@@ -3,18 +3,13 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
-import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
 import org.slf4j.LoggerFactory;
@@ -45,9 +40,6 @@ import tools.jackson.databind.JsonNode;
  */
 @ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ_WRITE)
 class DashboardTraceViewIT {
-
-    /** Creation orders for hand-built spans; only their per-trace ascending order matters. */
-    private static final AtomicLong CREATION_ORDER = new AtomicLong();
 
     @LocalServerPort
     private int port;
@@ -118,37 +110,10 @@ class DashboardTraceViewIT {
 
     @Test
     void insightsEndpointFiltersByBucketAndReportsCounts() {
-        Instant now = Instant.now();
-        traceStore.addSpan(new SpanData(
-                "berr",
-                "s1",
-                null,
-                "op",
-                null,
-                now,
-                now,
-                Duration.ZERO,
-                Map.of(),
-                List.of(),
-                "boom",
-                "java.lang.RuntimeException",
-                null,
-                CREATION_ORDER.incrementAndGet()));
-        traceStore.addSpan(new SpanData(
-                "bok",
-                "s2",
-                null,
-                "op",
-                null,
-                now,
-                now,
-                Duration.ZERO,
-                Map.of(),
-                List.of(),
-                null,
-                null,
-                null,
-                CREATION_ORDER.incrementAndGet()));
+        traceStore.addSpan(TestSpans.span("berr", "s1")
+                .error("boom", "java.lang.RuntimeException")
+                .build());
+        traceStore.addSpan(TestSpans.span("bok", "s2").build());
 
         JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
         JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
@@ -204,40 +169,20 @@ class DashboardTraceViewIT {
     }
 
     private void injectTestSpan() {
-        Instant start = Instant.now().minusMillis(100);
-        Instant end = Instant.now();
-        SpanData rootSpan = new SpanData(
-                testTraceId,
-                testSpanId,
-                null,
-                "GET /persons",
-                Span.Kind.SERVER,
-                start,
-                end,
-                Duration.between(start, end),
-                Map.of("http.method", "GET", "url.path", "/persons"),
-                List.of(),
-                null,
-                null,
-                null,
-                CREATION_ORDER.incrementAndGet());
-        traceStore.addSpan(rootSpan);
-
-        SpanData dbSpan = new SpanData(
-                testTraceId,
-                "db" + testSpanId,
-                testSpanId,
-                "SELECT * FROM person",
-                Span.Kind.CLIENT,
-                start.plusMillis(10),
-                end.minusMillis(10),
-                Duration.ofMillis(80),
-                Map.of("db.system", "h2", "db.statement", "SELECT * FROM person"),
-                List.of(),
-                null,
-                null,
-                null,
-                CREATION_ORDER.incrementAndGet());
-        traceStore.addSpan(dbSpan);
+        traceStore.addSpan(TestSpans.span(testTraceId, testSpanId)
+                .named("GET /persons")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .tag("http.method", "GET")
+                .tag("url.path", "/persons")
+                .build());
+        traceStore.addSpan(TestSpans.span(testTraceId, "db" + testSpanId)
+                .parent(testSpanId)
+                .named("SELECT * FROM person")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 80)
+                .tag("db.system", "h2")
+                .tag("db.statement", "SELECT * FROM person")
+                .build());
     }
 }

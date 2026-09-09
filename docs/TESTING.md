@@ -63,7 +63,9 @@ pin owner-only storage. OpenTelemetry `SpanData` comes from the SDK's own
 A test names only what it asserts on. A new record component is added to the builder once, not
 to every test class. The domain records carry no test-only constructors, and a test does not
 wrap a builder in a positional helper of its own (`createSpan(id, 150, OK, tags, children)`):
-that hides the defaults the builder exists to make explicit.
+that hides the defaults the builder exists to make explicit. `peekaboot-testing-app` cannot
+reach `Spans` (the backend publishes no test jar), so its `integration/TestSpans` is the same
+builder shape for the ITs that write spans straight to the store.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and

@@ -3,9 +3,6 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -28,7 +25,7 @@ import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
-import org.slf4j.LoggerFactory;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -62,29 +59,19 @@ class PeekabootActuatorServiceIT {
     @Autowired
     private ActuatorInsightsService insightsService;
 
-    private final Logger serviceLogger = (Logger) LoggerFactory.getLogger(PeekabootActuatorService.class);
-    private final ListAppender<ILoggingEvent> serviceLog = new ListAppender<>();
-    private boolean additivity;
-    private Level level;
+    private LogCapture serviceLog;
 
     // The throwing endpoint makes every getInsightsData() call log its failure - WARN with
     // the cause the first time, DEBUG afterwards; capture both so they can be asserted on
     // and never reach the console.
     @BeforeEach
     void captureServiceLog() {
-        additivity = serviceLogger.isAdditive();
-        level = serviceLogger.getLevel();
-        serviceLogger.setAdditive(false);
-        serviceLogger.setLevel(Level.DEBUG);
-        serviceLog.start();
-        serviceLogger.addAppender(serviceLog);
+        serviceLog = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG);
     }
 
     @AfterEach
     void releaseServiceLog() {
-        serviceLogger.detachAppender(serviceLog);
-        serviceLogger.setLevel(level);
-        serviceLogger.setAdditive(additivity);
+        serviceLog.close();
     }
 
     // flyway.enabled: false in the test profile leaves the flyway source absent from
@@ -112,13 +99,13 @@ class PeekabootActuatorServiceIT {
     @Test
     void aFailingEndpointIsLeftOutAndLoggedWithoutBreakingTheOthers() {
         service.getInsightsData();
-        serviceLog.list.clear();
+        serviceLog.appender().list.clear();
 
         Map<String, Object> data = service.getInsightsData();
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
-        assertThat(serviceLog.list)
+        assertThat(serviceLog.appender().list)
                 .filteredOn(event -> event.getFormattedMessage().contains("'loggers' failed"))
                 .singleElement()
                 .satisfies(event -> {
