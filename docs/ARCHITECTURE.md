@@ -852,11 +852,8 @@ and sender thread, so one wedged peer drops its own events instead of stalling t
 15-second heartbeat keeps idle connections open, and the publisher refuses past
 `MAX_SUBSCRIBERS` with a 503.
 
-Emitters carry a five-minute timeout. It only reclaims a peer that vanished without closing its
-socket, since the heartbeat and the lane overflow already detect one that is merely wedged.
-Every expiry costs a full resync of every series' level-1 ring, for every open dashboard.
-Thirty minutes would cut that by an order of magnitude with nothing functional lost; five is
-the value it was built with, nothing more.
+Emitters carry a thirty-minute timeout. It only reclaims a peer that vanished without closing
+its socket, since the heartbeat and the lane overflow already detect one that is merely wedged.
 
 ### Insights Domain
 

@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +31,7 @@ public final class LifecycleEventLog {
     private final LifecycleEventFile file;
     private final Duration loadWait;
     private final List<LifecycleEvent> events = new ArrayList<>();
-    private final CompletableFuture<Void> loaded = new CompletableFuture<>();
+    private final CountDownLatch loaded = new CountDownLatch(1);
     private volatile boolean writeFailureLogged;
 
     public LifecycleEventLog(LifecycleEventFile file) {
@@ -47,7 +47,7 @@ public final class LifecycleEventLog {
     /** Submits the read; returns immediately. Without a file the log is loaded by definition. */
     public void beginLoad() {
         if (file == null) {
-            loaded.complete(null);
+            loaded.countDown();
             return;
         }
         Thread.ofVirtual().name("peekaboot-lifecycle-load").start(() -> {
@@ -58,10 +58,10 @@ public final class LifecycleEventLog {
                     trim();
                 }
             } finally {
-                // However the read ended, the waiters have to be released: a future left
-                // incomplete costs every later API request the full wait, on a thread the
+                // However the read ended, the waiters have to be released: a latch never
+                // released costs every later API request the full wait, on a thread the
                 // host application owns, and the same again at shutdown.
-                loaded.complete(null);
+                loaded.countDown();
             }
         });
     }
@@ -150,12 +150,9 @@ public final class LifecycleEventLog {
 
     private boolean awaitLoad() {
         try {
-            loaded.get(loadWait.toMillis(), TimeUnit.MILLISECONDS);
-            return true;
+            return loaded.await(loadWait.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return false;
-        } catch (Exception e) {
             return false;
         }
     }

@@ -56,7 +56,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * EventSource reconnects on its own, so no emitter is held open indefinitely on
      * behalf of a peer that has silently gone away.
      */
-    static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(5);
+    static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(30);
 
     private final InsightsEventJson eventJson;
     private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
@@ -69,9 +69,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      */
     private final Object lock = new Object();
     /**
-     * Guarded by the publisher's {@code lock}, like every other access to the queue:
-     * set when an episode of overflow starts warning, cleared as soon as an offer
-     * succeeds again, so a later episode is never swallowed as a duplicate.
+     * Guarded by the publisher's {@code lock}, together with the drop-then-add pair in
+     * enqueue() that it describes: set when an episode of overflow starts warning,
+     * cleared as soon as an offer succeeds again, so a later episode is never swallowed
+     * as a duplicate. The queue itself is thread-safe; the dispatch loop polls it
+     * without the lock, and taking the lock there would deadlock it against enqueue().
      */
     private boolean queueOverflowWarned;
 

@@ -57,7 +57,7 @@ class InsightsSnapshotStoreTest {
 
     /**
      * An Error escaping the load - an OutOfMemoryError from a pathological file, say - must
-     * not leave awaitSnapshot parked for the full timeout; the future has to be released
+     * not leave awaitSnapshot parked for the full timeout; the waiters have to be released
      * regardless.
      */
     @Test
