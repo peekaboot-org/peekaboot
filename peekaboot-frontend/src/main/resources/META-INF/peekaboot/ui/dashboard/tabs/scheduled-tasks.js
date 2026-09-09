@@ -3,29 +3,47 @@
  * delay, fixed rate), each expandable to its individual task rows, with a summary badge
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
-import {groupList, expandedKeys, badge, emptyState, iconLink} from '../../shared/components.js';
+import {badge, iconLink} from '../../shared/components.js';
 import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
+import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {buildAppHash} from '../../shared/url-state.js';
 
 export const id = 'scheduled-tasks';
 export const label = 'Scheduled Tasks';
-
-let currentData = null;
-
-export function isAvailable(data) {
-    return Boolean(data?.scheduledTasks?.tasks?.length);
-}
-
-export function render(container, data, context) {
-    currentData = data;
-    renderGroups(container, context);
-}
 
 /** Every TaskType the backend emits, in the order the groups render. */
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
 const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 'Fixed Rate'};
 
 export const TASK_TYPES = Object.keys(TYPE_LABELS);
+
+// no inputId: the group shell without a filter (see filtered-group-tab.js)
+const tab = filteredGroupTab({
+    listId: 'scheduled-tasks-groups',
+    select: data => groupsByType(data?.scheduledTasks?.tasks),
+    filterGroup: group => group,
+    key: group => group.type,
+    header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
+    items: (group, list, query, context) => group.tasks.forEach(task =>
+        list.appendChild(renderTaskRow(task, group.type, context))),
+    extraTop: data => renderSummary(data.scheduledTasks),
+    emptyMessage: 'No scheduled tasks configured'
+});
+
+export function isAvailable(data) {
+    return Boolean(data?.scheduledTasks?.tasks?.length);
+}
+
+export function render(container, data, context) {
+    tab.render(container, data, context);
+}
+
+function groupsByType(tasks) {
+    if (!tasks) return [];
+    return TASK_TYPES
+        .map(type => ({type, tasks: tasks.filter(task => task.type === type)}))
+        .filter(group => group.tasks.length > 0);
+}
 
 /** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
 function taskSeverity(status) {
@@ -34,41 +52,14 @@ function taskSeverity(status) {
     return 'muted';
 }
 
-function renderGroups(container, context) {
-    const scheduledTasks = currentData?.scheduledTasks;
-    const target = container.querySelector('#scheduled-tasks-groups');
-    // Must run before the container is cleared below - see filtered-group-tab.js's renderGroups.
-    const expanded = expandedKeys(target);
-    target.innerHTML = '';
-
-    const tasks = scheduledTasks?.tasks;
-    if (!tasks || tasks.length === 0) {
-        target.appendChild(emptyState('No scheduled tasks configured'));
-        return;
-    }
-
-    renderSummary(container, scheduledTasks, tasks.length);
-
-    const groups = TASK_TYPES
-        .map(type => ({type, tasks: tasks.filter(t => t.type === type)}))
-        .filter(group => group.tasks.length > 0);
-
-    groupList(target, groups, {
-        key: group => group.type,
-        header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
-        items: (group, list) => group.tasks.forEach(task =>
-            list.appendChild(renderTaskRow(task, group.type, context))),
-        expandedKeys: expanded
-    });
-}
-
-function renderSummary(container, scheduledTasks, total) {
-    const summaryEl = container.querySelector('#scheduled-tasks-summary');
-    summaryEl.innerHTML = '';
-    summaryEl.appendChild(badge(`Total: ${total}`, 'muted'));
+function renderSummary(scheduledTasks) {
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'pk-tasks-summary';
+    summaryEl.appendChild(badge(`Total: ${scheduledTasks.tasks.length}`, 'muted'));
     summaryEl.appendChild(badge(`Cron: ${scheduledTasks.cronCount}`, 'muted'));
     summaryEl.appendChild(badge(`Fixed Delay: ${scheduledTasks.fixedDelayCount}`, 'muted'));
     summaryEl.appendChild(badge(`Fixed Rate: ${scheduledTasks.fixedRateCount}`, 'muted'));
+    return summaryEl;
 }
 
 function renderTaskRow(task, type, context) {

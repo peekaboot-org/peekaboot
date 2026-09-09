@@ -419,7 +419,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForSelector("#scheduled-tasks-groups .pk-group");
 
         assertThat(page.querySelectorAll("#scheduled-tasks-groups .pk-group")).isNotEmpty();
-        assertThat(page.textContent("#scheduled-tasks-summary")).contains("Total:");
+        assertThat(page.textContent("#scheduled-tasks-groups .pk-tasks-summary"))
+                .contains("Total:");
     }
 
     @Test

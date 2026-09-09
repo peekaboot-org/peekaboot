@@ -6,7 +6,7 @@
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatHosts, formatPlainValue, formatTileValue} from '../../shared/format.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
@@ -494,6 +494,5 @@ function renderHealthComponents(container, components) {
 function formatDetailValue(value) {
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '-';
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
+    return formatPlainValue(value);
 }
