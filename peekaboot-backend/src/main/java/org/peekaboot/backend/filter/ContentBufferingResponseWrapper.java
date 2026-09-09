@@ -47,8 +47,16 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     private volatile boolean committed = false;
     private volatile boolean passthrough = false;
 
+    /** Runs between draining the writer and the hand-over; a seam for the concurrent-write test. */
+    private final Runnable beforeHandOver;
+
     public ContentBufferingResponseWrapper(HttpServletResponse response) {
+        this(response, () -> {});
+    }
+
+    ContentBufferingResponseWrapper(HttpServletResponse response, Runnable beforeHandOver) {
         super(response);
+        this.beforeHandOver = beforeHandOver;
     }
 
     @Override
@@ -93,8 +101,10 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     /**
-     * Stops buffering: flushes anything buffered so far to the real response
-     * and routes all subsequent writes directly to it.
+     * Stops buffering: flushes anything buffered so far to the real response and routes all
+     * subsequent writes directly to it. The writer is drained again after the hand-over: a
+     * concurrent write that landed between the first drain and the switch sat in the encoder
+     * unflushed, and in passthrough nothing drains the writer at end of request.
      */
     public void enablePassthrough() throws IOException {
         if (passthrough) {
@@ -103,7 +113,11 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         if (writer != null) {
             writer.flush();
         }
+        beforeHandOver.run();
         switchToPassthrough();
+        if (writer != null) {
+            writer.flush();
+        }
     }
 
     /**

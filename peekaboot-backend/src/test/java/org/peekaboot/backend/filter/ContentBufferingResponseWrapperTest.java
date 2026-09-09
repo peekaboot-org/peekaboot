@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -325,16 +327,12 @@ class ContentBufferingResponseWrapperTest {
     @Test
     void aWriteDuringTheHandOverLandsAfterTheBufferedBytes() throws Exception {
         CountDownLatch handOverStarted = new CountDownLatch(1);
-        CountDownLatch workerDone = new CountDownLatch(1);
-        Thread[] worker = new Thread[1];
+        Worker[] worker = new Worker[1];
         originalResponse = new MockHttpServletResponse() {
             private final ServletOutputStream stalling =
                     new StallingServletOutputStream(super.getOutputStream(), () -> {
                         handOverStarted.countDown();
-                        await().pollDelay(Duration.ZERO)
-                                .pollInterval(Duration.ofMillis(1))
-                                .until(() ->
-                                        workerDone.getCount() == 0 || worker[0].getState() == Thread.State.BLOCKED);
+                        awaitBlockedOrDone(worker[0]);
                     });
 
             @Override
@@ -345,18 +343,10 @@ class ContentBufferingResponseWrapperTest {
         wrapper = new ContentBufferingResponseWrapper(originalResponse);
         ServletOutputStream out = wrapper.getOutputStream();
         out.write("early".getBytes(StandardCharsets.UTF_8));
-        worker[0] = new Thread(
-                () -> {
-                    awaitQuietly(handOverStarted);
-                    try {
-                        out.write("-late".getBytes(StandardCharsets.UTF_8));
-                    } catch (IOException e) {
-                        throw new IllegalStateException(e);
-                    }
-                    workerDone.countDown();
-                },
-                "async-writer");
-        worker[0].start();
+        worker[0] = new Worker(() -> {
+            handOverStarted.await();
+            out.write("-late".getBytes(StandardCharsets.UTF_8));
+        });
 
         wrapper.enablePassthrough();
         worker[0].join();
@@ -365,11 +355,77 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
-    private static void awaitQuietly(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+    /**
+     * The writer variant: chars a worker writes after the request thread drained the writer
+     * but before the hand-over sit in the encoder, unflushed because passthrough was still
+     * off, and in passthrough nothing drains the writer at end of request. The wrapper's
+     * package-private seam runs the worker in exactly that window.
+     */
+    @Test
+    void aWriterWriteBetweenTheDrainAndTheHandOverStillReachesTheResponse() throws Exception {
+        CountDownLatch writerDrained = new CountDownLatch(1);
+        Worker[] worker = new Worker[1];
+        wrapper = new ContentBufferingResponseWrapper(originalResponse, () -> {
+            writerDrained.countDown();
+            awaitBlockedOrDone(worker[0]);
+        });
+        PrintWriter writer = wrapper.getWriter();
+        writer.write("early");
+        worker[0] = new Worker(() -> {
+            writerDrained.await();
+            writer.write("-late");
+        });
+
+        wrapper.enablePassthrough();
+        worker[0].join();
+
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /** Resumes once the worker has finished, or is blocked on a monitor the calling thread holds. */
+    private static void awaitBlockedOrDone(Worker worker) {
+        await().pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(1))
+                .until(() -> worker.isDone() || worker.isBlocked());
+    }
+
+    /**
+     * A second thread writing through the wrapper. Starts at once; a failure in the body is
+     * kept for {@link #join()} to report instead of reaching stderr as an uncaught exception.
+     */
+    private static final class Worker {
+
+        private final Thread thread;
+        private final CountDownLatch done = new CountDownLatch(1);
+        private final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        Worker(ThrowingCallable body) {
+            thread = new Thread(
+                    () -> {
+                        try {
+                            body.call();
+                        } catch (Throwable t) {
+                            failure.set(t);
+                        } finally {
+                            done.countDown();
+                        }
+                    },
+                    "async-writer");
+            thread.start();
+        }
+
+        boolean isDone() {
+            return done.getCount() == 0;
+        }
+
+        boolean isBlocked() {
+            return thread.getState() == Thread.State.BLOCKED;
+        }
+
+        void join() throws InterruptedException {
+            assertThat(thread.join(Duration.ofSeconds(5))).as("worker finished").isTrue();
+            assertThat(failure.get()).as("worker failure").isNull();
         }
     }
 
