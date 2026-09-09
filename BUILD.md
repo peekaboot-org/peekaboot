@@ -501,13 +501,12 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
 - Local builds reformat your sources mid-build. Expect a dirty tree; that is by design.
 - `mvn verify -DskipTests` fails at the coverage guard, by design; there is no data to
   gate on. Use `-Djacoco.skip=true` alongside it.
-- `git-commit-id-maven-plugin` is *managed but not bound* in the parent. `git.properties`
-  lands at the classpath root and Spring resolves `classpath:git.properties` to a single
-  resource, so a library shipping one can beat the host application's own file and make the
-  dashboard report Peekaboot's branch as the app's. Only `peekaboot-testing-app`, the one
-  runnable application, declares it, and it pins the version itself with
-  `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
-- A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
-  everywhere thanks to that `failOnNoGitDirectory=false`.
+- `git-commit-id-maven-plugin` is declared only in `peekaboot-testing-app`, the one runnable
+  application, and nowhere in the parent. `git.properties` lands at the classpath root and
+  Spring resolves `classpath:git.properties` to a single resource, so a library shipping one
+  can beat the host application's own file and make the dashboard report Peekaboot's branch
+  as the app's. The testing-app pins the version itself with `failOnNoGitDirectory=false`,
+  so a worktree whose gitdir pointer does not resolve, or an exported source tree, builds
+  fine everywhere.
 - The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
   `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.
