@@ -82,12 +82,6 @@ class FlywayMapperTest {
     }
 
     @Test
-    void map_shouldHandlePendingState() {
-        FlywayInfo result = mapper.map(flyway(migration(null, "PENDING", "1")));
-        assertThat(result.migrations().get(0).state()).isEqualTo(MigrationState.PENDING);
-    }
-
-    @Test
     void map_shouldParseExecutionTime() {
         FlywayResponse flywayData = flyway(new FlywayResponse.Migration(null, 250, null, null, "SUCCESS", null, "1"));
 

@@ -57,6 +57,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).schedule()).isNull();
         assertThat(result.tasks().get(0).intervalMs()).isEqualTo(5000L);
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.SUCCESS);
+        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:25Z"));
+        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:30Z"));
     }
 
     @Test
@@ -150,18 +152,21 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(2).target()).isEqualTo("c.Scheduler.fixed");
     }
 
-    /** The interval reaches the frontend as milliseconds only; the frontend formats it. */
+    /** The interval reaches the frontend as milliseconds only; the frontend formats it, and there is no cron text to describe. */
     @Test
-    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleString() {
+    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleOrADescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
-                List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b"), createFixedTask(120000L, "c")),
-                List.of());
+                List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b")),
+                List.of(createFixedTask(120000L, "c")));
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).extracting(ScheduledTaskInfo::intervalMs).containsExactly(500L, 30000L, 120000L);
         assertThat(result.tasks()).extracting(ScheduledTaskInfo::schedule).containsOnlyNulls();
+        assertThat(result.tasks())
+                .extracting(ScheduledTaskInfo::scheduleDescription)
+                .containsOnlyNulls();
     }
 
     @Test
@@ -175,34 +180,6 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).scheduleDescription()).isNotNull();
         assertThat(result.tasks().get(0).scheduleDescription().toLowerCase(Locale.ROOT))
                 .contains("hour");
-    }
-
-    @Test
-    void map_fixedDelayTask_shouldHaveNullScheduleDescription() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(), List.of(createFixedTask(5000L, "com.example.Scheduler.fixedDelayTask")), List.of());
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks()).hasSize(1);
-        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
-    }
-
-    @Test
-    void map_fixedRateTask_shouldHaveNullScheduleDescription() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(),
-                List.of(),
-                List.of(new ScheduledTasksResponse.FixedTask(
-                        10000L,
-                        null,
-                        null,
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRateTask"))));
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks()).hasSize(1);
-        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
     }
 
     @Test
@@ -221,24 +198,6 @@ class ScheduledTasksMapperTest {
 
         assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:00:00Z"));
         assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
-    }
-
-    @Test
-    void map_shouldParseLastAndNextExecutionTimesForFixedTask() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(),
-                List.of(new ScheduledTasksResponse.FixedTask(
-                        5000L,
-                        new ScheduledTasksResponse.TaskExecution(
-                                null, "SUCCESS", Instant.parse("2026-01-11T06:49:25Z")),
-                        new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T06:49:30Z")),
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
-                List.of());
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:25Z"));
-        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:30Z"));
     }
 
     private ScheduledTasksResponse.CronTask createCronTask(String expr, String target) {

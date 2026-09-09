@@ -88,12 +88,8 @@ class MetricsServiceTest {
                 .tags("area", "heap")
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
+        MetricMeasurement measurement = firstMeasurement(registry);
 
-        MetricsInfo result = service.getMetrics();
-
-        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
-        assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
                 .contains(tuple("VALUE", 1024.0));
@@ -104,10 +100,8 @@ class MetricsServiceTest {
     void getMetrics_reportsANaNStatisticAsNull() {
         MeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("cache.hit.ratio", () -> Double.NaN).register(registry);
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricMeasurement measurement =
-                service.getMetrics().metrics().get(0).measurements().get(0);
+        MetricMeasurement measurement = firstMeasurement(registry);
 
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
@@ -120,12 +114,8 @@ class MetricsServiceTest {
 
         Counter.builder("http.requests").tag("method", "GET").register(registry).increment(42);
 
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
+        MetricMeasurement measurement = firstMeasurement(registry);
 
-        MetricsInfo result = service.getMetrics();
-
-        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
-        assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
                 .contains(tuple("COUNT", 42.0));
@@ -208,5 +198,15 @@ class MetricsServiceTest {
         assertThat(result.metrics().get(0).measurements().get(0).tags())
                 .containsEntry("api-key", "******")
                 .containsEntry("region", "eu-west-1");
+    }
+
+    /** The one measurement of the one meter a test registered. */
+    private static MetricMeasurement firstMeasurement(MeterRegistry registry) {
+        return new MetricsService(registry, new MaskingEngine())
+                .getMetrics()
+                .metrics()
+                .get(0)
+                .measurements()
+                .get(0);
     }
 }

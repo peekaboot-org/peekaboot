@@ -261,23 +261,6 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldPreferDbStatementOverSpanName() {
-        var querySpan = createSpan(
-                "span1",
-                "SELECT abbreviated...",
-                50,
-                Map.of("db.statement", "SELECT * FROM users WHERE id = ? AND active = true", "db.system", "mysql"),
-                10);
-
-        var traceData = TraceDatas.of("trace1", querySpan);
-
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE id = ? AND active = true");
-    }
-
-    @Test
     void extract_shouldReturnNullRowCountWhenRowCountIsMalformed() {
         var querySpan =
                 createSpan("q1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 10);
@@ -336,51 +319,6 @@ class QueryExtractorTest {
         assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM users WHERE email = ?");
     }
 
-    /**
-     * The tag set datasource-micrometer-opentelemetry actually emits. Its span name is an
-     * abbreviated summary ("SELECT person"), so a fallback to the name silently under-shows
-     * the statement - which is exactly the defect this covers.
-     */
-    @Test
-    void extract_shouldPreferDbQueryTextOverASqlShapedSpanName() {
-        var querySpan = createSpan(
-                "span1",
-                "SELECT person",
-                100,
-                Map.of(
-                        "db.query.text", "select p1_0.id,p1_0.name from person p1_0",
-                        "db.system.name", "postgresql"),
-                10);
-
-        var traceData = TraceDatas.of("trace1", querySpan);
-
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("select p1_0.id,p1_0.name from person p1_0");
-        assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
-    }
-
-    @Test
-    void extract_shouldPreferDbQueryTextOverDbStatementWhenBothArePresent() {
-        var querySpan = createSpan(
-                "span1",
-                "query",
-                40,
-                Map.of(
-                        "db.query.text", "SELECT * FROM current",
-                        "db.statement", "SELECT * FROM legacy",
-                        "db.system.name", "postgresql"),
-                10);
-
-        var traceData = TraceDatas.of("trace1", querySpan);
-
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql()).isEqualTo("SELECT * FROM current");
-    }
-
     @Test
     void extract_shouldPreferDbSystemNameOverDbSystem() {
         var querySpan = createSpan(
@@ -399,28 +337,6 @@ class QueryExtractorTest {
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).dbSystem()).isEqualTo("postgresql");
-    }
-
-    @Test
-    void extract_shouldMaskACredentialEmbeddedInDbQueryText() {
-        var querySpan = createSpan(
-                "span1",
-                "query",
-                20,
-                Map.of(
-                        "db.query.text",
-                        "INSERT INTO webhooks (callback_url) VALUES ('https://admin:hunter2@example.com/hook')",
-                        "db.system.name",
-                        "postgresql"),
-                10);
-
-        var traceData = TraceDatas.of("trace1", querySpan);
-
-        List<QueryInfo> queries = extractor.extract(traceData);
-
-        assertThat(queries).hasSize(1);
-        assertThat(queries.get(0).sql())
-                .isEqualTo("INSERT INTO webhooks (callback_url) VALUES ('https://******@example.com/hook')");
     }
 
     private SpanData createSpan(

@@ -449,6 +449,22 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("key=******&ok=1");
         }
 
+        /**
+         * Two different rules claiming overlapping spans: the userinfo rule wants
+         * {@code ci:ghp_...} and the GitHub rule wants the token inside it. The
+         * earlier-starting span wins and the inner one is skipped, so the value masks once
+         * rather than stacking two masks or leaving a fragment of the token behind.
+         */
+        @Test
+        void maskValue_shouldMaskAnOverlappingSpanOnceWhenTwoRulesClaimIt() {
+            String token = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a";
+            String value = "https://ci:" + token + "@github.example.com/org/repo.git";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("https://******@github.example.com/org/repo.git");
+        }
+
         @Test
         void maskValue_shouldMaskOnlyUserinfoInJdbcUrl() {
             String value = "jdbc:postgresql://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";

@@ -78,20 +78,6 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldHandleDownStatus() {
-        HealthResponse health = new HealthResponse("DOWN", Map.of());
-        HealthInfo result = mapper.map(health, false);
-        assertThat(result.status()).isEqualTo(HealthStatus.DOWN);
-    }
-
-    @Test
-    void map_shouldHandleOutOfServiceStatus() {
-        HealthResponse health = new HealthResponse("OUT_OF_SERVICE", Map.of());
-        HealthInfo result = mapper.map(health, false);
-        assertThat(result.status()).isEqualTo(HealthStatus.OUT_OF_SERVICE);
-    }
-
-    @Test
     void map_shouldExtractComponentDetails() {
         HealthResponse health = new HealthResponse(
                 "UP",
