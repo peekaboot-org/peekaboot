@@ -55,6 +55,16 @@ public final class TreeMasker {
         return unmask ? node : mask(key, node);
     }
 
+    /**
+     * {@link #mask(Object, boolean)} for a caller that holds a map and wants one back: the
+     * cast is honest because {@code maskNode} builds a {@code LinkedHashMap} for a map input
+     * and unmasking hands the input itself back.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> maskMap(Map<String, Object> map, boolean unmask) {
+        return (Map<String, Object>) mask(map, unmask);
+    }
+
     private Object maskNode(String path, Object value) {
         if (path != null && maskingEngine.isSensitiveKey(path)) {
             return value == null ? null : MaskingRules.MASK;

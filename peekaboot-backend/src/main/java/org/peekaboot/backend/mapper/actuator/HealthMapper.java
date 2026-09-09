@@ -53,19 +53,10 @@ public class HealthMapper {
             String name = namePrefix + entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
+            // a custom HealthIndicator can put anything in details, so they are masked as a tree
             Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
-            result.add(new HealthComponent(name, componentStatus, maskDetails(details, unmask)));
+            result.add(new HealthComponent(name, componentStatus, treeMasker.maskMap(details, unmask)));
             appendComponents(name + "/", component.components(), unmask, result);
         }
-    }
-
-    /**
-     * A consuming app's custom HealthIndicator can put anything in details - unlike the
-     * built-in indicators (db, diskSpace, ...), its shape isn't controlled here at all.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> maskDetails(Map<String, Object> details, boolean unmask) {
-        Object masked = treeMasker.mask(details, unmask);
-        return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
     }
 }

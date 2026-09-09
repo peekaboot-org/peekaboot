@@ -85,6 +85,21 @@ class TreeMaskerTest {
     }
 
     @Test
+    void maskMap_masksLikeMaskAndKeepsTheMapType() {
+        Map<String, Object> masked =
+                treeMasker.maskMap(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP", "nested", Map.of("password", "x")), false);
+
+        assertThat(masked).containsEntry("apiKey", "******").containsEntry("nested", Map.of("password", "******"));
+    }
+
+    @Test
+    void maskMap_handsTheMapBackUnchangedWhenUnmaskIsTrue() {
+        Map<String, Object> build = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
+
+        assertThat(treeMasker.maskMap(build, true)).isSameAs(build);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void mask_shouldReturnTreeUnchangedWhenUnmaskIsTrue() {
         Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), true);
