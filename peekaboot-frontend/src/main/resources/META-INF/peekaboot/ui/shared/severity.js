@@ -85,3 +85,21 @@ export function healthSeverity(status) {
     if (status === 'DOWN' || status === 'OUT_OF_SERVICE') return 'error';
     return 'muted';
 }
+
+/** A scheduled task's last-execution status: SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
+export function taskStatusVariant(status) {
+    if (status === 'SUCCESS') return 'ok';
+    if (status === 'FAILED') return 'error';
+    return 'muted';
+}
+
+/** Every MigrationState the backend collapses Flyway's states onto, and the badge tier each gets. */
+const MIGRATION_STATE_VARIANTS = Object.freeze({
+    SUCCESS: 'ok', PENDING: 'muted', FAILED: 'error', IGNORED: 'muted', UNKNOWN: 'muted'
+});
+
+export const MIGRATION_STATES = Object.keys(MIGRATION_STATE_VARIANTS);
+
+export function migrationStateVariant(state) {
+    return MIGRATION_STATE_VARIANTS[state] || 'muted';
+}

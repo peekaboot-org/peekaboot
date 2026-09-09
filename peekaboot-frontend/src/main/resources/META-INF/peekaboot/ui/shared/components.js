@@ -3,10 +3,11 @@ import {highlightText} from './markup.js';
 let groupSequence = 0;
 
 /** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted (components.css). */
-export function badge(text, variant = 'muted') {
+export function badge(text, variant = 'muted', {title} = {}) {
     const element = document.createElement('span');
     element.className = `pk-badge pk-badge--${variant}`;
     element.textContent = text == null ? '' : String(text);
+    if (title) element.title = title;
     return element;
 }
 
@@ -74,7 +75,17 @@ export function table(columns, rows, {className} = {}) {
     return scroll;
 }
 
-function setKvText(element, text, highlight) {
+/** A table cell: `children` are text or elements; `title` keeps a truncating cell's full value reachable. */
+export function cell({className, title} = {}, ...children) {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    if (title) td.title = title;
+    td.append(...children);
+    return td;
+}
+
+/** Text with every match of the query wrapped in <mark>, or plain text when there is no query. */
+function setHighlightedText(element, text, highlight) {
     if (highlight) element.innerHTML = highlightText(text, highlight);
     else element.textContent = text;
 }
@@ -93,11 +104,11 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
 
     const keyEl = document.createElement('span');
     keyEl.className = 'pk-kv__key';
-    setKvText(keyEl, key == null ? '' : String(key), highlight);
+    setHighlightedText(keyEl, key == null ? '' : String(key), highlight);
 
     const valueEl = document.createElement('span');
     valueEl.className = 'pk-kv__value' + (mono ? ' pk-kv__value--mono' : '');
-    setKvText(valueEl, value == null ? '-' : String(value), highlight);
+    setHighlightedText(valueEl, value == null ? '-' : String(value), highlight);
 
     row.append(keyEl, valueEl);
     return row;
@@ -123,7 +134,7 @@ export function group({name, count, expanded = false, highlight} = {}) {
 
     const nameEl = document.createElement('span');
     nameEl.className = 'pk-group__name';
-    setKvText(nameEl, name == null ? '' : String(name), highlight);
+    setHighlightedText(nameEl, name == null ? '' : String(name), highlight);
 
     const countEl = document.createElement('span');
     countEl.className = 'pk-group__count';

@@ -26,6 +26,20 @@ export function storeTheme(theme) {
 }
 
 /**
+ * Applies the resolved theme to `target` now and again on every change, calling
+ * `onChange(theme)` each time for whatever else follows the theme (an icon). Returns the
+ * unsubscribe; the three surfaces all start this way.
+ */
+export function bindTheme(target, onChange = () => {}) {
+    const apply = theme => {
+        applyTheme(target, theme);
+        onChange(theme);
+    };
+    apply(resolveTheme());
+    return watchTheme(apply);
+}
+
+/**
  * Invokes callback(theme) whenever the effective theme changes: the OS
  * preference flipping, or another tab writing the stored preference.
  * Returns an unsubscribe function.

@@ -15,24 +15,24 @@ export function escapeHtml(text) {
     return String(text).replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
 }
 
-/** Escapes text and wraps every case-insensitive occurrence of query in <mark>. */
+/**
+ * Escapes text and wraps every case-insensitive occurrence of query in <mark>. Matched on
+ * the original string with Unicode case folding, so a character whose lower-case form is
+ * longer (Turkish dotted I) cannot shift the marks off the characters that matched.
+ */
 export function highlightText(text, query) {
     if (!query) return escapeHtml(text);
 
     const value = String(text);
-    const haystack = value.toLowerCase();
-    const needle = query.toLowerCase();
+    const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
 
     let result = '';
     let lastIndex = 0;
-    let index = haystack.indexOf(needle);
-
-    while (index !== -1) {
-        result += escapeHtml(value.substring(lastIndex, index));
-        result += `<mark>${escapeHtml(value.substring(index, index + query.length))}</mark>`;
-        lastIndex = index + query.length;
-        index = haystack.indexOf(needle, lastIndex);
+    for (const match of value.matchAll(pattern)) {
+        result += escapeHtml(value.slice(lastIndex, match.index));
+        result += `<mark>${escapeHtml(match[0])}</mark>`;
+        lastIndex = match.index + match[0].length;
     }
 
-    return result + escapeHtml(value.substring(lastIndex));
+    return result + escapeHtml(value.slice(lastIndex));
 }

@@ -3,14 +3,15 @@
  *
  * Owns theme wiring, the tab registry, hash routing, auto-refresh, the locale/timezone
  * controls and the single error banner. Each tab's own rendering lives in its own module
- * under tabs/ (see the contract documented on overview.js) - this file never renders
- * domain data itself, only decides which tab module to hand the fetched payload to.
+ * under tabs/ (the contract is documented in peekaboot-frontend/README.md, "How to add a
+ * dashboard tab") - this file never renders domain data itself, only decides which tab
+ * module to hand the fetched payload to.
  */
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
-import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
+import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
 import {readSetting, writeSetting} from '../shared/storage.js';
-import {formatDateTime} from '../shared/format.js';
+import {formatDateTimeWith} from '../shared/format.js';
 import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
@@ -140,7 +141,8 @@ function showTab(tabId) {
 
 function initTabs() {
     const initialTabId = resolveTabId(parseAppHash().tab);
-    mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
+    // the strip's buttons are static in index.html, so only the ids are needed here
+    mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id})), {
         onSelect: tabId => {
             showTab(tabId);
             pushAppHash({tab: tabId});
@@ -304,7 +306,7 @@ async function fetchData() {
 
 function updateLastUpdated() {
     const {locale: currentLocale, timeZone} = currentContext();
-    const time = formatDateTime(new Date(), {locale: currentLocale, timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    const time = formatDateTimeWith(new Date(), {hour: '2-digit', minute: '2-digit', second: '2-digit'}, {locale: currentLocale, timeZone});
     document.getElementById('last-updated').textContent = `Updated ${time}`;
 }
 
@@ -388,19 +390,12 @@ function updateThemeIcon(theme) {
 }
 
 function initTheme() {
-    const theme = resolveTheme();
-    applyTheme(document.documentElement, theme);
-    updateThemeIcon(theme);
+    bindTheme(document.documentElement, updateThemeIcon);
 
     document.getElementById('theme-toggle').addEventListener('click', () => {
         const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
         applyTheme(document.documentElement, next);
         storeTheme(next);
-        updateThemeIcon(next);
-    });
-
-    watchTheme(next => {
-        applyTheme(document.documentElement, next);
         updateThemeIcon(next);
     });
 }

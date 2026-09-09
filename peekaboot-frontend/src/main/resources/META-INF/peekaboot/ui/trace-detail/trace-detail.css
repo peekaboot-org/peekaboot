@@ -105,7 +105,6 @@
 .pk-gantt-kind { font-size: var(--pk-text-xs); padding: 1px var(--pk-space-xs); border-radius: 3px; text-transform: uppercase; }
 .pk-gantt-kind--server { background: var(--pk-primary); color: var(--pk-on-primary); }
 .pk-gantt-kind--client { background: var(--pk-purple); color: var(--pk-on-purple); }
-.pk-gantt-kind--internal { background: var(--pk-border); color: var(--pk-text); }
 .pk-gantt-kind--producer, .pk-gantt-kind--consumer { background: var(--pk-info); color: var(--pk-on-info); }
 
 .pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 var(--pk-space-sm); }
@@ -163,7 +162,8 @@
 .pk-query-meta { display: flex; gap: var(--pk-space-md); align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
 .pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: var(--pk-text-xs); }
-.pk-query__sql { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
+/* A block of captured text kept verbatim - a query's SQL, a request body. */
+.pk-code-block { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 
 /* Logs tab styles */
 .pk-logs-filter { display: flex; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); align-items: center; flex-wrap: wrap; }

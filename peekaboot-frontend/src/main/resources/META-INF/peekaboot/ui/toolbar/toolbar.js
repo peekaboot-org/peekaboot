@@ -22,7 +22,7 @@ import {badge} from '../shared/components.js';
 import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
-import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
+import {bindTheme} from '../shared/theme.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
 import {traceStatParts, durationStat} from '../shared/trace-stats.js';
 
@@ -44,8 +44,7 @@ if (dataEl && hostEl && hostEl.shadowRoot && !hostEl.dataset.pkReady) {
 
 function initToolbar(host, data) {
     const shadow = host.shadowRoot;
-    applyTheme(host, resolveTheme());
-    watchTheme(theme => applyTheme(host, theme));
+    bindTheme(host);
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
     // looking, so the notice the server rendered for the opposite case has served its
@@ -56,10 +55,6 @@ function initToolbar(host, data) {
     const bar = shadow.querySelector('.pk-toolbar');
     const openButton = shadow.querySelector('.pk-toolbar__open');
     const metricsEl = shadow.getElementById('pk-metrics');
-    // A dedicated listener (rather than the inline onclick CSP would block on host pages
-    // whose script-src disallows 'unsafe-inline') keeps the link's own click from also
-    // triggering the bar's open-overlay handler below.
-    shadow.querySelector('.pk-toolbar__link').addEventListener('click', e => e.stopPropagation());
 
     let currentTraceId = null;
 
@@ -129,10 +124,10 @@ function initToolbar(host, data) {
         loadTrace(data.traceId, data.method, data.path, data.status);
     }
 
-    // Attached to the outer bar (not just the button) so a click anywhere on it - other
-    // than the dashboard link, which stops its own propagation above - opens the overlay.
-    // A real <button> click (mouse or native Enter/Space activation) bubbles up to this
-    // listener like any other click.
+    // Attached to the outer bar (not just the button) so a click anywhere on it opens the
+    // overlay - except on the dashboard link, the bar's one <a> once the auth notice is
+    // gone, whose click is a navigation and nothing else. A real <button> click (mouse or
+    // native Enter/Space activation) bubbles up to this listener like any other click.
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;

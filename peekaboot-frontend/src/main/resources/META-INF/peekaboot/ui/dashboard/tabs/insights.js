@@ -19,7 +19,6 @@ import {createInsightsStream} from './insights-stream.js';
 import {createInsightsPanels, levelButtonsHtml, updateLevelButtons, RESET_ICON} from './insights-panels.js';
 
 export const id = 'insights';
-export const label = 'Insights';
 
 /** Every param this tab owns in the URL (see reconcileUrlState / writeUrlParams). */
 const URL_KEYS = ['level', 'percentiles', 'restarts', 'panels'];

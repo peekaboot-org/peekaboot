@@ -66,15 +66,26 @@ export function formatHosts(hosts) {
 const DEFAULT_DATE_OPTIONS = {
     year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
 };
+const TIME_OF_DAY_OPTIONS = {
+    hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
+};
+
+/** A date/time in the dashboard's usual shape (date, hour and minute), in the reader's locale and timezone. */
+export function formatDateTime(value, display = {}) {
+    return formatDateTimeWith(value, DEFAULT_DATE_OPTIONS, display);
+}
+
+/** The time alone, to the millisecond - the overlay's log rows. */
+export function formatTimeOfDay(value, display = {}) {
+    return formatDateTimeWith(value, TIME_OF_DAY_OPTIONS, display);
+}
 
 /**
- * Formats a date/time value. Passing any option beyond locale/timeZone fully
- * replaces DEFAULT_DATE_OPTIONS rather than merging with it — callers that want
- * a single custom field (e.g. just dateStyle) must supply the complete option
- * set they want, not a partial override. Only the fields named in that set are
- * rendered, so a time-only option set yields a time-only string.
+ * A date/time with exactly the Intl.DateTimeFormat `options` given - the whole set, not
+ * a delta on the default: only the fields named are rendered, so a time-only set yields
+ * a time-only string. `display` is the reader's {locale, timeZone}.
  */
-export function formatDateTime(value, {locale, timeZone, ...options} = {}) {
+export function formatDateTimeWith(value, options, {locale, timeZone} = {}) {
     if (value == null || value === '') return '-';
     const date = new Date(value);
     // toLocaleString does not throw on an invalid Date - it returns the
@@ -83,8 +94,7 @@ export function formatDateTime(value, {locale, timeZone, ...options} = {}) {
     // locale/timeZone.
     if (Number.isNaN(date.getTime())) return String(value);
     try {
-        const resolved = Object.keys(options).length > 0 ? options : DEFAULT_DATE_OPTIONS;
-        return date.toLocaleString(locale, timeZone ? {...resolved, timeZone} : resolved);
+        return date.toLocaleString(locale, timeZone ? {...options, timeZone} : options);
     } catch {
         return String(value);
     }
@@ -112,6 +122,10 @@ export function formatCount(n, singular, plural = singular + 's') {
     return `${n} ${n === 1 ? singular : plural}`;
 }
 
+/** The units a series or panel can carry (the backend's Unit enum, by wire name), and the formats a tile can (TileFormat). */
+export const METRIC_UNITS = Object.freeze(['bytes', 'percent', 'millis', 'count', 'persec', 'bytes-persec']);
+export const TILE_FORMATS = Object.freeze(['duration', 'datetime', 'bytes', 'count']);
+
 /**
  * Formats one insights series/measurement value per its configured unit (see
  * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
@@ -136,31 +150,14 @@ export function formatMetricValue(value, unit) {
  * Formats one insights tile value per its configured format (see
  * InsightsConfigResponse.Tile.format). duration/datetime tile values are seconds
  * server-side (see InsightsService), hence the *1000 before handing off to the
- * millisecond-based formatDurationMs/formatDateTime.
+ * millisecond-based formatters; bytes and count are formatMetricValue's own.
  */
-export function formatTileValue(value, format, {locale, timeZone} = {}) {
+export function formatTileValue(value, format, display = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     switch (format) {
-        case 'duration': return formatDurationMs(value * 1000);
-        case 'datetime': return formatDateTime(value * 1000, {locale, timeZone});
-        case 'bytes': return formatBytes(value);
-        case 'count':
-        default: return formatMetricCount(value);
-    }
-}
-
-export function formatTimeOfDay(value, {locale, timeZone} = {}) {
-    if (value == null || value === '') return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    const options = {
-        hour12: false, hour: '2-digit', minute: '2-digit',
-        second: '2-digit', fractionalSecondDigits: 3
-    };
-    try {
-        return date.toLocaleTimeString(locale, timeZone ? {...options, timeZone} : options);
-    } catch {
-        return String(value).substring(11, 23);
+        case 'duration': return formatMetricValue(value * 1000, 'millis');
+        case 'datetime': return formatDateTime(value * 1000, display);
+        default: return formatMetricValue(value, format);
     }
 }

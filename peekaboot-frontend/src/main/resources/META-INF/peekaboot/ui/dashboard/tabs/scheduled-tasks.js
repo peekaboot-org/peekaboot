@@ -6,10 +6,10 @@
 import {badge, iconLink} from '../../shared/components.js';
 import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
+import {taskStatusVariant} from '../../shared/severity.js';
 import {buildAppHash} from '../../shared/url-state.js';
 
 export const id = 'scheduled-tasks';
-export const label = 'Scheduled Tasks';
 
 /** Every TaskType the backend emits, in the order the groups render. */
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
@@ -43,13 +43,6 @@ function groupsByType(tasks) {
     return TASK_TYPES
         .map(type => ({type, tasks: tasks.filter(task => task.type === type)}))
         .filter(group => group.tasks.length > 0);
-}
-
-/** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
-function taskSeverity(status) {
-    if (status === 'SUCCESS') return 'ok';
-    if (status === 'FAILED') return 'error';
-    return 'muted';
 }
 
 function renderSummary(scheduledTasks) {
@@ -98,7 +91,7 @@ function renderTaskRow(task, type, context) {
     right.className = 'pk-task__right';
     right.appendChild(timingEl('Last:', task.lastExecution ? formatDateTime(task.lastExecution, dateOptions) : 'Never'));
     right.appendChild(timingEl('Next:', task.nextExecution ? formatDateTime(task.nextExecution, dateOptions) : '-'));
-    right.appendChild(badge(task.lastStatus || 'PENDING', taskSeverity(task.lastStatus)));
+    right.appendChild(badge(task.lastStatus || 'PENDING', taskStatusVariant(task.lastStatus)));
 
     row.append(left, right);
     item.appendChild(row);

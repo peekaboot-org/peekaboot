@@ -15,13 +15,12 @@
  * removes the endpoint outright, and an operator who set that flag will not be
  * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
-import {badge, emptyState, table} from '../../shared/components.js';
+import {badge, cell, emptyState, table} from '../../shared/components.js';
 import {formatDateTime, formatLongDuration} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'lifecycle';
-export const label = 'Lifecycle';
 
 const PAGE_SIZE = 20;
 const COLUMNS = ['Started', 'Ran for', 'Stopped', 'Down before', 'Build'];
@@ -128,71 +127,48 @@ function renderRow(run, dateOptions) {
     return row;
 }
 
+const SHRINK = {className: 'pk-table__shrink'};
+
 function startedCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
-    td.append(document.createTextNode(formatDateTime(run.startedAtEpochMs, dateOptions)));
-    if (run.running) {
-        td.append(' ');
-        td.appendChild(badge('Running', 'ok'));
-    }
+    const td = cell(SHRINK, formatDateTime(run.startedAtEpochMs, dateOptions));
+    if (run.running) td.append(' ', badge('Running', 'ok'));
     return td;
 }
 
 function ranForCell(run) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
     // null means the run ended without a matching stop - a crash or a kill - so we
     // genuinely do not know how long it ran. A dash, never a computed guess.
-    if (run.ranForMs == null) {
-        td.textContent = '-';
-        return td;
-    }
-    td.append(document.createTextNode(formatLongDuration(run.ranForMs)));
-    if (run.running) {
-        // The server sent elapsed-so-far, not a final duration - say so, rather than
-        // let it read like the run is already over.
-        td.append(' ');
-        td.appendChild(badge('still counting', 'muted'));
-    }
+    if (run.ranForMs == null) return cell(SHRINK, '-');
+    const td = cell(SHRINK, formatLongDuration(run.ranForMs));
+    // The server sent elapsed-so-far, not a final duration - say so, rather than
+    // let it read like the run is already over.
+    if (run.running) td.append(' ', badge('still counting', 'muted'));
     return td;
 }
 
 function stoppedCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
-    if (run.stoppedAtEpochMs != null) {
-        td.textContent = formatDateTime(run.stoppedAtEpochMs, dateOptions);
-        return td;
-    }
+    if (run.stoppedAtEpochMs != null) return cell(SHRINK, formatDateTime(run.stoppedAtEpochMs, dateOptions));
     // No stop recorded - either still running (no badge, it is not an error), or it
     // died uncleanly (kill -9, crash, power loss - flagged so it reads as a fact, not
     // as missing data).
-    td.append(document.createTextNode('-'));
-    if (run.uncleanExit) {
-        td.append(' ');
-        td.appendChild(badge('Unclean exit', 'error'));
-    }
+    const td = cell(SHRINK, '-');
+    if (run.uncleanExit) td.append(' ', badge('Unclean exit', 'error'));
     return td;
 }
 
 function downBeforeCell(run) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
     // null means unknowable - either nothing precedes this run, or the previous run
     // itself ended uncleanly and left no stop to measure from. Never render that as 0.
-    td.textContent = run.downForMs != null ? formatLongDuration(run.downForMs) : '-';
-    return td;
+    return cell(SHRINK, run.downForMs != null ? formatLongDuration(run.downForMs) : '-');
 }
 
 function buildCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-lifecycle-row__build';
     // The build time is not shown as its own line (the row is already dense) - it is
     // available on hover instead, same as flyway.js's truncated-script tooltip.
-    if (run.buildTimeEpochMs != null) {
-        td.title = `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}`;
-    }
+    const td = cell({
+        className: 'pk-lifecycle-row__build',
+        title: run.buildTimeEpochMs != null ? `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}` : undefined
+    });
 
     const version = document.createElement('div');
     version.className = 'pk-lifecycle-row__version';
