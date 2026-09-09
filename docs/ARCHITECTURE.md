@@ -760,6 +760,10 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries.
 
+Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
+through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
+`withLogs`/`withChildren`, so a stage names only the components it adds.
+
 `findRootSpan` takes the first span with no parent stored in this trace, falling back to the
 first span. `attachOrphansToRoot` then re-parents every other span whose parent is not in the
 trace onto that root, so a subtree whose parent has not been exported yet does not silently

@@ -47,11 +47,7 @@ public class TraceTreeMapper {
                     RootActionType.UNKNOWN,
                     null,
                     null,
-                    new TraceTabSummary(
-                            null,
-                            new TraceTabSummary.SpansSummary(0, 0L, 0),
-                            new TraceTabSummary.QueriesSummary(0, 0L),
-                            new TraceTabSummary.LogsSummary(0, 0, 0)),
+                    TraceTabSummary.empty(),
                     null,
                     List.of(),
                     List.of(),

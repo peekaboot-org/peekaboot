@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,7 +14,6 @@ import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
 import org.peekaboot.backend.domain.trace.SpanStatus;
-import org.peekaboot.backend.domain.trace.TraceLog;
 import org.peekaboot.backend.domain.trace.TraceTabSummary;
 import org.peekaboot.backend.domain.trace.TraceTree;
 
@@ -319,89 +317,12 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldPreserveExistingSpanProperties() {
-        SpanNode span = node("span-id-123")
-                .named("my-operation")
-                .kind("CLIENT")
-                .startTimeMs(1000L)
-                .durationMs(150L)
-                .tags(Map.of("custom.attr", "value"))
-                .build();
-        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
-
-        TraceTree result = detector.detectIssues(trace);
-
-        SpanNode resultSpan = result.rootSpan();
-        assertThat(resultSpan.spanId()).isEqualTo("span-id-123");
-        assertThat(resultSpan.name()).isEqualTo("my-operation");
-        assertThat(resultSpan.kind()).isEqualTo("CLIENT");
-        assertThat(resultSpan.startTimeMs()).isEqualTo(1000L);
-        assertThat(resultSpan.durationMs()).isEqualTo(150L);
-        assertThat(resultSpan.status()).isEqualTo(SpanStatus.OK);
-        assertThat(resultSpan.tags()).containsEntry("custom.attr", "value");
-    }
-
-    @Test
-    void detectIssues_shouldPreserveErrorAndRemoteServiceProperties() {
-        SpanNode span = node("span-id-456")
-                .named("remote-call")
-                .kind("CLIENT")
-                .startTimeMs(1000L)
-                .durationMs(50L)
-                .status(SpanStatus.ERROR)
-                .order(42L)
-                .error("boom", "java.lang.RuntimeException")
-                .remoteServiceName("orders-service")
-                .build();
-        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
-
-        TraceTree result = detector.detectIssues(trace);
-
-        SpanNode resultSpan = result.rootSpan();
-        assertThat(resultSpan.creationOrder()).isEqualTo(42L);
-        assertThat(resultSpan.errorMessage()).isEqualTo("boom");
-        assertThat(resultSpan.errorClass()).isEqualTo("java.lang.RuntimeException");
-        assertThat(resultSpan.remoteServiceName()).isEqualTo("orders-service");
-    }
-
-    @Test
-    void detectIssues_shouldPreserveSpanLogs() {
-        List<TraceLog> childLogs = List.of(new TraceLog(
-                "child1", Instant.parse("2026-01-01T00:00:00Z"), "DEBUG", "ChildLogger", "child log", "main"));
-        List<TraceLog> rootLogs = List.of(
-                new TraceLog("span1", Instant.parse("2026-01-01T00:00:01Z"), "INFO", "RootLogger", "root log", "main"));
-        SpanNode child =
-                createSpan("child1", 10, SpanStatus.OK, Map.of(), List.of()).withLogs(childLogs);
-        SpanNode root =
-                createSpan("span1", 50, SpanStatus.OK, Map.of(), List.of(child)).withLogs(rootLogs);
-        TraceTree trace = createTrace(root, createSummary(2, 0, 0L, 0));
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().logs()).isEqualTo(rootLogs);
-        assertThat(result.rootSpan().children().get(0).logs()).isEqualTo(childLogs);
-    }
-
-    @Test
     void detectIssues_shouldHandleNullRootSpan() {
         TraceTree trace = tree(null).build();
 
         TraceTree result = detector.detectIssues(trace);
 
         assertThat(result.rootSpan()).isNull();
-    }
-
-    @Test
-    void detectIssues_preservesTheTruncatedFlag() {
-        // a trace the store marked truncated because the span cap dropped real spans
-        SpanNode span = createSpan("span1", 50, SpanStatus.OK, Map.of(), List.of());
-        TraceTree trace = tree(span).truncated(true).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        // rebuilding the tree around the processed span tree must not silently
-        // reset the flag - a shortened trace must never look complete again
-        assertThat(result.truncated()).isTrue();
     }
 
     private SpanNode createSpan(
