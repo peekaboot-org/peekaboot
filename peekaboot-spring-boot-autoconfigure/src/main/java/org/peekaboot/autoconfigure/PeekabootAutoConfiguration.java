@@ -31,7 +31,6 @@ import org.peekaboot.backend.tracing.bridge.otel.OtelSpanExporter;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -51,7 +50,7 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration(after = {PeekabootTracingAutoConfiguration.class, OtelTracingAutoConfiguration.class})
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
+@ConditionalOnClass(HealthEndpoint.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @EnableConfigurationProperties({PeekabootProperties.class, UiTracingProperties.class})
 public class PeekabootAutoConfiguration {

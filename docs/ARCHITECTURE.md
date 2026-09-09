@@ -488,11 +488,13 @@ servlet guard and the master switch: `PeekabootAutoConfiguration`,
 ```
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
-the `HealthEndpoint` and `InfoEndpoint` classes, `DevToolbarAutoConfiguration`
-`peekaboot.dev-toolbar`, `TracingInterceptorAutoConfiguration` the `ObservationRegistry`
-class and bean, `InsightsAutoConfiguration` a `MeterRegistry` bean and
-`peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the OpenTelemetry SDK's
-`SpanExporter` class.
+the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
+`TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean, `InsightsAutoConfiguration`
+a `MeterRegistry` bean and `peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the
+OpenTelemetry SDK's `SpanExporter` class. Class conditions guard only what the starter's
+closure leaves optional: `spring-boot-health` and the OpenTelemetry SDK. `InfoEndpoint` and
+`ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
+consumer of the starter can be without them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods whose names yield
