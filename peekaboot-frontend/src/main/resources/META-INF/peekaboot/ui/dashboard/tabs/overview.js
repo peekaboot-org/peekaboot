@@ -7,6 +7,7 @@ import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
 import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
+import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
 export const label = 'Overview';
@@ -15,7 +16,7 @@ export function render(container, data, context = {}) {
     const {locale, timeZone} = context;
     const {application, runtime, dataSources, health} = data;
 
-    renderInsightTiles(container, context);
+    renderInsightTiles(container, data, context);
     renderBuildInfo(container, application?.build, {locale, timeZone});
     renderGitInfo(container, application?.git, {locale, timeZone});
     renderSpringInfo(container, application);
@@ -50,49 +51,47 @@ function tileIcon(tileId) {
 }
 
 /**
- * Fills the tile row from /api/insights/config, whose tiles carry their current value
+ * The tile row's own fetch of /api/insights/config, whose tiles carry their current value
  * alongside their definition - so the dashboard's own 30s cycle keeps them current and
- * this tab needs none of the Insights tab's SSE machinery. The row is hidden outright,
- * rather than left as an empty box, whenever insights are switched off or unreachable.
- * Fetched only while this tab is the one showing (active-tab guard, see main.js's
- * renderTab); main.js renders it again the moment it is switched to.
+ * this tab needs none of the Insights tab's SSE machinery. On the self-fetching-tab
+ * contract: fetched only while this tab is the one showing, and hidden outright, rather
+ * than left as an empty box, when the endpoint is unreachable.
  */
-async function renderInsightTiles(container, {client, features, locale, timeZone, active} = {}) {
+const tileRow = selfFetchingTab({
+    // own dedupe key: the Insights tab loads this same path on its own schedule, and on
+    // a "#insights" deep link both fire in the same cycle - sharing the default per-path
+    // counter would leave whichever called first with a null and this row hidden until
+    // the next refresh (see shared/api.js)
+    fetch: ({client}) => client.get('/api/insights/config', {dedupeKey: 'insight-tiles'}),
+    renderResult: (container, config, {locale, timeZone}) => {
+        const tiles = config.tiles ?? [];
+        const row = container.querySelector('#insights-tiles');
+        row.innerHTML = tiles.map(tile => `
+            <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
+                ${tileIcon(tile.id)}
+                <div class="pk-insight-tile__text">
+                    <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
+                    <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+                </div>
+            </div>
+        `).join('');
+        row.classList.toggle('hidden', tiles.length === 0);
+    },
+    renderError: (container, error) => {
+        console.warn('Insight tiles unavailable:', error);
+        container.querySelector('#insights-tiles').classList.add('hidden');
+    }
+});
+
+/** The row is hidden outright when insights are switched off; otherwise the tile fetch above fills it. */
+function renderInsightTiles(container, data, context) {
     const row = container.querySelector('#insights-tiles');
     if (!row) return;
-    if (!features?.insights || !client) {
+    if (!context.features?.insights || !context.client) {
         row.classList.add('hidden');
         return;
     }
-    if (!active) return;
-
-    let config;
-    try {
-        // own dedupe key: the Insights tab loads this same path on its own schedule,
-        // and on a "#insights" deep link both fire in the same cycle - sharing the
-        // default per-path counter would leave whichever called first with a null and
-        // this row hidden until the next refresh (see shared/api.js)
-        config = await client.get('/api/insights/config', {dedupeKey: 'insight-tiles'});
-    } catch (error) {
-        console.warn('Insight tiles unavailable:', error);
-        row.classList.add('hidden');
-        return;
-    }
-    // null means this row's own previous call is still in flight and a newer one has
-    // taken over - that newer response is about to render the very same row
-    if (!config) return;
-
-    const tiles = config.tiles ?? [];
-    row.innerHTML = tiles.map(tile => `
-        <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
-            ${tileIcon(tile.id)}
-            <div class="pk-insight-tile__text">
-                <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
-                <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
-            </div>
-        </div>
-    `).join('');
-    row.classList.toggle('hidden', tiles.length === 0);
+    tileRow.render(container, data, context);
 }
 
 /**

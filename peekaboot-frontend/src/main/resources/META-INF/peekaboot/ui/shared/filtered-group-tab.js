@@ -21,11 +21,10 @@
  *                               -> optional hook run after every (re-)render, the empty
  *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
- *                                  instead of the shared payload render() receives. Called
- *                                  only for the active tab (active-tab guard, see main.js's
- *                                  renderTab). Resolves to the data select() reads, or null
- *                                  when superseded (see shared/api.js); a rejection renders
- *                                  fetchErrorMessage.
+ *                                  instead of the shared payload render() receives, on the
+ *                                  self-fetching-tab.js contract (active-tab guard,
+ *                                  supersession, rejection). Resolves to the data select()
+ *                                  reads; a rejection renders fetchErrorMessage.
  *   loadingMessage              -> shown while the very first fetchData() is in flight
  *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
@@ -35,6 +34,7 @@
  */
 import {groupList, expandedKeys, emptyState, loadingBlock} from './components.js';
 import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
+import {selfFetchingTab} from './self-fetching-tab.js';
 
 export function filteredGroupTab({
     inputId, listId, select, filterGroup, key, header, items, extraTop,
@@ -52,39 +52,40 @@ export function filteredGroupTab({
     const reconcile = urlFilter?.reconcile ?? ((input, container, context) => reconcileTextFilter(input, context));
     const write = urlFilter?.write ?? ((input, container, context) => writeTextFilter(input, context));
 
+    const fetcher = fetchData && selfFetchingTab({
+        fetch: fetchData,
+        reconcile: (container, context) => reconcile(input(container), container, context),
+        // Only before the very first data arrives - a background refresh of an
+        // already-populated, currently visible list must not blank it for the round
+        // trip's duration (renderGroups replaces the content once the response is in).
+        loading: (container, {firstLoad}) => {
+            if (firstLoad) list(container).replaceChildren(loadingBlock(loadingMessage));
+        },
+        renderResult: (container, result) => {
+            currentData = result;
+            renderGroups(container);
+        },
+        renderError: (container, error) => list(container).replaceChildren(emptyState(fetchErrorMessage(error)))
+    });
+
     function render(container, data, context) {
-        if (!fetchData) currentData = data;
         currentContext = context;
         wireFilter(container);
+        if (fetcher) {
+            fetcher.render(container, data, context);
+            return;
+        }
+        currentData = data;
         if (context.active) reconcile(input(container), container, context);
-        if (fetchData) fetchAndRender(container, context);
-        else renderGroups(container);
+        renderGroups(container);
     }
 
     function refresh(container) {
         renderGroups(container);
     }
 
-    async function fetchAndRender(container, context) {
-        if (!context.active) return;
-
-        const target = container.querySelector(`#${listId}`);
-        // Only before the very first data arrives - a background refresh of an
-        // already-populated, currently visible list must not blank it for the round
-        // trip's duration (renderGroups replaces the content once the response is in).
-        if (currentData === null) target.replaceChildren(loadingBlock(loadingMessage));
-
-        let result;
-        try {
-            result = await fetchData(context);
-        } catch (error) {
-            target.replaceChildren(emptyState(fetchErrorMessage(error)));
-            return;
-        }
-        if (result === null) return; // superseded by a newer request
-
-        currentData = result;
-        renderGroups(container);
+    function list(container) {
+        return container.querySelector(`#${listId}`);
     }
 
     function input(container) {
@@ -107,7 +108,7 @@ export function filteredGroupTab({
 
     function renderGroups(container) {
         const query = currentQuery(container);
-        const target = container.querySelector(`#${listId}`);
+        const target = list(container);
         // Must run before the container is cleared below - it reads the DOM's current
         // aria-expanded state so a re-render (e.g. the 30s auto-refresh) can restore it.
         const expanded = expandedKeys(target);

@@ -4,8 +4,7 @@
  * Paired with Insights in main.js's TABS order - both are views of the application over
  * time, Insights on what it measured, this on when it existed.
  *
- * Fetched from its own endpoint; a background render skips the round trip (active-tab
- * guard, see main.js's renderTab).
+ * Fetched from its own endpoint, on the self-fetching-tab.js contract.
  *
  * The current page is module-level state, not derived from the fetch response, so it
  * survives across those 30s re-renders - a reader on page 3 is not bounced back to page
@@ -14,11 +13,12 @@
  *
  * There is no isAvailable() - the tab always shows. peekaboot.lifecycle.enabled=false
  * removes the endpoint outright, and an operator who set that flag will not be
- * surprised; failedFetch below renders an honest "unavailable" line instead.
+ * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
 import {badge, emptyState, table} from '../../shared/components.js';
 import {formatDateTime, formatLongDuration} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'lifecycle';
 export const label = 'Lifecycle';
@@ -26,17 +26,28 @@ export const label = 'Lifecycle';
 const PAGE_SIZE = 20;
 const COLUMNS = ['Started', 'Ran for', 'Stopped', 'Down before', 'Build'];
 
-let currentContainer = null;
-let currentContext = null;
 let runs = null;        // most recent /api/lifecycle/runs response's `runs`, or null before the first load
-let fetchFailed = false;
 let currentPage = 0;    // 0-indexed, survives across render() calls - see doc comment above
 
+const tab = selfFetchingTab({
+    fetch: context => context.client.get('/api/lifecycle/runs'),
+    reconcile: (container, context) => reconcileWithUrl(context),
+    renderResult: (container, result, context) => {
+        runs = result.runs || [];
+        renderTable(container, context);
+    },
+    renderError: (container, error) => {
+        // peekaboot.lifecycle.enabled=false removes the endpoint entirely - that is an
+        // expected, operator-chosen state, not a bug, so this logs quietly and renders
+        // an honest sentence rather than throwing.
+        console.warn('Lifecycle history unavailable:', error);
+        runs = null;
+        container.querySelector('#lifecycle-runs').replaceChildren(emptyState('Lifecycle history is unavailable'));
+    }
+});
+
 export function render(container, data, context) {
-    currentContainer = container;
-    currentContext = context;
-    if (context.active) reconcileWithUrl(context);
-    fetchAndRender();
+    tab.render(container, data, context);
 }
 
 /**
@@ -69,42 +80,12 @@ function reconcileWithUrl(context) {
  * page one so the default yields a clean "#lifecycle" hash. A replace, never a push.
  */
 function writePageParam() {
-    currentContext.setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
-}
-
-async function fetchAndRender() {
-    const container = currentContainer;
-    const context = currentContext;
-    if (!context.active) return;
-
-    let result;
-    try {
-        result = await context.client.get('/api/lifecycle/runs');
-    } catch (error) {
-        // peekaboot.lifecycle.enabled=false removes the endpoint entirely - that is an
-        // expected, operator-chosen state, not a bug, so this logs quietly and renders
-        // an honest sentence rather than throwing.
-        console.warn('Lifecycle history unavailable:', error);
-        fetchFailed = true;
-        runs = null;
-        renderTable(container, context);
-        return;
-    }
-    if (result === null) return; // superseded by a newer request
-
-    fetchFailed = false;
-    runs = result.runs || [];
-    renderTable(container, context);
+    tab.context().setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
 }
 
 function renderTable(container, context) {
     const target = container.querySelector('#lifecycle-runs');
     target.innerHTML = '';
-
-    if (fetchFailed) {
-        target.appendChild(emptyState('Lifecycle history is unavailable'));
-        return;
-    }
 
     if (!runs || runs.length === 0) {
         target.appendChild(emptyState('No runs recorded yet'));
@@ -247,7 +228,7 @@ function renderPager(totalPages) {
     prevBtn.addEventListener('click', () => {
         currentPage -= 1;
         writePageParam();
-        renderTable(currentContainer, currentContext);
+        renderTable(tab.container(), tab.context());
     });
 
     const readout = document.createElement('span');
@@ -262,7 +243,7 @@ function renderPager(totalPages) {
     nextBtn.addEventListener('click', () => {
         currentPage += 1;
         writePageParam();
-        renderTable(currentContainer, currentContext);
+        renderTable(tab.container(), tab.context());
     });
 
     pager.append(prevBtn, readout, nextBtn);
