@@ -10,7 +10,7 @@
  */
 import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
-import {issueSeverity} from '../../shared/severity.js';
+import {issueSeverity, severityClass} from '../../shared/severity.js';
 
 const INDENT_PX = 20;
 
@@ -25,7 +25,7 @@ export function render(container, trace, context = {}) {
     const rowsContainer = el('div', {attrs: {id: 'pk-gantt-rows'}});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
         el('div', {className: 'pk-gantt-header'},
-            el('div', {className: 'pk-gantt-header__name', text: 'Span'}),
+            el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
             el('div', {className: 'pk-gantt-header__spacer'})),
         rowsContainer));
@@ -124,7 +124,7 @@ function nameCell(span, indent) {
     const cell = el('div', {className: 'pk-gantt-name'});
     cell.style.paddingLeft = `${indent}px`;
     cell.append(hasChildren
-        ? button({className: 'pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
+        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
     if (kind !== 'internal' && kind !== 'unknown') {
         cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
@@ -187,7 +187,7 @@ function eventMarker(event, traceStart, totalDuration) {
 
     const marker = document.createElement('button');
     marker.type = 'button';
-    marker.className = 'pk-gantt-event-marker';
+    marker.className = 'pk-unbutton pk-gantt-event-marker';
     marker.style.left = `${left}%`;
     marker.setAttribute('aria-label', `Event: ${event.name}`);
 
@@ -205,7 +205,7 @@ function durationCell(span, totalDuration) {
     const severity = issueSeverity(span.issues);
 
     const cell = document.createElement('span');
-    cell.className = 'pk-gantt-duration' + (severity ? ` pk-gantt-duration--${severity}` : '');
+    cell.className = 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : '');
     cell.textContent = `${formatDurationMs(span.durationMs)} · ${pct}%`;
     return cell;
 }
@@ -220,7 +220,7 @@ function queryDetailRow(span, indent, depth) {
     detail.dataset.depth = depth + 1;
     detail.style.marginLeft = `${indent + INDENT_PX}px`;
     detail.append(
-        el('div', {className: 'pk-query-label', text: 'Query'}),
+        el('div', {className: 'pk-query-label pk-label', text: 'Query'}),
         el('div', {className: 'pk-query-text', text: span.query}));
     return detail;
 }

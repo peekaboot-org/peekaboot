@@ -107,7 +107,7 @@ function renderTable(container, context) {
     const {locale, timeZone} = context;
 
     const rows = runs.slice(start, start + PAGE_SIZE).map(run => renderRow(run, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-lifecycle-table'}));
+    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
     target.appendChild(renderPager(totalPages));
@@ -115,8 +115,8 @@ function renderTable(container, context) {
 
 function renderRow(run, dateOptions) {
     const row = document.createElement('tr');
-    if (run.running) row.classList.add('pk-lifecycle-row--running');
-    if (run.uncleanExit) row.classList.add('pk-lifecycle-row--unclean');
+    if (run.running) row.classList.add('pk-table__stripe--primary');
+    if (run.uncleanExit) row.classList.add('pk-table__stripe--danger');
 
     row.append(
         startedCell(run, dateOptions),

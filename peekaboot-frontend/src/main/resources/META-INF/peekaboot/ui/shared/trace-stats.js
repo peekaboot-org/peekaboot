@@ -7,7 +7,7 @@
  */
 import {badge} from './components.js';
 import {formatCount, formatDurationMs} from './format.js';
-import {durationSeverity, logLevelVariant} from './severity.js';
+import {durationSeverity, logLevelVariant, severityClass} from './severity.js';
 
 export function traceStatParts(trace, features) {
     const summary = trace.summary || {};
@@ -31,11 +31,11 @@ export function traceStatParts(trace, features) {
  */
 export function durationStat(lead, ms, severity) {
     const stat = document.createElement('span');
-    stat.className = 'pk-stat' + (severity ? ` pk-stat--${severity}` : '');
+    stat.className = 'pk-stat';
     stat.append(lead, ' ');
 
     const duration = document.createElement('span');
-    duration.className = 'pk-stat__duration';
+    duration.className = 'pk-stat__duration' + (severity ? ` ${severityClass(severity)}` : '');
     duration.textContent = formatDurationMs(ms);
     stat.appendChild(duration);
     return stat;

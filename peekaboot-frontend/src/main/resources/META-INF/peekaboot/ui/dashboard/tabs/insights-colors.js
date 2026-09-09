@@ -3,9 +3,25 @@
  * marker layer. Read from the live document styles so a chart follows the active theme.
  */
 
-/** The document's value of a --pk-* custom property, or `fallback` when it is unset. */
-export function themeToken(name, fallback) {
-    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+/**
+ * The light-theme value of every token a chart draws with, for a document whose
+ * tokens.css has not applied (blocked, 404, a stale cache): one copy, mirroring
+ * tokens.css's light block, instead of a literal beside every read.
+ */
+export const LIGHT_FALLBACKS = Object.freeze({
+    '--pk-primary-text': '#447718',
+    '--pk-info-text': '#0a6e7f',
+    '--pk-warning-text': '#9a5e06',
+    '--pk-purple': '#7c3aed',
+    '--pk-danger': '#d21f1f',
+    '--pk-text-muted': '#626c79',
+    '--pk-border': '#d1d5db',
+    '--pk-font': 'system-ui, sans-serif'
+});
+
+/** The document's value of a --pk-* custom property, or its light-theme fallback when it is unset. */
+export function themeToken(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || LIGHT_FALLBACKS[name];
 }
 
 /**

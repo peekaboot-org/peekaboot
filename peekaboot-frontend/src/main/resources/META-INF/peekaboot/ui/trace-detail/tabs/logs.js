@@ -16,7 +16,7 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
     const spanId = log.spanId || '';
 
     const nameButton = button({
-        className: 'pk-log__span',
+        className: 'pk-unbutton pk-log__span',
         text: spanNames.get(spanId) || spanId,
         title: spanId,
         attrs: {'data-span-id': spanId, 'aria-label': `Filter logs to span ${spanId}`}
@@ -30,7 +30,7 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
     // button beside it, which filters this list (see trace-detail.js's goToSpan).
     if (view.goToSpan && spanId) {
         const treeLink = button({
-            className: 'pk-log__goto-span',
+            className: 'pk-unbutton pk-icon-btn pk-log__goto-span',
             text: '⤶',
             title: 'Show this span in the span tree',
             attrs: {'data-span-id': spanId, 'aria-label': `Show span ${spanId} in the span tree`}
@@ -153,7 +153,7 @@ function spanFilterChip(spanId, spanNames) {
     return el('span', {className: 'pk-logs-filter-span', title},
         `Span: ${label} `,
         button({
-            className: 'pk-logs-filter-span-clear',
+            className: 'pk-unbutton pk-logs-filter-span-clear',
             text: '×',
             attrs: {id: 'pk-clear-span-filter', 'aria-label': 'Clear span filter'}
         }));

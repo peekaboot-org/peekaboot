@@ -21,7 +21,7 @@
         <div class="pk-container">
             <div class="pk-header__content">
                 <div class="pk-header__brand">
-                    <span class="pk-header__logo" aria-hidden="true"></span>
+                    <span class="pk-header__logo pk-logo-mark" aria-hidden="true"></span>
                     <h1>peekaboot</h1>
                 </div>
                 <div class="pk-header__actions">
@@ -84,7 +84,7 @@
              un-hides and a screen-reader user is left on silently stale data. -->
         <div id="error" class="pk-error-banner hidden" role="alert">
             <span class="message"></span>
-            <button class="pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
+            <button class="pk-unbutton pk-icon-btn pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
         </div>
 
         <!-- Overview Tab -->
@@ -95,7 +95,7 @@
 
             <div class="pk-grid">
                 <div class="pk-card" id="build-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128230;</span>
                         <h2 class="pk-card__title">Build</h2>
                     </div>
@@ -103,7 +103,7 @@
                 </div>
 
                 <div class="pk-card" id="git-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128256;</span>
                         <h2 class="pk-card__title">Git</h2>
                     </div>
@@ -111,7 +111,7 @@
                 </div>
 
                 <div class="pk-card" id="spring-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#127807;</span>
                         <h2 class="pk-card__title">Spring</h2>
                     </div>
@@ -119,7 +119,7 @@
                 </div>
 
                 <div class="pk-card" id="java-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#9749;</span>
                         <h2 class="pk-card__title">Java</h2>
                     </div>
@@ -127,7 +127,7 @@
                 </div>
 
                 <div class="pk-card" id="os-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128187;</span>
                         <h2 class="pk-card__title">System</h2>
                     </div>
@@ -135,7 +135,7 @@
                 </div>
 
                 <div class="pk-card" id="machine-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128421;&#65039;</span>
                         <h2 class="pk-card__title">Machine</h2>
                     </div>
@@ -143,7 +143,7 @@
                 </div>
 
                 <div class="pk-card" id="jvm-defaults-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#9881;</span>
                         <h2 class="pk-card__title">JVM Defaults</h2>
                     </div>
@@ -152,7 +152,7 @@
             </div>
 
             <div class="pk-card pk-section" id="memory-card">
-                <div class="pk-card__header">
+                <div class="pk-card__header pk-label">
                     <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
                     <h2 class="pk-card__title">Memory &amp; Storage</h2>
                     <span class="pk-card__meta" id="process-info"></span>
@@ -200,7 +200,7 @@
                 <button class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
             <div id="traces-filter" class="pk-filter-row">
-                <span class="pk-filter-row__label">Filter by type:</span>
+                <span class="pk-filter-row__label pk-label">Filter by type:</span>
                 <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
                 <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>

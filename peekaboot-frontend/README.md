@@ -41,13 +41,19 @@ surface:
    other sheets use resolves through a `--pk-*` token, which is what keeps a literal from
    settling into a component rule. Light palette on `:root`, dark under
    `[data-theme="dark"]`.
-2. **`base.css`**. The reset (`box-sizing`) and bare element defaults (`body`, `mark`). No
-   component classes.
-3. **`components.css`**. The `.pk-*` primitives (badge, group, kv row, meter, button, tab
-   strip, empty state, spinner) every surface's own CSS builds on. A surface stylesheet
-   (`dashboard.css`, `toolbar.css`, `trace-detail.css`) only adds surface-specific chrome,
-   never a second copy of a primitive. A variant one surface needs becomes a modifier here
-   (`.pk-table--kv`, the overlay's key/value table).
+2. **`base.css`**. The reset (`box-sizing`), bare element defaults (`body`, `mark`), the one
+   `:focus-visible` ring, and the two classes the dev toolbar needs before it can load
+   `components.css`: `.pk-unbutton` (a `<button>` with its chrome reset away) and
+   `.pk-logo-mark` (the Peekaboot mark with its dark-theme swap). The toolbar inlines only
+   `tokens.css`, `base.css` and `toolbar.css` (see `ToolbarShell`), so anything its
+   server-rendered markup depends on before `toolbar.js` runs has to live in one of those.
+3. **`components.css`**. The `.pk-*` primitives (badge, coloured duration, stat line, label,
+   icon button, group, kv row, meter, button, copy control, table with its card and stripe
+   modifiers, tab strip, icon link, empty state, loading block and spinner) every surface's
+   own CSS builds on. A surface stylesheet (`dashboard.css`, `toolbar.css`,
+   `trace-detail.css`) only adds surface-specific chrome, never a second copy of a
+   primitive. A variant one surface needs becomes a modifier here (`.pk-table--kv`, the
+   overlay's key/value table).
 
 ### The doubled-selector mechanism
 
@@ -100,15 +106,17 @@ gloss) turns to noise, and the two places the UI shows a logo are 26px and 18px.
 There are two variants because the mark is two-tone. Its slate magnifier (`#263238`)
 measures 13.2:1 on white and 1.4:1 on the dark theme's `--pk-bg`, where it disappears, so
 `logo-mark-dark.png` is the same artwork with that slate recoloured to a light neutral.
-Both surfaces swap it with a CSS `background-image` override, no JavaScript:
+One class, `.pk-logo-mark` in `base.css`, paints it on both surfaces and swaps it with a
+doubled-selector `background-image` override, no JavaScript:
 
 ```css
-[data-theme="dark"] .pk-header__logo   { background-image: url('../assets/logo-mark-dark.png'); }  /* dashboard */
-:host([data-theme="dark"]) .pk-toolbar__link { background-image: url('../assets/logo-mark-dark.png'); }  /* shadow root */
+.pk-logo-mark { flex: none; background: url('logo-mark.png') center / contain no-repeat; }
+[data-theme="dark"] .pk-logo-mark, :host([data-theme="dark"]) .pk-logo-mark { background-image: url('logo-mark-dark.png'); }
 ```
 
-The toolbar's `url()` resolves against `toolbar.css`'s own URL, which is why it works from
-inside a shadow root without knowing `basePath`.
+The `url()` resolves against `base.css`'s own URL, which is why it works from inside a
+shadow root without knowing `basePath`, and `ToolbarShell` rewrites it to the served path
+when it inlines the sheet. Each surface only sizes it (`.pk-header__logo`, `.pk-toolbar__link`).
 
 To regenerate from new source artwork (the masters live outside this repo, alongside it in
 `peekaboot-org/assets/`), crop to the bounding box, centre it in a square with ~6% padding,
@@ -137,7 +145,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `unmask-control.js` | `renderUnmaskControl(slot, context)`, the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel`. The icon and label map for a trace's root action type (HTTP request, scheduled job, and so on). |
 | `self-fetching-tab.js` | `selfFetchingTab({fetch, reconcile, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload: the one place for the active-tab guard (a background render skips the round trip), supersession (a `null` from `api.js` renders nothing) and the error path. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Exposes `render`, `refetch()` for a control the tab wires itself, and the latest render's `container()`/`context()`. |
-| `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`. The one place a duration, a span's issues, a log level or a health status is turned into a colour. See *Thresholds and the SLOW badge* below. |
+| `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `severityClass(severity)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`. The one place a duration, a span's issues, a log level or a health status is turned into a colour; `severityClass` names the `components.css` class (`.pk-duration--slow`, `--very-slow`) every surface colours a duration with. See *Thresholds and the SLOW badge* below. |
 | `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. |
 | `span-names.js` | `buildSpanNames(rootSpan)`. A spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
 | `storage.js` | `readSetting`, `writeSetting`. Guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
@@ -335,7 +343,12 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
 ### Controls and markup
 
 - **Interactive elements are real controls with `:focus-visible`**, not `div`/`role`
-  approximations. In particular a `role="button"` container must not wrap a focusable child
+  approximations. The ring itself is one rule in `base.css`
+  (`:is(button, a, select, input, [tabindex]):focus-visible`), so a new control gets it
+  without asking; a component overrides only the offset (`-2px` where the control sits
+  inside a bordered box) or, on a saturated fill, the colour. A control that resets the
+  ring to `none` needs another visible focus indicator, as the jump-flash targets have.
+  In particular a `role="button"` container must not wrap a focusable child
   such as a link: ARIA defines a button's children as presentational, so assistive tech can
   prune the nested control right out of the accessibility tree while nothing looks wrong
   visually. The fix is always the same shape. The container stays a plain element, a real
@@ -344,10 +357,11 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   trace item header needed it; watch for it in any "make this row clickable" change.
 
   The trace-detail overlay's small controls are all `<button>`s with the browser's button
-  chrome reset away, so each is reachable by keyboard. That covers the gantt
-  expand/collapse triangle, the SQL and logs toggles, the gantt event markers, the "show
-  logs for all spans" link, the log span-filter cell and the span-filter clear. A new
-  control that needs `cursor: pointer` is the smell; make it a `<button>` first.
+  chrome reset away (`.pk-unbutton`, plus `.pk-icon-btn` for the 24px glyph box), so each
+  is reachable by keyboard. That covers the gantt expand/collapse triangle, the SQL and
+  logs toggles, the gantt event markers, the "show logs for all spans" link, the log
+  span-filter cell and the span-filter clear. A new control that needs `cursor: pointer` is
+  the smell; make it a `<button>` first.
 
 - **A control whose only content is an icon needs an explicit `aria-label`, and the icon
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title

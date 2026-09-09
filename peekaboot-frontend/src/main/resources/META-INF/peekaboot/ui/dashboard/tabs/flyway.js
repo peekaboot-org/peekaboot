@@ -34,13 +34,13 @@ export function render(container, data, {locale, timeZone} = {}) {
     }
 
     const rows = migrations.map(migration => renderRow(migration, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-flyway-table'}));
+    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
 }
 
 function renderRow(migration, {locale, timeZone}) {
     const row = document.createElement('tr');
-    if (migration.state === 'FAILED') row.classList.add('pk-flyway-row--failed');
-    if (migration.state === 'PENDING') row.classList.add('pk-flyway-row--pending');
+    if (migration.state === 'FAILED') row.classList.add('pk-table__stripe--danger');
+    if (migration.state === 'PENDING') row.classList.add('pk-table__stripe--muted');
 
     row.append(
         cell(`V${migration.version}`, 'pk-flyway-row__version pk-table__shrink'),

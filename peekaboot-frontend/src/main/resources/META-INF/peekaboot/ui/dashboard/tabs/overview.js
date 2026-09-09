@@ -70,8 +70,8 @@ const tileRow = selfFetchingTab({
             <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
                 ${tileIcon(tile.id)}
                 <div class="pk-insight-tile__text">
-                    <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
-                    <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+                    <div class="pk-insight-tile__label pk-label">${escapeHtml(tile.label)}</div>
+                    <div class="pk-insight-tile__value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
                 </div>
             </div>
         `).join('');
@@ -308,7 +308,7 @@ function renderDataSourceCard(ds) {
     card.dataset.datasource = ds.name || 'DataSource';
 
     const header = document.createElement('div');
-    header.className = 'pk-card__header';
+    header.className = 'pk-card__header pk-label';
     header.innerHTML = `<span class="pk-card__icon" aria-hidden="true">\u{1F5C2}</span>`
             + `<h2 class="pk-card__title">${escapeHtml(ds.name || 'DataSource')}</h2>`;
     if (ds.health) header.appendChild(badge(ds.health, healthSeverity(ds.health)));

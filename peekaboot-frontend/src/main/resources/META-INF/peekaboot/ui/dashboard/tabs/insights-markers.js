@@ -28,9 +28,7 @@ import {formatDateTime} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
-// Fallbacks mirror the tokens.css light --pk-text-muted.
-const FALLBACK_INK = '#626c79';
-const FALLBACK_BAND = 'rgba(98, 108, 121, 0.12)';
+const FALLBACK_BAND = 'rgba(98, 108, 121, 0.12)';   // the light --pk-text-muted at that alpha
 const HIT_RADIUS = 5;                     // CSS px around a marker that shows its tooltip
 const FLAG_WIDTH = 3;                     // half-width of a start's top flag
 const FLAG_HEIGHT = 5;
@@ -45,7 +43,7 @@ const TIMESTAMP_OPTIONS = {
  * every chart from scratch anyway, so there is nothing a per-draw reread could catch.
  */
 function ink() {
-    const stroke = themeToken('--pk-text-muted', FALLBACK_INK);
+    const stroke = themeToken('--pk-text-muted');
     return {stroke, band: withAlpha(stroke, BAND_ALPHA, FALLBACK_BAND)};
 }
 

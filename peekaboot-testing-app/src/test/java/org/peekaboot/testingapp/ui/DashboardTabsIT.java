@@ -122,7 +122,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(tileIds).doesNotContain("heap-max", "disk-total", "pool-min", "pool-max");
         assertThat(page.locator("#insights-tiles .pk-insight-tile__icon").count())
                 .isEqualTo(tileIds.size());
-        assertThat(page.textContent("#insights-tiles [data-tile-id='uptime'] .pk-insight-tile-value"))
+        assertThat(page.textContent("#insights-tiles [data-tile-id='uptime'] .pk-insight-tile__value"))
                 .as("a live tile resolves in a real app")
                 .isNotEqualTo("-");
     }

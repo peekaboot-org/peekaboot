@@ -11,6 +11,7 @@
  */
 import {el, button} from '../shared/dom.js';
 import {formatCount, formatDurationMs} from '../shared/format.js';
+import {severityClass} from '../shared/severity.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
 import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
@@ -251,7 +252,7 @@ function header(trace, display) {
     }
     const meta = el('div', {className: 'pk-overlay__meta'},
         el('span', {
-            className: 'pk-overlay__duration' + (trace.slow ? ' pk-overlay__duration--slow' : ''),
+            className: 'pk-overlay__duration' + (trace.slow ? ` ${severityClass('slow')}` : ''),
             text: formatDurationMs(trace.durationMs)
         }),
         badge(statusLabel(status), statusVariant(status)),
@@ -263,7 +264,7 @@ function header(trace, display) {
 
     return el('div', {className: 'pk-overlay__header'},
         el('div', {className: 'pk-overlay__header-main'}, title, meta),
-        button({className: 'pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
+        button({className: 'pk-unbutton pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
 }
 
 /**
