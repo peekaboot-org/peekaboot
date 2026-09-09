@@ -34,24 +34,12 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      * <p>Fired per test through the scheduler's own runnable rather than relying on the
      * boot-time run: every /?error=true and /boom the concurrent classes issue pushes an
      * older error trace further down the list, so only a freshly minted one is guaranteed
-     * to be found. The poll matches on the root span's name, which is what proves the
-     * trace's spans - exported asynchronously, unlike its logs - have landed.
+     * to be found. The listing names a trace by its root span, so a listed match proves the
+     * spans - exported asynchronously, unlike the logs - have landed.
      */
     private String freshFixedRateSchedulerTraceId() {
         ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-        openDashboard();
-        return (String) page.evaluate("""
-                async () => {
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
-                        const result = await response.json();
-                        const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
-                        if (match) return match.traceId;
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no scheduler.fixedRate trace reached the errors bucket within 15s');
-                }
-                """);
+        return awaitListedTrace("bucket=errors&limit=50", "trace => (trace.rootOperation || '').includes('fixedRate')");
     }
 
     @Test

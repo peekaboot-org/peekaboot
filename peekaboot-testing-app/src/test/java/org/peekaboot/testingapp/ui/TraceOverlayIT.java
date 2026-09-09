@@ -25,6 +25,7 @@ import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -46,36 +47,24 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Polls the insights endpoint for the trace the toolbar currently tracks until its
-     * spans carry logs on more than one span - shared by both the hash-route and
-     * toolbar-path variants of the span-logs filter test below, since both need the
-     * same real, non-vacuous precondition. It counts spans carrying logs the way spans.js
-     * itself derives them (span.logs, walked down span.children), so the precondition is
-     * measured against the very shape the Spans tab renders its "N logs" toggles from. The
-     * poll lives in a single evaluate() rather than separate Java-side calls: a second,
-     * separate fetch could race the trace's eviction from a bounded store.
+     * Waits until the trace the toolbar currently tracks carries logs on more than one span,
+     * and returns its id - shared by both the hash-route and toolbar-path variants of the
+     * span-logs filter test below, since both need the same real, non-vacuous precondition.
+     * It counts spans carrying logs the way spans.js itself derives them (span.logs, walked
+     * down span.children), so the precondition is measured against the very shape the Spans
+     * tab renders its "N logs" toggles from.
      */
     private String waitForMultiSpanLogTraceId() {
-        return (String) toolbar.evaluate("""
-                async root => {
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, """
+                trace => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
                           + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const copyEl = root.querySelector('#pk-trace .pk-copy');
-                        const id = copyEl ? copyEl.dataset.pkCopy : null;
-                        if (id) {
-                            const response = await fetch('/peekaboot/api/traces/' + id + '/insights');
-                            if (response.ok) {
-                                const trace = await response.json();
-                                if (spansWithLogs(trace.rootSpan) > 1) return id;
-                            }
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no trace with logs on more than one span arrived within 15s');
+                    return spansWithLogs(trace.rootSpan) > 1;
                 }
                 """);
+        return traceId;
     }
 
     /**
@@ -360,34 +349,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // backend to actually serve the query before opening the overlay - the same
         // endpoint and field the overlay's TABS.count reads (trace.queries).
         openPersonsPage();
-        toolbar.traceId();
-        // Polls (inside one evaluate(), not a separate waitForFunction + a later re-fetch)
-        // until the query span lands, then returns the span count from that very same
-        // response - both to dodge the ingestion race documented above, and to read the
-        // count from the exact same JSON payload the "queries present" check just parsed,
-        // rather than a second independent fetch that could race the trace being evicted
-        // from the store (a bounded ring buffer under constant pressure from this app's
-        // own background scheduler). Reads the id from the copy button's data-pk-copy
-        // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon built
-        // in by copyableId), not the bare id a URL path segment needs.
-        int spanCount = ((Number) toolbar.evaluate("async root => {"
-                        + "for (let i = 0; i < 150; i++) {"
-                        + "  const copyEl = root.querySelector('#pk-trace .pk-copy');"
-                        + "  const id = copyEl ? copyEl.dataset.pkCopy : null;"
-                        + "  if (id) {"
-                        + "    const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
-                        + "    if (response.ok) {"
-                        + "      const trace = await response.json();"
-                        + "      if ((trace.queries || []).length > 0) {"
-                        + "        return trace.summary?.spans?.count ?? 0;"
-                        + "      }"
-                        + "    }"
-                        + "  }"
-                        + "  await new Promise(r => setTimeout(r, 100));"
-                        + "}"
-                        + "throw new Error('query span never arrived within 15s');"
-                        + "}"))
-                .intValue();
+        // The count is read from the very response that proved the query span landed, so a
+        // second fetch cannot race the trace's eviction from the bounded store.
+        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        int spanCount = trace.path("summary").path("spans").path("count").asInt();
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
@@ -809,22 +774,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
      */
     private String waitForScheduledJobTraceId() {
-        page.navigate(baseUrl + "/persons");
-        return (String) page.evaluate("""
-                async () => {
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const response = await fetch(
-                            '/peekaboot/api/traces/insights?bucket=all&rootActionType=SCHEDULED_JOB');
-                        if (response.ok) {
-                            const body = await response.json();
-                            const trace = (body.traces || [])[0];
-                            if (trace) return trace.traceId;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no SCHEDULED_JOB trace arrived within 15s');
-                }
-                """);
+        return awaitListedTrace("bucket=all&rootActionType=SCHEDULED_JOB", "trace => true");
     }
 
     /**

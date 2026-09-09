@@ -189,12 +189,22 @@ Pinning to a traceId does not mean searching the store for it. A JSON endpoint a
 `Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
 `OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
 
+Spans reach the store asynchronously (the OTel batch processor, 50 ms in the test profile), so
+a test waits for the fact it is about to assert on, never for a delay.
+`PlaywrightTestBase.awaitTrace(traceId, jsPredicate)` and `awaitListedTrace(query, jsPredicate)`
+poll from the browser; `TraceApiClient.awaitTrace(traceId, predicate)` and its listing waits
+poll over HTTP with Awaitility. `ROOT_SPAN_EXPORTED` on both is the completeness proof: only a
+SERVER root classifies HTTP_REQUEST, that root is the last span of a request to end, and the
+exporter hands spans over in the order they ended. The listing endpoint leaves a trace out
+until its root has arrived, so a listed match already carries its spans.
+
 Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Every
 context that starts re-initialises it, detaching Peekaboot's capture appender until
 `LogbackCaptureReinstaller` puts it back (see `docs/ARCHITECTURE.md`, *Log Capture*), so a
 request served in that window is traced with no logs against it. A test must establish that its
 trace carries the log rather than assume it: `PlaywrightTestBase.openPageThatLogsAnError()`
-reloads until it does, checked against the endpoint the overlay itself reads. The same context is
+reloads until it does, checked with `awaitTrace` against the endpoint the overlay itself reads,
+and logs each reload at INFO so the window's size stays visible. The same context is
 why `PeekabootActuatorServiceIT` re-levels and redirects one logger for the length of each of its
 methods, which every concurrently running class sees. That is inert there because only its own
 context has an endpoint that throws, and the only real remedy, `@Isolated`, stops the whole suite

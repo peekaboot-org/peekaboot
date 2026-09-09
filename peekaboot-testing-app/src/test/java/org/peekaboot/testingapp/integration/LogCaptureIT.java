@@ -53,7 +53,8 @@ class LogCaptureIT {
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {
         String traceId = traces.triggerAndCaptureTraceId("/?error=true");
 
-        JsonNode summary = traces.awaitTrace(traceId).path("summary");
+        JsonNode summary =
+                traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED).path("summary");
         JsonNode logs = summary.path("logs");
 
         assertThat(logs.isMissingNode() || logs.isNull())
@@ -79,7 +80,9 @@ class LogCaptureIT {
     void requestWithoutAnErrorLogReportsNoErrorCount() {
         String traceId = traces.triggerAndCaptureTraceId("/persons");
 
-        JsonNode logs = traces.awaitTrace(traceId).path("summary").path("logs");
+        JsonNode logs = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED)
+                .path("summary")
+                .path("logs");
 
         assertThat(logs.path("errorCount").asInt())
                 .as("/persons logs no ERROR, so trace %s must report none", traceId)

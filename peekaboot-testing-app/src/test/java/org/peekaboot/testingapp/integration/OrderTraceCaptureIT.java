@@ -95,7 +95,7 @@ class OrderTraceCaptureIT {
     void ordersPageTripsTheHighTraceQueryCountThreshold() {
         String traceId = traces.triggerAndCaptureTraceId("/orders");
 
-        JsonNode trace = traces.awaitTrace(traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("summary").path("queries").path("count").asInt())
                 .as("the deliberate N+1 on /orders must exceed the default "
@@ -130,7 +130,7 @@ class OrderTraceCaptureIT {
     void ordersPageQueriesCarryRealSqlNotASpanNameSummary() {
         String traceId = traces.triggerAndCaptureTraceId("/orders");
 
-        JsonNode trace = traces.awaitTrace(traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         List<String> sqlTexts = new ArrayList<>();
         trace.path("queries").forEach(query -> sqlTexts.add(query.path("sql").asString("")));
@@ -202,7 +202,7 @@ class OrderTraceCaptureIT {
     void ordersPageTraceIncludesTheOutboundCustomerLookup() {
         String traceId = traces.triggerAndCaptureTraceId("/orders");
 
-        JsonNode trace = traces.awaitTrace(traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(spanNames(trace))
                 .as("the outbound customer lookup must appear as its own span, or the demo "
@@ -214,7 +214,7 @@ class OrderTraceCaptureIT {
     void placingAnOrderIsCapturedAsItsOwnTrace() {
         ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-NEW", 2));
 
-        JsonNode trace = traces.awaitTrace(traceIdOf(response));
+        JsonNode trace = traces.awaitTrace(traceIdOf(response), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a POST handled by a controller must be classified as an HTTP request")
@@ -237,7 +237,7 @@ class OrderTraceCaptureIT {
     void placingAnOrderWritesTheOrderAndItsLineOverOneConnection() {
         ResponseEntity<String> response = placeOrder(new NewOrder(1L, "WIDGET-TX", 1));
 
-        JsonNode trace = traces.awaitTrace(traceIdOf(response));
+        JsonNode trace = traces.awaitTrace(traceIdOf(response), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(spanNames(trace))
                 .as("spans of the POST trace")

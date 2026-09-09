@@ -39,18 +39,6 @@ class SharedModuleIT extends PlaywrightTestBase {
         return evalUiModule("shared/" + module, expression);
     }
 
-    /**
-     * The blank same-origin host page these tests import their modules from. Its status is
-     * asserted because a 404 whitelabel page hosts an {@code import()} just as well as the
-     * fixture does - the suite would stay green with the fixture unreachable.
-     */
-    private void openBlankFixture() {
-        String url = baseUrl + "/peekaboot/ui/pk-blank.html";
-        if (!page.url().equals(url)) {
-            assertThat(page.navigate(url).status()).as("GET %s", url).isEqualTo(200);
-        }
-    }
-
     private Object evalUiModule(String path, String expression) {
         openBlankFixture();
         return page.evaluate(
