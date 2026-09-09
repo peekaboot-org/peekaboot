@@ -13,9 +13,15 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.ThrowingConsumer;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class ContentBufferingResponseWrapperTest {
@@ -268,6 +274,31 @@ class ContentBufferingResponseWrapperTest {
 
         assertThat(originalResponse.getRedirectedUrl()).isEqualTo("/elsewhere");
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /** Servlet 6.1 added overloads to both families; each one replaces the body the same way. */
+    @ParameterizedTest
+    @MethodSource("bodyReplacingOverloads")
+    void everySendErrorAndSendRedirectOverloadDropsTheBufferedBody(
+            ThrowingConsumer<ContentBufferingResponseWrapper> send) throws Throwable {
+        wrapper.getOutputStream().write("<html><body>half".getBytes(StandardCharsets.UTF_8));
+
+        send.accept(wrapper);
+
+        assertThat(originalResponse.isCommitted()).isTrue();
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    static Stream<Arguments> bodyReplacingOverloads() {
+        return Stream.of(
+                overload("sendError(int)", w -> w.sendError(500)),
+                overload("sendRedirect(String, int)", w -> w.sendRedirect("/elsewhere", 301)),
+                overload("sendRedirect(String, boolean)", w -> w.sendRedirect("/elsewhere", false)),
+                overload("sendRedirect(String, int, boolean)", w -> w.sendRedirect("/elsewhere", 301, false)));
+    }
+
+    private static Arguments overload(String name, ThrowingConsumer<ContentBufferingResponseWrapper> send) {
+        return Arguments.of(Named.of(name, send));
     }
 
     /** An HTML body past the cap streams through rather than being held in heap; it gets no toolbar. */

@@ -237,6 +237,39 @@ class DevToolbarFilterTest {
         assertThat(result).doesNotContain("Peekaboot");
     }
 
+    /** An error page is a page: the bar goes in and says which status the request ended with. */
+    @Test
+    void theToolbarIsInjectedIntoAnErrorPageWithItsStatus() throws Exception {
+        doAnswer(invocation -> {
+                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
+                    wrapper.setStatus(404);
+                    wrapper.setContentType("text/html");
+                    wrapper.getWriter().write("<html><body><h1>Not here</h1></body></html>");
+                    return null;
+                })
+                .when(chain)
+                .doFilter(eq(request), any());
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getStatus()).isEqualTo(404);
+        assertThat(response.getContentAsString())
+                .contains("<!-- Peekaboot Dev Toolbar -->")
+                .contains("\"status\":404");
+    }
+
+    /** A HEAD answer carries headers only; with no body there is nothing to inject into and nothing is added. */
+    @Test
+    void aHeadRequestWithoutABodyGetsNoToolbar() throws Exception {
+        request = new MockHttpServletRequest("HEAD", "/users/123");
+        request.setServletPath("/users/123");
+        chainWritesHtml("");
+
+        filter.doFilter(request, response, chain);
+
+        assertThat(response.getContentAsByteArray()).isEmpty();
+    }
+
     @Test
     void shouldHandleToolbarGenerationError() throws Exception {
         // ToolbarDataProvider is a plain, real class with no injectable failure point;
