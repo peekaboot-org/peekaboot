@@ -40,33 +40,26 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     /**
      * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
-     * toolbar, and returns once the store serves it. Nothing else guarantees a trace: the
-     * failing scheduled jobs run once at startup, whether or not the tracer was ready to
+     * toolbar, and returns its id once the store serves it. Nothing else guarantees a trace:
+     * the failing scheduled jobs run once at startup, whether or not the tracer was ready to
      * capture them, so a test waiting for a listed trace would otherwise depend on the
      * tests that happened to run before it.
      */
-    private void seedAnHttpTrace() {
+    private String seedAnHttpTrace() {
         openPersonsPage();
         String traceId = toolbar.traceId();
-        page.waitForFunction("""
-                async traceId => (await fetch('/peekaboot/api/traces/' + traceId + '/insights')).ok
-                """, traceId);
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+        return traceId;
     }
 
     /**
      * Puts a failed SCHEDULED_JOB trace in the store by running the sample app's failing
-     * job, and returns once the Errors bucket lists one - the same reasoning as
+     * job, and returns its id once the Errors bucket lists it - the same reasoning as
      * seedAnHttpTrace for a test that opens that bucket.
      */
-    private void seedAnErrorTrace() {
+    private String seedAnErrorTrace() {
         ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-        page.waitForFunction("""
-                async () => {
-                    const response = await fetch('/peekaboot/api/traces/insights?bucket=errors');
-                    return response.ok && (await response.json()).traces.length > 0;
-                }
-                """);
+        return awaitListedTrace("bucket=errors", "trace => (trace.rootOperation || '').includes('fixedRate')");
     }
 
     /** Opens the Traces tab with at least one trace listed (see seedAnHttpTrace). */

@@ -1,13 +1,15 @@
 package org.peekaboot.testingapp.integration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
@@ -20,15 +22,25 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>Spans reach the {@code TraceStore} asynchronously via the OTel BatchSpanProcessor
  * (50ms in the test profile), so every read is a poll with a deadline rather than a
- * single fetch.
+ * single fetch, and a caller names the fact it is about to assert on as the condition.
  */
 class TraceApiClient {
+
+    /**
+     * The request's own root span has reached the store. Only a SERVER-kind root classifies
+     * HTTP_REQUEST, the root is the last span of a request to end, and the exporter hands
+     * spans over in the order they ended, so every span that ended before it is there too.
+     * Logs need no wait of their own: they are captured synchronously during the request.
+     */
+    static final Predicate<JsonNode> ROOT_SPAN_EXPORTED = trace -> RootActionType.HTTP_REQUEST
+            .name()
+            .equals(trace.path("rootActionType").asString(""));
 
     /** The toolbar embeds its payload as JSON in a {@code <script id="peekaboot-toolbar-data">} tag. */
     private static final Pattern TOOLBAR_TRACE_ID = Pattern.compile("\"traceId\"\\s*:\\s*\"([0-9a-fA-F]+)\"");
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private static final long POLL_INTERVAL_MS = 50;
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
 
     private final PeekabootApi api;
     private final RestClient restClient;
@@ -51,12 +63,10 @@ class TraceApiClient {
                 .body(String.class);
 
         Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
-        assertThat(matcher.find())
-                .as(
-                        "dev toolbar must embed a trace id for %s - without one the request was "
-                                + "never traced and any capture assertion would be meaningless",
-                        path)
-                .isTrue();
+        if (!matcher.find()) {
+            throw new AssertionError("dev toolbar must embed a trace id for " + path + " - without one the request "
+                    + "was never traced and any capture assertion would be meaningless");
+        }
         return matcher.group(1);
     }
 
@@ -68,34 +78,31 @@ class TraceApiClient {
         }
     }
 
-    JsonNode awaitTrace(String traceId) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        JsonNode lastSeen = null;
-        int previousSpanCount = -1;
-        while (System.nanoTime() < deadline) {
-            JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
-            if (trace != null) {
-                lastSeen = trace;
-                int spanCount =
-                        trace.path("summary").path("spans").path("count").asInt();
-                // A trace with an outbound call is exported in more than one BatchSpanProcessor
-                // flush, so a single non-zero read can be a partial snapshot. Requiring the count
-                // to hold steady across two consecutive polls confirms the flushes have caught up.
-                //
-                // Two consecutive equal polls is a heuristic, not a completeness proof: the poll
-                // interval (50ms) equals the BatchSpanProcessor schedule-delay in
-                // application-test.yml, so a trace whose spans land in three or more flushes can
-                // look stable across two polls and still be partial. Widen the window before
-                // trusting a new multi-flush trace shape.
-                if (spanCount > 0 && spanCount == previousSpanCount) {
-                    return trace;
-                }
-                previousSpanCount = spanCount;
-            }
-            sleepBriefly();
+    /**
+     * Polls the trace's own insights endpoint until {@code ready} holds and returns the trace
+     * as served at that moment. A 404 counts as "not yet": the endpoint answers nothing until
+     * the first span is exported. The predicate is the assertion's precondition
+     * ({@link #ROOT_SPAN_EXPORTED} for most), so a test asserts on what it waited for rather
+     * than on whatever had arrived.
+     */
+    JsonNode awaitTrace(String traceId, Predicate<JsonNode> ready) {
+        String uri = "/peekaboot/api/traces/" + traceId + "/insights";
+        AtomicReference<JsonNode> lastSeen = new AtomicReference<>();
+        try {
+            return await().atMost(TIMEOUT)
+                    .pollInterval(POLL_INTERVAL)
+                    .until(
+                            () -> {
+                                JsonNode trace = fetchOrNull(uri);
+                                lastSeen.set(trace);
+                                return trace;
+                            },
+                            trace -> trace != null && ready.test(trace));
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(
+                    "trace " + traceId + " never became ready within " + TIMEOUT + "; last response: " + lastSeen.get(),
+                    e);
         }
-        throw new AssertionError("trace " + traceId + " never had a stable exported span count within " + TIMEOUT
-                + "; last response: " + lastSeen);
     }
 
     JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
@@ -115,22 +122,33 @@ class TraceApiClient {
         return awaitListedTrace("rootActionType=" + type.name(), match, "a " + type + " trace");
     }
 
-    /** Polls the listing endpoint with {@code query} until a listed trace satisfies {@code match}. */
+    /**
+     * Polls the listing endpoint with {@code query} until a listed trace satisfies
+     * {@code match}. The listing leaves out a trace whose root span has not arrived, so a
+     * listed match already carries its spans.
+     */
     private JsonNode awaitListedTrace(String query, Predicate<JsonNode> match, String description) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        String uri = "/peekaboot/api/traces/insights?" + query;
         List<String> seen = new ArrayList<>();
-        while (System.nanoTime() < deadline) {
-            JsonNode response = api.getJson("/peekaboot/api/traces/insights?" + query);
-            seen.clear();
-            for (JsonNode trace : response.path("traces")) {
-                seen.add(trace.path("rootOperation").asString(""));
-                if (match.test(trace)) {
-                    return trace;
-                }
-            }
-            sleepBriefly();
+        try {
+            return await().atMost(TIMEOUT)
+                    .pollInterval(POLL_INTERVAL)
+                    .until(
+                            () -> {
+                                seen.clear();
+                                for (JsonNode trace : api.getJson(uri).path("traces")) {
+                                    seen.add(trace.path("rootOperation").asString(""));
+                                    if (match.test(trace)) {
+                                        return trace;
+                                    }
+                                }
+                                return null;
+                            },
+                            trace -> trace != null);
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(
+                    description + " was not listed within " + TIMEOUT + "; the listing held: " + seen, e);
         }
-        throw new AssertionError(description + " was not listed within " + TIMEOUT + "; the listing held: " + seen);
     }
 
     private JsonNode fetchOrNull(String uri) {
@@ -139,15 +157,6 @@ class TraceApiClient {
         } catch (HttpClientErrorException.NotFound notYetAvailable) {
             // single-trace endpoint returns 404 until the first span for the trace is exported
             return null;
-        }
-    }
-
-    private void sleepBriefly() {
-        try {
-            Thread.sleep(POLL_INTERVAL_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while waiting for trace export", e);
         }
     }
 }

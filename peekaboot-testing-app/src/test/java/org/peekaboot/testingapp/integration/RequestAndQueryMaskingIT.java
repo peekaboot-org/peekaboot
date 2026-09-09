@@ -72,7 +72,7 @@ class RequestAndQueryMaskingIT {
                 .toBodilessEntity();
 
         JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/search");
-        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
+        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString(), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode queryParams =
                 trace.path("httpExchange").path("request").path("params").path("query");
@@ -93,7 +93,7 @@ class RequestAndQueryMaskingIT {
                 .toBodilessEntity();
 
         JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/login");
-        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString());
+        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString(), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode formParams =
                 trace.path("httpExchange").path("request").path("params").path("form");
@@ -152,7 +152,7 @@ class RequestAndQueryMaskingIT {
                 null,
                 CREATION_ORDER.incrementAndGet()));
 
-        JsonNode trace = traces.awaitTrace(traceId);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("queries")).hasSize(1);
         String sql = trace.path("queries").get(0).path("sql").asString();
