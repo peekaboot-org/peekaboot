@@ -57,12 +57,16 @@ class MaskingEngineTest {
 
         // A @ConfigurationProperties group or an env-var prefix is often named in the
         // plural (app.secrets.*, DB_PASSWORDS). Matching is whole-token, so the singular
-        // rule never sees "secrets": each plural is listed as a rule of its own.
+        // rule never sees "secrets": each plural is listed as a rule of its own. The last
+        // three rows are the cost, accepted the same way as XDG_SESSION_ID above: "tokens"
+        // and "secrets" also name an LLM budget or a Kubernetes secrets mount, none of them
+        // secret, and a masked number on the Config tab costs less than a leaked subtree.
         @ParameterizedTest
         @ValueSource(
                 strings = {
                     "passwords",
                     "app.passwds",
+                    "app.passphrases.primary",
                     "app.secrets.db",
                     "app.tokens.github",
                     "app.api-keys",
@@ -70,8 +74,13 @@ class MaskingEngineTest {
                     "app.access-keys",
                     "app.private-keys",
                     "app.secret-keys",
+                    "app.signing-keys.current",
+                    "app.encryption-keys.primary",
                     "app.client-secrets",
                     "DB_PASSWORDS",
+                    "spring.ai.openai.chat.options.max-tokens",
+                    "maxTokens",
+                    "spring.cloud.kubernetes.secrets.enabled",
                 })
         void isSensitiveKey_shouldMatchThePluralOfARuleWord(String key) {
             assertThat(engine.isSensitiveKey(key)).isTrue();
