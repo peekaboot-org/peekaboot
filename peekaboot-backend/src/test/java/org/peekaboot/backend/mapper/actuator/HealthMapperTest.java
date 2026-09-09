@@ -19,7 +19,7 @@ class HealthMapperTest {
     @Test
     void map_shouldExtractStatusAndComponents() {
         HealthResponse health = new HealthResponse(
-                "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"))));
+                "UP", Map.of("db", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"), null)));
 
         HealthInfo result = mapper.map(health, false);
 
@@ -35,7 +35,7 @@ class HealthMapperTest {
         // proving per-component status is read from the component, not copied
         // from the top-level aggregate.
         HealthResponse health =
-                new HealthResponse("UP", Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of())));
+                new HealthResponse("UP", Map.of("cache", new HealthResponse.HealthComponent("DOWN", Map.of(), null)));
 
         HealthInfo result = mapper.map(health, false);
 
@@ -53,8 +53,8 @@ class HealthMapperTest {
     void map_shouldFlattenACompositesChildrenUnderTheParentName() {
         // insertion-ordered like Spring's TreeMap-backed composite, so the flat order is checkable
         Map<String, HealthResponse.HealthComponent> children = new LinkedHashMap<>();
-        children.put("primary", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL")));
-        children.put("reporting", new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused")));
+        children.put("primary", new HealthResponse.HealthComponent("UP", Map.of("database", "PostgreSQL"), null));
+        children.put("reporting", new HealthResponse.HealthComponent("DOWN", Map.of("error", "refused"), null));
         HealthResponse health =
                 new HealthResponse("DOWN", Map.of("db", new HealthResponse.HealthComponent("DOWN", null, children)));
 
@@ -98,7 +98,7 @@ class HealthMapperTest {
                 Map.of(
                         "db",
                         new HealthResponse.HealthComponent(
-                                "UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"))));
+                                "UP", Map.of("database", "PostgreSQL", "validationQuery", "isValid()"), null)));
 
         HealthInfo result = mapper.map(health, false);
 
@@ -118,7 +118,8 @@ class HealthMapperTest {
                         "customIndicator",
                         new HealthResponse.HealthComponent(
                                 "UP",
-                                Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"))));
+                                Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678", "region", "eu-west-1"),
+                                null)));
 
         HealthInfo result = mapper.map(health, false);
 
@@ -134,7 +135,7 @@ class HealthMapperTest {
                 Map.of(
                         "customIndicator",
                         new HealthResponse.HealthComponent(
-                                "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"))));
+                                "UP", Map.of("apiKey", "sk-abcdefghijklmnopqrstuvwxyz012345678"), null)));
 
         HealthInfo result = mapper.map(health, true);
 
@@ -148,7 +149,8 @@ class HealthMapperTest {
                 "UP",
                 Map.of(
                         "diskSpace",
-                        new HealthResponse.HealthComponent("UP", Map.of("total", 500_000_000L, "free", 250_000_000L))));
+                        new HealthResponse.HealthComponent(
+                                "UP", Map.of("total", 500_000_000L, "free", 250_000_000L), null)));
 
         HealthInfo result = mapper.map(health, false);
 

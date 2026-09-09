@@ -30,7 +30,7 @@ public final class TreeMasker {
         this.maskingEngine = maskingEngine;
     }
 
-    public Object mask(Object node) {
+    private Object mask(Object node) {
         return maskNode(null, node);
     }
 
@@ -40,13 +40,13 @@ public final class TreeMasker {
     }
 
     /**
-     * Same as {@link #mask(Object)}, except {@code key} is checked against
+     * Same as {@link #mask(Object, boolean)}, except {@code key} is checked against
      * {@link MaskingEngine#isSensitiveKey(String)} for {@code node} itself, not just for
      * its descendants - for a caller whose root node is one property's value rather than a
      * whole subtree, e.g. a {@code @ConfigurationProperties} bean's {@code clientSecret}
      * entry, where the sensitive key names the root, not a nested field.
      */
-    public Object mask(String key, Object node) {
+    private Object mask(String key, Object node) {
         return maskNode(key, node);
     }
 
