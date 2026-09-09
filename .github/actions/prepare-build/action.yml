@@ -1,0 +1,72 @@
+name: prepare-build
+description: >
+  Everything both build workflows do between the checkout and their Maven build: JDK,
+  Chromium cache, the reactor's SNAPSHOTs, Chromium. The checkout itself stays in the
+  workflow, because a local action resolves from the runner's workspace and so cannot run
+  before it. See BUILD.md, CI.
+
+inputs:
+  server-id:
+    description: Maven server id setup-java writes to settings.xml; the release workflow sets it to central.
+    default: github
+  server-username:
+    description: Name of the environment variable holding that server's username.
+    default: ''
+  server-password:
+    description: Name of the environment variable holding that server's password or token.
+    default: ''
+  gpg-private-key:
+    description: GPG private key to import for signing; empty imports nothing.
+    default: ''
+  gpg-passphrase:
+    description: Name of the environment variable holding that key's passphrase.
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: setup-jdk
+      uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+      with:
+        java-version: 25
+        distribution: 'temurin'
+        cache: maven
+        server-id: ${{ inputs.server-id }}
+        server-username: ${{ inputs.server-username }}
+        server-password: ${{ inputs.server-password }}
+        gpg-private-key: ${{ inputs.gpg-private-key }}
+        gpg-passphrase: ${{ inputs.gpg-passphrase }}
+
+    # Chromium changes with the Playwright version and nothing else, so the cache is
+    # keyed on that property rather than on every pom.
+    - name: playwright-version
+      id: playwright
+      shell: bash
+      run: echo "version=$(sed -n 's:.*<playwright.version>\(.*\)</playwright.version>.*:\1:p' peekaboot-testing-app/pom.xml)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+        restore-keys: playwright-${{ runner.os }}-
+
+    # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
+    # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
+    # The gates are skipped here because the workflow's `verify` runs every one of them.
+    - name: install-reactor-snapshots
+      shell: bash
+      run: >
+        ./mvnw --batch-mode -pl peekaboot-testing-app -am install -Dmaven.test.skip=true
+        -Dspotless.check.skip=true -Dspotbugs.skip=true -Dcheckstyle.skip=true -Dpmd.skip=true
+        -Dmaven.javadoc.skip=true -Dmaven.source.skip=true
+
+    # classpathScope=test is required because the playwright dependency is test-scoped;
+    # without it exec:java can't find com.microsoft.playwright.CLI.
+    - name: install-playwright-browser
+      shell: bash
+      run: >
+        ./mvnw --batch-mode -pl peekaboot-testing-app exec:java
+        -Dexec.mainClass=com.microsoft.playwright.CLI
+        -Dexec.classpathScope=test
+        -Dexec.args="install chromium"

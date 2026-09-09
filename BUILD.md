@@ -377,14 +377,20 @@ covers only the build mechanics.
 
 The workflows live under `.github/workflows/`. Both build workflows use the checked-in
 `./mvnw`, and every action is pinned to a commit SHA with the tag in a trailing comment;
-Dependabot's `github-actions` updates move the pins.
+Dependabot's `github-actions` updates move the pins. The composite action below has its
+own `directory` entry in `dependabot.yml`, because `/` covers `.github/workflows` and a
+root `action.yml` only.
 
-### `build-on-push.yml`
+### `.github/actions/prepare-build`
 
-Runs on every branch except `main`. JDK 25 (temurin), `fetch-depth: 0` for the ratchet,
-`~/.cache/ms-playwright` cached under a key derived from the testing-app's
+The steps both build workflows share, as a composite action: JDK 25 (temurin) with the
+Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
 `playwright.version` property (Chromium changes with Playwright, not with any other
-dependency), then `./mvnw --batch-mode clean verify`.
+dependency), the reactor's SNAPSHOTs installed, then Chromium installed. The checkout
+stays in each workflow: a local action resolves from the runner's workspace, so it cannot
+run before the checkout that puts it there. Its inputs hand the release workflow's Central
+server id, credential variable names and GPG key on to `setup-java`; the build workflow
+passes none and gets `setup-java`'s defaults.
 
 The Chromium install is split into two steps on purpose. `exec:java` ignores `-pl` scoping
 when combined with `-am`: it runs the goal against every upstream reactor module too and
@@ -395,6 +401,11 @@ follows runs them all anyway), and the plain `exec:java` call resolves against t
 repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
 `pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
 invocation resolves whatever is latest that day.
+
+### `build-on-push.yml`
+
+Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
+`prepare-build`, then `./mvnw --batch-mode clean verify`.
 
 ### `build-release-on-main-push.yml`
 
