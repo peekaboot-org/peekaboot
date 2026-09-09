@@ -1,20 +1,16 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.example.security.PeekabootSecurityConfig;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Peekaboot ships no authentication of its own, so the website's security page tells
@@ -43,12 +39,16 @@ class SecuredPeekabootIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi anonymous;
+
+    @BeforeEach
+    void connect() {
+        anonymous = new PeekabootApi(port);
+    }
 
     @Test
     void theDashboardEntryPointRejectsAnAnonymousRequest() {
-        assertThatThrownBy(() -> anonymous().get().uri("/peekaboot/").retrieve().toBodilessEntity())
-                .isInstanceOf(HttpClientErrorException.Unauthorized.class);
+        assertThat(anonymous.statusOf("/peekaboot/")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     /**
@@ -58,10 +58,7 @@ class SecuredPeekabootIT {
      */
     @Test
     void theRefusalCarriesABasicAuthChallenge() {
-        String challenge = anonymous()
-                .get()
-                .uri("/peekaboot/")
-                .exchange((request, response) -> response.getHeaders().getFirst("WWW-Authenticate"));
+        String challenge = anonymous.headersOf("/peekaboot/").getFirst("WWW-Authenticate");
 
         assertThat(challenge).startsWith("Basic");
     }
@@ -74,14 +71,12 @@ class SecuredPeekabootIT {
      */
     @Test
     void theExtensionlessDashboardPathRejectsAnAnonymousRequest() {
-        assertThatThrownBy(() -> anonymous().get().uri("/peekaboot").retrieve().toBodilessEntity())
-                .isInstanceOf(HttpClientErrorException.Unauthorized.class);
+        assertThat(anonymous.statusOf("/peekaboot")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
-        assertThatThrownBy(() -> anonymous().get().uri(INSIGHTS_API).retrieve().toBodilessEntity())
-                .isInstanceOf(HttpClientErrorException.Unauthorized.class);
+        assertThat(anonymous.statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     /**
@@ -91,32 +86,20 @@ class SecuredPeekabootIT {
      */
     @Test
     void aDashboardStaticAssetRejectsAnAnonymousRequest() {
-        assertThatThrownBy(
-                        () -> anonymous().get().uri(DASHBOARD_ASSET).retrieve().toBodilessEntity())
-                .isInstanceOf(HttpClientErrorException.Unauthorized.class);
+        assertThat(anonymous.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void anAuthenticatedUserWithoutTheAdminRoleIsForbidden() {
-        assertThatThrownBy(() -> authenticatedAs("user", "user-password")
-                        .get()
-                        .uri(INSIGHTS_API)
-                        .retrieve()
-                        .toBodilessEntity())
-                .isInstanceOf(HttpClientErrorException.Forbidden.class);
+        assertThat(anonymous.withBasicAuth("user", "user-password").statusOf(INSIGHTS_API))
+                .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
+    /** getJson accepts nothing but a 2xx, so the parse is the status assertion too. */
     @Test
     void anAdminReceivesTheRealInsightsPayload() {
-        ResponseEntity<String> response = authenticatedAs("admin", "admin-password")
-                .get()
-                .uri(INSIGHTS_API)
-                .retrieve()
-                .toEntity(String.class);
+        JsonNode insights = anonymous.withBasicAuth("admin", "admin-password").getJson(INSIGHTS_API);
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-
-        JsonNode insights = jsonMapper.readTree(response.getBody());
         assertThat(insights.has("config"))
                 .as("an admin must get the real insights payload, not an error page")
                 .isTrue();
@@ -124,13 +107,8 @@ class SecuredPeekabootIT {
 
     @Test
     void anAdminCanFetchADashboardStaticAsset() {
-        ResponseEntity<String> response = authenticatedAs("admin", "admin-password")
-                .get()
-                .uri(DASHBOARD_ASSET)
-                .retrieve()
-                .toEntity(String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(anonymous.withBasicAuth("admin", "admin-password").statusOf(DASHBOARD_ASSET))
+                .isEqualTo(HttpStatus.OK);
     }
 
     /**
@@ -140,20 +118,6 @@ class SecuredPeekabootIT {
      */
     @Test
     void theApplicationsOwnPathsStayAnonymouslyReachable() {
-        ResponseEntity<String> response =
-                anonymous().get().uri("/persons").retrieve().toEntity(String.class);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-    }
-
-    private RestClient anonymous() {
-        return RestClient.builder().baseUrl("http://localhost:" + port).build();
-    }
-
-    private RestClient authenticatedAs(String username, String password) {
-        return RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .defaultHeaders(headers -> headers.setBasicAuth(username, password))
-                .build();
+        assertThat(anonymous.statusOf("/persons")).isEqualTo(HttpStatus.OK);
     }
 }

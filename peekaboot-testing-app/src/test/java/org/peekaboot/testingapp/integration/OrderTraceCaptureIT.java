@@ -28,7 +28,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The demo endpoints exist to make Peekaboot's trace view worth looking at. These tests
@@ -43,7 +42,6 @@ class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
     private static final int CONCURRENT_ORDERS = 16;
-    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @LocalServerPort
     private int port;
@@ -218,7 +216,7 @@ class OrderTraceCaptureIT {
         assertThat(spanNames(trace))
                 .as("the order-placed listener runs inside the request, so its span belongs to this trace")
                 .contains("order.placed");
-        JsonNode placed = JSON.readTree(response.getBody());
+        JsonNode placed = PeekabootApi.readJson(response.getBody());
         assertThat(placed.path("lineCount").asInt()).isEqualTo(1);
         assertThat(placed.path("total").decimalValue())
                 .as("the summary describes the line that was persisted: 2 x 19.99")
@@ -252,7 +250,7 @@ class OrderTraceCaptureIT {
         try (ExecutorService placers = Executors.newVirtualThreadPerTaskExecutor()) {
             List<Future<String>> placed = placers.invokeAll(Collections.nCopies(
                     CONCURRENT_ORDERS,
-                    () -> JSON.readTree(placeOrder(new NewOrder(1L, "WIDGET-BURST", 1))
+                    () -> PeekabootApi.readJson(placeOrder(new NewOrder(1L, "WIDGET-BURST", 1))
                                     .getBody())
                             .path("reference")
                             .asString()));

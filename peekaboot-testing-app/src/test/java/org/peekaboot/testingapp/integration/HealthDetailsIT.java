@@ -4,14 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The dashboard's health carries per-component detail without Peekaboot widening the
@@ -31,22 +30,16 @@ class HealthDetailsIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi api;
 
-    private String get(String uri) {
-        return RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     @Test
     void theDashboardsHealthCarriesTheComponentsAndTheirDetails() {
-        JsonNode health =
-                jsonMapper.readTree(get("/peekaboot/api/actuator/all/insights")).path("health");
+        JsonNode health = api.getJson("/peekaboot/api/actuator/all/insights").path("health");
 
         assertThat(health.path("status").asString()).isEqualTo("UP");
         List<String> names = new ArrayList<>();
@@ -66,7 +59,7 @@ class HealthDetailsIT {
     /** Spring's default answer: the aggregate status and the group names, no components. */
     @Test
     void anAnonymousActuatorHealthAnswersWithTheAggregateStatusOnly() {
-        JsonNode health = jsonMapper.readTree(get("/actuator/health"));
+        JsonNode health = api.getJson("/actuator/health");
 
         assertThat(health.path("status").asString()).isEqualTo("UP");
         assertThat(health.propertyNames()).containsOnly("status", "groups");

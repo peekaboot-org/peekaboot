@@ -275,6 +275,10 @@ abstract class PlaywrightTestBase {
         return awaitJson(path, jsSelect, failure, API_TIMEOUT_MS);
     }
 
+    protected static JsonNode readJson(String json) {
+        return JSON.readTree(json);
+    }
+
     protected JsonNode awaitJson(String path, String jsSelect, String failure, int timeoutMs) {
         if (!page.url().startsWith(baseUrl)) {
             openBlankFixture();
@@ -297,7 +301,7 @@ abstract class PlaywrightTestBase {
                         + " throw new Error(failure + ' within ' + timeoutMs + 'ms; last body: ' + JSON.stringify(last));"
                         + "}",
                 List.of(path, failure, timeoutMs, API_POLL_INTERVAL_MS));
-        return JSON.readTree(json);
+        return readJson(json);
     }
 
     /**
