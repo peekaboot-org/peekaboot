@@ -672,7 +672,9 @@ falling back to the `exception` event's `exception.message` when empty, and the 
 event's `exception.type`, or `ERROR` where the span recorded no exception event.
 
 `tracing/bridge/otel` is the only bridge. There is no Brave/Zipkin one, so an application wired
-to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing.
+to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing. The
+toolbar itself only needs a `Tracer` bean and is injected with either bridge (see
+*Auto-Configuration Ordering*).
 
 ### Handler and View Spans
 
@@ -969,17 +971,20 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 
 ## Auto-Configuration Ordering
 
-`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists:
+`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists,
+whichever of Boot's tracing bridges registers it:
 
 ```java
 @AutoConfiguration(
-    after = PeekabootAutoConfiguration.class,
-    afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
-)
+        after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
+        afterName = {
+            "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
+            "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
+        })
 ```
 
 The string-based `afterName` attribute is used where the referenced auto-configuration lives
-in a module this one does not compile against at all: Boot's OpenTelemetry tracing module
+in a module this one does not compile against at all: Boot's two tracing bridge modules
 here, and `spring-boot-micrometer-metrics` for the `CompositeMeterRegistryAutoConfiguration`
 edge in `InsightsAutoConfiguration`. Boot reads ordering edges from the class metadata without
 loading the named classes, which is why `TracingInterceptorAutoConfiguration` can use a class

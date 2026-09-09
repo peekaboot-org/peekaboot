@@ -31,6 +31,7 @@ import org.springframework.boot.bootstrap.DefaultBootstrapContext;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.boot.context.logging.LoggingApplicationListener;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -166,6 +167,30 @@ class DevToolbarAutoConfigurationTest {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).doesNotHaveBean("devToolbarFilter");
                     assertThat(context).doesNotHaveBean("requestCaptureFilter");
+                });
+    }
+
+    /**
+     * Micrometer Tracing's Brave bridge gets its {@link Tracer} from Boot's
+     * {@code BraveAutoConfiguration}, which sorts after every {@code org.peekaboot} class by
+     * name. Without an ordering edge the {@code @ConditionalOnBean(Tracer.class)} checks run
+     * before that bean is defined, and the toolbar is silently never injected. The user
+     * configurations of the other tests here register their Tracer ahead of every
+     * auto-configuration, so only an auto-configuration of that name can prove the edge.
+     */
+    @Test
+    void theToolbarSeesATracerFromBravesAutoConfiguration() {
+        new WebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        DevToolbarAutoConfiguration.class,
+                        PeekabootAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class,
+                        BraveAutoConfiguration.class))
+                .withUserConfiguration(MockActuatorConfig.class)
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasBean("devToolbarFilter");
                 });
     }
 
