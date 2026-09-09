@@ -60,7 +60,7 @@ class DevToolbarAutoConfigurationTest {
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
-                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
                 });
     }
 
@@ -148,7 +148,7 @@ class DevToolbarAutoConfigurationTest {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).hasBean("devToolbarFilter");
                     assertThat(context).doesNotHaveBean("requestCaptureFilter");
-                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
 
@@ -215,7 +215,7 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
-                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
                     assertThat(peekabootAppenderCount())
                             .as("appender attached while context runs")
                             .isEqualTo(before + 1);
@@ -364,7 +364,7 @@ class DevToolbarAutoConfigurationTest {
                 .withClassLoader(new FilteredClassLoader(LoggerContext.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
 

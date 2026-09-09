@@ -1,8 +1,8 @@
 package org.peekaboot.testingapp.integration;
 
 import io.micrometer.tracing.Tracer;
-import org.peekaboot.autoconfigure.DevToolbarAutoConfiguration.LogbackAppenderRegistrar;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -31,7 +31,7 @@ public class SharedToolbarTestConfig {
 
     @Bean
     TraceStore traceStore() {
-        return new InMemoryTraceStore(new PeekabootTracingProperties());
+        return new LogFreeTraceStore();
     }
 
     @Bean
@@ -40,15 +40,22 @@ public class SharedToolbarTestConfig {
     }
 
     /**
-     * Throws away what this context's log appender captures. Logback's {@code LoggerContext}
-     * is JVM-wide while the appender is per application context, so every appender in the
-     * test JVM also sees the log events of every context running beside it - without this,
-     * a request served by a concurrently running IT's app lands here as a log-only trace and
-     * breaks {@link DashboardTraceViewIT}'s trace counts. Log capture itself is covered by
+     * Keeps no captured logs. Logback's {@code LoggerContext} is JVM-wide while the capture
+     * appender is per application context, so this context's appender also sees the log
+     * events of every context running beside it - without this, a request served by a
+     * concurrently running IT's app lands here as a log-only trace and breaks
+     * {@link DashboardTraceViewIT}'s trace counts. Log capture itself is covered by
      * {@code LogCaptureIT}, which boots a context of its own.
      */
-    @Bean
-    LogbackAppenderRegistrar logbackAppenderRegistrar() {
-        return new LogbackAppenderRegistrar(event -> {});
+    private static final class LogFreeTraceStore extends InMemoryTraceStore {
+
+        LogFreeTraceStore() {
+            super(new PeekabootTracingProperties());
+        }
+
+        @Override
+        public void addLog(LogCapturedEvent log) {
+            // dropped on purpose, see the class comment
+        }
     }
 }
