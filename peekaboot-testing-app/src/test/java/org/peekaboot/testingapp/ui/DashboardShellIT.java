@@ -67,7 +67,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void headerTextIsContrastTunedInLightTheme() {
         setStoredTheme("light");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         openDashboard();
 
         assertThat(cssVar("h1", "color")).isEqualTo("rgb(17, 24, 39)");
@@ -76,7 +76,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void headerTextIsContrastTunedInDarkTheme() {
         setStoredTheme("dark");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openDashboard();
 
         assertThat(cssVar("h1", "color")).isEqualTo("rgb(240, 246, 252)");
@@ -128,9 +128,7 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         // isVisible() on the host element only proves the injected <div> exists; the
         // toolbar itself lives inside its shadow root, so require that to be attached.
-        boolean shadowRootAttached =
-                (boolean) page.evaluate("document.getElementById('peekaboot-toolbar-host').shadowRoot !== null");
-        assertThat(shadowRootAttached).isTrue();
+        assertThat((Boolean) toolbar.evaluate("root => !!root")).isTrue();
     }
 
     /**
@@ -151,8 +149,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     void dashboardLoadsTheTraceDetailOverlayModule() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
 
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        overlay.waitFor(".pk-overlay__error");
     }
 
     /**
@@ -204,7 +201,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         page.route("**/api/insights/stream", route -> route.abort());
 
         openDashboard();
-        page.click("#insights-tab-btn");
+        dashboard.openTab("insights");
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
         page.route("**/api/insights/data*", route -> route.abort());
 

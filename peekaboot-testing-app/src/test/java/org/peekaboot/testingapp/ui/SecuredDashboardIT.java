@@ -56,12 +56,9 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     void theToolbarResolvesItsMetricsForAnAdmin() {
         openPersonsPage();
 
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-metrics').querySelector('.pk-stat') !== null");
+        toolbar.waitFor("#pk-metrics .pk-stat");
 
-        String metrics = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-metrics').textContent");
-        assertThat(metrics).doesNotContain("?");
+        assertThat(toolbar.text("#pk-metrics")).doesNotContain("?");
     }
 
     @Test
@@ -122,8 +119,8 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             anonymousPage.navigate(baseUrl + "/persons");
             anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
 
-            String href = (String) anonymousPage.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('#pk-auth a').getAttribute('href')");
+            String href = (String) new Toolbar(anonymousPage)
+                    .evaluate("root => root.querySelector('#pk-auth a').getAttribute('href')");
 
             assertThat(href).isEqualTo("/peekaboot/");
         }
@@ -140,9 +137,7 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             Page anonymousPage = anonymous.newPage();
             anonymousPage.navigate(baseUrl + "/persons");
 
-            anonymousPage.waitForFunction("() => getComputedStyle("
-                    + "document.getElementById('peekaboot-toolbar-host').shadowRoot"
-                    + ".getElementById('pk-auth')).opacity === '1'");
+            awaitAuthNoticeVisible(new Toolbar(anonymousPage));
         }
     }
 
@@ -155,12 +150,15 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     void theNoticeIsGoneOnceTheScriptHasRunForAnAdmin() {
         openPersonsPage();
 
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.getElementById('pk-auth') === null");
+        toolbar.waitForGone("#pk-auth");
+    }
+
+    /** The notice fades in on a delay, so its opacity is the signal that it has shown. */
+    private static void awaitAuthNoticeVisible(Toolbar bar) {
+        bar.waitUntil("root => getComputedStyle(root.getElementById('pk-auth')).opacity === '1'");
     }
 
     private static String authNoticeText(Page page) {
-        return (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.getElementById('pk-auth').textContent.trim()");
+        return new Toolbar(page).text("#pk-auth").trim();
     }
 }

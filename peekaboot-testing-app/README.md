@@ -50,6 +50,26 @@ mvn -pl peekaboot-testing-app verify -Dit.test=<Class>         # one *IT class
 
 This module is not published to Maven Central (`maven.deploy.skip`).
 
+### Page objects and helpers (`ui/`)
+
+`PlaywrightTestBase` binds three page objects to each test's page: `toolbar` (the dev
+toolbar's shadow root), `overlay` (the trace-detail overlay: `awaitOpened`, `awaitTrace(id)`,
+`awaitLoaded`, `openTab`, `awaitClosed`) and `dashboard` (the tab strip: `openTab(id)` waits
+for the tab's own data, `openTracesTab`, `awaitListedTrace(id)`, `openListedTrace(id)`,
+`selectedTab`, and `kvValue`/`awaitKvValue` for a `.pk-kv` row found by its key). Every
+shadow-root lookup goes through them; a test never spells
+`document.getElementById(...).shadowRoot` itself. The base also offers
+`openDashboard(hash, readySelector)`, `awaitTrace(traceId, jsPredicate)` and
+`awaitListedTrace(query, jsPredicate)` (see `docs/TESTING.md`, *Isolation in shared Spring
+contexts*), `importModule(path, expression)` to evaluate an expression over an ES module
+imported into the blank fixture page, `serveWithCsp(urlGlob, policy)` and
+`emulateOsColorScheme(scheme)`.
+
+The trace store is shared with every class in the suite, so a test pins its own trace: it
+triggers a request, takes the id from the toolbar (or from `TraceApiClient.get(path)` under
+`integration/`, which reads the `Server-Timing` header) and waits for that id, never for
+whichever trace happens to be listed first.
+
 ### Playwright browser (UI tests under `ui/`)
 
 The `PlaywrightTestBase`-derived tests drive a real headless Chromium instance. The first

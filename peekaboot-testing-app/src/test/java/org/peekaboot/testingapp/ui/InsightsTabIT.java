@@ -23,8 +23,7 @@ class InsightsTabIT extends PlaywrightTestBase {
 
     private void openInsights() {
         openDashboard();
-        page.click("#insights-tab-btn");
-        page.waitForSelector("#insights-panels .pk-insight-panel");
+        dashboard.openTab("insights");
     }
 
     /**
@@ -125,7 +124,7 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForSelector("#insights-tab.active");
         page.waitForCondition(() -> parkedTabRequest.get() != null);
 
-        page.click("#overview-tab-btn");
+        dashboard.openTab("overview");
         page.waitForSelector(
                 "#insights-tiles .pk-insight-tile[data-tile-id='uptime']",
                 new Page.WaitForSelectorOptions().setTimeout(10000));

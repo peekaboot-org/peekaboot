@@ -21,19 +21,14 @@ class RequestTabIT extends PlaywrightTestBase {
     }
 
     private void renderWithTrace(String traceJson, String viewJson) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-        }
-        page.evaluate(
-                "async ([traceJson, viewJson]) => {"
-                        + " const trace = JSON.parse(traceJson);"
-                        + " const view = JSON.parse(viewJson);"
-                        + " const m = await import('/peekaboot/ui/trace-detail/tabs/request.js');"
+        importModule(
+                "trace-detail/tabs/request.js",
+                "(() => {"
                         + " const container = document.createElement('div');"
                         + " container.id = 'pk-request-test-container';"
                         + " document.body.appendChild(container);"
-                        + " m.render(container, trace, view);"
-                        + "}",
+                        + " m.render(container, JSON.parse(arg[0]), JSON.parse(arg[1]));"
+                        + "})()",
                 List.of(traceJson, viewJson));
     }
 

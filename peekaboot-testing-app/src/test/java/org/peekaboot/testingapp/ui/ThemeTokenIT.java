@@ -18,13 +18,13 @@ class ThemeTokenIT extends PlaywrightTestBase {
     @Test
     void storedLightAndDarkPreferencesResolveDifferentSurfaceTokens() {
         setStoredTheme("light");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         openDashboard();
         String lightBackground = cssVar(":root", "--pk-bg");
         String lightText = cssVar(":root", "--pk-text");
 
         setStoredTheme("dark");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openDashboard();
 
         assertThat(cssVar(":root", "--pk-bg")).isNotEqualTo(lightBackground);

@@ -23,6 +23,16 @@ final class TraceOverlay extends ShadowHost {
         return this;
     }
 
+    /** Waits for the host alone: openTraceDetail() creates it before any fetch, so this proves an open was started, nothing more. */
+    void awaitOpened() {
+        page.waitForSelector(HOST);
+    }
+
+    /** Waits until the overlay open is the one for {@code traceId}, which trace-detail.js stamps on the host. */
+    void awaitTrace(String traceId) {
+        page.waitForSelector(HOST + "[data-trace-id='" + traceId + "']");
+    }
+
     /** Switches to a tab once render() has built the strip (trace fetch and stylesheets both resolved). */
     void openTab(String tab) {
         String selector = ".pk-tab[data-tab=\"" + tab + "\"]";

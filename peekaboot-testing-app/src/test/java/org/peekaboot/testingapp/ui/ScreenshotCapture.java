@@ -71,25 +71,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final String INSIGHTS_TAB = "insights";
 
     /**
-     * The selector each tab waits for beyond "panel active" before it counts as rendered
-     * with real data. Without this a tab can be photographed mid-fetch (an empty list),
-     * since {@code #<id>-tab.active} only proves the panel is showing, not that its own
-     * render() call has finished populating it.
-     */
-    private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
-            "overview", "#memory-info .pk-meter__fill",
-            "lifecycle", "#lifecycle-runs .pk-table--card tbody tr",
-            "environment", "#property-sources .pk-group__header",
-            "flyway", "#flyway-timeline .pk-table tbody tr",
-            "loggers", "#loggers-list .pk-group",
-            "config", "#config-groups .pk-group__header",
-            "scheduled-tasks", "#scheduled-tasks-groups .pk-group",
-            "meters", "#meters-list .pk-group",
-            "traces", "#traces-list .pk-trace-item");
-
-    /**
-     * The header of one property group per tab that carries a masked value, keyed the
-     * same way as {@link #TAB_READY_SELECTOR}. Both tabs render every group collapsed by
+     * The header of one property group per tab that carries a masked value, keyed by tab
+     * id. Both tabs render every group collapsed by
      * default, so without this, neither image ever shows a masked value or the reveal
      * control next to one - only collapsed headers.
      *
@@ -223,9 +206,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         assertAllTabButtonsVisible();
 
         for (String tabId : DASHBOARD_TABS) {
-            page.click(".pk-tab[data-tab=\"" + tabId + "\"]");
-            page.waitForSelector("#" + tabId + "-tab.active");
-            page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
+            dashboard.openTab(tabId);
             if (OVERVIEW_TAB.equals(tabId)) {
                 // Overview is the one tab that photographs the machine it ran on
                 ScreenshotIdentityScrub.applyTo(page);
@@ -242,15 +223,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // as its own root-level "connection" trace, and that trace sorts above /orders by
         // the time this runs.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", flagshipTraceId);
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // The host element exists as soon as openTraceDetail() creates it, well before
-        // fetchAndRender() replaces the loading placeholder - wait for that placeholder to
-        // actually be gone, or the screenshot just shows "Loading trace data...".
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.awaitTrace(flagshipTraceId);
+        // or the screenshot just shows "Loading trace data..."
+        overlay.awaitLoaded();
         shoot(outputDir, "trace-detail-" + theme);
 
         // Spans and Queries are independent rendering paths - Spans shows span.name
@@ -259,8 +234,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // so without this click no shipped image has ever shown QueryExtractor's output. The
         // flagship /orders trace deep-linked above is deliberately the N+1 example, so it is
         // guaranteed to carry real queries to click across to.
-        page.click("#peekaboot-trace-overlay .pk-tabs .pk-tab[data-tab=\"queries\"]");
-        page.waitForSelector("#peekaboot-trace-overlay .pk-query-item");
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-query-item");
         shoot(outputDir, "trace-detail-queries-" + theme);
     }
 
@@ -275,7 +250,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         List<String> expected = new ArrayList<>(DASHBOARD_TABS);
         expected.add(INSIGHTS_TAB);
         for (String tabId : expected) {
-            if (!page.isVisible(".pk-tab[data-tab=\"" + tabId + "\"]")) {
+            if (!page.isVisible(Dashboard.tabButton(tabId))) {
                 missing.add(tabId);
             }
         }
@@ -296,8 +271,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         openDashboard();
         waitForInsightsHistory();
 
-        page.click(".pk-tab[data-tab=\"" + INSIGHTS_TAB + "\"]");
-        page.waitForSelector("#" + INSIGHTS_TAB + "-tab.active");
+        dashboard.openTab(INSIGHTS_TAB);
         page.waitForFunction("""
                 () => {
                     const inViewport = el => {
@@ -396,23 +370,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
         waitForRevealedRowValue(tabId, MASKED_VALUE);
     }
 
-    /**
-     * Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR}
-     * to render {@code expected} as its value. Mirrors
-     * {@code UnmaskingControlEnabledIT.waitForConfigPasswordValue}'s own lookup-by-key
-     * approach rather than a CSS value selector, since {@code kvRow} renders both the key
-     * and the value as plain text nodes with nothing to select the value by other than its
-     * sibling key.
-     */
+    /** Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR} to render {@code expected}. */
     private void waitForRevealedRowValue(String tabId, String expected) {
-        page.waitForFunction(
-                """
-                ([container, key, expected]) => {
-                    const row = Array.from(document.querySelectorAll(container + ' .pk-kv'))
-                        .find(r => r.querySelector('.pk-kv__key').textContent === key);
-                    return row && row.querySelector('.pk-kv__value').textContent === expected;
-                }
-                """, List.of(REVEALED_ROW_CONTAINER_SELECTOR.get(tabId), REVEALED_ROW_KEY.get(tabId), expected));
+        dashboard.awaitKvValue(REVEALED_ROW_CONTAINER_SELECTOR.get(tabId), REVEALED_ROW_KEY.get(tabId), expected);
     }
 
     private void captureToolbar(Path outputDir, String theme) {
@@ -422,8 +382,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // The bar shows a "loading" placeholder in its metrics area while it fetches the
         // request's own trace insights; wait for that to resolve so the screenshot shows
         // the real duration/query/log metrics instead of a spinner.
-        page.waitForFunction("() => !document.getElementById('peekaboot-toolbar-host').shadowRoot"
-                + ".querySelector('.pk-toolbar__loading')");
+        toolbar.waitForGone(".pk-toolbar__loading");
         shoot(outputDir, "toolbar-collapsed-" + theme);
     }
 
@@ -431,7 +390,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         if (page != null) {
             page.context().close();
         }
-        page = browserContextPage();
+        usePage(browserContextPage());
         setStoredTheme(theme);
     }
 

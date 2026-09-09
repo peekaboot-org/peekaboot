@@ -1,13 +1,19 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.impl.TargetClosedError;
+import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,6 +75,7 @@ abstract class PlaywrightTestBase {
     protected Page page;
     protected Toolbar toolbar;
     protected TraceOverlay overlay;
+    protected Dashboard dashboard;
     protected String baseUrl;
 
     private final List<String> browserSignals = new CopyOnWriteArrayList<>();
@@ -111,9 +118,20 @@ abstract class PlaywrightTestBase {
     @BeforeEach
     void openPage() {
         baseUrl = "http://localhost:" + port;
-        page = browserContextPage();
+        usePage(browserContextPage());
+    }
+
+    /** Binds the page objects to {@code newPage}; a tool that swaps pages mid-run rebinds them the same way. */
+    protected void usePage(Page newPage) {
+        page = newPage;
         toolbar = new Toolbar(page);
         overlay = new TraceOverlay(page);
+        dashboard = new Dashboard(page);
+    }
+
+    /** The servlet context path the application is mounted under; the root unless a subclass says otherwise. */
+    protected String contextPath() {
+        return "";
     }
 
     /**
@@ -191,20 +209,64 @@ abstract class PlaywrightTestBase {
     }
 
     protected void openDashboard() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        page.waitForSelector("#overview-tab.active");
-        // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
+        openDashboard("", "#build-info > *");
+    }
+
+    /**
+     * Opens the dashboard at {@code hash} and waits for the render it lands on.
+     * {@code readySelector} is the positive proof of that render on whichever tab the hash
+     * names: #loading is the app's own readiness signal, hidden only after fetchData() ->
+     * renderData(), but it also hides on the failure path.
+     */
+    protected void openDashboard(String hash, String readySelector) {
+        page.navigate(baseUrl + contextPath() + "/peekaboot/ui/dashboard/index.html" + hash);
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
-        // ...but #loading also hides on the failure path, so require positive proof of a render
-        page.waitForSelector("#build-info > *, #error:not(.hidden)");
+        page.waitForSelector(readySelector + ", #error:not(.hidden)");
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
     }
 
     protected void openPersonsPage() {
-        page.navigate(baseUrl + "/persons");
+        page.navigate(baseUrl + contextPath() + "/persons");
         page.waitForSelector("#peekaboot-toolbar-host");
+    }
+
+    /**
+     * Imports {@code /peekaboot/ui/<path>} into the blank fixture page as {@code m} and
+     * returns what {@code expression} evaluates to, awaited if it is a promise. The
+     * expression is spliced into the function source rather than eval'd, so a host page's
+     * CSP cannot refuse it and a failure names its line.
+     */
+    protected Object importModule(String path, String expression) {
+        return importModule(path, expression, null);
+    }
+
+    /** {@link #importModule(String, String)} with {@code arg} in scope of the expression. */
+    protected Object importModule(String path, String expression, Object arg) {
+        openBlankFixture();
+        return page.evaluate(
+                "async ([mod, arg]) => { const m = await import(mod); return await (" + expression + "); }",
+                Arrays.asList(contextPath() + "/peekaboot/ui/" + path, arg));
+    }
+
+    /** Serves the real response for {@code urlGlob} with a Content-Security-Policy header added, its body untouched. */
+    protected void serveWithCsp(String urlGlob, String policy) {
+        page.route(urlGlob, route -> {
+            APIResponse response = route.fetch();
+            Map<String, String> headers = new HashMap<>(response.headers());
+            headers.put("content-security-policy", policy);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
+        });
+    }
+
+    /**
+     * Emulates the OS colour-scheme preference. Headless Chromium's own default is light,
+     * so a test of "the stored preference wins" sets the OS to the opposite of what it
+     * stored, or it passes with the preference ignored entirely.
+     */
+    protected void emulateOsColorScheme(ColorScheme scheme) {
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(scheme));
     }
 
     /**
@@ -244,7 +306,7 @@ abstract class PlaywrightTestBase {
      */
     protected JsonNode awaitTrace(String traceId, String jsPredicate) {
         return awaitJson(
-                "/peekaboot/api/traces/" + traceId + "/insights",
+                contextPath() + "/peekaboot/api/traces/" + traceId + "/insights",
                 "trace => (" + jsPredicate + ")(trace) ? trace : null",
                 "trace " + traceId + " never satisfied " + jsPredicate);
     }
@@ -257,7 +319,7 @@ abstract class PlaywrightTestBase {
      */
     protected String awaitListedTrace(String query, String jsPredicate) {
         return awaitJson(
-                        "/peekaboot/api/traces/insights?" + query,
+                        contextPath() + "/peekaboot/api/traces/insights?" + query,
                         "listing => (listing.traces || []).find(" + jsPredicate + ")",
                         "no listed trace for '" + query + "' satisfied " + jsPredicate)
                 .path("traceId")
@@ -310,7 +372,7 @@ abstract class PlaywrightTestBase {
      * or a {@code fetch()} just as well as the fixture does.
      */
     protected void openBlankFixture() {
-        String url = baseUrl + "/peekaboot/ui/pk-blank.html";
+        String url = baseUrl + contextPath() + "/peekaboot/ui/pk-blank.html";
         if (!page.url().equals(url)) {
             int status = page.navigate(url).status();
             if (status != 200) {

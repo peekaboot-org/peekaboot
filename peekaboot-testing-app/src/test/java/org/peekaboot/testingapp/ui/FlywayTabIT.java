@@ -29,8 +29,7 @@ class FlywayTabIT extends PlaywrightTestBase {
     @Test
     void flywayTabListsAppliedMigrations() {
         openDashboard();
-        page.click(".pk-tab[data-tab='flyway']");
-        page.waitForSelector("#flyway-timeline .pk-table tbody tr");
+        dashboard.openTab("flyway");
 
         assertThat(page.textContent("#flyway-timeline")).contains("V1");
         assertThat(page.querySelectorAll("#flyway-timeline .pk-badge--ok")).isNotEmpty();
@@ -43,8 +42,7 @@ class FlywayTabIT extends PlaywrightTestBase {
     @Test
     void flywayTabRendersOneTableRowPerMigration() throws Exception {
         openDashboard();
-        page.click(".pk-tab[data-tab='flyway']");
-        page.waitForSelector("#flyway-timeline .pk-table tbody tr");
+        dashboard.openTab("flyway");
 
         assertThat(page.querySelectorAll("#flyway-timeline .pk-table thead th"))
                 .as("the table is column-headed so each migration reads as a record")
@@ -64,17 +62,14 @@ class FlywayTabIT extends PlaywrightTestBase {
      */
     @Test
     void migrationDurationsAreNotColouredBySpanThresholds() {
-        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-
-        Object durationCellClass = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/dashboard/tabs/flyway.js');
+        Object durationCellClass = importModule("dashboard/tabs/flyway.js", """
+            (() => {
                 const container = document.createElement('div');
                 container.innerHTML = '<div id="flyway-timeline"></div>';
                 m.render(container, {flyway: {migrations: [{version: '1', description: 'init',
                     script: 'V1__init.sql', type: 'SQL', executionTime: 5000, installedOn: 0, state: 'SUCCESS'}]}}, {});
                 return container.querySelector('td.pk-table__num').className;
-            }
+            })()
             """);
 
         assertThat((String) durationCellClass).doesNotContain("slow");

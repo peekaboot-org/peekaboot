@@ -63,26 +63,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
     private String openTracesTabWithATrace() {
         String traceId = seedAnHttpTrace();
         openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector(traceItem(traceId));
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
         return traceId;
-    }
-
-    /** The listed row of one trace; the list is shared with every class, so a test opens its own. */
-    private static String traceItem(String traceId) {
-        return "#traces-list .pk-trace-item[data-trace-id='" + traceId + "']";
-    }
-
-    /**
-     * Opens the listed trace's overlay through its own row, the way a reader does, and
-     * waits for its tab strip: render() is where trace-detail.js takes focus and starts
-     * listening for Escape, so a keypress before that is lost.
-     */
-    private void openListedTrace(String traceId) {
-        page.click(traceItem(traceId) + " .pk-trace-item__open");
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
-        overlay.waitFor(".pk-tab");
     }
 
     @Test
@@ -139,20 +122,16 @@ class DashboardTabsIT extends PlaywrightTestBase {
     void tabStripUsesAriaSelection() {
         openDashboard();
 
-        String selected =
-                (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
-        assertThat(selected).isEqualTo("overview");
+        assertThat(dashboard.selectedTab()).isEqualTo("overview");
     }
 
     @Test
     void switchingTabsUpdatesTheHashAndSelection() {
         openDashboard();
-        page.click(".pk-tab[data-tab='environment']");
-        page.waitForSelector("#environment-tab.active");
+        dashboard.openTab("environment");
 
         assertThat(page.url()).endsWith("#environment");
-        assertThat(page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
-                .isEqualTo("environment");
+        assertThat(dashboard.selectedTab()).isEqualTo("environment");
     }
 
     /**
@@ -172,8 +151,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         // order), and is unhidden here since the test profile configures the insights
         // feature (see dashboardShowsTheInsightStatTiles's own comment for the pattern).
         assertThat(page.evaluate("() => document.activeElement.dataset.tab")).isEqualTo("insights");
-        assertThat(page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab"))
-                .isEqualTo("insights");
+        assertThat(dashboard.selectedTab()).isEqualTo("insights");
     }
 
     @Test
@@ -230,8 +208,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
         page.keyboard().press("ArrowRight");
 
-        String selected =
-                (String) page.evaluate("() => document.querySelector('.pk-tab[aria-selected=\"true\"]').dataset.tab");
+        String selected = dashboard.selectedTab();
         Object expectedNext = page.evaluate(
                 "() => { const visible = [...document.querySelectorAll('#main-tabs .pk-tab')].filter(t => t.offsetParent !== null);"
                         + " const idx = visible.findIndex(t => t.dataset.tab === 'overview');"
@@ -282,8 +259,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void deepLinkingDirectlyToATraceDetailPreservesTheDetailSegment() {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
+        overlay.waitFor(".pk-overlay__error");
 
         assertThat(page.url()).endsWith("#traces/deadbeef");
     }
@@ -328,8 +304,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void environmentGroupsCollapseAndExpand() {
         openDashboard();
-        page.click(".pk-tab[data-tab='environment']");
-        page.waitForSelector("#property-sources .pk-group__header");
+        dashboard.openTab("environment");
 
         assertThat(page.isVisible("#property-sources .pk-group__list")).isFalse();
 
@@ -347,8 +322,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void environmentFilterHighlightsMatches() {
         openDashboard();
-        page.click(".pk-tab[data-tab='environment']");
-        page.waitForSelector("#property-sources .pk-group");
+        dashboard.openTab("environment");
 
         page.fill("#env-filter", "server.port");
         page.waitForSelector(
@@ -362,8 +336,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void expandedGroupSurvivesARefresh() {
         openDashboard();
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-groups .pk-group__header");
+        dashboard.openTab("config");
         page.click("#config-groups .pk-group__header");
         assertThat(page.isVisible("#config-groups .pk-group__list")).isTrue();
 
@@ -376,8 +349,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void loggersTabShowsLevelsAndRespectsConfiguredOnly() {
         openDashboard();
-        page.click(".pk-tab[data-tab='loggers']");
-        page.waitForSelector("#loggers-list .pk-group");
+        dashboard.openTab("loggers");
 
         int all = page.querySelectorAll("#loggers-list .pk-group").size();
         page.check("#loggers-configured-only");
@@ -398,33 +370,20 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void configTabMasksSensitiveValues() {
         openDashboard();
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-groups .pk-group__header");
+        dashboard.openTab("config");
 
         page.fill("#config-filter", "password");
-        // Rows render into the DOM regardless of the group's expand/collapse state -
-        // only the group's [hidden] wrapper controls visibility - so this waits for
-        // attachment, not visibility.
-        page.waitForSelector(
-                "#config-groups .pk-kv__key",
-                new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
 
-        String maskedValue = (String) page.evaluate("""
-            () => {
-                const row = Array.from(document.querySelectorAll('#config-groups .pk-kv'))
-                    .find(r => r.querySelector('.pk-kv__key').textContent === 'password');
-                return row ? row.querySelector('.pk-kv__value').textContent : null;
-            }
-            """);
-
-        assertThat(maskedValue).isEqualTo("******");
+        // Rows render into the DOM regardless of the group's expand/collapse state - only
+        // the group's [hidden] wrapper controls visibility - so the row is read attached,
+        // not visible.
+        assertThat(dashboard.kvValue("#config-groups", "password")).isEqualTo("******");
     }
 
     @Test
     void scheduledTasksTabGroupsByScheduleType() {
         openDashboard();
-        page.click(".pk-tab[data-tab='scheduled-tasks']");
-        page.waitForSelector("#scheduled-tasks-groups .pk-group");
+        dashboard.openTab("scheduled-tasks");
 
         assertThat(page.querySelectorAll("#scheduled-tasks-groups .pk-group")).isNotEmpty();
         assertThat(page.textContent("#scheduled-tasks-groups .pk-tasks-summary"))
@@ -434,8 +393,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void metersTabFiltersAndCounts() {
         openDashboard();
-        page.click(".pk-tab[data-tab='meters']");
-        page.waitForSelector("#meters-list .pk-group");
+        dashboard.openTab("meters");
 
         page.fill("#meters-filter", "jvm.memory");
         page.waitForFunction("() => document.querySelector('#meters-count').textContent.includes('/')");
@@ -482,16 +440,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void metersFilterSurvivesSwitchingTabsAwayAndBack() {
         openDashboard();
-        page.click(".pk-tab[data-tab='meters']");
-        page.waitForSelector("#meters-list .pk-group");
+        dashboard.openTab("meters");
 
         page.fill("#meters-filter", "jvm.memory");
         page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
 
-        page.click(".pk-tab[data-tab='environment']");
-        page.waitForSelector("#environment-tab.active");
+        dashboard.openTab("environment");
 
-        page.click(".pk-tab[data-tab='meters']");
+        dashboard.openTab("meters");
         page.waitForFunction("() => window.location.hash.includes('q=jvm.memory')");
 
         assertThat(page.inputValue("#meters-filter")).isEqualTo("jvm.memory");
@@ -511,8 +467,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void handEditingTheHashToRemoveTheFilterClearsIt() {
         openDashboard();
-        page.click(".pk-tab[data-tab='meters']");
-        page.waitForSelector("#meters-list .pk-group");
+        dashboard.openTab("meters");
 
         page.fill("#meters-filter", "jvm");
         page.waitForFunction("() => window.location.hash.includes('q=jvm')");
@@ -615,7 +570,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
         String traceId = seedAnHttpTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
-        page.waitForSelector(traceItem(traceId));
+        dashboard.awaitListedTrace(traceId);
 
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
                 .isEqualTo("true");
@@ -629,17 +584,17 @@ class DashboardTabsIT extends PlaywrightTestBase {
     void clickingATraceOpensTheOverlayAndDeepLinks() {
         String traceId = openTracesTabWithATrace();
 
-        openListedTrace(traceId);
+        dashboard.openListedTrace(traceId);
 
         assertThat(page.url()).endsWith("#traces/" + traceId);
     }
 
     @Test
     void closingTheOverlayCleansTheHash() {
-        openListedTrace(openTracesTabWithATrace());
+        dashboard.openListedTrace(openTracesTabWithATrace());
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
 
         assertThat(page.url()).endsWith("#traces");
     }
@@ -659,7 +614,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
-        openListedTrace(openTracesTabWithATrace());
+        dashboard.openListedTrace(openTracesTabWithATrace());
 
         // Forces a full renderData() cycle while the overlay is open, so a setUrlParams
         // closure taken at render time would pick up the open trace's id as "detail" -
@@ -670,7 +625,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction("() => !document.getElementById('refresh-icon').classList.contains('pk-spinning')");
 
         page.keyboard().press("Escape");
-        page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
+        overlay.awaitClosed();
         assertThat(page.url()).endsWith("#traces");
 
         page.click("#traces-bucket .pk-btn[data-bucket='errors']");
@@ -699,27 +654,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
         String traceId = seedAnErrorTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
         page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
-        page.waitForSelector(traceItem(traceId));
+        dashboard.awaitListedTrace(traceId);
 
-        openListedTrace(traceId);
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
-        page.evaluate("() => document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('.pk-tab[data-tab=\"logs\"]').click()");
-        // The tab switch renders synchronously, but wait for the element anyway - the
-        // click evaluate() resolving does not mean the shadow DOM has been re-queried.
-        page.waitForFunction(
-                "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('#pk-log-level')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        dashboard.openListedTrace(traceId);
+        overlay.openTab("logs");
+        overlay.waitFor("#pk-log-level");
         page.waitForFunction("() => window.location.hash.includes('/logs')");
 
-        page.evaluate("() => { const sel = document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                + ".querySelector('#pk-log-level'); sel.value = 'ERROR';"
+        overlay.evaluate("root => { const sel = root.querySelector('#pk-log-level'); sel.value = 'ERROR';"
                 + " sel.dispatchEvent(new Event('change')); }");
         page.waitForFunction("() => window.location.hash.includes('level=ERROR')");
 
@@ -764,14 +706,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
         // expandTraceById path, which is what registers the onClose callback that the
         // switch below fires early.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", firstTraceId);
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", firstTraceId);
+        overlay.awaitTrace(firstTraceId);
 
         // Straight to a *different* trace by hash, without closing the first - the
         // sequence that desyncs a flag-based guard (see the javadoc above).
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", secondTraceId);
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", secondTraceId);
+        overlay.awaitTrace(secondTraceId);
 
         page.evaluate("() => { document.getElementById('peekaboot-trace-overlay').dataset.testMarker = 'stable'; }");
 
@@ -793,8 +733,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Test
     void schedulerTracesLinkArrivesFiltered() {
         openDashboard();
-        page.click(".pk-tab[data-tab='scheduled-tasks']");
-        page.waitForSelector("#scheduled-tasks-groups .pk-group__header");
+        dashboard.openTab("scheduled-tasks");
         page.click("#scheduled-tasks-groups .pk-group__header");
         page.waitForSelector(".pk-task__traces-link");
 
@@ -824,7 +763,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         openDashboard();
         Response defaultResponse = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
-                () -> page.click(".pk-tab[data-tab='traces']"));
+                () -> page.click(Dashboard.tabButton("traces")));
         assertThat(defaultResponse.url()).doesNotContain("rootActionType");
         page.waitForSelector("#traces-list .pk-trace-item");
         assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']")
@@ -885,7 +824,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .as("no tile fetch while the Overview tab is hidden")
                 .isInstanceOf(TimeoutError.class);
 
-        page.waitForRequest("**/api/insights/config**", () -> page.click(".pk-tab[data-tab='overview']"));
+        page.waitForRequest("**/api/insights/config**", () -> page.click(Dashboard.tabButton("overview")));
         page.waitForSelector("#insights-tiles .pk-insight-tile");
     }
 }

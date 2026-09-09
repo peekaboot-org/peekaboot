@@ -40,10 +40,12 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     private Object evalUiModule(String path, String expression) {
-        openBlankFixture();
-        return page.evaluate(
-                "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
-                List.of("/peekaboot/ui/" + path, expression));
+        return importModule(path, expression);
+    }
+
+    /** Runs {@code body}, a function body over the insights store module {@code m}, and returns what it returns. */
+    private Object evalInsightsStore(String body) {
+        return evalUiModule("dashboard/tabs/insights-store.js", "(() => {" + body + "})()");
     }
 
     private static List<String> names(Enum<?>[] constants) {
@@ -540,30 +542,25 @@ class SharedModuleIT extends PlaywrightTestBase {
     void insightsStoreAppendsTicksWithGapNullsAndIgnoresStaleOnes() {
         String setup = "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
                 + " series: {a: {values: [1, 2, 3]}}}, 5);";
-        assertThat(evalUiModule(
-                        "dashboard/tabs/insights-store.js",
-                        setup
-                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
-                                + " JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs])"))
+        assertThat(evalInsightsStore(setup
+                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
+                        + " return JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs]);"))
                 .isEqualTo("[[2,3,null,null,4],[null,null,null,null,7],5,13000]");
-        assertThat(evalUiModule(
-                        "dashboard/tabs/insights-store.js",
-                        setup
-                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
-                                + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
-                                + " JSON.stringify(s.series.a)"))
+        assertThat(evalInsightsStore(setup
+                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
+                        + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
+                        + " return JSON.stringify(s.series.a);"))
                 .isEqualTo("[2,3,null,null,4]");
     }
 
     @Test
     void insightsStoreAppendsRollupsPerStat() {
         assertThat(
-                        evalUiModule(
-                                "dashboard/tabs/insights-store.js",
+                        evalInsightsStore(
                                 "const r = m.normalizeLevel({level: 1, intervalMs: 60000, endEpochMs: 60000, count: 1,"
                                         + " series: {a: {stats: {min: [1], max: [3], avg: [2]}}}}, 4);"
                                         + " m.appendRollup(r, {level: 1, epochMs: 120000, entries: {a: {min: 0, max: 5, avg: 2.5}}});"
-                                        + " JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count])"))
+                                        + " return JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count]);"))
                 .isEqualTo("[[1,0],[3,5],[2,2.5],[null],2]");
     }
 
@@ -587,12 +584,11 @@ class SharedModuleIT extends PlaywrightTestBase {
      */
     @Test
     void insightsStoreCapsAGapLongerThanTheRingAtTheRingSize() {
-        assertThat(evalUiModule(
-                        "dashboard/tabs/insights-store.js",
+        assertThat(evalInsightsStore(
                         "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
                                 + " series: {a: {values: [1, 2, 3]}}}, 5);"
                                 + " m.appendTick(s, {epochMs: 99000, values: {a: 4}});"
-                                + " JSON.stringify([s.series.a, s.count])"))
+                                + " return JSON.stringify([s.series.a, s.count]);"))
                 .isEqualTo("[[null,null,null,null,4],5]");
     }
 

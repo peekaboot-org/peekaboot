@@ -15,16 +15,14 @@ import org.junit.jupiter.api.Test;
  */
 class ShadowStylesAttachmentIT extends PlaywrightTestBase {
 
-    private Object evalShadowStyles(String script) {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        return page.evaluate(script);
+    /** Runs {@code body}, a function body over the module {@code m}, against a fresh host on the blank fixture. */
+    private Object evalShadowStyles(String body) {
+        return importModule("shared/shadow-styles.js", "(async () => {" + body + "})()");
     }
 
     @Test
     void hostIsHiddenWhileSheetsLoadAndRevealedAfterwards() {
         Object result = evalShadowStyles("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/shadow-styles.js');
                 const host = document.createElement('div');
                 document.body.appendChild(host);
                 const shadowRoot = host.attachShadow({mode: 'open'});
@@ -32,7 +30,6 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
                 const hiddenDuringLoad = host.style.visibility;
                 await attachPromise;
                 return {hiddenDuringLoad, revealedAfter: host.style.visibility};
-            }
             """);
         Map<?, ?> map = (Map<?, ?>) result;
         assertThat(map.get("hiddenDuringLoad")).isEqualTo("hidden");
@@ -42,14 +39,11 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
     @Test
     void linksTheThreeSharedSheetsPlusTheOwnSheet() {
         Object hrefs = evalShadowStyles("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/shadow-styles.js');
                 const host = document.createElement('div');
                 document.body.appendChild(host);
                 const shadowRoot = host.attachShadow({mode: 'open'});
                 await m.attachSharedStyles(shadowRoot, host, '/peekaboot', '/peekaboot/ui/toolbar/toolbar.css');
                 return Array.from(shadowRoot.querySelectorAll('link')).map(l => l.getAttribute('href'));
-            }
             """);
         @SuppressWarnings("unchecked")
         List<String> hrefList = (List<String>) hrefs;
@@ -64,14 +58,11 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
     @Test
     void omitsTheOwnSheetLinkWhenNoneIsGiven() {
         Object count = evalShadowStyles("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/shadow-styles.js');
                 const host = document.createElement('div');
                 document.body.appendChild(host);
                 const shadowRoot = host.attachShadow({mode: 'open'});
                 await m.attachSharedStyles(shadowRoot, host, '/peekaboot', null);
                 return shadowRoot.querySelectorAll('link').length;
-            }
             """);
         assertThat(count).isEqualTo(3);
     }
@@ -84,15 +75,12 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
     @Test
     void aFailedSheetStillResolvesInsteadOfHangingUntilTheTimeout() {
         Object elapsedMs = evalShadowStyles("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/shadow-styles.js');
                 const host = document.createElement('div');
                 document.body.appendChild(host);
                 const shadowRoot = host.attachShadow({mode: 'open'});
                 const start = performance.now();
                 await m.attachSharedStyles(shadowRoot, host, '/peekaboot', '/does/not/exist.css');
                 return performance.now() - start;
-            }
             """);
         assertThat(((Number) elapsedMs).doubleValue()).isLessThan(900);
     }
@@ -104,14 +92,11 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
     @Test
     void revealsWithinTheTimeoutEvenWhenAllSheetsAreMissing() {
         Object visibilityAfter = evalShadowStyles("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/shadow-styles.js');
                 const host = document.createElement('div');
                 document.body.appendChild(host);
                 const shadowRoot = host.attachShadow({mode: 'open'});
                 await m.attachSharedStyles(shadowRoot, host, '/does/not/exist', '/still/missing.css');
                 return host.style.visibility;
-            }
             """);
         assertThat(visibilityAfter).isEqualTo("");
     }

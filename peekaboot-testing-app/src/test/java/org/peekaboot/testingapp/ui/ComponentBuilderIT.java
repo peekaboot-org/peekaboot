@@ -16,14 +16,9 @@ import org.junit.jupiter.api.Test;
  */
 class ComponentBuilderIT extends PlaywrightTestBase {
 
+    /** Runs {@code body}, a function body over the components module {@code m}, and returns what it returns. */
     private Object evalBuilders(String body) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-        }
-        return page.evaluate(
-                "async (body) => { const m = await import('/peekaboot/ui/shared/components.js');"
-                        + " return await eval('(async () => {' + body + '})()'); }",
-                body);
+        return importModule("shared/components.js", "(async () => {" + body + "})()");
     }
 
     @Test

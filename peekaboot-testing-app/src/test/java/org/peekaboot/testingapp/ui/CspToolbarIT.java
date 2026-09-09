@@ -2,12 +2,8 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.Route;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -28,12 +24,7 @@ class CspToolbarIT extends PlaywrightTestBase {
         page.addInitScript("window.__cspViolations = [];"
                 + "document.addEventListener('securitypolicyviolation',"
                 + " e => window.__cspViolations.push(e.violatedDirective));");
-        page.route("**/persons", route -> {
-            APIResponse response = route.fetch();
-            Map<String, String> headers = new HashMap<>(response.headers());
-            headers.put("content-security-policy", "style-src 'self'");
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
-        });
+        serveWithCsp("**/persons", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/persons");
         page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");

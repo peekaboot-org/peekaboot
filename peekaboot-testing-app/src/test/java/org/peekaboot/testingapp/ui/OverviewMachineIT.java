@@ -32,7 +32,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         // the build itself may run inside a container, so assert against the same
         // detector the backend serialises instead of a literal "none"
-        String value = page.textContent("#machine-info .pk-kv:has(.pk-kv__key:text-is('Container')) .pk-kv__value");
+        String value = dashboard.kvValue("#machine-info", "Container");
         assertThat(value).isEqualTo(ContainerRuntime.current().wireName());
     }
 
@@ -180,7 +180,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
-        String value = page.textContent("#machine-info .pk-kv:has(.pk-kv__key:text-is('CPU Cores')) .pk-kv__value");
+        String value = dashboard.kvValue("#machine-info", "CPU Cores");
         int logical = Runtime.getRuntime().availableProcessors();
         CpuTopology topology = MachineInfo.current().cpuTopology();
         if (topology == null) {
