@@ -28,20 +28,7 @@ public class IssueDetector {
                 : 0;
         SpanNode processedRoot = processSpan(trace.rootSpan(), true, traceDbQueryCount);
 
-        return new TraceTree(
-                trace.traceId(),
-                trace.startTimeMs(),
-                trace.durationMs(),
-                trace.status(),
-                hasSlowIssue(processedRoot),
-                trace.rootActionType(),
-                trace.rootOperation(),
-                processedRoot,
-                trace.summary(),
-                trace.httpExchange(),
-                trace.logs(),
-                trace.queries(),
-                trace.truncated());
+        return trace.withRootSpan(processedRoot, hasSlowIssue(processedRoot));
     }
 
     private SpanNode processSpan(SpanNode span, boolean isRoot, int traceDbQueryCount) {
@@ -99,23 +86,7 @@ public class IssueDetector {
                 .map(child -> processSpan(child, false, traceDbQueryCount))
                 .toList();
 
-        return new SpanNode(
-                span.spanId(),
-                span.name(),
-                span.kind(),
-                span.startTimeMs(),
-                span.durationMs(),
-                span.status(),
-                processedChildren,
-                span.tags(),
-                span.events(),
-                issues,
-                span.creationOrder(),
-                span.errorMessage(),
-                span.errorClass(),
-                span.remoteServiceName(),
-                span.query(),
-                span.logs());
+        return span.withIssues(issues, processedChildren);
     }
 
     private static boolean hasSlowIssue(SpanNode span) {

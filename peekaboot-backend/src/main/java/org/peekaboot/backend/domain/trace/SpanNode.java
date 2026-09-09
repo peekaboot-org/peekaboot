@@ -21,7 +21,7 @@ public record SpanNode(
         String query,
         List<TraceLog> logs) {
 
-    public SpanNode withLogs(List<TraceLog> logs) {
+    public SpanNode withLogs(List<TraceLog> newLogs) {
         return new SpanNode(
                 spanId,
                 name,
@@ -38,7 +38,7 @@ public record SpanNode(
                 errorClass,
                 remoteServiceName,
                 query,
-                logs);
+                newLogs);
     }
 
     public SpanNode withChildren(List<SpanNode> newChildren) {
@@ -53,6 +53,27 @@ public record SpanNode(
                 tags,
                 events,
                 issues,
+                creationOrder,
+                errorMessage,
+                errorClass,
+                remoteServiceName,
+                query,
+                logs);
+    }
+
+    /** The issues judged for this span, with the children the same judgement already ran over. */
+    public SpanNode withIssues(List<SpanIssue> newIssues, List<SpanNode> newChildren) {
+        return new SpanNode(
+                spanId,
+                name,
+                kind,
+                startTimeMs,
+                durationMs,
+                status,
+                newChildren,
+                tags,
+                events,
+                newIssues,
                 creationOrder,
                 errorMessage,
                 errorClass,
