@@ -74,13 +74,22 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     private void passThroughUnlessHtml(String contentType) {
-        if (contentType != null && !contentType.contains(CONTENT_TYPE_HTML)) {
+        if (contentType != null && !isHtml(contentType)) {
             try {
                 enablePassthrough();
             } catch (IOException e) {
                 throw new IllegalStateException("Failed to switch response to passthrough mode", e);
             }
         }
+    }
+
+    /** Whether the declared content type is HTML, the only kind the toolbar goes into; false while none is declared. */
+    public boolean isHtml() {
+        return isHtml(getContentType());
+    }
+
+    private static boolean isHtml(String contentType) {
+        return contentType != null && contentType.contains(CONTENT_TYPE_HTML);
     }
 
     /**

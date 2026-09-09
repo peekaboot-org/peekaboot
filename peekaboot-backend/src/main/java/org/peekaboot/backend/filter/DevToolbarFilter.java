@@ -22,7 +22,6 @@ public class DevToolbarFilter implements Filter {
 
     private static final Logger log = LoggerFactory.getLogger(DevToolbarFilter.class);
 
-    private static final String CONTENT_TYPE_HTML = "text/html";
     private static final String BODY_END_TAG = "</body>";
 
     /** springdoc's own default for {@code springdoc.swagger-ui.path}. */
@@ -173,11 +172,10 @@ public class DevToolbarFilter implements Filter {
 
         wrappedResponse.flushBuffer();
 
-        String contentType = wrappedResponse.getContentType();
-        log.trace("Response content-type: {} for {}", contentType, request.getRequestURI());
+        log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), request.getRequestURI());
 
-        if (contentType == null || !contentType.contains(CONTENT_TYPE_HTML)) {
-            log.trace("Skipping toolbar injection - not HTML: {}", contentType);
+        if (!wrappedResponse.isHtml()) {
+            log.trace("Skipping toolbar injection - not HTML: {}", wrappedResponse.getContentType());
             wrappedResponse.copyBodyToResponse();
             return;
         }
