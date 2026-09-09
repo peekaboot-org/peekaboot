@@ -37,6 +37,13 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private ServletOutputStream outputStream;
     private PrintWriter writer;
+    /**
+     * What the writer encodes with. The container never sees this wrapper's getWriter(), so
+     * it never locks the encoding; a content type declared later changes {@link #charset()}
+     * but not the bytes already buffered.
+     */
+    private Charset writerCharset;
+
     private volatile boolean committed = false;
     private volatile boolean passthrough = false;
 
@@ -140,8 +147,9 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
             throw new IllegalStateException("getOutputStream() has already been called");
         }
         if (writer == null) {
+            writerCharset = charset();
             writer = new PrintWriter(
-                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset())));
+                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), writerCharset)));
         }
         return writer;
     }
@@ -223,10 +231,11 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     public String getContentAsString() {
-        if (writer != null) {
-            writer.flush();
+        if (writer == null) {
+            return buffer.toString(charset());
         }
-        return buffer.toString(charset());
+        writer.flush();
+        return buffer.toString(writerCharset);
     }
 
     /** The response's declared character encoding, UTF-8 while none is declared. */

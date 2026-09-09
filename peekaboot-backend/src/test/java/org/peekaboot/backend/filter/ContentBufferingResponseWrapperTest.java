@@ -55,6 +55,20 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.getContentAsString()).isEqualTo("Test Content");
     }
 
+    /**
+     * The container never sees this wrapper's getWriter(), so it never locks the character
+     * encoding; a content type declared after the writer wrote changes what the response
+     * says while the buffered bytes stay encoded as they were.
+     */
+    @Test
+    void contentIsDecodedWithTheCharsetTheWriterEncodedWith() throws IOException {
+        wrapper.setContentType("text/html;charset=UTF-8");
+        wrapper.getWriter().write("Grüße");
+        wrapper.setContentType("text/html;charset=ISO-8859-1");
+
+        assertThat(wrapper.getContentAsString()).isEqualTo("Grüße");
+    }
+
     @Test
     void shouldCopyBufferedContentToOriginalResponse() throws IOException {
         wrapper.getWriter().write("Buffered Content");
