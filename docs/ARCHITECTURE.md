@@ -453,7 +453,7 @@ hooks that run before or outside the application context are registered in
 
 | Class | Registered via | Purpose |
 |-------|----------------|---------|
-| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, mappers, web config |
+| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` bean |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
@@ -480,6 +480,12 @@ let an application overriding a single source suppress every reading. The dataso
 metadata is a bean of its own type, `DataSourceMetadataList`, rather than a
 `List<DataSourceMetadata>`: Spring resolves the list type by collecting `DataSourceMetadata`
 beans first, so one application bean of that type would have replaced the whole list.
+
+The nine actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
+`mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
+`MaskingEngine`, so the one override point for that pipeline is the service itself. They
+are stateless and need at most the engine, and nine `@ConditionalOnMissingBean` methods
+nobody overrode bought nothing but wiring.
 
 ### Conditional Loading
 
