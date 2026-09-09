@@ -1,8 +1,11 @@
 package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
@@ -11,6 +14,9 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.PropertySource;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
 import org.springframework.mock.env.MockEnvironment;
 
 class PeekabootDefaultsEnvironmentPostProcessorTest {
@@ -21,7 +27,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
      * the detection result so both branches are testable.
      */
     private PeekabootDefaultsEnvironmentPostProcessor postProcessor(boolean localDevelopment) {
-        return new PeekabootDefaultsEnvironmentPostProcessor(java.util.function.Supplier::get) {
+        return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
             @Override
             boolean localDevelopment() {
                 return localDevelopment;
@@ -469,6 +475,47 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isNull();
         assertThat(environment.getPropertySources().contains("peekabootDevToolbarDefaults"))
                 .isFalse();
+    }
+
+    /**
+     * A bundled file can only be missing when a consumer's shade or repackage step filtered
+     * it out. For the no-push defaults that would silently start pushing telemetry to
+     * localhost, the one thing the file exists to prevent, so a warning is the wrong answer.
+     */
+    @Test
+    void failsFastWhenABundledDefaultsFileIsMissing() {
+        PeekabootDefaultsEnvironmentPostProcessor postProcessor =
+                postProcessorReading(resourceName -> new ClassPathResource("filtered-out/" + resourceName));
+
+        assertThatThrownBy(() -> postProcessor.postProcessEnvironment(new MockEnvironment(), servletApplication()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("peekaboot-no-push-defaults.yml");
+    }
+
+    @Test
+    void failsFastWhenABundledDefaultsFileIsEmpty() {
+        PeekabootDefaultsEnvironmentPostProcessor postProcessor =
+                postProcessorReading(resourceName -> new ByteArrayResource(new byte[0]));
+
+        assertThatThrownBy(() -> postProcessor.postProcessEnvironment(new MockEnvironment(), servletApplication()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("peekaboot-no-push-defaults.yml");
+    }
+
+    /** The seam for the two tests above: what the post-processor finds under a bundled file's name. */
+    private static PeekabootDefaultsEnvironmentPostProcessor postProcessorReading(
+            Function<String, Resource> bundledDefaults) {
+        return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
+            @Override
+            boolean localDevelopment() {
+                return false;
+            }
+
+            @Override
+            Resource bundledDefaults(String resourceName) {
+                return bundledDefaults.apply(resourceName);
+            }
+        };
     }
 
     @Test
