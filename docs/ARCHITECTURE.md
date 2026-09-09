@@ -450,7 +450,7 @@ hooks that run before or outside the application context are registered in
 |-------|----------------|---------|
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, `LogbackAppenderRegistrar` |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` bean |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
@@ -461,6 +461,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled`, and the default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes the health endpoint bean available without web/JMX exposure |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
+| `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
 | `LocalDevDetector` | (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
 Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`. Most
@@ -726,8 +727,8 @@ no header-injection code anywhere in the repo.
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
 `TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
 `TraceInsightsService` attaches them to the trace's spans on read (see *Trace Assembly and
-Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which lives
-inside `DevToolbarAutoConfiguration`, so correlated logs require `peekaboot.dev-toolbar=true`.
+Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which only
+`DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar=true`.
 A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot
