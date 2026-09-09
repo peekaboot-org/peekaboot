@@ -121,6 +121,32 @@ class InsightsSsePublisherTest {
         }
     }
 
+    /**
+     * The same wedge at shutdown: the interrupt cannot end a send already inside the
+     * container's socket write, and complete() would wait behind it, so stop() must
+     * detach the peer instead of holding the context's shutdown for a dead dashboard.
+     */
+    @Test
+    void stopDoesNotWaitBehindAWedgedSend() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        SseEmitter emitter = publisher.subscribe();
+        new DispatchedStream(emitter, wedgingOnTheFirstWrite(writeStarted, releaseWrite));
+        try {
+            publisher.broadcast("tick", "{}");
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is wedged inside send()")
+                    .isTrue();
+
+            CompletableFuture.runAsync(publisher::stop).get(3, TimeUnit.SECONDS);
+
+            assertThat(publisher.subscriberCount()).isZero();
+            assertThat(publisher.isRunning()).isFalse();
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
     @Test
     void refusesSubscribersBeyondTheCapWithServiceUnavailable() {
         for (int i = 0; i < InsightsSsePublisher.MAX_SUBSCRIBERS; i++) {
@@ -158,8 +184,8 @@ class InsightsSsePublisherTest {
         // below would block on this same latch and the test would time out.
         InsightsSsePublisher slowPublisher = tracked(new InsightsSsePublisher(new ObjectMapper()) {
             @Override
-            SseEmitter newEmitter() {
-                return new SseEmitter(0L) {
+            SubscriberEmitter newEmitter() {
+                return new SubscriberEmitter() {
                     @Override
                     public void send(SseEventBuilder builder) throws IOException {
                         sendStarted.countDown();
@@ -415,9 +441,9 @@ class InsightsSsePublisherTest {
         AtomicBoolean firstEmitter = new AtomicBoolean(true);
         InsightsSsePublisher publisher = tracked(new InsightsSsePublisher(new ObjectMapper()) {
             @Override
-            SseEmitter newEmitter() {
+            SubscriberEmitter newEmitter() {
                 if (firstEmitter.getAndSet(false)) {
-                    return new SseEmitter(0L) {
+                    return new SubscriberEmitter() {
                         @Override
                         public void send(SseEventBuilder builder) throws IOException {
                             try {
@@ -428,7 +454,7 @@ class InsightsSsePublisherTest {
                         }
                     };
                 }
-                return new SseEmitter(0L) {
+                return new SubscriberEmitter() {
                     @Override
                     public void send(SseEventBuilder builder) throws IOException {
                         healthyDeliveries.add("sent");
@@ -460,8 +486,8 @@ class InsightsSsePublisherTest {
         CountDownLatch wedgeReleased = new CountDownLatch(1);
         InsightsSsePublisher publisher = tracked(new InsightsSsePublisher(new ObjectMapper()) {
             @Override
-            SseEmitter newEmitter() {
-                return new SseEmitter(0L) {
+            SubscriberEmitter newEmitter() {
+                return new SubscriberEmitter() {
                     @Override
                     public void send(SseEventBuilder builder) throws IOException {
                         try {
@@ -503,8 +529,8 @@ class InsightsSsePublisherTest {
     void aSubscriberWhoseSendFailsIsDroppedWithAOneLineDebugMessage() {
         InsightsSsePublisher publisher = tracked(new InsightsSsePublisher(new ObjectMapper()) {
             @Override
-            SseEmitter newEmitter() {
-                return new SseEmitter(0L) {
+            SubscriberEmitter newEmitter() {
+                return new SubscriberEmitter() {
                     @Override
                     public void send(SseEventBuilder builder) throws IOException {
                         throw new IOException("Broken pipe");
