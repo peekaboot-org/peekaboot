@@ -41,19 +41,29 @@
   the ladder, the export delay or the constant and you redo it rather than assume it holds.
 
 ## Fixtures
-`peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`.
+`peekaboot-backend`'s fixtures are built through `org.peekaboot.backend.testsupport`.
 `Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the
-`jdbcQuery`/`jdbcDuplicate` presets for the double-instrumented pair. `TraceDatas.of(traceId,
-spans...)` runs those through a `TraceDataBundle` and returns its `snapshot()`, so a mapper test
-gets the root and ordering the store would hand it. `SpanNodes.node(id)` builds an
-already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the mapped `TraceTree` around one.
-`RequestCompletedEvents.request(traceId)`/`minimal(traceId)` build the request event, and
+`jdbcQuery`/`jdbcDuplicate` presets for the double-instrumented pair and `jdbcConnection` for
+the pool acquisition datasource-micrometer exports. `TraceDatas.of(traceId, spans...)` runs
+those through a `TraceDataBundle` and returns its `snapshot()`, so a mapper test gets the root
+and ordering the store would hand it. `SpanNodes.node(id)` builds an already-mapped `SpanNode`,
+`TraceTrees.tree(rootSpan)` the mapped `TraceTree` around one (`queries(count, durationMs)`
+sets what the summary counts). `Logs.log(traceId)` builds a `LogCapturedEvent`,
+`RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
-auto-configuration builds it, from `PeekabootTracingProperties`.
+auto-configuration builds it, from `PeekabootTracingProperties`. `LifecycleStarts.start(epochMs)`
+builds the START event the lifecycle tests replay; a stop is `LifecycleEvent.stop`.
+`SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
 rather than the events; the collector's only package-private constructor argument is its clock.
-A test names only what it asserts on. A new record component is added to the builder once, not to every test class. The
-domain records carry no test-only constructors.
+`FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
+do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
+pin owner-only storage. OpenTelemetry `SpanData` comes from the SDK's own
+`opentelemetry-sdk-testing` (`TestSpanData.builder()`), not a hand-rolled implementation.
+A test names only what it asserts on. A new record component is added to the builder once, not
+to every test class. The domain records carry no test-only constructors, and a test does not
+wrap a builder in a positional helper of its own (`createSpan(id, 150, OK, tags, children)`):
+that hides the defaults the builder exists to make explicit.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -11,8 +12,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
-import org.peekaboot.backend.insights.config.SeriesDef;
-import org.peekaboot.backend.insights.config.Stat;
 
 class InsightsCollectorLifecycleTest {
 
@@ -37,7 +36,7 @@ class InsightsCollectorLifecycleTest {
                 List.of(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 10)),
-                List.of(new SeriesDef("g", "G", "g", Map.of(), Stat.VALUE, null, null)),
+                List.of(value("g", "g")),
                 List.of(),
                 registry,
                 listener,

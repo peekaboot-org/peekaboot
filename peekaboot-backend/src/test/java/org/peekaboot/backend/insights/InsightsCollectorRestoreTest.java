@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Gauge;
@@ -14,7 +15,6 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -22,7 +22,6 @@ import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
-import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 
@@ -31,9 +30,8 @@ class InsightsCollectorRestoreTest {
     private static InsightsCollector collector(String... seriesIds) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 7).register(registry);
-        List<SeriesDef> series = List.of(seriesIds).stream()
-                .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), Stat.VALUE, null, null))
-                .toList();
+        List<SeriesDef> series =
+                List.of(seriesIds).stream().map(id -> value(id, "g")).toList();
         return new InsightsCollector(
                 List.of(
                         InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
@@ -160,7 +158,7 @@ class InsightsCollectorRestoreTest {
         Gauge.builder("g", () -> gaugeValue).register(registry);
         return new InsightsCollector(
                 List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
+                List.of(value("cpu.process", "g")),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
@@ -221,7 +219,7 @@ class InsightsCollectorRestoreTest {
                 List.of(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
+                List.of(value("cpu.process", "g")),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),

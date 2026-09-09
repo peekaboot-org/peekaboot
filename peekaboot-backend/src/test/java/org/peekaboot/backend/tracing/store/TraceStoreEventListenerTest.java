@@ -1,14 +1,13 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
@@ -33,8 +32,7 @@ class TraceStoreEventListenerTest {
 
     @Test
     void onLogCaptured_forwardsLogToStore() {
-        listener.onLogCaptured(
-                new LogCapturedEvent("trace1", "span1", Instant.EPOCH, "INFO", "TestLogger", "msg", "main"));
+        listener.onLogCaptured(log("trace1").build());
 
         assertThat(store.getTrace("trace1")).isPresent();
         assertThat(store.getTrace("trace1").get().logs()).hasSize(1);

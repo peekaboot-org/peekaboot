@@ -3,6 +3,7 @@ package org.peekaboot.backend.lifecycle;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
 import ch.qos.logback.classic.Level;
 import java.io.IOException;
@@ -25,10 +26,6 @@ class LifecycleEventLogTest {
 
     private LifecycleEventFile file() {
         return new LifecycleEventFile(directory.resolve(LifecycleEventFile.FILE_NAME));
-    }
-
-    private static LifecycleEvent start(long epochMs) {
-        return LifecycleEvent.start(epochMs, 4711, Map.of("version", "1.2.3"), Map.of("branch", "dev"));
     }
 
     /**
@@ -54,7 +51,7 @@ class LifecycleEventLogTest {
     @Test
     void aRecordedStartOutlivesTheRunThatWroteIt() {
         LifecycleEventLog first = loaded(file());
-        first.recordAndPersist(start(1_000));
+        first.recordAndPersist(start(1_000).build());
 
         assertThat(loaded(file()).events()).extracting(LifecycleEvent::epochMs).containsExactly(1_000L);
     }
@@ -66,7 +63,7 @@ class LifecycleEventLogTest {
     @Test
     void theStartIsAppendedWithoutTheCallerWaitingForTheLoad() {
         LifecycleEventLog log = new LifecycleEventLog(file());
-        log.recordWhenLoaded(start(1_000));
+        log.recordWhenLoaded(start(1_000).build());
 
         log.beginLoad();
 
@@ -78,12 +75,12 @@ class LifecycleEventLogTest {
         LifecycleEventFile file = file();
         List<LifecycleEvent> existing = new ArrayList<>();
         for (int i = 0; i < LifecycleEventLog.MAX_EVENTS; i++) {
-            existing.add(start(i));
+            existing.add(start(i).build());
         }
         file.write(existing);
 
         LifecycleEventLog log = loaded(file);
-        log.recordAndPersist(start(9_999));
+        log.recordAndPersist(start(9_999).build());
 
         assertThat(log.events()).hasSize(LifecycleEventLog.MAX_EVENTS);
         assertThat(log.events().get(0).epochMs()).isEqualTo(1); // the oldest is gone
@@ -95,7 +92,7 @@ class LifecycleEventLogTest {
     @Test
     void withoutAFileTheCurrentRunIsStillRemembered() {
         LifecycleEventLog log = loaded(null);
-        log.recordAndPersist(start(1_000));
+        log.recordAndPersist(start(1_000).build());
 
         assertThat(log.events()).hasSize(1);
         assertThat(Files.exists(directory.resolve(LifecycleEventFile.FILE_NAME)))
@@ -113,7 +110,7 @@ class LifecycleEventLogTest {
         LifecycleEventLog log = loaded(null);
 
         log.recordAndPersist(LifecycleEvent.stop(2_000, 7));
-        log.recordAndPersist(start(1_000));
+        log.recordAndPersist(start(1_000).build());
 
         assertThat(log.events())
                 .extracting(LifecycleEvent::type)
@@ -144,7 +141,7 @@ class LifecycleEventLogTest {
                         return;
                     }
                     for (int i = 0; i < perRecorder; i++) {
-                        log.recordAndPersist(start(base + i));
+                        log.recordAndPersist(start(base + i).build());
                     }
                 }));
             }
@@ -190,8 +187,8 @@ class LifecycleEventLogTest {
         LifecycleEventLog log = loaded(new LifecycleEventFile(blocked.resolve(LifecycleEventFile.FILE_NAME)));
 
         try (LogCapture capture = LogCapture.attach(LifecycleEventLog.class)) {
-            log.recordAndPersist(start(1_000));
-            log.recordAndPersist(start(2_000));
+            log.recordAndPersist(start(1_000).build());
+            log.recordAndPersist(start(2_000).build());
 
             assertThat(capture.appender().list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.WARN);
@@ -204,7 +201,7 @@ class LifecycleEventLogTest {
     @Test
     void aStopIsDroppedRatherThanWrittenOverHistoryThatNeverLoaded() throws IOException {
         LifecycleEventFile file = file();
-        file.write(List.of(start(1_000), start(2_000)));
+        file.write(List.of(start(1_000).build(), start(2_000).build()));
 
         // beginLoad() deliberately not called; the wait is shortened so the test does not sit out the production 5s
         LifecycleEventLog log = new LifecycleEventLog(file, Duration.ofMillis(50));
