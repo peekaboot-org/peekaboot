@@ -256,10 +256,29 @@ function renderTab(tab) {
     const available = tab.isAvailable ? tab.isAvailable(data, features) : true;
     const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
     if (button) button.classList.toggle('hidden', !available);
-    if (!available) return;
-
     const section = document.getElementById(`${tab.id}-tab`);
+    if (!available) {
+        if (section?.classList.contains('active')) fallBackToOverview();
+        return;
+    }
+
     if (section) tab.render(section, data, currentContext({active: section.classList.contains('active')}));
+}
+
+/**
+ * A deep link or a stale bookmark can name a tab this instance does not have (tracing
+ * switched off, no Flyway). An empty panel with no tab selected looks broken, so the
+ * reader lands on Overview instead and the hash is corrected to it - a replace, like
+ * every other correction of a URL that asked for a state that does not exist.
+ */
+function fallBackToOverview() {
+    mainTabs.select('overview', {silent: true});
+    showTab('overview');
+    replaceAppHash({tab: 'overview'});
+    // A "#traces/<id>" link with tracing off may have opened the overlay before the data
+    // arrived; the hash no longer names it, so its own close-time cleanup stays a no-op.
+    closeTraceDetail();
+    renderTabById('overview');
 }
 
 /** Renders every registered tab against the latest data - the 30s auto-refresh path. */
