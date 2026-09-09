@@ -123,8 +123,9 @@ class InsightsSsePublisherTest {
 
     /**
      * The same wedge at shutdown: the interrupt cannot end a send already inside the
-     * container's socket write, and complete() would wait behind it, so stop() must
-     * detach the peer instead of holding the context's shutdown for a dead dashboard.
+     * container's socket write, and complete() would wait behind it, so once the grace
+     * has passed stop() must detach the peer instead of holding the context's shutdown
+     * for a dead dashboard.
      */
     @Test
     void stopDoesNotWaitBehindAWedgedSend() throws Exception {
@@ -183,6 +184,31 @@ class InsightsSsePublisherTest {
         } finally {
             releaseWrite.release();
         }
+    }
+
+    /**
+     * stop() can run with the interrupt flag already set: ManagedLoop.stop() re-asserts it
+     * after an interrupted join, and the flag survives into the subscriber loop. A timed
+     * lock attempt throws on entry for an interrupted caller, so unless the untimed one
+     * goes first, every idle peer is detached instead of completed.
+     */
+    @Test
+    void stopRunningInterruptedStillCompletesIdlePeers() throws Exception {
+        SseEmitter emitter = publisher.subscribe();
+        DispatchedStream stream = new DispatchedStream(emitter, new MockHttpServletResponse());
+
+        Thread.currentThread().interrupt();
+        try {
+            publisher.stop();
+            assertThat(Thread.currentThread().isInterrupted())
+                    .as("the flag survives stop()")
+                    .isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+
+        assertThat(stream.result()).as("a completed stream").isNull();
+        assertThat(publisher.subscriberCount()).isZero();
     }
 
     @Test
