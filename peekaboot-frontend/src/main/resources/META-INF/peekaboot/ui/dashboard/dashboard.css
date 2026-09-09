@@ -485,6 +485,8 @@
    library); only the legend is re-tuned here to sit in the card's type scale.
    .pk-blink is retriggered on every panel readout an SSE tick actually changed. */
 #insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
+/* The text-tuned amber: a warning drawn on the page background, not a fill. */
+.pk-insight-stream-note { font-size: var(--pk-text-xs); color: var(--pk-warning-text); }
 /* The interval switch: one button per configured level, active state from the shared
    .pk-btn[aria-pressed="true"] rule. Segments touch, so only the outer corners are
    rounded and shared borders are collapsed. Shared by the toolbar's own switch

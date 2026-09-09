@@ -59,6 +59,8 @@ let markersCheckbox = null;
 // (epoch seconds) - null while every chart is auto-fitting its own data as usual
 let zoomWindow = null;
 let zoomResetButton = null;
+// shown while the browser has given up on the stream (see connectStream)
+let streamStoppedNote = null;
 
 export function isAvailable(data, features) {
     return Boolean(features?.insights);
@@ -70,6 +72,9 @@ export function render(container, data, context) {
         // SSE keeps this tab live; the 30s cycle must not rebuild it. Only the
         // URL-owned state is reconciled (active-tab guard, see main.js's renderTab).
         if (config && context.active) reconcileUrlState(context);
+        // ...and a stream the browser gave up on is given another go each cycle - the
+        // endpoint may be back, and nothing else would ever try again
+        if (source?.readyState === EventSource.CLOSED) reconnectStream();
         return;
     }
     if (!context.active) return;
@@ -197,7 +202,7 @@ function teardown() {
     sizeObserver?.disconnect();
     themeObserver?.disconnect();
     chartObserver = sizeObserver = themeObserver = levelGroup = zoomResetButton = null;
-    percentilesCheckbox = markersCheckbox = null;
+    percentilesCheckbox = markersCheckbox = streamStoppedNote = null;
     zoomWindow = null;
     if (frame !== null) cancelAnimationFrame(frame);
     frame = null;
@@ -260,7 +265,9 @@ function renderToolbar(container) {
         <label><input type="checkbox" id="insights-markers"${showMarkers ? ' checked' : ''}> Restarts</label>
         <button type="button" id="insights-zoom-reset" class="pk-btn pk-btn--icon hidden"
                 title="Reset zoom" aria-label="Reset zoom">${RESET_ICON}</button>
+        <span id="insights-stream-stopped" class="pk-insight-stream-note hidden" role="status">Live updates stopped</span>
     `;
+    streamStoppedNote = toolbar.querySelector('#insights-stream-stopped');
 
     levelGroup = toolbar.querySelector('#insights-level');
     levelGroup.addEventListener('click', event => {
@@ -697,11 +704,16 @@ function connectStream() {
 
     // EventSource reconnects on its own, but the deltas missed while it was down
     // leave the mirrored rings out of step - every loaded level is re-snapshotted
-    // before the next delta is applied
-    source.addEventListener('error', () => {
+    // before the next delta is applied. A browser that has given up instead (CLOSED:
+    // the endpoint answering 404 behind a proxy, an expired session) never fires open
+    // again, and a frozen chart is indistinguishable from a quiet application, so the
+    // toolbar says so until render() manages to reconnect.
+    source.addEventListener('error', event => {
         resyncPending = true;
+        if (event.target.readyState === EventSource.CLOSED) streamStoppedNote?.classList.remove('hidden');
     });
     source.addEventListener('open', () => {
+        streamStoppedNote?.classList.add('hidden');
         if (!resyncPending) return;
         resyncPending = false;
         // the application may still be coming up - a failed snapshot is retried on the
@@ -711,6 +723,12 @@ function connectStream() {
             resyncPending = true;
         });
     });
+}
+
+/** Replaces a stream the browser closed for good; the open that follows resyncs (resyncPending was set by the closing error). */
+function reconnectStream() {
+    source.close();
+    connectStream();
 }
 
 /** Re-snapshots every loaded level after a reconnect. */
