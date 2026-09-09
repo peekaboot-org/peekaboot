@@ -28,18 +28,11 @@ public class TraceTreeMapper {
         this.tagMasker = new TagMasker(maskingEngine);
     }
 
-    /**
-     * Builds the {@link TraceTree} for a captured trace.
-     *
-     * @param truncated whether the {@code max-spans-per-trace} cap dropped real spans for
-     *                  this trace before it reached here - a property of how the trace was
-     *                  captured, not of its (already-deduplicated) span list, so it must be
-     *                  passed in rather than derived from {@code traceData}.
-     */
-    public TraceTree map(TraceData traceData, boolean truncated) {
-        if (traceData == null || traceData.spans() == null || traceData.spans().isEmpty()) {
+    /** Builds the {@link TraceTree} for a captured trace. */
+    public TraceTree map(TraceData traceData) {
+        if (traceData.spans().isEmpty()) {
             return new TraceTree(
-                    traceData != null ? traceData.traceId() : null,
+                    traceData.traceId(),
                     0L,
                     0L,
                     TraceStatus.OK,
@@ -51,7 +44,7 @@ public class TraceTreeMapper {
                     null,
                     List.of(),
                     List.of(),
-                    truncated);
+                    traceData.truncated());
         }
 
         List<SpanData> spans = traceData.spans();
@@ -60,7 +53,7 @@ public class TraceTreeMapper {
         Map<String, List<SpanData>> childrenByParentId =
                 spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
 
-        SpanData rootSpanData = findRootSpan(spans, spanById);
+        SpanData rootSpanData = traceData.rootSpan();
 
         // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
         // exported) under the root so they don't silently vanish from the tree
@@ -89,7 +82,7 @@ public class TraceTreeMapper {
                 null,
                 List.of(),
                 List.of(),
-                truncated);
+                traceData.truncated());
     }
 
     private void attachOrphansToRoot(
@@ -117,16 +110,6 @@ public class TraceTreeMapper {
                     .computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>())
                     .addAll(orphans);
         }
-    }
-
-    /** The span the tree hangs from: the first span with no parent stored in this trace, else the first span. */
-    private static SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {
-        for (SpanData span : spans) {
-            if (span.parentId() == null || !spanById.containsKey(span.parentId())) {
-                return span;
-            }
-        }
-        return spans.getFirst();
     }
 
     public RootActionType detectRootActionType(SpanData rootSpan) {

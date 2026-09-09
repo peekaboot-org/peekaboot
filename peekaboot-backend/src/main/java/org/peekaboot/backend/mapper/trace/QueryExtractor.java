@@ -18,10 +18,6 @@ public class QueryExtractor {
     }
 
     public List<QueryInfo> extract(TraceData traceData) {
-        if (traceData == null || traceData.spans() == null) {
-            return List.of();
-        }
-
         // TraceData's spans are creation-ordered, so each query's row-count search can be
         // bounded by the next query
         List<SpanData> spans = traceData.spans();

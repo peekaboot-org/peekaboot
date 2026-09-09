@@ -9,6 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.trace.QueryInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
+import org.peekaboot.backend.testsupport.TraceDatas;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceData;
 
@@ -25,7 +26,7 @@ class QueryExtractorTest {
                 Map.of("db.statement", "SELECT * FROM users WHERE id = ?", "db.system", "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -44,7 +45,7 @@ class QueryExtractorTest {
                 Map.of("jdbc.query[0]", "INSERT INTO orders (user_id) VALUES (?)", "peer.service", "orders_db"),
                 20);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -67,7 +68,7 @@ class QueryExtractorTest {
                         "peer.service", "orders_db"),
                 20);
 
-        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(batchSpan)));
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", batchSpan));
 
         assertThat(queries).hasSize(1);
         assertThat(queries.get(0).sql())
@@ -79,7 +80,7 @@ class QueryExtractorTest {
         // a query span (db.* tagged) whose instrumentation put the statement in the name only
         var querySpan = createSpan("span1", "SELECT * FROM products", 30, Map.of("db.system", "postgresql"), 30);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -97,7 +98,7 @@ class QueryExtractorTest {
         var resultSetSpan =
                 createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "42", "peer.service", "mydb"), 11);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan, resultSetSpan));
+        var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -116,7 +117,7 @@ class QueryExtractorTest {
                 createSpan("q2", "query", 20, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 20);
         var rs = createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "42", "peer.service", "db"), 21);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(update, select, rs));
+        var traceData = TraceDatas.of("trace1", update, select, rs);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -138,7 +139,7 @@ class QueryExtractorTest {
                 "q2", "query", 30, Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"), 20);
         var rs2 = createSpan("rs2", "result-set", 5, Map.of("jdbc.row-count", "25", "peer.service", "db"), 21);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(query1, rs1, query2, rs2));
+        var traceData = TraceDatas.of("trace1", query1, rs1, query2, rs2);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -156,7 +157,7 @@ class QueryExtractorTest {
         var querySpan =
                 createSpan("q1", "query", 50, Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"), 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(resultSetSpan, querySpan));
+        var traceData = TraceDatas.of("trace1", resultSetSpan, querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -173,7 +174,7 @@ class QueryExtractorTest {
                 Map.of("db.statement", "UPDATE users SET active = true", "db.system", "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -189,7 +190,7 @@ class QueryExtractorTest {
         // SQL-shaped name, but nothing marks it as a database span
         var sqlNamedSpan = createSpan("span3", "SELECT * FROM products", 30, Map.of("peer.service", "db"), 30);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(httpSpan, internalSpan, sqlNamedSpan));
+        var traceData = TraceDatas.of("trace1", httpSpan, internalSpan, sqlNamedSpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -204,7 +205,7 @@ class QueryExtractorTest {
     void extract_shouldListAQuerySpanWithoutAStatementWithNullSql() {
         var querySpan = createSpan("span1", "query", 30, Map.of("db.system", "postgresql"), 10);
 
-        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(querySpan)));
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", querySpan));
 
         assertThat(queries).hasSize(1);
         assertThat(queries.getFirst().sql()).isNull();
@@ -218,19 +219,18 @@ class QueryExtractorTest {
                 .tags(Map.of("db.statement", "SELECT 1"))
                 .build();
 
-        List<QueryInfo> queries = extractor.extract(TraceData.fromSpans("trace1", List.of(serverSpan)));
+        List<QueryInfo> queries = extractor.extract(TraceDatas.of("trace1", serverSpan));
 
         assertThat(queries).isEmpty();
     }
 
     @Test
-    void extract_shouldReturnQueriesSortedByCreationOrder() {
-        // Add spans in reverse creation order
-        var query3 = createSpan("q3", "query", 10, Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"), 30);
+    void extract_shouldListQueriesInCreationOrder() {
         var query1 = createSpan("q1", "query", 10, Map.of("jdbc.query[0]", "SELECT 1", "peer.service", "db"), 10);
         var query2 = createSpan("q2", "query", 10, Map.of("jdbc.query[0]", "SELECT 2", "peer.service", "db"), 20);
+        var query3 = createSpan("q3", "query", 10, Map.of("jdbc.query[0]", "SELECT 3", "peer.service", "db"), 30);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(query3, query1, query2));
+        var traceData = TraceDatas.of("trace1", query1, query2, query3);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -245,7 +245,7 @@ class QueryExtractorTest {
         var querySpan = createSpan(
                 "span1", "query", 50, Map.of("jdbc.query[0]", "SELECT 1", "jdbc.datasource.name", "primary_db"), 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -254,21 +254,8 @@ class QueryExtractorTest {
     }
 
     @Test
-    void extract_shouldHandleNullTraceData() {
-        List<QueryInfo> queries = extractor.extract(null);
-        assertThat(queries).isEmpty();
-    }
-
-    @Test
-    void extract_shouldHandleTraceWithNullSpans() {
-        var traceData = new TraceData("trace1", null, null, null, null);
-        List<QueryInfo> queries = extractor.extract(traceData);
-        assertThat(queries).isEmpty();
-    }
-
-    @Test
     void extract_shouldHandleTraceWithEmptySpans() {
-        var traceData = new TraceData("trace1", null, null, null, List.of());
+        var traceData = new TraceData("trace1", null, null, null, List.of(), false);
         List<QueryInfo> queries = extractor.extract(traceData);
         assertThat(queries).isEmpty();
     }
@@ -282,7 +269,7 @@ class QueryExtractorTest {
                 Map.of("db.statement", "SELECT * FROM users WHERE id = ? AND active = true", "db.system", "mysql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -297,7 +284,7 @@ class QueryExtractorTest {
         var resultSetSpan =
                 createSpan("rs1", "result-set", 5, Map.of("jdbc.row-count", "not-a-number", "peer.service", "db"), 11);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan, resultSetSpan));
+        var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -324,7 +311,7 @@ class QueryExtractorTest {
                         "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -342,7 +329,7 @@ class QueryExtractorTest {
                 Map.of("db.statement", "SELECT * FROM users WHERE email = ?", "db.system", "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -365,7 +352,7 @@ class QueryExtractorTest {
                         "db.system.name", "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -386,7 +373,7 @@ class QueryExtractorTest {
                         "db.system.name", "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -406,7 +393,7 @@ class QueryExtractorTest {
                         "db.system", "other"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
@@ -427,7 +414,7 @@ class QueryExtractorTest {
                         "postgresql"),
                 10);
 
-        var traceData = TraceData.fromSpans("trace1", List.of(querySpan));
+        var traceData = TraceDatas.of("trace1", querySpan);
 
         List<QueryInfo> queries = extractor.extract(traceData);
 
