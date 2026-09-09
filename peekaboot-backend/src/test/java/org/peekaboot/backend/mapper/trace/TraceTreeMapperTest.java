@@ -110,6 +110,32 @@ class TraceTreeMapperTest {
         assertThat(orphanNode.children()).extracting(SpanNode::spanId).containsExactly("orphan-child");
     }
 
+    /** Two parentless spans: the earlier-created one is the root and the other hangs under it. */
+    @Test
+    void theEarlierOfTwoParentlessSpansIsTheRootAndTheOtherItsChild() {
+        var first = span("first").named("first-op").at(0, 100).order(1).build();
+        var second = span("second").named("second-op").at(50, 20).order(2).build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", second, first));
+
+        assertThat(result.rootSpan().spanId()).isEqualTo("first");
+        assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).containsExactly("second");
+    }
+
+    /** No span is parentless in a cycle; the earliest-created one is the root and its own parent edge is cut. */
+    @Test
+    void aCycleHangsFromTheEarliestSpanWithoutLoopingForever() {
+        var a = span("a").parent("b").named("a-op").at(0, 100).order(1).build();
+        var b = span("b").parent("a").named("b-op").at(10, 50).order(2).build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", a, b));
+
+        assertThat(result.rootSpan().spanId()).isEqualTo("a");
+        assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).containsExactly("b");
+        assertThat(result.rootSpan().children().getFirst().children()).isEmpty();
+        assertThat(result.summary().spans().count()).isEqualTo(2);
+    }
+
     @Test
     void identifiesRootSpanWithNullParentId() {
         var rootSpan = span("root-id")

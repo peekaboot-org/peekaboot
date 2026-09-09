@@ -75,6 +75,42 @@ class IssueDetectorTest {
                                 IssueType.SLOW_QUERY, "Query took 80ms (threshold: 50ms)", IssueSeverity.WARNING)));
     }
 
+    /** The thresholds are inclusive: a span exactly on one trips it. */
+    @Test
+    void aSpanExactlyOnAThresholdTripsIt() {
+        TraceTree slow =
+                detector.detectIssues(tree(node("s").durationMs(100).build()).build());
+        TraceTree verySlow =
+                detector.detectIssues(tree(node("v").durationMs(500).build()).build());
+
+        assertThat(slow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW);
+        assertThat(verySlow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.VERY_SLOW);
+    }
+
+    @Test
+    void aBlankErrorMessageFallsThroughToTheTag() {
+        SpanNode span = node("span1")
+                .status(SpanStatus.ERROR)
+                .error("   ", "java.net.ConnectException")
+                .tags(Map.of("error.message", "from a tag"))
+                .build();
+
+        TraceTree result = detector.detectIssues(tree(span).build());
+
+        assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("from a tag");
+    }
+
+    /** A tree without a summary has no trace-level query count to judge; the span rules still run. */
+    @Test
+    void aTreeWithoutASummaryStillGetsItsSpanIssues() {
+        TraceTree trace =
+                tree(node("span1").durationMs(150).build()).summary(null).build();
+
+        TraceTree result = detector.detectIssues(trace);
+
+        assertThat(result.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW);
+    }
+
     @Test
     void usesErrorMessageFromSpanAttributeIfAvailable() {
         SpanNode span = node("span1")
