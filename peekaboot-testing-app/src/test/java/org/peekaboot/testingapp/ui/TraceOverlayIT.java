@@ -994,4 +994,33 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
                 .doesNotContain("slow");
     }
+
+    /**
+     * The row count beside a result-set span comes from a tag string the instrumentation
+     * wrote; one that does not parse as a number renders no count at all rather than
+     * "NaN rows".
+     */
+    @Test
+    void spansTabShowsARowCountOnlyWhenItIsANumber() {
+        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
+
+        Object counts = page.evaluate("""
+            async () => {
+                const m = await import('/peekaboot/ui/trace-detail/tabs/spans.js');
+                const rowCountOf = span => {
+                    const container = document.createElement('div');
+                    m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span});
+                    return container.querySelector('.pk-span-row-count')?.textContent ?? null;
+                };
+                return [
+                    rowCountOf({spanId: 'a', name: 'result-set', tags: {'jdbc.row-count': '3'}}),
+                    rowCountOf({spanId: 'b', name: 'result-set', tags: {'jdbc.row-count': 'abc'}})
+                ];
+            }
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<String> rowCounts = (List<String>) counts;
+        assertThat(rowCounts).containsExactly("3 rows", null);
+    }
 }
