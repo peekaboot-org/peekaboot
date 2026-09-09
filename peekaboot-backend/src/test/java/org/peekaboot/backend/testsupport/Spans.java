@@ -27,16 +27,14 @@ public final class Spans {
         return new SpanBuilder(spanId);
     }
 
-    /**
-     * A datasource-proxy query span: CLIENT kind, named {@code query}, carrying the SQL under
-     * {@code jdbc.query[0]} and the real datasource name under {@code peer.service}.
-     */
+    /** A query span as the JDBC instrumentations shape it: CLIENT kind, named {@code query}, 10ms long, no tags yet. */
+    public static SpanBuilder query(String spanId) {
+        return span(spanId).named("query").kind(Span.Kind.CLIENT).at(0, 10);
+    }
+
+    /** {@link #query} carrying the SQL under {@code jdbc.query[0]} and the real datasource name under {@code peer.service}. */
     public static SpanBuilder jdbcQuery(String spanId, String sql) {
-        return span(spanId)
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .tag("jdbc.query[0]", sql)
-                .tag("peer.service", "sample_app_db");
+        return query(spanId).tag("jdbc.query[0]", sql).tag("peer.service", "sample_app_db");
     }
 
     /**

@@ -7,6 +7,7 @@ import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -169,21 +170,9 @@ class TraceInsightsServiceTest {
     void eachTracesLogsAreCountedByLevel() {
         addTrace("trace1", 100, false);
         addTrace("trace2", 100, false);
-        store.addLog(log("trace1")
-                .inSpan("span-" + "trace1")
-                .at("ERROR")
-                .saying("ERROR" + " line")
-                .build());
-        store.addLog(log("trace1")
-                .inSpan("span-" + "trace1")
-                .at("WARN")
-                .saying("WARN" + " line")
-                .build());
-        store.addLog(log("trace1")
-                .inSpan("span-" + "trace1")
-                .at("INFO")
-                .saying("INFO" + " line")
-                .build());
+        for (String level : List.of("ERROR", "WARN", "INFO")) {
+            store.addLog(log("trace1").inSpan("span-trace1").at(level).build());
+        }
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 

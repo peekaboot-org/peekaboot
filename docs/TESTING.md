@@ -43,7 +43,7 @@
 ## Fixtures
 `peekaboot-backend`'s fixtures are built through `org.peekaboot.backend.testsupport`.
 `Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the
-`jdbcQuery`/`jdbcDuplicate` presets for the double-instrumented pair and `jdbcConnection` for
+`query` preset for a JDBC-shaped query span, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and `jdbcConnection` for
 the pool acquisition datasource-micrometer exports. `TraceDatas.of(traceId, spans...)` runs
 those through a `TraceDataBundle` and returns its `snapshot()`, so a mapper test gets the root
 and ordering the store would hand it. `SpanNodes.node(id)` builds an already-mapped `SpanNode`,

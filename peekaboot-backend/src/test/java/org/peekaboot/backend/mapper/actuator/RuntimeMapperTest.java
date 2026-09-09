@@ -116,7 +116,7 @@ class RuntimeMapperTest {
 
     /** A JVM without -Xmx reports an unbounded heap as -1; the share is then unknown, never negative. */
     @Test
-    void map_shouldReportAnUnboundedHeapWithoutAPercentage() {
+    void map_shouldReportAnUnboundedHeapAsAZeroShare() {
         InfoResponse info = new InfoResponse(
                 null,
                 null,
