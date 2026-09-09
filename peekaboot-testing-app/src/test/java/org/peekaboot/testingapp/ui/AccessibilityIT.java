@@ -61,7 +61,7 @@ class AccessibilityIT extends PlaywrightTestBase {
     @Test
     void insightsLevelControlsAreLabelled() {
         openDashboard();
-        page.click("#insights-tab-btn");
+        dashboard.openTab("insights");
         page.waitForSelector("#insights-level .pk-insight-level");
 
         assertThat(page.getAttribute("#insights-level", "role")).isEqualTo("group");

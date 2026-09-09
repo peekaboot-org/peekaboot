@@ -13,10 +13,8 @@ import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
@@ -91,21 +89,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Headless Chromium's own default is prefers-color-scheme: light, so a naive
-     * "storage wins" test in the light direction would pass even with resolveTheme()/
-     * applyTheme() deleted entirely - light is also tokens.css's bare :root,:host default.
-     * Forcing the OS preference to the opposite of what's stored (mirroring ToolbarIT)
-     * makes each test fail if the stored preference ever stops taking priority.
+     * A light dashboard must not open a dark overlay. The OS preference is set to the
+     * opposite of what is stored (see emulateOsColorScheme), or the light case would pass
+     * with resolveTheme()/applyTheme() deleted: light is also tokens.css's bare default.
      */
-    private void emulateOppositeOsPreference(ColorScheme osPreference) {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
-    }
-
-    /** A light dashboard must not open a dark overlay. */
     @Test
     void overlayIsLightWhenTheStoredPreferenceIsLight() {
         setStoredTheme("light");
-        emulateOppositeOsPreference(ColorScheme.DARK);
+        emulateOsColorScheme(ColorScheme.DARK);
         openOverlayFromToolbar();
 
         assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#ffffff");
@@ -114,7 +105,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void overlayIsDarkWhenTheStoredPreferenceIsDark() {
         setStoredTheme("dark");
-        emulateOppositeOsPreference(ColorScheme.LIGHT);
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openOverlayFromToolbar();
 
         assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#0d1117");
@@ -222,7 +213,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         toolbar.traceId();
         toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        overlay.awaitOpened();
         // container.focus() only happens once render() actually runs (after the trace
         // fetch and shared stylesheets both resolve) - wait for real content so the
         // assertion below cannot race a still-loading overlay.
@@ -668,11 +659,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void queriesTabSlowLabelFollowsTheQueryThresholdAtTheBoundary() {
-        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-
-        Object labels = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/trace-detail/tabs/queries.js');
+        Object labels = importModule("trace-detail/tabs/queries.js", """
+            (() => {
                 const queries = [
                     {sql: 'SELECT 1', durationMs: 49, dbSystem: 'h2', rowCount: 1},
                     {sql: 'SELECT 2', durationMs: 50, dbSystem: 'h2', rowCount: 1}
@@ -684,7 +672,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const labelsIn = el =>
                     Array.from(el.querySelectorAll('.pk-query__duration')).map(cell => cell.textContent);
                 return [...labelsIn(fallback), ...labelsIn(published)];
-            }
+            })()
             """);
 
         @SuppressWarnings("unchecked")
@@ -844,12 +832,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         });
         openPersonsPage();
         String traceId = toolbar.traceId();
-        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
-            APIResponse response = route.fetch();
-            Map<String, String> headers = new HashMap<>(response.headers());
-            headers.put("content-security-policy", "style-src 'self'");
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
-        });
+        serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-gantt-row[data-depth='1']");
@@ -958,11 +941,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void spansTabTrustsTheBackendsSpanFacts() {
-        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-
-        Object facts = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/trace-detail/tabs/spans.js');
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
                 const rendered = span => {
                     const container = document.createElement('div');
                     m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span});
@@ -978,7 +958,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                     errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
                     tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
                 ];
-            }
+            })()
             """);
 
         @SuppressWarnings("unchecked")

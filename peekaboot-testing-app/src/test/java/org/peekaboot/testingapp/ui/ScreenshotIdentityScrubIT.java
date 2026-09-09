@@ -131,8 +131,7 @@ class ScreenshotIdentityScrubIT extends PlaywrightTestBase {
         assertThatThrownBy(() -> ScreenshotIdentityScrub.applyTo(page)).hasMessageContaining("User");
     }
 
-    /** The value cell of the row a card renders under {@code key}. */
     private String rowValue(String card, String key) {
-        return page.textContent(card + " .pk-kv:has(.pk-kv__key:text-is('" + key + "')) .pk-kv__value");
+        return dashboard.kvValue(card, key);
     }
 }

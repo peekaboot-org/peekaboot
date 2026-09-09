@@ -29,17 +29,26 @@ abstract class ShadowHost {
         return evaluate(fn, null);
     }
 
-    /** Waits until {@code predicate(root, arg)} is truthy; a still-missing host counts as false. */
-    void waitUntil(String predicate, Object arg) {
-        page.waitForFunction(
-                "arg => { const root = " + shadowRootLookup + "; return root ? (" + predicate
-                        + ")(root, arg) : false; }",
-                arg,
-                new Page.WaitForFunctionOptions().setTimeout(WAIT_TIMEOUT_MS));
+    /**
+     * Waits until {@code predicate(root, arg)} is truthy and returns that value; a
+     * still-missing host counts as false. The value comes from the very poll that
+     * succeeded, so a caller reading a text that keeps changing gets the one it waited for.
+     */
+    Object waitUntil(String predicate, Object arg) {
+        return waitUntil(predicate, arg, WAIT_TIMEOUT_MS);
     }
 
-    void waitUntil(String predicate) {
-        waitUntil(predicate, null);
+    Object waitUntil(String predicate, Object arg, double timeoutMs) {
+        return page.waitForFunction(
+                        "arg => { const root = " + shadowRootLookup + "; return root ? (" + predicate
+                                + ")(root, arg) : false; }",
+                        arg,
+                        new Page.WaitForFunctionOptions().setTimeout(timeoutMs))
+                .jsonValue();
+    }
+
+    Object waitUntil(String predicate) {
+        return waitUntil(predicate, null);
     }
 
     void waitFor(String selector) {

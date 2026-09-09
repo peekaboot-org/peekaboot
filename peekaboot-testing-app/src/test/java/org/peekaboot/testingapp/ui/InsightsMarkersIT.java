@@ -38,7 +38,7 @@ class InsightsMarkersIT extends PlaywrightTestBase {
 
     private void openInsights() {
         openDashboard();
-        page.click("#insights-tab-btn");
+        dashboard.openTab("insights");
         page.waitForSelector(PANEL + " .u-over");
     }
 

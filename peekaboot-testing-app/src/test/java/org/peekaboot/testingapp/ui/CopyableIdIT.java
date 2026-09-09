@@ -85,18 +85,16 @@ class CopyableIdIT extends PlaywrightTestBase {
 
     @Test
     void traceListRendersCopyableIds() {
-        page.navigate(baseUrl + "/");
+        openPageWithToolbar();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
         openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
-        assertThat(page.querySelectorAll("#traces-list .pk-trace-item .pk-copy"))
-                .as("every listed trace exposes its id for copying")
-                .isNotEmpty();
-        assertThat((String) page.evaluate(
-                        "() => document.querySelector('#traces-list .pk-trace-item .pk-copy').dataset.pkCopy"))
+        assertThat(page.getAttribute(Dashboard.traceItem(traceId) + " .pk-copy", "data-pk-copy"))
                 .as("the row shows a shortened id but copies the whole one")
-                .hasSize(TRACE_ID_LENGTH);
+                .isEqualTo(traceId);
     }
 
     /**

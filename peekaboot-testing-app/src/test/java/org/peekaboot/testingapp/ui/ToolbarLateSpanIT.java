@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Page;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -34,20 +33,13 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
      * the root stretches it from a handful of milliseconds to at least {@code LATE_WORK}. The
      * query and log counters cannot serve - this request issues neither.
      */
-    private static final String RENDERED_DURATION = "() => { const el ="
-            + " document.getElementById('peekaboot-toolbar-host')"
-            + ".shadowRoot.querySelector('#pk-metrics .pk-stat__duration');"
-            + " return el ? el.textContent : null; }";
+    private static final String RENDERED_DURATION =
+            "root => root.querySelector('#pk-metrics .pk-stat__duration')?.textContent ?? null";
 
     /** Same value, but only once it differs from the first render - i.e. once the bar re-read. */
-    private static final String RENDERED_DURATION_OTHER_THAN = "first => { const el ="
-            + " document.getElementById('peekaboot-toolbar-host')"
-            + ".shadowRoot.querySelector('#pk-metrics .pk-stat__duration');"
+    private static final String RENDERED_DURATION_OTHER_THAN = "(root, first) => { const el ="
+            + " root.querySelector('#pk-metrics .pk-stat__duration');"
             + " return el && el.textContent !== first ? el.textContent : null; }";
-
-    private static final String RENDERED_TRACE_ID = "() => document"
-            + ".getElementById('peekaboot-toolbar-host')"
-            + ".shadowRoot.querySelector('#pk-trace .pk-copy').dataset.pkCopy";
 
     @Autowired
     private LateSpanFixture.LateSpanController lateSpanController;
@@ -59,9 +51,8 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
         page.waitForSelector("#peekaboot-toolbar-host");
 
         // First render: the root span is exported, the late child is still running.
-        String firstRender = (String)
-                page.waitForFunction(RENDERED_DURATION, null, within(10_000)).jsonValue();
-        String barTraceId = (String) page.evaluate(RENDERED_TRACE_ID);
+        String firstRender = (String) toolbar.waitUntil(RENDERED_DURATION, null, 10_000);
+        String barTraceId = toolbar.traceId();
 
         LateSpanFixture.LateSpan lateSpan = lateSpanController.awaitLateSpan(Duration.ofSeconds(10));
         assertThat(lateSpan.traceId())
@@ -71,16 +62,11 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
                 .as("the late span must end after the response reached the browser")
                 .isAfter(responseReceivedAt);
 
-        String laterRender = (String) page.waitForFunction(RENDERED_DURATION_OTHER_THAN, firstRender, within(15_000))
-                .jsonValue();
+        String laterRender = (String) toolbar.waitUntil(RENDERED_DURATION_OTHER_THAN, firstRender, 15_000);
 
         assertThat(renderedDurationMs(laterRender))
                 .isGreaterThan(renderedDurationMs(firstRender))
                 .isGreaterThanOrEqualTo((double) LateSpanFixture.LateSpanController.LATE_WORK.toMillis());
-    }
-
-    private static Page.WaitForFunctionOptions within(int timeoutMs) {
-        return new Page.WaitForFunctionOptions().setTimeout(timeoutMs);
     }
 
     /**

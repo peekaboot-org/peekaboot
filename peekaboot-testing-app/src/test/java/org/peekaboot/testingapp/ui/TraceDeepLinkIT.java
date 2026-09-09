@@ -106,16 +106,15 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // Establishes a real pushed '#traces' history entry - the state Back below must
         // land on once it unwinds the trace-open, tab-switch and filter-change entry that
         // were all written via replaceState.
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item[data-trace-id='" + traceId + "']");
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
         // Deep-link (rather than clicking the trace's own open button): a real navigation,
         // like Back/Forward, so this test can drive main.js's hash-routing path - the one
         // that threads urlState into the overlay - the same way deepLinkOpensTheRequestedTab
         // and revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay do.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", traceId);
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        overlay.awaitTrace(traceId);
         overlay.openTab("logs");
         overlay.waitFor("#pk-log-level");
 
@@ -180,13 +179,10 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         String traceId = toolbar.traceId();
         awaitTrace(traceId, ROOT_SPAN_EXPORTED);
         openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        String ownRow = "#traces-list .pk-trace-item[data-trace-id='" + traceId + "']";
-        page.waitForSelector(ownRow);
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
-        page.click(ownRow + " .pk-trace-item__open");
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        dashboard.openListedTrace(traceId);
         overlay.openTab("request");
 
         assertThat(page.url()).endsWith("#traces/" + traceId + "/request");

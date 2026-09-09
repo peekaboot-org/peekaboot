@@ -22,20 +22,11 @@ import org.junit.jupiter.api.Test;
  */
 class ToolbarIT extends PlaywrightTestBase {
 
-    /**
-     * Headless Chromium's own default is prefers-color-scheme: light, so a naive
-     * "storage wins" test in the light direction would pass even if the stored preference
-     * were ignored entirely. Forcing the OS preference to the opposite of what's stored
-     * makes each test fail if resolveTheme() ever stops preferring localStorage.
-     */
-    private void emulateOppositeOsPreference(ColorScheme osPreference) {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
-    }
-
+    /** The OS preference is the opposite of what is stored (see emulateOsColorScheme), or the light case proves nothing. */
     @Test
     void toolbarFollowsTheStoredLightPreference() {
         setStoredTheme("light");
-        emulateOppositeOsPreference(ColorScheme.DARK);
+        emulateOsColorScheme(ColorScheme.DARK);
         openPersonsPage();
 
         assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#ffffff");
@@ -44,7 +35,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarFollowsTheStoredDarkPreference() {
         setStoredTheme("dark");
-        emulateOppositeOsPreference(ColorScheme.LIGHT);
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openPersonsPage();
 
         assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#0d1117");
@@ -69,7 +60,7 @@ class ToolbarIT extends PlaywrightTestBase {
 
         toolbar.click(".pk-toolbar");
 
-        page.waitForSelector("#peekaboot-trace-overlay");
+        overlay.awaitOpened();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
 
@@ -93,7 +84,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
 
-        page.waitForSelector("#peekaboot-trace-overlay");
+        overlay.awaitOpened();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
 
@@ -127,7 +118,7 @@ class ToolbarIT extends PlaywrightTestBase {
         // Not vacuous: the bar's own action still works on this same page.
         toolbar.traceId();
         toolbar.click(".pk-toolbar");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        overlay.awaitOpened();
         assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
     }
 

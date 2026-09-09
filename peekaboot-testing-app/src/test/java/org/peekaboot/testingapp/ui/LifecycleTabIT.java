@@ -71,8 +71,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
 
     private void openLifecycle() {
         openDashboard();
-        page.click("#lifecycle-tab-btn");
-        page.waitForSelector(ROWS);
+        dashboard.openTab("lifecycle");
     }
 
     private Locator pagerButton(int index) {
@@ -87,11 +86,10 @@ class LifecycleTabIT extends PlaywrightTestBase {
     void tabAppearsInTheStripAndOpens() {
         openDashboard();
 
-        assertThat(page.isVisible("#lifecycle-tab-btn")).isTrue();
-        page.click("#lifecycle-tab-btn");
+        assertThat(page.isVisible(Dashboard.tabButton("lifecycle"))).isTrue();
+        dashboard.openTab("lifecycle");
 
         page.waitForSelector("#lifecycle-tab.active");
-        page.waitForSelector(ROWS);
     }
 
     @Test
