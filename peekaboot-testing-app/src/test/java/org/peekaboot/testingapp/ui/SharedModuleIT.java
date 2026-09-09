@@ -560,4 +560,19 @@ class SharedModuleIT extends PlaywrightTestBase {
                         "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 20000})"))
                 .isEqualTo(5);
     }
+
+    /**
+     * A gap longer than the ring itself leaves nothing of the old samples: the mirror is
+     * the newest sample behind a ring's worth of nulls, and the count is the ring size.
+     */
+    @Test
+    void insightsStoreCapsAGapLongerThanTheRingAtTheRingSize() {
+        assertThat(evalUiModule(
+                        "dashboard/tabs/insights-store.js",
+                        "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
+                                + " series: {a: {values: [1, 2, 3]}}}, 5);"
+                                + " m.appendTick(s, {epochMs: 99000, values: {a: 4}});"
+                                + " JSON.stringify([s.series.a, s.count])"))
+                .isEqualTo("[[null,null,null,null,4],5]");
+    }
 }
