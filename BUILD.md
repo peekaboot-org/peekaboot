@@ -334,10 +334,14 @@ and the Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). T
 covers only the build mechanics.
 
 - Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
-  `peekaboot-testing-app`. Those three resolve `${org.mockito:mockito-core:jar}` via
-  `maven-dependency-plugin:properties` and pass it to Surefire as `-javaagent`, which
-  keeps Mockito's inline mock-maker from self-attaching and warning about it. Their
-  `argLine` starts with `@{jacocoArgLine}` so the coverage agent survives alongside it.
+  `peekaboot-testing-app`. The parent runs `maven-dependency-plugin:properties` in every
+  module and gives surefire and failsafe one managed `argLine`,
+  `@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}`. The agent keeps
+  Mockito's inline mock-maker from self-attaching and warning about it; the
+  `@{jacocoArgLine}` prefix late-binds the coverage agent so both survive. A module
+  without tests never forks a test JVM, so the placeholder left unresolved there is
+  harmless. `peekaboot-testing-app` carries its own copy, since it does not inherit the
+  parent.
 - `peekaboot-testing-app`'s tests activate the `test` profile: H2 instead of PostgreSQL,
   Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
