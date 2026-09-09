@@ -53,6 +53,16 @@ public final class TraceTrees {
             return this;
         }
 
+        /** The queries the summary counts for the trace, whatever the tree holds. */
+        public Builder queries(int count, long durationMs) {
+            this.summary = new TraceTabSummary(
+                    summary.request(),
+                    summary.spans(),
+                    new TraceTabSummary.QueriesSummary(count, durationMs),
+                    summary.logs());
+            return this;
+        }
+
         public Builder truncated(boolean truncated) {
             this.truncated = truncated;
             return this;

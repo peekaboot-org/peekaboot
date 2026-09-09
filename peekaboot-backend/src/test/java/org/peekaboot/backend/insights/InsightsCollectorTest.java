@@ -1,6 +1,7 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -40,7 +41,7 @@ class InsightsCollectorTest {
         registry = new SimpleMeterRegistry();
         gaugeValue = new AtomicLong(0);
         Gauge.builder("test.gauge", gaugeValue::get).register(registry);
-        SeriesDef series = new SeriesDef("g", "G", "test.gauge", Map.of(), Stat.VALUE, null, null);
+        SeriesDef series = value("g", "test.gauge");
         TileDef staticTile = new TileDef("startup", "Startup", "app.start", Map.of(), TileFormat.DURATION, false);
         TileDef liveTile = new TileDef("uptime", "Uptime", "app.uptime", Map.of(), TileFormat.DURATION, true);
         events = new ArrayList<>();
@@ -263,7 +264,7 @@ class InsightsCollectorTest {
                 .register(registry);
         InsightsCollector midTick = new InsightsCollector(
                 levels,
-                List.of(seriesOf("first"), seriesOf("second")),
+                List.of(value("first", "first"), value("second", "second")),
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
@@ -298,10 +299,6 @@ class InsightsCollectorTest {
                 registry,
                 InsightsCollectors.noOpListener(),
                 InsightsCollector.SnapshotSource.NONE);
-    }
-
-    private static SeriesDef seriesOf(String meter) {
-        return new SeriesDef(meter, meter, meter, Map.of(), Stat.VALUE, null, null);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

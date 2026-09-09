@@ -109,6 +109,12 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- the SDK's own SpanData fixture for the exporter tests; versioned by the BOM -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- full servlet stack for unit tests (main deps are optional) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

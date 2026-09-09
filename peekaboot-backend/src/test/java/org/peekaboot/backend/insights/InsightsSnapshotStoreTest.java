@@ -1,14 +1,11 @@
 package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import ch.qos.logback.classic.Level;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +14,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 import org.peekaboot.testsupport.LogCapture;
 
 class InsightsSnapshotStoreTest {
@@ -244,7 +242,7 @@ class InsightsSnapshotStoreTest {
     /** The rings describe the host application's runtime; the file is the owner's business and no one else's. */
     @Test
     void theSnapshotAndItsDirectoryAreReadableByTheOwnerAlone() throws IOException {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
         Path stateDirectory = directory.resolve("state");
         InsightsSnapshotStore store = new InsightsSnapshotStore(
                 stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME),
@@ -256,16 +254,14 @@ class InsightsSnapshotStoreTest {
 
         store.stop();
 
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(stateDirectory)))
-                .isEqualTo("rwx------");
-        assertThat(PosixFilePermissions.toString(
-                        Files.getPosixFilePermissions(stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME))))
+        assertThat(PosixPermissions.of(stateDirectory)).isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(stateDirectory.resolve(InsightsSnapshotStore.FILE_NAME)))
                 .isEqualTo("rw-------");
     }
 
     @Test
     void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
         Path victim = directory.resolve("victim");
         Files.writeString(victim, "untouched");
         Files.createSymbolicLink(directory.resolve("insights.snapshot.tmp"), victim);

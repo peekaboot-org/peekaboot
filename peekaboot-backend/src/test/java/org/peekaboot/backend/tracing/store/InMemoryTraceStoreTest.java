@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.jdbcDuplicate;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
@@ -37,7 +38,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void anAddedLogIsStored() {
-        storage.addLog(log("trace1", "INFO", "test message"));
+        storage.addLog(log("trace1").saying("test message").build());
 
         var bundle = storage.getTrace("trace1");
         assertThat(bundle).isPresent();
@@ -64,7 +65,7 @@ class InMemoryTraceStoreTest {
         storage.addSpan(spanIn("trace1", "span1"));
         storage.addSpan(
                 span("span2").in("trace1").parent("span1").named("child").build());
-        storage.addLog(log("trace1", "INFO", "log1"));
+        storage.addLog(log("trace1").saying("log1").build());
         storage.setRequest(RequestCompletedEvents.minimal("trace1"));
 
         var bundle = storage.getTrace("trace1");
@@ -124,7 +125,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void errorLogClassifiesTraceIntoErrorBucket() {
-        storage.addLog(log("t1", "ERROR", "boom"));
+        storage.addLog(log("t1").at("ERROR").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -151,7 +152,7 @@ class InMemoryTraceStoreTest {
 
     @Test
     void infoLogDoesNotClassifyTraceIntoErrorBucket() {
-        storage.addLog(log("t1", "INFO", "fine"));
+        storage.addLog(log("t1").saying("fine").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).isEmpty();
     }
@@ -197,7 +198,7 @@ class InMemoryTraceStoreTest {
         storage.addSpan(errorSpan("t1"));
         storage.addSpan(
                 span("s2").in("t1").error("boom", "java.lang.RuntimeException").build());
-        storage.addLog(log("t1", "ERROR", "boom"));
+        storage.addLog(log("t1").at("ERROR").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10)).hasSize(1);
     }
@@ -305,7 +306,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(errorSpan("t1"));
         store.addSpan(spanIn("t2", "s2"));
 
-        store.addLog(log("t1", "INFO", "late"));
+        store.addLog(log("t1").saying("late").build());
 
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
         assertThat(bundle.spans()).hasSize(1); // original span still there - no fresh bundle
@@ -341,7 +342,7 @@ class InMemoryTraceStoreTest {
         store.addSpan(spanIn("t1", "s1"));
         store.addSpan(span("s2").in("t2").at(START, Duration.ofMillis(10)).build());
 
-        store.addLog(log("t1", "INFO", "late"));
+        store.addLog(log("t1").saying("late").build());
 
         TraceDataBundle bundle = store.getTrace("t1").orElseThrow();
         assertThat(bundle.spans()).hasSize(1);
@@ -359,7 +360,7 @@ class InMemoryTraceStoreTest {
                 .at(START, Duration.ofMillis(150))
                 .error("boom", "java.lang.RuntimeException")
                 .build());
-        store.addLog(log("t1", "INFO", "probe"));
+        store.addLog(log("t1").saying("probe").build());
 
         store.discard("t1");
 
@@ -393,7 +394,7 @@ class InMemoryTraceStoreTest {
     void logsAreCappedPerTrace() {
         InMemoryTraceStore store = TraceStores.with(p -> p.setMaxLogsPerTrace(3));
         for (int i = 1; i <= 5; i++) {
-            store.addLog(log("t1", "INFO", "log" + i));
+            store.addLog(log("t1").saying("log" + i).build());
         }
 
         var bundle = store.getTrace("t1");
@@ -403,8 +404,8 @@ class InMemoryTraceStoreTest {
 
     @Test
     void lowercaseErrorLogAfterNonErrorLogClassifiesTraceIntoErrorBucket() {
-        storage.addLog(log("t1", "INFO", "fine"));
-        storage.addLog(log("t1", "error", "boom"));
+        storage.addLog(log("t1").saying("fine").build());
+        storage.addLog(log("t1").at("error").saying("boom").build());
 
         assertThat(storage.getTraces(TraceBucket.ERRORS, 10))
                 .extracting(TraceDataBundle::traceId)
@@ -425,9 +426,5 @@ class InMemoryTraceStoreTest {
                 .in(traceId)
                 .error("boom", "java.lang.RuntimeException")
                 .build();
-    }
-
-    private static LogCapturedEvent log(String traceId, String level, String message) {
-        return new LogCapturedEvent(traceId, "s1", START, level, "Logger", message, "main");
     }
 }

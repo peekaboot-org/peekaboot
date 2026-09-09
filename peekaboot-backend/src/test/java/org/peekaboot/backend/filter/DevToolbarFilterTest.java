@@ -15,9 +15,7 @@ import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
-import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.ServletResponse;
-import jakarta.servlet.WriteListener;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -30,6 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
+import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -340,7 +339,7 @@ class DevToolbarFilterTest {
                 assertThat(event.getThrowableProxy()).isNull();
             });
         }
-        assertThat(aborted.writeAttempts).isEqualTo(1);
+        assertThat(aborted.writeAttempts()).isEqualTo(1);
     }
 
     /** ClientAbortException is Tomcat's; another container reports the same thing as a plain IOException. */
@@ -385,7 +384,7 @@ class DevToolbarFilterTest {
                 assertThat(event.getThrowableProxy()).isNull();
             });
         }
-        assertThat(aborted.writeAttempts).isEqualTo(1);
+        assertThat(aborted.writeAttempts()).isEqualTo(1);
     }
 
     /** Once bytes have gone out there is no response left to fall back to; the failure is reported once. */
@@ -405,7 +404,7 @@ class DevToolbarFilterTest {
                 assertThat(event.getThrowableProxy().getMessage()).isEqualTo("disk full");
             });
         }
-        assertThat(committed.writeAttempts).isEqualTo(1);
+        assertThat(committed.writeAttempts()).isEqualTo(1);
     }
 
     /** With nothing committed yet, the page the handler produced still gets out, minus the toolbar. */
@@ -424,7 +423,7 @@ class DevToolbarFilterTest {
                 assertThat(event.getThrowableProxy().getMessage()).isEqualTo("hiccup");
             });
         }
-        assertThat(hiccup.writeAttempts).isEqualTo(2);
+        assertThat(hiccup.writeAttempts()).isEqualTo(2);
         assertThat(response.getContentAsString()).isEqualTo(htmlContent);
     }
 
@@ -547,56 +546,6 @@ class DevToolbarFilterTest {
     private static final class ClientAbortException extends IOException {}
 
     private static final class EofException extends IOException {}
-
-    /**
-     * A response whose first write fails the way a container's does: with {@code failure},
-     * and - when {@code commitsOnFailure} - with the response committed by the bytes that
-     * were already on the wire. Later writes succeed.
-     */
-    private static final class FailingWriteResponse extends MockHttpServletResponse {
-
-        private final IOException failure;
-        private final boolean commitsOnFailure;
-        int writeAttempts;
-
-        FailingWriteResponse(IOException failure, boolean commitsOnFailure) {
-            this.failure = failure;
-            this.commitsOnFailure = commitsOnFailure;
-        }
-
-        @Override
-        public ServletOutputStream getOutputStream() {
-            ServletOutputStream real = super.getOutputStream();
-            return new ServletOutputStream() {
-                @Override
-                public void write(int b) throws IOException {
-                    attempt();
-                    real.write(b);
-                }
-
-                @Override
-                public void write(byte[] b, int off, int len) throws IOException {
-                    attempt();
-                    real.write(b, off, len);
-                }
-
-                @Override
-                public boolean isReady() {
-                    return true;
-                }
-
-                @Override
-                public void setWriteListener(WriteListener listener) {}
-            };
-        }
-
-        private void attempt() throws IOException {
-            if (++writeAttempts == 1) {
-                setCommitted(commitsOnFailure);
-                throw failure;
-            }
-        }
-    }
 
     /** A GET without a context path: the request URI and the container's mapped path coincide. */
     private static MockHttpServletRequest get(String path) {

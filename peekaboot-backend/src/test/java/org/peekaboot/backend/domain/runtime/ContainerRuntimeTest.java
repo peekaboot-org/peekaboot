@@ -2,9 +2,7 @@ package org.peekaboot.backend.domain.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -17,6 +15,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.peekaboot.backend.config.PeekabootJson;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime.Signals;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 
 class ContainerRuntimeTest {
 
@@ -81,7 +80,7 @@ class ContainerRuntimeTest {
 
     @Test
     void detectsNoneWhenTheCgroupFileIsUnreadable(@TempDir Path dir) throws Exception {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
         Path cgroupFile = Files.writeString(dir.resolve("cgroup"), "0::/docker/3f4c2a\n");
         Files.setPosixFilePermissions(cgroupFile, Set.<PosixFilePermission>of());
         assumeFalse(Files.isReadable(cgroupFile), "root reads a file whatever its mode says");

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
@@ -314,14 +315,10 @@ class TraceDataBundleTest {
     void addLogTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         for (int i = 1; i <= 5; i++) {
-            bundle.addLog(createLog("log" + i), 3);
+            bundle.addLog(log("trace1").saying("log" + i).build(), 3);
         }
 
         assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
-    }
-
-    private LogCapturedEvent createLog(String message) {
-        return new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", message, "main");
     }
 
     /** A JDBC-shaped span carrying the same query text every time, differing only by

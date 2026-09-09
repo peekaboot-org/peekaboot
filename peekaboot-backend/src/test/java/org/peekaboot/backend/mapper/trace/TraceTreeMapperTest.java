@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -268,13 +269,7 @@ class TraceTreeMapperTest {
                 .at(0, 100)
                 .tags(Map.of("http.method", "GET"))
                 .build();
-        var connection = span("conn")
-                .parent("root")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(10, 50)
-                .tags(Map.of("jdbc.datasource.name", "mydb"))
-                .build();
+        var connection = jdbcConnection("conn").parent("root").at(10, 50).build();
         var query = span("query")
                 .parent("root")
                 .named("query")
@@ -331,13 +326,7 @@ class TraceTreeMapperTest {
                 .at(70, 20)
                 .tags(Map.of("db.system", "h2"))
                 .build();
-        var connection = span("conn")
-                .parent("root")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(5, 100)
-                .tags(Map.of("jdbc.datasource.name", "primary"))
-                .build();
+        var connection = jdbcConnection("conn").parent("root").at(5, 100).build();
         var resultSet = span("rs")
                 .parent("root")
                 .named("result-set")
@@ -402,13 +391,7 @@ class TraceTreeMapperTest {
                 .at(40, 20)
                 .tags(Map.of("db.system", "h2"))
                 .build();
-        var connection = span("conn")
-                .parent("root")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(5, 100)
-                .tags(Map.of("jdbc.datasource.name", "primary"))
-                .build();
+        var connection = jdbcConnection("conn").parent("root").at(5, 100).build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", root, query, statementless, connection));
 
@@ -788,15 +771,7 @@ class TraceTreeMapperTest {
      */
     @Test
     void map_shouldClassifyAStandaloneConnectionSpanAsConnectionPool() {
-        var rootSpan = span("root")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(0, 30)
-                .tags(Map.of(
-                        "jdbc.datasource.name", "dataSource",
-                        "jdbc.datasource.pool", "HikariPool-1",
-                        "jdbc.datasource.driver", "org.h2.Driver"))
-                .build();
+        var rootSpan = jdbcConnection("root").build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", rootSpan));
 
@@ -813,16 +788,8 @@ class TraceTreeMapperTest {
      */
     @Test
     void map_shouldNotClassifyAConnectionSpanWithAnUnexportedParentAsConnectionPool() {
-        var connectionSpan = span("child")
-                .parent("root-span-never-exported")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(0, 30)
-                .tags(Map.of(
-                        "jdbc.datasource.name", "dataSource",
-                        "jdbc.datasource.pool", "HikariPool-1",
-                        "jdbc.datasource.driver", "org.h2.Driver"))
-                .build();
+        var connectionSpan =
+                jdbcConnection("child").parent("root-span-never-exported").build();
 
         TraceTree result = mapper.map(TraceDatas.of("trace1", connectionSpan));
 

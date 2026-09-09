@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.AggregateStats;
+import org.peekaboot.backend.testsupport.FailingWriteResponse;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
@@ -472,7 +473,8 @@ class InsightsSsePublisherTest {
      */
     @Test
     void aSubscriberWhoseSendFailsIsDroppedWithAOneLineDebugMessage() throws Exception {
-        new DispatchedStream(publisher.subscribe(), failingEveryWrite(new IOException("Broken pipe")));
+        new DispatchedStream(
+                publisher.subscribe(), FailingWriteResponse.failingEveryWrite(new IOException("Broken pipe")));
 
         try (LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
             publisher.onTick(1_000, Map.of("a", 1.0));
@@ -634,31 +636,6 @@ class InsightsSsePublisherTest {
                         // a container's socket write is not interruptible either
                         releaseWrite.acquireUninterruptibly();
                     }
-                }
-
-                @Override
-                public boolean isReady() {
-                    return true;
-                }
-
-                @Override
-                public void setWriteListener(WriteListener listener) {}
-            };
-
-            @Override
-            public ServletOutputStream getOutputStream() {
-                return stream;
-            }
-        };
-    }
-
-    /** A response whose socket is gone: every write fails with {@code failure}. */
-    private static MockHttpServletResponse failingEveryWrite(IOException failure) {
-        return new MockHttpServletResponse() {
-            private final ServletOutputStream stream = new ServletOutputStream() {
-                @Override
-                public void write(int b) throws IOException {
-                    throw failure;
                 }
 
                 @Override

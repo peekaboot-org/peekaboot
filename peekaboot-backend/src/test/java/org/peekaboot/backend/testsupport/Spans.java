@@ -47,6 +47,21 @@ public final class Spans {
         return jdbcQuery(spanId, sql).parent(realSpanId).tag("peer.service", "dataSource");
     }
 
+    /**
+     * The span datasource-micrometer exports for acquiring a pooled connection: CLIENT kind,
+     * named {@code connection}, 30ms long, carrying the {@code jdbc.datasource.*} keys and no
+     * {@code db.*} tag. Parentless it is the root of a pool-maintenance trace.
+     */
+    public static SpanBuilder jdbcConnection(String spanId) {
+        return span(spanId)
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tag("jdbc.datasource.name", "dataSource")
+                .tag("jdbc.datasource.pool", "HikariPool-1")
+                .tag("jdbc.datasource.driver", "org.h2.Driver");
+    }
+
     public static final class SpanBuilder {
 
         private final String spanId;
