@@ -41,7 +41,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private final List<InsightsSnapshot.Level> geometry;
     private final Duration interval;
     private final Duration maxAge;
-    /** Released once the load has ended, however it ended; {@link #persisted} is final by then. */
+    /** Released once the load has ended, however it ended; {@link #persisted} no longer changes by then. */
     private final CountDownLatch loaded = new CountDownLatch(1);
 
     private volatile Optional<InsightsSnapshot> persisted = Optional.empty();

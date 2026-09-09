@@ -147,6 +147,44 @@ class InsightsSsePublisherTest {
         }
     }
 
+    /**
+     * A sender inside an ordinary socket write at the instant stop() runs is a healthy
+     * peer, not a wedged one: refusing it would leave its async request open until the
+     * container gives up. stop() waits a short grace for that write to finish and then
+     * completes the stream.
+     */
+    @Test
+    void stopCompletesAPeerWhoseWriteFinishesWithinTheGrace() throws Exception {
+        CountDownLatch writeStarted = new CountDownLatch(1);
+        Semaphore releaseWrite = new Semaphore(0);
+        SseEmitter emitter = publisher.subscribe();
+        DispatchedStream stream = new DispatchedStream(emitter, wedgingOnTheFirstWrite(writeStarted, releaseWrite));
+        try {
+            publisher.broadcast("tick", "{}");
+            assertThat(writeStarted.await(3, TimeUnit.SECONDS))
+                    .as("the sender is inside send()")
+                    .isTrue();
+
+            Thread stopping = Thread.ofPlatform().name("stop-under-test").start(publisher::stop);
+            // polled tightly so the release lands well inside the grace, load or no load
+            await().atMost(Duration.ofSeconds(3))
+                    .pollDelay(Duration.ZERO)
+                    .pollInterval(Duration.ofMillis(5))
+                    .alias("stop() waits for the write instead of giving the peer up")
+                    .until(() -> stopping.getState() == Thread.State.TIMED_WAITING);
+            releaseWrite.release();
+            stopping.join(3_000);
+
+            assertThat(stopping.isAlive())
+                    .as("stop() returned once the write finished")
+                    .isFalse();
+            assertThat(stream.result()).as("a completed stream").isNull();
+            assertThat(publisher.subscriberCount()).isZero();
+        } finally {
+            releaseWrite.release();
+        }
+    }
+
     @Test
     void refusesSubscribersBeyondTheCapWithServiceUnavailable() {
         for (int i = 0; i < InsightsSsePublisher.MAX_SUBSCRIBERS; i++) {
@@ -585,32 +623,38 @@ class InsightsSsePublisherTest {
         return publisher;
     }
 
-    /** A response whose first write blocks until released - a peer that has stopped reading. */
+    /**
+     * A response whose first write blocks until released - a peer that has stopped reading.
+     * One stream per response: Spring fetches the output stream once per converter write,
+     * and a send spans several, so a fresh stream each time would wedge the same send again.
+     */
     private static MockHttpServletResponse wedgingOnTheFirstWrite(CountDownLatch writeStarted, Semaphore releaseWrite) {
         return new MockHttpServletResponse() {
+            private final ServletOutputStream stream = new ServletOutputStream() {
+                private boolean wedged;
+
+                @Override
+                public void write(int b) {
+                    if (!wedged) {
+                        wedged = true;
+                        writeStarted.countDown();
+                        // a container's socket write is not interruptible either
+                        releaseWrite.acquireUninterruptibly();
+                    }
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setWriteListener(WriteListener listener) {}
+            };
+
             @Override
             public ServletOutputStream getOutputStream() {
-                return new ServletOutputStream() {
-                    private boolean wedged;
-
-                    @Override
-                    public void write(int b) {
-                        if (!wedged) {
-                            wedged = true;
-                            writeStarted.countDown();
-                            // a container's socket write is not interruptible either
-                            releaseWrite.acquireUninterruptibly();
-                        }
-                    }
-
-                    @Override
-                    public boolean isReady() {
-                        return true;
-                    }
-
-                    @Override
-                    public void setWriteListener(WriteListener listener) {}
-                };
+                return stream;
             }
         };
     }
