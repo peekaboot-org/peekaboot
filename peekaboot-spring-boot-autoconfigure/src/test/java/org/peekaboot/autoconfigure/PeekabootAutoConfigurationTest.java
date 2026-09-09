@@ -110,16 +110,6 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off
-        contextRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).doesNotHaveBean(PeekabootController.class);
-        });
-    }
-
-    @Test
     void shouldNotRegisterBeansOnNonServletApplication() {
         // peekaboot.enabled=true is the default in local development; on a reactive or
         // non-web application PeekabootAutoConfiguration must stay inactive rather than

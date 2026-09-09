@@ -524,7 +524,9 @@ toolbar is still injected into every page with nothing captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar`. Both
 default from `PeekabootDefaultsEnvironmentPostProcessor` into a `peekabootDetection` property
-source at lowest precedence, so any explicit application setting wins in either direction. The
+source at lowest precedence, so any explicit application setting wins in either direction.
+`PeekabootOffByDefaultTest` pins that for every registered auto-configuration at once: without
+`peekaboot.enabled`, no Peekaboot bean exists, the toolbar switch alone included. The
 toolbar keys on the same local-development detection as `peekaboot.enabled`, not on
 `peekaboot.enabled`'s resolved value, so turning Peekaboot on deliberately in a shared
 environment does not inject the toolbar into every page as a side effect.

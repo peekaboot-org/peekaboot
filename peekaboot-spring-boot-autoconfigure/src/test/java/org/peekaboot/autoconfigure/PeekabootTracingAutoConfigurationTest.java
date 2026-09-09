@@ -87,21 +87,6 @@ class PeekabootTracingAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        PeekabootTracingAutoConfiguration.class,
-                        OtelTracingAutoConfiguration.class,
-                        PeekabootPathsAutoConfiguration.class))
-                .run(context -> {
-                    assertThat(context).doesNotHaveBean(TraceStore.class);
-                    assertThat(context).doesNotHaveBean(OtelSpanExporter.class);
-                });
-    }
-
-    @Test
     void bucketPropertiesReachTheStore() {
         contextRunner
                 .withPropertyValues(
@@ -154,20 +139,6 @@ class PeekabootTracingAutoConfigurationTest {
                 .withConfiguration(AutoConfigurations.of(
                         TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withPropertyValues("peekaboot.enabled=true")
-                .withUserConfiguration(ObservationRegistryConfig.class)
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(TracingHandlerInterceptor.class);
-                });
-    }
-
-    @Test
-    void shouldNotRegisterInterceptorWhenGlobalEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off
-        new WebApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(
-                        TracingInterceptorAutoConfiguration.class, PeekabootPathsAutoConfiguration.class))
                 .withUserConfiguration(ObservationRegistryConfig.class)
                 .run(context -> {
                     assertThat(context).hasNotFailed();
