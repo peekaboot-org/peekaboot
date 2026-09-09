@@ -104,8 +104,9 @@ as the `-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is in
 `peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, so it
 consumes the starter exactly as a real user would. The cost is duplication: its POM
 re-declares the verify-bound static-analysis gates, the JaCoCo agent wiring, the
-`spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks
-up Spring Boot's plugin versions for everything else rather than the parent's pins. Any
+`spotless-apply-local` profile and the Error Prone compiler config by hand, pins the
+compiler, dependency, surefire and failsafe plugins at the parent's versions, and picks
+up Spring Boot's plugin versions for everything else. Any
 change to the parent's build config has to be mirrored there. The one deliberate exception
 is the dependency check: the sample app is the module that violates it (see
 [the dependency check](#the-dependency-check)), and gating an unpublished sample on a
@@ -466,7 +467,9 @@ Reproducibility depends on `project.build.outputTimestamp` being pinned in the r
 in the testing-app's, and on every plugin version being explicit. That includes the
 lifecycle plugins Maven would otherwise bind on its own (clean, resources, install, deploy,
 site), which the parent pins at the versions `spring-boot-dependencies` manages so the
-testing-app runs the same ones.
+testing-app runs the same ones. Surefire, failsafe, the compiler and the dependency plugin
+have moved past Boot's pins through Dependabot; the testing-app pins those four in its own
+`pluginManagement`, and Dependabot bumps both poms in one pull request.
 
 ### How the next version is chosen
 
