@@ -62,12 +62,30 @@ class DashboardTabsIT extends PlaywrightTestBase {
         return awaitListedTrace("bucket=errors", "trace => (trace.rootOperation || '').includes('fixedRate')");
     }
 
-    /** Opens the Traces tab with at least one trace listed (see seedAnHttpTrace). */
-    private void openTracesTabWithATrace() {
-        seedAnHttpTrace();
+    /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */
+    private String openTracesTabWithATrace() {
+        String traceId = seedAnHttpTrace();
         openDashboard();
         page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        page.waitForSelector(traceItem(traceId));
+        return traceId;
+    }
+
+    /** The listed row of one trace; the list is shared with every class, so a test opens its own. */
+    private static String traceItem(String traceId) {
+        return "#traces-list .pk-trace-item[data-trace-id='" + traceId + "']";
+    }
+
+    /**
+     * Opens the listed trace's overlay through its own row, the way a reader does, and
+     * waits for its tab strip: render() is where trace-detail.js takes focus and starts
+     * listening for Escape, so a keypress before that is lost.
+     */
+    private void openListedTrace(String traceId) {
+        page.click(traceItem(traceId) + " .pk-trace-item__open");
+        page.waitForFunction(
+                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        overlay.waitFor(".pk-tab");
     }
 
     @Test
@@ -598,9 +616,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void bogusBucketInTheUrlFallsBackToAllInsteadOfHittingTheBackendWithIt() {
-        seedAnHttpTrace();
+        String traceId = seedAnHttpTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=bogus");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        page.waitForSelector(traceItem(traceId));
 
         assertThat(page.getAttribute("#traces-bucket .pk-btn[data-bucket='all']", "aria-pressed"))
                 .isEqualTo("true");
@@ -612,19 +630,16 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     @Test
     void clickingATraceOpensTheOverlayAndDeepLinks() {
-        openTracesTabWithATrace();
+        String traceId = openTracesTabWithATrace();
 
-        page.click("#traces-list .pk-trace-item__open");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        openListedTrace(traceId);
 
-        assertThat(page.url()).contains("#traces/");
+        assertThat(page.url()).endsWith("#traces/" + traceId);
     }
 
     @Test
     void closingTheOverlayCleansTheHash() {
-        openTracesTabWithATrace();
-        page.click("#traces-list .pk-trace-item__open");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        openListedTrace(openTracesTabWithATrace());
 
         page.keyboard().press("Escape");
         page.waitForCondition(() -> page.querySelector("#peekaboot-trace-overlay") == null);
@@ -647,10 +662,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {
-        openTracesTabWithATrace();
-
-        page.click("#traces-list .pk-trace-item__open");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        openListedTrace(openTracesTabWithATrace());
 
         // Forces a full renderData() cycle while the overlay is open, so a setUrlParams
         // closure taken at render time would pick up the open trace's id as "detail" -
@@ -687,13 +699,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void autoRefreshOfTheTracesTabDoesNotClobberTheOpenOverlaysFilterParams() {
-        seedAnErrorTrace();
+        String traceId = seedAnErrorTrace();
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=errors");
         page.waitForSelector("#traces-bucket .pk-btn[data-bucket='errors'][aria-pressed='true']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        page.waitForSelector(traceItem(traceId));
 
-        page.click("#traces-list .pk-trace-item__open");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        openListedTrace(traceId);
         page.waitForFunction(
                 "() => !!document.getElementById('peekaboot-trace-overlay').shadowRoot"
                         + ".querySelector('.pk-tab[data-tab=\"logs\"]')",
@@ -747,18 +758,10 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay() {
-        seedAnHttpTrace();
-        openTracesTabWithATrace();
-
-        Object idsRaw = page.evaluate(
-                "() => [...document.querySelectorAll('#traces-list .pk-trace-item')].map(el => el.dataset.traceId)");
-        @SuppressWarnings("unchecked")
-        List<String> traceIds = (List<String>) idsRaw;
-        assertThat(traceIds.size())
-                .as("need at least two distinct traces for this test")
-                .isGreaterThanOrEqualTo(2);
-        String firstTraceId = traceIds.get(0);
-        String secondTraceId = traceIds.get(1);
+        // two page loads, so two distinct traces of this test's own to switch between
+        String firstTraceId = seedAnHttpTrace();
+        String secondTraceId = openTracesTabWithATrace();
+        assertThat(secondTraceId).isNotEqualTo(firstTraceId);
 
         // Deep-link straight to the first trace - main.js's own hash-driven
         // expandTraceById path, which is what registers the onClose callback that the
