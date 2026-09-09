@@ -16,6 +16,7 @@ public class InsightsProperties {
      */
     public static final int MAX_LEVELS = 16;
 
+    /** The most entries one level's ring may hold; the codec bounds every ring size it reads by this. */
     public static final int MAX_LEVEL_SIZE = 1_000_000;
 
     /** Whether the collector, the /api/insights endpoints and the Insights tab exist at all; also needs a MeterRegistry bean. */

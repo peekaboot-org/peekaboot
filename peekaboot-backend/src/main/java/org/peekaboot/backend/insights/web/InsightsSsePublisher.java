@@ -27,6 +27,8 @@ import tools.jackson.databind.ObjectMapper;
  * <p>A {@link SmartLifecycle} so that context shutdown completes every open
  * emitter: an emitter left open holds its async servlet request, and the
  * container's graceful shutdown then waits for it (measured: 30s at JVM exit).
+ * The one exception is a peer still inside a send past {@link #STOP_GRACE}; that
+ * one is detached instead, since its socket write cannot be ended from here.
  */
 public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLifecycle {
 
@@ -57,6 +59,14 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * behalf of a peer that has silently gone away.
      */
     static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(30);
+    /**
+     * How long stop() waits for a send in flight before detaching the peer instead. A
+     * healthy peer's socket write takes milliseconds; one that has stopped reading holds
+     * its write far longer than this. The waits run one subscriber after another, so
+     * shutdown is held for at most this times {@link #MAX_SUBSCRIBERS} (6.4s), inside a
+     * container's default 30s graceful shutdown.
+     */
+    static final Duration STOP_GRACE = Duration.ofMillis(200);
 
     private final InsightsEventJson eventJson;
     private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
@@ -73,7 +83,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * enqueue() that it describes: set when an episode of overflow starts warning,
      * cleared as soon as an offer succeeds again, so a later episode is never swallowed
      * as a duplicate. The queue itself is thread-safe; the dispatch loop polls it
-     * without the lock, and taking the lock there would deadlock it against enqueue().
+     * without the lock, and taking the lock there would hold enqueue() off for a whole
+     * poll timeout at a time, stalling the collector threads that call it.
      */
     private boolean queueOverflowWarned;
 
@@ -100,10 +111,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * <p>The loops go first and each sender is interrupted before its emitter is
      * completed, so no further event feeds a wedged send once shutdown has begun. The
      * interrupt cannot end a send already inside the container's socket write, and
-     * complete() would wait behind it on that emitter's write lock, so such a peer is
-     * only detached, exactly as on timeout. Subscribers are snapshotted and cleared
-     * under the monitor before either step, so a broadcast racing this has nothing
-     * left to iterate.
+     * complete() would wait behind it on that emitter's write lock: a healthy peer's
+     * write finishes within {@link #STOP_GRACE} and its stream is then completed, one
+     * still writing after that is only detached, as on timeout. Subscribers are
+     * snapshotted and cleared under the monitor before either step, so a broadcast
+     * racing this has nothing left to iterate.
      */
     @Override
     public void stop() {
@@ -119,7 +131,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         for (Subscriber subscriber : open) {
             subscriber.sender.interrupt();
             try {
-                subscriber.emitter.completeUnlessSending();
+                subscriber.emitter.completeUnlessSendingWithin(STOP_GRACE);
             } catch (RuntimeException e) {
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
@@ -299,7 +311,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * while the write lock is free: a sender wedged in send() holds it, and waiting behind
      * that send on the container's thread is what the per-subscriber lanes exist to
      * prevent. Such a peer is only detached, and Spring's own timeout handling ends it.
-     * {@link #stop()} completes emitters under the same guard, for the same reason.
+     * {@link #stop()} completes emitters under the same guard, but grants a send in
+     * flight {@link #STOP_GRACE} to finish first: it runs on the context's thread, where
+     * a bounded wait costs less than an async request left open for the container.
      *
      * <p>Package-visible so tests can subclass it with a send() of their own.
      */
@@ -323,7 +337,19 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
 
         private void completeUnlessSending() {
-            if (!writeLock.tryLock()) {
+            completeUnlessSendingWithin(Duration.ZERO);
+        }
+
+        /** Completes once the write lock is free within {@code grace}; a peer still sending after that is only detached. */
+        private void completeUnlessSendingWithin(Duration grace) {
+            boolean acquired;
+            try {
+                acquired = writeLock.tryLock(grace.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                acquired = false;
+            }
+            if (!acquired) {
                 removeSubscriber(this);
                 return;
             }
