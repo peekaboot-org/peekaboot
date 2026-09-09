@@ -7,11 +7,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -36,11 +39,17 @@ class TraceApiClient {
             .name()
             .equals(trace.path("rootActionType").asString(""));
 
-    /** The toolbar embeds its payload as JSON in a {@code <script id="peekaboot-toolbar-data">} tag. */
-    private static final Pattern TOOLBAR_TRACE_ID = Pattern.compile("\"traceId\"\\s*:\\s*\"([0-9a-fA-F]+)\"");
+    /** The trace carries at least one captured log; see {@link #awaitTrace(Supplier, Predicate)}. */
+    static final Predicate<JsonNode> LOG_CAPTURED = trace -> !trace.path("logs").isEmpty();
+
+    private static final Logger log = LoggerFactory.getLogger(TraceApiClient.class);
+
+    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
+    private static final int RETRIGGER_ATTEMPTS = 5;
 
     private final PeekabootApi api;
     private final RestClient restClient;
@@ -54,28 +63,25 @@ class TraceApiClient {
         return restClient;
     }
 
-    String triggerAndCaptureTraceId(String path) {
-        String html = restClient
-                .get()
-                .uri(path)
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
-
-        Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
-        if (!matcher.find()) {
-            throw new AssertionError("dev toolbar must embed a trace id for " + path + " - without one the request "
-                    + "was never traced and any capture assertion would be meaningless");
-        }
-        return matcher.group(1);
+    /**
+     * Requests {@code path} and returns the trace id its response named in Server-Timing,
+     * for any content type and any status: /boom answers 500 by design and is captured all
+     * the same. A response without the header was never captured, which no later read could
+     * tell from a capture that lost everything, so that fails here.
+     */
+    String get(String path) {
+        return traceIdOf(api.headersOf(path));
     }
 
-    void trigger(String path) {
-        try {
-            restClient.get().uri(path).accept(MediaType.ALL).retrieve().toBodilessEntity();
-        } catch (RuntimeException expectedForErrorPaths) {
-            // /boom answers 500 by design; the trace is what matters, not the response
+    /** The trace id a captured response names in Server-Timing, for a request made some other way. */
+    static String traceIdOf(HttpHeaders headers) {
+        String serverTiming = headers.getFirst("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        if (!matcher.find()) {
+            throw new AssertionError(
+                    "Server-Timing must carry the trace id, or the request was never captured: " + serverTiming);
         }
+        return matcher.group(1);
     }
 
     /**
@@ -103,6 +109,27 @@ class TraceApiClient {
                     "trace " + traceId + " never became ready within " + TIMEOUT + "; last response: " + lastSeen.get(),
                     e);
         }
+    }
+
+    /**
+     * Fires {@code request}, which answers with its trace id, waits for that trace's root
+     * span, and fires again while the stored trace does not satisfy {@code captured}. For a
+     * fact that is final once the root span is stored yet can be lost for good: a log written
+     * while a concurrent context boot had detached the capture appender (see
+     * {@code LogbackCaptureReinstaller}) is gone, and only a fresh request can produce one.
+     */
+    JsonNode awaitTrace(Supplier<String> request, Predicate<JsonNode> captured) {
+        JsonNode trace = null;
+        for (int attempt = 0; attempt < RETRIGGER_ATTEMPTS; attempt++) {
+            String traceId = request.get();
+            trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+            if (captured.test(trace)) {
+                return trace;
+            }
+            log.info("trace {} lacks what its request should have captured, requesting again", traceId);
+        }
+        throw new AssertionError(RETRIGGER_ATTEMPTS
+                + " requests produced no trace carrying what they should have captured; last response: " + trace);
     }
 
     JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {

@@ -20,6 +20,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,14 +66,9 @@ class RequestAndQueryMaskingIT {
      */
     @Test
     void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
-        traces.restClient()
-                .get()
-                .uri("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets")
-                .retrieve()
-                .toBodilessEntity();
+        String traceId = traces.get("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets");
 
-        JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/search");
-        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString(), TraceApiClient.ROOT_SPAN_EXPORTED);
+        JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode queryParams =
                 trace.path("httpExchange").path("request").path("params").path("query");
@@ -84,7 +80,7 @@ class RequestAndQueryMaskingIT {
 
     @Test
     void aSecretBearingFormFieldComesBackMaskedFromTheTraceInsightsApi() {
-        traces.restClient()
+        ResponseEntity<Void> response = traces.restClient()
                 .post()
                 .uri("/masking-test/login")
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
@@ -92,8 +88,8 @@ class RequestAndQueryMaskingIT {
                 .retrieve()
                 .toBodilessEntity();
 
-        JsonNode listed = traces.awaitTraceInBucket("all", "/masking-test/login");
-        JsonNode trace = traces.awaitTrace(listed.path("traceId").asString(), TraceApiClient.ROOT_SPAN_EXPORTED);
+        JsonNode trace =
+                traces.awaitTrace(TraceApiClient.traceIdOf(response.getHeaders()), TraceApiClient.ROOT_SPAN_EXPORTED);
 
         JsonNode formParams =
                 trace.path("httpExchange").path("request").path("params").path("form");

@@ -33,7 +33,10 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>Waiting for the spans is enough to know the logs are in: spans arrive via the OTel
  * BatchSpanProcessor whereas logs are published synchronously during the request, so a
- * trace that has spans has necessarily already received any log it will ever get.
+ * trace that has spans has necessarily already received any log it will ever get. A trace
+ * that has spans and no log was served while a concurrent context boot had detached the
+ * capture appender (see {@code LogbackCaptureReinstaller}), so the request is repeated
+ * until one lands outside that window; only then is the count itself asserted.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -51,24 +54,13 @@ class LogCaptureIT {
 
     @Test
     void errorLoggedInsideRequestIsCapturedAgainstThatRequestsTrace() {
-        String traceId = traces.triggerAndCaptureTraceId("/?error=true");
+        JsonNode trace = traces.awaitTrace(() -> traces.get("/?error=true"), TraceApiClient.LOG_CAPTURED);
 
-        JsonNode summary =
-                traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED).path("summary");
-        JsonNode logs = summary.path("logs");
-
-        assertThat(logs.isMissingNode() || logs.isNull())
-                .as(
-                        "trace %s carried spans but no logs section at all - nothing reached "
-                                + "PeekabootLogbackAppender, so MDC correlation is not populating traceId",
-                        traceId)
-                .isFalse();
-
-        assertThat(logs.path("errorCount").asInt())
+        assertThat(trace.path("summary").path("logs").path("errorCount").asInt())
                 .as(
                         "the ERROR PersonController logs for /?error=true must be captured against "
                                 + "trace %s; a count of 0 means the log event carried no MDC traceId",
-                        traceId)
+                        trace.path("traceId").asString())
                 .isEqualTo(1);
     }
 
@@ -78,7 +70,7 @@ class LogCaptureIT {
      */
     @Test
     void requestWithoutAnErrorLogReportsNoErrorCount() {
-        String traceId = traces.triggerAndCaptureTraceId("/persons");
+        String traceId = traces.get("/persons");
 
         JsonNode logs = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED)
                 .path("summary")
