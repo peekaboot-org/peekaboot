@@ -35,6 +35,9 @@ public final class PeekabootPaths {
     /** Spring Boot's default {@code management.endpoints.web.base-path}. */
     private static final String DEFAULT_MANAGEMENT_BASE_PATH = "/actuator";
 
+    /** springdoc's own default for {@code springdoc.swagger-ui.path}, for the toolbar's idle mode and the lifecycle banner. */
+    public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
+
     /** Prefixes whose requests are neither traced nor given a toolbar. */
     private final Set<String> excludedPrefixes;
 

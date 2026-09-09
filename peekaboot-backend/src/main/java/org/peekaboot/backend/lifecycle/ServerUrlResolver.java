@@ -3,7 +3,6 @@ package org.peekaboot.backend.lifecycle;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import org.peekaboot.backend.config.PeekabootPaths;
-import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.web.server.Ssl;
@@ -94,7 +93,7 @@ public class ServerUrlResolver {
     private String swaggerUiPath() {
         String configured = environment.getProperty("springdoc.swagger-ui.path");
         if (configured == null || configured.isBlank()) {
-            return DevToolbarFilter.DEFAULT_SWAGGER_UI_PATH;
+            return PeekabootPaths.DEFAULT_SWAGGER_UI_PATH;
         }
         return configured.startsWith("/") ? configured : "/" + configured;
     }

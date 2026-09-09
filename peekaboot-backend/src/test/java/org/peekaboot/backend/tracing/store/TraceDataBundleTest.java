@@ -293,6 +293,27 @@ class TraceDataBundleTest {
         assertThat(snapshot.truncated()).isFalse();
     }
 
+    /**
+     * The mapper hangs the tree from the snapshot's root and skips it by equality when it
+     * re-parents orphans, so the root must be the same value the span list carries, parent
+     * redirects included. A cycle is the only shape where no span is parentless and the
+     * fallback picks a span whose parent a fold rewrote; it does not occur in production,
+     * but the invariant must hold for every shape the fold can leave.
+     */
+    @Test
+    void snapshotsRootIsAnElementOfItsSpansAfterARedirectRewroteItsParent() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(jdbcSpan("a", "dup", "query", "SELECT 1", "sample_app_db", 1), 100);
+        bundle.addSpan(jdbcSpan("b", "a", "query", "SELECT 2", "sample_app_db", 2), 100);
+        bundle.addSpan(jdbcSpan("dup", "b", "query", "SELECT 2", "dataSource", 3), 100);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.rootSpan().spanId()).isEqualTo("a");
+        assertThat(snapshot.rootSpan().parentId()).isEqualTo("b");
+        assertThat(snapshot.spans()).contains(snapshot.rootSpan());
+    }
+
     @Test
     void snapshotOfAnEmptyBundleHasNoRootAndNoWindow() {
         TraceData snapshot = new TraceDataBundle("trace1").snapshot();
