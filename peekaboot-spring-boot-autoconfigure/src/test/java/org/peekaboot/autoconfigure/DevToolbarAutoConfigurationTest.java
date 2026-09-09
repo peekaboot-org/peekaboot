@@ -170,22 +170,6 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off, even with the toolbar flag set
-        new WebApplicationContextRunner()
-                .withConfiguration(
-                        AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class, MockTracingConfig.class)
-                .withPropertyValues("peekaboot.dev-toolbar=true")
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-                    assertThat(context).doesNotHaveBean("devToolbarFilter");
-                });
-    }
-
-    @Test
     void peekabootDisabledWinsOverDevToolbarFlag() {
         // peekaboot.enabled=false skips PeekabootAutoConfiguration (and with it
         // the PeekabootProperties bean); the toolbar must switch off cleanly

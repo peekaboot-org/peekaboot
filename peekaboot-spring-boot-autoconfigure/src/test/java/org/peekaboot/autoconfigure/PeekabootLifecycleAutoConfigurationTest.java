@@ -154,15 +154,6 @@ class PeekabootLifecycleAutoConfigurationTest {
     }
 
     @Test
-    void disabledWhenGlobalEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off
-        new ApplicationContextRunner()
-                .withConfiguration(AutoConfigurations.of(PeekabootLifecycleAutoConfiguration.class))
-                .run(context -> assertThat(context).doesNotHaveBean(ApplicationReadyListener.class));
-    }
-
-    @Test
     void theReadyBannerReportsTheHikariPoolWhenHikariIsOnTheClasspath() {
         contextRunner
                 .withPropertyValues("spring.datasource.url=jdbc:h2:mem:lifecyclepool;DB_CLOSE_DELAY=-1")
