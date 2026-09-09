@@ -124,6 +124,16 @@ class PeekabootPathsTest {
         assertThat(PeekabootPaths.pathWithinApplication(request)).isEqualTo("/api/persons");
     }
 
+    /** Under a {@code /*} servlet mapping the servlet path is empty and the whole path is path info. */
+    @Test
+    void pathWithinApplicationIsThePathInfoWhenTheServletIsMappedToEverything() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/peekaboot/api/traces");
+        request.setServletPath("");
+        request.setPathInfo("/peekaboot/api/traces");
+
+        assertThat(PeekabootPaths.pathWithinApplication(request)).isEqualTo("/peekaboot/api/traces");
+    }
+
     @Test
     void basePathSitsBehindTheRequestsContextPath() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app/persons");

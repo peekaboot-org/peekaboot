@@ -119,6 +119,30 @@ class TracingHandlerInterceptorTest {
                 .hasBeenStopped();
     }
 
+    /** A template that throws mid-render fails after postHandle opened the view span; the error lands on that span. */
+    @Test
+    void afterCompletion_recordsAViewRenderingExceptionOnTheViewObservation() {
+        request.setRequestURI("/api/users");
+        Object handler = new Object();
+        RuntimeException exception = new RuntimeException("template blew up");
+
+        interceptor.preHandle(request, response, handler);
+        interceptor.postHandle(request, response, handler, new ModelAndView("users/list"));
+        interceptor.afterCompletion(request, response, handler, exception);
+
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.view.render")
+                .that()
+                .hasError(exception)
+                .hasBeenStopped();
+        assertThat(observationRegistry)
+                .hasObservationWithNameEqualTo("spring.handler")
+                .that()
+                .doesNotHaveError()
+                .hasBeenStopped();
+        assertThat(observationRegistry.getCurrentObservation()).isNull();
+    }
+
     /** postHandle is skipped when the handler throws; afterCompletion records the error and still stops the observation. */
     @Test
     void afterCompletion_recordsTheHandlerExceptionAndStopsTheObservation() {

@@ -520,6 +520,37 @@ class RequestCaptureFilterTest {
         assertThat(restarted.getListeners()).containsExactly(listener);
     }
 
+    /** The container signals the timeout, then completes the cycle; the one capture carries the status it ended with. */
+    @Test
+    void aTimedOutAsyncRequestIsCapturedOnceWithItsFinalStatus() throws Exception {
+        setupTraceContext("trace1");
+        MockAsyncContext asyncContext = startAsync();
+        filter.doFilter(request, response, chain);
+        AsyncListener listener = asyncContext.getListeners().get(0);
+
+        listener.onTimeout(new AsyncEvent(asyncContext));
+        verify(eventPublisher, never()).publishEvent(any());
+        response.setStatus(503);
+        asyncContext.complete();
+
+        assertThat(publishedEvent().status()).isEqualTo(503);
+    }
+
+    @Test
+    void aFailedAsyncRequestIsCapturedOnceWithItsFinalStatus() throws Exception {
+        setupTraceContext("trace1");
+        MockAsyncContext asyncContext = startAsync();
+        filter.doFilter(request, response, chain);
+        AsyncListener listener = asyncContext.getListeners().get(0);
+
+        listener.onError(new AsyncEvent(asyncContext, new IllegalStateException("handler failed")));
+        verify(eventPublisher, never()).publishEvent(any());
+        response.setStatus(500);
+        asyncContext.complete();
+
+        assertThat(publishedEvent().status()).isEqualTo(500);
+    }
+
     private RequestCompletedEvent publishedEvent() {
         ArgumentCaptor<RequestCompletedEvent> captor = ArgumentCaptor.forClass(RequestCompletedEvent.class);
         verify(eventPublisher).publishEvent(captor.capture());
