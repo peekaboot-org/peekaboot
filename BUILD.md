@@ -353,12 +353,16 @@ covers only the build mechanics.
   [peekaboot-test-support/README.md](peekaboot-test-support/README.md). The backend's own
   fixture builders (`Spans`, `SpanNodes`, `TraceTrees`, `RequestCompletedEvents`,
   `TraceStores`) construct backend domain types and stay in its test tree.
+- The parent sets the runners' includes explicitly: `*Test` and `*Tests` for surefire,
+  `*IT` for failsafe, the same patterns as the Gradle `test`/`integrationTest` tasks.
+  The defaults would also take `Test*`, `*TestCase`, `IT*` and `*ITCase`, which Gradle
+  would not, so a class named that way would run under one build only. The testing-app
+  keeps Boot's defaults; every class in it is a `*IT`.
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
-  `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes nor the
-  Gradle `test`/`integrationTest` includes. Running either is Maven only: `-Dtest=` widens
-  Surefire's includes, while Gradle's `--tests` only filters within a task's own includes,
-  so no Gradle task can reach them.
+  `TraceWritePathBenchmark`. Neither matches those includes. Running either is Maven
+  only: `-Dtest=` widens Surefire's includes, while Gradle's `--tests` only filters within
+  a task's own includes, so no Gradle task can reach them.
 - Never combine `-am` with `-Dtest`.
 
 ## CI
