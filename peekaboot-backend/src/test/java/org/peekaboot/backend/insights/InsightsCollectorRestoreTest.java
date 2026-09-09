@@ -74,8 +74,7 @@ class InsightsCollectorRestoreTest {
 
         double[][] level1 = source.capture().series().get("cpu.process").get(1);
 
-        assertThat(InsightsSnapshot.STAT_COLUMNS.indexOf("samples")).isEqualTo(7);
-        assertThat(level1[7]).containsExactly(2.0);
+        assertThat(level1[InsightsSnapshot.STAT_COLUMNS.indexOf("samples")]).containsExactly(2.0);
     }
 
     @Test

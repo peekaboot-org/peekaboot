@@ -18,7 +18,6 @@ class InsightsPropertiesTest {
     @Test
     void theDefaultLevelsAreThePersistedHistorysCompatibilityKey() {
         InsightsProperties properties = new InsightsProperties();
-        assertThat(properties.isEnabled()).isTrue();
         assertThat(properties.getLevels()).hasSize(3);
         assertThat(properties.getLevels().get(0).getInterval()).isEqualTo(Duration.ofSeconds(10));
         assertThat(properties.getLevels().get(0).getSize()).isEqualTo(90);

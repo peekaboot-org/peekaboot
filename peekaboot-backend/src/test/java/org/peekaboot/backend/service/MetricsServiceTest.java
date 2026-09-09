@@ -19,13 +19,6 @@ import org.peekaboot.backend.masking.MaskingEngine;
 class MetricsServiceTest {
 
     @Test
-    void isAvailable_returnsFalse_whenNoMeterRegistry() {
-        MetricsService service = new MetricsService(null, new MaskingEngine());
-
-        assertThat(service.isAvailable()).isFalse();
-    }
-
-    @Test
     void isAvailable_returnsTrue_whenMeterRegistryPresent() {
         MeterRegistry registry = new SimpleMeterRegistry();
         MetricsService service = new MetricsService(registry, new MaskingEngine());
@@ -39,6 +32,7 @@ class MetricsServiceTest {
 
         MetricsInfo result = service.getMetrics();
 
+        assertThat(service.isAvailable()).isFalse();
         assertThat(result.metricCount()).isZero();
         assertThat(result.measurementCount()).isZero();
         assertThat(result.metrics()).isEmpty();
@@ -109,19 +103,6 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_reportsActualStatisticValueForCounter() {
-        MeterRegistry registry = new SimpleMeterRegistry();
-
-        Counter.builder("http.requests").tag("method", "GET").register(registry).increment(42);
-
-        MetricMeasurement measurement = firstMeasurement(registry);
-
-        assertThat(measurement.statistics())
-                .extracting(MetricStatistic::name, MetricStatistic::value)
-                .contains(tuple("COUNT", 42.0));
-    }
-
-    @Test
     void getMetrics_includesCounters() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
@@ -143,6 +124,9 @@ class MetricsServiceTest {
 
         assertThat(group.measurements()).hasSize(1);
         assertThat(group.measurements().get(0).tags()).containsEntry("method", "GET");
+        assertThat(group.measurements().get(0).statistics())
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .containsExactly(tuple("COUNT", 42.0));
     }
 
     @Test

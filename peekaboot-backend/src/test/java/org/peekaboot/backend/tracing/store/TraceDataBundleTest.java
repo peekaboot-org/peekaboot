@@ -28,14 +28,20 @@ class TraceDataBundleTest {
         assertThat(spans).extracting(SpanData::spanId).containsExactly("span1", "span2", "span3");
     }
 
+    /** The flag flips on the first eviction and stays: a trimmed trace never reads as complete again. */
     @Test
     void addSpanTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 3; i++) {
             bundle.addSpan(createSpan("span" + i, i), 3);
         }
+        assertThat(bundle.truncated()).isFalse();
+
+        bundle.addSpan(createSpan("span4", 4), 3);
+        bundle.addSpan(createSpan("span5", 5), 3);
 
         assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
+        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test
@@ -196,26 +202,6 @@ class TraceDataBundleTest {
                 .as("the redirect table must not leak an entry per chained fold whose "
                         + "intermediate survivor was itself later folded away and evicted")
                 .isLessThanOrEqualTo(cap * 2);
-    }
-
-    @Test
-    void truncated_isFalseUntilRealSpansExceedTheCap() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 3; i++) {
-            bundle.addSpan(createSpan("span" + i, i), 3);
-        }
-
-        assertThat(bundle.truncated()).isFalse();
-    }
-
-    @Test
-    void truncated_becomesTrueOnceRealSpansExceedTheCapAndStaysTrue() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 5; i++) {
-            bundle.addSpan(createSpan("span" + i, i), 3);
-        }
-
-        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test

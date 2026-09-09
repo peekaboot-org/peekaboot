@@ -84,15 +84,9 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void tracingIsAvailableWhenTraceStoreIsPresent() {
+    void tracingIsAvailableExactlyWhenThereIsATraceStore() {
         assertThat(service.isTracingAvailable()).isTrue();
-    }
-
-    @Test
-    void tracingIsUnavailableWithoutTraceStore() {
-        TraceInsightsService serviceWithNullStore = newService(null);
-
-        assertThat(serviceWithNullStore.isTracingAvailable()).isFalse();
+        assertThat(newService(null).isTracingAvailable()).isFalse();
     }
 
     @Test
