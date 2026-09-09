@@ -28,6 +28,11 @@ public record SpanData(
         return errorMessage != null || errorClass != null;
     }
 
+    /** Zero for a span whose duration was never recorded. */
+    public long durationMs() {
+        return duration != null ? duration.toMillis() : 0L;
+    }
+
     /** Returns a copy of this span re-parented to {@code newParentId}. */
     public SpanData withParentId(String newParentId) {
         return new SpanData(

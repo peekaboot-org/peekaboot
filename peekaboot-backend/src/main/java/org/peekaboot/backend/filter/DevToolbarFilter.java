@@ -24,7 +24,10 @@ public class DevToolbarFilter implements Filter {
 
     private static final String BODY_END_TAG = "</body>";
 
-    /** springdoc's own default for {@code springdoc.swagger-ui.path}. */
+    /**
+     * springdoc's own default for {@code springdoc.swagger-ui.path}. A compile-time constant,
+     * so the lifecycle banner can name it without loading this servlet class.
+     */
     public static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
     // Recognised by simple name: this module depends on no container, and shaded or
     // repackaged copies move the classes around.

@@ -45,14 +45,13 @@ public class QueryExtractor {
         String dbSystem = DbSpans.system(span.tags());
 
         Instant timestamp = span.startTime();
-        long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
         long creationOrder = span.creationOrder();
 
         // Find matching result-set for row count: it must come after this
         // query but before the next one
         Long rowCount = findRowCount(creationOrder, nextQueryOrder, resultSets);
 
-        return new QueryInfo(span.spanId(), sql, dbSystem, durationMs, timestamp, rowCount, creationOrder);
+        return new QueryInfo(span.spanId(), sql, dbSystem, span.durationMs(), timestamp, rowCount, creationOrder);
     }
 
     private boolean isResultSetSpan(SpanData span) {
