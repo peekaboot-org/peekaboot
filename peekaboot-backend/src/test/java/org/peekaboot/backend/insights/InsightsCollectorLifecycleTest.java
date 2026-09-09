@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
-import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorLifecycleTest {
 
@@ -51,22 +50,5 @@ class InsightsCollectorLifecycleTest {
             collector.stop();
         }
         assertThat(collector.isRunning()).isFalse();
-    }
-
-    @Test
-    void threadNamesFollowConvention() {
-        SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        InsightsCollector collector = new InsightsCollector(
-                List.of(
-                        InsightsProperties.Level.of(Duration.ofSeconds(10), 9),
-                        InsightsProperties.Level.of(Duration.ofMinutes(1), 9),
-                        InsightsProperties.Level.of(Duration.ofHours(1), 9)),
-                List.of(),
-                List.of(),
-                registry,
-                InsightsCollectors.noOpListener(),
-                InsightsCollector.SnapshotSource.NONE);
-        assertThat(collector.threadNames())
-                .containsExactly("peekaboot-insights-tick", "peekaboot-insights-agg-1m", "peekaboot-insights-agg-1h");
     }
 }

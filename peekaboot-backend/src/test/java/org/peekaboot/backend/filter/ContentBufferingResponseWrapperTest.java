@@ -136,11 +136,6 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldNotBeCommittedInitially() {
-        assertThat(wrapper.isCommitted()).isFalse();
-    }
-
-    @Test
     void nonHtmlContentTypeSwitchesToPassthrough() throws IOException {
         wrapper.setContentType("application/json");
         wrapper.getOutputStream().write("{\"id\":1}".getBytes(StandardCharsets.UTF_8));
@@ -246,6 +241,8 @@ class ContentBufferingResponseWrapperTest {
 
     @Test
     void isCommittedFollowsTheRealResponse() {
+        assertThat(wrapper.isCommitted()).isFalse();
+
         originalResponse.setCommitted(true);
 
         assertThat(wrapper.isCommitted()).isTrue();

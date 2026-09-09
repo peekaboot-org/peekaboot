@@ -164,7 +164,8 @@ class DevToolbarFilterTest {
 
         String result = response.getContentAsString();
         assertThat(result).contains("<!-- Peekaboot Dev Toolbar -->");
-        assertThat(result).contains("peekaboot-toolbar-data");
+        assertThat(result).contains("id=\"peekaboot-toolbar-data\"");
+        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
         assertThat(result).contains("<h1>Hello</h1>");
         assertThat(result).endsWith("</body></html>");
     }
@@ -417,17 +418,6 @@ class DevToolbarFilterTest {
         filter.doFilter(request, response, chain);
 
         assertThat(response.getContentAsString()).isEqualTo("data: tick\n\n");
-    }
-
-    @Test
-    void shouldInjectExternalToolbarScriptLoader() throws Exception {
-        chainWritesHtml("<html><body></body></html>");
-
-        filter.doFilter(request, response, chain);
-
-        String result = response.getContentAsString();
-        assertThat(result).contains("<script src=\"/peekaboot/ui/toolbar/toolbar.js\" type=\"module\"></script>");
-        assertThat(result).contains("id=\"peekaboot-toolbar-data\"");
     }
 
     @Test

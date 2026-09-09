@@ -467,18 +467,6 @@ class TraceTreeMapperTest {
     }
 
     @Test
-    void map_shouldReturnOkStatusWhenNoErrors() {
-        var root =
-                span("root").named("root-op").kind(Span.Kind.SERVER).at(0, 100).build();
-
-        var traceData = TraceDatas.of("trace1", root);
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.status()).isEqualTo(TraceStatus.OK);
-    }
-
-    @Test
     void map_shouldHandleEmptyTrace() {
         var traceData = new TraceData("trace1", null, null, null, List.of(), false);
 

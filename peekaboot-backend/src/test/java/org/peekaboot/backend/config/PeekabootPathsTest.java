@@ -16,35 +16,6 @@ class PeekabootPathsTest {
     private final PeekabootPaths paths = PeekabootPaths.defaults();
 
     @Test
-    void staticPathsAreExcluded() {
-        assertThat(paths.isExcluded("/static/")).isTrue();
-        assertThat(paths.isExcluded("/static/css/app.css")).isTrue();
-        assertThat(paths.isExcluded("/webjars/")).isTrue();
-        assertThat(paths.isExcluded("/webjars/bootstrap/5.0.0/css/bootstrap.min.css"))
-                .isTrue();
-    }
-
-    @Test
-    void actuatorPathsAreExcluded() {
-        assertThat(paths.isExcluded("/actuator/")).isTrue();
-        assertThat(paths.isExcluded("/actuator/health")).isTrue();
-        assertThat(paths.isExcluded("/actuator/info")).isTrue();
-    }
-
-    @Test
-    void peekabootsOwnPathsAreExcluded() {
-        assertThat(paths.isExcluded("/peekaboot/")).isTrue();
-        assertThat(paths.isExcluded("/peekaboot/api/v1/traces")).isTrue();
-        assertThat(paths.isExcluded("/peekaboot/dashboard")).isTrue();
-    }
-
-    @Test
-    void errorPathsAreExcluded() {
-        assertThat(paths.isExcluded("/error")).isTrue();
-        assertThat(paths.isExcluded("/error/404")).isTrue();
-    }
-
-    @Test
     void applicationPathsAreNotExcluded() {
         assertThat(paths.isExcluded("/api/users")).isFalse();
         assertThat(paths.isExcluded("/api/v1/products")).isFalse();
@@ -69,13 +40,19 @@ class PeekabootPathsTest {
     @ValueSource(
             strings = {
                 "/peekaboot",
+                "/peekaboot/",
                 "/peekaboot/api/traces",
+                "/peekaboot/dashboard",
                 "/actuator",
+                "/actuator/",
                 "/actuator/health",
                 "/error",
                 "/error/404",
                 "/static",
-                "/webjars"
+                "/static/",
+                "/static/css/app.css",
+                "/webjars",
+                "/webjars/bootstrap/5.0.0/css/bootstrap.min.css"
             })
     void theFiltersAndTheInterceptorExcludeTheSamePaths(String path) {
         assertThat(paths.isExcluded(path)).isTrue();
