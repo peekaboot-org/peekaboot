@@ -3,6 +3,7 @@ package org.peekaboot.backend.tracing.store;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -266,16 +267,25 @@ public class TraceDataBundle {
         }
     }
 
-    public List<SpanData> spans() {
+    /**
+     * Everything a reader needs about the spans, taken under one lock so the list, the root,
+     * the window and the truncated flag describe the same moment.
+     */
+    public TraceData snapshot() {
         synchronized (spansLock) {
             // copy under spansLock before sorting; streaming spansById directly would race
             // with a concurrent addSpan call mutating it
-            return new ArrayList<>(spansById.values())
+            List<SpanData> spans = new ArrayList<>(spansById.values())
                     .stream()
                             .map(this::withResolvedParent)
                             .sorted(Comparator.comparingLong(SpanData::creationOrder))
                             .toList();
+            return new TraceData(traceId, minSpanStart, spanWindow(), rootOf(spansById.values()), spans, truncated);
         }
+    }
+
+    public List<SpanData> spans() {
+        return snapshot().spans();
     }
 
     /**
@@ -291,20 +301,32 @@ public class TraceDataBundle {
     }
 
     /**
-     * The span the tree hangs from: the first stored span whose parent is not stored. Read
-     * under the lock without copying, so the list filters can classify every bundle in a
-     * bucket by its root without a copy and sort per bundle.
+     * The span the tree hangs from: the earliest-created stored span whose parent is not
+     * stored, else the earliest-created span. Read under the lock without copying, so the
+     * list filters can classify every bundle in a bucket by its root without a copy and sort
+     * per bundle.
      */
     public SpanData rootSpan() {
         synchronized (spansLock) {
-            for (SpanData span : spansById.values()) {
-                String parentId = resolve(span.parentId());
-                if (parentId == null || !spansById.containsKey(parentId)) {
-                    return span;
-                }
-            }
-            return null;
+            return rootOf(spansById.values());
         }
+    }
+
+    /** The one definition of the root; must run under {@code spansLock}, as it consults {@link #parentRedirects}. */
+    private SpanData rootOf(Collection<SpanData> spans) {
+        SpanData root = null;
+        SpanData earliest = null;
+        for (SpanData span : spans) {
+            if (earliest == null || span.creationOrder() < earliest.creationOrder()) {
+                earliest = span;
+            }
+            String parentId = resolve(span.parentId());
+            boolean parentless = parentId == null || !spansById.containsKey(parentId);
+            if (parentless && (root == null || span.creationOrder() < root.creationOrder())) {
+                root = span;
+            }
+        }
+        return root != null ? root : earliest;
     }
 
     /** Whether any span stored so far carried an error - maintained in {@code store()}, no span copy. */

@@ -150,8 +150,7 @@ public class TraceInsightsService {
     }
 
     private TraceTree mapBundle(TraceDataBundle bundle) {
-        TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-        return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
+        return withLogsSummary(traceTreeMapper.map(bundle.snapshot()), bundle.logs());
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
@@ -241,9 +240,9 @@ public class TraceInsightsService {
         }
 
         return traceStore.getTrace(traceId).map(bundle -> {
-            TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
+            TraceData traceData = bundle.snapshot();
             List<QueryInfo> queries = queryExtractor.extract(traceData);
-            TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
+            TraceTree tree = traceTreeMapper.map(traceData);
             tree = issueDetector.detectIssues(tree);
             return enrichWithDetails(tree, bundle, queries);
         });

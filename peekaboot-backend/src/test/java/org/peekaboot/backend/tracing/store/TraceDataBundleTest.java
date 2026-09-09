@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -257,6 +258,49 @@ class TraceDataBundleTest {
 
         bundle.addSpan(createSpan("parent", 2, null), 10);
         assertThat(bundle.rootSpan().spanId()).isEqualTo("parent");
+    }
+
+    /**
+     * The Slow bucket admits a trace by the window its spans have covered, and the listed
+     * duration must be that same number: a truncated trace whose earliest spans were evicted
+     * must not display a duration below the threshold it was admitted at.
+     */
+    @Test
+    void snapshotReportsTheWindowTheSlowBucketAdmittedEvenAfterEviction() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(createSpan("span1", 1, null), 2);
+        bundle.addSpan(createSpan("span2", 2, null), 2);
+        bundle.addSpan(createSpan("span3", 3, null), 2);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.spans()).extracting(SpanData::spanId).containsExactly("span2", "span3");
+        assertThat(snapshot.startTime()).isEqualTo(Instant.EPOCH.plusMillis(100));
+        assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(250));
+        assertThat(snapshot.truncated()).isTrue();
+    }
+
+    @Test
+    void snapshotCarriesTheRootSpanTheBundleChose() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(createSpan("child", 1, "parent"), 10);
+        bundle.addSpan(createSpan("parent", 2, null), 10);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.traceId()).isEqualTo("trace1");
+        assertThat(snapshot.rootSpan().spanId()).isEqualTo("parent");
+        assertThat(snapshot.truncated()).isFalse();
+    }
+
+    @Test
+    void snapshotOfAnEmptyBundleHasNoRootAndNoWindow() {
+        TraceData snapshot = new TraceDataBundle("trace1").snapshot();
+
+        assertThat(snapshot.spans()).isEmpty();
+        assertThat(snapshot.rootSpan()).isNull();
+        assertThat(snapshot.startTime()).isNull();
+        assertThat(snapshot.duration()).isNull();
     }
 
     @Test

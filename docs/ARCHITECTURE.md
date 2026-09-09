@@ -747,9 +747,9 @@ even reset-resistant listeners.
 Three collaborators turn a stored bundle into what the API returns, and the split is easy to
 get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
-1. `TraceTreeMapper.map(traceData, truncated)` builds the `TraceTree`. It picks the root span,
-   re-parents orphans, masks tags, error messages and query text, classifies the root action
-   type and computes the tab summary. It leaves `TraceTree.slow` false, every `SpanNode.issues`
+1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
+   It re-parents orphans under the root the snapshot names, masks tags, error messages and
+   query text, classifies the root action type and computes the tab summary. It leaves `TraceTree.slow` false, every `SpanNode.issues`
    list empty and every `SpanNode.logs` null. **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
@@ -764,12 +764,18 @@ Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy 
 through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
 `withLogs`/`withChildren`, so a stage names only the components it adds.
 
-`findRootSpan` takes the first span with no parent stored in this trace, falling back to the
-first span. `attachOrphansToRoot` then re-parents every other span whose parent is not in the
-trace onto that root, so a subtree whose parent has not been exported yet does not silently
-vanish. `truncated` is passed into the mapper rather than derived from the span list. It is a
-property of how the trace was captured, and the list the mapper sees is already deduplicated
-and already capped, so nothing in it can say whether real spans were dropped.
+`TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
+creation order, the root span, the trace window and the `truncated` flag. The root is chosen
+there and nowhere else: the earliest-created stored span whose parent is not stored, else the
+earliest-created span. `TraceDataBundle.rootSpan()` answers the same rule without a copy, which
+is what the listing filters classify by, so the row a filter admits and the tree the mapper
+builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
+whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
+yet does not silently vanish. The window is the bundle's high-water start and end, the same
+number the Slow bucket admitted the trace by, so a truncated trace never lists a duration below
+the threshold that put it there. `truncated` travels on the snapshot rather than being derived
+from the span list: the list is already deduplicated and already capped, so nothing in it can
+say whether real spans were dropped.
 
 ### Span Deduplication
 
@@ -845,8 +851,10 @@ both, so `trace-detail-queries-*` is the shipped image demonstrating `QueryExtra
 ```
 TraceData
 ├── traceId: String
-├── startTime, endTime, duration
-└── spans: List<SpanData>
+├── startTime, duration      # the bundle's high-water window
+├── rootSpan: SpanData       # chosen once by the bundle
+├── spans: List<SpanData>    # creation order
+└── truncated: boolean
 
 SpanData
 ├── traceId, spanId, parentId
