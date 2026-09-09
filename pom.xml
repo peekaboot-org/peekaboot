@@ -249,36 +249,6 @@
                     <artifactId>maven-dependency-plugin</artifactId>
                     <version>3.11.0</version>
                 </plugin>
-                <!-- Managed, not bound: git.properties lands at the classpath ROOT, and
-                     Spring Boot resolves "classpath:git.properties" to a SINGLE resource.
-                     A library that ships one competes with the host application's own file
-                     and can win, making the dashboard report peekaboot's branch as the
-                     app's. Only the runnable application declares this plugin. -->
-                <plugin>
-                    <groupId>io.github.git-commit-id</groupId>
-                    <artifactId>git-commit-id-maven-plugin</artifactId>
-                    <version>10.0.1</version>
-                    <executions>
-                        <execution>
-                            <id>git-info</id>
-                            <goals>
-                                <goal>revision</goal>
-                            </goals>
-                            <phase>initialize</phase>
-                        </execution>
-                    </executions>
-                    <configuration>
-                        <generateGitPropertiesFile>true</generateGitPropertiesFile>
-                        <failOnNoGitDirectory>false</failOnNoGitDirectory>
-                        <includeOnlyProperties>
-                            <includeOnlyProperty>git.branch</includeOnlyProperty>
-                            <includeOnlyProperty>git.tags</includeOnlyProperty>
-                            <includeOnlyProperty>^git.build.(time|version)$</includeOnlyProperty>
-                            <includeOnlyProperty>^git.commit.id.(abbrev|full)$</includeOnlyProperty>
-                        </includeOnlyProperties>
-                        <commitIdGenerationMode>full</commitIdGenerationMode>
-                    </configuration>
-                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
