@@ -19,6 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.testsupport.LogCapture;
 
 class InsightsCollectorRestoreTest {
@@ -27,7 +28,7 @@ class InsightsCollectorRestoreTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 7).register(registry);
         List<SeriesDef> series = List.of(seriesIds).stream()
-                .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), "value", null, null))
+                .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), Stat.VALUE, null, null))
                 .toList();
         return new InsightsCollector(
                 List.of(
@@ -150,7 +151,7 @@ class InsightsCollectorRestoreTest {
         Gauge.builder("g", () -> gaugeValue).register(registry);
         return new InsightsCollector(
                 List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
                 List.of(),
                 registry,
                 InsightsCollector.Listener.NO_OP,
@@ -207,7 +208,7 @@ class InsightsCollectorRestoreTest {
                 List.of(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
                 List.of(),
                 registry,
                 InsightsCollector.Listener.NO_OP,

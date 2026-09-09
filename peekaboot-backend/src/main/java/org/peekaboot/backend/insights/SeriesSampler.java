@@ -50,11 +50,10 @@ public final class SeriesSampler {
     public double sample(long elapsedMillis) {
         List<Meter> meters = matching(def.meter());
         return switch (def.stat()) {
-            case "value" -> sampleValue(meters);
-            case "rate" -> sampleRate(meters, elapsedMillis);
-            case "avg" -> sampleAvg(meters);
-            case "max" -> sampleMax(meters);
-            default -> Double.NaN; // loader validated; defensive only
+            case VALUE -> sampleValue(meters);
+            case RATE -> sampleRate(meters, elapsedMillis);
+            case AVG -> sampleAvg(meters);
+            case MAX -> sampleMax(meters);
         };
     }
 

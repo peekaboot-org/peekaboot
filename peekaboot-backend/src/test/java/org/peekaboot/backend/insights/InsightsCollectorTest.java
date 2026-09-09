@@ -18,7 +18,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
+import org.peekaboot.backend.insights.config.TileFormat;
 
 class InsightsCollectorTest {
 
@@ -37,9 +39,9 @@ class InsightsCollectorTest {
         registry = new SimpleMeterRegistry();
         gaugeValue = new AtomicLong(0);
         Gauge.builder("test.gauge", gaugeValue::get).register(registry);
-        SeriesDef series = new SeriesDef("g", "G", "test.gauge", Map.of(), "value", null, null);
-        TileDef staticTile = new TileDef("startup", "Startup", "app.start", Map.of(), "duration", false);
-        TileDef liveTile = new TileDef("uptime", "Uptime", "app.uptime", Map.of(), "duration", true);
+        SeriesDef series = new SeriesDef("g", "G", "test.gauge", Map.of(), Stat.VALUE, null, null);
+        TileDef staticTile = new TileDef("startup", "Startup", "app.start", Map.of(), TileFormat.DURATION, false);
+        TileDef liveTile = new TileDef("uptime", "Uptime", "app.uptime", Map.of(), TileFormat.DURATION, true);
         events = new ArrayList<>();
         InsightsCollector.Listener listener = new InsightsCollector.Listener() {
             @Override
@@ -133,7 +135,7 @@ class InsightsCollectorTest {
 
     @Test
     void rateSampledAfterAGapSpansTheRealElapsedTime() {
-        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), "rate", null, null);
+        SeriesDef rate = new SeriesDef("r", "R", "test.counter", Map.of(), Stat.RATE, null, null);
         InsightsCollector rateCollector =
                 new InsightsCollector(levels, List.of(rate), List.of(), registry, InsightsCollector.Listener.NO_OP);
         Counter counter = registry.counter("test.counter");
@@ -259,7 +261,7 @@ class InsightsCollectorTest {
     }
 
     private static SeriesDef seriesOf(String meter) {
-        return new SeriesDef(meter, meter, meter, Map.of(), "value", null, null);
+        return new SeriesDef(meter, meter, meter, Map.of(), Stat.VALUE, null, null);
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

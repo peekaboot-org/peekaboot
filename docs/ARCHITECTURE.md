@@ -196,7 +196,7 @@ org.peekaboot.backend/
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
 ├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share)
-│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
+│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
 ├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, DataSourceMetadata, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
