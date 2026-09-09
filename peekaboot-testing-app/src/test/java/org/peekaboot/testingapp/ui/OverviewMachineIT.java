@@ -11,11 +11,8 @@ import org.peekaboot.backend.domain.runtime.CpuTopology;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.NetworkAddress;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 class OverviewMachineIT extends PlaywrightTestBase {
-
-    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     @Test
     void machineCardShowsCpuMemoryAndContainerFacts() {
@@ -45,7 +42,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
         // MachineInfo this test reads directly - no hardcoded network or CPU facts
         APIResponse response = page.request().get(baseUrl + "/peekaboot/api/actuator/all/insights");
         assertThat(response.status()).isEqualTo(200);
-        JsonNode machine = JSON.readTree(response.text()).path("runtime").path("machine");
+        JsonNode machine = readJson(response.text()).path("runtime").path("machine");
         MachineInfo current = MachineInfo.current();
 
         if (current.cpuTopology() != null) {

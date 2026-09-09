@@ -2,13 +2,13 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 
 /**
  * The response headers Peekaboot's own API carries through the real, auto-configured
@@ -24,20 +24,16 @@ class ApiHeadersIT {
     @LocalServerPort
     private int port;
 
-    private HttpHeaders headersOf(String path) {
-        return RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(path)
-                .retrieve()
-                .toBodilessEntity()
-                .getHeaders();
+    private PeekabootApi api;
+
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     @Test
     void apiResponsesAreNeitherStoredNorSniffed() {
-        HttpHeaders headers = headersOf("/peekaboot/api/insights/config");
+        HttpHeaders headers = api.headersOf("/peekaboot/api/insights/config");
 
         assertThat(headers.getCacheControl()).isEqualTo("no-store");
         assertThat(headers.getFirst("X-Content-Type-Options")).isEqualTo("nosniff");
@@ -45,7 +41,7 @@ class ApiHeadersIT {
 
     @Test
     void dashboardAssetsKeepTheirRevalidatingCachePolicy() {
-        HttpHeaders headers = headersOf("/peekaboot/ui/dashboard/index.html");
+        HttpHeaders headers = api.headersOf("/peekaboot/ui/dashboard/index.html");
 
         assertThat(headers.getCacheControl()).isEqualTo("no-cache");
     }

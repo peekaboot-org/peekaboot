@@ -9,9 +9,7 @@ import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.client.RestClient;
 
 /**
  * Integration test for dev toolbar filter behavior.
@@ -35,20 +33,15 @@ class DevToolbarIT {
     @LocalServerPort
     private int port;
 
-    private RestClient restClient;
+    private PeekabootApi api;
 
     @BeforeEach
     void setUp() {
-        restClient = RestClient.builder().baseUrl("http://localhost:" + port).build();
+        api = new PeekabootApi(port);
     }
 
     private String getPersonsHtml() {
-        return restClient
-                .get()
-                .uri("/persons")
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
+        return api.get("/persons");
     }
 
     @Test
@@ -88,24 +81,14 @@ class DevToolbarIT {
 
     @Test
     void toolbarShouldNotBeInjectedForJsonResponses() {
-        String response = restClient
-                .get()
-                .uri("/peekaboot/api/features")
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String.class);
+        String response = api.get("/peekaboot/api/features");
 
         assertThat(response).doesNotContain("<!-- Peekaboot Dev Toolbar -->");
     }
 
     @Test
     void toolbarShouldNotBeInjectedForPeekabootEndpoints() {
-        String response = restClient
-                .get()
-                .uri("/peekaboot/api/actuator/all/insights")
-                .accept(MediaType.APPLICATION_JSON)
-                .retrieve()
-                .body(String.class);
+        String response = api.get("/peekaboot/api/actuator/all/insights");
 
         assertThat(response).doesNotContain("<!-- Peekaboot Dev Toolbar -->");
     }

@@ -20,11 +20,8 @@ import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 class DashboardTabsIT extends PlaywrightTestBase {
-
-    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     /** The observed datasource - a connection acquired on it outside any traced work starts a pool trace. */
     @Autowired
@@ -565,7 +562,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 response -> response.url().contains("/api/traces/insights")
                         && response.url().contains("bucket=errors"),
                 () -> page.click("#traces-bucket .pk-btn[data-bucket='errors']"));
-        JsonNode errorsBucket = JSON.readTree(errorsResponse.text());
+        JsonNode errorsBucket = readJson(errorsResponse.text());
         JsonNode counts = errorsBucket.path("filteredBucketCounts");
         assertThat(counts.isObject())
                 .as("the default view is a filter, so its listing carries the counts that match it")
