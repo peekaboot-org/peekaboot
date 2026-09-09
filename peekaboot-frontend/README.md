@@ -173,7 +173,9 @@ shared link must not impose the sender's display preferences on the reader. An i
 param value (unknown bucket, root action type, level, log level, page, checkbox flag or
 panel override) falls back to its default instead of reaching the backend or filtering
 invisibly, and the URL is rewritten to the state that restored. A lower-case `type` is
-folded the way the backend folds it.
+folded the way the backend folds it. A tab this instance does not have (`#traces` with
+tracing off, `#flyway` without migrations) falls back to `#overview` the same way, rather
+than landing on an empty panel.
 
 ### Cross-links in the trace overlay
 

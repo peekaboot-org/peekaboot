@@ -819,4 +819,23 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .isTrue();
         return Integer.parseInt(matcher.group(1));
     }
+
+    /**
+     * A bookmark or a shared link can name a tab this instance does not have - Flyway is
+     * disabled under the test profile, so its tab is hidden. Landing on an empty panel with
+     * no tab selected looks broken; the dashboard falls back to Overview and corrects the
+     * hash, the way a bogus filter value is corrected to the state that restored.
+     */
+    @Test
+    void deepLinkToAnUnavailableTabFallsBackToOverview() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#flyway");
+        page.waitForSelector("#overview-tab.active");
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.url()).endsWith("#overview");
+        assertThat(page.isVisible("#flyway-tab")).isFalse();
+        assertThat(page.getAttribute(".pk-tab[data-tab='overview']", "aria-selected"))
+                .isEqualTo("true");
+        assertThat(page.isVisible(".pk-tab[data-tab='flyway']")).isFalse();
+    }
 }
