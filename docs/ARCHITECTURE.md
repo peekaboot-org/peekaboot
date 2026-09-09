@@ -69,7 +69,8 @@ know, a ring geometry that no longer matches `peekaboot.insights.levels`, and an
 `peekaboot.insights.persistence.max-age` (default: the coarsest level's span). The file is then
 deleted and the rings start empty, exactly as they would with storage off. Every length read
 from the file is checked against a plausibility bound before it is used to allocate, so a
-corrupt file cannot provoke an oversized allocation.
+corrupt file cannot provoke an oversized allocation. The level-count and ring-size bounds are
+the ones `InsightsProperties` enforces, so a configuration that starts can always be read back.
 
 Loading never delays startup. `InsightsSnapshotStore.beginLoad()` submits the parse to a
 virtual thread and returns. Each of the collector's level threads then runs a one-shot restore

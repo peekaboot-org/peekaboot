@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class InsightsPropertiesTest {
@@ -59,6 +60,34 @@ class InsightsPropertiesTest {
 
         properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofSeconds(10), 0)));
         assertThatThrownBy(properties::validate).isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * The snapshot codec refuses a file whose header claims more levels or a wider ring
+     * than it holds plausible; a configuration past those bounds would start, persist
+     * at shutdown, and lose its history on the next start. So it is refused up front.
+     */
+    @Test
+    void rejectsMoreLevelsThanTheSnapshotCanHold() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(IntStream.range(0, 17)
+                .mapToObj(
+                        i -> InsightsProperties.Level.of(Duration.ofSeconds(10).multipliedBy(1L << i), 2))
+                .toList());
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("16")
+                .hasMessageContaining("snapshot");
+    }
+
+    @Test
+    void rejectsARingWiderThanTheSnapshotCanHold() {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setLevels(List.of(InsightsProperties.Level.of(Duration.ofSeconds(10), 1_000_001)));
+        assertThatThrownBy(properties::validate)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("1000000")
+                .hasMessageContaining("snapshot");
     }
 
     @Test
