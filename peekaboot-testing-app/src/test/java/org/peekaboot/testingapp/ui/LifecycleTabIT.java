@@ -3,7 +3,9 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Locator;
+import com.microsoft.playwright.options.AriaRole;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -46,7 +48,8 @@ import org.springframework.test.context.DynamicPropertySource;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class LifecycleTabIT extends PlaywrightTestBase {
 
-    private static final String ROWS = "#lifecycle-runs .pk-table--card tbody tr";
+    private static final String TABLE = "#lifecycle-runs .pk-table--card";
+    private static final String ROWS = TABLE + " tbody tr";
 
     private static final int SEEDED_RUN_COUNT = 45;
     private static final int UNCLEAN_INDEX = 40;
@@ -74,12 +77,26 @@ class LifecycleTabIT extends PlaywrightTestBase {
         dashboard.openTab("lifecycle");
     }
 
-    private Locator pagerButton(int index) {
-        return page.locator(".pk-lifecycle-pager button").nth(index);
+    /** The pager's buttons by their accessible name; their order in the pager is not a contract. */
+    private Locator pagerButton(String name) {
+        return page.locator(".pk-lifecycle-pager")
+                .getByRole(
+                        AriaRole.BUTTON,
+                        new Locator.GetByRoleOptions().setName(name).setExact(true));
     }
 
     private Locator row(int index) {
         return page.locator(ROWS).nth(index);
+    }
+
+    /** The cell of {@code row} under the column headed {@code header}; column order is not a contract either. */
+    private Locator cell(Locator row, String header) {
+        List<String> headers = page.locator(TABLE + " thead th").allTextContents().stream()
+                .map(String::trim)
+                .toList();
+        int index = headers.indexOf(header);
+        assertThat(index).as("column '%s' among %s", header, headers).isNotNegative();
+        return row.locator("td").nth(index);
     }
 
     @Test
@@ -98,27 +115,33 @@ class LifecycleTabIT extends PlaywrightTestBase {
 
         assertThat(page.querySelectorAll(ROWS)).hasSize(20);
         assertThat(page.textContent(".pk-lifecycle-pager__readout")).isEqualTo("Page 1 of 3");
-        assertThat(pagerButton(0).isDisabled()).as("Previous on page 1").isTrue();
-        assertThat(pagerButton(1).isDisabled()).as("Next on page 1").isFalse();
+        assertThat(pagerButton("Previous").isDisabled())
+                .as("Previous on page 1")
+                .isTrue();
+        assertThat(pagerButton("Next").isDisabled()).as("Next on page 1").isFalse();
     }
 
     @Test
     void nextWalksThroughAllThreePagesAndDisablesAtTheEnds() {
         openLifecycle();
 
-        pagerButton(1).click();
+        pagerButton("Next").click();
         page.waitForFunction(
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 2 of 3'");
         assertThat(page.querySelectorAll(ROWS)).hasSize(20);
-        assertThat(pagerButton(0).isDisabled()).as("Previous on page 2").isFalse();
-        assertThat(pagerButton(1).isDisabled()).as("Next on page 2").isFalse();
+        assertThat(pagerButton("Previous").isDisabled())
+                .as("Previous on page 2")
+                .isFalse();
+        assertThat(pagerButton("Next").isDisabled()).as("Next on page 2").isFalse();
 
-        pagerButton(1).click();
+        pagerButton("Next").click();
         page.waitForFunction(
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 3 of 3'");
         assertThat(page.querySelectorAll(ROWS)).as("the remaining 6 of 46 runs").hasSize(6);
-        assertThat(pagerButton(0).isDisabled()).as("Previous on page 3").isFalse();
-        assertThat(pagerButton(1).isDisabled()).as("Next on page 3").isTrue();
+        assertThat(pagerButton("Previous").isDisabled())
+                .as("Previous on page 3")
+                .isFalse();
+        assertThat(pagerButton("Next").isDisabled()).as("Next on page 3").isTrue();
     }
 
     /**
@@ -147,13 +170,13 @@ class LifecycleTabIT extends PlaywrightTestBase {
         openLifecycle();
         int historyLengthBefore = ((Number) page.evaluate("() => window.history.length")).intValue();
 
-        pagerButton(1).click();
+        pagerButton("Next").click();
         page.waitForFunction("() => window.location.hash.includes('page=2')");
 
         int historyLengthAfter = ((Number) page.evaluate("() => window.history.length")).intValue();
         assertThat(historyLengthAfter).isEqualTo(historyLengthBefore);
 
-        pagerButton(0).click();
+        pagerButton("Previous").click();
         page.waitForFunction(
                 "() => document.querySelector('.pk-lifecycle-pager__readout')?.textContent === 'Page 1 of 3'");
         assertThat(page.url()).endsWith("#lifecycle");
@@ -187,7 +210,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
 
         Locator uncleanRow = row(5); // seeded run UNCLEAN_INDEX (40) -> response index 45 - 40
         assertThat(uncleanRow.locator(".pk-badge--error").textContent()).isEqualTo("Unclean exit");
-        assertThat(uncleanRow.locator("td").nth(1).textContent())
+        assertThat(cell(uncleanRow, "Ran for").textContent())
                 .as("we do not know when an unclean run died - never a computed guess")
                 .isEqualTo("-");
     }
@@ -197,7 +220,7 @@ class LifecycleTabIT extends PlaywrightTestBase {
         openLifecycle();
 
         Locator followingRow = row(4); // seeded run 41, started right after the unclean run 40
-        assertThat(followingRow.locator("td").nth(3).textContent())
+        assertThat(cell(followingRow, "Down before").textContent())
                 .as("its preceding event is a start, not a stop, so the gap is unknowable")
                 .isEqualTo("-");
     }
@@ -228,6 +251,6 @@ class LifecycleTabIT extends PlaywrightTestBase {
         openLifecycle();
 
         Locator mostRecentSeededRun = row(1); // seeded run 44, a clean 2h30m run
-        assertThat(mostRecentSeededRun.locator("td").nth(1).textContent()).isEqualTo("2 hours, 30 minutes");
+        assertThat(cell(mostRecentSeededRun, "Ran for").textContent()).isEqualTo("2 hours, 30 minutes");
     }
 }

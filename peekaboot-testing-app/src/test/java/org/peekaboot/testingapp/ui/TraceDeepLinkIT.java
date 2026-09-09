@@ -200,7 +200,6 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {
-        setStoredTheme("light");
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();
