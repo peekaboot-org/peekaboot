@@ -1,8 +1,6 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -15,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
@@ -157,23 +156,27 @@ class PeekabootActuatorServiceIT {
     /**
      * {@code PeekabootLifecycleAutoConfiguration} backs its {@code DataSourceMetadataList}
      * bean off for one of the same type, so this fixture bean wins over the real one and
-     * this module's real, H2-backed DataSource is never consulted. A mock (same pattern as
-     * {@code DataSourceMapperTest})
-     * is used instead of a live DataSource so a real {@link Host} and a password
-     * parameter can be stubbed in - the H2 in-memory URL this module's test DataSource
-     * actually uses yields neither.
+     * this module's real, H2-backed DataSource is never consulted. The record is built by
+     * hand rather than read off a live DataSource so it carries a real {@link Host} and a
+     * password parameter - the H2 in-memory URL this module's test DataSource actually
+     * uses yields neither.
      */
     @TestConfiguration
     static class DataSourceMetadataFixtureConfig {
         @Bean
         DataSourceMetadataList dataSourceMetadataList() {
-            DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-            when(metadata.getDataSourceName()).thenReturn("primary");
-            when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
-            when(metadata.getConnectionParams())
-                    .thenReturn(Map.of(
+            DataSourceMetadata metadata = new DataSourceMetadata(
+                    "primary",
+                    "app",
+                    List.of(new Host("db.example.com", 5432, null)),
+                    "orders",
+                    DatabaseProduct.POSTGRESQL,
+                    Map.of(
                             "MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY"),
-                            "password", new JdbcProperty(PropertySource.QUERY, "hunter2")));
+                            "password", new JdbcProperty(PropertySource.QUERY, "hunter2")),
+                    "PostgreSQL",
+                    "16",
+                    "PostgreSQL JDBC Driver");
             return new DataSourceMetadataList(List.of(metadata));
         }
     }

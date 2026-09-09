@@ -2,7 +2,6 @@ package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
@@ -10,8 +9,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
+import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -56,14 +57,24 @@ class ApplicationReadyListenerTest {
         }
     }
 
+    /**
+     * Built by hand rather than read off H2: the driver reports its in-memory URL without
+     * any credential parameter, so no live DataSource in this module can yield one.
+     */
     @Test
     void banner_masksSensitiveConnectionParams() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
-        when(metadata.getConnectionParams())
-                .thenReturn(new LinkedHashMap<>(Map.of(
+        DataSourceMetadata metadata = new DataSourceMetadata(
+                "primary",
+                "app",
+                List.of(),
+                "orders",
+                DatabaseProduct.POSTGRESQL,
+                new LinkedHashMap<>(Map.of(
                         "ssl", new JdbcProperty(PropertySource.QUERY, "true"),
-                        "password", new JdbcProperty(PropertySource.QUERY, "s3cret"))));
+                        "password", new JdbcProperty(PropertySource.QUERY, "s3cret"))),
+                "PostgreSQL",
+                "16",
+                "PostgreSQL JDBC Driver");
 
         String report = report(ReadyEvents.webApplication(8083), List.of(metadata));
 
@@ -76,8 +87,7 @@ class ApplicationReadyListenerTest {
 
     @Test
     void banner_reportsThePoolSettingsOfAHikariDataSource() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
+        DataSourceMetadata metadata = h2Metadata("primary");
         try (HikariDataSource hikari = new HikariDataSource()) {
             hikari.setMinimumIdle(3);
             hikari.setMaximumPoolSize(7);
@@ -101,13 +111,19 @@ class ApplicationReadyListenerTest {
      */
     @Test
     void banner_omitsThePoolLinesWithoutAPoolInfoContributor() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
+        DataSourceMetadata metadata = h2Metadata("primary");
 
         String report = report(
                 ReadyEvents.webApplication(8083), List.of(metadata), Map.of("primary", mock(DataSource.class)), null);
 
         assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
+    }
+
+    /** The metadata a real in-memory H2 reports for {@code name}; the banner reads only the name off it. */
+    private static DataSourceMetadata h2Metadata(String name) {
+        JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL("jdbc:h2:mem:banner-" + name + ";DB_CLOSE_DELAY=-1");
+        return DataSourceMetadata.fromDataSource(name, dataSource).orElseThrow();
     }
 
     private static String report(ApplicationReadyEvent event) {

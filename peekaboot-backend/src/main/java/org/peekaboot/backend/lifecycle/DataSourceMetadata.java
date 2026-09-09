@@ -14,48 +14,29 @@ import net.osslabz.jdbc.JdbcUrlParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class DataSourceMetadata {
+/**
+ * What one {@code DataSource} bean connects to, read once at startup from a live
+ * connection's {@link DatabaseMetaData} and the JDBC URL it reports.
+ *
+ * @param databaseProduct what the JDBC URL names, so a MariaDB reached through a
+ *                        {@code jdbc:mysql:} URL reports MySQL
+ */
+public record DataSourceMetadata(
+        String dataSourceName,
+        String username,
+        List<Host> hosts,
+        String databaseName,
+        DatabaseProduct databaseProduct,
+        Map<String, JdbcProperty> connectionParams,
+        String databaseProductName,
+        String databaseProductVersion,
+        String driverName) {
 
     private static final Logger logger = LoggerFactory.getLogger(DataSourceMetadata.class);
 
-    private final String dataSourceName;
-
-    private final String username;
-
-    private final List<Host> hosts;
-
-    private final String databaseName;
-
-    private final DatabaseProduct databaseProduct;
-
-    private final Map<String, JdbcProperty> connectionParams;
-
-    private final String databaseProductName;
-
-    private final String databaseProductVersion;
-
-    private final String driverName;
-
-    private DataSourceMetadata(
-            String dataSourceName,
-            String username,
-            List<Host> hosts,
-            String databaseName,
-            DatabaseProduct databaseProduct,
-            Map<String, JdbcProperty> connectionParams,
-            String databaseProductName,
-            String databaseProductVersion,
-            String driverName) {
-
-        this.dataSourceName = dataSourceName;
-        this.username = username;
-        this.hosts = hosts;
-        this.databaseName = databaseName;
-        this.databaseProduct = databaseProduct;
-        this.connectionParams = connectionParams;
-        this.databaseProductName = databaseProductName;
-        this.databaseProductVersion = databaseProductVersion;
-        this.driverName = driverName;
+    public DataSourceMetadata {
+        hosts = hosts == null ? List.of() : hosts;
+        connectionParams = connectionParams == null ? Map.of() : connectionParams;
     }
 
     public static Optional<DataSourceMetadata> fromDataSource(String dataSourceName, DataSource dataSource) {
@@ -81,51 +62,5 @@ public final class DataSourceMetadata {
         }
 
         return Optional.empty();
-    }
-
-    public String getDataSourceName() {
-
-        return dataSourceName;
-    }
-
-    public String getUsername() {
-
-        return username;
-    }
-
-    public List<Host> getHosts() {
-
-        return hosts;
-    }
-
-    public String getDatabaseName() {
-
-        return databaseName;
-    }
-
-    /** What the JDBC URL names, so a MariaDB reached through a {@code jdbc:mysql:} URL reports MySQL. */
-    public DatabaseProduct getDatabaseProduct() {
-
-        return databaseProduct;
-    }
-
-    public Map<String, JdbcProperty> getConnectionParams() {
-
-        return connectionParams;
-    }
-
-    public String getDatabaseProductName() {
-
-        return databaseProductName;
-    }
-
-    public String getDatabaseProductVersion() {
-
-        return databaseProductVersion;
-    }
-
-    public String getDriverName() {
-
-        return driverName;
     }
 }

@@ -10,7 +10,9 @@ import com.zaxxer.hikari.pool.HikariPool;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -246,10 +248,8 @@ class PeekabootLifecycleAutoConfigurationTest {
 
         @Bean
         DataSourceMetadata strayMetadata() {
-            DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-            when(metadata.getDataSourceName()).thenReturn("stray");
-            when(metadata.getHosts()).thenReturn(List.of());
-            return metadata;
+            return new DataSourceMetadata(
+                    "stray", "sa", List.of(), "app", DatabaseProduct.H2, Map.of(), "H2", "2", "H2 JDBC Driver");
         }
     }
 
