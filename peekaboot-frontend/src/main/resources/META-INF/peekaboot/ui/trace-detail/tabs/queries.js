@@ -51,5 +51,5 @@ function queryItem(query, index, view) {
         el('div', {className: 'pk-query-header'},
             el('span', {className: 'pk-query-system', text: `${index + 1}. ${system.toUpperCase()}`}),
             meta),
-        el('div', {className: 'pk-query__sql', text: query.sql || 'Unknown query'}));
+        el('div', {className: 'pk-code-block', text: query.sql || 'Unknown query'}));
 }

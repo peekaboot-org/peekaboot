@@ -25,6 +25,13 @@ export function traceStatParts(trace, features) {
     return parts;
 }
 
+/** The one wording for a trace that hit the max-spans-per-trace cap, wherever the trace is shown. */
+export function truncatedBadge() {
+    return badge('TRUNCATED', 'warn', {
+        title: 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so its span, query and log counts may be incomplete.'
+    });
+}
+
 /**
  * A `.pk-stat`: `lead` (a string or an element, the count or an icon) followed by the
  * duration in monospace, coloured by `severity` (a severity.js suffix, or '').

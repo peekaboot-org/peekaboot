@@ -38,25 +38,30 @@ public class ToolbarShell {
     private static final String BASE_TOKEN = "{{BASE}}";
 
     /**
-     * Every sheet the bar's own appearance depends on, in cascade order, relative to the base
-     * path. components.css is deliberately absent: it styles the status badge and the copy
-     * control, both of which only exist once toolbar.js has injected them, so a reader who
-     * cannot load the script cannot reach anything it styles either - and it is the largest sheet.
-     */
-    private static final List<String> INLINED_SHEETS =
-            List.of("/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/toolbar/toolbar.css");
-
-    /**
-     * Linked as well as inlined. The {@code style-src} directive's {@code 'unsafe-inline'}
-     * keyword governs only inline {@code <style>} elements and style attributes; a
-     * {@code <link rel="stylesheet">} is governed by the directive's source list instead, so
-     * dropping {@code 'unsafe-inline'} alone leaves it untouched. A host whose CSP omits that
-     * keyword therefore loses only the inline copy above - the link elements already written
-     * into this markup keep the bar styled. Both come from the same file, so there is nothing
-     * to keep in sync.
+     * Every sheet the bar loads, in cascade order, relative to the base path: the three shared
+     * sheets (the same list as shadow-styles.js's SHARED_SHEETS, which SharedModuleIT pins) and
+     * the bar's own. Linked as well as inlined. The {@code style-src} directive's
+     * {@code 'unsafe-inline'} keyword governs only inline {@code <style>} elements and style
+     * attributes; a {@code <link rel="stylesheet">} is governed by the directive's source list
+     * instead, so dropping {@code 'unsafe-inline'} alone leaves it untouched. A host whose CSP
+     * omits that keyword therefore loses only the inline copy - the link elements already
+     * written into this markup keep the bar styled. Both come from the same file, so there is
+     * nothing to keep in sync.
      */
     private static final List<String> LINKED_SHEETS = List.of(
             "/ui/assets/tokens.css", "/ui/assets/base.css", "/ui/assets/components.css", "/ui/toolbar/toolbar.css");
+
+    private static final String COMPONENTS_SHEET = "/ui/assets/components.css";
+
+    /**
+     * The linked sheets minus components.css, which is deliberately not inlined: it styles the
+     * status badge and the copy control, both of which only exist once toolbar.js has injected
+     * them, so a reader who cannot load the script cannot reach anything it styles either -
+     * and it is the largest sheet.
+     */
+    private static final List<String> INLINED_SHEETS = LINKED_SHEETS.stream()
+            .filter(sheet -> !COMPONENTS_SHEET.equals(sheet))
+            .toList();
 
     /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
     private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");

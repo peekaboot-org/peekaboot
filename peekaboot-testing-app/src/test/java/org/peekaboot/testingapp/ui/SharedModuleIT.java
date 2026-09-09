@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Level;
 import java.lang.reflect.RecordComponent;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
@@ -15,6 +17,9 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.insights.config.Chart;
+import org.peekaboot.backend.insights.config.TileFormat;
+import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.lifecycle.UptimeFormat;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -98,6 +103,27 @@ class SharedModuleIT extends PlaywrightTestBase {
     void highlightTextWrapsEveryMatchAndEscapesTheRest() {
         assertThat(evalModule("markup.js", "m.highlightText('a<b>a', 'a')"))
                 .isEqualTo("<mark>a</mark>&lt;b&gt;<mark>a</mark>");
+    }
+
+    /** The query is a filter string, so its regex metacharacters mean themselves. */
+    @Test
+    void highlightTextTreatsTheQueryLiterally() {
+        assertThat(evalModule("markup.js", "m.highlightText('a.b (c) [d]', '(c)')"))
+                .isEqualTo("a.b <mark>(c)</mark> [d]");
+        assertThat(evalModule("markup.js", "m.highlightText('a.b', '.')")).isEqualTo("a<mark>.</mark>b");
+    }
+
+    /**
+     * Matched on the original string with Unicode case folding: an upper-case match keeps
+     * its own spelling inside the mark, and a letter whose lower-case form is longer than
+     * itself does not shift the marks that follow it.
+     */
+    @Test
+    void highlightTextFoldsCaseWithoutShiftingLaterMarks() {
+        assertThat(evalModule("markup.js", "m.highlightText('\u00c4rger', '\u00e4')"))
+                .isEqualTo("<mark>\u00c4</mark>rger");
+        assertThat(evalModule("markup.js", "m.highlightText('\u0130x-ab-ab', 'ab')"))
+                .isEqualTo("\u0130x-<mark>ab</mark>-<mark>ab</mark>");
     }
 
     @Test
@@ -255,8 +281,7 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     @Test
     void migrationStatesMirrorTheBackendEnum() {
-        assertThat(evalUiModule("dashboard/tabs/flyway.js", "m.MIGRATION_STATES"))
-                .isEqualTo(names(MigrationState.values()));
+        assertThat(evalModule("severity.js", "m.MIGRATION_STATES")).isEqualTo(names(MigrationState.values()));
     }
 
     /**
@@ -411,18 +436,25 @@ class SharedModuleIT extends PlaywrightTestBase {
     }
 
     /**
-     * The dashboard header's "Updated ..." readout passes hour/minute/second only; a
-     * date-first formatter would still prepend the day, which that one-line readout has
-     * no room for.
+     * The dashboard header's "Updated ..." readout passes hour/minute/second only; the
+     * options given are the whole set, so no date-first default prepends the day the
+     * one-line readout has no room for.
      */
     @Test
-    void formatDateTimeWithTimeOnlyOptionsRendersNoDate() {
+    void formatDateTimeWithRendersExactlyTheOptionsGiven() {
         String time = (String) evalModule(
                 "format.js",
-                "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC',"
-                        + " hour: '2-digit', minute: '2-digit', second: '2-digit'})");
+                "m.formatDateTimeWith(0, {hour: '2-digit', minute: '2-digit', second: '2-digit'},"
+                        + " {locale: 'en-US', timeZone: 'UTC'})");
         assertThat(time).contains("12:00:00");
         assertThat(time).doesNotContain("1970").doesNotContain("Jan");
+    }
+
+    /** formatTimeOfDay is formatDateTimeWith at millisecond precision: no date, three fraction digits. */
+    @Test
+    void formatTimeOfDayRendersTheTimeToTheMillisecond() {
+        assertThat(evalModule("format.js", "m.formatTimeOfDay(1500, {locale: 'en-US', timeZone: 'UTC'})"))
+                .isEqualTo("00:00:01.500");
     }
 
     @Test
@@ -574,5 +606,40 @@ class SharedModuleIT extends PlaywrightTestBase {
                                 + " m.appendTick(s, {epochMs: 99000, values: {a: 4}});"
                                 + " JSON.stringify([s.series.a, s.count])"))
                 .isEqualTo("[[null,null,null,null,4],5]");
+    }
+
+    /**
+     * The panel vocabulary is typed on the backend (Chart, Unit, TileFormat) and read as
+     * literals by format.js and insights-chart.js; the wire words must not drift apart.
+     */
+    @Test
+    void panelVocabularyMirrorsTheBackendEnums() {
+        assertThat(evalModule("format.js", "m.METRIC_UNITS"))
+                .isEqualTo(Stream.of(Unit.values()).map(Unit::wireName).toList());
+        assertThat(evalModule("format.js", "m.TILE_FORMATS"))
+                .isEqualTo(
+                        Stream.of(TileFormat.values()).map(TileFormat::wireName).toList());
+        assertThat(evalUiModule("dashboard/tabs/insights-chart.js", "m.CHART_TYPES"))
+                .isEqualTo(Stream.of(Chart.values()).map(Chart::wireName).toList());
+    }
+
+    /**
+     * ToolbarShell links the three shared sheets shadow-styles.js links into the overlay,
+     * then the bar's own: the two lists must name the same files in the same order, or the
+     * bar and the overlay drift apart in cascade.
+     */
+    @Test
+    void toolbarLinksTheSharedSheetsTheOverlayLinks() {
+        @SuppressWarnings("unchecked")
+        List<String> shared = (List<String>) evalModule("shadow-styles.js", "m.SHARED_SHEETS");
+        List<String> expected = new ArrayList<>(
+                shared.stream().map(name -> "/peekaboot/ui/assets/" + name).toList());
+        expected.add("/peekaboot/ui/toolbar/toolbar.css");
+
+        openPersonsPage();
+        Object linked = toolbar.evaluate(
+                "root => [...root.querySelectorAll('link[rel=\"stylesheet\"]')].map(link => link.getAttribute('href'))");
+
+        assertThat(linked).isEqualTo(expected);
     }
 }

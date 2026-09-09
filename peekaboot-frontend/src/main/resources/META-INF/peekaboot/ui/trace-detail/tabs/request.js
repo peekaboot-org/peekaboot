@@ -93,7 +93,7 @@ function renderUploadedFiles(files) {
 
 function renderRequestBody(body) {
     if (!body?.content) return null;
-    return section('Request Body', el('div', {className: 'pk-query__sql', text: body.content}),
+    return section('Request Body', el('div', {className: 'pk-code-block', text: body.content}),
         body.truncated ? '(truncated)' : null);
 }
 

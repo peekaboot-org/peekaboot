@@ -1,4 +1,5 @@
-const SHARED_SHEETS = ['tokens.css', 'base.css', 'components.css'];
+/** The design system's sheets in cascade order; ToolbarShell links the same three ahead of toolbar.css. */
+export const SHARED_SHEETS = ['tokens.css', 'base.css', 'components.css'];
 const REVEAL_TIMEOUT_MS = 1000;
 
 /**

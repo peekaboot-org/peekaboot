@@ -18,7 +18,10 @@
 /** Parses a `#...` hash (or any equivalent string) into routing state. */
 export function parseAppHash(hash = window.location.hash) {
     const raw = hash.startsWith('#') ? hash.slice(1) : hash;
-    const [path, query = ''] = raw.split('?');
+    // split at the first '?' only: a later one belongs to a param value
+    const querySplit = raw.indexOf('?');
+    const path = querySplit === -1 ? raw : raw.slice(0, querySplit);
+    const query = querySplit === -1 ? '' : raw.slice(querySplit + 1);
     if (!path) return {tab: 'overview', detail: null, subview: null, params: {}};
 
     const [tab, detail = null, subview = null] = path.split('/');

@@ -13,13 +13,12 @@ import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
-import {traceStatParts} from '../../shared/trace-stats.js';
+import {traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
 import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'traces';
-export const label = 'Traces';
 
 // Empty set means no type in the request, which the backend answers with its default
 // view - every type except the routine pool maintenance it keeps out. Every chip,
@@ -339,11 +338,7 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
     if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
     else if (trace.slow) mainLine.appendChild(badge('SLOW', 'warn'));
 
-    if (trace.truncated) {
-        const truncatedBadge = badge('TRUNCATED', 'warn');
-        truncatedBadge.title = 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped.';
-        mainLine.appendChild(truncatedBadge);
-    }
+    if (trace.truncated) mainLine.appendChild(truncatedBadge());
 
     return mainLine;
 }

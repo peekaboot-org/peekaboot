@@ -102,8 +102,6 @@
     border-bottom: 1px solid var(--pk-border);
 }
 .pk-card__icon { font-size: var(--pk-text-sm); }
-/* Trailing, non-uppercase text in a card header, e.g. the memory card's PID. */
-.pk-card__meta { margin-left: auto; font-weight: normal; text-transform: none; letter-spacing: normal; }
 .pk-card__body { padding: var(--pk-space-md); }
 
 /* Footer */

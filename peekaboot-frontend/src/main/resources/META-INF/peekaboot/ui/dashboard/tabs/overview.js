@@ -6,11 +6,10 @@
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatHosts, formatPlainValue, formatTileValue} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatPlainValue, formatTileValue} from '../../shared/format.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
-export const label = 'Overview';
 
 export function render(container, data, context = {}) {
     const {locale, timeZone} = context;
@@ -286,7 +285,7 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
         }
         if (server.currentTime) {
             el.appendChild(kvRow('Server Time',
-                formatDateTime(server.currentTime, {locale, timeZone, dateStyle: 'medium', timeStyle: 'medium'})));
+                formatDateTimeWith(server.currentTime, {dateStyle: 'medium', timeStyle: 'medium'}, {locale, timeZone})));
         }
         if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
     });
@@ -370,7 +369,6 @@ function usageSection(label, caption, percent) {
 
 function renderMemoryInfo(container, runtime) {
     const el = container.querySelector('#memory-info');
-    const processInfo = container.querySelector('#process-info');
     el.innerHTML = '';
 
     const memory = runtime?.memory;
@@ -378,11 +376,8 @@ function renderMemoryInfo(container, runtime) {
 
     if (!memory && (!storage || storage.length === 0)) {
         el.appendChild(emptyState('No memory info available'));
-        processInfo.textContent = '';
         return;
     }
-
-    processInfo.textContent = '';
 
     if (memory) {
         const hasMax = memory.heapMax && memory.heapMax > 0;

@@ -10,7 +10,6 @@ import {logLevelVariant} from '../../shared/severity.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 
 export const id = 'loggers';
-export const label = 'Loggers';
 
 const tab = filteredGroupTab({
     inputId: 'loggers-filter',

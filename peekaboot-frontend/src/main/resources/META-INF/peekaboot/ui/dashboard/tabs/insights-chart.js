@@ -18,6 +18,8 @@ import {themeToken, withAlpha} from './insights-colors.js';
 const UPLOT_SCRIPT = new URL('../../vendor/uplot/uplot.iife.min.js', import.meta.url);
 const UPLOT_STYLES = new URL('../../vendor/uplot/uplot.min.css', import.meta.url);
 
+/** The chart shapes a panel can ask for (the backend's Chart enum, by wire name); line is the default. */
+export const CHART_TYPES = Object.freeze(['line', 'bars', 'bars-line']);
 const CHART_HEIGHT = 180;
 const MIN_CHART_WIDTH = 200;
 const PERCENTILES = ['p90', 'p95', 'p99'];

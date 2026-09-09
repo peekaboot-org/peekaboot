@@ -8,9 +8,19 @@
 import {el, button} from '../../shared/dom.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {LOG_LEVELS} from '../../shared/severity.js';
-import {buildSpanNames} from '../../shared/span-names.js';
 import {copyableId} from '../../shared/copyable.js';
 import {emptyState} from '../../shared/components.js';
+
+/** A spanId -> name lookup over the span tree, to name the span each log row belongs to. */
+function buildSpanNames(rootSpan) {
+    const names = new Map();
+    (function walk(span) {
+        if (!span) return;
+        names.set(span.spanId, span.name);
+        (span.children || []).forEach(walk);
+    })(rootSpan);
+    return names;
+}
 
 function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
     const spanId = log.spanId || '';

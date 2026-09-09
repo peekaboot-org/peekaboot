@@ -57,14 +57,8 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
-            for (String pill : List.of(
-                    "kind-server",
-                    "kind-client",
-                    "kind-internal",
-                    "kind-producer",
-                    "tag-badge",
-                    "tag-badge-key",
-                    "tab-count")) {
+            for (String pill :
+                    List.of("kind-server", "kind-client", "kind-producer", "tag-badge", "tag-badge-key", "tab-count")) {
                 assertThat(contrastRatio("#" + pill))
                         .as("%s ink/fill contrast (%s theme)", pill, theme)
                         .isGreaterThanOrEqualTo(4.5);

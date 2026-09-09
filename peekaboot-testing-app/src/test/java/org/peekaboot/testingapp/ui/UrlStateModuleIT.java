@@ -54,4 +54,11 @@ class UrlStateModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("m.buildAppHash({tab: 'traces', subview: 'logs'})"))
                 .isEqualTo("#traces");
     }
+
+    /** Only the first '?' starts the query: a later one belongs to a param value. */
+    @Test
+    void parseAppHashSplitsAtTheFirstQuestionMarkOnly() {
+        assertThat(evalModule("JSON.stringify(m.parseAppHash('#loggers?q=what?'))"))
+                .isEqualTo("{\"tab\":\"loggers\",\"detail\":null,\"subview\":null,\"params\":{\"q\":\"what?\"}}");
+    }
 }

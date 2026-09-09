@@ -640,7 +640,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         openOverlayFromToolbar();
         overlay.click(".pk-tab[data-tab=\"queries\"]");
 
-        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-query__sql')?.textContent ?? ''");
+        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-code-block')?.textContent ?? ''");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 

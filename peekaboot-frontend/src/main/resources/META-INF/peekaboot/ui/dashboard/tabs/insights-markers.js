@@ -24,7 +24,7 @@
  * the other by hand.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatDateTime} from '../../shared/format.js';
+import {formatDateTimeWith} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
@@ -168,13 +168,13 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
     }
 
     function describe({event}) {
-        const options = {...TIMESTAMP_OPTIONS, ...dateOptions()};
-        const when = formatDateTime(event.epochMs, options);
+        const display = dateOptions();
+        const when = formatDateTimeWith(event.epochMs, TIMESTAMP_OPTIONS, display);
         const rows = [];
         if (event.version) rows.push(['Version', event.version]);
         if (event.branch) rows.push(['Branch', event.branch]);
         if (event.shortCommitId) rows.push(['Commit', event.shortCommitId]);
-        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTime(event.buildTimeEpochMs, options)]);
+        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTimeWith(event.buildTimeEpochMs, TIMESTAMP_OPTIONS, display)]);
 
         const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${escapeHtml(when)}`;
         const details = rows

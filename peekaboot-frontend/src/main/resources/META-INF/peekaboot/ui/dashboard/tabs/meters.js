@@ -10,7 +10,6 @@ import {formatBytes, formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
-export const label = 'Meters';
 
 const tab = filteredGroupTab({
     inputId: 'meters-filter',

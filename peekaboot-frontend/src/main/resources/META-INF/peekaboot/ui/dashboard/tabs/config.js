@@ -6,7 +6,6 @@
 import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'config';
-export const label = 'Config';
 
 const tab = propertyGroupTab({
     inputId: 'config-filter',

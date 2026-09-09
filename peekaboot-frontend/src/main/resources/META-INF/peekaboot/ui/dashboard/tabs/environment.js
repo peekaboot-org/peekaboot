@@ -6,7 +6,6 @@ import {badge} from '../../shared/components.js';
 import {propertyGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'environment';
-export const label = 'Environment';
 
 const tab = propertyGroupTab({
     inputId: 'env-filter',

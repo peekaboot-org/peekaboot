@@ -72,9 +72,9 @@
         </div>
         </nav>
 
-        <!-- Static rather than built by shared/components.js's loadingBlock(): it is on
-             screen before main.js has run, and the browser tests read it as the
-             dashboard's readiness signal. -->
+        <!-- Static rather than built by shared/components.js's loadingBlock() (same
+             markup, same components.css rules): it is on screen before main.js has run,
+             and the browser tests read it as the dashboard's readiness signal. -->
         <div id="loading" class="pk-loading">
             <div class="pk-spinner"></div>
             <p>Loading data...</p>
@@ -155,7 +155,6 @@
                 <div class="pk-card__header pk-label">
                     <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
                     <h2 class="pk-card__title">Memory &amp; Storage</h2>
-                    <span class="pk-card__meta" id="process-info"></span>
                 </div>
                 <div class="pk-card__body" id="memory-info"></div>
             </div>
@@ -238,9 +237,6 @@
         <!-- Flyway Tab -->
         <section class="pk-tab-panel" id="flyway-tab" role="tabpanel" aria-labelledby="flyway-tab-btn">
             <div id="flyway-timeline"></div>
-            <div id="no-flyway" class="pk-empty hidden">
-                <p>No Flyway migrations found</p>
-            </div>
         </section>
 
         <!-- Loggers Tab -->

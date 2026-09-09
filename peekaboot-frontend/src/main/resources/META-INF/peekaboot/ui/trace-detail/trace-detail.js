@@ -14,23 +14,25 @@ import {formatCount, formatDurationMs} from '../shared/format.js';
 import {severityClass} from '../shared/severity.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
-import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
+import {bindTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
 import {badge, tabStrip} from '../shared/components.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
+import {truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
 import * as logs from './tabs/logs.js';
 
 // label/count feed the tab strip built in wireTabs() below - label becomes each
-// button's text, count (when present) the small badge next to it.
+// button's text, count (when present) the small badge next to it. The counts are the
+// backend's TraceTabSummary, the same numbers the Traces tab and the toolbar show.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
-    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary?.spans?.count ?? countSpans(t.rootSpan)},
-    {id: 'queries', label: 'Queries', render: queries.render, count: t => (t.queries || []).length},
-    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => (t.logs || []).length}
+    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary.spans.count},
+    {id: 'queries', label: 'Queries', render: queries.render, count: t => t.summary.queries.count},
+    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => t.summary.logs.count}
 ];
 
 // How long a cross-link jump's highlight stays on its target (see jumpToElement).
@@ -111,8 +113,7 @@ export function openTraceDetail(traceId, options = {}) {
     setBackgroundInert(overlayHost);
 
     const shadow = overlayHost.attachShadow({mode: 'open'});
-    applyTheme(overlayHost, resolveTheme());
-    themeUnwatch = watchTheme(theme => applyTheme(overlayHost, theme));
+    themeUnwatch = bindTheme(overlayHost);
     // attachSharedStyles keeps the host visibility:hidden until its <link> sheets settle;
     // an element under a visibility:hidden ancestor cannot take focus, so the eventual
     // render() -> container.focus() call must wait for this to resolve too, not just the
@@ -194,14 +195,11 @@ function render(content, trace, urlState, display) {
     content.replaceChildren(container);
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
-    container.addEventListener('click', (e) => {
-        if (e.target === container) closeTraceDetail();
-    });
 
     wireTabs(container, trace, urlState, display);
 
     // ESC key to close; closeTraceDetail removes the listener however
-    // the overlay is dismissed (buttons, overlay click, ESC)
+    // the overlay is dismissed (buttons, ESC)
     if (escHandler) {
         document.removeEventListener('keydown', escHandler);
     }
@@ -231,10 +229,7 @@ function header(trace, display) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-
-    const queryCount = (trace.queries || []).length;
-    const logCount = (trace.logs || []).length;
-    const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
+    const {spans: spanSummary, queries: querySummary, logs: logSummary} = trace.summary;
 
     const title = el('h2', {className: 'pk-overlay__title', attrs: {id: 'pk-overlay-title'}},
         el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(trace.rootActionType), attrs: {'aria-hidden': 'true'}}),
@@ -245,11 +240,6 @@ function header(trace, display) {
     // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
     // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
     // trace's total would call a 120 ms request slow here while the list did not.
-    const truncated = trace.truncated ? badge('Truncated', 'warn') : null;
-    if (truncated) {
-        truncated.title = 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped,'
-            + ' so span, query and log counts above may be incomplete.';
-    }
     const meta = el('div', {className: 'pk-overlay__meta'},
         el('span', {
             className: 'pk-overlay__duration' + (trace.slow ? ` ${severityClass('slow')}` : ''),
@@ -257,10 +247,10 @@ function header(trace, display) {
         }),
         badge(statusLabel(status), statusVariant(status)),
         trace.slow ? badge('SLOW', 'warn') : null,
-        el('span', {text: formatCount(spanCount, 'span')}),
-        el('span', {text: formatCount(queryCount, 'query', 'queries')}),
-        el('span', {text: formatCount(logCount, 'log')}),
-        truncated);
+        el('span', {text: formatCount(spanSummary.count, 'span')}),
+        el('span', {text: formatCount(querySummary.count, 'query', 'queries')}),
+        el('span', {text: formatCount(logSummary.count, 'log')}),
+        trace.truncated ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},
         el('div', {className: 'pk-overlay__header-main'}, title, meta),
@@ -367,13 +357,4 @@ function wireTabs(container, trace, urlState, display) {
 function renderTabContent(container, tabId, trace, view) {
     const tab = TABS.find(t => t.id === tabId);
     if (tab) tab.render(container, trace, view);
-}
-
-function countSpans(span) {
-    if (!span) return 0;
-    let count = 1;
-    (span.children || []).forEach(child => {
-        count += countSpans(child);
-    });
-    return count;
 }
