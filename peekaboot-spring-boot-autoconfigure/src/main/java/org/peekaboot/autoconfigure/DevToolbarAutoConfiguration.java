@@ -32,12 +32,14 @@ import org.springframework.core.env.Environment;
 /**
  * The toolbar injection filter, and the request and log capture that feed the store. The
  * capture parts need a {@link TraceStore} bean to land in; the toolbar itself only needs
- * the {@link Tracer}.
+ * the {@link Tracer}, whichever of Boot's two tracing bridges registers it.
  */
 @AutoConfiguration(
         after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
-        afterName =
-                "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
+        afterName = {
+            "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
+            "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
+        })
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
