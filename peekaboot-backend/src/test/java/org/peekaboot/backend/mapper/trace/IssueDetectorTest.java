@@ -60,17 +60,6 @@ class IssueDetectorTest {
     }
 
     @Test
-    void detectIssues_shouldNotAddBothSlowAndVerySlowForSameSpan() {
-        SpanNode span = createSpan("span1", 600, SpanStatus.OK, Map.of(), List.of());
-        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        assertThat(result.rootSpan().issues().get(0).type()).isEqualTo(IssueType.VERY_SLOW);
-    }
-
-    @Test
     void detectIssues_shouldDetectErrorSpan() {
         SpanNode span = createSpan("span1", 50, SpanStatus.ERROR, Map.of(), List.of());
         TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));

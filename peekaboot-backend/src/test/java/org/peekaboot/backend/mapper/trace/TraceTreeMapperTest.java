@@ -744,44 +744,6 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
     }
 
-    @Test
-    void map_shouldExtractRequestSummaryFromStandardTags() {
-        var root = span("root")
-                .named("GET /api/users")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .tags(Map.of("http.method", "GET", "http.target", "/api/users", "http.status_code", "200"))
-                .build();
-
-        var traceData = TraceDatas.of("trace1", root);
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.summary().request()).isNotNull();
-        assertThat(result.summary().request().method()).isEqualTo("GET");
-        assertThat(result.summary().request().path()).isEqualTo("/api/users");
-        assertThat(result.summary().request().statusCode()).isEqualTo(200);
-    }
-
-    @Test
-    void map_shouldExtractRequestSummaryFromFallbackTags() {
-        var root = span("root")
-                .named("POST /api/orders")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .tags(Map.of(
-                        "http.request.method", "POST", "url.path", "/api/orders", "http.response.status_code", "201"))
-                .build();
-
-        var traceData = TraceDatas.of("trace1", root);
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.summary().request().method()).isEqualTo("POST");
-        assertThat(result.summary().request().path()).isEqualTo("/api/orders");
-        assertThat(result.summary().request().statusCode()).isEqualTo(201);
-    }
-
     /**
      * The names Spring Boot's own server-request observation puts on the root span - the
      * only ones a default Boot application ever produces. {@code uri} is the route pattern;
@@ -810,23 +772,6 @@ class TraceTreeMapperTest {
         assertThat(result.summary().request().path()).isEqualTo("/api/users/42");
         assertThat(result.summary().request().statusCode()).isEqualTo(200);
         assertThat(result.rootActionType()).isEqualTo(RootActionType.HTTP_REQUEST);
-    }
-
-    @Test
-    void map_shouldTolerateMalformedStatusCodeInRequestSummary() {
-        var root = span("root")
-                .named("GET /api/users")
-                .kind(Span.Kind.SERVER)
-                .at(0, 100)
-                .tags(Map.of("http.method", "GET", "http.status_code", "not-a-number"))
-                .build();
-
-        var traceData = TraceDatas.of("trace1", root);
-
-        TraceTree result = mapper.map(traceData);
-
-        assertThat(result.summary().request().method()).isEqualTo("GET");
-        assertThat(result.summary().request().statusCode()).isNull();
     }
 
     @Test

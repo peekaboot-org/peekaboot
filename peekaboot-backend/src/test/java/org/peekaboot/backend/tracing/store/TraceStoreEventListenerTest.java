@@ -31,14 +31,6 @@ class TraceStoreEventListenerTest {
     }
 
     @Test
-    void onSpanData_ignoresNullEventAndNullSpan() {
-        listener.onSpanData(null);
-        listener.onSpanData(new SpanDataEvent(null));
-        // no exception, nothing stored - nothing to assert beyond absence
-        assertThat(store.getTrace("trace1")).isEmpty();
-    }
-
-    @Test
     void onLogCaptured_forwardsLogToStore() {
         listener.onLogCaptured(
                 new LogCapturedEvent("trace1", "span1", Instant.EPOCH, "INFO", "TestLogger", "msg", "main"));
@@ -61,14 +53,6 @@ class TraceStoreEventListenerTest {
 
         listener.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
 
-        assertThat(store.getTrace("trace1")).isEmpty();
-    }
-
-    @Test
-    void nullEventsAreIgnored() {
-        listener.onLogCaptured(null);
-        listener.onRequestCompleted(null);
-        listener.onTraceDiscarded(null);
         assertThat(store.getTrace("trace1")).isEmpty();
     }
 }

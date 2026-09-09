@@ -17,33 +17,21 @@ public class TraceStoreEventListener {
 
     @EventListener
     public void onSpanData(SpanDataEvent event) {
-        if (event == null || event.spanData() == null) {
-            return;
-        }
         store.addSpan(event.spanData());
     }
 
     @EventListener
     public void onLogCaptured(LogCapturedEvent event) {
-        if (event == null) {
-            return;
-        }
         store.addLog(event);
     }
 
     @EventListener
     public void onRequestCompleted(RequestCompletedEvent event) {
-        if (event == null) {
-            return;
-        }
         store.setRequest(event);
     }
 
     @EventListener
     public void onTraceDiscarded(TraceDiscardedEvent event) {
-        if (event == null) {
-            return;
-        }
         store.discard(event.traceId());
     }
 }
