@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import net.osslabz.jdbc.DatabaseProduct;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
@@ -86,9 +87,8 @@ class ActuatorInsightsServiceTest {
 
     @Test
     void getInsights_shouldMapDataSourcesFromInjectedMetadata() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primaryDS");
-        when(metadata.getHosts()).thenReturn(List.of());
+        DataSourceMetadata metadata = new DataSourceMetadata(
+                "primaryDS", "sa", List.of(), "app", DatabaseProduct.H2, Map.of(), "H2", "2", "H2 JDBC Driver");
         ActuatorInsightsService service = service(Map.of(), new DataSourceMetadataList(List.of(metadata)));
 
         ActuatorInsightsResponse response = service.getInsights(Locale.ENGLISH, false);

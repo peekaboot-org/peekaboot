@@ -158,14 +158,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
             report.append(String.format(
                             " DB Connection [%s]: %s on %s (user: %s)",
-                            metadata.getDataSourceName(),
-                            metadata.getDatabaseName(),
-                            metadata.getHosts(),
-                            metadata.getUsername()))
+                            metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()))
                     .append("\n\n");
 
-            if (!metadata.getConnectionParams().isEmpty()) {
-                String params = connectionParamsMasker.mask(metadata.getConnectionParams()).entrySet().stream()
+            if (!metadata.connectionParams().isEmpty()) {
+                String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
                         .map(e -> e.getKey() + "=" + e.getValue())
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("");
@@ -175,10 +172,9 @@ public class ApplicationReadyListener implements ApplicationListener<Application
             LifecycleBanner.line(
                     report,
                     String.format(
-                            " DB Version: %s %s",
-                            metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()));
+                            " DB Version: %s %s", metadata.databaseProductName(), metadata.databaseProductVersion()));
 
-            appendPoolInfo(report, metadata.getDataSourceName());
+            appendPoolInfo(report, metadata.dataSourceName());
         }
     }
 

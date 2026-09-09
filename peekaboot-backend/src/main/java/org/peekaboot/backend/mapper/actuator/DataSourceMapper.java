@@ -2,7 +2,6 @@ package org.peekaboot.backend.mapper.actuator;
 
 import java.util.List;
 import java.util.Map;
-import net.osslabz.jdbc.Host;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
@@ -27,17 +26,16 @@ public class DataSourceMapper {
     }
 
     private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthResponse health, boolean unmask) {
-        HealthStatus dbHealth = extractDbHealth(health, metadata.getDataSourceName());
-        List<Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
-        Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
+        HealthStatus dbHealth = extractDbHealth(health, metadata.dataSourceName());
+        Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.connectionParams(), unmask);
 
         return new DataSourceInfo(
-                metadata.getDataSourceName(),
-                metadata.getDatabaseProduct(),
-                metadata.getDriverName(),
-                hosts,
-                metadata.getDatabaseName(),
-                metadata.getUsername(),
+                metadata.dataSourceName(),
+                metadata.databaseProduct(),
+                metadata.driverName(),
+                metadata.hosts(),
+                metadata.databaseName(),
+                metadata.username(),
                 dbHealth,
                 maskedProperties);
     }
