@@ -101,14 +101,21 @@ starter, and `javadoc:jar` builds nothing for the starter or the frontend. So th
 sets `maven.source.forceCreation`, and both modules package their empty `target/apidocs`
 as the `-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is intended.
 
-`peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, so it
-consumes the starter exactly as a real user would. The cost is duplication: its POM
-re-declares the verify-bound static-analysis gates, the JaCoCo agent wiring, the
+`peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`. The split
+proves two things: the sample app builds on Boot's own plugin defaults (`-parameters`,
+`@..@` resource filtering), and it leans on nothing in `peekaboot-parent`'s build config.
+It proves nothing about consuming the published artifact. Inside the reactor the starter
+resolves from the reactor under either parent, and both parents manage dependencies
+through the same `spring-boot-dependencies` BOM, so dependency resolution is identical. A
+real consume-as-a-user check would build outside the reactor against an installed jar,
+and nothing here does that. The cost of the split is duplication: its POM re-declares the
+verify-bound static-analysis gates, the JaCoCo and Mockito agent wiring, the
 `spotless-apply-local` profile and the Error Prone compiler config by hand, pins the
 compiler, dependency, surefire and failsafe plugins at the parent's versions, and picks
-up Spring Boot's plugin versions for everything else. Any
-change to the parent's build config has to be mirrored there. The one deliberate exception
-is the dependency check: the sample app is the module that violates it (see
+up Spring Boot's plugin versions for everything else. `BuildVersionLockstepTest` compares
+its build instant, JaCoCo version and Boot parent version with the root pom; every other
+change to the parent's build config has to be mirrored there by hand. The one deliberate
+exception is the dependency check: the sample app is the module that violates it (see
 [the dependency check](#the-dependency-check)), and gating an unpublished sample on a
 third-party version clash would buy nothing but two permanent exclusions.
 
@@ -125,8 +132,9 @@ same tool versions, reading the same `config/` files, plus the reactor-wide cove
 `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the role of
 `peekaboot-parent`: shared compiler, gate, JaCoCo and test-split config. Each module's
 `build.gradle.kts` declares only its dependencies; `peekaboot-testing-app` adds the Spring
-Boot and git-properties plugins. The consume-the-starter-as-a-published-artifact proof
-stays with Maven, which is why the Maven module keeps its `spring-boot-starter-parent`.
+Boot and git-properties plugins. Gradle has no counterpart to a Maven parent, so what the
+Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
+no Gradle equivalent; the module simply shares the conventions.
 
 ### Lockstep
 
