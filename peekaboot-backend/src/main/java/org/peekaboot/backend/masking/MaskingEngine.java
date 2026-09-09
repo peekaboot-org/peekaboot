@@ -41,6 +41,12 @@ public final class MaskingEngine {
      */
     public static final String MASK_LITERAL = MaskingRules.MASK;
 
+    // Compiled once: tokenize runs twice per key for every property on every refresh, and
+    // neither expression takes String's single-character fast path. Declared ahead of the
+    // token rules below, whose static initialisation already tokenizes.
+    private static final Pattern CAMEL_CASE_BOUNDARY = Pattern.compile("(?<=[a-z0-9])(?=[A-Z])");
+    private static final Pattern KEY_SEPARATORS = Pattern.compile("[^a-z0-9]+");
+
     private static final List<List<String>> KEY_NAME_TOKEN_RULES = MaskingRules.KEY_NAME_RULES.stream()
             .map(rule -> tokenize(rule, true))
             .toList();
@@ -247,8 +253,9 @@ public final class MaskingEngine {
      * - stays one token, "password", instead of being mis-split into ["pass", "word"].
      */
     private static List<String> tokenize(String text, boolean splitCamelCaseBoundaries) {
-        String normalized = splitCamelCaseBoundaries ? text.replaceAll("(?<=[a-z0-9])(?=[A-Z])", "-") : text;
-        String[] parts = normalized.toLowerCase(Locale.ROOT).split("[^a-z0-9]+", -1);
+        String normalized =
+                splitCamelCaseBoundaries ? CAMEL_CASE_BOUNDARY.matcher(text).replaceAll("-") : text;
+        String[] parts = KEY_SEPARATORS.split(normalized.toLowerCase(Locale.ROOT), -1);
         List<String> tokens = new ArrayList<>(parts.length);
         for (String part : parts) {
             if (!part.isEmpty()) {
