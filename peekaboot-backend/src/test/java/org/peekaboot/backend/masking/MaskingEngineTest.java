@@ -827,11 +827,9 @@ class MaskingEngineTest {
 
         @Test
         void mask_shouldFallBackToValueRulesWhenKeyIsNull() {
-            String value = "aws_access_key_id=AKIAIOSFODNN7EXAMPLE";
+            String result = engine.mask(null, "aws_access_key_id=AKIAIOSFODNN7EXAMPLE");
 
-            String result = engine.mask(null, value);
-
-            assertThat(result).isEqualTo(engine.maskValue(value));
+            assertThat(result).isEqualTo("aws_access_key_id=******");
         }
 
         @Test

@@ -1,6 +1,7 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
@@ -197,7 +198,12 @@ class IssueDetectorTest {
         TraceTree result = detector.detectIssues(trace);
 
         SpanNode serviceNode = result.rootSpan().children().get(0);
-        assertThat(serviceNode.issues()).anyMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
+        assertThat(serviceNode.issues())
+                .extracting(SpanIssue::type, SpanIssue::message, SpanIssue::severity)
+                .containsExactly(tuple(
+                        IssueType.HIGH_QUERY_COUNT,
+                        "Span has 6 direct database queries (threshold: 5)",
+                        IssueSeverity.WARNING));
     }
 
     @Test
@@ -216,19 +222,39 @@ class IssueDetectorTest {
         assertThat(serviceNode.issues()).noneMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
     }
 
+    /**
+     * One tree that trips every rule at the defaults: a 600ms root with six 80ms direct
+     * queries on a 25-query trace. Raising all five thresholds above it must silence each
+     * rule, so a threshold the detector stopped reading would show up here.
+     */
     @Test
     void detectIssues_shouldSupportCustomThresholds() {
-        // slow threshold raised to 200ms
-        properties.setSlowSpanThresholdMs(200);
+        List<SpanNode> queries = new java.util.ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            queries.add(querySpan("q" + i, 80, Map.of("db.system", "postgresql")));
+        }
+        SpanNode root = createSpan("root", 600, SpanStatus.OK, Map.of(), List.copyOf(queries));
+        TraceTree trace = createTrace(root, createSummary(7, 25, 480L, 0));
+
+        TraceTree atDefaults = detector.detectIssues(trace);
+        assertThat(atDefaults.rootSpan().issues())
+                .extracting(SpanIssue::type)
+                .containsExactlyInAnyOrder(IssueType.VERY_SLOW, IssueType.HIGH_QUERY_COUNT, IssueType.HIGH_QUERY_COUNT);
+        assertThat(atDefaults.rootSpan().children())
+                .allSatisfy(query ->
+                        assertThat(query.issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY));
+
+        properties.setSlowSpanThresholdMs(700);
         properties.setVerySlowSpanThresholdMs(1000);
+        properties.setSlowQueryThresholdMs(100);
+        properties.setHighQueryCountThreshold(10);
+        properties.setHighTraceQueryCountThreshold(30);
 
-        SpanNode span = createSpan("span1", 150, SpanStatus.OK, Map.of(), List.of());
-        TraceTree trace = createTrace(span, createSummary(1, 0, 0L, 0));
-
-        TraceTree result = detector.detectIssues(trace);
-
-        // 150ms is under the raised threshold
-        assertThat(result.rootSpan().issues()).isEmpty();
+        TraceTree raised = detector.detectIssues(trace);
+        assertThat(raised.rootSpan().issues()).isEmpty();
+        assertThat(raised.rootSpan().children())
+                .allSatisfy(query -> assertThat(query.issues()).isEmpty());
+        assertThat(raised.slow()).isFalse();
     }
 
     @Test
