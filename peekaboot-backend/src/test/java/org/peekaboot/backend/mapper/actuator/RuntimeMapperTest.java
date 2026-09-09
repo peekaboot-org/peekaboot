@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
+import org.peekaboot.backend.domain.runtime.ProcessInfo;
 import org.peekaboot.backend.domain.runtime.RuntimeInfo;
 
 class RuntimeMapperTest {
@@ -35,13 +36,15 @@ class RuntimeMapperTest {
         assertThat(result.storage().get(0).usedPercent()).isEqualTo(60.0);
     }
 
+    /** The process and machine facts are the JVM's own, so they are there whatever the actuator said. */
     @Test
     void map_shouldHandleNullInputs() {
         RuntimeInfo result = mapper.map(null, null);
         assertThat(result.os()).isNull();
         assertThat(result.memory()).isNull();
         assertThat(result.storage()).isEmpty();
-        assertThat(result.process()).isNotNull();
+        assertThat(result.process()).isSameAs(ProcessInfo.current());
+        assertThat(result.machine()).isSameAs(MachineInfo.current());
     }
 
     @Test
@@ -66,12 +69,6 @@ class RuntimeMapperTest {
         InfoResponse info = new InfoResponse(null, null, null, null, null);
         RuntimeInfo result = mapper.map(info, null);
         assertThat(result.os()).isNull();
-    }
-
-    @Test
-    void map_shouldAlwaysIncludeMachineInfo() {
-        RuntimeInfo result = mapper.map(null, null);
-        assertThat(result.machine()).isSameAs(MachineInfo.current());
     }
 
     @Test
