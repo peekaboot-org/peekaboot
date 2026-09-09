@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.Stat;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 
 class InsightsCollectorRestoreTest {
@@ -37,7 +38,8 @@ class InsightsCollectorRestoreTest {
                 series,
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP);
+                InsightsCollectors.noOpListener(),
+                InsightsCollector.SnapshotSource.NONE);
     }
 
     @Test
@@ -154,7 +156,7 @@ class InsightsCollectorRestoreTest {
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP,
+                InsightsCollectors.noOpListener(),
                 source);
     }
 
@@ -211,7 +213,7 @@ class InsightsCollectorRestoreTest {
                 List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), Stat.VALUE, null, null)),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP,
+                InsightsCollectors.noOpListener(),
                 timeout -> {
                     asked.incrementAndGet();
                     try {

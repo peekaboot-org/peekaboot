@@ -27,16 +27,6 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Notified after each tick and each roll-up. */
     public interface Listener {
-        // UncommentedEmptyMethodBody: the constant's name is the documentation
-        @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
-        Listener NO_OP = new Listener() {
-            @Override
-            public void onTick(long epochMs, Map<String, Double> values) {}
-
-            @Override
-            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {}
-        };
-
         void onTick(long epochMs, Map<String, Double> values);
 
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
@@ -63,15 +53,6 @@ public final class InsightsCollector implements SmartLifecycle {
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
     private final SnapshotRestoreBarrier restoreBarrier;
-
-    public InsightsCollector(
-            List<InsightsProperties.Level> levels,
-            List<SeriesDef> series,
-            List<TileDef> tiles,
-            MeterRegistry registry,
-            Listener listener) {
-        this(levels, series, tiles, registry, listener, SnapshotSource.NONE);
-    }
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,

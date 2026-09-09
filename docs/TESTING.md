@@ -34,7 +34,9 @@ gets the root and ordering the store would hand it. `SpanNodes.node(id)` builds 
 already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the mapped `TraceTree` around one.
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` build the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
-auto-configuration builds it, from `PeekabootTracingProperties`. A test names only what it
+auto-configuration builds it, from `PeekabootTracingProperties`.
+`InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
+rather than the events; the collector itself has no test-only constructor. A test names only what it
 asserts on. A new record component is added to the builder once, not to every test class. The
 domain records carry no test-only constructors.
 
