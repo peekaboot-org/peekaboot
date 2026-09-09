@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
@@ -593,5 +594,38 @@ class InsightsTabIT extends PlaywrightTestBase {
                 new Page.WaitForFunctionOptions().setTimeout(15000));
 
         assertThat(markerLoads).hasSize(1);
+    }
+
+    /**
+     * A stream the browser has given up on (readyState CLOSED - the endpoint answering 404
+     * behind a proxy, say; a 404 makes EventSource fail the connection instead of retrying)
+     * is otherwise indistinguishable from a quiet application: the readouts just stop
+     * moving. The tab says so, and the dashboard's own refresh (the same render() the 30s
+     * timer calls) opens a new stream once the endpoint answers again, resyncing the
+     * mirrored rings on its open so the readouts move once more.
+     */
+    @Test
+    void aClosedStreamIsAnnouncedAndReopenedByTheRefreshCycle() {
+        page.route("**/api/insights/stream", route -> route.fulfill(new Route.FulfillOptions().setStatus(404)));
+        openInsights();
+
+        page.waitForSelector("#insights-stream-stopped");
+        assertThat(page.textContent("#insights-stream-stopped")).contains("Live updates stopped");
+
+        page.unroute("**/api/insights/stream");
+        page.click("#refresh-btn");
+        page.waitForSelector(
+                "#insights-stream-stopped", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+
+        String value = "#insights-panels .pk-insight-panel[data-panel-id='cpu'] .pk-insight-current";
+        String before = page.textContent(value);
+        page.waitForFunction(
+                "([selector, previous]) => {"
+                        + "  const element = document.querySelector(selector);"
+                        + "  return !!element && element.textContent !== previous"
+                        + "      && element.classList.contains('pk-blink');"
+                        + "}",
+                List.of(value, before),
+                new Page.WaitForFunctionOptions().setTimeout(15000));
     }
 }
