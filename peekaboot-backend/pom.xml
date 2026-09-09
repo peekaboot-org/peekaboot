@@ -68,12 +68,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Configuration processor for IDE support -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <optional>true</optional>
-        </dependency>
         <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>jdbc-url-parser</artifactId>

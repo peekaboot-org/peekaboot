@@ -272,10 +272,8 @@ bans `jakarta.servlet:jakarta.servlet-api`, `org.springframework:spring-webmvc`,
 cannot be banned, because the starter's own dependencies bring them: logback through
 `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through
 `spring-boot-starter-actuator`, the OpenTelemetry SDK and
-`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. One more,
-`spring-boot-configuration-processor`, is absent and left unbanned: it is an annotation
-processor, so a leak costs a compile-time annoyance rather than a wrong auto-configuration
-decision. Re-check the split after a dependency change with
+`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. Re-check
+the split after a dependency change with
 `mvn -pl peekaboot-spring-boot-starter -am dependency:tree`.
 
 ### The configuration-metadata check

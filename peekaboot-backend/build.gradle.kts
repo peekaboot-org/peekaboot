@@ -20,7 +20,6 @@ dependencies {
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
-    compileOnly("org.springframework.boot:spring-boot-configuration-processor")
 
     // The toolbar shell inlines stylesheets that ship in peekaboot-frontend, read off
     // the runtime classpath. Test scope only: a compile-scope edge would invert the
