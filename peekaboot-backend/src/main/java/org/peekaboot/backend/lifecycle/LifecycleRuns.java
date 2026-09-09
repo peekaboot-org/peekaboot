@@ -36,13 +36,13 @@ public class LifecycleRuns {
     public LifecycleRunsResponse runs() {
         List<LifecycleEvent> events = log.events();
         List<LifecycleRunsResponse.Run> runs = new ArrayList<>();
-        LifecycleEvents.Build carried = null;
+        BuildFacts carried = null;
         for (int i = 0; i < events.size(); i++) {
             LifecycleEvent event = events.get(i);
             if (event.type() != LifecycleEvent.Type.START) {
                 continue;
             }
-            LifecycleEvents.Build effective = carryForward(LifecycleEvents.Build.of(event), carried);
+            BuildFacts effective = BuildFacts.of(event).orElse(carried);
             LifecycleEvent previous = i == 0 ? null : events.get(i - 1);
             LifecycleEvent next = i + 1 < events.size() ? events.get(i + 1) : null;
             runs.add(toRun(event, previous, next, effective, changed(effective, carried), clock.getAsLong()));
@@ -53,31 +53,10 @@ public class LifecycleRuns {
     }
 
     /**
-     * A start's own maps win; a field the start doesn't report - missing build or git
-     * info, a hand-edited file, a run that predates this tracking - falls back to the
-     * last start that did report it, because the field never stopped being true.
-     */
-    private static LifecycleEvents.Build carryForward(LifecycleEvents.Build raw, LifecycleEvents.Build carried) {
-        if (carried == null) {
-            return raw;
-        }
-        return new LifecycleEvents.Build(
-                first(raw.version(), carried.version()),
-                first(raw.branch(), carried.branch()),
-                first(raw.commitId(), carried.commitId()),
-                first(raw.shortCommitId(), carried.shortCommitId()),
-                first(raw.buildTimeEpochMs(), carried.buildTimeEpochMs()));
-    }
-
-    private static <T> T first(T preferred, T fallback) {
-        return preferred != null ? preferred : fallback;
-    }
-
-    /**
      * The oldest run has no predecessor to differ from, so it is never a deployment - only
      * a run that replaced a known previous one can be.
      */
-    private static List<String> changed(LifecycleEvents.Build current, LifecycleEvents.Build previous) {
+    private static List<String> changed(BuildFacts current, BuildFacts previous) {
         if (previous == null) {
             return List.of();
         }
@@ -98,7 +77,7 @@ public class LifecycleRuns {
             LifecycleEvent start,
             LifecycleEvent previous,
             LifecycleEvent next,
-            LifecycleEvents.Build effective,
+            BuildFacts effective,
             List<String> changed,
             long nowEpochMs) {
         Timing timing = Timing.of(start, next, nowEpochMs);

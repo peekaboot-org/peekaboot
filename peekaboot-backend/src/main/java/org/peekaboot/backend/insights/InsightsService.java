@@ -110,13 +110,18 @@ public final class InsightsService implements SmartLifecycle {
 
     private static SeriesDef namespaced(String panelId, SeriesDef series) {
         return new SeriesDef(
-                panelId + "." + series.id(),
+                namespacedId(panelId, series.id()),
                 series.label(),
                 series.meter(),
                 series.tags(),
                 series.stat(),
                 series.subtractMeter(),
                 series.unit());
+    }
+
+    /** Series ids are unique within a panel; the panel id makes them unique across the collector. */
+    private static String namespacedId(String panelId, String seriesId) {
+        return panelId + "." + seriesId;
     }
 
     @Override
@@ -153,8 +158,7 @@ public final class InsightsService implements SmartLifecycle {
         List<InsightsProperties.Level> propertyLevels = properties.getLevels();
         for (int index = 0; index < propertyLevels.size(); index++) {
             InsightsProperties.Level level = propertyLevels.get(index);
-            levels.add(
-                    new InsightsConfigResponse.Level(index, level.getInterval().toMillis(), level.getSize()));
+            levels.add(new InsightsConfigResponse.Level(index, level.intervalMillis(), level.getSize()));
         }
 
         List<InsightsConfigResponse.Panel> panelResponses =
@@ -176,7 +180,7 @@ public final class InsightsService implements SmartLifecycle {
     private InsightsConfigResponse.Panel toPanel(PanelDef panel) {
         List<InsightsConfigResponse.Series> seriesResponses = panel.series().stream()
                 .map(series -> new InsightsConfigResponse.Series(
-                        panel.id() + "." + series.id(), series.label(), series.unit()))
+                        namespacedId(panel.id(), series.id()), series.label(), series.unit()))
                 .toList();
         return new InsightsConfigResponse.Panel(
                 panel.id(), panel.title(), panel.chart(), panel.unit(), panel.level(), seriesResponses);
@@ -199,7 +203,7 @@ public final class InsightsService implements SmartLifecycle {
 
     private String levelsDescription() {
         return properties.getLevels().stream()
-                .map(level -> InsightsCollector.formatInterval(level.getInterval()) + " x" + level.getSize())
+                .map(level -> IntervalFormat.humanize(level.getInterval()) + " x" + level.getSize())
                 .collect(Collectors.joining(", "));
     }
 }

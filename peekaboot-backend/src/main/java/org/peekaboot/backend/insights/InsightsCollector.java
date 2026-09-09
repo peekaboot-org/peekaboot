@@ -84,7 +84,7 @@ public final class InsightsCollector implements SmartLifecycle {
         this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
         this.intervalMillis = new long[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
-            intervalMillis[i] = levels.get(i).getInterval().toMillis();
+            intervalMillis[i] = levels.get(i).intervalMillis();
         }
 
         for (SeriesDef def : series) {
@@ -137,24 +137,9 @@ public final class InsightsCollector implements SmartLifecycle {
         List<String> names = new ArrayList<>(intervalMillis.length);
         names.add("peekaboot-insights-tick");
         for (int level = 1; level < intervalMillis.length; level++) {
-            names.add("peekaboot-insights-agg-" + formatInterval(Duration.ofMillis(intervalMillis[level])));
+            names.add("peekaboot-insights-agg-" + IntervalFormat.humanize(Duration.ofMillis(intervalMillis[level])));
         }
         return names;
-    }
-
-    /** Renders a duration compactly: whole hours as "Nh", whole minutes as "Nm", else "Ns"/"Nms". */
-    static String formatInterval(Duration duration) {
-        long millis = duration.toMillis();
-        if (millis % 3_600_000 == 0) {
-            return (millis / 3_600_000) + "h";
-        }
-        if (millis % 60_000 == 0) {
-            return (millis / 60_000) + "m";
-        }
-        if (millis % 1_000 == 0) {
-            return (millis / 1_000) + "s";
-        }
-        return millis + "ms";
     }
 
     /**

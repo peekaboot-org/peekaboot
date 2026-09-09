@@ -76,7 +76,7 @@ public final class InsightsSnapshotStore implements SnapshotStore {
     /** The ring shape a persisted snapshot has to match; endEpochMs and count play no part. */
     private static List<InsightsSnapshot.Level> geometry(InsightsProperties properties) {
         return properties.getLevels().stream()
-                .map(level -> new InsightsSnapshot.Level(level.getInterval().toMillis(), level.getSize(), 0, 0))
+                .map(level -> new InsightsSnapshot.Level(level.intervalMillis(), level.getSize(), 0, 0))
                 .toList();
     }
 

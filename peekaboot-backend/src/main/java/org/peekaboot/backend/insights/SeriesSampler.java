@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.TimeGauge;
 import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.ToDoubleFunction;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,20 +105,25 @@ public final class SeriesSampler {
         subtractMeterUnresolvedLogged = true;
     }
 
-    private double currentValue(List<Meter> meters) {
+    private static double currentValue(List<Meter> meters) {
+        return sum(meters, meter -> switch (meter) {
+            case TimeGauge tg -> tg.value(TimeUnit.SECONDS);
+            case Gauge gauge -> gauge.value();
+            case LongTaskTimer ltt -> ltt.activeTasks();
+            case Counter counter -> counter.count();
+            case FunctionCounter counter -> counter.count();
+            default -> Double.NaN;
+        });
+    }
+
+    /** The readings summed across the tag combinations a meter name matched; NaN when nothing matched. */
+    private static double sum(List<Meter> meters, ToDoubleFunction<Meter> reading) {
         if (meters.isEmpty()) {
             return Double.NaN;
         }
         double sum = 0;
         for (Meter meter : meters) {
-            sum += switch (meter) {
-                case TimeGauge tg -> tg.value(TimeUnit.SECONDS);
-                case Gauge gauge -> gauge.value();
-                case LongTaskTimer ltt -> ltt.activeTasks();
-                case Counter counter -> counter.count();
-                case FunctionCounter counter -> counter.count();
-                default -> Double.NaN;
-            };
+            sum += reading.applyAsDouble(meter);
         }
         return sum;
     }
@@ -141,22 +147,15 @@ public final class SeriesSampler {
         return delta * 1000.0 / elapsedMillis;
     }
 
-    private double cumulativeCount(List<Meter> meters) {
-        if (meters.isEmpty()) {
-            return Double.NaN;
-        }
-        double sum = 0;
-        for (Meter meter : meters) {
-            sum += switch (meter) {
-                case Counter counter -> counter.count();
-                case FunctionCounter counter -> counter.count();
-                case Timer timer -> timer.count();
-                case FunctionTimer timer -> timer.count();
-                case DistributionSummary summary -> summary.count();
-                default -> Double.NaN;
-            };
-        }
-        return sum;
+    private static double cumulativeCount(List<Meter> meters) {
+        return sum(meters, meter -> switch (meter) {
+            case Counter counter -> counter.count();
+            case FunctionCounter counter -> counter.count();
+            case Timer timer -> timer.count();
+            case FunctionTimer timer -> timer.count();
+            case DistributionSummary summary -> summary.count();
+            default -> Double.NaN;
+        });
     }
 
     private double sampleAvg(List<Meter> meters) {
@@ -184,20 +183,13 @@ public final class SeriesSampler {
         return deltaTotal / deltaCount;
     }
 
-    private double totalTime(List<Meter> meters) {
-        if (meters.isEmpty()) {
-            return Double.NaN;
-        }
-        double sum = 0;
-        for (Meter meter : meters) {
-            sum += switch (meter) {
-                case Timer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
-                case FunctionTimer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
-                case DistributionSummary summary -> summary.totalAmount();
-                default -> Double.NaN;
-            };
-        }
-        return sum;
+    private static double totalTime(List<Meter> meters) {
+        return sum(meters, meter -> switch (meter) {
+            case Timer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
+            case FunctionTimer timer -> timer.totalTime(TimeUnit.MILLISECONDS);
+            case DistributionSummary summary -> summary.totalAmount();
+            default -> Double.NaN;
+        });
     }
 
     private double sampleMax(List<Meter> meters) {
