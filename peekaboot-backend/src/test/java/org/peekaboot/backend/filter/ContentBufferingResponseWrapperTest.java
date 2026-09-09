@@ -2,12 +2,16 @@ package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -270,5 +274,100 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.isPassthrough()).isTrue();
         assertThat(originalResponse.getContentAsByteArray()).hasSize(chunks * chunk.length + 1);
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
+     * An async handler's worker can write while the request thread is still handing the
+     * buffered bytes over. The real response below stalls the hand-over inside its write,
+     * starts the worker there, and resumes once the worker has either finished (it overtook
+     * the hand-over) or is blocked waiting for it, so the outcome is deterministic either way.
+     */
+    @Test
+    void aWriteDuringTheHandOverLandsAfterTheBufferedBytes() throws Exception {
+        CountDownLatch handOverStarted = new CountDownLatch(1);
+        CountDownLatch workerDone = new CountDownLatch(1);
+        Thread[] worker = new Thread[1];
+        originalResponse = new MockHttpServletResponse() {
+            private final ServletOutputStream stalling =
+                    new StallingServletOutputStream(super.getOutputStream(), () -> {
+                        handOverStarted.countDown();
+                        await().pollDelay(Duration.ZERO)
+                                .pollInterval(Duration.ofMillis(1))
+                                .until(() ->
+                                        workerDone.getCount() == 0 || worker[0].getState() == Thread.State.BLOCKED);
+                    });
+
+            @Override
+            public ServletOutputStream getOutputStream() {
+                return stalling;
+            }
+        };
+        wrapper = new ContentBufferingResponseWrapper(originalResponse);
+        ServletOutputStream out = wrapper.getOutputStream();
+        out.write("early".getBytes(StandardCharsets.UTF_8));
+        worker[0] = new Thread(
+                () -> {
+                    awaitQuietly(handOverStarted);
+                    try {
+                        out.write("-late".getBytes(StandardCharsets.UTF_8));
+                    } catch (IOException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    workerDone.countDown();
+                },
+                "async-writer");
+        worker[0].start();
+
+        wrapper.enablePassthrough();
+        worker[0].join();
+
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /** Runs {@code beforeHandOver} once, at the first write from the thread that created it, the request thread. */
+    private static final class StallingServletOutputStream extends ServletOutputStream {
+
+        private final ServletOutputStream delegate;
+        private final Runnable beforeHandOver;
+        private final Thread requestThread = Thread.currentThread();
+        private boolean handedOver;
+
+        StallingServletOutputStream(ServletOutputStream delegate, Runnable beforeHandOver) {
+            this.delegate = delegate;
+            this.beforeHandOver = beforeHandOver;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            if (Thread.currentThread().equals(requestThread) && !handedOver) {
+                handedOver = true;
+                beforeHandOver.run();
+            }
+            delegate.write(b, off, len);
+        }
+
+        @Override
+        public boolean isReady() {
+            return true;
+        }
+
+        @Override
+        public void setWriteListener(WriteListener listener) {
+            // not needed by the wrapper under test
+        }
     }
 }
