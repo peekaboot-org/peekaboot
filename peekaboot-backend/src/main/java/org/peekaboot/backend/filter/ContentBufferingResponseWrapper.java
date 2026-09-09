@@ -92,24 +92,30 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
 
     /**
      * The hand-over itself, without flushing the writer: called from inside a write when the
-     * buffer outgrows the cap, where the writer's encoder is mid-flush already.
+     * buffer outgrows the cap, where the writer's encoder is mid-flush already. Holds the
+     * buffer's monitor for the whole sequence: an async worker writing meanwhile must land
+     * after the buffered bytes, and neither in a buffer already handed over nor ahead of it.
      */
     private void switchToPassthrough() throws IOException {
-        passthrough = true;
-        if (buffer.size() > 0) {
-            buffer.writeTo(getResponse().getOutputStream());
-            buffer.reset();
+        synchronized (buffer) {
+            passthrough = true;
+            if (buffer.size() > 0) {
+                buffer.writeTo(getResponse().getOutputStream());
+                buffer.reset();
+            }
         }
     }
 
     private void bufferOrPassThrough(byte[] b, int off, int len) throws IOException {
-        if (passthrough) {
-            getResponse().getOutputStream().write(b, off, len);
-            return;
-        }
-        buffer.write(b, off, len);
-        if (buffer.size() > MAX_BUFFERED_BYTES) {
-            switchToPassthrough();
+        synchronized (buffer) {
+            if (passthrough) {
+                getResponse().getOutputStream().write(b, off, len);
+                return;
+            }
+            buffer.write(b, off, len);
+            if (buffer.size() > MAX_BUFFERED_BYTES) {
+                switchToPassthrough();
+            }
         }
     }
 
