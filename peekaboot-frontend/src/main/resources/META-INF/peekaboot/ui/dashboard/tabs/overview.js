@@ -54,14 +54,17 @@ function tileIcon(tileId) {
  * alongside their definition - so the dashboard's own 30s cycle keeps them current and
  * this tab needs none of the Insights tab's SSE machinery. The row is hidden outright,
  * rather than left as an empty box, whenever insights are switched off or unreachable.
+ * Fetched only while this tab is the one showing (active-tab guard, see main.js's
+ * renderTab); main.js renders it again the moment it is switched to.
  */
-async function renderInsightTiles(container, {client, features, locale, timeZone} = {}) {
+async function renderInsightTiles(container, {client, features, locale, timeZone, active} = {}) {
     const row = container.querySelector('#insights-tiles');
     if (!row) return;
     if (!features?.insights || !client) {
         row.classList.add('hidden');
         return;
     }
+    if (!active) return;
 
     let config;
     try {
