@@ -20,16 +20,24 @@ final class MaskingRules {
      * filesystem path, not a secret) and key-alias. Bare "certificate" is absent for the
      * same reason - server.ssl.certificate is a path too; actual key material is caught by
      * the PEM value pattern, so only the two compound names that name a secret outright
-     * are listed.
+     * are listed. Plurals are listed as rules of their own: a {@code @ConfigurationProperties}
+     * group or an env-var prefix is often named "secrets" or "passwords", and whole-token
+     * matching (which keeps "passwordless" readable) never sees the singular inside it.
+     * Nothing strips a trailing "s" generically, so no unlisted word becomes a candidate.
      */
     static final List<String> KEY_NAME_RULES = List.of(
             "password",
+            "passwords",
             "passwd",
+            "passwds",
             "pwd",
             "passphrase",
             "secret",
+            "secrets",
             "client-secret",
+            "client-secrets",
             "token",
+            "tokens",
             "access-token",
             "refresh-token",
             "id-token",
@@ -38,10 +46,15 @@ final class MaskingRules {
             "credential",
             "credentials",
             "api-key",
+            "api-keys",
             "apikey",
+            "apikeys",
             "access-key",
+            "access-keys",
             "private-key",
+            "private-keys",
             "secret-key",
+            "secret-keys",
             "signing-key",
             "encryption-key",
             "authorization",
