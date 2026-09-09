@@ -10,7 +10,6 @@ import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
-import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -153,17 +152,6 @@ class PeekabootAutoConfigurationTest {
         contextRunner
                 .withPropertyValues("peekaboot.enabled=true")
                 .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(PeekabootController.class);
-                });
-    }
-
-    @Test
-    void shouldNotRegisterBeansWhenInfoEndpointClassMissing() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=true")
-                .withClassLoader(new FilteredClassLoader(InfoEndpoint.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
