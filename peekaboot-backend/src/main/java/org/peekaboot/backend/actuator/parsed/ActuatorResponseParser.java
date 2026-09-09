@@ -1,6 +1,5 @@
 package org.peekaboot.backend.actuator.parsed;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
@@ -9,9 +8,11 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Parses the raw Map response from PeekabootActuatorService into typed actuator beans.
  * An endpoint the service could not invoke is absent from that map and parses as null;
- * the others are unaffected. Properties the records do not declare are ignored here, for
- * every record at once: the records bind only what the mappers read, and a Boot release
- * adding a field must not break the parse.
+ * the others are unaffected. Inside a section, a collection the response left out binds as
+ * empty, normalised once by the records' compact constructors so no mapper has to guard for
+ * it. Properties the records do not declare are ignored here, for every record at once: the
+ * records bind only what the mappers read, and a Boot release adding a field must not break
+ * the parse.
  */
 public class ActuatorResponseParser {
 
@@ -24,15 +25,6 @@ public class ActuatorResponseParser {
     }
 
     public ActuatorParsedData parse(Map<String, Object> rawData) {
-        if (rawData == null) {
-            return new ActuatorParsedData(null, null, null, null, null, null, null, null);
-        }
-        Map<String, Object> sanitized = new LinkedHashMap<>();
-        rawData.forEach((key, value) -> {
-            if (value != null) {
-                sanitized.put(key, value);
-            }
-        });
-        return objectMapper.convertValue(sanitized, ActuatorParsedData.class);
+        return objectMapper.convertValue(rawData, ActuatorParsedData.class);
     }
 }

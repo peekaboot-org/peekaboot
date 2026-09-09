@@ -20,17 +20,13 @@ public class ConfigMapper {
     }
 
     public ConfigInfo map(ConfigPropsResponse configprops, boolean unmask) {
-        if (configprops == null || configprops.contexts() == null) {
+        if (configprops == null) {
             return new ConfigInfo(List.of());
         }
 
         Map<String, List<ConfigProperty>> byPrefix = new LinkedHashMap<>();
 
         for (ConfigPropsResponse.ConfigContext context : configprops.contexts().values()) {
-            if (context.beans() == null) {
-                continue;
-            }
-
             for (ConfigPropsResponse.ConfigBean bean : context.beans().values()) {
                 collectBeanProperties(bean, byPrefix, unmask);
             }
@@ -45,9 +41,6 @@ public class ConfigMapper {
 
     private void collectBeanProperties(
             ConfigPropsResponse.ConfigBean bean, Map<String, List<ConfigProperty>> byPrefix, boolean unmask) {
-        if (bean.properties() == null) {
-            return;
-        }
         String prefix = bean.prefix() != null ? bean.prefix() : "unknown";
         List<ConfigProperty> properties = byPrefix.computeIfAbsent(prefix, k -> new ArrayList<>());
         for (Map.Entry<String, Object> entry : bean.properties().entrySet()) {

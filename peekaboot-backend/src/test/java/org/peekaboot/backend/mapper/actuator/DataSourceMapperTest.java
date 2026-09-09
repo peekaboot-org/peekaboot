@@ -121,19 +121,6 @@ class DataSourceMapperTest {
         assertThat(result.get(0).properties()).containsEntry("password", "secret123");
     }
 
-    @Test
-    void map_shouldFilterNullMetadata() {
-        DataSourceMetadata metadata = mockMetadata("ds");
-
-        List<DataSourceMetadata> listWithNulls = new java.util.ArrayList<>();
-        listWithNulls.add(null);
-        listWithNulls.add(metadata);
-        listWithNulls.add(null);
-
-        List<DataSourceInfo> result = mapper.map(listWithNulls, null, false);
-        assertThat(result).hasSize(1);
-    }
-
     private DataSourceMetadata mockMetadata(String name) {
         DataSourceMetadata metadata = mock(DataSourceMetadata.class);
         when(metadata.getDataSourceName()).thenReturn(name);

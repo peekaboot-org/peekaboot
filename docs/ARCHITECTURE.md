@@ -304,7 +304,7 @@ tool that can read response headers from doing the same.
 The backend implements a Backend-for-Frontend pattern:
 
 1. **Raw actuator data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
-2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed beans
+2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
 3. **Domain mapping**: individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
 

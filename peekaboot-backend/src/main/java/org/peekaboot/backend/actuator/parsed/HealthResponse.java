@@ -4,9 +4,14 @@ import java.util.Map;
 
 /**
  * The descriptor {@code HealthEndpoint.health()} returns: the aggregate {@code status} at
- * the top and one entry per health contributor under {@code components}.
+ * the top and one entry per health contributor under {@code components}. Absent
+ * collections bind as empty (see {@link ActuatorResponseParser}).
  */
 public record HealthResponse(String status, Map<String, HealthComponent> components) {
+
+    public HealthResponse {
+        components = Absent.orEmpty(components);
+    }
 
     /**
      * One contributor: an indicator carries {@code details}, a composite (Spring's
@@ -14,6 +19,11 @@ public record HealthResponse(String status, Map<String, HealthComponent> compone
      * {@code components} instead.
      */
     public record HealthComponent(String status, Map<String, Object> details, Map<String, HealthComponent> components) {
+
+        public HealthComponent {
+            details = Absent.orEmpty(details);
+            components = Absent.orEmpty(components);
+        }
 
         /** An indicator: details and no children. */
         public HealthComponent(String status, Map<String, Object> details) {

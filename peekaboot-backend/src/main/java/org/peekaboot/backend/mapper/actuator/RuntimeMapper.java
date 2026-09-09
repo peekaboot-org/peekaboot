@@ -57,14 +57,14 @@ public class RuntimeMapper {
     }
 
     private List<StorageInfo> extractStorageInfo(HealthResponse health) {
-        if (health == null || health.components() == null) {
+        if (health == null) {
             return List.of();
         }
 
         List<StorageInfo> result = new ArrayList<>();
         HealthResponse.HealthComponent diskSpace = health.components().get("diskSpace");
 
-        if (diskSpace != null && diskSpace.details() != null) {
+        if (diskSpace != null) {
             Map<String, Object> details = diskSpace.details();
             String path = details.get("path") != null ? details.get("path").toString() : "/";
             long total = getLongValue(details, "total");

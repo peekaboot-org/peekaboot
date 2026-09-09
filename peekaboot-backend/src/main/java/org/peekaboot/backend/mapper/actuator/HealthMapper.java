@@ -1,7 +1,6 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
@@ -46,16 +45,12 @@ public class HealthMapper {
             Map<String, HealthResponse.HealthComponent> components,
             boolean unmask,
             List<HealthComponent> result) {
-        if (components == null) {
-            return;
-        }
         for (Map.Entry<String, HealthResponse.HealthComponent> entry : components.entrySet()) {
             String name = namePrefix + entry.getKey();
             HealthResponse.HealthComponent component = entry.getValue();
             HealthStatus componentStatus = HealthStatus.fromString(component.status());
             // a custom HealthIndicator can put anything in details, so they are masked as a tree
-            Map<String, Object> details = component.details() != null ? component.details() : Collections.emptyMap();
-            result.add(new HealthComponent(name, componentStatus, treeMasker.maskMap(details, unmask)));
+            result.add(new HealthComponent(name, componentStatus, treeMasker.maskMap(component.details(), unmask)));
             appendComponents(name + "/", component.components(), unmask, result);
         }
     }

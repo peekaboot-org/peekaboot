@@ -26,9 +26,9 @@ public class ScheduledTasksMapper {
             return new ScheduledTasksInfo(List.of(), 0, 0, 0);
         }
 
-        var cronTasks = orEmpty(response.cron());
-        var fixedDelayTasks = orEmpty(response.fixedDelay());
-        var fixedRateTasks = orEmpty(response.fixedRate());
+        var cronTasks = response.cron();
+        var fixedDelayTasks = response.fixedDelay();
+        var fixedRateTasks = response.fixedRate();
 
         List<ScheduledTaskInfo> tasks = new ArrayList<>();
         for (var cron : cronTasks) {
@@ -44,10 +44,6 @@ public class ScheduledTasksMapper {
         tasks.sort(Comparator.comparing(ScheduledTaskInfo::type).thenComparing(ScheduledTaskInfo::target));
 
         return new ScheduledTasksInfo(tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size());
-    }
-
-    private static <T> List<T> orEmpty(List<T> list) {
-        return list != null ? list : List.of();
     }
 
     private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
