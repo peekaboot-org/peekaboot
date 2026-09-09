@@ -94,6 +94,10 @@ public class TraceTreeMapper {
         if (rootSpanData == null) {
             return;
         }
+        // in a cycle the root has a stored parent; cutting that edge is what ends the walk
+        if (rootSpanData.parentId() != null && childrenByParentId.containsKey(rootSpanData.parentId())) {
+            childrenByParentId.get(rootSpanData.parentId()).remove(rootSpanData);
+        }
         List<SpanData> orphans = new ArrayList<>();
         for (SpanData span : spans) {
             if (span.equals(rootSpanData)) {
