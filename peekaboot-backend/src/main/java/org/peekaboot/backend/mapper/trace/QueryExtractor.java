@@ -22,8 +22,8 @@ public class QueryExtractor {
         List<SpanData> spans = traceData.spans();
 
         List<ResultSetInfo> resultSets = spans.stream()
-                .filter(this::isResultSetSpan)
-                .map(s -> new ResultSetInfo(s.creationOrder(), extractRowCount(s)))
+                .filter(DbSpans::isResultSet)
+                .map(s -> new ResultSetInfo(s.creationOrder(), DbSpans.rowCount(s)))
                 .toList();
 
         List<SpanData> querySpans = spans.stream().filter(DbSpans::isQuery).toList();
@@ -52,21 +52,6 @@ public class QueryExtractor {
         Long rowCount = findRowCount(creationOrder, nextQueryOrder, resultSets);
 
         return new QueryInfo(span.spanId(), sql, dbSystem, span.durationMs(), timestamp, rowCount, creationOrder);
-    }
-
-    private boolean isResultSetSpan(SpanData span) {
-        return "result-set".equals(span.name())
-                && span.tags() != null
-                && span.tags().containsKey("jdbc.row-count");
-    }
-
-    /** Only called for a span {@link #isResultSetSpan} accepted, so the tag is present. */
-    private static Long extractRowCount(SpanData span) {
-        try {
-            return Long.parseLong(span.tags().get("jdbc.row-count"));
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private Long findRowCount(long queryCreationOrder, long nextQueryOrder, List<ResultSetInfo> resultSets) {

@@ -131,4 +131,44 @@ class DbSpansTest {
     private static org.peekaboot.backend.tracing.store.SpanData clientSpan(Map<String, String> tags) {
         return span("s1").kind(Span.Kind.CLIENT).tags(tags).build();
     }
+
+    /** After mapping, the statement tags are gone: the query field is what says "query" then. */
+    @Test
+    void theMappedTwinTrustsTheQueryField() {
+        assertThat(DbSpans.isQuery(node("s1")
+                        .kind(Span.Kind.CLIENT)
+                        .tags(Map.of("jdbc.datasource.name", "primary"))
+                        .query("SELECT 1")
+                        .build()))
+                .isTrue();
+    }
+
+    @Test
+    void rowCountIsTheParsedTagOfAResultSetSpan() {
+        assertThat(DbSpans.rowCount(span("s1")
+                        .named("result-set")
+                        .tags(Map.of("jdbc.row-count", "10"))
+                        .build()))
+                .isEqualTo(10L);
+        assertThat(DbSpans.rowCount(span("s1")
+                        .named("result-set")
+                        .tags(Map.of("jdbc.row-count", "x"))
+                        .build()))
+                .isNull();
+        assertThat(DbSpans.rowCount(span("s1")
+                        .named("query")
+                        .tags(Map.of("jdbc.row-count", "10"))
+                        .build()))
+                .isNull();
+        assertThat(DbSpans.rowCount(span("s1").named("result-set").build())).isNull();
+    }
+
+    @Test
+    void statementTagsAreTheOnesSqlReads() {
+        assertThat(DbSpans.isStatementTag("db.query.text")).isTrue();
+        assertThat(DbSpans.isStatementTag("db.statement")).isTrue();
+        assertThat(DbSpans.isStatementTag("jdbc.query[3]")).isTrue();
+        assertThat(DbSpans.isStatementTag("db.system")).isFalse();
+        assertThat(DbSpans.isStatementTag("jdbc.row-count")).isFalse();
+    }
 }

@@ -38,4 +38,12 @@ class TraceWireFormatTest {
 
         assertThat(json).contains("\"severity\":\"warning\"").contains("\"severity\":\"error\"");
     }
+
+    @Test
+    void rowCountSerialisesAsANumber() {
+        String json =
+                PeekabootJson.MAPPER.writeValueAsString(node("s1").rowCount(3L).build());
+
+        assertThat(json).contains("\"rowCount\":3");
+    }
 }

@@ -830,4 +830,81 @@ class TraceTreeMapperTest {
 
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
+
+    /**
+     * The statement a query span carries is served once, masked, as {@code SpanNode.query};
+     * the raw {@code db.query.text}/{@code db.statement}/{@code jdbc.query[N]} tags it was
+     * read from are dropped from the span's tags rather than shipped a second time.
+     */
+    @Test
+    void dropsTheStatementTagsTheQueryFieldAlreadyCarries() {
+        var root = span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .build();
+        var otelQuery = span("q1")
+                .parent("root")
+                .named("SELECT orders")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 20)
+                .tags(Map.of(
+                        "db.query.text", "select * from orders",
+                        "db.statement", "select * from orders",
+                        "db.system.name", "h2"))
+                .build();
+        var proxyQuery = span("q2")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(40, 20)
+                .tags(Map.of("jdbc.query[0]", "select * from lines", "jdbc.datasource.name", "primary"))
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", root, otelQuery, proxyQuery));
+
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId, SpanNode::tags, SpanNode::query)
+                .containsExactly(
+                        tuple("q1", Map.of("db.system.name", "h2"), "select * from orders"),
+                        tuple("q2", Map.of("jdbc.datasource.name", "primary"), "select * from lines"));
+    }
+
+    /** A datasource-proxy result-set span's row count is served parsed; anything else has none. */
+    @Test
+    void readsTheRowCountOffAResultSetSpan() {
+        var root = span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .build();
+        var resultSet = span("rs")
+                .parent("root")
+                .named("result-set")
+                .kind(Span.Kind.CLIENT)
+                .at(10, 5)
+                .tags(Map.of("jdbc.row-count", "10"))
+                .build();
+        var unparsable = span("rs2")
+                .parent("root")
+                .named("result-set")
+                .kind(Span.Kind.CLIENT)
+                .at(20, 5)
+                .tags(Map.of("jdbc.row-count", "not-a-number"))
+                .build();
+        var otherSpanWithTheTag = span("q1")
+                .parent("root")
+                .named("query")
+                .kind(Span.Kind.CLIENT)
+                .at(30, 5)
+                .tags(Map.of("jdbc.row-count", "10", "jdbc.query[0]", "SELECT 1"))
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", root, resultSet, unparsable, otherSpanWithTheTag));
+
+        assertThat(result.rootSpan().rowCount()).isNull();
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::spanId, SpanNode::rowCount)
+                .containsExactly(tuple("rs", 10L), tuple("rs2", null), tuple("q1", null));
+    }
 }

@@ -39,6 +39,7 @@ public final class SpanNodes {
         private String errorClass;
         private String remoteServiceName;
         private String query;
+        private Long rowCount;
         private List<TraceLog> logs;
 
         private Builder(String spanId) {
@@ -111,6 +112,11 @@ public final class SpanNodes {
             return this;
         }
 
+        public Builder rowCount(Long rowCount) {
+            this.rowCount = rowCount;
+            return this;
+        }
+
         public Builder logs(List<TraceLog> logs) {
             this.logs = logs;
             return this;
@@ -133,6 +139,7 @@ public final class SpanNodes {
                     errorClass,
                     remoteServiceName,
                     query,
+                    rowCount,
                     logs);
         }
     }

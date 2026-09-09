@@ -120,9 +120,6 @@ function nameCell(span, indent) {
     const name = span.name || 'unknown';
     const spanId = span.spanId;
     const logCount = (span.logs || []).length;
-    // The backend decides what a query span is (DbSpans) and ships its masked statement as
-    // span.query; a datasource-proxy result-set span carries the row count as a tag.
-    const rowCount = name.toLowerCase().includes('result-set') ? (span.tags || {})['jdbc.row-count'] : undefined;
 
     const cell = el('div', {className: 'pk-gantt-name'});
     cell.style.paddingLeft = `${indent}px`;
@@ -133,9 +130,10 @@ function nameCell(span, indent) {
         cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
     }
     cell.append(el('span', {className: 'pk-gantt-name__text', text: name, title: name}));
-    // a tag is a string the instrumentation wrote; one that is not a number shows nothing
-    if (rowCount !== undefined && Number.isFinite(Number(rowCount))) {
-        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(Number(rowCount), 'row')}));
+    // The backend decides what a query span is (DbSpans) and ships its masked statement
+    // as span.query, and a result-set span's parsed row count as span.rowCount.
+    if (span.rowCount != null) {
+        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row')}));
     }
     if (span.query) {
         cell.append(
@@ -165,7 +163,8 @@ function track(span, traceStart, totalDuration) {
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
     const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
     const kind = (span.kind || 'internal').toLowerCase();
-    const hasError = span.status === 'ERROR' || span.errorMessage;
+    // the backend's verdict: ERROR whenever the span recorded an error message or class
+    const hasError = span.status === 'ERROR';
 
     const element = document.createElement('div');
     element.className = 'pk-gantt-track';
@@ -227,11 +226,12 @@ function queryDetailRow(span, indent, depth) {
 }
 
 /**
- * The span's tags as badges under its row, or null when there are none to show: the
- * statement tags already show in the query detail, and events sit on the track.
+ * The span's tags as badges under its row, or null when there are none: the backend
+ * already keeps the statement tags out (they show in the query detail), and events sit
+ * on the track.
  */
 function tagBadgesRow(span, indent, depth) {
-    const entries = Object.entries(span.tags || {}).filter(([key]) => !isStatementTag(key));
+    const entries = Object.entries(span.tags || {});
     if (entries.length === 0) return null;
 
     const row = document.createElement('div');
@@ -249,9 +249,4 @@ function tagBadge(key, value) {
         el('span', {className: 'pk-tag-badge__key', text: shortKey}),
         '=',
         el('span', {className: 'pk-tag-badge__value', text: shortValue}));
-}
-
-/** The tags DbSpans.sql reads the statement from - shown once, in the query detail, not again as a badge. */
-function isStatementTag(key) {
-    return key.startsWith('jdbc.query') || key === 'db.query.text' || key === 'db.statement';
 }

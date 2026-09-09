@@ -843,7 +843,11 @@ is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
 The same masked text is put on the span itself as `SpanNode.query`, which is what the Spans
-tab's SQL toggle shows. `DbSpans.system` mirrors this priority for `db.system.name` /
+tab's SQL toggle shows, and the three statement tags it was read from are dropped from
+`SpanNode.tags` rather than served a second time beside it. A datasource-proxy result-set
+span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount` (null when it does not
+parse), so the Spans tab reads facts the backend decided instead of re-deriving them from
+tag and span names. `DbSpans.system` mirrors this priority for `db.system.name` /
 `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is value-patterns only, not
 column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries the reasoning), so a
 credential with no provider-recognisable shape sitting in an ordinary column is not caught.
