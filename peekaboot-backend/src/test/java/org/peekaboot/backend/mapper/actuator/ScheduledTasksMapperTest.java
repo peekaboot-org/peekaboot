@@ -152,7 +152,11 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(2).target()).isEqualTo("c.Scheduler.fixed");
     }
 
-    /** The interval reaches the frontend as milliseconds only; the frontend formats it, and there is no cron text to describe. */
+    /**
+     * The interval reaches the frontend as milliseconds only; the frontend formats it, and
+     * there is no cron text to describe. None of these has run yet, which the status says
+     * outright rather than leaving the frontend to infer it from a missing timestamp.
+     */
     @Test
     void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleOrADescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
@@ -167,6 +171,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks())
                 .extracting(ScheduledTaskInfo::scheduleDescription)
                 .containsOnlyNulls();
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::lastExecution).containsOnlyNulls();
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::lastStatus).containsOnly(TaskExecutionStatus.PENDING);
     }
 
     @Test

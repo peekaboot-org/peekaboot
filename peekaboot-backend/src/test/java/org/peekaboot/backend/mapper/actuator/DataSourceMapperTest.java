@@ -87,6 +87,14 @@ class DataSourceMapperTest {
         assertThat(result.get(0).health()).isEqualTo(HealthStatus.UP);
     }
 
+    /** The health endpoint may be off; the row then says unknown rather than guessing UP. */
+    @Test
+    void map_reportsUnknownHealthWithoutAHealthResponse() {
+        List<DataSourceInfo> result = mapper.map(List.of(metadata("ds")), null, false);
+
+        assertThat(result).extracting(DataSourceInfo::health).containsExactly(HealthStatus.UNKNOWN);
+    }
+
     @Test
     void map_shouldHandleEmptyList() {
         List<DataSourceInfo> result = mapper.map(List.of(), null, false);
