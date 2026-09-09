@@ -78,14 +78,6 @@ class HealthMapperTest {
     }
 
     @Test
-    void map_shouldHandleAnEmptyDescriptor() {
-        HealthResponse health = new HealthResponse(null, null);
-        HealthInfo result = mapper.map(health, false);
-        assertThat(result.status()).isEqualTo(HealthStatus.UNKNOWN);
-        assertThat(result.components()).isEmpty();
-    }
-
-    @Test
     void map_shouldHandleDownStatus() {
         HealthResponse health = new HealthResponse("DOWN", Map.of());
         HealthInfo result = mapper.map(health, false);

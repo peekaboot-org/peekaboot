@@ -145,12 +145,12 @@ class ActuatorResponseParserTest {
 
         HealthResponse.HealthComponent db = response.health().components().get("db");
         assertThat(db.status()).isEqualTo("DOWN");
-        assertThat(db.details()).isNull();
+        assertThat(db.details()).isEmpty();
         assertThat(db.components()).containsOnlyKeys("primary", "reporting");
         assertThat(db.components().get("primary").status()).isEqualTo("UP");
         assertThat(db.components().get("reporting").details())
                 .containsEntry("error", "org.postgresql.util.PSQLException: Connection refused");
-        assertThat(response.health().components().get("ping").components()).isNull();
+        assertThat(response.health().components().get("ping").components()).isEmpty();
     }
 
     /** The records declare only what the mappers read; whatever else an endpoint sends is dropped, not fatal. */
@@ -167,14 +167,79 @@ class ActuatorResponseParserTest {
         assertThat(response.loggers().loggers()).containsOnlyKeys("ROOT");
     }
 
+    /**
+     * A section can leave a collection out (no active profile, an indicator with no
+     * details, a Flyway bean before its first migration). The records normalise that once,
+     * at the boundary, so the mappers never see a null list or map.
+     */
     @Test
-    void handlesNullInput() {
-        ActuatorParsedData response = parser.parse(null);
+    void anAbsentCollectionInConfigpropsBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of(
+                "configprops", Map.of("contexts", Map.of("app", Map.of("beans", Map.of("server", Map.of()))))));
 
-        assertThat(response).isNotNull();
-        assertThat(response.spring()).isNull();
-        assertThat(response.health()).isNull();
-        assertThat(response.info()).isNull();
-        assertThat(response.scheduledtasks()).isNull();
+        ConfigPropsResponse.ConfigContext context =
+                response.configprops().contexts().get("app");
+        assertThat(context.beans().get("server").properties()).isEmpty();
+        assertThat(new ConfigPropsResponse(null).contexts()).isEmpty();
+        assertThat(new ConfigPropsResponse.ConfigContext(null, null).beans()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInFlywayBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of(
+                "flyway", Map.of("contexts", Map.of("app", Map.of("flywayBeans", Map.of("flyway", Map.of()))))));
+
+        assertThat(response.flyway()
+                        .contexts()
+                        .get("app")
+                        .flywayBeans()
+                        .get("flyway")
+                        .migrations())
+                .isEmpty();
+        assertThat(new FlywayResponse(null).contexts()).isEmpty();
+        assertThat(new FlywayResponse.FlywayContext(null, null).flywayBeans()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInEnvBindsAsEmpty() {
+        ActuatorParsedData response =
+                parser.parse(Map.of("env", Map.of("propertySources", List.of(Map.of("name", "systemEnvironment")))));
+
+        assertThat(response.env().activeProfiles()).isEmpty();
+        assertThat(response.env().propertySources().getFirst().properties()).isEmpty();
+        assertThat(new EnvResponse(null, null).propertySources()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInHealthBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of(
+                "health", Map.of("status", "UP", "components", Map.of("ping", Map.of("status", "UP")))));
+
+        HealthResponse.HealthComponent ping = response.health().components().get("ping");
+        assertThat(ping.details()).isEmpty();
+        assertThat(ping.components()).isEmpty();
+        assertThat(new HealthResponse("UP", null).components()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInLoggersBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of("loggers", Map.of("levels", List.of("INFO"))));
+
+        assertThat(response.loggers().loggers()).isEmpty();
+    }
+
+    @Test
+    void anAbsentCollectionInScheduledtasksBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of("scheduledtasks", Map.of("cron", List.of())));
+
+        assertThat(response.scheduledtasks().fixedDelay()).isEmpty();
+        assertThat(response.scheduledtasks().fixedRate()).isEmpty();
+    }
+
+    @Test
+    void anAbsentBuildSectionInInfoBindsAsEmpty() {
+        ActuatorParsedData response = parser.parse(Map.of("info", Map.of("java", Map.of("version", "25"))));
+
+        assertThat(response.info().build()).isEmpty();
     }
 }

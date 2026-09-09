@@ -80,13 +80,6 @@ class ConfigMapperTest {
         assertThat(result.groups()).isEmpty();
     }
 
-    @Test
-    void map_shouldHandleNullContexts() {
-        ConfigPropsResponse configprops = new ConfigPropsResponse(null);
-        ConfigInfo result = mapper.map(configprops, false);
-        assertThat(result.groups()).isEmpty();
-    }
-
     /**
      * A nested tree flattens to one dotted-key property per leaf, so the Config tab's
      * filter can match nested keys and values directly - and the sensitive leaf still

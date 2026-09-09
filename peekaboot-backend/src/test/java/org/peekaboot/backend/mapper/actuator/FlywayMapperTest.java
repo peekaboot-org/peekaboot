@@ -82,13 +82,6 @@ class FlywayMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullContexts() {
-        FlywayResponse flywayData = new FlywayResponse(null);
-        FlywayInfo result = mapper.map(flywayData);
-        assertThat(result.migrations()).isEmpty();
-    }
-
-    @Test
     void map_shouldHandlePendingState() {
         FlywayInfo result = mapper.map(flyway(migration(null, "PENDING", "1")));
         assertThat(result.migrations().get(0).state()).isEqualTo(MigrationState.PENDING);

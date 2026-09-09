@@ -50,14 +50,6 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullProfiles() {
-        EnvResponse env = new EnvResponse(null, null);
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.activeProfiles()).isEmpty();
-        assertThat(result.propertySources()).isEmpty();
-    }
-
-    @Test
     void map_shouldFallBackToUnknownNameWhenPropertySourceNameIsNull() {
         EnvResponse env = new EnvResponse(
                 List.of(),
@@ -66,15 +58,6 @@ class EnvironmentMapperTest {
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources()).hasSize(1);
         assertThat(result.propertySources().get(0).name()).isEqualTo("unknown");
-    }
-
-    @Test
-    void map_shouldReturnEmptyPropertiesWhenSourcePropertiesIsNull() {
-        EnvResponse env =
-                new EnvResponse(List.of(), List.of(new EnvResponse.PropertySource("application.properties", null)));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources()).hasSize(1);
-        assertThat(result.propertySources().get(0).properties()).isEmpty();
     }
 
     @Test

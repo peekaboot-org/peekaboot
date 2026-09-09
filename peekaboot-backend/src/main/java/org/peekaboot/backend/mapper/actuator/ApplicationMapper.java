@@ -24,10 +24,8 @@ public class ApplicationMapper {
         String javaVendor = null;
 
         if (info != null) {
-            if (info.build() != null) {
-                // free-form: a consuming app supplies info.build itself, so it is masked as a tree
-                build = treeMasker.maskMap(info.build(), unmask);
-            }
+            // free-form: a consuming app supplies info.build itself, so it is masked as a tree
+            build = treeMasker.maskMap(info.build(), unmask);
             if (info.git() != null) {
                 git = mapGitInfo(info.git());
             }
