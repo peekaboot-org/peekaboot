@@ -30,7 +30,7 @@ record BuildFacts(String version, String branch, String commitId, String shortCo
      * missing build or git info, a hand-edited file, a run that predates this tracking. The
      * field never stopped being true. A null {@code fallback} leaves the facts as they are.
      */
-    BuildFacts orElse(BuildFacts fallback) {
+    BuildFacts withFallback(BuildFacts fallback) {
         if (fallback == null) {
             return this;
         }
