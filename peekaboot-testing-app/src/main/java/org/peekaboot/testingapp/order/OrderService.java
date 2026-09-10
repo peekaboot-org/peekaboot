@@ -67,8 +67,8 @@ public class OrderService {
             // exists. They are here so the page passes the high-trace-query-count threshold
             // the Traces tab reads its query count against - padding, not a bug.
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
-            long redundantLineCount = orderLineRepository.countByOrderId(order.getId());
-            boolean stillPresent = orderRepository.existsById(order.getId());
+            long lineCount = orderLineRepository.countByOrderId(order.getId());
+            orderRepository.existsById(order.getId());
 
             BigDecimal total = lines.stream()
                     .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
@@ -77,9 +77,9 @@ public class OrderService {
             summaries.add(new OrderSummary(
                     order.getId(),
                     order.getReference(),
-                    stillPresent ? order.getStatus() : "UNKNOWN",
+                    order.getStatus(),
                     order.getPlacedAt(),
-                    (int) redundantLineCount,
+                    (int) lineCount,
                     total,
                     customerName));
         }
