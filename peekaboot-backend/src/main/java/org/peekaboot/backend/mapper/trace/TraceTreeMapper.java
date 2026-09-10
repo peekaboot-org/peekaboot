@@ -95,7 +95,8 @@ public class TraceTreeMapper {
             return;
         }
         // in a cycle the root has a stored parent; cutting that edge is what ends the walk
-        if (rootSpanData.parentId() != null && childrenByParentId.containsKey(rootSpanData.parentId())) {
+        // (the root is one of `spans`, so its own parentId always has a group here)
+        if (rootSpanData.parentId() != null) {
             childrenByParentId.get(rootSpanData.parentId()).remove(rootSpanData);
         }
         List<SpanData> orphans = new ArrayList<>();

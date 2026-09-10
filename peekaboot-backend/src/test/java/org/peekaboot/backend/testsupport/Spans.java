@@ -32,6 +32,15 @@ public final class Spans {
         return span(spanId).named("query").kind(Span.Kind.CLIENT).at(0, 10);
     }
 
+    /**
+     * The span datasource-proxy exports after a query, carrying its row count: shaped like
+     * {@link #query} but named {@code result-set} and with no statement tag, so it is a
+     * result set and not a query of its own.
+     */
+    public static SpanBuilder resultSet(String spanId, int rowCount) {
+        return query(spanId).named("result-set").tag("jdbc.row-count", String.valueOf(rowCount));
+    }
+
     /** {@link #query} carrying the SQL under {@code jdbc.query[0]} and the real datasource name under {@code peer.service}. */
     public static SpanBuilder jdbcQuery(String spanId, String sql) {
         return query(spanId).tag("jdbc.query[0]", sql).tag("peer.service", "sample_app_db");
