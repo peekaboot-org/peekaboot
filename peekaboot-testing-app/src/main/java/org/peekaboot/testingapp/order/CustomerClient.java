@@ -5,6 +5,7 @@ import static java.util.Objects.requireNonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
@@ -33,8 +34,8 @@ public class CustomerClient {
     public String lookupCustomerName(long customerId) {
 
         try {
-            // An unknown id answers 404, which RestClient raises, so every way this can fail -
-            // that one included - lands in the catch below rather than in a branch of its own.
+            // An unknown id answers 404, which RestClient raises, so "there is no such person"
+            // is a catch below rather than a branch on the body.
             JsonNode person = requireNonNull(
                     restClient
                             .get()
@@ -45,6 +46,9 @@ public class CustomerClient {
 
             return person.path("firstName").asString("") + " "
                     + person.path("lastName").asString("");
+        } catch (HttpClientErrorException.NotFound noSuchCustomer) {
+            // An id with nobody behind it is an answer, not a failure - the order still renders.
+            return "customer #" + customerId;
         } catch (RuntimeException e) {
             log.warn("customer lookup for {} failed, falling back to the id", customerId, e);
             return "customer #" + customerId;
