@@ -74,7 +74,23 @@ final class Subscriber {
             Thread.currentThread().interrupt();
         } catch (IOException | IllegalStateException e) {
             log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
-            emitter.completeWithError(e);
+            endStream(e);
+        }
+    }
+
+    /** Ends the stream for a peer whose send failed, and detaches the subscriber either way. */
+    private void endStream(Exception sendFailure) {
+        try {
+            emitter.completeWithError(sendFailure);
+        } catch (IllegalStateException e) {
+            // A container refuses a completion once its async request has errored or gone, so
+            // this peer left before we could end its stream - as routine as the failed send.
+            log.debug("Insights SSE subscriber had already gone when its stream was ended: {}", e.toString());
+        } catch (RuntimeException e) {
+            log.warn("Failed to end an insights SSE subscriber's stream", e);
+        } finally {
+            // The emitter detaches the subscriber itself, but only when the completion goes through.
+            onDrop.run();
         }
     }
 

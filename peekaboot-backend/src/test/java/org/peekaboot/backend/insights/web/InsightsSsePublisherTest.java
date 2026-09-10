@@ -15,7 +15,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +30,7 @@ import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.StringHttpMessageConverter;
+import org.springframework.mock.web.MockAsyncContext;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.context.request.ServletWebRequest;
@@ -491,6 +494,67 @@ class InsightsSsePublisherTest {
         }
     }
 
+    /**
+     * Ending the stream is itself a call the container can refuse: Tomcat's AsyncContext
+     * rejects a dispatch from a non-container thread once its onError has returned, and that
+     * throw comes straight out of completeWithError() on the sender thread. It must not kill
+     * the sender, and the peer must be detached anyway.
+     */
+    @Test
+    void aCompletionTheContainerRefusesStillDropsThePeerQuietly() throws Exception {
+        DispatchedStream stream = new DispatchedStream(
+                publisher.subscribe(), FailingWriteResponse.failingEveryWrite(new IOException("Broken pipe")));
+        stream.refusesDispatchWith(
+                new IllegalStateException(
+                        "A non-container (application) thread attempted to use "
+                                + "the AsyncContext after an error had occurred and the call to AsyncListener.onError() had returned."));
+
+        try (UncaughtExceptions uncaught = new UncaughtExceptions()) {
+            publisher.onTick(1_000, Map.of("a", 1.0));
+
+            // Awaitility's own uncaught-exception catching would take the handler over mid-wait
+            await().dontCatchUncaughtExceptions()
+                    .atMost(Duration.ofSeconds(3))
+                    .alias("the sender thread finished")
+                    .until(() -> !uncaught.captured().isEmpty() || publisher.subscriberCount() == 0);
+            assertThat(uncaught.captured())
+                    .as("nothing escapes the sender thread")
+                    .isEmpty();
+        }
+        assertThat(publisher.subscriberCount())
+                .as("the peer is detached even though its stream could not be ended")
+                .isZero();
+    }
+
+    /**
+     * A completion refused for any other reason is not a peer going away, so it is reported
+     * once with its stack trace rather than swallowed - and the subscriber still goes.
+     */
+    @Test
+    void aCompletionFailingForAnotherReasonIsReportedOnce() throws Exception {
+        DispatchedStream stream = new DispatchedStream(
+                publisher.subscribe(), FailingWriteResponse.failingEveryWrite(new IOException("Broken pipe")));
+        stream.refusesDispatchWith(
+                new IllegalArgumentException("expected failure from aCompletionFailingForAnotherReasonIsReportedOnce"));
+
+        try (UncaughtExceptions uncaught = new UncaughtExceptions();
+                LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
+            publisher.onTick(1_000, Map.of("a", 1.0));
+
+            await().dontCatchUncaughtExceptions()
+                    .atMost(Duration.ofSeconds(3))
+                    .alias("the peer is detached")
+                    .until(() -> !uncaught.captured().isEmpty() || publisher.subscriberCount() == 0);
+            assertThat(uncaught.captured())
+                    .as("nothing escapes the sender thread")
+                    .isEmpty();
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel() == Level.WARN)
+                    .singleElement()
+                    .satisfies(event -> assertThat(event.getThrowableProxy()).isNotNull());
+        }
+    }
+
     /** A keep-alive is an SSE comment, so an idle connection carries traffic without a data event. */
     @Test
     void aHeartbeatReachesAHealthySubscriberAsAComment() throws Exception {
@@ -572,6 +636,31 @@ class InsightsSsePublisherTest {
     private InsightsSsePublisher tracked(InsightsSsePublisher publisher) {
         publishers.add(publisher);
         return publisher;
+    }
+
+    /**
+     * Collects what the JVM's default handler would otherwise print for a thread that dies on
+     * an exception. That handler is JVM-global, which is safe here only because
+     * peekaboot-backend's surefire runs its classes one at a time on one thread; close() puts
+     * the previous handler back.
+     */
+    private static final class UncaughtExceptions implements AutoCloseable {
+
+        private final List<Throwable> captured = new CopyOnWriteArrayList<>();
+        private final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+
+        UncaughtExceptions() {
+            Thread.setDefaultUncaughtExceptionHandler((thread, e) -> captured.add(e));
+        }
+
+        List<Throwable> captured() {
+            return captured;
+        }
+
+        @Override
+        public void close() {
+            Thread.setDefaultUncaughtExceptionHandler(previous);
+        }
     }
 
     /**
@@ -681,6 +770,14 @@ class InsightsSsePublisherTest {
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
+        }
+
+        /** Makes the container refuse the completion dispatch, as one that has already errored does. */
+        void refusesDispatchWith(RuntimeException refusal) {
+            MockAsyncContext asyncContext = (MockAsyncContext) Objects.requireNonNull(request.getAsyncContext());
+            asyncContext.addDispatchHandler(() -> {
+                throw refusal;
+            });
         }
 
         /** What the async dispatch would hand back: null for a completed stream, or the exception. */
