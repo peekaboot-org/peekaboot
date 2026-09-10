@@ -205,7 +205,7 @@ means `main.js` is a graph of forty-odd separate fetches, and losing one left th
 unevaluated, the loading placeholder up and the page mute, which every waiting test read as a
 30s Playwright timeout with nothing to explain it.
 
-`dashboard/boot-error.js` now reloads the page once out of it and raises the error banner if
+`dashboard/boot-recovery.js` now reloads the page once out of it and raises the error banner if
 that does not help (see `peekaboot-frontend/README.md`, *When the shell does not start*). The
 recovery is the product's, not the suite's, so it covers the deep-link tests that navigate to
 the dashboard directly as well as `openDashboard()`, and no test retries anything.
