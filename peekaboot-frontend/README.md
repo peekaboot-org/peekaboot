@@ -419,7 +419,7 @@ streamed body. The last attempt lands 4.75s after the response finished. With
 a pending placeholder rather than leaving a spinner up forever. A response that arrived but
 was empty (a 404, or `rootSpan` missing) leaves the previous render standing.
 
-`ToolbarLateSpanIT` is timed against this ladder: `LateSpanFixture.LateSpanController.LATE_WORK`
+`ToolbarLateSpanIT` is timed against this ladder: `LateSpanController.LATE_WORK`
 is arithmetic over the four attempts and the test profile's export delay, so moving an
 attempt means redoing that arithmetic.
 
