@@ -111,6 +111,15 @@ export function openTraceDetail(traceId, options = {}) {
     overlayHost.style.cssText = 'position:fixed;inset:0;';
     document.body.appendChild(overlayHost);
     setBackgroundInert(overlayHost);
+    // Bound here rather than in render(): from this line on the page behind is inert, and a
+    // reader waiting out the trace fetch (or looking at the error state) must be able to
+    // leave. closeTraceDetail() unbinds it, however the overlay is dismissed.
+    escHandler = event => {
+        if (event.key === 'Escape') {
+            closeTraceDetail();
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 
     const shadow = overlayHost.attachShadow({mode: 'open'});
     themeUnwatch = bindTheme(overlayHost);
@@ -131,7 +140,7 @@ export function openTraceDetail(traceId, options = {}) {
 
 export function closeTraceDetail() {
     // Invalidates any fetchAndRender() still in flight from the overlay just removed, so
-    // it cannot re-render into (or re-register an ESC listener for) a detached node.
+    // it cannot re-render into a detached node.
     currentSession += 1;
     const existing = document.getElementById('peekaboot-trace-overlay');
     if (existing) {
@@ -168,10 +177,10 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
         render(content, trace, urlState, display);
     } catch (error) {
         if (session !== currentSession) return;
-        // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
-        // which never was one either - but this screen is reachable and has a working
-        // control, so it needs a role and a name at minimum for a screen-reader user to
-        // know what landed on the page.
+        // Not a full dialog (no focus-in) - consistent with the loading state, which never
+        // was one either - but this screen is reachable and has a working control, so it
+        // needs a role and a name at minimum for a screen-reader user to know what landed
+        // on the page. Escape closes it, bound since the open.
         const close = button({className: 'pk-btn', text: 'Close'});
         close.addEventListener('click', closeTraceDetail);
         content.replaceChildren(el('div', {
@@ -197,18 +206,6 @@ function render(content, trace, urlState, display) {
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
 
     wireTabs(container, trace, urlState, display);
-
-    // ESC key to close; closeTraceDetail removes the listener however
-    // the overlay is dismissed (buttons, ESC)
-    if (escHandler) {
-        document.removeEventListener('keydown', escHandler);
-    }
-    escHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeTraceDetail();
-        }
-    };
-    document.addEventListener('keydown', escHandler);
 
     // Move focus into the dialog. No single interior control is the obvious "first" one
     // given the tab strip + header controls, so the dialog itself (a real ARIA APG
