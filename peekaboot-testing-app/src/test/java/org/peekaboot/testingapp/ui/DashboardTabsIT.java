@@ -52,11 +52,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /**
      * Puts a failed SCHEDULED_JOB trace in the store by running the sample app's failing
      * job, and returns its id once the Errors bucket lists it - the same reasoning as
-     * seedAnHttpTrace for a test that opens that bucket.
+     * seedAnHttpTrace for a test that opens that bucket. TraceDeepLinkIT fires the same job
+     * against the same store, so the wait names the run this call fired.
      */
     private String seedAnErrorTrace() {
-        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-        return awaitListedTrace("bucket=errors", "trace => (trace.rootOperation || '').includes('fixedRate')");
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+        return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
     }
 
     /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */

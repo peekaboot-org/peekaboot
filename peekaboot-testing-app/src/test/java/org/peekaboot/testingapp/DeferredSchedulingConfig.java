@@ -1,17 +1,20 @@
 package org.peekaboot.testingapp;
 
+import io.micrometer.observation.ObservationHandler;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.Trigger;
+import org.springframework.scheduling.support.ScheduledTaskObservationContext;
 
 /**
  * Keeps the sample app's demo jobs from going off on their own during a test run. They exist
@@ -33,6 +36,15 @@ public class DeferredSchedulingConfig {
     @Bean
     TaskScheduler taskScheduler() {
         return new DeferredTaskScheduler();
+    }
+
+    /**
+     * Lets {@code ScheduledJobs.run} answer with the trace id of the run it fired, so a test
+     * waits for its own job trace rather than for whichever one names that job.
+     */
+    @Bean
+    ObservationHandler<ScheduledTaskObservationContext> scheduledJobTraceIdRecorder() {
+        return ScheduledJobs.traceIdRecorder();
     }
 
     /**
