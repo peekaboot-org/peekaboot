@@ -23,8 +23,9 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code *Test} so surefire's default includes never pick it up.
  *
  * <pre>
- * mvn -pl peekaboot-testing-app test \
+ * mvn -pl peekaboot-testing-app -am test \
  *     -Dtest=ScreenshotCapture \
+ *     -Dsurefire.failIfNoSpecifiedTests=false \
  *     -Dpeekaboot.screenshots.out=/absolute/output/dir
  * </pre>
  *

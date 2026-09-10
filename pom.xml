@@ -234,7 +234,9 @@
                      the placeholder left unresolved there is harmless.
                      The includes replace the runners' defaults (Test*, *TestCase, IT*,
                      *ITCase besides) with the same patterns the Gradle build uses, so a
-                     class runs under both builds or under neither. -->
+                     class in a module inheriting this parent runs under both builds or
+                     under neither. peekaboot-testing-app inherits spring-boot-starter-parent
+                     instead and keeps Boot's own includes. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>

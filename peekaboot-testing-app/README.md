@@ -25,7 +25,7 @@ give Peekaboot's trace view something worth looking at.
 | --- | --- |
 | `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. The Traces tab lists it with a query count past `peekaboot.ui.tracing.high-trace-query-count-threshold` in the row's query stat. No badge goes with it: the backend raises `HIGH_QUERY_COUNT` and no surface renders that issue. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
-| `POST /api/orders` | Places a new order. Shows up as its own `HTTP_REQUEST`-classified trace, distinct from a page load. |
+| `POST /api/orders` | Places the order and its line in one transaction, so the trace shows a single pooled connection for both writes. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /api/person/all` | The same `@Observed` lookup over JSON. A `@RestController` renders no view, so the span tree has no view-render span under the handler. |
 | `GET /api/person/{id}` | A single-row lookup that is *not* `@Observed`. Its JDBC span hangs straight off the handler span, which is what the observed lookup above avoids. An unknown id answers 404, not 200 with an empty body. |
@@ -121,9 +121,15 @@ Gradle's `--tests` filter cannot widen the `*Test`/`*IT` includes the way surefi
 `-Dtest` does.
 
 ```bash
-mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
+    -Dsurefire.failIfNoSpecifiedTests=false \
     -Dpeekaboot.screenshots.out=/absolute/path/to/output/dir
 ```
+
+`-am` builds the other reactor modules rather than resolving them from the local
+repository, which may hold an older install and would then photograph that code.
+`-Dtest` applies to every module `-am` pulls in, and only this one has the class, hence
+the second flag.
 
 It runs under the `screenshots` profile (`application-screenshots.yml`), which points at
 the real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,
