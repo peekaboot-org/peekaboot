@@ -225,6 +225,46 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
+     * The close button's listener comes from main.js, and on this path main.js is exactly what
+     * did not run. A control that looks live and does nothing is worse than none at all.
+     */
+    @Test
+    void theBannerRaisedWhenTheShellNeverStartedCanBeDismissed() {
+        page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#error:not(.hidden)");
+
+        page.click("#error-close");
+
+        page.waitForSelector("#error", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * The recovery is the boot's, not every module script's. A dashboard that is up holds an
+     * open trace overlay, filters and scroll position, and a reload would discard all of it -
+     * so a module injected long after the boot (a chart library, say) losing its fetch has to
+     * be left to the code that injected it. The element's own error listener runs after the
+     * capture-phase one the recovery installs, so the page has already decided by then.
+     */
+    @Test
+    void aModuleLostAfterTheDashboardIsUpDoesNotReloadIt() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
+        openDashboard();
+
+        page.evaluate("() => new Promise(resolve => {"
+                + " const script = document.createElement('script');"
+                + " script.type = 'module';"
+                + " script.src = './no-such-module.js';"
+                + " script.addEventListener('error', resolve);"
+                + " document.body.appendChild(script); })");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+        assertThat(documents).as("the boot document, and no reload after it").hasSize(1);
+    }
+
+    /**
      * The reload cannot wait for the load event alone. A half-connected network that loses a
      * module usually leaves another request hanging too, and the document then sits at
      * readyState "interactive" for good, so load never fires. Here the module graph fails and

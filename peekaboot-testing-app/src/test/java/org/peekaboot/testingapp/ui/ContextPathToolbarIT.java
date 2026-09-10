@@ -54,6 +54,9 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
 
     @BeforeEach
     void watchPeekabootRequests() {
+        // A dropped request in the toolbar's own graph leaves the bar mute and this class
+        // waiting out its timeout, so the browser's side of that failure has to be printable.
+        captureBrowserSignals();
         page.onResponse(response -> {
             if (response.status() >= 400 && response.url().contains("/peekaboot/")) {
                 failedPeekabootRequests.add(response.status() + " " + response.url());

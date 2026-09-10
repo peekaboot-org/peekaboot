@@ -22,7 +22,7 @@ META-INF/peekaboot/ui/
 │                    Insights tab's own insights-stream.js, insights-panels.js,
 │                    insights-store.js, insights-chart.js, insights-markers.js and
 │                    insights-colors.js)
-│                    boot-error.js: reloads once, then says so, when main.js never loads
+│                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/: the only third-party code, loaded on demand (see below)
@@ -304,7 +304,7 @@ whenever the host's network configuration changes - a container taking a veth in
 down is enough, and so is a VPN connecting - so a page open on a working machine meets this
 with nothing broken.
 
-`dashboard/boot-error.js` is the one thing that can see it, being outside the graph it
+`dashboard/boot-recovery.js` is the one thing that can see it, being outside the graph it
 watches. A classic script in `index.html`'s `<head>`, for the same reasons `theme-boot.js` is
 one: a module would share the failure, and an inline block is dropped by a strict CSP. It
 listens for the single `error` event the browser fires at the module script element for the
@@ -323,6 +323,17 @@ The reload waits for `load` first, since one started during the navigation repla
 anything waiting on that navigation reads as an interrupted one. That wait is bounded at five
 seconds: a half-connected network that loses a module usually leaves another request hanging
 too, and the document then sits at `readyState` "interactive" for good, so `load` never comes.
+
+It acts only while `#loading` is still showing, which is what keeps it the boot's recovery. The
+one remedy it has is a reload, and a dashboard that is up has an open overlay, filters and a
+scroll position to lose, so a module script injected at runtime is left to whatever injected it.
+
+The banner is the same `#error` element `main.js` raises, unhidden before its message is
+written, since a `role="alert"` populated while it is still `display: none` is not reliably
+announced. `boot-recovery.js` binds the close button too, because `main.js`, which normally
+binds it, is exactly what did not run. Both of its log lines name the module script whose graph
+failed: the browser fires one error for the whole graph and never says which fetch under it
+broke, so that is as precise as a field report can be.
 
 ## Accessibility invariants
 

@@ -46,10 +46,10 @@
         }
     }
 
-    function reloadOnce() {
+    function reloadOnce(source) {
         // The browser logs the failed request but not who reacted to it, and a page that
         // reloads itself saying nothing is not something anyone can debug afterwards.
-        console.warn('Peekaboot: the dashboard did not load, reloading once');
+        console.warn('Peekaboot: ' + source + ' did not load, reloading the dashboard once');
         var reloading = false;
         function reload() {
             if (reloading) return;
@@ -67,20 +67,33 @@
         }
     }
 
-    function reportFailure() {
+    function reportFailure(source) {
+        console.error('Peekaboot: ' + source + ' did not load on the retry either, giving up');
         var loading = document.getElementById('loading');
-        if (loading) loading.classList.add('hidden');
+        loading.classList.add('hidden');
         var banner = document.getElementById('error');
         if (!banner) return;
+        // Unhidden before the message is written, the order main.js's own error path uses: a
+        // role="alert" populated while it is still display:none is not reliably announced.
+        banner.classList.remove('hidden');
         banner.querySelector('.message').textContent =
             'The dashboard could not start - one of its scripts did not load. Reload the page.';
-        banner.classList.remove('hidden');
+        // main.js normally binds this, and main.js is exactly what did not run.
+        var dismiss = document.getElementById('error-close');
+        if (dismiss) dismiss.addEventListener('click', function () { banner.classList.add('hidden'); });
     }
 
     window.addEventListener('error', function (event) {
         var script = event.target;
         if (!script || script.tagName !== 'SCRIPT' || script.type !== 'module') return;
-        if (!alreadyRetried && markRetry()) reloadOnce();
-        else reportFailure();
+        // Only while the dashboard is still booting. A module script injected at runtime is
+        // free to lose its fetch without a reload discarding the state of a page in use.
+        var loading = document.getElementById('loading');
+        if (!loading || loading.classList.contains('hidden')) return;
+        // One error covers the whole graph, so this names the module script, not whichever
+        // fetch under it failed - the browser does not say which.
+        var source = script.src;
+        if (!alreadyRetried && markRetry()) reloadOnce(source);
+        else reportFailure(source);
     }, true);
 })();
