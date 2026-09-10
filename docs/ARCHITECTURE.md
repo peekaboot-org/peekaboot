@@ -498,9 +498,10 @@ Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoC
 the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
 `TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean, `InsightsAutoConfiguration`
 a `MeterRegistry` bean and `peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the
-OpenTelemetry SDK's `SpanExporter` class. Class conditions guard only what the starter's
-closure leaves optional: `spring-boot-health` and the OpenTelemetry SDK. `InfoEndpoint` and
-`ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
+OpenTelemetry SDK's `SpanExporter` class. Class-level conditions guard only what the starter's
+closure leaves optional: `spring-boot-health` and the OpenTelemetry SDK. HikariCP, Logback and
+Flyway are optional too, each guarded a level down on a nested `@Configuration`. `InfoEndpoint`
+and `ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
 consumer of the starter can be without them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
@@ -765,7 +766,7 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    queries.
 
 Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
-through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
+output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
 `withLogs`/`withChildren`, so a stage names only the components it adds.
 
 `TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in

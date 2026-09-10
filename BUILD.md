@@ -365,7 +365,7 @@ covers only the build mechanics.
   `*IT` for failsafe, the same patterns as the Gradle `test`/`integrationTest` tasks.
   The defaults would also take `Test*`, `*TestCase`, `IT*` and `*ITCase`, which Gradle
   would not, so a class named that way would run under one build only. The testing-app
-  keeps Boot's defaults; every class in it is a `*IT`.
+  keeps Boot's defaults; every class the suite runs there is a `*IT`.
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
   `TraceWritePathBenchmark`. Neither matches those includes. Running either is Maven

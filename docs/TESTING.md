@@ -53,8 +53,9 @@ exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair 
 sets what the summary counts). `Logs.log(traceId)` builds a `LogCapturedEvent`,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
-auto-configuration builds it, from `PeekabootTracingProperties`. `LifecycleStarts.start(epochMs)`
-builds the START event the lifecycle tests replay; a stop is `LifecycleEvent.stop`.
+auto-configuration builds it, from `PeekabootTracingProperties`.
+`LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
+is `LifecycleEvent.stop`.
 `SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
 `InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
 rather than the events; the collector's only package-private constructor argument is its clock.
@@ -150,10 +151,12 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
   forked JVM, caused by Mockito's inline mock-maker calling
   `Instrumentation.appendToBootstrapClassLoaderSearch` during its javaagent bootstrap. No config
   knob exists for it.
-- The `sun.misc.Unsafe` deprecation `WARNING:` block, `peekaboot-spring-boot-autoconfigure`
-  only. Fired by protobuf's reflective `Unsafe` access, a transitive OTel/gRPC dependency.
-  Third-party, not application or test code. A real fix means a protobuf/gRPC version bump, out
-  of scope for test cleanup.
+- The `sun.misc.Unsafe` deprecation `WARNING:` block, printed before the build's own first
+  line. It comes from the Maven distribution's own guava
+  (`AbstractFuture$UnsafeAtomicHelper` in `<maven home>/lib/guava.jar`), not from anything on
+  this project's class path, and depends only on which `mvn` runs the build. The pinned
+  Maven `./mvnw` downloads ships a guava that no longer calls it, so a wrapper build is
+  silent and an older `mvn` on the PATH is not.
 - `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, fired by
   the tests that need an error trace. Deliberate demo signal in `peekaboot-testing-app`, giving
   the dashboard's Errors bucket a scheduled-job failure to show. Its sibling
@@ -285,7 +288,8 @@ test author needs on top of it:
 - Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):
 
   ```bash
-  mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+  mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
+      -Dsurefire.failIfNoSpecifiedTests=false \
       -Dpeekaboot.screenshots.out=/absolute/path/to/peekaboot-org.github.io/assets/img/screenshots
   ```
 
