@@ -59,7 +59,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * against the same store, so the wait names the run this call fired.
      */
     private String seedAnErrorTrace() {
-        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+        String traceId =
+                awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
         return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
     }
 
