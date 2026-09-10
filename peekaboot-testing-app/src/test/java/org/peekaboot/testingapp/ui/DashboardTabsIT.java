@@ -72,6 +72,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** The meters tab's readout while a filter is active (meters.js's updateCount). */
     private static final Pattern METERS_COUNT_READOUT = Pattern.compile("(\\d+) / (\\d+) metrics");
 
+    /** A duration as format.js renders it: a number and its unit ("850ms", "1.23s", "1.50m"). */
+    private static final Pattern RENDERED_DURATION = Pattern.compile("([0-9.]+)(ms|s|m)$");
+
     /**
      * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
      * toolbar, and returns its id once the store serves it. Nothing else guarantees a trace:
@@ -125,6 +128,29 @@ class DashboardTabsIT extends PlaywrightTestBase {
         line.setUnitPrice(new BigDecimal("19.99"));
         orderLineRepository.save(line);
         return saved;
+    }
+
+    /** The millis behind a rendered duration, so a row's own text can be compared with a threshold. */
+    private static long durationMsOf(String rendered) {
+        Matcher matcher = RENDERED_DURATION.matcher(rendered.trim());
+        assertThat(matcher.find())
+                .as("a rendered duration reads '<number><unit>': %s", rendered)
+                .isTrue();
+        double value = Double.parseDouble(matcher.group(1));
+        return switch (matcher.group(2)) {
+            case "ms" -> Math.round(value);
+            case "s" -> Math.round(value * 1_000);
+            default -> Math.round(value * 60_000);
+        };
+    }
+
+    /** What the frontend colours and buckets a trace duration by; the Slow bucket's admission threshold. */
+    private long slowTraceThresholdMs() {
+        return awaitJson(
+                        contextPath() + "/peekaboot/api/features",
+                        "features => features.slowTraceThresholdMs",
+                        "/api/features named no slow-trace threshold")
+                .asLong();
     }
 
     /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */
@@ -922,10 +948,11 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
         dashboard.awaitListedTrace(traceId);
 
-        assertThat(page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")
-                        .textContent())
-                .as("a Slow-bucket row shows the duration that put it there")
-                .isNotBlank();
+        String rendered = page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")
+                .textContent();
+        assertThat(durationMsOf(rendered))
+                .as("a Slow-bucket row shows the duration that put it there: %s", rendered)
+                .isGreaterThanOrEqualTo(slowTraceThresholdMs());
     }
 
     /**
