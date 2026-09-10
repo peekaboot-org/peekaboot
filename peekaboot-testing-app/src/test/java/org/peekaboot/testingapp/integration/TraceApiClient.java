@@ -156,25 +156,27 @@ class TraceApiClient {
      */
     private JsonNode awaitListedTrace(String query, Predicate<JsonNode> match, String description) {
         String uri = "/peekaboot/api/traces/insights?" + query;
-        List<String> seen = new ArrayList<>();
+        // written on Awaitility's poll thread, read on the test thread once the wait gave up
+        AtomicReference<List<String>> lastListing = new AtomicReference<>(List.of());
         try {
             return await().atMost(TIMEOUT)
                     .pollInterval(POLL_INTERVAL)
                     .until(
                             () -> {
-                                seen.clear();
+                                List<String> listed = new ArrayList<>();
                                 for (JsonNode trace : api.getJson(uri).path("traces")) {
-                                    seen.add(trace.path("rootOperation").asString(""));
+                                    listed.add(trace.path("rootOperation").asString(""));
                                     if (match.test(trace)) {
                                         return trace;
                                     }
                                 }
+                                lastListing.set(listed);
                                 return null;
                             },
                             trace -> trace != null);
         } catch (ConditionTimeoutException e) {
             throw new AssertionError(
-                    description + " was not listed within " + TIMEOUT + "; the listing held: " + seen, e);
+                    description + " was not listed within " + TIMEOUT + "; the listing held: " + lastListing.get(), e);
         }
     }
 

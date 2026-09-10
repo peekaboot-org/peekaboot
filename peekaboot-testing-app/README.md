@@ -112,8 +112,8 @@ Playwright, and with it Chromium, changes. GitHub-hosted Ubuntu runners have pas
 
 `src/test/java/.../ui/ScreenshotCapture.java` photographs every dashboard tab, the
 trace-detail overlay and the dev toolbar, in both light and dark themes, for the
-peekaboot.org website. It is a tool, not a test (its one assertion is that every canonical
-file below was written), and is deliberately not named `*Test`, so
+peekaboot.org website. It is a tool, not a test (its one assertion is that a file was
+written for each of the canonical names below), and is deliberately not named `*Test`, so
 surefire's default includes never pick it up and a normal `mvn test` never runs it or
 touches Docker. It is Maven-only. The Gradle build has no task that includes it, because
 Gradle's `--tests` filter cannot widen the `*Test`/`*IT` includes the way surefire's

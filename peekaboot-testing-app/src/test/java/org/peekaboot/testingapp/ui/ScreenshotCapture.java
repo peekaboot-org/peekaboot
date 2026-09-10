@@ -56,11 +56,12 @@ class ScreenshotCapture extends PlaywrightTestBase {
     // here are ordered to match the tab strip's own order (see dashboard/main.js's TABS
     // array).
     private static final String OVERVIEW_TAB = "overview";
+    private static final String TRACES_TAB = "traces";
 
     private static final List<String> DASHBOARD_TABS = List.of(
             OVERVIEW_TAB,
             "lifecycle",
-            "traces",
+            TRACES_TAB,
             "meters",
             "environment",
             "flyway",
@@ -230,6 +231,10 @@ class ScreenshotCapture extends PlaywrightTestBase {
             if (OVERVIEW_TAB.equals(tabId)) {
                 // Overview is the one tab that photographs the machine it ran on
                 ScreenshotIdentityScrub.applyTo(page);
+            }
+            if (TRACES_TAB.equals(tabId)) {
+                // an empty list counts as rendered for openTab, and an empty tab is not a shot
+                page.waitForSelector(Dashboard.TRACE_ITEM);
             }
             expandMaskedGroupIfPresent(tabId);
             shoot(outputDir, "dashboard-" + tabId + "-" + theme);

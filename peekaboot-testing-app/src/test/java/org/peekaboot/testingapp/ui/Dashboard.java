@@ -9,6 +9,9 @@ import java.util.regex.Pattern;
 /** The dashboard's tab strip and the panels it switches between (dashboard/main.js). */
 final class Dashboard {
 
+    /** One listed trace row; the Traces tab renders this once the listing holds anything. */
+    static final String TRACE_ITEM = "#traces-list .pk-trace-item";
+
     /**
      * The selector each tab renders once its own data has arrived. {@code #<id>-tab.active}
      * only proves the panel is showing, not that its render() has populated it, so a tab is
@@ -20,7 +23,7 @@ final class Dashboard {
             Map.entry("overview", "#memory-info .pk-meter__fill"),
             Map.entry("insights", "#insights-panels .pk-insight-panel"),
             Map.entry("lifecycle", "#lifecycle-runs .pk-table--card tbody tr"),
-            Map.entry("traces", "#traces-list .pk-trace-item, #no-traces:not(.hidden)"),
+            Map.entry("traces", TRACE_ITEM + ", #no-traces:not(.hidden)"),
             Map.entry("meters", "#meters-list .pk-group"),
             Map.entry("environment", "#property-sources .pk-group__header"),
             Map.entry("flyway", "#flyway-timeline .pk-table tbody tr"),
@@ -59,7 +62,7 @@ final class Dashboard {
 
     /** The listed row of one trace; the list is shared with every class, so a test opens its own. */
     static String traceItem(String traceId) {
-        return "#traces-list .pk-trace-item[data-trace-id='" + traceId + "']";
+        return TRACE_ITEM + "[data-trace-id='" + traceId + "']";
     }
 
     void awaitListedTrace(String traceId) {
