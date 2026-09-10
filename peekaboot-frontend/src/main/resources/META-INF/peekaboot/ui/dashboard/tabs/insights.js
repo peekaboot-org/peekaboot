@@ -28,6 +28,7 @@ let config = null;          // /config response
 let currentContext = null;
 let stream = null;
 let panels = null;
+let toolbar = null;
 let levelGroup = null;
 let percentilesCheckbox = null;
 let markersCheckbox = null;
@@ -183,14 +184,17 @@ async function init(container, context) {
 function teardown() {
     stream?.close();
     panels?.destroy();
-    stream = panels = null;
+    // the toolbar's four listeners read `panels`, so its markup goes with them rather than
+    // staying clickable against torn-down state until the next render
+    toolbar?.replaceChildren();
+    stream = panels = toolbar = null;
     levelGroup = percentilesCheckbox = markersCheckbox = zoomResetButton = streamStoppedNote = null;
 }
 
 // --- Toolbar ----------------------------------------------------------------------------
 
 function renderToolbar(container) {
-    const toolbar = container.querySelector('#insights-toolbar');
+    toolbar = container.querySelector('#insights-toolbar');
     // the zoom-reset button sits last: it is the only toolbar control that toggles
     // hidden/shown at runtime, and trailing keeps that from shifting anything else
     toolbar.innerHTML = `

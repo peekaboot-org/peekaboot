@@ -106,6 +106,6 @@ function renderHeaders(title, headers, maskLiteral) {
     const entries = Object.entries(headers || {});
     const rows = entries.length > 0
         ? entries.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-note pk-request-masked' : ''))
-        : [el('tr', {}, el('td', {className: 'pk-note pk-request-empty', text: 'No headers captured', attrs: {colspan: '2'}}))];
+        : [el('tr', {}, el('td', {className: 'pk-note', text: 'No headers captured', attrs: {colspan: '2'}}))];
     return section(title, kvTable(rows));
 }
