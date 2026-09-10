@@ -213,8 +213,8 @@ org.peekaboot.backend/
 │   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
-│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
-│                           # TraceBucket, TraceStoreEventListener
+│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
+│                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 ```
 
 ### Tracing Flow
@@ -224,7 +224,7 @@ org.peekaboot.backend/
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
-6. **Thresholds**: `IssueDetector` raises SLOW/VERY_SLOW/SLOW_QUERY at `UiTracingProperties`' thresholds and sets `TraceTree.slow`, the Traces tab's badge. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
+6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW, SLOW_QUERY and HIGH_QUERY_COUNT at `UiTracingProperties`' thresholds, and ERROR off the span's own status. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
 
@@ -346,11 +346,12 @@ record and `InsightsController`'s 400 body included, both under that package pre
 ### In-Process Actuator Invocation
 
 Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
-list of `InsightsSource` beans, one per endpoint id (`spring`, `health`, `info`,
+list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
 `env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`). Each is a record
-pairing that id with a `Supplier` that reads an endpoint object
-`ActuatorSourcesAutoConfiguration` constructs. Reading a source calls that endpoint
-object directly. There is no discovery step and no HTTP call; a source that reads
+pairing that id with a `Supplier`. Six of them read an endpoint object
+`ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
+`HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is
+no endpoint at all. There is no discovery step and no HTTP call; a source that reads
 `null` contributes no entry, which is how an endpoint whose backing bean is absent
 (`flyway` without a Flyway bean, `health` without a `HealthEndpoint` bean, `loggers`
 without a `LoggingSystem` bean) reports that it has nothing rather than failing.
@@ -456,7 +457,7 @@ hooks that run before or outside the application context are registered in
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled`, and the default property values |
-| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes the health endpoint bean available without web/JMX exposure |
+| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
 | `LocalDevDetector` | (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
@@ -483,9 +484,10 @@ nobody overrode bought nothing but wiring.
 
 Most of the auto-configuration classes carry the same two class-level conditions, the
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
-`PeekabootPathsAutoConfiguration`, `DevToolbarAutoConfiguration`,
-`TracingInterceptorAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
-`OtelTracingAutoConfiguration` and `InsightsAutoConfiguration`.
+`PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
+`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
+`InsightsAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -750,8 +752,9 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
 1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
    It re-parents orphans under the root the snapshot names, masks tags, error messages and
-   query text, classifies the root action type and computes the tab summary. It leaves `TraceTree.slow` false, every `SpanNode.issues`
-   list empty and every `SpanNode.logs` null. **It attaches no issues and correlates no logs.**
+   query text, classifies the root action type and computes the tab summary. It leaves
+   `TraceTree.slow` false, every `SpanNode.issues` list empty and every `SpanNode.logs` null.
+   **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
@@ -887,8 +890,14 @@ and a poll that comes back empty means the stream has been idle that long and ge
 keep-alive comment instead. A busy stream never needs one. The publisher refuses past
 `MAX_SUBSCRIBERS` with a 503.
 
-Emitters carry a thirty-minute timeout. It only reclaims a peer that vanished without closing
-its socket, since the heartbeat and the lane overflow already detect one that is merely wedged.
+Emitters carry a thirty-minute timeout (`EMITTER_TIMEOUT`). It only reclaims a peer that
+vanished without closing its socket, since the heartbeat and the lane overflow already detect
+one that is merely wedged.
+
+On context shutdown the publisher stops the dispatch thread, interrupts every sender and then
+completes each emitter. An interrupt cannot end a write already inside the container's socket
+call, so `completeUnlessSendingWithin(STOP_GRACE)` waits 200 ms for that write and detaches the
+peer rather than blocking shutdown behind it.
 
 ### Insights Domain
 
@@ -956,7 +965,7 @@ Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 `peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
 `AnnotationConfigApplicationContext` covers the one case where a bean-name lookup needs a real
 container (`ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner
-unit tests per auto-configuration, plus the `*IT`s that boot its own `TestApplication`
+unit tests for its auto-configurations, plus the `*IT`s that boot its own `TestApplication`
 (`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
 through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
 under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real
