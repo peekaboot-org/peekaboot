@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -295,6 +296,42 @@ abstract class PlaywrightTestBase {
                     traceId);
         }
         throw new AssertionError("no /?error=true request produced a trace carrying its own ERROR log");
+    }
+
+    /**
+     * Fires {@code run}, which answers with the trace id of the run it made, and repeats until
+     * that run's trace carries the ERROR line it logged. Returns that trace's id.
+     *
+     * <p>{@code Scheduler.fixedRate} throws nothing, so its trace reaches the Errors bucket
+     * through the captured log alone. A run served while a concurrent context boot had the
+     * capture appender detached (see {@code LogbackCaptureReinstaller}) leaves a trace that
+     * never reaches the bucket, and only a fresh run can produce one - the same window
+     * {@link #openPageThatLogsAnError()} reloads for. Waiting for the root span is enough to
+     * decide: logs are captured synchronously during the run, so a trace whose root span has
+     * been exported carries every log it will ever have.
+     */
+    protected String awaitErrorLoggingJobRun(Supplier<String> run) {
+        for (int attempt = 0; attempt < LOG_CAPTURE_ATTEMPTS; attempt++) {
+            String traceId = run.get();
+            JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
+            if (carriesAnErrorLog(trace)) {
+                return traceId;
+            }
+            log.info(
+                    "trace {} of the failing job carries no ERROR log (capture appender detached by a "
+                            + "context boot), firing it again",
+                    traceId);
+        }
+        throw new AssertionError("no run of the failing job produced a trace carrying its own ERROR log");
+    }
+
+    private static boolean carriesAnErrorLog(JsonNode trace) {
+        for (JsonNode log : trace.path("logs")) {
+            if ("ERROR".equals(log.path("level").asString(""))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

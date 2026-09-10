@@ -40,7 +40,8 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      * unlike the logs - have landed.
      */
     private String freshFixedRateSchedulerTraceId() {
-        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+        String traceId =
+                awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
         return awaitListedTrace("bucket=errors&limit=50", "trace => trace.traceId === '" + traceId + "'");
     }
 
