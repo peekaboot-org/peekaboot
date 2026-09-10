@@ -22,8 +22,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("net.ttddyy.observation:datasource-micrometer-spring-boot:2.2.1")
-    implementation("net.ttddyy.observation:datasource-micrometer-opentelemetry:2.2.1")
     implementation("org.springframework.boot:spring-boot-starter-aspectj")
     implementation("com.github.gavlyukovskiy:datasource-proxy-spring-boot-starter:2.0.1")
     implementation("org.hibernate.orm:hibernate-micrometer")
