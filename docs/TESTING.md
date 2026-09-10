@@ -48,9 +48,8 @@ exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair 
 `jdbcConnection` for the pool acquisition datasource-micrometer exports.
 `TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
 `snapshot()`, so a mapper test gets the root and ordering the store would hand it.
-`SpanNodes.node(id)` builds an already-mapped `SpanNode`,
-`TraceTrees.tree(rootSpan)` the mapped `TraceTree` around one (`queries(count, durationMs)`
-sets what the summary counts). `Logs.log(traceId)` builds a `LogCapturedEvent`,
+`SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
+mapped `TraceTree` around one. `Logs.log(traceId)` builds a `LogCapturedEvent`,
 `RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
 auto-configuration builds it, from `PeekabootTracingProperties`.

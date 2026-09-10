@@ -249,7 +249,7 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW'}, {type: 'VERY_SLOW'}])"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'HIGH_QUERY_COUNT'}])"))
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'ERROR'}])"))
                 .isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }

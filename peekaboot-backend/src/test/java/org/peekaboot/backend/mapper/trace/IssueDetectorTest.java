@@ -1,7 +1,6 @@
 package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.SpanNodes.node;
 import static org.peekaboot.backend.testsupport.TraceTrees.tree;
 
@@ -114,17 +113,6 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("Span ended with error");
     }
 
-    /** A tree without a summary has no trace-level query count to judge; the span rules still run. */
-    @Test
-    void aTreeWithoutASummaryStillGetsItsSpanIssues() {
-        TraceTree trace =
-                tree(node("span1").durationMs(150).build()).summary(null).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW);
-    }
-
     @Test
     void usesErrorMessageFromSpanAttributeIfAvailable() {
         SpanNode span = node("span1")
@@ -199,77 +187,10 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).isEmpty();
     }
 
-    @Test
-    void detectsHighQueryCountOnRootSpan() {
-        // 25 queries: over the 20-query trace threshold
-        SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
-        SpanNode root = node("root").durationMs(50).children(List.of(child)).build();
-        TraceTree trace = tree(root).queries(25, 500L).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().issues()).hasSize(1);
-        SpanIssue issue = result.rootSpan().issues().get(0);
-        assertThat(issue.type()).isEqualTo(IssueType.HIGH_QUERY_COUNT);
-        assertThat(issue.severity()).isEqualTo(IssueSeverity.WARNING);
-        assertThat(issue.message()).isEqualTo("Trace has 25 database queries (threshold: 20)");
-    }
-
-    @Test
-    void doesNotAddHighQueryCountToChildSpans() {
-        SpanNode child = querySpan("child1", 30, Map.of("db.system", "mysql"));
-        SpanNode root = node("root").durationMs(50).children(List.of(child)).build();
-        TraceTree trace = tree(root).queries(25, 500L).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        assertThat(result.rootSpan().children().get(0).issues()).isEmpty();
-    }
-
-    @Test
-    void flagsSpanWithManyDirectQueryChildren() {
-        // Default highQueryCountThreshold is 5; six direct query children exceed it
-        List<SpanNode> queries = new java.util.ArrayList<>();
-        for (int i = 0; i < 6; i++) {
-            queries.add(querySpan("q" + i, 10, Map.of("jdbc.query[0]", "SELECT " + i)));
-        }
-        SpanNode service =
-                node("service").durationMs(80).children(List.copyOf(queries)).build();
-        SpanNode root = node("root").durationMs(90).children(List.of(service)).build();
-        TraceTree trace = tree(root).queries(6, 60L).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        SpanNode serviceNode = result.rootSpan().children().get(0);
-        assertThat(serviceNode.issues())
-                .extracting(SpanIssue::type, SpanIssue::message, SpanIssue::severity)
-                .containsExactly(tuple(
-                        IssueType.HIGH_QUERY_COUNT,
-                        "Span has 6 direct database queries (threshold: 5)",
-                        IssueSeverity.WARNING));
-    }
-
-    @Test
-    void doesNotFlagSpanWithQueryChildrenAtThreshold() {
-        List<SpanNode> queries = new java.util.ArrayList<>();
-        for (int i = 0; i < 5; i++) {
-            queries.add(querySpan("q" + i, 10, Map.of("jdbc.query[0]", "SELECT " + i)));
-        }
-        SpanNode service =
-                node("service").durationMs(80).children(List.copyOf(queries)).build();
-        SpanNode root = node("root").durationMs(90).children(List.of(service)).build();
-        TraceTree trace = tree(root).queries(5, 50L).build();
-
-        TraceTree result = detector.detectIssues(trace);
-
-        SpanNode serviceNode = result.rootSpan().children().get(0);
-        assertThat(serviceNode.issues()).noneMatch(issue -> issue.type() == IssueType.HIGH_QUERY_COUNT);
-    }
-
     /**
      * One tree that trips every rule at the defaults: a 600ms root with six 80ms direct
-     * queries on a 25-query trace. Raising all five thresholds above it must silence each
-     * rule, so a threshold the detector stopped reading would show up here.
+     * queries. Raising all three thresholds above it must silence each rule, so a threshold
+     * the detector stopped reading would show up here.
      */
     @Test
     void everyThresholdIsRead() {
@@ -279,12 +200,10 @@ class IssueDetectorTest {
         }
         SpanNode root =
                 node("root").durationMs(600).children(List.copyOf(queries)).build();
-        TraceTree trace = tree(root).queries(25, 480L).build();
+        TraceTree trace = tree(root).build();
 
         TraceTree atDefaults = detector.detectIssues(trace);
-        assertThat(atDefaults.rootSpan().issues())
-                .extracting(SpanIssue::type)
-                .containsExactlyInAnyOrder(IssueType.VERY_SLOW, IssueType.HIGH_QUERY_COUNT, IssueType.HIGH_QUERY_COUNT);
+        assertThat(atDefaults.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.VERY_SLOW);
         assertThat(atDefaults.rootSpan().children())
                 .allSatisfy(query ->
                         assertThat(query.issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY));
@@ -292,8 +211,6 @@ class IssueDetectorTest {
         properties.setSlowSpanThresholdMs(700);
         properties.setVerySlowSpanThresholdMs(1000);
         properties.setSlowQueryThresholdMs(100);
-        properties.setHighQueryCountThreshold(10);
-        properties.setHighTraceQueryCountThreshold(30);
 
         TraceTree raised = detector.detectIssues(trace);
         assertThat(raised.rootSpan().issues()).isEmpty();
@@ -356,8 +273,7 @@ class IssueDetectorTest {
                 .children(List.of(child))
                 .build();
 
-        assertThat(detector.detectIssues(tree(root).queries(1, 80L).build()).slow())
-                .isFalse();
+        assertThat(detector.detectIssues(tree(root).build()).slow()).isFalse();
     }
 
     @Test
@@ -368,7 +284,7 @@ class IssueDetectorTest {
                 .status(SpanStatus.ERROR)
                 .tags(Map.of("db.system", "postgresql"))
                 .build();
-        TraceTree trace = tree(span).queries(1, 200L).build();
+        TraceTree trace = tree(span).build();
 
         TraceTree result = detector.detectIssues(trace);
 

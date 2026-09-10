@@ -4,6 +4,5 @@ public enum IssueType {
     SLOW,
     VERY_SLOW,
     ERROR,
-    SLOW_QUERY,
-    HIGH_QUERY_COUNT
+    SLOW_QUERY
 }

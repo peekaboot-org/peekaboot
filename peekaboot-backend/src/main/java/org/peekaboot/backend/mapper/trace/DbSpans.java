@@ -11,9 +11,8 @@ import org.peekaboot.backend.tracing.store.SpanData;
 
 /**
  * The one definition of "database query span", shared by the summary count
- * ({@link TraceTreeMapper}), the SLOW_QUERY and HIGH_QUERY_COUNT issues ({@link IssueDetector})
- * and the Queries tab ({@link QueryExtractor}), so the three numbers a trace reports about its
- * queries agree.
+ * ({@link TraceTreeMapper}), the SLOW_QUERY issue ({@link IssueDetector}) and the Queries tab
+ * ({@link QueryExtractor}), so the three numbers a trace reports about its queries agree.
  *
  * <p>A query is the CLIENT side of a database call - the only side Peekaboot ever sees -
  * tagged either by the OpenTelemetry conventions ({@code db.*}) or by datasource-proxy
