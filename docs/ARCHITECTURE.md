@@ -238,6 +238,11 @@ still captured. `DevToolbarFilter` is innermost; it wraps the response in a
 registrations live only in `DevToolbarAutoConfiguration`, so neither filter runs while
 `peekaboot.dev-toolbar` is off.
 
+Tomcat 11 suspends a wrapped response after a `RequestDispatcher.forward`
+(`suspendWrappedResponseAfterForward`, default `true` since 11.0.0-M18), so the toolbar's write
+after the filter chain would be dropped and a `forward:` view served as an empty 200.
+`TomcatForwardResponseCustomizer` turns the flag off; Tomcat without the setter is left alone.
+
 `PeekabootPaths` is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix,
 the excluded prefixes, and those same exclusions as MVC patterns for the tracing interceptor.
 The exclusions are `/static/`, `/webjars/`, `/peekaboot/`, `/error/` and the resolved
@@ -449,7 +454,7 @@ hooks that run before or outside the application context are registered in
 |-------|----------------|---------|
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, `LogbackAppenderRegistrar` |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, `LogbackAppenderRegistrar`, `TomcatForwardResponseCustomizer` |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |

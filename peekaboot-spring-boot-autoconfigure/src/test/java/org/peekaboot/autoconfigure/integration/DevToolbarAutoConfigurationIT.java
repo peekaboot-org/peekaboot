@@ -84,6 +84,19 @@ class DevToolbarAutoConfigurationIT {
     }
 
     @Test
+    void toolbarShouldBeInjectedIntoAForwardedHtmlResponse() {
+        String response = restClient
+                .get()
+                .uri("/forwarded")
+                .accept(MediaType.TEXT_HTML)
+                .retrieve()
+                .body(String.class);
+
+        assertThat(response).contains("<h1>Test Page</h1>");
+        assertThat(response).contains("<!-- Peekaboot Dev Toolbar -->");
+    }
+
+    @Test
     void toolbarShouldNotBeInjectedForJsonResponses() {
         String response = restClient
                 .get()

@@ -17,6 +17,9 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-flyway")
     compileOnly("org.flywaydb:flyway-core")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
+    // the Tomcat context customizer that keeps forwards working, see TomcatForwardResponseCustomizer
+    compileOnly("org.springframework.boot:spring-boot-tomcat")
+    compileOnly("org.apache.tomcat.embed:tomcat-embed-core")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("io.micrometer:micrometer-observation")
