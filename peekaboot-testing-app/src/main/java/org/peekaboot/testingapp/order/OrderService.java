@@ -62,9 +62,13 @@ public class OrderService {
 
         List<OrderSummary> summaries = new ArrayList<>();
         for (CustomerOrder order : orders) {
+            // Three queries where one would do, and the last two answer questions already
+            // answered: lines.size() is the count, and an order loaded a moment ago still
+            // exists. They are here so the page passes the high-trace-query-count threshold
+            // and the Traces tab has a warning to render - padding, not a bug.
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
-            long lineCount = orderLineRepository.countByOrderId(order.getId());
-            boolean known = orderRepository.existsById(order.getId());
+            long redundantLineCount = orderLineRepository.countByOrderId(order.getId());
+            boolean stillPresent = orderRepository.existsById(order.getId());
 
             BigDecimal total = lines.stream()
                     .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
@@ -73,9 +77,9 @@ public class OrderService {
             summaries.add(new OrderSummary(
                     order.getId(),
                     order.getReference(),
-                    known ? order.getStatus() : "UNKNOWN",
+                    stillPresent ? order.getStatus() : "UNKNOWN",
                     order.getPlacedAt(),
-                    (int) lineCount,
+                    (int) redundantLineCount,
                     total,
                     customerName));
         }
