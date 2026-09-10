@@ -807,13 +807,16 @@ class DashboardTabsIT extends PlaywrightTestBase {
         try (Connection connection = dataSource.getConnection()) {
             assertThat(connection.isValid(1)).isTrue();
         }
+        // the connection trace is the one the default view must hide, so the list needs a
+        // trace of this test's own to render before the absence means anything
+        String httpTraceId = seedAnHttpTrace();
 
         openDashboard();
         Response defaultResponse = page.waitForResponse(
                 response -> response.url().contains("/api/traces/insights"),
                 () -> page.click(Dashboard.tabButton("traces")));
         assertThat(defaultResponse.url()).doesNotContain("rootActionType");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        dashboard.awaitListedTrace(httpTraceId);
         assertThat(page.locator("#traces-list .pk-trace-item__icon[aria-label='Connection Pool']")
                         .count())
                 .isZero();
