@@ -16,10 +16,12 @@ import org.springframework.web.client.RestClient;
  * application's own pages: the switch is what a consumer reaches for to turn the whole thing
  * off, so a bar left rendering into every page would be the visible half of it failing.
  */
+// No profile here, so this context disables Flyway itself. There are no migrations in this
+// module and Flyway WARNs about the empty location.
 @SpringBootTest(
         classes = TestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "peekaboot.enabled=false")
+        properties = {"peekaboot.enabled=false", "spring.flyway.enabled=false"})
 class PeekabootOffIT {
 
     @LocalServerPort
