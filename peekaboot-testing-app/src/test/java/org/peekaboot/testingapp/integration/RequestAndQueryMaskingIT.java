@@ -9,17 +9,10 @@ import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -29,10 +22,13 @@ import tools.jackson.databind.JsonNode;
  * while parameters and the query string leak, because neither exercises those parts.
  * The assertions run against {@code /api/traces/{traceId}/insights}, the only trace
  * endpoint, so it is the only path this masking has to hold on.
+ *
+ * <p>The secret-bearing endpoints it drives come from {@code MaskingFixtureController}, a bean
+ * of {@code SharedFixturesConfig}, so this class shares the suite's context instead of forking
+ * one for a fixture.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-@Import(RequestAndQueryMaskingIT.MaskingTestEndpoints.class)
 class RequestAndQueryMaskingIT {
 
     @LocalServerPort
@@ -48,13 +44,6 @@ class RequestAndQueryMaskingIT {
         traces = new TraceApiClient(port);
     }
 
-    /**
-     * The fixture endpoints below are registered only for this test (never shipped in the
-     * app's own controllers) purely to give a real HTTP request a secret-bearing query
-     * parameter and a secret-bearing form field - mirroring
-     * {@code PeekabootActuatorServiceIT}'s {@code ThrowingEndpointConfig} pattern for a
-     * test-only Spring bean.
-     */
     @Test
     void aSecretBearingQueryParameterComesBackMaskedFromTheTraceInsightsApi() {
         String traceId = traces.get("/masking-test/search?api_key=AKIAABCDEFGHIJKLMNOP&q=widgets");
@@ -126,27 +115,5 @@ class RequestAndQueryMaskingIT {
         assertThat(sql)
                 .isEqualTo("INSERT INTO webhooks (callback_url) VALUES "
                         + "('https://******@internal.example.com/callback')");
-    }
-
-    @TestConfiguration
-    static class MaskingTestEndpoints {
-        @Bean
-        FixtureController maskingTestFixtureController() {
-            return new FixtureController();
-        }
-    }
-
-    @RestController
-    static class FixtureController {
-
-        @GetMapping("/masking-test/search")
-        String search(@RequestParam(required = false) String api_key, @RequestParam(required = false) String q) {
-            return "ok";
-        }
-
-        @PostMapping(value = "/masking-test/login", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-        String login(@RequestParam String username, @RequestParam String password) {
-            return "ok";
-        }
     }
 }

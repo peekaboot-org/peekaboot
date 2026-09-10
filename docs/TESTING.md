@@ -37,8 +37,8 @@
 - Timing a test does not own: `ToolbarLateSpanIT`'s margins are arithmetic against the
   toolbar's fetch ladder (`toolbar.js`, documented in `peekaboot-frontend/README.md`) and the
   test profile's span export delay. Neither has a source of truth a Java test can read.
-  `LateSpanFixture.LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch
-  the ladder, the export delay or the constant and you redo it rather than assume it holds.
+  `LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch the ladder, the
+  export delay or the constant and you redo it rather than assume it holds.
 
 ## Fixtures
 `peekaboot-backend`'s fixtures are built through `org.peekaboot.backend.testsupport`.

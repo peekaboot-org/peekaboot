@@ -5,25 +5,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.testingapp.integration.LateSpanFixture;
+import org.peekaboot.fixtures.LateSpanController;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 
 /**
  * The collapsed bar polls in four fixed attempts out to 4.75s rather than stopping the moment a
  * trace looks complete, so work ending after the response - an {@code @Async} continuation, a
  * streamed body - still appears on it.
  *
- * <p>Real app, real spans, real browser: {@link LateSpanFixture} ends a genuine child span ~1.5s
- * after the response, and the assertions below check that it really is the same trace and really
- * did end after the response, rather than trusting the tracing wiring.
+ * <p>Real app, real spans, real browser: {@link LateSpanController} ends a genuine child span
+ * ~1.5s after the response, and the assertions below check that it really is the same trace and
+ * really did end after the response, rather than trusting the tracing wiring.
  *
  * <p>That 1.5s is not incidental: it has to outlast the toolbar's first render, or the "duration
  * changes" assertion below has nothing to change to and times out. See {@link
- * LateSpanFixture.LateSpanController#LATE_WORK} for the exact margin against the fetch ladder and
- * the test export delay.
+ * LateSpanController#LATE_WORK} for the exact margin against the fetch ladder and the test export
+ * delay.
  */
-@Import(LateSpanFixture.class)
 class ToolbarLateSpanIT extends PlaywrightTestBase {
 
     /**
@@ -42,7 +40,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
             + " return el && el.textContent !== first ? el.textContent : null; }";
 
     @Autowired
-    private LateSpanFixture.LateSpanController lateSpanController;
+    private LateSpanController lateSpanController;
 
     @Test
     void collapsedBarPicksUpASpanThatEndsAfterTheResponse() throws InterruptedException {
@@ -54,7 +52,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
         String firstRender = (String) toolbar.waitUntil(RENDERED_DURATION, null, 10_000);
         String barTraceId = toolbar.traceId();
 
-        LateSpanFixture.LateSpan lateSpan = lateSpanController.awaitLateSpan(Duration.ofSeconds(10));
+        LateSpanController.LateSpan lateSpan = lateSpanController.awaitLateSpan(Duration.ofSeconds(10));
         assertThat(lateSpan.traceId())
                 .as("the late span must belong to the trace the bar is reading")
                 .isEqualTo(barTraceId);
@@ -66,7 +64,7 @@ class ToolbarLateSpanIT extends PlaywrightTestBase {
 
         assertThat(renderedDurationMs(laterRender))
                 .isGreaterThan(renderedDurationMs(firstRender))
-                .isGreaterThanOrEqualTo((double) LateSpanFixture.LateSpanController.LATE_WORK.toMillis());
+                .isGreaterThanOrEqualTo((double) LateSpanController.LATE_WORK.toMillis());
     }
 
     /**

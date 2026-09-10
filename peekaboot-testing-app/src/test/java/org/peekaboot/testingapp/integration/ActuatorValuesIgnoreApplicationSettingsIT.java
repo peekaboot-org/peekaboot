@@ -8,7 +8,6 @@ import static org.peekaboot.testingapp.integration.ActuatorInsightsJson.findEnvi
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
@@ -42,7 +41,6 @@ import tools.jackson.databind.JsonNode;
             "management.endpoint.configprops.access=none"
         })
 @ActiveProfiles("test")
-@EnableConfigurationProperties(NestedConfigPropertiesFixture.class)
 class ActuatorValuesIgnoreApplicationSettingsIT {
 
     @LocalServerPort
