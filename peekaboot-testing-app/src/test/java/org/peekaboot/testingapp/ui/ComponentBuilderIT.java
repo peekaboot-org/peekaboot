@@ -95,13 +95,14 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 """)).isEqualTo("true:false|false:true");
     }
 
+    /** A real button, not a click-handled div: keyboard activation and the ARIA wiring both. */
     @Test
-    void headerIsWiredToItsListByAria() {
+    void headerIsARealButtonWiredToItsListByAria() {
         assertThat(evalBuilders("""
                 const g = m.group({name: 'n', count: '1 item'});
                 document.body.appendChild(g.element);
-                return g.header.getAttribute('aria-controls') === g.list.id;
-                """)).isEqualTo(true);
+                return g.header.tagName + '|' + (g.header.getAttribute('aria-controls') === g.list.id);
+                """)).isEqualTo("BUTTON|true");
     }
 
     /** Same escaping guarantee as kvRow, applied to the group's name. */

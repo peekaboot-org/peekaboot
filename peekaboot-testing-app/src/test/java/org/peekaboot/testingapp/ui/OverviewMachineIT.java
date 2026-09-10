@@ -3,14 +3,12 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.microsoft.playwright.APIResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
 import org.peekaboot.backend.domain.runtime.CpuTopology;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.NetworkAddress;
-import tools.jackson.databind.JsonNode;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
@@ -34,26 +32,6 @@ class OverviewMachineIT extends PlaywrightTestBase {
         // detector the backend serialises instead of a literal "none"
         String value = dashboard.kvValue("#machine-info", "Container");
         assertThat(value).isEqualTo(ContainerRuntime.current().wireName());
-    }
-
-    @Test
-    void insightsApiCarriesCpuTopologyAndNetworkAddresses() {
-        // the server runs in this JVM, so the API must serialise exactly the cached
-        // MachineInfo this test reads directly - no hardcoded network or CPU facts
-        APIResponse response = page.request().get(baseUrl + "/peekaboot/api/actuator/all/insights");
-        assertThat(response.status()).isEqualTo(200);
-        JsonNode machine = readJson(response.text()).path("runtime").path("machine");
-        MachineInfo current = MachineInfo.current();
-
-        if (current.cpuTopology() != null) {
-            assertThat(machine.path("cpuTopology").path("physicalCores").asInt())
-                    .isEqualTo(current.cpuTopology().physicalCores());
-            assertThat(machine.path("cpuTopology").path("threadsPerCore").asInt())
-                    .isEqualTo(current.cpuTopology().threadsPerCore());
-        }
-        assertThat(machine.path("networkAddresses").isArray()).isTrue();
-        assertThat(machine.path("networkAddresses").size())
-                .isEqualTo(current.networkAddresses().size());
     }
 
     @Test

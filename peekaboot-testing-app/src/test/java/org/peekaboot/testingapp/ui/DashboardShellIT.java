@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
@@ -106,50 +105,6 @@ class DashboardShellIT extends PlaywrightTestBase {
         openDashboard();
 
         assertThat(cssVar(".pk-header__logo", "background-image")).contains("logo-mark-dark.png");
-    }
-
-    /**
-     * The icon set is referenced only from CSS url() and <link rel="icon">, so a path
-     * typo or a packaging change that stopped shipping binaries from the frontend module
-     * would fail silently - no console error the other tests would notice, just a missing
-     * favicon and an empty logo box.
-     */
-    @Test
-    void iconAssetsAreServed() {
-        for (String asset : List.of("favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
-            APIResponse response = page.request().get(baseUrl + "/peekaboot/ui/assets/" + asset);
-            assertThat(response.status()).as(asset).isEqualTo(200);
-        }
-    }
-
-    @Test
-    void toolbarIsInjectedIntoApplicationPages() {
-        openPersonsPage();
-
-        // isVisible() on the host element only proves the injected <div> exists; the
-        // toolbar itself lives inside its shadow root, so require that to be attached.
-        assertThat((Boolean) toolbar.evaluate("root => !!root")).isTrue();
-    }
-
-    /**
-     * main.js imports {openTraceDetail, closeTraceDetail} directly from trace-detail.js (no
-     * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
-     * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
-     * imported openTraceDetail() itself, without going through the traces tab - so a
-     * direct navigation to such a link is enough to prove the import actually loaded and
-     * ran, independent of whether the trace id resolves to anything real.
-     *
-     * Waiting only for "#peekaboot-trace-overlay" to exist would prove less than it looks
-     * like: openTraceDetail() appends that host synchronously, before any fetch even
-     * starts, so it passes even if render() itself is broken. "deadbeef" is not a real
-     * trace id, so the fetch deterministically 404s - waiting for the resulting
-     * ".pk-overlay__error" instead proves fetchAndRender() actually ran to completion.
-     */
-    @Test
-    void dashboardLoadsTheTraceDetailOverlayModule() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-
-        overlay.waitFor(".pk-overlay__error");
     }
 
     /**

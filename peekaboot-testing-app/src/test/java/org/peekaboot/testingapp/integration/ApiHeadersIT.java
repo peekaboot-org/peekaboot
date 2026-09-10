@@ -2,20 +2,23 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * The response headers Peekaboot's own API carries through the real, auto-configured
- * app: JSON holding environment variables and captured headers must not be stored by
+ * What Peekaboot serves under {@code /peekaboot} through the real, auto-configured app, and
+ * on what terms: JSON holding environment variables and captured headers must not be stored by
  * a proxy or the back-forward cache, nor content-sniffed (ApiSecurityHeadersInterceptor,
  * registered by PeekabootWebConfig for /peekaboot/api/** only - the dashboard's static
- * assets keep their own, revalidating cache policy).
+ * assets keep their own, revalidating cache policy), and the assets themselves have to arrive
+ * at all.
  */
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -44,5 +47,18 @@ class ApiHeadersIT {
         HttpHeaders headers = api.headersOf("/peekaboot/ui/dashboard/index.html");
 
         assertThat(headers.getCacheControl()).isEqualTo("no-cache");
+    }
+
+    /**
+     * The icon set is referenced only from CSS {@code url()} and {@code <link rel="icon">}, so a
+     * path typo or a packaging change that stopped shipping binaries from the frontend module
+     * would fail silently - no console error a UI test would notice, just a missing favicon and
+     * an empty logo box.
+     */
+    @Test
+    void iconAssetsAreServed() {
+        for (String asset : List.of("favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
+            assertThat(api.statusOf("/peekaboot/ui/assets/" + asset)).as(asset).isEqualTo(HttpStatus.OK);
+        }
     }
 }

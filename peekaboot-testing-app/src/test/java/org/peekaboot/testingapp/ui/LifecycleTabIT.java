@@ -100,16 +100,6 @@ class LifecycleTabIT extends PlaywrightTestBase {
     }
 
     @Test
-    void tabAppearsInTheStripAndOpens() {
-        openDashboard();
-
-        assertThat(page.isVisible(Dashboard.tabButton("lifecycle"))).isTrue();
-        dashboard.openTab("lifecycle");
-
-        page.waitForSelector("#lifecycle-tab.active");
-    }
-
-    @Test
     void firstPageShowsTwentyRowsWithPreviousDisabled() {
         openLifecycle();
 

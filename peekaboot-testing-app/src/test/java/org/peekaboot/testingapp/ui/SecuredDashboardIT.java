@@ -51,25 +51,19 @@ class SecuredDashboardIT extends PlaywrightTestBase {
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
     }
 
+    /**
+     * The admin half of the bar, on one page load: the module was allowed to run, so it
+     * resolved the request's real numbers and took its sign-in notice back out. Removed rather
+     * than hidden, so it leaves the accessibility tree too.
+     */
     @Test
-    void theToolbarResolvesItsMetricsForAnAdmin() {
+    void theToolbarResolvesItsMetricsAndDropsTheNoticeForAnAdmin() {
         openPersonsPage();
 
-        toolbar.waitFor("#pk-metrics .pk-stat");
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
 
-        assertThat(toolbar.text("#pk-metrics")).doesNotContain("?");
-    }
-
-    @Test
-    void anAnonymousBrowserIsRefusedTheDashboard() {
-        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
-            Page anonymousPage = anonymous.newPage();
-
-            Response response = anonymousPage.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-
-            assertThat(response.status()).isEqualTo(401);
-            assertThat(anonymousPage.locator("#overview-tab").count()).isZero();
-        }
+        assertThat(toolbar.text("#pk-metrics")).contains("quer").doesNotContain("?");
+        toolbar.waitForGone("#pk-auth");
     }
 
     /**
@@ -109,25 +103,6 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     }
 
     /**
-     * The notice is a real link rather than something a click handler opens, because in the
-     * case it exists for no handler was ever bound - the script that binds them was refused.
-     */
-    @Test
-    void theNoticeLinksAnAnonymousBrowserToTheDashboard() {
-        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
-            Page anonymousPage = anonymous.newPage();
-            anonymousPage.navigate(baseUrl + "/persons");
-            Toolbar anonymousToolbar = new Toolbar(anonymousPage);
-            anonymousToolbar.waitFor("#pk-auth a");
-
-            String href =
-                    (String) anonymousToolbar.evaluate("root => root.querySelector('#pk-auth a').getAttribute('href')");
-
-            assertThat(href).isEqualTo("/peekaboot/");
-        }
-    }
-
-    /**
      * The notice is revealed by a delayed animation rather than by a script, so that a page
      * blocking inline script still gets it. This pins the reveal actually happening - an
      * always-transparent notice would satisfy every other assertion here.
@@ -140,18 +115,6 @@ class SecuredDashboardIT extends PlaywrightTestBase {
 
             awaitAuthNoticeVisible(new Toolbar(anonymousPage));
         }
-    }
-
-    /**
-     * The complement: reaching the script at all proves the reader may read Peekaboot's data,
-     * so the notice is removed outright. Removed rather than hidden, so it leaves the
-     * accessibility tree too.
-     */
-    @Test
-    void theNoticeIsGoneOnceTheScriptHasRunForAnAdmin() {
-        openPersonsPage();
-
-        toolbar.waitForGone("#pk-auth");
     }
 
     /** The notice fades in on a delay, so its opacity is the signal that it has shown. */

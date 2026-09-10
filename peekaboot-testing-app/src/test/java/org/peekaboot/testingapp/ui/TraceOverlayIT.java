@@ -175,16 +175,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(selected).isEqualTo("spans");
     }
 
-    @Test
-    void escapeClosesTheOverlay() {
-        openOverlayFromToolbar();
-
-        page.keyboard().press("Escape");
-
-        overlay.awaitClosed();
-        assertThat(page.querySelector(TraceOverlay.HOST)).isNull();
-    }
-
     /**
      * Escape has to reach the overlay from the moment it opens, not from its first render:
      * between the two the reader is looking at a loading dialog with the whole page behind
