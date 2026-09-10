@@ -181,33 +181,36 @@ class DashboardShellIT extends PlaywrightTestBase {
      * host's network configuration changes - a container taking a veth interface up or down
      * is enough - so this is a transient a page meets with nothing broken, and one reload
      * fetches the whole graph again. Here the module never arrives, so the reload cannot help
-     * and the reader has to be told.
+     * and the reader has to be told. Two documents is also where a reload loop would show, and
+     * this is the cheapest place to guard against one.
      */
     @Test
     void aScriptThatNeverArrivesRaisesTheBannerAfterTheReloadFailsToo() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
         page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
 
         page.waitForSelector("#error:not(.hidden)");
+        page.waitForLoadState();
         assertThat(page.textContent("#error .message")).contains("could not start");
         assertThat(page.isVisible("#loading")).isFalse();
+        assertThat(documents).as("the one reload, and no loop after it").hasSize(2);
     }
 
     /**
      * The transient itself: one module lost on the first attempt and served on the next. The
      * dashboard reloads itself out of it, which is what keeps every entry point covered - the
      * deep-link tests navigate to the page directly rather than through openDashboard().
-     * Two main-frame navigations for the one this test asked for is the reload.
+     * Two documents where this test asked for one is the reload. Documents rather than
+     * navigations: a hash write is a navigation too, so counting those would turn red on the
+     * day any boot path writes one.
      */
     @Test
     void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
-        List<String> navigations = new ArrayList<>();
-        page.onFrameNavigated(frame -> {
-            if (frame.equals(page.mainFrame())) {
-                navigations.add(frame.url());
-            }
-        });
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
         page.route(
                 "**/peekaboot/ui/dashboard/tabs/meters.js",
                 route -> route.abort(),
@@ -215,9 +218,10 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         page.waitForSelector("#build-info > *");
+        page.waitForLoadState();
 
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
-        assertThat(navigations).hasSize(2);
+        assertThat(documents).hasSize(2);
     }
 
     /**
