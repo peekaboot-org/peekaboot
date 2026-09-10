@@ -5,6 +5,8 @@ import io.micrometer.observation.ObservationRegistry;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.method.HandlerMethod;
@@ -24,11 +26,7 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(TracingHandlerInterceptor.class);
 
-    private static final String HANDLER_OBSERVATION_ATTR =
-            TracingHandlerInterceptor.class.getName() + ".handlerObservation";
-    private static final String HANDLER_SCOPE_ATTR = TracingHandlerInterceptor.class.getName() + ".handlerScope";
-    private static final String VIEW_OBSERVATION_ATTR = TracingHandlerInterceptor.class.getName() + ".viewObservation";
-    private static final String VIEW_SCOPE_ATTR = TracingHandlerInterceptor.class.getName() + ".viewScope";
+    private static final String DISPATCH_STACK_ATTR = TracingHandlerInterceptor.class.getName() + ".dispatchStack";
 
     private final ObservationRegistry observationRegistry;
 
@@ -36,12 +34,35 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
         this.observationRegistry = observationRegistry;
     }
 
+    /**
+     * What one DispatcherServlet dispatch owns.
+     *
+     * <p>A handler that returns {@code forward:} - or an include - runs a second dispatch
+     * inside the first one's view rendering, and both call every interceptor callback
+     * against the same request. Holding the observations in one request attribute each
+     * would have the inner dispatch overwrite the outer dispatch's view observation, which
+     * is then never stopped: no span for it, and its scope stays open on the request
+     * thread, so every later request that thread serves inherits the leftover trace
+     * context and is captured as part of that trace.
+     */
+    private static final class DispatchObservations {
+        private Observation handlerObservation;
+        private Observation.Scope handlerScope;
+        private Observation viewObservation;
+        private Observation.Scope viewScope;
+    }
+
+    /**
+     * Pushes this dispatch's frame - always, so {@link #afterCompletion} can pop exactly one
+     * - and starts the handler observation, except on the ASYNC re-dispatch, which the
+     * initial dispatch already observed.
+     */
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // the initial dispatch already observed this request; don't double-count
-        // the ASYNC re-dispatch
-        if (request.getDispatcherType() == DispatcherType.ASYNC
-                || request.getAttribute(HANDLER_OBSERVATION_ATTR) != null) {
+        DispatchObservations dispatch = new DispatchObservations();
+        stack(request).push(dispatch);
+
+        if (request.getDispatcherType() == DispatcherType.ASYNC) {
             return true;
         }
 
@@ -51,8 +72,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
                 .highCardinalityKeyValue("handler.name", spanName)
                 .start();
 
-        request.setAttribute(HANDLER_OBSERVATION_ATTR, observation);
-        request.setAttribute(HANDLER_SCOPE_ATTR, observation.openScope());
+        dispatch.handlerObservation = observation;
+        dispatch.handlerScope = observation.openScope();
         log.trace("Started handler observation for {}", spanName);
 
         return true;
@@ -61,7 +82,11 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     @Override
     public void postHandle(
             HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) {
-        stopHandlerObservation(request, null);
+        DispatchObservations dispatch = stack(request).peek();
+        if (dispatch == null) {
+            return;
+        }
+        stopHandlerObservation(dispatch, null);
 
         String viewName = viewName(modelAndView);
         if (viewName != null) {
@@ -70,8 +95,8 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
                     .highCardinalityKeyValue("view.name", viewName)
                     .start();
 
-            request.setAttribute(VIEW_OBSERVATION_ATTR, viewObservation);
-            request.setAttribute(VIEW_SCOPE_ATTR, viewObservation.openScope());
+            dispatch.viewObservation = viewObservation;
+            dispatch.viewScope = viewObservation.openScope();
             log.trace("Started view observation for {}", viewName);
         }
     }
@@ -79,51 +104,68 @@ public class TracingHandlerInterceptor implements AsyncHandlerInterceptor {
     @Override
     public void afterConcurrentHandlingStarted(
             HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // the handler returned but processing continues on another thread;
-        // close the scope on this thread and end the handler span here
-        stopHandlerObservation(request, null);
+        // the handler returned but processing continues on another thread; close the scope on
+        // this thread and end the handler span here. afterCompletion never runs for this
+        // dispatch - the ASYNC re-dispatch gets its own - so the frame is popped here.
+        DispatchObservations dispatch = stack(request).poll();
+        if (dispatch != null) {
+            stopHandlerObservation(dispatch, null);
+        }
     }
 
     @Override
     public void afterCompletion(
             HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
-        Observation viewObservation = (Observation) request.getAttribute(VIEW_OBSERVATION_ATTR);
-        if (viewObservation != null) {
-            closeScope(request, VIEW_SCOPE_ATTR);
+        DispatchObservations dispatch = stack(request).poll();
+        if (dispatch == null) {
+            return;
+        }
+
+        if (dispatch.viewObservation != null) {
+            closeScope(dispatch.viewScope);
             if (ex != null) {
-                viewObservation.error(ex);
+                dispatch.viewObservation.error(ex);
             }
-            viewObservation.stop();
-            request.removeAttribute(VIEW_OBSERVATION_ATTR);
+            dispatch.viewObservation.stop();
             log.trace("Stopped view observation");
         }
 
         // an exception in the handler skips postHandle
-        stopHandlerObservation(request, ex);
+        stopHandlerObservation(dispatch, ex);
     }
 
-    private void stopHandlerObservation(HttpServletRequest request, Exception ex) {
-        Observation observation = (Observation) request.getAttribute(HANDLER_OBSERVATION_ATTR);
-        if (observation == null) {
+    private static void stopHandlerObservation(DispatchObservations dispatch, Exception ex) {
+        if (dispatch.handlerObservation == null) {
             return;
         }
-        closeScope(request, HANDLER_SCOPE_ATTR);
+        closeScope(dispatch.handlerScope);
         if (ex != null) {
-            observation.error(ex);
+            dispatch.handlerObservation.error(ex);
         }
-        observation.stop();
-        request.removeAttribute(HANDLER_OBSERVATION_ATTR);
+        dispatch.handlerObservation.stop();
+        dispatch.handlerObservation = null;
+        dispatch.handlerScope = null;
         log.trace("Stopped handler observation");
     }
 
-    // CloseResource: the scope is opened in preHandle and intentionally closed here,
-    // in a later interceptor callback - a lifecycle PMD cannot follow
-    @SuppressWarnings("PMD.CloseResource")
-    private void closeScope(HttpServletRequest request, String scopeAttribute) {
-        Observation.Scope scope = (Observation.Scope) request.getAttribute(scopeAttribute);
+    /**
+     * The dispatch frames currently open on this request, innermost first. Nested dispatches
+     * run to completion inside the outer one on the same thread, so the deque is only ever
+     * touched by one thread at a time and needs no synchronisation of its own.
+     */
+    @SuppressWarnings("unchecked")
+    private static Deque<DispatchObservations> stack(HttpServletRequest request) {
+        Deque<DispatchObservations> stack = (Deque<DispatchObservations>) request.getAttribute(DISPATCH_STACK_ATTR);
+        if (stack == null) {
+            stack = new ArrayDeque<>();
+            request.setAttribute(DISPATCH_STACK_ATTR, stack);
+        }
+        return stack;
+    }
+
+    private static void closeScope(Observation.Scope scope) {
         if (scope != null) {
             scope.close();
-            request.removeAttribute(scopeAttribute);
         }
     }
 

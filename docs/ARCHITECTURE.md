@@ -672,7 +672,7 @@ not just Peekaboot's:
 
 | Observation | Raised in | Tags |
 |-------------|-----------|------|
-| `spring.handler` | `preHandle`, once per request | `handler.type` (low cardinality: the handler class's simple name), `handler.name` (high cardinality: `BeanType.methodName` for a `HandlerMethod`, else the handler class's simple name) |
+| `spring.handler` | `preHandle`, once per dispatch | `handler.type` (low cardinality: the handler class's simple name), `handler.name` (high cardinality: `BeanType.methodName` for a `HandlerMethod`, else the handler class's simple name) |
 | `spring.view.render` | `postHandle`, only when the handler returned a resolvable view | `view.type` (always `template`), `view.name` (the view name, or the `View` implementation's simple class name when the handler returned a `View` instance) |
 
 A `@ResponseBody` or REST controller renders no view, so those requests carry a handler span and
@@ -687,6 +687,17 @@ request, and it is the reason to keep a scope rather than just time the handler.
 An `ASYNC` re-dispatch is skipped so the handler span is not counted twice, and
 `afterConcurrentHandlingStarted` ends it on the thread that started it. A handler exception
 skips `postHandle`, so `afterCompletion` ends the handler observation and records the error.
+
+The observations belong to a **dispatch**, not to the request, and are held in a stack on the
+request: `preHandle` pushes one frame, `afterCompletion` pops one. A handler that returns
+`forward:` (or an include) has DispatcherServlet run a second dispatch *inside* the first one's
+view rendering, so both dispatches call every callback against the same request. One attribute
+per observation would have the inner dispatch overwrite the outer one's view observation, which
+is then never stopped: no `spring.view.render` span for the forward, and - the part that reaches
+beyond the request - its scope left open on the request thread, so every later request that
+pooled thread served inherited the leftover context and was captured into that same trace.
+`TracingHandlerInterceptorTest` pins the scope, `NestedDispatchTraceCaptureIT` the captured
+shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack be right here.
 
 `TracingInterceptorAutoConfiguration` registers two beans: the interceptor, and an anonymous
 `WebMvcConfigurer` named `tracingInterceptorConfigurer` that adds it with
