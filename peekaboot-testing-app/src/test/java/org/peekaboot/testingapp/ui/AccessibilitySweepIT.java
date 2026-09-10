@@ -27,10 +27,19 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
      */
     @Test
     void theDashboardHasNoAccessibilityViolations() {
+        // the Traces tab renders as an empty list until some trace exists, and an empty list
+        // has no rows to find a violation in - so this class seeds its own
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+
         openDashboard();
 
         for (String tabId : dashboard.visibleTabs()) {
             dashboard.openTab(tabId);
+            if ("traces".equals(tabId)) {
+                dashboard.awaitListedTrace(traceId);
+            }
             assertNoViolations("the " + tabId + " tab", sweep());
         }
     }

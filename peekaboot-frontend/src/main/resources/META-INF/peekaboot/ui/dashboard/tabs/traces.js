@@ -282,17 +282,22 @@ function renderTraceItem(trace, context) {
     const header = document.createElement('div');
     header.className = 'pk-trace-item__header';
 
-    // A real <button>; the scheduler link below is its sibling, not its child, because a
+    // A real <button> over the main line alone. The scheduler link and the stats line are
+    // its siblings, not its children: the stats carry the traceId's copy control, and a
     // button cannot contain interactive content (see ToolbarShell for the same shape).
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
     openBtn.className = 'pk-unbutton pk-trace-item__open';
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
-    openBtn.appendChild(renderStats(trace, context));
     if (trace.traceId) {
         openBtn.addEventListener('click', () => context.openTrace(trace.traceId));
     }
-    header.appendChild(openBtn);
+
+    const body = document.createElement('div');
+    body.className = 'pk-trace-item__body';
+    body.appendChild(openBtn);
+    body.appendChild(renderStats(trace, context));
+    header.appendChild(body);
 
     if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink());
 
