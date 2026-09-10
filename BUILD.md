@@ -58,10 +58,10 @@ threads (`-Dpeekaboot.it.threads=N`; `1` serializes when diagnosing a flaky test
 owning its own Chromium, all sharing one Spring context cache and therefore one running
 app per context configuration. The concurrency is deliberate beyond speed: concurrent test
 classes hammer peekaboot the way a real concurrent host application does, so a race in
-peekaboot itself shows up here first. Classes that cannot overlap coordinate through JUnit
-`@ResourceLock` (see `DashboardTraceViewIT` and `DevToolbarIT`). `-Dpeekaboot.it.forks=N`
-still exists on top (forks × threads both apply) but defaults to 1. The coverage gate sees
-the same `jacoco.exec` data it would from a serial run.
+peekaboot itself shows up here first. No class holds a JUnit `@ResourceLock`: every one of
+them pins its own trace id instead of clearing state the others are using.
+`-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults to 1.
+The coverage gate sees the same `jacoco.exec` data it would from a serial run.
 
 `peekaboot-coverage` runs last and adds the coverage gate over the whole reactor:
 
