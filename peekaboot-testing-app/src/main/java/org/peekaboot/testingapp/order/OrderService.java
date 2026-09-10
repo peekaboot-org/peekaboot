@@ -49,7 +49,7 @@ public class OrderService {
 
     /**
      * Deliberate N+1: one query for the orders, then three per order. Trips the
-     * high-trace-query-count threshold so the Traces tab has a warning to render.
+     * high-trace-query-count threshold, so the Traces tab shows a query count past it.
      */
     public List<OrderSummary> listOrders() {
 
@@ -65,7 +65,7 @@ public class OrderService {
             // Three queries where one would do, and the last two answer questions already
             // answered: lines.size() is the count, and an order loaded a moment ago still
             // exists. They are here so the page passes the high-trace-query-count threshold
-            // and the Traces tab has a warning to render - padding, not a bug.
+            // the Traces tab reads its query count against - padding, not a bug.
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
             long redundantLineCount = orderLineRepository.countByOrderId(order.getId());
             boolean stillPresent = orderRepository.existsById(order.getId());

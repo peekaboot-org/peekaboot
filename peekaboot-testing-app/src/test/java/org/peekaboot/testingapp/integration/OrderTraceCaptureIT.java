@@ -88,7 +88,7 @@ class OrderTraceCaptureIT {
         assertThat(trace.path("summary").path("queries").path("count").asInt())
                 .as("the deliberate N+1 on /orders must exceed the default "
                         + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
-                        + "Traces tab has no high-query-count warning to show")
+                        + "Traces tab has no high query count to show")
                 .isGreaterThan(20);
     }
 
