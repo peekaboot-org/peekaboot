@@ -11,7 +11,7 @@ import org.peekaboot.backend.domain.trace.TraceTree;
  * Builds already-mapped {@link TraceTree} fixtures for the stages after
  * {@code TraceTreeMapper}: trace {@code trace-1}, ended OK, of UNKNOWN root action, taking
  * as long as its root span and named after it, with a summary counting that one span and
- * nothing else - unless a test says otherwise. The root span may be null.
+ * nothing else. The root span may be null.
  */
 public final class TraceTrees {
 
