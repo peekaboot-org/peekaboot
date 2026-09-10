@@ -48,9 +48,14 @@ public final class ScheduledJobs {
                 .getRunnable();
 
         RUN_TRACE_ID.remove();
-        runnable.run();
-        String traceId = RUN_TRACE_ID.get();
-        RUN_TRACE_ID.remove();
+        String traceId;
+        try {
+            runnable.run();
+            traceId = RUN_TRACE_ID.get();
+        } finally {
+            // a throwing job would otherwise leave its id on the thread for the next run to read
+            RUN_TRACE_ID.remove();
+        }
         if (traceId == null) {
             throw new AssertionError(taskDescription + " ran without a traced scheduled-task observation; this "
                     + "context is missing the recorder DeferredSchedulingConfig registers");
