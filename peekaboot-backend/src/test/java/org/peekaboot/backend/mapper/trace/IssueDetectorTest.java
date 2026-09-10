@@ -82,9 +82,13 @@ class IssueDetectorTest {
                 detector.detectIssues(tree(node("s").durationMs(100).build()).build());
         TraceTree verySlow =
                 detector.detectIssues(tree(node("v").durationMs(500).build()).build());
+        // 50ms is under the 100ms span threshold, so the query threshold is the only one read
+        TraceTree slowQuery = detector.detectIssues(
+                tree(querySpan("q", 50, Map.of("db.system", "postgresql"))).build());
 
         assertThat(slow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW);
         assertThat(verySlow.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.VERY_SLOW);
+        assertThat(slowQuery.rootSpan().issues()).extracting(SpanIssue::type).containsExactly(IssueType.SLOW_QUERY);
     }
 
     @Test

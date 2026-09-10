@@ -2,6 +2,7 @@ package org.peekaboot.backend.mapper.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.peekaboot.backend.testsupport.Spans.query;
+import static org.peekaboot.backend.testsupport.Spans.resultSet;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -101,13 +102,8 @@ class QueryExtractorTest {
                 .build();
 
         // Result-set span created after query (creationOrder=11)
-        var resultSetSpan = span("rs1")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(1100, 5)
-                .tags(Map.of("jdbc.row-count", "42", "peer.service", "mydb"))
-                .order(11)
-                .build();
+        var resultSetSpan =
+                resultSet("rs1", 42).tag("peer.service", "mydb").order(11).build();
 
         var traceData = TraceDatas.of("trace1", querySpan, resultSetSpan);
 
@@ -130,13 +126,7 @@ class QueryExtractorTest {
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(20)
                 .build();
-        var rs = span("rs1")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(2100, 5)
-                .tags(Map.of("jdbc.row-count", "42", "peer.service", "db"))
-                .order(21)
-                .build();
+        var rs = resultSet("rs1", 42).tag("peer.service", "db").order(21).build();
 
         var traceData = TraceDatas.of("trace1", update, select, rs);
 
@@ -155,26 +145,14 @@ class QueryExtractorTest {
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(10)
                 .build();
-        var rs1 = span("rs1")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(1100, 5)
-                .tags(Map.of("jdbc.row-count", "10", "peer.service", "db"))
-                .order(11)
-                .build();
+        var rs1 = resultSet("rs1", 10).tag("peer.service", "db").order(11).build();
 
         // Second query + result set
         var query2 = query("q2")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM orders", "peer.service", "db"))
                 .order(20)
                 .build();
-        var rs2 = span("rs2")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(2100, 5)
-                .tags(Map.of("jdbc.row-count", "25", "peer.service", "db"))
-                .order(21)
-                .build();
+        var rs2 = resultSet("rs2", 25).tag("peer.service", "db").order(21).build();
 
         var traceData = TraceDatas.of("trace1", query1, rs1, query2, rs2);
 
@@ -190,13 +168,8 @@ class QueryExtractorTest {
     @Test
     void extract_shouldNotMatchResultSetToQueryIfCreationOrderIsLower() {
         // Result-set created before query (shouldn't match)
-        var resultSetSpan = span("rs1")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
-                .at(500, 5)
-                .tags(Map.of("jdbc.row-count", "99", "peer.service", "db"))
-                .order(5)
-                .build();
+        var resultSetSpan =
+                resultSet("rs1", 99).tag("peer.service", "db").order(5).build();
         var querySpan = query("q1")
                 .tags(Map.of("jdbc.query[0]", "SELECT * FROM users", "peer.service", "db"))
                 .order(10)

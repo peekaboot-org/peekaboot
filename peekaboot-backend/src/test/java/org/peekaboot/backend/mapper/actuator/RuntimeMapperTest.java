@@ -114,7 +114,7 @@ class RuntimeMapperTest {
         assertThat(result.os()).isNull();
     }
 
-    /** A JVM without -Xmx reports an unbounded heap as -1; the share is then unknown, never negative. */
+    /** A JVM without -Xmx reports an unbounded heap as -1; the share is then zero, never negative. */
     @Test
     void map_shouldReportAnUnboundedHeapAsAZeroShare() {
         InfoResponse info = new InfoResponse(
