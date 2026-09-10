@@ -106,7 +106,13 @@ export function openTraceDetail(traceId, options = {}) {
     // An inline style, not a `:host` rule in trace-detail.css: attachSharedStyles() links
     // that sheet asynchronously, and a CSS-only rule would leave the host collapsed to
     // zero size until it lands. The CSSOM write applies the instant the element exists.
-    overlayHost.style.cssText = 'position:fixed;inset:0;';
+    //
+    // The z-index is the toolbar's own (toolbar.css `:host`) and is not optional: this host
+    // is appended to document.body, so without one it stacks at `auto` and any host page
+    // chrome that stacks above the page flow - Bulma's .navbar at 30, Bootstrap's
+    // .fixed-top at 1030 - paints over the overlay and takes its clicks. Equal to the
+    // toolbar's rather than above it: appended later, it already wins the tie.
+    overlayHost.style.cssText = 'position:fixed;inset:0;z-index:2147483647;';
     document.body.appendChild(overlayHost);
     setBackgroundInert(overlayHost);
 
