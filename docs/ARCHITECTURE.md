@@ -224,7 +224,7 @@ org.peekaboot.backend/
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
-6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW, SLOW_QUERY and HIGH_QUERY_COUNT at `UiTracingProperties`' thresholds, and ERROR off the span's own status. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
+6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `UiTracingProperties`' thresholds, and ERROR off the span's own status. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
 
@@ -818,10 +818,9 @@ JDBC/datasource instrumentation on the classpath already emits a span for it, ta
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
-`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY and the
-HIGH_QUERY_COUNT children count) and `QueryExtractor` (the `queries` list), so the three
-numbers a trace reports about its queries are one number; `TraceTreeMapperTest` pins the
-equality.
+`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY) and
+`QueryExtractor` (the `queries` list), so the three numbers a trace reports about its queries
+are one number; `TraceTreeMapperTest` pins the equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
 tree's own names, one entry per query span. A span whose instrumentation recorded no statement

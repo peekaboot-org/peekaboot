@@ -26,7 +26,7 @@ public final class TraceTrees {
         private final SpanNode rootSpan;
         private String traceId = "trace-1";
         private RootActionType rootActionType = RootActionType.UNKNOWN;
-        private TraceTabSummary summary;
+        private final TraceTabSummary summary;
         private boolean truncated;
 
         private Builder(SpanNode rootSpan) {
@@ -45,21 +45,6 @@ public final class TraceTrees {
 
         public Builder rootActionType(RootActionType rootActionType) {
             this.rootActionType = rootActionType;
-            return this;
-        }
-
-        public Builder summary(TraceTabSummary summary) {
-            this.summary = summary;
-            return this;
-        }
-
-        /** The queries the summary counts for the trace, whatever the tree holds. */
-        public Builder queries(int count, long durationMs) {
-            this.summary = new TraceTabSummary(
-                    summary.request(),
-                    summary.spans(),
-                    new TraceTabSummary.QueriesSummary(count, durationMs),
-                    summary.logs());
             return this;
         }
 

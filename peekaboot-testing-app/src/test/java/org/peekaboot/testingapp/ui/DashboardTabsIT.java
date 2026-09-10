@@ -20,7 +20,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
-import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.Scheduler;
@@ -48,9 +47,6 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     @Autowired
     private OrderLineRepository orderLineRepository;
-
-    @Autowired
-    private UiTracingProperties uiTracing;
 
     @Autowired
     private PeekabootTracingProperties tracingProperties;
@@ -99,17 +95,6 @@ class DashboardTabsIT extends PlaywrightTestBase {
         String traceId =
                 awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
         return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
-    }
-
-    /**
-     * Seeds orders until the {@code /orders} page's deliberate N+1 - one query for the list
-     * plus three per order - passes the high-trace-query-count threshold. The store is shared,
-     * so whatever another class seeded counts too; this only makes up the difference.
-     */
-    private void seedEnoughOrdersToTripTheQueryCountWarning() {
-        while (orderRepository.count() * QUERIES_PER_ORDER + 1 <= uiTracing.getHighTraceQueryCountThreshold()) {
-            seedAnOrder();
-        }
     }
 
     /** One order with one line, for a test that needs a row to read rather than a query count. */
@@ -922,14 +907,14 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * What the README promises the {@code /orders} page shows: a trace whose query count is
-     * past the high-trace-query-count threshold, rendered on the row as the shared query
-     * stat. The count is read off the row, not off the API, because the row is what a reader
-     * judges the page by.
+     * What the README promises the {@code /orders} page shows: the deliberate N+1's queries
+     * counted on the listed trace row, rendered as the shared query stat. The count is read
+     * off the row, not off the API, because the row is what a reader judges the page by.
      */
     @Test
-    void theOrdersPageTraceListsAQueryCountPastTheWarningThreshold() {
-        seedEnoughOrdersToTripTheQueryCountWarning();
+    void theOrdersPageTraceListsTheQueryCountOfItsNPlusOne() {
+        seedAnOrder();
+        long orders = orderRepository.count();
         page.navigate(baseUrl + "/orders");
         String traceId = toolbar.traceId();
         awaitTrace(traceId, ROOT_SPAN_EXPORTED);
@@ -945,8 +930,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .as("the row's query stat reads '<n> queries': %s", queryStat)
                 .isTrue();
         assertThat(Integer.parseInt(queries.group(1)))
-                .as("the N+1 on /orders is what puts the row's count past the threshold")
-                .isGreaterThan(uiTracing.getHighTraceQueryCountThreshold());
+                .as("the N+1 runs one query for the list plus %d per order, over %d orders", QUERIES_PER_ORDER, orders)
+                .isGreaterThanOrEqualTo((int) (orders * QUERIES_PER_ORDER + 1));
     }
 
     /**

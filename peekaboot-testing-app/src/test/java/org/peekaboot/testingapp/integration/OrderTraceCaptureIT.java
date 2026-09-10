@@ -38,6 +38,9 @@ class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
 
+    /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
+    private static final int QUERIES_PER_ORDER = 3;
+
     @LocalServerPort
     private int port;
 
@@ -80,16 +83,18 @@ class OrderTraceCaptureIT {
     }
 
     @Test
-    void ordersPageTripsTheHighTraceQueryCountThreshold() {
+    void ordersPageCountsEveryQueryOfItsNPlusOne() {
         String traceId = traces.get("/orders");
 
         JsonNode trace = traces.awaitTrace(traceId, TraceApiClient.ROOT_SPAN_EXPORTED);
 
         assertThat(trace.path("summary").path("queries").path("count").asInt())
-                .as("the deliberate N+1 on /orders must exceed the default "
-                        + "peekaboot.ui.tracing.high-trace-query-count-threshold of 20, or the "
-                        + "Traces tab has no high query count to show")
-                .isGreaterThan(20);
+                .as(
+                        "the deliberate N+1 runs one query for the list plus %d per order, so the "
+                                + "%d seeded orders must be counted, or the Traces tab's query stat "
+                                + "under-reports the page",
+                        QUERIES_PER_ORDER, SEEDED_ORDERS)
+                .isGreaterThanOrEqualTo(SEEDED_ORDERS * QUERIES_PER_ORDER + 1);
     }
 
     /**

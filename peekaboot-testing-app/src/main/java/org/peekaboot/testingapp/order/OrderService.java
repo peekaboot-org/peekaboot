@@ -48,8 +48,8 @@ public class OrderService {
     }
 
     /**
-     * Deliberate N+1: one query for the orders, then three per order. Trips the
-     * high-trace-query-count threshold, so the Traces tab shows a query count past it.
+     * Deliberate N+1: one query for the orders, then three per order, so the Traces tab has a
+     * page with a query count worth looking at.
      */
     public List<OrderSummary> listOrders() {
 
@@ -64,8 +64,7 @@ public class OrderService {
         for (CustomerOrder order : orders) {
             // Three queries where one would do, and the last two answer questions already
             // answered: lines.size() is the count, and an order loaded a moment ago still
-            // exists. They are here so the page passes the high-trace-query-count threshold
-            // the Traces tab reads its query count against - padding, not a bug.
+            // exists. They are here to pad the trace's query count - padding, not a bug.
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
             long lineCount = orderLineRepository.countByOrderId(order.getId());
             orderRepository.existsById(order.getId());

@@ -54,8 +54,7 @@ const ISSUE_SEVERITIES = Object.freeze({
     SLOW: 'slow',
     VERY_SLOW: 'very-slow',
     ERROR: '',
-    SLOW_QUERY: 'slow',
-    HIGH_QUERY_COUNT: ''
+    SLOW_QUERY: 'slow'
 });
 
 export const ISSUE_TYPES = Object.keys(ISSUE_SEVERITIES);
