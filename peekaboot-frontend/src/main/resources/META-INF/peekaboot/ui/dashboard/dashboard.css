@@ -164,7 +164,7 @@
     font-size: var(--pk-text-sm);
     transition: border-color var(--pk-transition), background-color var(--pk-transition);
 }
-.pk-filter__input:focus { outline: none; border-color: var(--pk-primary-text); }
+.pk-filter__input:focus { border-color: var(--pk-primary-text); }
 .pk-filter__input::placeholder { color: var(--pk-text-muted); }
 .pk-filter__icon {
     position: absolute;

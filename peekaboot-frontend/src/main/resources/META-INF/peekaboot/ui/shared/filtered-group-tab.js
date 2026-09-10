@@ -187,8 +187,9 @@ export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupNa
 }
 
 /**
- * Key or rendered value contains the query, case-insensitively; a missing value matches
- * nothing, since the row shows "-" rather than the word "null". Exported for the browser tests.
+ * Key or rendered value contains the query, case-insensitively. A missing value is matched
+ * as the empty string, so such a row matches on its key alone; the dash the row renders in
+ * its place is no part of the filter text. Exported for the browser tests.
  */
 export function propertyMatches(prop, query) {
     if (!query) return true;

@@ -7,6 +7,7 @@ import java.lang.reflect.RecordComponent;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -626,6 +627,29 @@ class SharedModuleIT extends PlaywrightTestBase {
                         Stream.of(TileFormat.values()).map(TileFormat::wireName).toList());
         assertThat(evalUiModule("dashboard/tabs/insights-chart.js", "m.CHART_TYPES"))
                 .isEqualTo(Stream.of(Chart.values()).map(Chart::wireName).toList());
+    }
+
+    /**
+     * insights-colors.js repeats tokens.css's light values, for a chart drawn in a document
+     * whose stylesheet never applied. A recolour of a token would leave those copies painting
+     * the old palette, silently and only on that path. {@code --pk-font} is out: it falls back
+     * to a short system stack rather than to tokens.css's full one.
+     */
+    @Test
+    void insightsChartFallbacksMirrorTheLightThemeTokens() {
+        @SuppressWarnings("unchecked")
+        Map<String, String> fallbacks = new LinkedHashMap<>(
+                (Map<String, String>) evalUiModule("dashboard/tabs/insights-colors.js", "m.LIGHT_FALLBACKS"));
+        fallbacks.remove("--pk-font");
+
+        setStoredTheme("light");
+        openDashboard();
+
+        assertThat(fallbacks)
+                .isNotEmpty()
+                .allSatisfy((token, fallback) -> assertThat(cssVar(":root", token))
+                        .as("%s in tokens.css's light block", token)
+                        .isEqualTo(fallback));
     }
 
     /**

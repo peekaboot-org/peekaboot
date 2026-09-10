@@ -884,6 +884,22 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
+     * The other half of that fallback: an id no tab has at all, from a typo or a link built
+     * against an older version. Overview renders and the URL is corrected to say so, rather
+     * than keeping a hash that names a view the reader is not looking at.
+     */
+    @Test
+    void deepLinkToAnUnknownTabCorrectsTheHashToOverview() {
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#nosuchtab");
+        page.waitForSelector("#overview-tab.active");
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.url()).endsWith("#overview");
+        assertThat(page.getAttribute(".pk-tab[data-tab='overview']", "aria-selected"))
+                .isEqualTo("true");
+    }
+
+    /**
      * The Overview tile row reads /api/insights/config on the dashboard's own refresh
      * cycle, but only while it is the tab on screen: a refresh with another tab showing
      * must not spend a request on tiles nobody is looking at. Switching back renders the

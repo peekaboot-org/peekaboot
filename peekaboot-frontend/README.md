@@ -348,14 +348,18 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
   (`:is(button, a, select, input, [tabindex]):focus-visible`), so a new control gets it
   without asking; a component overrides only the offset (`-2px` where the control sits
   inside a bordered box) or, on a saturated fill, the colour. A control that resets the
-  ring to `none` needs another visible focus indicator, as the jump-flash targets have.
+  ring to `none` needs another visible focus indicator. The overlay's jump targets show the
+  shape: `.pk-jump-flash` marks one while it lasts, and a `:focus-visible` rule of their own
+  keeps a ring once it is gone, which is the state a keyboard jump leaves them in.
   In particular a `role="button"` container must not wrap a focusable child
   such as a link: ARIA defines a button's children as presentational, so assistive tech can
   prune the nested control right out of the accessibility tree while nothing looks wrong
   visually. The fix is always the same shape. The container stays a plain element, a real
   `<button>` carries the primary action, and the other interactive element becomes the
-  button's sibling rather than its descendant. The toolbar's open button and the traces tab's
-  trace item header needed it; watch for it in any "make this row clickable" change.
+  button's sibling rather than its descendant. The toolbar's open button needed it, and the
+  traces tab's row twice: once for its scheduler link, once for the traceId's copy control,
+  which is why the row's button now covers its main line alone and the stats line beside it
+  is no longer part of the click target. Watch for it in any "make this row clickable" change.
 
   The trace-detail overlay's small controls are all `<button>`s with the browser's button
   chrome reset away (`.pk-unbutton`, plus `.pk-icon-btn` for the 24px glyph box), so each

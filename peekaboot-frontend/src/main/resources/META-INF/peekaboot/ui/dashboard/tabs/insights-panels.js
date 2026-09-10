@@ -32,7 +32,7 @@ export const RESET_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill=
  */
 export function levelButtonsHtml(levels, activeLevel, buttonClass) {
     return levels.map(level => `
-        <button type="button" class="pk-btn ${buttonClass} pk-insight-level" data-level="${level.index}"
+        <button type="button" class="pk-btn ${buttonClass} pk-insight-level" data-level="${escapeHtml(level.index)}"
                 aria-pressed="${level.index === activeLevel}"
         >${escapeHtml(formatInterval(level.intervalMs))}</button>
     `).join('');

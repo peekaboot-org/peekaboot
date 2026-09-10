@@ -57,6 +57,9 @@ let urlChangeInProgress = false;
 function handleHashChange() {
     const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
+    // an unknown id renders Overview, so the URL says Overview too - the same correction
+    // fallBackToOverview() makes for a tab this instance does not have
+    if (tabId !== tab) replaceAppHash({tab: tabId});
     mainTabs.select(tabId, {silent: true});
     showTab(tabId);
     urlChangeInProgress = true;

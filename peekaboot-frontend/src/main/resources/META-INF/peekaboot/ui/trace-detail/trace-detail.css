@@ -213,9 +213,15 @@
    focus just moved; the class is removed again after a moment. Declared last so it
    wins over .pk-gantt-row:hover / .pk-query-item's own background. */
 .pk-jump-flash { background: var(--pk-primary-light); box-shadow: inset 0 0 0 2px var(--pk-primary-text); }
-/* Focus lands on the row/entry itself (tabindex=-1, programmatic focus); the flash
-   ring above is the visible indicator, so the UA's default outline is redundant. */
+/* Focus lands on the row/entry itself (tabindex=-1, programmatic focus); while the flash
+   ring above is up it is the visible indicator, so the UA's default outline is redundant.
+   The flash is removed after a moment and focus stays, so :focus-visible - which a jump
+   made from the keyboard matches - keeps a ring of its own. */
 .pk-gantt-row:focus, .pk-query-item:focus { outline: none; }
+.pk-gantt-row:focus-visible, .pk-query-item:focus-visible {
+    outline: 2px solid var(--pk-primary-text);
+    outline-offset: -2px;
+}
 
 /* Narrow viewports: the fixed name column would otherwise leave the track no room and
    push every row past the right edge. The name shares the row proportionally instead

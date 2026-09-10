@@ -5,8 +5,9 @@
 
 /**
  * The light-theme value of every token a chart draws with, for a document whose
- * tokens.css has not applied (blocked, 404, a stale cache): one copy, mirroring
- * tokens.css's light block, instead of a literal beside every read.
+ * tokens.css has not applied (blocked, 404, a stale cache): one copy instead of a literal
+ * beside every read. The colours mirror tokens.css's light block exactly, pinned by
+ * SharedModuleIT; --pk-font falls back to a short system stack rather than the full one.
  */
 export const LIGHT_FALLBACKS = Object.freeze({
     '--pk-primary-text': '#447718',
