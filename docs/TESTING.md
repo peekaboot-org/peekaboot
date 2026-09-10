@@ -75,6 +75,16 @@ GitHub's push protection scans for the same shapes. The concatenation folds at c
 so the value under test is unchanged. It just never appears contiguously in the source. A new
 provider fixture is written the same way and never tidied back together.
 
+## Accessibility
+`AccessibilityIT` pins the regressions this project has had - a control that lost its
+accessible name, a target under 24px, a contrast pair - one assertion each, with the reasoning
+in the Javadoc. `AccessibilitySweepIT` runs axe-core (`com.deque.html.axe-core:playwright`,
+pinned in both builds) over the dashboard, the trace overlay and the toolbar's shadow root at
+WCAG 2.1 A and AA, and expects zero violations. The two do not replace each other: the sweep
+knows rules nobody here thought of, and says nothing about why a targeted assertion exists. The
+overlay is swept over the dashboard rather than over a sample-app page, and the toolbar is
+scoped to its own host: the consumer's markup is not Peekaboot's to answer for.
+
 ## Backend to frontend contracts
 The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
 `SharedModuleIT`'s `*MirrorTheBackend*` tests pin `ROOT_ACTION_TYPES`, `TASK_TYPES`,
@@ -144,18 +154,20 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
   only. Fired by protobuf's reflective `Unsafe` access, a transitive OTel/gRPC dependency.
   Third-party, not application or test code. A real fix means a protobuf/gRPC version bump, out
   of scope for test cleanup.
-- `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, and the
-  `IllegalStateException: fixedDelay failed` from `Scheduler.fixedDelay()` (logged by Spring's
-  `TaskUtils$LoggingErrorHandler` as `ERROR ... Unexpected error occurred in scheduled task`,
-  with the full stack trace). Deliberate demo signal in `peekaboot-testing-app`, giving the
-  dashboard's Errors bucket a scheduled-job failure to show.
+- `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, fired by
+  the tests that need an error trace. Deliberate demo signal in `peekaboot-testing-app`, giving
+  the dashboard's Errors bucket a scheduled-job failure to show. Its sibling
+  `Scheduler.fixedDelay()`, which throws, cannot fire under `test` or `security` at all:
+  `DeferredSchedulingConfig` parks every timer, and no test runs that job. Only the screenshot
+  profile, which deliberately lets the timers run, sees its stack trace.
 - `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and has not
   been acknowledged`. Deliberate demo signal giving the Logs tab WARN content on a non-HTTP
   (`SCHEDULED_JOB`) trace. One line per order the context holds, on every run. Nothing ever
   moves an order out of `PLACED`, so the count grows with the orders a run places.
 - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is unreachable`.
   From `OrderController`'s deliberately failing `/boom` endpoint, exercised to populate the
-  Errors bucket and the toolbar's error styling.
+  Errors bucket. Not the toolbar: the throw is handled by the error dispatch, whose path
+  `PeekabootPaths` excludes, so the whitelabel page carries no bar.
 - `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find all
   persons`. From `PersonController`'s deliberate error path (`/?error=true`), same purpose.
 - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than the
