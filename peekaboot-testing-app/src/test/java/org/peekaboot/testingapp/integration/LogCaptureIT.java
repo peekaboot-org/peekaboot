@@ -27,10 +27,6 @@ import tools.jackson.databind.JsonNode;
  * instead, and pins the boundary: green here plus red there means the regression is in the
  * frontend render, not in capture.
  *
- * <p>Uses the real auto-configured tracer deliberately - {@code SharedToolbarTestConfig}'s
- * stand-in {@code Tracer} is NOOP-backed and populates no MDC, which is exactly the
- * condition under test.
- *
  * <p>Waiting for the spans is enough to know the logs are in: spans arrive via the OTel
  * BatchSpanProcessor whereas logs are published synchronously during the request, so a
  * trace that has spans has necessarily already received any log it will ever get. A trace

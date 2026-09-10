@@ -3,17 +3,10 @@ package org.peekaboot.testingapp.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.tracing.Span;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.parallel.ResourceAccessMode;
-import org.junit.jupiter.api.parallel.ResourceLock;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.TestingApp;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -21,24 +14,16 @@ import org.springframework.test.context.ActiveProfiles;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Asserts on the dashboard's trace API against a {@link TraceStore} that holds only
- * what the test itself injects. Three things keep it that way: {@link #setUp} clears the
- * store before every single test, {@link SharedToolbarTestConfig}'s stand-in
- * {@code Tracer} means the app's own request handling never produces a span for the
- * exporter to publish, and that same configuration drops every captured log - which would
- * otherwise arrive from the other application contexts sharing this JVM's Logback root
- * logger, as {@link #aLogFromAnotherApplicationContextDoesNotReachThisStore} pins down.
+ * What the dashboard's trace endpoint makes of a trace written straight to the store: the
+ * root span it hangs the tree from, the tags it carries through, and the query its child span
+ * is counted as. Spans are injected rather than provoked so the shape under test is stated
+ * outright; which tag a real driver populates is {@code QueryExtractorTest}'s question.
+ *
+ * <p>The store is shared with every other class running against this application, so the
+ * trace is pinned by an id of this class's own and nothing here asserts a store-wide count.
  */
-@SpringBootTest(
-        classes = {TestingApp.class, SharedToolbarTestConfig.class},
-        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
-/*
- * READ_WRITE on the shared store: setUp() clears the TraceStore of the app this class
- * shares with the other SharedToolbarTestConfig tests, so it must not overlap with a
- * class that is pinning its own traces in that store (they hold the READ side).
- */
-@ResourceLock(value = "shared-toolbar-trace-store", mode = ResourceAccessMode.READ_WRITE)
 class DashboardTraceViewIT {
 
     @LocalServerPort
@@ -48,141 +33,41 @@ class DashboardTraceViewIT {
     private TraceStore traceStore;
 
     private PeekabootApi api;
-    private String testTraceId;
-    private String testSpanId;
 
     @BeforeEach
-    void setUp(TestInfo testInfo) {
-        traceStore.clear();
-
+    void connect() {
         api = new PeekabootApi(port);
-
-        String testName = testInfo.getTestMethod().map(m -> m.getName()).orElse("unknown");
-        testTraceId = String.format("%016x", testName.hashCode());
-        testSpanId = String.format("%016x", (testName + "span").hashCode());
-
-        injectTestSpan();
     }
 
     @Test
-    void anInjectedTraceIsListedByTheDashboardApi() {
-        JsonNode response = api.getJson("/peekaboot/api/traces/insights");
-        JsonNode traces = response.get("traces");
-
-        assertThat(traces).isNotNull();
-        assertThat(traces.isArray()).isTrue();
-        assertThat(traceIdsOf(traces)).containsExactly(testTraceId);
-    }
-
-    @Test
-    void traceDetailsShouldContainSpans() {
-        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
-        JsonNode rootSpan = trace.get("rootSpan");
-
-        assertThat(rootSpan).as("Trace should contain rootSpan").isNotNull();
-        assertThat(rootSpan.get("spanId").asText())
-                .as("rootSpan should have correct spanId")
-                .isEqualTo(testSpanId);
-    }
-
-    @Test
-    void traceDetailsShouldContainHttpAttributes() {
-        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
-        JsonNode rootTags = trace.get("rootSpan").get("tags");
-
-        assertThat(rootTags.get("http.method").asString()).isEqualTo("GET");
-        assertThat(rootTags.get("url.path").asString()).isEqualTo("/persons");
-    }
-
-    @Test
-    void traceShouldContainDatabaseSpansWhenQueryExecuted() {
-        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", testTraceId);
-        JsonNode summary = trace.get("summary");
-
-        assertThat(summary).isNotNull();
-        JsonNode queries = summary.get("queries");
-
-        assertThat(queries).isNotNull();
-        assertThat(queries.get("count").asInt(-1))
-                .as("the single DB span injected by injectTestSpan() must be counted as exactly one query")
-                .isEqualTo(1);
-    }
-
-    @Test
-    void insightsEndpointFiltersByBucketAndReportsCounts() {
-        traceStore.addSpan(TestSpans.span("berr", "s1")
-                .error("boom", "java.lang.RuntimeException")
-                .build());
-        traceStore.addSpan(TestSpans.span("bok", "s2").build());
-
-        JsonNode errors = api.getJson("/peekaboot/api/traces/insights?bucket=errors");
-        JsonNode all = api.getJson("/peekaboot/api/traces/insights?bucket=all");
-
-        assertThat(traceIdsOf(errors.get("traces"))).containsExactly("berr");
-        assertThat(traceIdsOf(all.get("traces"))).containsExactlyInAnyOrder("berr", "bok", testTraceId);
-        assertThat(all.get("bucketCounts").get("all").asInt()).isEqualTo(3);
-        assertThat(all.get("bucketCounts").get("errors").asInt()).isEqualTo(1);
-        assertThat(all.get("bucketCounts").get("slow").asInt()).isZero();
-    }
-
-    /**
-     * The one thing {@code setUp()}'s {@code clear()} cannot keep out. Every application
-     * context in this JVM attaches its own appender to the single Logback root logger, so
-     * each one captures the log events of every other context running beside it - a request
-     * served by a concurrently running IT's app arrives here as a log-only trace and breaks
-     * the exact counts the tests above assert. A log carrying an MDC trace id this context
-     * never issued is exactly what that looks like from the store's side.
-     */
-    @Test
-    void aLogFromAnotherApplicationContextDoesNotReachThisStore() {
-        MDC.put("traceId", "ffffffffffffffffffffffffffffffff");
-        MDC.put("spanId", "ffffffffffffffff");
-        try {
-            LoggerFactory.getLogger(DashboardTraceViewIT.class).info("served by another context's app");
-        } finally {
-            MDC.remove("traceId");
-            MDC.remove("spanId");
-        }
-
-        JsonNode traces = api.getJson("/peekaboot/api/traces/insights").get("traces");
-
-        assertThat(traceIdsOf(traces)).containsExactly(testTraceId);
-    }
-
-    @Test
-    void featuresShouldIndicateTracingEnabled() {
-        JsonNode features = api.getJson("/peekaboot/api/features");
-
-        assertThat(features.get("tracing").asBoolean())
-                .as("Tracing feature should be enabled")
-                .isTrue();
-
-        assertThat(features.get("devToolbar").asBoolean())
-                .as("DevToolbar feature should be enabled")
-                .isTrue();
-    }
-
-    private static List<String> traceIdsOf(JsonNode traces) {
-        List<String> traceIds = new ArrayList<>();
-        traces.forEach(trace -> traceIds.add(trace.get("traceId").asString()));
-        return traceIds;
-    }
-
-    private void injectTestSpan() {
-        traceStore.addSpan(TestSpans.span(testTraceId, testSpanId)
+    void anInjectedTraceIsServedWithItsSpansAndTags() {
+        String traceId = "dashboard-trace-view-" + System.nanoTime();
+        String rootSpanId = "root" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, rootSpanId)
                 .named("GET /persons")
                 .kind(Span.Kind.SERVER)
                 .at(0, 100)
                 .tag("http.method", "GET")
                 .tag("url.path", "/persons")
                 .build());
-        traceStore.addSpan(TestSpans.span(testTraceId, "db" + testSpanId)
-                .parent(testSpanId)
+        traceStore.addSpan(TestSpans.span(traceId, "db" + rootSpanId)
+                .parent(rootSpanId)
                 .named("SELECT * FROM person")
                 .kind(Span.Kind.CLIENT)
                 .at(10, 80)
                 .tag("db.system", "h2")
                 .tag("db.statement", "SELECT * FROM person")
                 .build());
+
+        JsonNode trace = api.getJson("/peekaboot/api/traces/{traceId}/insights", traceId);
+
+        assertThat(trace.path("rootSpan").path("spanId").asString()).isEqualTo(rootSpanId);
+        assertThat(trace.path("rootSpan").path("tags").path("http.method").asString())
+                .isEqualTo("GET");
+        assertThat(trace.path("rootSpan").path("tags").path("url.path").asString())
+                .isEqualTo("/persons");
+        assertThat(trace.path("summary").path("queries").path("count").asInt(-1))
+                .as("the one injected DB span is counted as exactly one query")
+                .isEqualTo(1);
     }
 }

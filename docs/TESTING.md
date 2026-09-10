@@ -182,12 +182,13 @@ itself an interception update over the same wire. Each catch logs what it swallo
 a teardown hiding a real failure still leaves a line in the output.
 
 ## Isolation in shared Spring contexts
-`@SpringBootTest` classes sharing mutable singletons (`TraceStore`, for one) reset that state
-first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert exact counts rather than
-defensive `contains`. Since `*IT` classes run concurrently, a class that clears shared state this
-way MUST hold the corresponding `@ResourceLock(..., mode = READ_WRITE)`, and every class pinning
-its own data in that same store holds the `READ` side. `DashboardTraceViewIT` and `DevToolbarIT`
-are the pattern. A class on its own context configuration needs no lock.
+No class in this module clears a mutable singleton the suite shares, and none holds a
+`@ResourceLock`. `*IT` classes run concurrently, so a class that cleared the `TraceStore` would
+have to take `@ResourceLock(..., mode = READ_WRITE)` over it while every class pinning its own
+data there took the `READ` side - a lock that serializes half the suite for one class's exact
+counts. Pinning is the cheaper answer and the one every class here takes: assert on your own
+trace, never on what the store holds. A class on its own context configuration is isolated
+anyway.
 
 Pinning to a traceId does not mean searching the store for it. Every captured request answers
 with `Server-Timing: trace;desc="00-<traceId>-..."`, whatever its content type or status.
@@ -265,8 +266,8 @@ test author needs on top of it:
   default-property precedence; it boots no server and costs a fraction of a second.
   `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker threads with
   a Chromium each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test asserting on
-  app-global state shared with other classes must either pin to its own traceId or take a
-  `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
+  app-global state shared with other classes pins to its own traceId; nothing here takes a
+  `@ResourceLock`.
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):
