@@ -719,8 +719,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         // hash itself - what Back/Forward landing back on it produces.
         page.evaluate("() => window.dispatchEvent(new Event('hashchange'))");
 
-        assertThat(page.getAttribute("#peekaboot-trace-overlay", "data-test-marker"))
-                .isEqualTo("stable");
+        assertThat(page.getAttribute(TraceOverlay.HOST, "data-test-marker")).isEqualTo("stable");
     }
 
     /**

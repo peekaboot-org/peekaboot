@@ -25,7 +25,6 @@ import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -183,7 +182,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         page.keyboard().press("Escape");
 
         overlay.awaitClosed();
-        assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+        assertThat(page.querySelector(TraceOverlay.HOST)).isNull();
     }
 
     /**
@@ -275,7 +274,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.click(".pk-overlay__error button");
 
         overlay.awaitClosed();
-        assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+        assertThat(page.querySelector(TraceOverlay.HOST)).isNull();
     }
 
     /**
@@ -380,7 +379,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         toolbar.openOverlay();
         overlay.openTab("queries");
 
-        Locator tablist = page.locator("#peekaboot-trace-overlay .pk-overlay__container > .pk-tabs");
+        Locator tablist = page.locator(TraceOverlay.HOST + " .pk-overlay__container > .pk-tabs");
         String snapshot = tablist.ariaSnapshot();
 
         assertThat(snapshot).contains("tablist");
@@ -662,9 +661,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .as("the axis origin is the trace's start, not a sub-millisecond measurement")
                 .isEqualTo("0ms");
 
-        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
-                .boundingBox();
-        BoundingBox trackBox = page.locator("#peekaboot-trace-overlay .pk-gantt-row")
+        BoundingBox headerBox =
+                page.locator(TraceOverlay.HOST + " .pk-gantt-header__timeline").boundingBox();
+        BoundingBox trackBox = page.locator(TraceOverlay.HOST + " .pk-gantt-row")
                 .first()
                 .locator(".pk-gantt-track")
                 .boundingBox();
@@ -734,9 +733,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .isFalse();
 
         BoundingBox closeBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__close").boundingBox();
+                page.locator(TraceOverlay.HOST + " .pk-overlay__close").boundingBox();
         BoundingBox titleBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__title").boundingBox();
+                page.locator(TraceOverlay.HOST + " .pk-overlay__title").boundingBox();
 
         assertThat(closeBox.y)
                 .as("close button top should be within the title's vertical span")
@@ -929,7 +928,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     private void openOverlayWithTracePatched(boolean slow, long durationMs) {
         page.route("**/api/traces/*/insights", route -> {
             APIResponse response = route.fetch();
-            ObjectNode trace = (ObjectNode) JsonMapper.builder().build().readTree(response.text());
+            ObjectNode trace = (ObjectNode) readJson(response.text());
             trace.put("slow", slow).put("durationMs", durationMs);
             route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
         });

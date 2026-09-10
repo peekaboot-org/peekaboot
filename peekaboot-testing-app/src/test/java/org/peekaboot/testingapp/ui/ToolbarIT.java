@@ -61,7 +61,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.click(".pk-toolbar");
 
         overlay.awaitOpened();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
     }
 
     @Test
@@ -85,7 +85,7 @@ class ToolbarIT extends PlaywrightTestBase {
         page.keyboard().press("Enter");
 
         overlay.awaitOpened();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
     }
 
     /**
@@ -109,7 +109,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.click(".pk-toolbar a");
 
         assertThatThrownBy(() -> page.waitForSelector(
-                        "#peekaboot-trace-overlay",
+                        TraceOverlay.HOST,
                         new Page.WaitForSelectorOptions()
                                 .setState(WaitForSelectorState.ATTACHED)
                                 .setTimeout(1000)))
@@ -119,7 +119,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.traceId();
         toolbar.click(".pk-toolbar");
         overlay.awaitOpened();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
     }
 
     /**
@@ -218,7 +218,7 @@ class ToolbarIT extends PlaywrightTestBase {
                 () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isFalse();
 
         // Not stuck: a second click (still blocked) must still reach the handler and
         // produce its own warning, rather than the listener having wedged or detached
@@ -229,7 +229,7 @@ class ToolbarIT extends PlaywrightTestBase {
                 () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isFalse();
     }
 
     /**

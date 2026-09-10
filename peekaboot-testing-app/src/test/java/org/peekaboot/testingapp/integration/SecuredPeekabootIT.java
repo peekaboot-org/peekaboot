@@ -39,16 +39,16 @@ class SecuredPeekabootIT {
     @LocalServerPort
     private int port;
 
-    private PeekabootApi anonymous;
+    private PeekabootApi api;
 
     @BeforeEach
     void connect() {
-        anonymous = new PeekabootApi(port);
+        api = new PeekabootApi(port);
     }
 
     @Test
     void theDashboardEntryPointRejectsAnAnonymousRequest() {
-        assertThat(anonymous.statusOf("/peekaboot/")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api.statusOf("/peekaboot/")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     /**
@@ -58,7 +58,7 @@ class SecuredPeekabootIT {
      */
     @Test
     void theRefusalCarriesABasicAuthChallenge() {
-        String challenge = anonymous.headersOf("/peekaboot/").getFirst("WWW-Authenticate");
+        String challenge = api.headersOf("/peekaboot/").getFirst("WWW-Authenticate");
 
         assertThat(challenge).startsWith("Basic");
     }
@@ -71,12 +71,12 @@ class SecuredPeekabootIT {
      */
     @Test
     void theExtensionlessDashboardPathRejectsAnAnonymousRequest() {
-        assertThat(anonymous.statusOf("/peekaboot")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api.statusOf("/peekaboot")).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
-        assertThat(anonymous.statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api.statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     /**
@@ -86,19 +86,19 @@ class SecuredPeekabootIT {
      */
     @Test
     void aDashboardStaticAssetRejectsAnAnonymousRequest() {
-        assertThat(anonymous.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
     void anAuthenticatedUserWithoutTheAdminRoleIsForbidden() {
-        assertThat(anonymous.withBasicAuth("user", "user-password").statusOf(INSIGHTS_API))
+        assertThat(api.withBasicAuth("user", "user-password").statusOf(INSIGHTS_API))
                 .isEqualTo(HttpStatus.FORBIDDEN);
     }
 
     /** getJson accepts nothing but a 2xx, so the parse is the status assertion too. */
     @Test
     void anAdminReceivesTheRealInsightsPayload() {
-        JsonNode insights = anonymous.withBasicAuth("admin", "admin-password").getJson(INSIGHTS_API);
+        JsonNode insights = api.withBasicAuth("admin", "admin-password").getJson(INSIGHTS_API);
 
         assertThat(insights.has("config"))
                 .as("an admin must get the real insights payload, not an error page")
@@ -107,7 +107,7 @@ class SecuredPeekabootIT {
 
     @Test
     void anAdminCanFetchADashboardStaticAsset() {
-        assertThat(anonymous.withBasicAuth("admin", "admin-password").statusOf(DASHBOARD_ASSET))
+        assertThat(api.withBasicAuth("admin", "admin-password").statusOf(DASHBOARD_ASSET))
                 .isEqualTo(HttpStatus.OK);
     }
 
@@ -118,6 +118,6 @@ class SecuredPeekabootIT {
      */
     @Test
     void theApplicationsOwnPathsStayAnonymouslyReachable() {
-        assertThat(anonymous.statusOf("/persons")).isEqualTo(HttpStatus.OK);
+        assertThat(api.statusOf("/persons")).isEqualTo(HttpStatus.OK);
     }
 }

@@ -54,7 +54,7 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat((String) page.evaluate("() => navigator.clipboard.readText()"))
                 .as("the full id reaches the clipboard")
                 .isEqualTo(traceId);
-        assertThat(page.querySelector("#peekaboot-trace-overlay"))
+        assertThat(page.querySelector(TraceOverlay.HOST))
                 .as("the whole toolbar bar opens the overlay on click; copying an id must not "
                         + "also trigger it, which needs the copy handler to run in the capture phase")
                 .isNull();

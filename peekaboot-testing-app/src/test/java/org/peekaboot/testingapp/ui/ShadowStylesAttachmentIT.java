@@ -73,26 +73,33 @@ class ShadowStylesAttachmentIT extends PlaywrightTestBase {
      * A sheet that never settles cannot keep the host hidden. The three shared sheets are
      * parked (their requests intercepted and held, so neither load nor error ever fires for
      * them) and the surface's own sheet is a 404; the promise still settles and the host is
-     * revealed while the parked requests are still held, which no load could have done. No
-     * elapsed-time assertion: whether the own sheet's error listener or the timeout settled
-     * the race is not the contract, the reveal is.
+     * revealed while the parked requests are still held, which no load could have done. With
+     * three of the four links held, the Promise.all that attachSharedStyles races against its
+     * 1000ms timeout cannot settle, so the timeout is what reveals the host. The elapsed time
+     * is not asserted; the reveal is.
      */
     @Test
     void aBlockedSheetCannotKeepTheHostHidden() {
         List<Route> parked = new CopyOnWriteArrayList<>();
         page.route("**/peekaboot/ui/assets/*.css", parked::add);
 
-        Object visibilityAfter = evalShadowStyles("""
-                const host = document.createElement('div');
-                document.body.appendChild(host);
-                const shadowRoot = host.attachShadow({mode: 'open'});
-                await m.attachSharedStyles(shadowRoot, host, '/peekaboot', '/does/not/exist.css');
-                return host.style.visibility;
-            """);
+        try {
+            Object visibilityAfter = evalShadowStyles("""
+                    const host = document.createElement('div');
+                    document.body.appendChild(host);
+                    const shadowRoot = host.attachShadow({mode: 'open'});
+                    await m.attachSharedStyles(shadowRoot, host, '/peekaboot', '/does/not/exist.css');
+                    return host.style.visibility;
+                """);
 
-        assertThat(visibilityAfter).isEqualTo("");
-        assertThat(parked).as("the shared sheets were held for the whole wait").hasSize(3);
-        parked.forEach(Route::abort);
+            assertThat(visibilityAfter).isEqualTo("");
+            assertThat(parked)
+                    .as("the shared sheets were held for the whole wait")
+                    .hasSize(3);
+        } finally {
+            // a failing assertion must not leave the sheets held for teardown to trip over
+            parked.forEach(Route::abort);
+        }
     }
 
     /**
