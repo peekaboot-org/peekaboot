@@ -29,7 +29,7 @@ give Peekaboot's trace view something worth looking at.
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /api/person/all` | The same `@Observed` lookup over JSON. A `@RestController` renders no view, so the span tree has no view-render span under the handler. |
 | `GET /api/person/{id}` | A single-row lookup that is *not* `@Observed`. Its JDBC span hangs straight off the handler span, which is what the observed lookup above avoids. An unknown id answers 404, not 200 with an empty body. |
-| `GET /boom` | Always throws. Gives the Errors bucket, the error badge and the toolbar's error styling something real to render. |
+| `GET /boom` | Always throws. Gives the Errors bucket and the error badge something real to render. The bar is not among them: the throw is served by the error dispatch, a path Peekaboot excludes. |
 | `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, its scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation: the method's own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
 
 `OrderTraceCaptureIT` asserts what Peekaboot actually captured from these endpoints, not
@@ -61,9 +61,10 @@ shadow-root lookup goes through them; a test never spells
 `document.getElementById(...).shadowRoot` itself. The base also offers
 `openDashboard(hash, readySelector)`, `awaitTrace(traceId, jsPredicate)` and
 `awaitListedTrace(query, jsPredicate)` (see `docs/TESTING.md`, *Isolation in shared Spring
-contexts*), `importModule(path, expression)` to evaluate an expression over an ES module
-imported into the blank fixture page, `serveWithCsp(urlGlob, policy)` and
-`emulateOsColorScheme(scheme)`.
+contexts*), `openPageThatLogsAnError()` and `awaitErrorLoggingJobRun(run)` for the two traces
+that only exist if their log was captured, `importModule(path, expression)` to evaluate an
+expression over an ES module imported into the blank fixture page, `serveWithCsp(urlGlob,
+policy)` and `emulateOsColorScheme(scheme)`.
 
 The trace store is shared with every class in the suite, so a test pins its own trace: it
 triggers a request, takes the id from the toolbar (or from `TraceApiClient.get(path)` under

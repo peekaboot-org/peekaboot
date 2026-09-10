@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class MaskingFixtureController {
 
     @GetMapping("/masking-test/search")
-    String search(@RequestParam(required = false) String api_key, @RequestParam(required = false) String q) {
+    String search(
+            @RequestParam(name = "api_key", required = false) String apiKey, @RequestParam(required = false) String q) {
         return "ok";
     }
 

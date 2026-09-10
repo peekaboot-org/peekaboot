@@ -76,6 +76,8 @@ class InsightsTabIT extends PlaywrightTestBase {
 
         // must exactly match the server config order - first four suffice as a strong signal
         assertThat(ids).startsWith("cpu", "load", "heap", "nonheap");
+        // shipped but enabled: false in the bundled panels - a default that has to survive
+        // the merge with this app's own panel file
         assertThat(ids).doesNotContain("thread-states");
     }
 
