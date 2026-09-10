@@ -214,9 +214,14 @@ the dashboard directly as well as `openDashboard()`, and no test retries anythin
 page asked for and did not get, and a dropped request is not the context-path bug it hunts, so
 it excludes that one failure by name.
 
-Pages carrying the toolbar keep the same exposure over a much smaller graph, and have no
-equivalent recovery: `ToolbarShell` renders a "could not start" notice for a script that never
-arrives, but a test waiting for `data-pk-ready` would still time out.
+Pages carrying the toolbar keep the same exposure over a much smaller graph, and are
+deliberately left without an equivalent recovery. The only recovery on offer is a page reload,
+and those pages belong to the host application: reloading one discards whatever a user has typed
+and not saved, which is a worse bug than the mute bar it would fix. The bar degrades visibly
+anyway. `ToolbarShell` renders its "could not start" notice into every page, `toolbar.css`
+reveals it 400ms after paint with a delayed animation, and `toolbar.js` removes it the moment it
+runs, so a script that never arrives leaves a reader with a notice and a real link to the
+dashboard. A test waiting for `data-pk-ready` still times out, and that is the accepted cost.
 
 ## Isolation in shared Spring contexts
 No class in this module clears a mutable singleton the suite shares, and none holds a
