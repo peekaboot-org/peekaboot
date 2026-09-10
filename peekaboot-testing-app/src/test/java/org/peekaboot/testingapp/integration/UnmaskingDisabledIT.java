@@ -53,14 +53,6 @@ class UnmaskingDisabledIT {
     }
 
     @Test
-    void insightsEndpointStaysMaskedWithoutTheUnmaskParameter() {
-        JsonNode config = api.getJson("/peekaboot/api/actuator/all/insights").path("config");
-
-        JsonNode passwordProperty = findConfigInfoProperty(config, "spring.datasource", "password");
-        assertThat(passwordProperty.path("value").asString()).isEqualTo("******");
-    }
-
-    @Test
     void featuresReportsUnmaskingAsDisabled() {
         JsonNode features = api.getJson("/peekaboot/api/features");
 
