@@ -21,9 +21,10 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 ```
 
 Run your app the way you already do. Peekaboot detects a local run, turns itself on and
-serves the dashboard at `http://localhost:8080/peekaboot/`. The Gradle coordinate, what
-counts as a local run and how to override the detection are in the
-[quick start](https://www.peekaboot.org/docs/quick-start/).
+serves the dashboard at `http://localhost:8080/peekaboot/`. The Gradle coordinate is in the
+[quick start](https://www.peekaboot.org/docs/quick-start/); what counts as a local run and
+how to override the detection are in
+[Configuration](https://www.peekaboot.org/docs/configuration/#local-run).
 
 ![The Peekaboot dashboard](docs/images/dashboard.png)
 
