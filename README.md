@@ -12,8 +12,6 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 
 ## Quick start
 
-**Maven**
-
 ```xml
 <dependency>
     <groupId>org.peekaboot</groupId>
@@ -22,18 +20,10 @@ schedules, metrics and traces in one dashboard, with no external infrastructure.
 </dependency>
 ```
 
-**Gradle**
-
-```groovy
-implementation("org.peekaboot:peekaboot-spring-boot-starter:0.1.0")
-```
-
-Run your app the way you already do. Peekaboot detects a local run and turns itself on.
-Open the dashboard at `http://localhost:8080/peekaboot/`. A local run is an IDE run,
-`mvn spring-boot:run` or `gradle bootRun` on your own machine; a packaged jar, a
-container, a test, an AOT build or a native image counts as not local. Set
-`peekaboot.enabled=true|false` (or `peekaboot.dev-toolbar` for the toolbar alone) to
-override the detection in either direction.
+Run your app the way you already do. Peekaboot detects a local run, turns itself on and
+serves the dashboard at `http://localhost:8080/peekaboot/`. The Gradle coordinate, what
+counts as a local run and how to override the detection are in the
+[quick start](https://www.peekaboot.org/docs/quick-start/).
 
 ![The Peekaboot dashboard](docs/images/dashboard.png)
 

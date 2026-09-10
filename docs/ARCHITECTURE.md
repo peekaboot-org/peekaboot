@@ -11,24 +11,19 @@ published. The sections below follow the same split: backend, frontend, auto-con
 
 ## Persisted state
 
-Two stores opt into the filesystem behind one switch:
-
-```
-peekaboot.storage.enabled = <local run>                       # on for a local launch
-peekaboot.storage.dir     = ${user.home}/.peekaboot/<app>      # both stores
-```
+Two stores opt into the filesystem behind one switch, `peekaboot.storage.enabled`, and share
+one directory, `peekaboot.storage.dir`. Both properties, their defaults, the per-application
+subdirectory and its fallbacks live on the site under
+[`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage).
 
 Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
 `peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off everywhere
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
 
-`<app>` is `<groupId>.<artifactId>` from `build-info.properties`, sanitized to `[A-Za-z0-9._-]`.
-A build that publishes no build information falls back to `spring.application.name`, and an
-application with neither to `application`. Coordinates rather than the name, so two
-applications sharing a `spring.application.name`, or having none, keep their history apart. An
-explicit `peekaboot.storage.dir` is used verbatim, with no per-application subdirectory
-appended.
+The subdirectory is named from the application's build coordinates rather than its
+`spring.application.name`, so two applications sharing a name, or having none, still keep their
+history apart.
 
 `StorageDirectory` only resolves this path; it never touches the disk. While
 `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and neither
@@ -66,13 +61,17 @@ hands the service `SnapshotStore.NONE`, a store that loads, writes and restores 
 `InsightsService` drives one store the same way in both cases.
 
 The snapshot is a cache, never a source of truth, so anything wrong with it costs only the
-history. Four things count as wrong: a bad magic number, a schema version this build doesn't
-know, a ring geometry that no longer matches `peekaboot.insights.levels`, and an age past
-`peekaboot.insights.persistence.max-age` (default: the coarsest level's span). The file is then
-deleted and the rings start empty, exactly as they would with storage off. Every length read
-from the file is checked against a plausibility bound before it is used to allocate, so a
-corrupt file cannot provoke an oversized allocation. The level-count and ring-size bounds are
-the ones `InsightsProperties` enforces, so a configuration that starts can always be read back.
+history. Five things count as wrong: a bad magic number, a schema version this build doesn't
+know, a ring geometry that no longer matches `peekaboot.insights.levels`, an age past
+`peekaboot.insights.persistence.max-age` (default: the coarsest level's span), and a date more
+than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`), which is what a
+stepped-back clock or a restored backup leaves behind. The file is then deleted and the rings
+start empty, exactly as they would with storage off.
+
+Every length read from the file is checked against a plausibility bound before it is used to
+allocate, so a corrupt file cannot provoke an oversized allocation. The level-count and
+ring-size bounds are the ones `InsightsProperties` enforces, so a configuration that starts can
+always be read back.
 
 Loading never delays startup. `InsightsSnapshotStore.beginLoad()` submits the parse to a
 virtual thread and returns. Each of the collector's level threads then runs a one-shot restore
@@ -101,12 +100,13 @@ That is cheap at this size (at most 400 KB for the full 1000) and it removes bot
 partial-line corruption window and a second trim code path. A line that fails to parse is
 skipped on read; the rest of the file still loads.
 
-A start event carries its epoch timestamp, its pid, and the `BuildProperties`/`GitProperties`
-entries the two projections read: `version`, `time`, `branch`, `commit.id`, `commit.id.full`,
-`commit.id.abbrev`, `build.version` and `build.time`. No others, because a git remote URL can
-carry the token it was cloned with and the building user's mail address is personal data. A stop
-event carries only its own timestamp and pid, since its build belongs to the start it follows,
-which the log still remembers.
+A start event carries its epoch timestamp, its pid, and a whitelist of
+`BuildProperties`/`GitProperties` entries, no others, because a git remote URL can carry the
+token it was cloned with and the building user's mail address is personal data. The site names
+every kept entry under
+[what Peekaboot writes to disk](https://www.peekaboot.org/docs/security/#what-peekaboot-writes-to-disk).
+A stop event carries only its own timestamp and pid, since its build belongs to the start it
+follows, which the log still remembers.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
 `LifecycleEventLog` still records the current run's start and stop in memory and serves them
@@ -243,11 +243,11 @@ registrations live only in `DevToolbarAutoConfiguration`, so neither filter runs
 
 `PeekabootPaths` is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix,
 the excluded prefixes, and those same exclusions as MVC patterns for the tracing interceptor.
-The exclusions are `/static/`, `/webjars/`, `/peekaboot/`, `/error/` and the resolved
-management base path (`/actuator/` by default). Note what is not there: Boot's other
-default static locations, `/public/`, `/resources/` and `/META-INF/resources/`. As MVC patterns
-each prefix gains a `**` suffix, and `/x/**` matches bare `/x`, so `/error` is excluded while
-`/errors` stays an application path.
+The site lists the prefixes themselves under
+[what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured). Note what is
+not among them: Boot's other default static locations, `/public/`, `/resources/` and
+`/META-INF/resources/`. As MVC patterns each prefix gains a `**` suffix, and `/x/**` matches
+bare `/x`, so `/error` is excluded while `/errors` stays an application path.
 
 Everything in `PeekabootPaths` is relative to the servlet context. The filters match on the
 container's mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather
@@ -321,18 +321,8 @@ arrives as the single masked leaf its subtree collapsed to.
 *`lifecycle.jsonl`*): a remote URL can carry a token and a committer's address is personal data.
 `info.build` stays a free-form map, masked, because the consuming app fills it itself.
 
-### The two `insights` URL shapes
-
-Two unrelated things share the word, and only the position in the path tells them apart.
-
-| Shape | Endpoints | What it is |
-|-------|-----------|------------|
-| `insights` as a **suffix** | `GET /peekaboot/api/actuator/all/insights`, `GET /peekaboot/api/traces/insights`, `GET /peekaboot/api/traces/{traceId}/insights` | The BFF enrichment above: raw data assembled into a domain aggregate. Served by `PeekabootController` |
-| `/api/insights/` as a **prefix** | `GET /peekaboot/api/insights/config`, `/data`, `/stream` | The metric ring buffers behind the Insights tab. Served by `InsightsController`, which needs a `MeterRegistry` bean and has nothing to do with the BFF pipeline |
-
-Neither is a version of the other, and they disappear under different conditions: the prefix
-form goes away with the `MeterRegistry`, the suffix form does not. `docs/GLOSSARY.md` draws the
-same line for the word; this is the line for the routes.
+The word `insights` marks these BFF endpoints as a path *suffix* and the unrelated metric
+rings as a path *prefix*. [`GLOSSARY.md`](GLOSSARY.md#the-word-insights) draws that line.
 
 ### JSON on the wire
 
@@ -569,18 +559,16 @@ signals of its own, checked in order:
    a genuine local launch, which shares the thread name and the class loader.
 4. Those three hold for *every* exploded-classpath launch, so two more signals decide
    (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests).
-   `java.class.path` must contain a build tool's output directory: an entry ending in
-   `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main`,
-   `build/classes/groovy/main`, `build/classes/scala/main` or `bin/main`, or containing
-   `out/production/`. A jar's `Class-Path` manifest attribute counts as part of the class
-   path, resolved relative to the jar: IntelliJ's "JAR manifest" command-line shortening
-   leaves one temp jar on `java.class.path` and moves every real entry into its manifest. An
-   IDE, `spring-boot:run` and `bootRun` always put an output directory there, directly or
-   through that manifest; a Jib image (`/app/classes`) and Boot's `extract` layout (a thin
-   jar whose `Class-Path` manifest names only `lib/*.jar`) never do. And
-   `ContainerRuntime.current()` must report `NONE`: no `/.dockerenv`, no Podman
-   `/run/.containerenv`, no `KUBERNETES_SERVICE_HOST`, and no `/proc/1/cgroup` naming `docker`,
-   `kubepods` or `containerd`.
+   `java.class.path` must contain a build tool's output directory, and
+   `ContainerRuntime.current()` must report `NONE`. The site names the accepted directory
+   suffixes and the four container markers under
+   [what counts as a local run](https://www.peekaboot.org/docs/configuration/#local-run).
+   A jar's `Class-Path` manifest attribute counts as part of the class path, resolved
+   relative to the jar, because IntelliJ's "JAR manifest" command-line shortening leaves one
+   temp jar on `java.class.path` and moves every real entry into its manifest. An IDE,
+   `spring-boot:run` and `bootRun` always put an output directory there, directly or through
+   that manifest; a Jib image (`/app/classes`) and Boot's `extract` layout (a thin jar whose
+   `Class-Path` manifest names only `lib/*.jar`) never do.
 
 So an IDE run, `mvn spring-boot:run` and `gradle bootRun` default to on. A `java -jar` of the
 packaged artifact, a war in a servlet container, a native image, an AOT-processed build, a
@@ -626,7 +614,7 @@ settings. Health is the one exception. Its bean is borrowed rather than built, a
 source reads and configure trace sampling and `@Observed` support. None of them
 decides value visibility. `management.info.<x>.enabled=false` is the one host lever
 left over dashboard content: it removes an `InfoContributor` bean outright and so
-narrows the Application tab, and an explicit host setting wins because Peekaboot's
+narrows the Overview tab, and an explicit host setting wins because Peekaboot's
 own four `management.info.*` defaults apply at lowest precedence.
 
 `peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
@@ -833,7 +821,9 @@ equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
 tree's own names, one entry per query span. A span whose instrumentation recorded no statement
-is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
+is listed with `sql: null`. `DbSpans.sql` checks tags in priority order. The site states the
+outcome under [the trace view](https://www.peekaboot.org/docs/dev-toolbar/#the-trace-view);
+the order and the reasons are here:
 
 1. `db.query.text`, the current OpenTelemetry semantic convention, emitted by
    `datasource-micrometer-opentelemetry`, the default stack `peekaboot-testing-app` uses
@@ -851,8 +841,9 @@ tag and span names. `DbSpans.system` mirrors this priority for `db.system.name` 
 `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is value-patterns only, not
 column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries the reasoning), so a
 credential with no provider-recognisable shape sitting in an ordinary column is not caught.
-The security page states that as a caveat and tells readers to assume a captured trace carries
-plaintext SQL. It is a caveat, not a promise waiting to be strengthened.
+The [security page](https://www.peekaboot.org/docs/security/#masking) states that as a caveat
+and tells readers to assume a captured trace carries plaintext SQL. It is a caveat, not a
+promise waiting to be strengthened.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for
