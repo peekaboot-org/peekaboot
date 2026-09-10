@@ -258,15 +258,17 @@ public class TraceTreeMapper {
      * key name alone can't catch. A span's errorMessage and query text are masked the same
      * way: an exception message can echo back the failing request's URL. The statement
      * tags are the exception: the statement is served once, masked, as the span's
-     * {@code query}, and shipping the raw tag beside it would say it twice.
+     * {@code query}, and shipping the raw tag beside it would say it twice. That holds
+     * only on a query span, the one shape {@code query} is populated for.
      */
     private Map<String, String> maskedTags(SpanData spanData) {
         if (spanData.tags() == null) {
             return Map.of();
         }
+        boolean servedAsQuery = DbSpans.isQuery(spanData);
         Map<String, String> kept = new LinkedHashMap<>();
         spanData.tags().forEach((key, value) -> {
-            if (!DbSpans.isStatementTag(key)) {
+            if (!servedAsQuery || !DbSpans.isStatementTag(key)) {
                 kept.put(key, value);
             }
         });

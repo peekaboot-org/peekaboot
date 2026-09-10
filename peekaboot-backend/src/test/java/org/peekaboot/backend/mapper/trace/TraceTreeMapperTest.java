@@ -922,6 +922,31 @@ class TraceTreeMapperTest {
                         tuple("q2", Map.of("jdbc.datasource.name", "primary"), "select * from lines"));
     }
 
+    /**
+     * Only a query span gets a {@code query} field, so dropping the statement tag off any other
+     * span would lose the statement from both places.
+     */
+    @Test
+    void keepsTheStatementTagOnASpanThatIsNoQuery() {
+        var root = span("root")
+                .named("GET /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 200)
+                .build();
+        var internal = span("s1")
+                .parent("root")
+                .named("OrderRepository.findAll")
+                .at(10, 20)
+                .tags(Map.of("db.statement", "select * from orders"))
+                .build();
+
+        TraceTree result = mapper.map(TraceDatas.of("trace1", root, internal));
+
+        assertThat(result.rootSpan().children())
+                .extracting(SpanNode::tags, SpanNode::query)
+                .containsExactly(tuple(Map.of("db.statement", "select * from orders"), null));
+    }
+
     /** A datasource-proxy result-set span's row count is served parsed; anything else has none. */
     @Test
     void readsTheRowCountOffAResultSetSpan() {
