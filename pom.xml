@@ -199,8 +199,8 @@
                      runs the same ones. surefire, failsafe, compiler and dependency have
                      moved past Boot's pins through Dependabot; the testing-app pins those
                      four itself, and Dependabot bumps both poms in one pull request. The
-                     site plugin, which Boot does not manage, is Maven 3.9.16's own
-                     binding. -->
+                     site plugin, which Boot does not manage, was pinned at Maven 3.9.16's
+                     binding of 3.12.1 and Dependabot has since moved it past. -->
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>

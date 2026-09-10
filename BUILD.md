@@ -491,10 +491,10 @@ Reproducibility depends on `project.build.outputTimestamp` being pinned in the r
 in the testing-app's, and on every plugin version being explicit. That includes the
 lifecycle plugins Maven would otherwise bind on its own. Clean, resources, install and
 deploy sit at the versions `spring-boot-dependencies` manages, so the testing-app runs the
-same ones. The site plugin, which Boot does not manage, sits at Maven 3.9.16's own binding.
-Surefire, failsafe, the compiler and the dependency plugin have moved past Boot's pins
-through Dependabot; the testing-app pins those four in its own `pluginManagement`, and
-Dependabot bumps both poms in one pull request.
+same ones. The site plugin, which Boot does not manage, was pinned at Maven 3.9.16's own
+binding of 3.12.1; Dependabot has since moved it past. Surefire, failsafe, the compiler
+and the dependency plugin have likewise moved past Boot's pins; the testing-app pins those
+four in its own `pluginManagement`, and Dependabot bumps both poms in one pull request.
 
 ### How the next version is chosen
 
