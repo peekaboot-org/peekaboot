@@ -44,6 +44,8 @@ override the detection in either direction.
 - A dashboard for health, environment, config, Flyway, loggers, scheduled tasks and
   metrics, read in-process with nothing exposed under `/actuator/**`.
 - In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.
+- Every SQL statement a request runs, timed and listed: the starter brings the JDBC
+  instrumentation, so there is none to wire up yourself.
 - Charts that mark every application start and stop, with metric history surviving a
   restart.
 - Zero configuration, on for a local run and off everywhere else.
