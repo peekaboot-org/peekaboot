@@ -677,7 +677,7 @@ not just Peekaboot's:
 
 | Observation | Raised in | Tags |
 |-------------|-----------|------|
-| `spring.handler` | `preHandle`, once per request | `handler.type` (low cardinality: the handler class's simple name), `handler.name` (high cardinality: `BeanType.methodName` for a `HandlerMethod`, else the handler class's simple name) |
+| `spring.handler` | `preHandle`, once per dispatch | `handler.type` (low cardinality: the handler class's simple name), `handler.name` (high cardinality: `BeanType.methodName` for a `HandlerMethod`, else the handler class's simple name) |
 | `spring.view.render` | `postHandle`, only when the handler returned a resolvable view | `view.type` (always `template`), `view.name` (the view name, or the `View` implementation's simple class name when the handler returned a `View` instance) |
 
 A `@ResponseBody` or REST controller renders no view, so those requests carry a handler span and
@@ -692,6 +692,17 @@ request, and it is the reason to keep a scope rather than just time the handler.
 An `ASYNC` re-dispatch is skipped so the handler span is not counted twice, and
 `afterConcurrentHandlingStarted` ends it on the thread that started it. A handler exception
 skips `postHandle`, so `afterCompletion` ends the handler observation and records the error.
+
+The observations belong to a **dispatch**, not to the request, and are held in a stack on the
+request: `preHandle` pushes one frame, `afterCompletion` pops one. A handler that returns
+`forward:` (or an include) has DispatcherServlet run a second dispatch *inside* the first one's
+view rendering, so both dispatches call every callback against the same request. One attribute
+per observation would have the inner dispatch overwrite the outer one's view observation, which
+is then never stopped: no `spring.view.render` span for the forward, and - the part that reaches
+beyond the request - its scope left open on the request thread, so every later request that
+pooled thread served inherited the leftover context and was captured into that same trace.
+`TracingHandlerInterceptorTest` pins the scope, `NestedDispatchTraceCaptureIT` the captured
+shape. Nesting is strictly LIFO on one thread, which is what lets a plain stack be right here.
 
 `TracingInterceptorAutoConfiguration` registers two beans: the interceptor, and an anonymous
 `WebMvcConfigurer` named `tracingInterceptorConfigurer` that adds it with
@@ -788,7 +799,12 @@ never a second deduplication pass beside the write-time one.
 
 Database queries aren't captured specially. A query shows up in a trace because the
 JDBC/datasource instrumentation on the classpath already emits a span for it, tagged with
-`db.*` or `jdbc.query*` attributes. `DbSpans.isQuery` is the one definition of a query span:
+`db.*` or `jdbc.query*` attributes. That instrumentation is
+`datasource-micrometer-spring-boot` plus `datasource-micrometer-opentelemetry`, which
+`peekaboot-spring-boot-starter` depends on - an uninstrumented DataSource emits no query
+spans, and nothing downstream can tell that apart from an endpoint that runs no queries, so
+the starter carries the instrumentation rather than leaving both cases reading as `0`.
+`DbSpans.isQuery` is the one definition of a query span:
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
@@ -802,7 +818,7 @@ tree's own names, one entry per query span. A span whose instrumentation recorde
 is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
 
 1. `db.query.text`, the current OpenTelemetry semantic convention, emitted by
-   `datasource-micrometer-opentelemetry`, the default stack `peekaboot-testing-app` uses
+   `datasource-micrometer-opentelemetry`, which the starter brings
 2. `db.statement`, that convention's superseded spelling, so a library emitting both is read
    by the current one
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
