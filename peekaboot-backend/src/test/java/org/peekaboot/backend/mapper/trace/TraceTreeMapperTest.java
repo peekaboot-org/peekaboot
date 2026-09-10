@@ -489,6 +489,32 @@ class TraceTreeMapperTest {
         assertThat(result.rootActionType()).isEqualTo(RootActionType.UNKNOWN);
     }
 
+    /**
+     * TraceData is a public record and map() is public API, so a caller can hand over a root
+     * that is not one of the spans; TraceDataBundle.snapshot() is only one of its sources.
+     */
+    @Test
+    void mapsATraceWhoseRootIsNotAmongItsSpans() {
+        var listed = span("span-child")
+                .parent("span-root")
+                .named("child-op")
+                .at(10, 40)
+                .build();
+        var detachedRoot = span("span-root")
+                .parent("span-caller")
+                .named("root-op")
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build();
+        var traceData =
+                new TraceData("trace1", Instant.EPOCH, Duration.ofMillis(100), detachedRoot, List.of(listed), false);
+
+        TraceTree result = mapper.map(traceData);
+
+        assertThat(result.rootSpan().spanId()).isEqualTo("span-root");
+        assertThat(result.rootSpan().children()).extracting(SpanNode::spanId).containsExactly("span-child");
+    }
+
     @Test
     void mapsASingleSpanTrace() {
         var singleSpan = span("only-span")

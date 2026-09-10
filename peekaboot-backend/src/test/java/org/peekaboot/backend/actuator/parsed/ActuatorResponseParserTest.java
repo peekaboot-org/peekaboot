@@ -79,6 +79,16 @@ class ActuatorResponseParserTest {
         assertThat(response.loggers()).isNotNull();
     }
 
+    /** parse() is public API; convertValue answers null for a null map and the caller reads every section off it. */
+    @Test
+    void parsesANullResponseAsAllSectionsAbsent() {
+        ActuatorParsedData response = parser.parse(null);
+
+        assertThat(response).isNotNull();
+        assertThat(response.health()).isNull();
+        assertThat(response.env()).isNull();
+    }
+
     @Test
     void parsesPojoEndpointResults() {
         // At runtime the invoked operations return POJOs (HealthEndpoint's descriptor,

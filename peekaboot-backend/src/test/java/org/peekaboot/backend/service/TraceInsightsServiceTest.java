@@ -228,7 +228,7 @@ class TraceInsightsServiceTest {
         TraceTree result = service.getTraceInsights("trace1").orElseThrow();
 
         assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
-        assertThat(result.rootSpan().logs()).isNull();
+        assertThat(result.rootSpan().logs()).isEmpty();
         assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
     }
 
@@ -254,8 +254,8 @@ class TraceInsightsServiceTest {
         SpanNode child = tree.rootSpan().children().getFirst();
         SpanNode grandchild = child.children().getFirst();
         assertThat(grandchild.logs()).extracting(TraceLog::message).containsExactly("deep");
-        assertThat(tree.rootSpan().logs()).isNull();
-        assertThat(child.logs()).isNull();
+        assertThat(tree.rootSpan().logs()).isEmpty();
+        assertThat(child.logs()).isEmpty();
     }
 
     @Test
