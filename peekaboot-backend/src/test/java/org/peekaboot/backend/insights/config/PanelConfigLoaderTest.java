@@ -12,9 +12,39 @@ class PanelConfigLoaderTest {
     private final ClassPathResource user = new ClassPathResource("insights/loader-user.yml");
     private final ClassPathResource shipped = new ClassPathResource("insights/loader-shipped.yml");
     private final ClassPathResource patch = new ClassPathResource("insights/loader-patch.yml");
+    private final ClassPathResource shippedDefaults = new ClassPathResource("peekaboot-insights-defaults.yml");
 
     private static PanelDef panelNamed(PanelsFile file, String id) {
         return file.panels().stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
+    }
+
+    /**
+     * A panel added to the shipped file without {@code enabled: false} renders for every
+     * reader; these six are the ones held back for an operator to switch on by id.
+     */
+    @Test
+    void theShippedFileHoldsBackSixPanels() {
+        PanelsFile file = PanelConfigLoader.load(shippedDefaults, null);
+
+        assertThat(file.panels())
+                .filteredOn(panel -> Boolean.FALSE.equals(panel.enabled()))
+                .extracting(PanelDef::id)
+                .containsExactlyInAnyOrder(
+                        "thread-states",
+                        "hibernate-activity",
+                        "executors",
+                        "open-files",
+                        "tomcat-sessions",
+                        "allocation");
+    }
+
+    /** The timer's average and maximum, in the unit the frontend renders the panel by. */
+    @Test
+    void theShippedHttpLatencyPanelChartsAvgAndMaxInMillis() {
+        PanelDef latency = panelNamed(PanelConfigLoader.load(shippedDefaults, null), "http-latency");
+
+        assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
+        assertThat(latency.series()).extracting(SeriesDef::stat).containsExactly(Stat.AVG, Stat.MAX);
     }
 
     @Test
