@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.ScreenshotAnimations;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -405,6 +406,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private void shoot(Path outputDir, String name) {
         page.screenshot(new Page.ScreenshotOptions()
                 .setPath(outputDir.resolve(name + ".png"))
+                // a tab panel fades in over 0.2s, and a shot taken inside that is half-transparent
+                .setAnimations(ScreenshotAnimations.DISABLED)
                 .setFullPage(false));
     }
 
