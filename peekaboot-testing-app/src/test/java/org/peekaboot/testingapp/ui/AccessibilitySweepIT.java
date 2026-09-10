@@ -21,15 +21,25 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
     /** WCAG 2.1 A and AA, the level the project's contrast work targets; axe's own best practices are advisory. */
     private static final List<String> WCAG_AA = List.of("wcag2a", "wcag2aa", "wcag21a", "wcag21aa");
 
+    /**
+     * Every tab the strip shows, one sweep each: an inactive panel is {@code display: none},
+     * which axe skips, so a violation inside one is invisible until that tab is the shown one.
+     */
     @Test
     void theDashboardHasNoAccessibilityViolations() {
         openDashboard();
 
-        assertNoViolations(sweep());
+        for (String tabId : dashboard.visibleTabs()) {
+            dashboard.openTab(tabId);
+            assertNoViolations("the " + tabId + " tab", sweep());
+        }
     }
 
     /**
-     * Opened over the dashboard rather than from the toolbar, so the document around it is
+     * The overlay's landing view, its Spans tab: the other three are swept nowhere, since a
+     * sweep of each would cost a trace of its own for no rule the Spans tab misses.
+     *
+     * <p>Opened over the dashboard rather than from the toolbar, so the document around it is
      * Peekaboot's own: the sample app's pages are the consumer's markup, and a sweep of them
      * would report the consumer's own oversights as Peekaboot's.
      */
@@ -40,7 +50,7 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-tab");
 
-        assertNoViolations(sweep());
+        assertNoViolations("the trace overlay", sweep());
     }
 
     /**
@@ -52,19 +62,21 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.traceId();
 
-        assertNoViolations(new AxeBuilder(page)
-                .include("#peekaboot-toolbar-host")
-                .withTags(WCAG_AA)
-                .analyze());
+        assertNoViolations(
+                "the dev toolbar",
+                new AxeBuilder(page)
+                        .include("#peekaboot-toolbar-host")
+                        .withTags(WCAG_AA)
+                        .analyze());
     }
 
     private AxeResults sweep() {
         return new AxeBuilder(page).withTags(WCAG_AA).analyze();
     }
 
-    private static void assertNoViolations(AxeResults results) {
+    private static void assertNoViolations(String surface, AxeResults results) {
         assertThat(results.getViolations())
-                .as("axe-core violations: %s", describe(results.getViolations()))
+                .as("axe-core violations on %s: %s", surface, describe(results.getViolations()))
                 .isEmpty();
     }
 
