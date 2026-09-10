@@ -23,7 +23,7 @@ give Peekaboot's trace view something worth looking at.
 
 | Endpoint | What it demonstrates |
 | --- | --- |
-| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. Trips the high-trace-query-count warning in the Traces tab. |
+| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. The Traces tab lists it with a query count past `peekaboot.ui.tracing.high-trace-query-count-threshold` in the row's query stat. No badge goes with it: the backend raises `HIGH_QUERY_COUNT` and no surface renders that issue. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
 | `POST /api/orders` | Places a new order. Shows up as its own `HTTP_REQUEST`-classified trace, distinct from a page load. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
