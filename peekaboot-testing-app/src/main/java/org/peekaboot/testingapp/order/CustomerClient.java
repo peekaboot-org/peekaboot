@@ -1,5 +1,7 @@
 package org.peekaboot.testingapp.order;
 
+import static java.util.Objects.requireNonNull;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -22,26 +24,27 @@ public class CustomerClient {
     private final RestClient restClient;
     private final LocalPortSupplier localPort;
 
-
     public CustomerClient(RestClient.Builder restClientBuilder, LocalPortSupplier localPort) {
 
         this.restClient = restClientBuilder.build();
         this.localPort = localPort;
     }
 
-
     public String lookupCustomerName(long customerId) {
 
         try {
-            JsonNode person = restClient.get()
-                    .uri("http://localhost:{port}/api/person/{id}", localPort.port(), customerId)
-                    .retrieve()
-                    .body(JsonNode.class);
+            // An unknown id answers 404, which RestClient raises, so every way this can fail -
+            // that one included - lands in the catch below rather than in a branch of its own.
+            JsonNode person = requireNonNull(
+                    restClient
+                            .get()
+                            .uri("http://localhost:{port}/api/person/{id}", localPort.port(), customerId)
+                            .retrieve()
+                            .body(JsonNode.class),
+                    "the person API answered with no body");
 
-            if (person == null || person.path("firstName").isMissingNode()) {
-                return "customer #" + customerId;
-            }
-            return person.path("firstName").asString("") + " " + person.path("lastName").asString("");
+            return person.path("firstName").asString("") + " "
+                    + person.path("lastName").asString("");
         } catch (RuntimeException e) {
             log.warn("customer lookup for {} failed, falling back to the id", customerId, e);
             return "customer #" + customerId;
