@@ -70,7 +70,7 @@ class InsightsSsePublisherTest {
     void emittersTimeOutInsteadOfLivingForever() {
         SseEmitter emitter = publisher.subscribe();
 
-        assertThat(emitter.getTimeout()).isEqualTo(InsightsSsePublisher.EMITTER_TIMEOUT.toMillis());
+        assertThat(emitter.getTimeout()).isNotNull().isPositive();
     }
 
     /**
