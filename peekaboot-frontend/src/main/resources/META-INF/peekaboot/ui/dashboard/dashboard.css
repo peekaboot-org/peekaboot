@@ -312,16 +312,23 @@
 }
 .pk-trace-item__header { display: flex; align-items: center; gap: var(--pk-space-md); padding: var(--pk-space-md); transition: background-color var(--pk-transition); flex-wrap: wrap; }
 .pk-trace-item__header:hover { background: var(--pk-bg-alt); }
-/* A .pk-unbutton laid out like the plain flex column it replaces - only its semantics (a
-   real <button>) are new, not its appearance. Sibling to .pk-trace-item__scheduler-link,
-   not its parent - a <button> cannot contain interactive content (the link), so the two
-   live side by side in .pk-trace-item__header instead of one nesting the other. */
-.pk-trace-item__open {
+/* The column the row's two lines used to get from .pk-trace-item__open itself. The button
+   now covers the main line alone, because the stats line below it carries the traceId's
+   copy control and a <button> cannot contain interactive content. The scheduler link is a
+   sibling of this column for the same reason. */
+.pk-trace-item__body {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-width: 0;
     gap: var(--pk-space-xs);
+}
+.pk-trace-item__open {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    /* the hit-target floor the project holds every control to; one line of text is under it */
+    min-height: 24px;
     text-align: left;
 }
 .pk-trace-item__open:focus-visible { outline-offset: -2px; }
