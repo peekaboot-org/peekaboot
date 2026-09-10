@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -53,6 +54,13 @@ final class Dashboard {
 
     void openTracesTab() {
         openTab("traces");
+    }
+
+    /** The tab ids the strip is showing; main.js hides the button of a tab isAvailable() rejected. */
+    @SuppressWarnings("unchecked")
+    List<String> visibleTabs() {
+        return (List<String>) page.evaluate("() => Array.from(document.querySelectorAll('#main-tabs .pk-tab'))"
+                + ".filter(tab => !tab.classList.contains('hidden')).map(tab => tab.dataset.tab)");
     }
 
     String selectedTab() {
