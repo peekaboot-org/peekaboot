@@ -183,13 +183,15 @@ The word carries two unrelated features in the URL space, plus a prose shorthand
   `/peekaboot/api/insights/{config,data,stream}`.
 - **The insights suffix** marks the enriched read models: `/peekaboot/api/actuator/all/insights`,
   `/peekaboot/api/traces/insights` and `/peekaboot/api/traces/{traceId}/insights`. Nothing to do
-  with the tab. `ActuatorInsightsResponse` and `TraceInsightsResponse` are their payloads.
+  with the tab. `PeekabootController` serves them; `ActuatorInsightsResponse` and
+  `TraceInsightsResponse` are their payloads.
 - **Insights Data** in prose means the enriched shape itself: `TraceTree` and `SpanNode` rather
   than `TraceData` and `SpanData`.
 
 So `/api/insights/**` and `/api/*/insights` are two different features that happen to share a
 word. A path with `insights` in the middle is the tab's; a path ending in `insights` is a read
-model.
+model. Neither is a version of the other, and they disappear under different conditions: the
+prefix form goes away without a `MeterRegistry` bean, the suffix form does not.
 
 ### Backend-for-Frontend (BFF)
 The pattern behind the suffix. The backend assembles, correlates and masks before the frontend

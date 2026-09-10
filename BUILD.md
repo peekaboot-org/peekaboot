@@ -122,8 +122,8 @@ third-party version clash would buy nothing but two permanent exclusions.
 ## The parallel Gradle build
 
 `settings.gradle.kts` mirrors the reactor module for module. `./gradlew build` is the
-`mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` only) and integration
-tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
+`mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
+integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
 `peekaboot.it.threads` in `gradle.properties`). It runs the static-analysis gates at the
 same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
 (`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
@@ -452,7 +452,8 @@ the poms:
 1. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in
    `_config.yml` to the released version; every dependency snippet on the site reads it.
    The site publishes from its `main`, so merge `dev` into it and push.
-2. Put the released version into the two quick-start snippets in `README.md`.
+2. Put the released version into `README.md`'s dependency snippet, the one place the app
+   repo spells it out.
 
 The profile adds `maven-release-plugin` with Basjes'
 `conventional-commits-version-policy`, so commit message discipline decides the version
@@ -488,11 +489,12 @@ dependency checks and the configuration-metadata check still run.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
-lifecycle plugins Maven would otherwise bind on its own (clean, resources, install, deploy,
-site), which the parent pins at the versions `spring-boot-dependencies` manages so the
-testing-app runs the same ones. Surefire, failsafe, the compiler and the dependency plugin
-have moved past Boot's pins through Dependabot; the testing-app pins those four in its own
-`pluginManagement`, and Dependabot bumps both poms in one pull request.
+lifecycle plugins Maven would otherwise bind on its own. Clean, resources, install and
+deploy sit at the versions `spring-boot-dependencies` manages, so the testing-app runs the
+same ones. The site plugin, which Boot does not manage, sits at Maven 3.9.16's own binding.
+Surefire, failsafe, the compiler and the dependency plugin have moved past Boot's pins
+through Dependabot; the testing-app pins those four in its own `pluginManagement`, and
+Dependabot bumps both poms in one pull request.
 
 ### How the next version is chosen
 
