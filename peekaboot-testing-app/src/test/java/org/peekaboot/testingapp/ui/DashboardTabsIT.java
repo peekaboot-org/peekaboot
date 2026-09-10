@@ -3,20 +3,33 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import io.micrometer.tracing.Span;
+import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.config.UiTracingProperties;
+import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.Scheduler;
+import org.peekaboot.testingapp.entity.CustomerOrder;
+import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
+import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.repository.OrderLineRepository;
+import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
@@ -30,10 +43,31 @@ class DashboardTabsIT extends PlaywrightTestBase {
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private OrderLineRepository orderLineRepository;
+
+    @Autowired
+    private UiTracingProperties uiTracing;
+
+    @Autowired
+    private PeekabootTracingProperties tracingProperties;
+
+    @Autowired
+    private TraceStore traceStore;
+
     private static final Pattern TRACES_PAGE_SIZE_PARAM = Pattern.compile("[?&]limit=(\\d+)");
 
     /** Mirrors the limit traces.js sends with every listing request. */
     private static final int TRACES_PAGE_SIZE = 50;
+
+    /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
+    private static final int QUERIES_PER_ORDER = 3;
+
+    /** The shared query stat on a listed trace row (trace-stats.js). */
+    private static final Pattern QUERY_STAT = Pattern.compile("(\\d+) quer(?:y|ies)");
 
     /** The meters tab's readout while a filter is active (meters.js's updateCount). */
     private static final Pattern METERS_COUNT_READOUT = Pattern.compile("(\\d+) / (\\d+) metrics");
@@ -62,6 +96,29 @@ class DashboardTabsIT extends PlaywrightTestBase {
         String traceId =
                 awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
         return awaitListedTrace("bucket=errors", "trace => trace.traceId === '" + traceId + "'");
+    }
+
+    /**
+     * Seeds orders until the {@code /orders} page's deliberate N+1 - one query for the list
+     * plus three per order - passes the high-trace-query-count threshold. The store is shared,
+     * so whatever another class seeded counts too; this only makes up the difference.
+     */
+    private void seedEnoughOrdersToTripTheQueryCountWarning() {
+        while (orderRepository.count() * QUERIES_PER_ORDER + 1 <= uiTracing.getHighTraceQueryCountThreshold()) {
+            CustomerOrder order = new CustomerOrder();
+            order.setReference("PK-TABS-" + System.nanoTime());
+            order.setCustomerId(1L);
+            order.setStatus("PLACED");
+            order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z"));
+            CustomerOrder saved = orderRepository.save(order);
+
+            OrderLine line = new OrderLine();
+            line.setOrderId(saved.getId());
+            line.setSku("WIDGET-TABS");
+            line.setQuantity(1);
+            line.setUnitPrice(new BigDecimal("19.99"));
+            orderLineRepository.save(line);
+        }
     }
 
     /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */
@@ -811,5 +868,178 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
         page.waitForRequest("**/api/insights/config**", () -> page.click(Dashboard.tabButton("overview")));
         page.waitForSelector("#insights-tiles .pk-insight-tile");
+    }
+    /**
+     * What the README promises the {@code /orders} page shows: a trace whose query count is
+     * past the high-trace-query-count threshold, rendered on the row as the shared query
+     * stat. The count is read off the row, not off the API, because the row is what a reader
+     * judges the page by.
+     */
+    @Test
+    void theOrdersPageTraceListsAQueryCountPastTheWarningThreshold() {
+        seedEnoughOrdersToTripTheQueryCountWarning();
+        page.navigate(baseUrl + "/orders");
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+
+        String queryStat =
+                page.locator(Dashboard.traceItem(traceId) + " .pk-stat").first().textContent();
+        Matcher queries = QUERY_STAT.matcher(queryStat);
+        assertThat(queries.find())
+                .as("the row's query stat reads '<n> queries': %s", queryStat)
+                .isTrue();
+        assertThat(Integer.parseInt(queries.group(1)))
+                .as("the N+1 on /orders is what gives the Traces tab a warning to show")
+                .isGreaterThan(uiTracing.getHighTraceQueryCountThreshold());
+    }
+
+    /**
+     * The Slow bucket, which no other UI test opens: the report endpoint sleeps its way past
+     * the slow-trace threshold, so its own trace has to be there and not in the default view's
+     * company by accident.
+     */
+    @Test
+    void theSlowReportTraceIsListedInTheSlowBucket() {
+        seedEnoughOrdersToTripTheQueryCountWarning();
+        long orderId = orderRepository.findAll().getFirst().getId();
+        page.navigate(baseUrl + "/api/orders/" + orderId + "/report");
+        String traceId = awaitListedTrace("bucket=slow", "trace => trace.rootOperation.includes('/report')");
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces?bucket=slow");
+        page.waitForSelector("#traces-bucket .pk-btn[data-bucket='slow'][aria-pressed='true']");
+        dashboard.awaitListedTrace(traceId);
+
+        assertThat(page.locator(Dashboard.traceItem(traceId) + " .pk-trace-item__duration")
+                        .textContent())
+                .as("a Slow-bucket row shows the duration that put it there")
+                .isNotBlank();
+    }
+
+    /**
+     * The negative half of the feature gating: the strip hides a tab whose feature is off.
+     * The real /api/features response is served with one flag flipped rather than a fabricated
+     * body, so every other flag - and the thresholds the tabs colour by - stay as the running
+     * app reports them; the Traces tab is the positive control that the flip was surgical.
+     */
+    @Test
+    void aTabIsHiddenWhenItsFeatureIsOff() {
+        page.route("**/peekaboot/api/features", route -> {
+            APIResponse features = route.fetch();
+            route.fulfill(new Route.FulfillOptions()
+                    .setResponse(features)
+                    .setBody(features.text().replace("\"metrics\":true", "\"metrics\":false")));
+        });
+
+        openDashboard();
+
+        assertThat(page.isVisible(Dashboard.tabButton("meters"))).isFalse();
+        assertThat(page.isVisible(Dashboard.tabButton("traces")))
+                .as("only the metrics flag was flipped")
+                .isTrue();
+    }
+
+    /**
+     * The reverse of schedulerTracesLinkArrivesFiltered: a scheduled-job row links back to the
+     * Scheduled Tasks tab. Deliberately unfiltered - the tab lists every task - so the
+     * assertion is where it lands, not what it carries.
+     */
+    @Test
+    void aScheduledJobRowLinksToTheScheduledTasksTab() {
+        String traceId = seedAnErrorTrace();
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+
+        page.click(Dashboard.traceItem(traceId) + " .pk-trace-item__scheduler-link");
+
+        page.waitForSelector("#scheduled-tasks-tab.active");
+        assertThat(dashboard.selectedTab()).isEqualTo("scheduled-tasks");
+    }
+
+    /**
+     * The meters tab fetches its own endpoint, so it owns the failure too: a rejection renders
+     * the tab's own message in place of the group list rather than leaving the loading block
+     * up for good. The request is refused by Chromium's real network stack.
+     */
+    @Test
+    void theMetersTabSaysSoWhenItsOwnFetchFails() {
+        page.route("**/peekaboot/api/metrics", route -> route.abort());
+
+        openDashboard();
+        page.click(Dashboard.tabButton("meters"));
+
+        page.waitForSelector("#meters-list .pk-empty");
+        assertThat(page.textContent("#meters-list .pk-empty")).startsWith("Failed to load metrics");
+    }
+
+    /**
+     * A task whose last run threw shows the exception beside its FAILED badge. The sample app
+     * has a failing job, but nothing records an outcome for a run fired outside the scheduler,
+     * so the row is rendered from the payload shape the backend would send.
+     */
+    @Test
+    void aFailedTaskShowsItsStatusAndTheExceptionFromTheLastRun() {
+        importModule("dashboard/tabs/scheduled-tasks.js", """
+            (() => {
+                const container = document.createElement('div');
+                container.innerHTML = '<div id="scheduled-tasks-groups"></div>';
+                container.id = 'pk-tasks-test-container';
+                document.body.appendChild(container);
+                m.render(container, {scheduledTasks: {tasks: [{target: 'demo.Job.run', type: 'FIXED_RATE',
+                    intervalMs: 60000, lastStatus: 'FAILED', lastExecution: 0,
+                    lastException: 'java.lang.IllegalStateException: fixedDelay failed'}],
+                    cronCount: 0, fixedDelayCount: 0, fixedRateCount: 1}}, {});
+            })()
+            """);
+
+        assertThat(page.textContent("#pk-tasks-test-container .pk-badge--error"))
+                .isEqualTo("FAILED");
+        assertThat(page.textContent("#pk-tasks-test-container .pk-task__exception"))
+                .contains("Error during last Execution:")
+                .contains("fixedDelay failed");
+    }
+    /**
+     * A trace past the max-spans-per-trace cap says so wherever it is shown: the store dropped
+     * its oldest spans, so the counts beside the badge are incomplete and the reader has to be
+     * told once in the listing and again in the overlay they opened from it. Written straight
+     * to the store - no demo endpoint issues five hundred spans.
+     */
+    @Test
+    void aTruncatedTraceSaysSoInTheListingAndInTheOverlay() {
+        String traceId = "tabs-truncated-" + System.nanoTime();
+        // The children go in first: the store drops the oldest span past the cap, and the root
+        // is what the listing and the overlay hang everything else from.
+        for (int i = 0; i < tracingProperties.getMaxSpansPerTrace(); i++) {
+            traceStore.addSpan(TestSpans.span(traceId, String.format("child%011x", i))
+                    .parent("root")
+                    .named("work")
+                    .at(1, 1)
+                    .build());
+        }
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("GET /truncated-fixture")
+                .kind(Span.Kind.SERVER)
+                .at(0, 40)
+                .tag("http.method", "GET")
+                .tag("url.path", "/truncated-fixture")
+                .build());
+
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+
+        assertThat(page.textContent(Dashboard.traceItem(traceId) + " .pk-badge--warn"))
+                .isEqualTo("TRUNCATED");
+        assertThat(page.getAttribute(Dashboard.traceItem(traceId) + " .pk-badge--warn", "title"))
+                .as("the badge says what the counts beside it are missing")
+                .contains("max-spans-per-trace");
+
+        dashboard.openListedTrace(traceId);
+
+        assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn")).isEqualTo("TRUNCATED");
     }
 }

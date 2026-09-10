@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -208,5 +210,75 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#error")).isFalse();
+    }
+    /**
+     * The banner a failed refresh raises, and the only way back out of it. Aborting the data
+     * request is a real refusal by Chromium's network stack, and the dashboard is loaded
+     * before the route is installed, so what fails is the refresh rather than the boot.
+     */
+    @Test
+    void aFailedRefreshRaisesTheErrorBannerAndTheCloseButtonDismissesIt() {
+        openDashboard();
+        page.route("**/peekaboot/api/actuator/all/insights**", route -> route.abort());
+
+        page.click("#refresh-btn");
+
+        page.waitForSelector("#error:not(.hidden)");
+        assertThat(page.textContent("#error .message")).startsWith("Failed to load data:");
+
+        page.click("#error-close");
+
+        page.waitForSelector("#error", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * The timezone toggle switches which zone every rendered timestamp is read in, says which
+     * one is showing, and remembers the choice. The readout has to become the server's real
+     * zone from the payload - "Unknown" is what it says when nothing arrived - and the button
+     * has to name the direction, since "Server"/"Browser" alone is not a usable button name.
+     * The two zone ids are not compared: the server here is this same JVM.
+     */
+    @Test
+    void theTimezoneToggleSwitchesToServerTimeAndPersists() {
+        openDashboard();
+        assertThat(page.textContent("#timezone-label")).isEqualTo("Browser");
+
+        page.click("#timezone-toggle");
+
+        assertThat(page.textContent("#timezone-label")).isEqualTo("Server");
+        String serverZone = page.textContent("#tz-info");
+        assertThat(serverZone).isEqualTo(ZoneId.systemDefault().getId());
+        assertThat(page.getAttribute("#timezone-toggle", "aria-label")).contains("Switch to browser timezone");
+
+        page.reload();
+        page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+
+        assertThat(page.textContent("#timezone-label"))
+                .as("the choice is kept under peekaboot-use-server-tz")
+                .isEqualTo("Server");
+        assertThat(page.textContent("#tz-info")).isEqualTo(serverZone);
+    }
+
+    /**
+     * Choosing a locale re-fetches with it and re-renders the dates in it. The Build card's
+     * timestamp is the assertion: German renders the month as a number where en-US spells it,
+     * so a locale that reached the request but not the render fails here.
+     */
+    @Test
+    void changingTheLocaleRerendersDatesInIt() {
+        openDashboard();
+        page.waitForSelector("#build-info .pk-kv");
+        String english = dashboard.kvValue("#build-info", "Built");
+
+        page.waitForResponse(
+                response -> response.url().contains("locale=de-DE") && response.status() == 200,
+                () -> page.selectOption("#locale-select", "de-DE"));
+        page.waitForFunction(
+                "(before) => document.querySelector('#build-info')?.textContent.includes(before) === false", english);
+
+        assertThat(dashboard.kvValue("#build-info", "Built"))
+                .as("the same instant, rendered in the chosen locale")
+                .isNotEqualTo(english);
     }
 }

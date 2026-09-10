@@ -647,4 +647,29 @@ class SharedModuleIT extends PlaywrightTestBase {
 
         assertThat(linked).isEqualTo(expected);
     }
+    /**
+     * Every unit a series or tile can carry, so a chart's axis and a tile's readout cannot
+     * silently render a raw number. percent is the one that scales (the backend ships 0..1),
+     * and the two rate units are the only ones with a suffix.
+     */
+    @Test
+    void formatMetricValueRendersEveryUnitItsOwnWay() {
+        assertThat(evalModule("format.js", "m.formatMetricValue(1536, 'bytes')"))
+                .isEqualTo("1.50 KB");
+        assertThat(evalModule("format.js", "m.formatMetricValue(0.42, 'percent')"))
+                .isEqualTo("42.0%");
+        assertThat(evalModule("format.js", "m.formatMetricValue(1500, 'millis')"))
+                .isEqualTo("1.50s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(12.345, 'persec')"))
+                .isEqualTo("12/s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(2048, 'bytes-persec')"))
+                .isEqualTo("2.00 KB/s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'count')")).isEqualTo("7");
+        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'no-such-unit')"))
+                .as("an unknown unit falls back to the count format rather than to nothing")
+                .isEqualTo("7");
+        assertThat(evalModule("format.js", "m.formatMetricValue(null, 'bytes')"))
+                .isEqualTo("-");
+        assertThat(evalModule("format.js", "m.formatMetricValue(NaN, 'bytes')")).isEqualTo("-");
+    }
 }

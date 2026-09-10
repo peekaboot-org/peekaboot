@@ -179,6 +179,15 @@
             <version>${playwright.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- The axe-core rule engine, injected into a page Playwright already drives:
+             the targeted a11y tests pin the regressions we know about, this catches the
+             control nobody labelled. Keep the version in lockstep with build.gradle.kts. -->
+        <dependency>
+            <groupId>com.deque.html.axe-core</groupId>
+            <artifactId>playwright</artifactId>
+            <version>4.13.0</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
