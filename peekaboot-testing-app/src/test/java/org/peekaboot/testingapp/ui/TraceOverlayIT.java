@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
@@ -183,6 +184,35 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         overlay.awaitClosed();
         assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+    }
+
+    /**
+     * Escape has to reach the overlay from the moment it opens, not from its first render:
+     * between the two the reader is looking at a loading dialog with the whole page behind
+     * it inert, which is exactly when they reach for Escape.
+     *
+     * <p>Every insights request is parked - held, not stubbed - rather than only the
+     * overlay's: the toolbar's own fetch ladder reads the same URL, and holding them all is
+     * what keeps the overlay on its loading placeholder for the length of the press.
+     */
+    @Test
+    void escapeClosesAnOverlayWhoseTraceHasNotArrivedYet() {
+        openPersonsPage();
+        toolbar.traceId();
+        toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
+        List<Route> parkedTraceRequests = new CopyOnWriteArrayList<>();
+        page.route("**/api/traces/*/insights", parkedTraceRequests::add);
+
+        page.keyboard().press("Enter");
+        overlay.awaitOpened();
+        overlay.waitFor(".pk-overlay__loading");
+        page.keyboard().press("Escape");
+
+        overlay.awaitClosed();
+        boolean focusIsBackOnTheInvoker = (Boolean)
+                toolbar.evaluate("root => root.activeElement?.classList.contains('pk-toolbar__open') ?? false");
+        assertThat(focusIsBackOnTheInvoker).isTrue();
+        parkedTraceRequests.forEach(Route::resume);
     }
 
     /** role=dialog + aria-modal, and a real accessible name, not just visual chrome. */

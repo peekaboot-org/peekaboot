@@ -68,8 +68,8 @@ final class Dashboard {
 
     /**
      * Opens the listed trace's overlay through its own row, the way a reader does, and
-     * waits for its tab strip: render() is where trace-detail.js takes focus and starts
-     * listening for Escape, so a keypress before that is lost.
+     * waits for its tab strip: render() is where trace-detail.js builds the strip and takes
+     * focus, so a click or a Tab before that has nothing to land on.
      */
     void openListedTrace(String traceId) {
         page.click(traceItem(traceId) + " .pk-trace-item__open");
