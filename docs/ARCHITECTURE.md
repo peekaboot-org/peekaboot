@@ -794,7 +794,12 @@ never a second deduplication pass beside the write-time one.
 
 Database queries aren't captured specially. A query shows up in a trace because the
 JDBC/datasource instrumentation on the classpath already emits a span for it, tagged with
-`db.*` or `jdbc.query*` attributes. `DbSpans.isQuery` is the one definition of a query span:
+`db.*` or `jdbc.query*` attributes. That instrumentation is
+`datasource-micrometer-spring-boot` plus `datasource-micrometer-opentelemetry`, which
+`peekaboot-spring-boot-starter` depends on - an uninstrumented DataSource emits no query
+spans, and nothing downstream can tell that apart from an endpoint that runs no queries, so
+the starter carries the instrumentation rather than leaving both cases reading as `0`.
+`DbSpans.isQuery` is the one definition of a query span:
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
@@ -808,7 +813,7 @@ tree's own names, one entry per query span. A span whose instrumentation recorde
 is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
 
 1. `db.query.text`, the current OpenTelemetry semantic convention, emitted by
-   `datasource-micrometer-opentelemetry`, the default stack `peekaboot-testing-app` uses
+   `datasource-micrometer-opentelemetry`, which the starter brings
 2. `db.statement`, that convention's superseded spelling, so a library emitting both is read
    by the current one
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
