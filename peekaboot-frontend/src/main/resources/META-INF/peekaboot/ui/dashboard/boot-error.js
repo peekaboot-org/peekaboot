@@ -19,33 +19,52 @@
 (function () {
     var RETRY_MARKER = 'peekaboot-dashboard-retried';
 
+    // The marker is written before the reload commits, so one that never navigated - offline,
+    // the tab closed in between - is left behind; only a recent one is this load's own retry.
+    var RETRY_WINDOW_MS = 30000;
+
+    // How long the reload waits for the load event before going without it.
+    var RELOAD_WAIT_MS = 5000;
+
     // Read and cleared on every load, so the reload below finds itself marked and reports
     // instead of reloading again, while a load that works leaves the next one a retry of its
     // own. Storage that throws - private browsing, an embedder policy - reports straight away
     // rather than reloading on a marker that was never written.
     var alreadyRetried = false;
     try {
-        alreadyRetried = sessionStorage.getItem(RETRY_MARKER) !== null;
+        var markedAt = sessionStorage.getItem(RETRY_MARKER);
+        alreadyRetried = markedAt !== null && Date.now() - Number(markedAt) < RETRY_WINDOW_MS;
         sessionStorage.removeItem(RETRY_MARKER);
     } catch (e) { /* storage blocked */ }
 
     function markRetry() {
         try {
-            sessionStorage.setItem(RETRY_MARKER, '1');
+            sessionStorage.setItem(RETRY_MARKER, String(Date.now()));
             return true;
         } catch (e) {
             return false;
         }
     }
 
-    // Never while the browser is still finishing this navigation: a reload started then
-    // replaces it, which anything waiting on that navigation reads as an interrupted one.
     function reloadOnce() {
         // The browser logs the failed request but not who reacted to it, and a page that
         // reloads itself saying nothing is not something anyone can debug afterwards.
         console.warn('Peekaboot: the dashboard did not load, reloading once');
-        if (document.readyState === 'complete') location.reload();
-        else window.addEventListener('load', function () { location.reload(); });
+        var reloading = false;
+        function reload() {
+            if (reloading) return;
+            reloading = true;
+            location.reload();
+        }
+        // Not while the browser is still finishing this navigation: a reload started then
+        // replaces it, which anything waiting on that navigation reads as an interrupted one.
+        // Bounded, because the load event never fires while another subresource hangs, and the
+        // half-connected network that loses a module is exactly what hangs one.
+        if (document.readyState === 'complete') reload();
+        else {
+            window.addEventListener('load', reload);
+            setTimeout(reload, RELOAD_WAIT_MS);
+        }
     }
 
     function reportFailure() {

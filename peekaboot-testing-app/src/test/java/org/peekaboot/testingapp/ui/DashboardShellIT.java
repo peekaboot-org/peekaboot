@@ -6,6 +6,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import com.microsoft.playwright.options.WaitUntilState;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -217,6 +218,51 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
         assertThat(navigations).hasSize(2);
+    }
+
+    /**
+     * The reload cannot wait for the load event alone. A half-connected network that loses a
+     * module usually leaves another request hanging too, and the document then sits at
+     * readyState "interactive" for good, so load never fires. Here the module graph fails and
+     * the header logo never answers, which leaves the bounded wait as the only thing that can
+     * start the reload.
+     */
+    @Test
+    void theDashboardReloadsEvenWhenAnotherSubresourceNeverAnswers() {
+        setStoredTheme("light");
+        // Left unanswered for the whole test, so no document here ever fires its load event.
+        page.route("**/peekaboot/ui/assets/logo-mark.png", route -> {});
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(
+                baseUrl + "/peekaboot/ui/dashboard/index.html",
+                new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+    }
+
+    /**
+     * A marker is written before the reload commits, so a reload that never navigates - the
+     * tab went offline, or was closed in between - leaves one behind. Honouring it forever
+     * would spend the next episode's one retry on a reload that never happened, so it counts
+     * only while it is recent.
+     */
+    @Test
+    void aStaleRetryMarkerDoesNotSpendTheNextFailuresReload() {
+        page.addInitScript("sessionStorage.setItem('peekaboot-dashboard-retried', String(Date.now() - 120000));");
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
     }
 
     /**

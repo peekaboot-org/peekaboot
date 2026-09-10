@@ -311,12 +311,18 @@ listens for the single `error` event the browser fires at the module script elem
 whole graph - in the capture phase, since resource errors do not bubble.
 
 The network change is an instant, not a state, so the first response is one reload: it fetches
-the whole graph again and gets it. One reload only. A `sessionStorage` marker is read and
-cleared on every load, so the reload finds itself marked and raises `#error` instead of
-reloading again, while a load that works leaves the next one a retry of its own. Storage that
-throws takes the banner straight away rather than looping on a marker that was never written.
-The reload waits for `load` first: started during the navigation it would replace it, which
-anything waiting on that navigation reads as an interrupted one.
+the whole graph again and gets it. One reload per failure episode. A `sessionStorage` marker is
+read and cleared on every load, so the reload finds itself marked and raises `#error` instead of
+reloading again, while a load that works leaves the next one a retry of its own. The marker
+carries the time it was written and counts only for 30 seconds, because it is written before the
+reload commits: one that never navigated - the tab went offline, or was closed in between -
+would otherwise spend the next episode's retry. Storage that throws takes the banner straight
+away rather than looping on a marker that was never written.
+
+The reload waits for `load` first, since one started during the navigation replaces it, which
+anything waiting on that navigation reads as an interrupted one. That wait is bounded at five
+seconds: a half-connected network that loses a module usually leaves another request hanging
+too, and the document then sits at `readyState` "interactive" for good, so `load` never comes.
 
 ## Accessibility invariants
 
