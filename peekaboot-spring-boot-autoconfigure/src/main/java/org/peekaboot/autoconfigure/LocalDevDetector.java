@@ -125,7 +125,8 @@ final class LocalDevDetector {
          * A jar without a manifest, or one that cannot be opened, contributes nothing.
          */
         private static List<String> manifestClassPath(File jar) {
-            try (JarFile jarFile = new JarFile(jar)) {
+            // no verification: signature checks would read every entry of every jar on the class path
+            try (JarFile jarFile = new JarFile(jar, false)) {
                 Manifest manifest = jarFile.getManifest();
                 String classPath =
                         manifest == null ? null : manifest.getMainAttributes().getValue(Attributes.Name.CLASS_PATH);
@@ -187,6 +188,7 @@ final class LocalDevDetector {
 
     /** The two signals a class loader and a clean stack cannot see, shared by every branch that gets this far. */
     private static boolean isDeveloperLaunch(LaunchSignals signals) {
-        return signals.buildOutputOnClassPath() && !signals.containerMarkers();
+        // container check first: two file probes, against a scan of every jar manifest on the class path
+        return !signals.containerMarkers() && signals.buildOutputOnClassPath();
     }
 }
