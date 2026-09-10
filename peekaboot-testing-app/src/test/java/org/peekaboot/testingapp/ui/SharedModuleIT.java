@@ -313,36 +313,24 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.healthSeverity('WHATEVER')")).isEqualTo("muted");
     }
 
+    /**
+     * Every root-action type renders an icon of its own: a plain character (an HTML entity
+     * would arrive as literal text through textContent) and distinct from every sibling, so a
+     * mapping that folded two types onto one glyph fails here. The characters themselves are
+     * not pinned - which emoji stands for a database is a design choice, not a contract.
+     */
     @Test
-    void rootActionsExposeIconsAsPlainCharacters() {
+    void rootActionsExposeADistinctPlainCharacterIconPerType() {
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('SCHEDULED_JOB')"))
                 .isEqualTo("Scheduled Job");
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('NOPE')")).isEqualTo("Unknown");
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST').startsWith('&')"))
-                .isEqualTo(false);
-        assertThat(evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.length")).isEqualTo(8);
-    }
 
-    @Test
-    void rootActionIconsMatchTheExpectedLiteralCharacters() {
-        // Pins every icon explicitly so a mapping swap (e.g. DATABASE <-> RPC_CALL)
-        // fails here instead of slipping through on the "not an entity" check alone.
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST') === '\\u{1F310}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('SCHEDULED_JOB') === '\\u{1F551}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('MESSAGE_CONSUMER') === '\\u{1F4E9}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('CONNECTION_POOL') === '\\u{1F50C}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('UNKNOWN') === '❓'"))
-                .isEqualTo(true);
+        @SuppressWarnings("unchecked")
+        List<String> icons = (List<String>) evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.map(m.rootActionIcon)");
+
+        assertThat(icons).hasSameSizeAs(RootActionType.values());
+        assertThat(icons).doesNotHaveDuplicates();
+        assertThat(icons).allSatisfy(icon -> assertThat(icon).isNotBlank().doesNotStartWith("&"));
     }
 
     /**

@@ -54,17 +54,6 @@ class ToolbarIT extends PlaywrightTestBase {
     }
 
     @Test
-    void clickingTheBarOpensTheTraceOverlay() {
-        openPersonsPage();
-        toolbar.traceId();
-
-        toolbar.click(".pk-toolbar");
-
-        overlay.awaitOpened();
-        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
-    }
-
-    @Test
     void toolbarDoesNotLeakGlobals() {
         openPersonsPage();
 

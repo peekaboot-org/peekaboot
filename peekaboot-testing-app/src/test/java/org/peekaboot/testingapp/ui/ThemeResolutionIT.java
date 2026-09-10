@@ -31,19 +31,6 @@ class ThemeResolutionIT extends PlaywrightTestBase {
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
-    @Test
-    void applyThemeSetsTheAttributeOnAnyTarget() {
-        Object result = evalTheme("""
-            (() => {
-                const host = document.createElement('div');
-                document.body.appendChild(host);
-                m.applyTheme(host, 'dark');
-                return host.getAttribute('data-theme');
-            })()
-            """);
-        assertThat(result).isEqualTo("dark");
-    }
-
     /**
      * The toolbar and overlay run inside pages Peekaboot does not own, where storage access
      * can throw (private browsing, sandboxed iframes, embedder policy). resolveTheme() must

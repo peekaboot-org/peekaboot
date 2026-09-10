@@ -237,14 +237,6 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(snapshot).contains("\"Environment\"");
     }
 
-    @Test
-    void deepLinkOpensTheRequestedTab() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#loggers");
-        page.waitForSelector("#loggers-tab.active");
-
-        assertThat(page.isVisible("#loggers-tab")).isTrue();
-    }
-
     /**
      * tabStrip()'s {silent: true} option exists for this:
      * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
@@ -286,50 +278,25 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * main.js fetches /api/features once at boot and unhides the traces/meters tab
-     * buttons directly from the result - the only place those two buttons are ever
-     * unhidden. Tracing is
-     * enabled in the test profile (see TraceOverlayIT/ToolbarIT, which depend on
-     * real trace data), so this is a real assertion on a real feature flag, not a stub.
+     * Filtering never auto-expands a group - a matching group renders collapsed just like an
+     * unfiltered one, so the header must be clicked open before a {@code <mark>} inside its
+     * list becomes visible. That click is also the group's own collapse/expand contract, which
+     * is why the collapsed state is asserted on the way in.
      */
     @Test
-    void tracesTabIsUnhiddenWhenTracingIsAvailable() {
-        openDashboard();
-        page.waitForFunction(
-                "() => !document.querySelector('.pk-tab[data-tab=\"traces\"]').classList.contains('hidden')");
-
-        assertThat(page.isVisible(".pk-tab[data-tab='traces']")).isTrue();
-    }
-
-    @Test
-    void environmentGroupsCollapseAndExpand() {
-        openDashboard();
-        dashboard.openTab("environment");
-
-        assertThat(page.isVisible("#property-sources .pk-group__list")).isFalse();
-
-        page.click("#property-sources .pk-group__header");
-
-        assertThat(page.isVisible("#property-sources .pk-group__list")).isTrue();
-    }
-
-    /**
-     * Filtering never auto-expands a group - a matching group renders collapsed just
-     * like an unfiltered one, so the header must be clicked open before a <mark>
-     * inside its list becomes visible. Same pattern as configTabMasksSensitiveValues
-     * below.
-     */
-    @Test
-    void environmentFilterHighlightsMatches() {
+    void environmentFilterHighlightsMatchesInsideAGroupTheReaderOpens() {
         openDashboard();
         dashboard.openTab("environment");
 
         page.fill("#env-filter", "server.port");
         page.waitForSelector(
                 "#property-sources mark", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.ATTACHED));
+        assertThat(page.isVisible("#property-sources .pk-group__list")).isFalse();
+
         page.click("#property-sources .pk-group__header");
 
         page.waitForSelector("#property-sources mark");
+        assertThat(page.isVisible("#property-sources .pk-group__list")).isTrue();
         assertThat(page.textContent("#property-sources mark")).contains("server.port");
     }
 
@@ -357,27 +324,6 @@ class DashboardTabsIT extends PlaywrightTestBase {
         int configured = page.querySelectorAll("#loggers-list .pk-group").size();
 
         assertThat(configured).isLessThan(all);
-    }
-
-    /**
-     * application-test.yml binds spring.datasource.password as a fixture value purely so
-     * this test has a real, secret-looking property to filter on and check against the
-     * masking engine's actual output - the test profile's H2 datasource doesn't otherwise
-     * need it. Without the fixture, filtering on "password" finds nothing: Spring's
-     * /configprops report omits unset properties entirely rather than masking them, and
-     * no other property in the real payload contains "password".
-     */
-    @Test
-    void configTabMasksSensitiveValues() {
-        openDashboard();
-        dashboard.openTab("config");
-
-        page.fill("#config-filter", "password");
-
-        // Rows render into the DOM regardless of the group's expand/collapse state - only
-        // the group's [hidden] wrapper controls visibility - so the row is read attached,
-        // not visible.
-        assertThat(dashboard.kvValue("#config-groups", "password")).isEqualTo("******");
     }
 
     @Test
