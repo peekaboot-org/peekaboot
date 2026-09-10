@@ -284,7 +284,7 @@ export function createInsightsPanels({
         panel.mount.replaceChildren();
         if (!empty) return;
         const message = document.createElement('div');
-        message.className = 'pk-insight-empty';
+        message.className = 'pk-note pk-insight-empty';
         message.textContent = 'No data';
         panel.mount.appendChild(message);
     }

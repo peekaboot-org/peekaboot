@@ -18,6 +18,7 @@
  * The bar never fetches /api/features: it colours durations by the shared defaults
  * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults.
  */
+import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
 import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
@@ -44,6 +45,9 @@ if (dataEl && hostEl && hostEl.shadowRoot && !hostEl.dataset.pkReady) {
 
 function initToolbar(host, data) {
     const shadow = host.shadowRoot;
+    // The server hands the toolbar its base path; api.js's own default is read off the
+    // module URL, which is the same place but only the dashboard needs to derive it.
+    const client = createClient({basePath: data.basePath});
     bindTheme(host);
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
@@ -64,7 +68,7 @@ function initToolbar(host, data) {
         renderRequest(traceId, method, path, status);
         metricsEl.replaceChildren(el('span', {className: 'pk-toolbar__loading', text: 'loading'}));
         if (traceId) {
-            pollTrace(data.basePath, traceId, {
+            pollTrace(client, traceId, {
                 stillCurrent: () => currentTraceId === traceId,
                 onTrace: renderTrace,
                 onNothingArrived: renderPending
@@ -150,7 +154,7 @@ function initToolbar(host, data) {
  * previous render standing - and onNothingArrived once if no attempt ever did. Stops
  * silently the moment stillCurrent() says the bar has moved on to another trace.
  */
-function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived}) {
+function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
     let rendered = false;
 
     function attempt(index) {
@@ -158,8 +162,9 @@ function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived})
         const last = index === ATTEMPT_DELAYS_MS.length - 1;
         setTimeout(() => {
             if (!stillCurrent()) return;
-            fetch(basePath + '/api/traces/' + traceId + '/insights')
-                .then(resp => (resp.ok ? resp.json() : null))
+            // A 404 rejects here (api.js), which the catch below reads the same way as an
+            // empty result: the trace has not arrived yet.
+            client.get('/api/traces/' + traceId + '/insights')
                 .then(trace => {
                     if (!stillCurrent()) return;
                     if (trace && trace.rootSpan) {

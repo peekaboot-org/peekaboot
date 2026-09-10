@@ -196,32 +196,26 @@ function renderPager(totalPages) {
     const pager = document.createElement('div');
     pager.className = 'pk-lifecycle-pager';
 
-    const prevBtn = document.createElement('button');
-    prevBtn.type = 'button';
-    prevBtn.className = 'pk-btn pk-btn--small';
-    prevBtn.textContent = 'Previous';
-    prevBtn.disabled = currentPage === 0;
-    prevBtn.addEventListener('click', () => {
-        currentPage -= 1;
-        writePageParam();
-        renderTable(tab.container(), tab.context());
-    });
+    // The step is all the two buttons differ by: it says where a click goes and, with
+    // totalPages, whether there is a page to go to at all.
+    function pagerButton(label, delta) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pk-btn pk-btn--small';
+        btn.textContent = label;
+        btn.disabled = currentPage + delta < 0 || currentPage + delta >= totalPages;
+        btn.addEventListener('click', () => {
+            currentPage += delta;
+            writePageParam();
+            renderTable(tab.container(), tab.context());
+        });
+        return btn;
+    }
 
     const readout = document.createElement('span');
     readout.className = 'pk-lifecycle-pager__readout';
     readout.textContent = `Page ${currentPage + 1} of ${totalPages}`;
 
-    const nextBtn = document.createElement('button');
-    nextBtn.type = 'button';
-    nextBtn.className = 'pk-btn pk-btn--small';
-    nextBtn.textContent = 'Next';
-    nextBtn.disabled = currentPage >= totalPages - 1;
-    nextBtn.addEventListener('click', () => {
-        currentPage += 1;
-        writePageParam();
-        renderTable(tab.container(), tab.context());
-    });
-
-    pager.append(prevBtn, readout, nextBtn);
+    pager.append(pagerButton('Previous', -1), readout, pagerButton('Next', 1));
     return pager;
 }

@@ -27,7 +27,7 @@ function tableRow(key, value, valueClass) {
 /** `note` is the muted aside a title can carry ("(truncated)"). */
 function section(title, body, note) {
     const heading = el('h3', {className: 'pk-label', text: title});
-    if (note) heading.append(' ', el('span', {className: 'pk-request-masked', text: note}));
+    if (note) heading.append(' ', el('span', {className: 'pk-note', text: note}));
     return el('div', {className: 'pk-request-section'}, heading, body);
 }
 
@@ -105,7 +105,7 @@ function renderRequestBody(body) {
 function renderHeaders(title, headers, maskLiteral) {
     const entries = Object.entries(headers || {});
     const rows = entries.length > 0
-        ? entries.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-request-masked' : ''))
-        : [el('tr', {}, el('td', {className: 'pk-request-empty', text: 'No headers captured', attrs: {colspan: '2'}}))];
+        ? entries.sort(byKey).map(([key, value]) => tableRow(key, value, value === maskLiteral ? 'pk-note pk-request-masked' : ''))
+        : [el('tr', {}, el('td', {className: 'pk-note pk-request-empty', text: 'No headers captured', attrs: {colspan: '2'}}))];
     return section(title, kvTable(rows));
 }

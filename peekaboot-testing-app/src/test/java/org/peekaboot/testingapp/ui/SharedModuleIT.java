@@ -345,6 +345,29 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo(true);
     }
 
+    /**
+     * The Environment and Config tabs filter on what a row actually reads: the key, or the
+     * value as formatPlainValue renders it. A structured value is therefore matched by its
+     * JSON, and a null value by nothing at all - the row shows "-", and matching the word
+     * "null" would hand back rows whose value is precisely what the reader cannot search for.
+     */
+    @Test
+    void propertyFilterMatchesTheRenderedValue() {
+        String module = "filtered-group-tab.js";
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server', value: {port: 8080}}, '8080')"))
+                .isEqualTo(true);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server', value: {port: 8080}}, 'PORT')"))
+                .isEqualTo(true);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.address', value: null}, 'null')"))
+                .isEqualTo(false);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.address', value: null}, 'ADDRESS')"))
+                .isEqualTo(true);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'spring.profiles', value: 'PROD'}, 'prod')"))
+                .isEqualTo(true);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.port', value: 8080}, '')"))
+                .isEqualTo(true);
+    }
+
     /** lifecycle.js's page param is 1-based in the URL; anything unparseable, fractional or below 1 is page one. */
     @Test
     void lifecyclePageFromUrlParsesOneBasedAndRejectsGarbage() {

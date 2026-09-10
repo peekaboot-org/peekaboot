@@ -370,15 +370,14 @@
 }
 
 /* Metric group. The collapsible header/body is the shared .pk-group primitive (see its
-   --mono name modifier, reserved for metric names) - only the type-badge/unit slot and
-   the measurement rows inside the group's list are metric-specific. */
+   --mono name modifier, reserved for metric names) and a measurement row is the shared
+   .pk-kv one - only the type-badge/unit slot and what sits inside a row are
+   metric-specific. */
 .pk-metric__unit { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-metric__description { padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg); font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-style: italic; border-bottom: 1px solid var(--pk-border); }
-.pk-metric__measurement { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--pk-space-md); padding: var(--pk-space-sm) var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }
-.pk-metric__measurement:last-child { border-bottom: none; }
 .pk-metric__tags { display: flex; flex-wrap: wrap; gap: var(--pk-space-xs); flex: 1; }
 .pk-metric__tag { display: inline-block; padding: 2px 6px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text); }
-.pk-metric__no-tags { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-style: italic; }
+.pk-metric__no-tags { font-size: var(--pk-text-xs); }
 .pk-metric__stats { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); justify-content: flex-end; }
 .pk-metric__stat { display: inline-flex; align-items: center; gap: 4px; font-size: var(--pk-text-xs); }
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
@@ -434,7 +433,7 @@
 .pk-insight-chart { min-height: 180px; }
 /* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */
 .pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }
-.pk-insight-empty { color: var(--pk-text-muted); font-size: var(--pk-text-sm); font-style: italic; }
+.pk-insight-empty { font-size: var(--pk-text-sm); }
 .pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-insight-chart .u-legend th { font-weight: 500; }
 /* min/max band edges and percentile hairlines take their panel series' colour and

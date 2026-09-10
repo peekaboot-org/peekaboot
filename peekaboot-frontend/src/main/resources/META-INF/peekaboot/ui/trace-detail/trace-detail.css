@@ -149,10 +149,6 @@
 /* Request tab styles */
 .pk-request-section { margin-bottom: var(--pk-space-lg); }
 .pk-request-section h3 { margin: 0 0 var(--pk-space-sm) 0; }
-/* Two muted-italic notes that must not share a class: --masked marks a value the
-   masking engine replaced, and the mask tests count those. --empty is the placeholder
-   row a header section shows when nothing was captured, which is not a masked value. */
-.pk-request-masked, .pk-request-empty { color: var(--pk-text-muted); font-style: italic; }
 .pk-controller-info { font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border-radius: var(--pk-radius); }
 
 /* Queries tab styles */

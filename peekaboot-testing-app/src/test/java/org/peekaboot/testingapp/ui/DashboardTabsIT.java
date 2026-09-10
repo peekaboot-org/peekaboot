@@ -248,13 +248,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * tabStrip()'s {silent: true} option exists for this:
      * handleHashChange() calls mainTabs.select(tabId, {silent: true}) precisely
      * so that syncing the strip's visual selection on a hash-driven boot doesn't also
-     * re-trigger onSelect() - which calls setHash(tabId) with no detail argument, and
-     * would silently strip the "/deadbeef" segment off a URL like "#traces/deadbeef"
+     * re-trigger onSelect() - which pushes a bare {tab} hash with no detail, and would
+     * silently strip the "/deadbeef" segment off a URL like "#traces/deadbeef"
      * before expandTraceById() even runs. Deep-linking straight to a trace detail URL
      * (not clicking into it - clickingATraceOpensTheOverlayAndDeepLinks below goes
-     * through navigate(), whose own setHash(resolvedId, detail) call passes the real
-     * detail through and would self-correct the hash even without silent) must land
-     * with the URL intact once routing settles.
+     * through context.openTrace, which pushes the detail itself and would self-correct
+     * the hash even without silent) must land with the URL intact once routing settles.
      */
     @Test
     void deepLinkingDirectlyToATraceDetailPreservesTheDetailSegment() {
@@ -602,15 +601,15 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /**
      * context.setUrlParams (main.js's currentContext()) re-parses the hash at call time
      * rather than closing over a detail/subview snapshot taken at the tab's last render().
-     * A snapshot goes stale: opening a trace (traces.js's click-to-open path) and closing
-     * it (its onClose callback, both via context.navigate()) each skip a fresh render
-     * whenever the traces tab was already active (navigate()'s wasAlreadyActive guard), so
-     * it would only pick up "detail = the open trace's id" through some *other* render
-     * while the overlay is open - in real use, the 30s auto-refresh cycle; here, a manual
-     * refresh click makes it deterministic. Closing the overlay then clears the real hash
-     * back to plain "#traces" but leaves the snapshot behind, and the very next filter
-     * change would replace the hash with the just-closed trace's id still attached,
-     * silently reopening it on reload/share.
+     * A snapshot goes stale: opening a trace (context.openTrace, which pushes the hash and
+     * calls expandTraceById) and closing it (expandTraceById's onClose, which pushes the
+     * bare "#traces" back) both write the hash with pushAppHash, which fires no hashchange
+     * and re-renders no tab. So the snapshot would only pick up "detail = the open trace's
+     * id" through some *other* render while the overlay is open - in real use, the 30s
+     * auto-refresh cycle; here, a manual refresh click makes it deterministic. Closing the
+     * overlay then clears the real hash back to plain "#traces" but leaves the snapshot
+     * behind, and the very next filter change would replace the hash with the just-closed
+     * trace's id still attached, silently reopening it on reload/share.
      */
     @Test
     void closingAnOverlayThenFilteringDoesNotResurrectTheClosedTrace() {

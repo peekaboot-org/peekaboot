@@ -380,8 +380,7 @@ function renderMemoryInfo(container, runtime) {
     }
 
     if (memory) {
-        const hasMax = memory.heapMax && memory.heapMax > 0;
-        const heapPercent = memory.heapUsedPercent ?? (hasMax ? (memory.heapUsed / memory.heapMax) * 100 : 0);
+        const heapPercent = memory.heapUsedPercent;
         el.appendChild(usageSection('Heap',
             `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
             heapPercent));
@@ -394,10 +393,9 @@ function renderMemoryInfo(container, runtime) {
     if (storage && storage.length > 0) {
         storage.forEach(s => {
             const used = s.total - s.free;
-            const percent = s.usedPercent ?? (s.total > 0 ? (used / s.total) * 100 : 0);
             el.appendChild(usageSection(s.path || 'Disk',
                 `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
-                percent));
+                s.usedPercent));
         });
     }
 }
