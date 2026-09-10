@@ -326,8 +326,8 @@ abstract class PlaywrightTestBase {
     }
 
     private static boolean carriesAnErrorLog(JsonNode trace) {
-        for (JsonNode log : trace.path("logs")) {
-            if ("ERROR".equals(log.path("level").asString(""))) {
+        for (JsonNode entry : trace.path("logs")) {
+            if ("ERROR".equals(entry.path("level").asString(""))) {
                 return true;
             }
         }

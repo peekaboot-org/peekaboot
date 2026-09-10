@@ -162,6 +162,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
                 .containsEntry("content-security-policy", "script-src 'self'");
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
     }
+
     /**
      * The OS preference flipping while a surface is open, which is what the media listener is
      * for: the storage path is covered above, and a test that only sets the preference before

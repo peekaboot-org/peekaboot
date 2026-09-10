@@ -996,6 +996,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         List<Object> spanFacts = (List<Object>) facts;
         assertThat(spanFacts).containsExactly("3 rows", null, true, false, "system,statement");
     }
+
     /**
      * The gantt's subtree toggle: collapsing the root hides every deeper row and flips the
      * control's own state, so a screen reader and the eye agree. Measured on rows rather than
@@ -1091,6 +1092,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + ".filter(row => !row.classList.contains('pk-log--hidden')).length"))
                 .intValue();
     }
+
     /**
      * A span event is drawn on that span's own track, named, so a reader spots an exception or
      * a checkpoint without opening anything. Written straight to the store: the sample app's

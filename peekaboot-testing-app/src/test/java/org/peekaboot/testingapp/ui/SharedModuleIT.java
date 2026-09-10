@@ -647,6 +647,7 @@ class SharedModuleIT extends PlaywrightTestBase {
 
         assertThat(linked).isEqualTo(expected);
     }
+
     /**
      * Every unit a series or tile can carry, so a chart's axis and a tile's readout cannot
      * silently render a raw number. percent is the one that scales (the backend ships 0..1),

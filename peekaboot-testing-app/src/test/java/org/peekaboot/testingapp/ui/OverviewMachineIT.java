@@ -209,6 +209,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
                 .as("the first datasource card directly follows the JVM Defaults card")
                 .isNotNull();
     }
+
     /**
      * The datasource card keeps its connection parameters behind a toggle: a JDBC URL's query
      * string carries whatever the deployment put there, so it is not on screen by default.
