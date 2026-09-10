@@ -4,7 +4,11 @@ import static io.micrometer.observation.tck.TestObservationRegistryAssert.assert
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationHandler;
 import io.micrometer.observation.tck.TestObservationRegistry;
+import jakarta.servlet.DispatcherType;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,9 +25,28 @@ class TracingHandlerInterceptorTest {
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
 
+    /**
+     * The names of the observations that were stopped, in order. An observation the
+     * interceptor starts and never stops produces no span at all, and the registry's own
+     * assertions count observations whether or not they ever ended, so they cannot tell
+     * that apart from a healthy one.
+     */
+    private final List<String> stoppedObservations = new ArrayList<>();
+
     @BeforeEach
     void setUp() {
         observationRegistry = TestObservationRegistry.create();
+        observationRegistry.observationConfig().observationHandler(new ObservationHandler<>() {
+            @Override
+            public boolean supportsContext(Observation.Context context) {
+                return true;
+            }
+
+            @Override
+            public void onStop(Observation.Context context) {
+                stoppedObservations.add(context.getName());
+            }
+        });
         interceptor = new TracingHandlerInterceptor(observationRegistry);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
@@ -201,6 +224,49 @@ class TracingHandlerInterceptorTest {
         interceptor.afterCompletion(request, response, handler, null);
 
         assertThat(observationRegistry).hasNumberOfObservationsWithNameEqualTo("spring.handler", 1);
+    }
+
+    /**
+     * A {@code forward:} view runs a second DispatcherServlet dispatch inside the first
+     * one's view rendering, so both dispatches call every interceptor callback against the
+     * same request. The outer dispatch's view observation must survive that and be stopped
+     * by its own afterCompletion: an observation left open keeps its scope on the request
+     * thread, and the next request that thread serves inherits the trace context.
+     */
+    @Test
+    void nestedDispatch_shouldLeaveNoScopeOpenOnTheThread() {
+        forwardThroughNestedDispatch();
+
+        assertThat(observationRegistry.getCurrentObservationScope())
+                .as("the outer dispatch's view scope must not outlive the request")
+                .isNull();
+    }
+
+    @Test
+    void nestedDispatch_shouldStopBothDispatchesObservations() {
+        forwardThroughNestedDispatch();
+
+        assertThat(stoppedObservations)
+                .as("both dispatches must end their handler span and their view span")
+                .containsExactly("spring.handler", "spring.handler", "spring.view.render", "spring.view.render");
+    }
+
+    /** The callback sequence DispatcherServlet produces for a handler that returns {@code forward:}. */
+    private void forwardThroughNestedDispatch() {
+        request.setRequestURI("/");
+        Object outerHandler = new Object();
+        Object forwardedHandler = new Object();
+
+        interceptor.preHandle(request, response, outerHandler);
+        interceptor.postHandle(request, response, outerHandler, new ModelAndView("forward:/users"));
+
+        request.setDispatcherType(DispatcherType.FORWARD);
+        interceptor.preHandle(request, response, forwardedHandler);
+        interceptor.postHandle(request, response, forwardedHandler, new ModelAndView("users/list"));
+        interceptor.afterCompletion(request, response, forwardedHandler, null);
+
+        request.setDispatcherType(DispatcherType.REQUEST);
+        interceptor.afterCompletion(request, response, outerHandler, null);
     }
 
     // Test controller for handler method resolution
