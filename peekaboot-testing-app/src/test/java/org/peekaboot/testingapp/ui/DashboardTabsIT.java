@@ -105,20 +105,26 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     private void seedEnoughOrdersToTripTheQueryCountWarning() {
         while (orderRepository.count() * QUERIES_PER_ORDER + 1 <= uiTracing.getHighTraceQueryCountThreshold()) {
-            CustomerOrder order = new CustomerOrder();
-            order.setReference("PK-TABS-" + System.nanoTime());
-            order.setCustomerId(1L);
-            order.setStatus("PLACED");
-            order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z"));
-            CustomerOrder saved = orderRepository.save(order);
-
-            OrderLine line = new OrderLine();
-            line.setOrderId(saved.getId());
-            line.setSku("WIDGET-TABS");
-            line.setQuantity(1);
-            line.setUnitPrice(new BigDecimal("19.99"));
-            orderLineRepository.save(line);
+            seedAnOrder();
         }
+    }
+
+    /** One order with one line, for a test that needs a row to read rather than a query count. */
+    private CustomerOrder seedAnOrder() {
+        CustomerOrder order = new CustomerOrder();
+        order.setReference("PK-TABS-" + System.nanoTime());
+        order.setCustomerId(1L);
+        order.setStatus("PLACED");
+        order.setPlacedAt(Instant.parse("2026-08-20T08:00:00Z"));
+        CustomerOrder saved = orderRepository.save(order);
+
+        OrderLine line = new OrderLine();
+        line.setOrderId(saved.getId());
+        line.setSku("WIDGET-TABS");
+        line.setQuantity(1);
+        line.setUnitPrice(new BigDecimal("19.99"));
+        orderLineRepository.save(line);
+        return saved;
     }
 
     /** Opens the Traces tab with the caller's own trace listed, and returns that trace's id. */
@@ -869,6 +875,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForRequest("**/api/insights/config**", () -> page.click(Dashboard.tabButton("overview")));
         page.waitForSelector("#insights-tiles .pk-insight-tile");
     }
+
     /**
      * What the README promises the {@code /orders} page shows: a trace whose query count is
      * past the high-trace-query-count threshold, rendered on the row as the shared query
@@ -893,7 +900,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .as("the row's query stat reads '<n> queries': %s", queryStat)
                 .isTrue();
         assertThat(Integer.parseInt(queries.group(1)))
-                .as("the N+1 on /orders is what gives the Traces tab a warning to show")
+                .as("the N+1 on /orders is what puts the row's count past the threshold")
                 .isGreaterThan(uiTracing.getHighTraceQueryCountThreshold());
     }
 
@@ -904,8 +911,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
      */
     @Test
     void theSlowReportTraceIsListedInTheSlowBucket() {
-        seedEnoughOrdersToTripTheQueryCountWarning();
-        long orderId = orderRepository.findAll().getFirst().getId();
+        long orderId = seedAnOrder().getId();
         page.navigate(baseUrl + "/api/orders/" + orderId + "/report");
         String traceId = awaitListedTrace("bucket=slow", "trace => trace.rootOperation.includes('/report')");
 
@@ -1002,6 +1008,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .contains("Error during last Execution:")
                 .contains("fixedDelay failed");
     }
+
     /**
      * A trace past the max-spans-per-trace cap says so wherever it is shown: the store dropped
      * its oldest spans, so the counts beside the badge are incomplete and the reader has to be

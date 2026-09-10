@@ -141,6 +141,7 @@ class CopyableIdIT extends PlaywrightTestBase {
                 .as("copying an id is not a request to also filter by it - same capture-phase handler as the toolbar")
                 .isNull();
     }
+
     /**
      * The toolbar's usual home: an application served over plain HTTP, where
      * {@code navigator.clipboard} does not exist and the control falls back to the legacy

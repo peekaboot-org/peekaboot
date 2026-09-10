@@ -211,6 +211,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#error")).isFalse();
     }
+
     /**
      * The banner a failed refresh raises, and the only way back out of it. Aborting the data
      * request is a real refusal by Chromium's network stack, and the dashboard is loaded
