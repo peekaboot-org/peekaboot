@@ -21,30 +21,22 @@ class ComponentBuilderIT extends PlaywrightTestBase {
         return importModule("shared/components.js", "(async () => {" + body + "})()");
     }
 
-    @Test
-    void badgeCarriesItsVariantClass() {
-        assertThat(evalBuilders("return m.badge('UP', 'ok').className;")).isEqualTo("pk-badge pk-badge--ok");
-    }
-
+    /** The variant class is what the sheet colours by, so it belongs with the escaping rule. */
     @Test
     void badgeUsesTextContentSoMarkupCannotInject() {
-        assertThat(evalBuilders("return m.badge('<b>x</b>', 'ok').innerHTML;")).isEqualTo("&lt;b&gt;x&lt;/b&gt;");
-    }
-
-    @Test
-    void kvRowAppliesMonoAndTightModifiers() {
-        assertThat(evalBuilders("return m.kvRow('k', 'v', {mono: true, tight: true}).className;"))
-                .isEqualTo("pk-kv pk-kv--tight");
-        assertThat(evalBuilders("return m.kvRow('k', 'v', {mono: true}).querySelector('.pk-kv__value').className;"))
-                .isEqualTo("pk-kv__value pk-kv__value--mono");
+        assertThat(evalBuilders("const b = m.badge('<b>x</b>', 'ok'); return b.className + '|' + b.innerHTML;"))
+                .isEqualTo("pk-badge pk-badge--ok|&lt;b&gt;x&lt;/b&gt;");
     }
 
     @Test
     void kvRowWithoutHighlightUsesPlainTextForKeyAndValue() {
         assertThat(evalBuilders("return m.kvRow('k', null).querySelector('.pk-kv__value').textContent;"))
                 .isEqualTo("-");
-        assertThat(evalBuilders("return m.kvRow('k', 'v').querySelector('.pk-kv__value').innerHTML;"))
-                .isEqualTo("v");
+        assertThat(evalBuilders("""
+                const row = m.kvRow('k', 'v', {mono: true, tight: true});
+                return row.className + '|' + row.querySelector('.pk-kv__value').className
+                    + '|' + row.querySelector('.pk-kv__value').innerHTML;
+                """)).isEqualTo("pk-kv pk-kv--tight|pk-kv__value pk-kv__value--mono|v");
     }
 
     @Test
@@ -206,7 +198,9 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 catch (e) { return e.message; }
             }
             """);
-        assertThat((String) message).startsWith("HTTP ");
+        assertThat((String) message)
+                .as("the status is what a caller renders, so it has to survive into the message")
+                .isEqualTo("HTTP 404");
     }
 
     /**

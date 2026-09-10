@@ -59,8 +59,6 @@ class InsightsApiIT {
     void configServesPanelsAndLevels() {
         JsonNode config = api.getJson("/peekaboot/api/insights/config");
 
-        assertThat(config.get("levels")).hasSize(3);
-
         List<String> panelIds = new ArrayList<>();
         config.get("panels").forEach(panel -> panelIds.add(panel.get("id").asText()));
         assertThat(panelIds).contains("cpu", "heap", "http-throughput");

@@ -552,6 +552,10 @@ class InsightsTabIT extends PlaywrightTestBase {
     void rapidLevelSwitchingLeavesEveryPanelCharted() {
         openInsights();
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+        // The canvas the second rebuild has to replace: waiting for "a canvas" alone is
+        // satisfied by the one already on screen, whatever the switching did to it.
+        page.evaluate("() => document.querySelectorAll('#insights-panels canvas')"
+                + ".forEach(canvas => canvas.dataset.beforeSwitching = 'yes')");
 
         // both switches must land inside the first rebuild's data fetch - dispatched in
         // one task, since two real clicks can straddle it instead
@@ -560,7 +564,17 @@ class InsightsTabIT extends PlaywrightTestBase {
                 + ".sort((a, b) => b.dataset.level - a.dataset.level)"
                 + ".forEach(button => button.click())");
 
-        page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
+        page.waitForFunction("() => { const canvas = document.querySelector('#insights-panels"
+                + " .pk-insight-panel[data-panel-id=\"cpu\"] canvas');"
+                + " return canvas && !canvas.dataset.beforeSwitching; }");
+        // A panel below the fold has its chart destroyed and not rebuilt until it scrolls into
+        // view, so the check is that no chart from before the switch is still on screen.
+        assertThat(page.locator("#insights-panels canvas[data-before-switching]")
+                        .count())
+                .isZero();
+        assertThat(page.getAttribute("#insights-level .pk-insight-level[data-level='0']", "aria-pressed"))
+                .as("the last switch wins, however the rebuilds interleaved")
+                .isEqualTo("true");
     }
 
     /**

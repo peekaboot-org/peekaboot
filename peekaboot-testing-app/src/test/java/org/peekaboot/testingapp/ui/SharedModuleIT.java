@@ -433,7 +433,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void formatDateTimeTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isNotEqualTo("-");
+                .isEqualTo("Jan 1, 1970, 12:00 AM");
     }
 
     /**
@@ -461,7 +461,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isNotEqualTo("-");
+                .isEqualTo("00:00:00.000");
     }
 
     /**
@@ -535,11 +535,21 @@ class SharedModuleIT extends PlaywrightTestBase {
      */
     @Test
     void formatLongDurationMirrorsTheBackendsUptimeFormat() {
-        long ms = 93_784_000L;
-        assertThat(evalModule("format.js", "m.formatLongDuration(" + ms + ")"))
-                .isEqualTo(UptimeFormat.humanize(Duration.ofMillis(ms)));
-        assertThat(evalModule("format.js", "m.formatLongDuration(45000)"))
-                .isEqualTo(UptimeFormat.humanize(Duration.ofSeconds(45)));
+        // The cases UptimeFormatTest pins on the Java side: singular units, an exact unit
+        // standing alone, a zero unit left out rather than padded, and a run too short to
+        // measure. Each is a place the two implementations could drift apart on their own.
+        for (Duration uptime : List.of(
+                Duration.ofSeconds(45),
+                Duration.ofSeconds(1),
+                Duration.ofHours(1),
+                Duration.ofHours(2),
+                Duration.ofDays(1).plusHours(2).plusMinutes(3).plusSeconds(4),
+                Duration.ofDays(1).plusMinutes(3),
+                Duration.ZERO)) {
+            assertThat(evalModule("format.js", "m.formatLongDuration(" + uptime.toMillis() + ")"))
+                    .as("%s", uptime)
+                    .isEqualTo(UptimeFormat.humanize(uptime));
+        }
     }
 
     /**

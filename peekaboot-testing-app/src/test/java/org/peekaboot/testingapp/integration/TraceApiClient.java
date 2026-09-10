@@ -4,7 +4,9 @@ import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -132,11 +134,39 @@ class TraceApiClient {
                 + " requests produced no trace carrying what they should have captured; last response: " + trace);
     }
 
-    JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
+    /**
+     * Waits for the caller's own trace to be listed in {@code bucket}. The bucket is the
+     * assertion: a trace the backend classified elsewhere never arrives here. Pinned by id
+     * rather than by a name fragment, since every other class fills the same listing.
+     */
+    JsonNode awaitTraceInBucket(String bucket, String traceId) {
         return awaitListedTrace(
                 "bucket=" + bucket,
-                trace -> trace.path("rootOperation").asString("").contains(rootOperationFragment),
-                "a trace whose rootOperation contains '" + rootOperationFragment + "' in the " + bucket + " bucket");
+                trace -> traceId.equals(trace.path("traceId").asString("")),
+                "trace " + traceId + " in the " + bucket + " bucket");
+    }
+
+    /**
+     * Waits for a trace of {@code rootOperation} that was not listed when this call started.
+     * The fallback for work that answers no request and runs through no scheduled-task
+     * observation, so nothing hands the caller an id: a direct method call.
+     */
+    JsonNode awaitTraceAppearing(String rootOperation, Runnable trigger) {
+        Predicate<JsonNode> named =
+                trace -> rootOperation.equals(trace.path("rootOperation").asString(""));
+        Set<String> listedBefore = new HashSet<>();
+        for (JsonNode trace :
+                api.getJson("/peekaboot/api/traces/insights?bucket=all").path("traces")) {
+            if (named.test(trace)) {
+                listedBefore.add(trace.path("traceId").asString(""));
+            }
+        }
+        trigger.run();
+        return awaitListedTrace(
+                "bucket=all",
+                trace -> named.test(trace)
+                        && !listedBefore.contains(trace.path("traceId").asString("")),
+                "a new '" + rootOperation + "' trace");
     }
 
     /**

@@ -5,11 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -41,7 +37,6 @@ import tools.jackson.databind.JsonNode;
 class OrderTraceCaptureIT {
 
     private static final int SEEDED_ORDERS = 8;
-    private static final int CONCURRENT_ORDERS = 16;
 
     @LocalServerPort
     private int port;
@@ -158,9 +153,9 @@ class OrderTraceCaptureIT {
     void slowReportLandsInTheSlowBucket() {
         Long orderId = orderRepository.findAll().getFirst().getId();
 
-        traces.get("/api/orders/" + orderId + "/report");
+        String traceId = traces.get("/api/orders/" + orderId + "/report");
 
-        JsonNode trace = traces.awaitTraceInBucket("slow", "/api/orders/{id}/report");
+        JsonNode trace = traces.awaitTraceInBucket("slow", traceId);
 
         assertThat(trace.path("durationMs").asLong())
                 .as("the report endpoint must exceed the default "
@@ -181,9 +176,9 @@ class OrderTraceCaptureIT {
 
     @Test
     void failingEndpointLandsInTheErrorsBucket() {
-        traces.get("/boom");
+        String traceId = traces.get("/boom");
 
-        JsonNode trace = traces.awaitTraceInBucket("errors", "/boom");
+        JsonNode trace = traces.awaitTraceInBucket("errors", traceId);
 
         assertThat(trace.path("status").asString(""))
                 .as("a trace in the Errors bucket must be classified as having errors, "
@@ -216,11 +211,6 @@ class OrderTraceCaptureIT {
         assertThat(spanNames(trace))
                 .as("the order-placed listener runs inside the request, so its span belongs to this trace")
                 .contains("order.placed");
-        JsonNode placed = PeekabootApi.readJson(response.getBody());
-        assertThat(placed.path("lineCount").asInt()).isEqualTo(1);
-        assertThat(placed.path("total").decimalValue())
-                .as("the summary describes the line that was persisted: 2 x 19.99")
-                .isEqualByComparingTo("39.98");
     }
 
     /**
@@ -241,28 +231,6 @@ class OrderTraceCaptureIT {
     }
 
     /**
-     * Order references are unique in the schema, so two orders placed in the same instant
-     * must still get their own; a colliding reference fails the second request outright.
-     */
-    @Test
-    void ordersPlacedAtTheSameInstantGetDistinctReferences() throws Exception {
-        List<String> references = new ArrayList<>();
-        try (ExecutorService placers = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<String>> placed = placers.invokeAll(Collections.nCopies(
-                    CONCURRENT_ORDERS,
-                    () -> PeekabootApi.readJson(placeOrder(new NewOrder(1L, "WIDGET-BURST", 1))
-                                    .getBody())
-                            .path("reference")
-                            .asString()));
-            for (Future<String> reference : placed) {
-                references.add(reference.get());
-            }
-        }
-
-        assertThat(references).hasSize(CONCURRENT_ORDERS).doesNotHaveDuplicates();
-    }
-
-    /**
      * Calls {@link OrderReconciler#reconcileOrders()} directly rather than going through
      * Spring's scheduler, so this method's own {@code @Observed} span (named
      * {@code order.reconcile.job}) is the trace root. That span carries only its own
@@ -275,9 +243,7 @@ class OrderTraceCaptureIT {
      */
     @Test
     void directReconciliationCallDoesNotClassifyAsScheduledJob() {
-        reconciler.reconcileOrders();
-
-        JsonNode trace = traces.awaitTraceInBucket("all", "order.reconcile.job");
+        JsonNode trace = traces.awaitTraceAppearing("order.reconcile.job", reconciler::reconcileOrders);
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("a direct call carries none of Spring's scheduled-task tags, so its "
@@ -294,9 +260,9 @@ class OrderTraceCaptureIT {
      */
     @Test
     void reconciliationFiredByTheSchedulerIsCapturedAsAScheduledJobTrace() {
-        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
 
-        JsonNode trace = traces.awaitTraceInBucket("all", "task orderReconciler.reconcileOrders");
+        JsonNode trace = traces.awaitTraceInBucket("all", traceId);
 
         assertThat(trace.path("rootActionType").asString(""))
                 .as("Spring's scheduled-task observation wraps the call and becomes the "

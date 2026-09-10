@@ -53,11 +53,23 @@ class ToolbarIT extends PlaywrightTestBase {
         assertThat(path).isEqualTo("/persons");
     }
 
+    /**
+     * The bar runs inside pages Peekaboot does not own, so it may add nothing at all to their
+     * window. Diffed against a snapshot taken before any page script ran, rather than probing
+     * one name a leak would have to be called.
+     */
     @Test
     void toolbarDoesNotLeakGlobals() {
+        page.addInitScript("window.__pkGlobalsBeforeToolbar = Object.keys(window);");
         openPersonsPage();
+        toolbar.traceId();
 
-        assertThat(page.evaluate("() => typeof window.__peekaboot")).isEqualTo("undefined");
+        @SuppressWarnings("unchecked")
+        List<String> added = (List<String>) page.evaluate("() => Object.keys(window)"
+                + ".filter(key => key !== '__pkGlobalsBeforeToolbar'"
+                + " && !window.__pkGlobalsBeforeToolbar.includes(key))");
+
+        assertThat(added).isEmpty();
     }
 
     /**

@@ -13,8 +13,10 @@ import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
@@ -285,8 +287,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(focused).isEqualTo("queries");
         assertThat(selected).isEqualTo("queries");
 
-        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
-        assertThat(content).isNotEmpty();
+        // The panel really swapped: the Spans tab's gantt is what was showing a moment ago,
+        // and an innerHTML that merely stayed non-empty would keep it.
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-gantt')"))
+                .as("the arrow key swapped the panel, it did not merely restyle the strip")
+                .isFalse();
     }
 
     /**
@@ -394,16 +399,27 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(status).isEqualTo("200 OK");
     }
 
+    /**
+     * Each tab against the element only its own renderer builds. The error page's trace is
+     * the one that has all four: an HTTP exchange, a span tree, a JDBC query and a captured
+     * log, so no tab can pass on its empty state.
+     */
     @Test
     void everyOverlayTabRendersContent() {
-        openOverlayFromToolbar();
+        openOverlayForTheMultiSpanLogTrace();
 
-        for (String tab : List.of("request", "spans", "queries", "logs")) {
-            overlay.evaluate("(root, id) => root.querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
-
-            String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
-            assertThat(content).as("tab %s renders something", tab).isNotEmpty();
-        }
+        Map<String, String> tabRoot = new LinkedHashMap<>();
+        tabRoot.put("request", ".pk-table--kv");
+        tabRoot.put("spans", "#pk-gantt-rows");
+        tabRoot.put("queries", ".pk-code-block");
+        tabRoot.put("logs", ".pk-log");
+        tabRoot.forEach((tab, root) -> {
+            overlay.openTab(tab);
+            overlay.waitFor(root);
+            assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-empty')"))
+                    .as("tab %s fell back to its empty state", tab)
+                    .isFalse();
+        });
     }
 
     /**
@@ -777,18 +793,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * The listed trace of the run of {@link OrderReconciler#reconcileOrders()} just fired,
-     * named by its root operation the way the Traces tab's chip filter names it. The listing
-     * is shared with every class, and the first SCHEDULED_JOB trace listed is as likely to be
-     * {@code Scheduler.fixedRate}'s (no query at all) as this test's own.
-     */
-    private String waitForScheduledJobTraceId() {
-        return awaitListedTrace(
-                "bucket=all&rootActionType=SCHEDULED_JOB",
-                "trace => trace.rootOperation === 'task orderReconciler.reconcileOrders'");
-    }
-
-    /**
      * On a non-HTTP trace (a scheduled job here) trace-detail.js's method falls back to
      * null, which the header renders as the trace's root-action label (root-actions.js):
      * httpExchange/http.* tags are only ever populated for real HTTP requests, so a
@@ -807,8 +811,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
-        String traceId = waitForScheduledJobTraceId();
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+        // The run's own trace, and the wait is on its root span: the exporter hands spans over
+        // in the order they ended, so the query span the header counts is there with it.
+        awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-overlay__title-method");

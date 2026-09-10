@@ -35,6 +35,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** Mirrors the limit traces.js sends with every listing request. */
     private static final int TRACES_PAGE_SIZE = 50;
 
+    /** The meters tab's readout while a filter is active (meters.js's updateCount). */
+    private static final Pattern METERS_COUNT_READOUT = Pattern.compile("(\\d+) / (\\d+) metrics");
+
     /**
      * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
      * toolbar, and returns its id once the store serves it. Nothing else guarantees a trace:
@@ -69,13 +72,18 @@ class DashboardTabsIT extends PlaywrightTestBase {
         return traceId;
     }
 
+    /**
+     * Both values travel the actuator endpoints and the mappers before they reach a row, so
+     * pinning them to the running JVM's own is what tells a real render from a card of
+     * labels with nothing behind them.
+     */
     @Test
     void overviewShowsJavaAndSystemCards() {
         openDashboard();
         page.waitForSelector("#java-info .pk-kv");
 
-        assertThat(page.textContent("#java-info")).contains("Version");
-        assertThat(page.textContent("#os-info")).contains("Architecture");
+        assertThat(dashboard.kvValue("#java-info", "Version")).isEqualTo(System.getProperty("java.version"));
+        assertThat(dashboard.kvValue("#os-info", "Architecture")).isEqualTo(System.getProperty("os.arch"));
     }
 
     @Test
@@ -86,12 +94,21 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(page.textContent("#health-status-text")).isEqualTo("UP");
     }
 
+    /**
+     * A live JVM always holds some heap and never all of it, so a fill outside (0, 100] means
+     * the real percentage never reached the primitive - a bare meter() with no argument
+     * clamps to 0 and would still render.
+     */
     @Test
     void memoryMeterIsRenderedWithTheSharedPrimitive() {
         openDashboard();
         page.waitForSelector("#memory-info .pk-meter__fill");
 
-        assertThat(page.isVisible("#memory-info .pk-meter")).isTrue();
+        String width = (String) page.evalOnSelector("#memory-info .pk-meter__fill", "el => el.style.width");
+        assertThat(Double.parseDouble(width.replace("%", "")))
+                .as("heap fill, rendered as %s", width)
+                .isGreaterThan(0)
+                .isLessThanOrEqualTo(100);
     }
 
     /**
@@ -318,12 +335,20 @@ class DashboardTabsIT extends PlaywrightTestBase {
         openDashboard();
         dashboard.openTab("loggers");
 
+        int rows = page.locator("#loggers-list .pk-kv").count();
+        assertThat(page.locator("#loggers-list .pk-kv .pk-badge").count())
+                .as("every logger row renders its effective level, not just its name")
+                .isEqualTo(rows);
+
         int all = page.querySelectorAll("#loggers-list .pk-group").size();
         page.check("#loggers-configured-only");
         page.waitForFunction("(prev) => document.querySelectorAll('#loggers-list .pk-group').length !== prev", all);
         int configured = page.querySelectorAll("#loggers-list .pk-group").size();
 
         assertThat(configured).isLessThan(all);
+        assertThat(page.locator("#loggers-list .pk-kv__key").allTextContents())
+                .as("ROOT always carries a configured level, so the filtered list keeps it")
+                .contains("ROOT");
     }
 
     @Test
@@ -331,9 +356,15 @@ class DashboardTabsIT extends PlaywrightTestBase {
         openDashboard();
         dashboard.openTab("scheduled-tasks");
 
-        assertThat(page.querySelectorAll("#scheduled-tasks-groups .pk-group")).isNotEmpty();
-        assertThat(page.textContent("#scheduled-tasks-groups .pk-tasks-summary"))
-                .contains("Total:");
+        assertThat(page.locator("#scheduled-tasks-groups .pk-group__name").allTextContents())
+                .as("a group per schedule type the app actually registers, and no other")
+                .isNotEmpty()
+                .isSubsetOf("Cron Tasks", "Fixed Delay Tasks", "Fixed Rate Tasks");
+        assertThat(page.locator("#scheduled-tasks-groups .pk-tasks-summary .pk-badge")
+                        .first()
+                        .textContent())
+                .as("the summary counts the tasks Spring registered, not the rows that rendered")
+                .isEqualTo("Total: " + scheduledTaskHolder.getScheduledTasks().size());
     }
 
     @Test
@@ -344,7 +375,15 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.fill("#meters-filter", "jvm.memory");
         page.waitForFunction("() => document.querySelector('#meters-count').textContent.includes('/')");
 
-        assertThat(page.textContent("#meters-count")).contains("/");
+        String readout = page.textContent("#meters-count");
+        Matcher counts = METERS_COUNT_READOUT.matcher(readout);
+        assertThat(counts.matches())
+                .as("the count readout reads '<matched> / <all> metrics': %s", readout)
+                .isTrue();
+        assertThat(Integer.parseInt(counts.group(1)))
+                .as("jvm.memory matches some meters but not all of them: %s", readout)
+                .isPositive()
+                .isLessThan(Integer.parseInt(counts.group(2)));
     }
 
     /**
