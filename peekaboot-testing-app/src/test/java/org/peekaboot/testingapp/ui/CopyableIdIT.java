@@ -141,4 +141,26 @@ class CopyableIdIT extends PlaywrightTestBase {
                 .as("copying an id is not a request to also filter by it - same capture-phase handler as the toolbar")
                 .isNull();
     }
+    /**
+     * The toolbar's usual home: an application served over plain HTTP, where
+     * {@code navigator.clipboard} does not exist and the control falls back to the legacy
+     * selection copy. Both outcomes are pinned - execCommand may or may not be honoured in a
+     * headless run, and the point is that the reader is told which one happened rather than
+     * left with a control that did nothing.
+     */
+    @Test
+    void anInsecureContextFallsBackToTheLegacyCopyAndSaysHowItWent() {
+        page.addInitScript("Object.defineProperty(window, 'isSecureContext', {get: () => false});");
+        openPageWithToolbar();
+
+        toolbar.click("#pk-trace .pk-copy");
+
+        String state = (String) toolbar.waitUntil("root => { const copy ="
+                + " root.querySelector('#pk-trace .pk-copy');"
+                + " return copy.classList.contains('pk-copy--copied') ? 'copied'"
+                + "      : copy.classList.contains('pk-copy--failed') ? 'failed' : null; }");
+        assertThat(state).isIn("copied", "failed");
+        assertThat(toolbar.text("#pk-trace .pk-copy__status"))
+                .isEqualTo("copied".equals(state) ? "Copied" : "Copy failed");
+    }
 }

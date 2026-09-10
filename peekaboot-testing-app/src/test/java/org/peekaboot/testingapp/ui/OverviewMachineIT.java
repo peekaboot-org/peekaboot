@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import com.microsoft.playwright.Locator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
@@ -207,5 +208,33 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assertThat(neighbour)
                 .as("the first datasource card directly follows the JVM Defaults card")
                 .isNotNull();
+    }
+    /**
+     * The datasource card keeps its connection parameters behind a toggle: a JDBC URL's query
+     * string carries whatever the deployment put there, so it is not on screen by default.
+     * The control has to say which way it switches, or a reader cannot tell it is a toggle.
+     */
+    @Test
+    void theDatasourceCardHidesItsConnectionParamsBehindAToggle() {
+        openDashboard();
+        page.waitForSelector(".pk-card[data-datasource] .pk-datasources__toggle button");
+
+        Locator toggle = page.locator(".pk-card[data-datasource] .pk-datasources__toggle button")
+                .first();
+        Locator params = page.locator(".pk-card[data-datasource] .pk-datasources__params")
+                .first();
+        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
+        assertThat(params.isHidden()).isTrue();
+
+        toggle.click();
+
+        assertThat(toggle.textContent()).isEqualTo("Hide Connection Params");
+        assertThat(params.isVisible()).isTrue();
+        assertThat(params.textContent()).isNotBlank();
+
+        toggle.click();
+
+        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
+        assertThat(params.isHidden()).isTrue();
     }
 }

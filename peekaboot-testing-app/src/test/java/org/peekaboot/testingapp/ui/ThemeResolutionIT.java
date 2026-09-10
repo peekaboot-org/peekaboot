@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Response;
 import com.microsoft.playwright.options.ColorScheme;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ThemeResolutionIT extends PlaywrightTestBase {
@@ -160,5 +161,27 @@ class ThemeResolutionIT extends PlaywrightTestBase {
                 .as("the policy reached the document under test")
                 .containsEntry("content-security-policy", "script-src 'self'");
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+    }
+    /**
+     * The OS preference flipping while a surface is open, which is what the media listener is
+     * for: the storage path is covered above, and a test that only sets the preference before
+     * evaluating never runs the listener at all.
+     */
+    @Test
+    void watchThemeFollowsTheOsPreferenceChangingAfterTheModuleLoaded() {
+        emulateOsColorScheme(ColorScheme.LIGHT);
+        openBlankFixture();
+        page.evaluate("""
+            async () => {
+                const m = await import('/peekaboot/ui/shared/theme.js');
+                window.__pkThemes = [];
+                m.watchTheme(theme => window.__pkThemes.push(theme));
+            }
+            """);
+
+        emulateOsColorScheme(ColorScheme.DARK);
+
+        page.waitForFunction("() => window.__pkThemes.includes('dark')");
+        assertThat(page.evaluate("() => window.__pkThemes")).isEqualTo(List.of("dark"));
     }
 }

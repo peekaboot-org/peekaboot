@@ -12,6 +12,7 @@ import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -22,7 +23,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
+import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
@@ -40,6 +43,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
+
+    @Autowired
+    private TraceStore traceStore;
 
     private void openOverlayFromToolbar() {
         openPersonsPage();
@@ -989,5 +995,124 @@ class TraceOverlayIT extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
         assertThat(spanFacts).containsExactly("3 rows", null, true, false, "system,statement");
+    }
+    /**
+     * The gantt's subtree toggle: collapsing the root hides every deeper row and flips the
+     * control's own state, so a screen reader and the eye agree. Measured on rows rather than
+     * on the button, since hiding is what the reader came for.
+     */
+    @Test
+    void collapsingASpanHidesItsSubtreeAndSaysSo() {
+        openOverlayFromToolbar();
+        overlay.waitFor("#pk-gantt-rows .pk-gantt-toggle");
+
+        int allRows = visibleGanttRows();
+        assertThat(allRows)
+                .as("a nested tree is what makes a collapse observable")
+                .isGreaterThan(1);
+
+        overlay.click("#pk-gantt-rows .pk-gantt-toggle");
+
+        assertThat(visibleGanttRows()).isEqualTo(1);
+        assertThat(overlay.evaluate(
+                        "root => root.querySelector('#pk-gantt-rows .pk-gantt-toggle').getAttribute('aria-expanded')"))
+                .isEqualTo("false");
+
+        overlay.click("#pk-gantt-rows .pk-gantt-toggle");
+
+        assertThat(visibleGanttRows()).isEqualTo(allRows);
+    }
+
+    private int visibleGanttRows() {
+        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-row')]"
+                        + ".filter(row => row.style.display !== 'none').length"))
+                .intValue();
+    }
+
+    /**
+     * A query span's SQL sits collapsed under its row until the reader asks: the statement can
+     * be hundreds of characters and the tree is what the tab is for. The toggle's title is the
+     * only name it has, so it has to say which way it switches.
+     */
+    @Test
+    void theSqlToggleRevealsTheStatementUnderItsSpan() {
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+
+        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
+                        + ".classList.contains('pk-span-query-detail--expanded')"))
+                .isFalse();
+
+        overlay.click(".pk-span-query-toggle");
+
+        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
+                        + ".classList.contains('pk-span-query-detail--expanded')"))
+                .isTrue();
+        assertThat(overlay.text(".pk-span-query-detail .pk-query-text").toLowerCase(Locale.ROOT))
+                .contains("select");
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-span-query-toggle').title"))
+                .isEqualTo("Hide SQL");
+    }
+
+    /**
+     * A level filter that matches no row leaves the list rendered but empty rather than
+     * dropping back to "no logs recorded": the trace does carry logs, the filter is simply
+     * hiding them, and clearing it has to bring them back.
+     */
+    @Test
+    void aLevelFilterThatMatchesNoRowHidesEveryLog() {
+        openOverlayForTheMultiSpanLogTrace();
+        overlay.openTab("logs");
+        overlay.waitFor(".pk-log");
+
+        int allLogs = visibleLogRows();
+        assertThat(allLogs).isPositive();
+
+        overlay.evaluate("root => { const select = root.querySelector('#pk-log-level');"
+                + " select.value = 'TRACE'; select.dispatchEvent(new Event('change')); }");
+
+        assertThat(visibleLogRows())
+                .as("nothing in this trace logs at TRACE level")
+                .isZero();
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-logs-list')"))
+                .as("the list stays; it is the rows that are filtered out")
+                .isTrue();
+
+        overlay.evaluate("root => { const select = root.querySelector('#pk-log-level');"
+                + " select.value = ''; select.dispatchEvent(new Event('change')); }");
+
+        assertThat(visibleLogRows()).isEqualTo(allLogs);
+    }
+
+    private int visibleLogRows() {
+        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('.pk-log')]"
+                        + ".filter(row => !row.classList.contains('pk-log--hidden')).length"))
+                .intValue();
+    }
+    /**
+     * A span event is drawn on that span's own track, named, so a reader spots an exception or
+     * a checkpoint without opening anything. Written straight to the store: the sample app's
+     * instrumentation records no events, and one that started to would not do it on request.
+     */
+    @Test
+    void aSpanEventIsMarkedOnItsTrackWithItsName() {
+        String traceId = "overlay-event-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("GET /events-fixture")
+                .kind(Span.Kind.SERVER)
+                .at(0, 40)
+                .tag("http.method", "GET")
+                .tag("url.path", "/events-fixture")
+                .event("exception", 20)
+                .build());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.waitFor("#pk-gantt-rows");
+
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
+                .isEqualTo("Event: exception");
+        assertThat(overlay.text(".pk-gantt-event-tooltip")).isEqualTo("exception");
     }
 }
