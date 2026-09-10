@@ -193,7 +193,10 @@ Pinning to a traceId does not mean searching the store for it. Every captured re
 with `Server-Timing: trace;desc="00-<traceId>-..."`, whatever its content type or status.
 `TraceApiClient.get(path)` returns that id for a GET and `traceIdOf(headers)` reads it off a
 response made some other way, so an integration test names the trace its own call produced
-before it reads anything back.
+before it reads anything back. A scheduled job answers no request and so has no such header;
+`integration/ScheduledJobs.run` reads its id off the scheduled-task observation instead (the
+recorder is a bean of `DeferredSchedulingConfig`) and returns it, which is how the two classes
+firing `Scheduler.fixedRate` each wait for the run they fired.
 
 Spans reach the store asynchronously (the OTel batch processor, 50 ms in the test profile), so
 a test waits for the fact it is about to assert on, never for a delay.

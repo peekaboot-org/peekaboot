@@ -34,12 +34,14 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      * <p>Fired per test through the scheduler's own runnable rather than relying on the
      * boot-time run: every /?error=true and /boom the concurrent classes issue pushes an
      * older error trace further down the list, so only a freshly minted one is guaranteed
-     * to be found. The listing names a trace by its root span, so a listed match proves the
-     * spans - exported asynchronously, unlike the logs - have landed.
+     * to be found. DashboardTabsIT fires the same job against the same store, so the wait
+     * names the run this call fired rather than any trace of that job. The listing names a
+     * trace by its root span, so a listed match proves the spans - exported asynchronously,
+     * unlike the logs - have landed.
      */
     private String freshFixedRateSchedulerTraceId() {
-        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-        return awaitListedTrace("bucket=errors&limit=50", "trace => (trace.rootOperation || '').includes('fixedRate')");
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
+        return awaitListedTrace("bucket=errors&limit=50", "trace => trace.traceId === '" + traceId + "'");
     }
 
     @Test
