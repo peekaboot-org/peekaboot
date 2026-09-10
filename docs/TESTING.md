@@ -31,6 +31,11 @@
   their Javadoc. That is safe only because `peekaboot-backend`'s surefire runs its classes one
   at a time on one thread (the pom configures no parallelism). Turn parallel execution on for
   that module and those two tests have to lose the global write first.
+- The default uncaught-exception handler is JVM-global the same way.
+  `InsightsSsePublisherTest`'s `UncaughtExceptions` installs one to prove nothing escapes the SSE
+  sender thread, and restores the previous handler on close. Its awaits pass
+  `dontCatchUncaughtExceptions()`, since Awaitility otherwise takes the handler over for the
+  length of the wait and rethrows into the test thread.
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
   holds `obj` weakly and samples turn NaN after a GC. Use `Gauge.builder(name, supplier)`, or
   keep the returned object in a field.
