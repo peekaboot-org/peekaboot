@@ -60,7 +60,7 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 `HIGH_QUERY_COUNT`; `IssueSeverity` has two and serialises lowercase through `@JsonValue`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
-`issues` empty on every node it builds, and leaves `logs` empty too. Firing conditions:
+`issues` empty on every node it builds, and leaves `logs` null. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.ui.tracing](https://www.peekaboot.org/docs/configuration/#peekabootuitracing).
 
