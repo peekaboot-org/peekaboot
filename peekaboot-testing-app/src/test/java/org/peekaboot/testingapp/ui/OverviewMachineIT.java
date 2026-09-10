@@ -12,15 +12,28 @@ import org.peekaboot.backend.domain.runtime.NetworkAddress;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
+    /**
+     * The two byte rows against the machine this JVM runs on, formatted by the shared
+     * formatter the row itself uses - a card of labels over placeholder numbers passes a
+     * presence check and fails this.
+     */
     @Test
     void machineCardShowsCpuMemoryAndContainerFacts() {
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
-        String text = page.textContent("#machine-info");
-        assertThat(text).contains("CPU Cores");
-        assertThat(text).contains("Total Memory");
-        assertThat(text).contains("Max Heap");
+        MachineInfo current = MachineInfo.current();
+        assertThat(page.textContent("#machine-info")).contains("CPU Cores");
+        assertThat(dashboard.kvValue("#machine-info", "Total Memory")).isEqualTo(formatBytes(current.totalMemory()));
+        assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(current.maxHeap()));
+    }
+
+    /** What the card renders a byte count as; the same module the card builds its rows with. */
+    private String formatBytes(long bytes) {
+        // As a string: Playwright's argument serializer takes no Java long.
+        return (String) page.evaluate(
+                "async (value) => (await import('/peekaboot/ui/shared/format.js')).formatBytes(Number(value))",
+                String.valueOf(bytes));
     }
 
     @Test

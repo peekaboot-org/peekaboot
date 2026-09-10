@@ -60,7 +60,13 @@ class InsightsMarkersIT extends PlaywrightTestBase {
         openInsights();
         useALevelWithHeadroomForTheStartMarker();
 
-        assertThat(page.locator(PANEL).first().getAttribute("data-marker-x")).isNotBlank();
+        // One run, one marker - and it has to sit inside the plot the reader is looking at,
+        // which a marker layer that lost track of the x scale would not.
+        assertThat(page.locator(PANEL).first().getAttribute("data-marker-count"))
+                .isEqualTo("1");
+        double markerX = Double.parseDouble(page.locator(PANEL).first().getAttribute("data-marker-x"));
+        BoundingBox plot = page.locator(PANEL + " .u-over").first().boundingBox();
+        assertThat(markerX).isBetween(0.0, plot.width);
     }
 
     @Test
