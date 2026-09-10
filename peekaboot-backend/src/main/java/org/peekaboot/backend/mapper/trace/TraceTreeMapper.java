@@ -94,10 +94,12 @@ public class TraceTreeMapper {
         if (rootSpanData == null) {
             return;
         }
-        // in a cycle the root has a stored parent; cutting that edge is what ends the walk
-        // (the root is one of `spans`, so its own parentId always has a group here)
-        if (rootSpanData.parentId() != null) {
-            childrenByParentId.get(rootSpanData.parentId()).remove(rootSpanData);
+        // in a cycle the root has a stored parent; cutting that edge is what ends the walk.
+        // map(TraceData) is public, so the root need not be one of `spans` and the group can be absent
+        List<SpanData> rootSiblings =
+                rootSpanData.parentId() == null ? null : childrenByParentId.get(rootSpanData.parentId());
+        if (rootSiblings != null) {
+            rootSiblings.remove(rootSpanData);
         }
         List<SpanData> orphans = new ArrayList<>();
         for (SpanData span : spans) {

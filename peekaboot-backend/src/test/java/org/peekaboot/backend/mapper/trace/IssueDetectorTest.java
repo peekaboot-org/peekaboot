@@ -104,6 +104,16 @@ class IssueDetectorTest {
         assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("from a tag");
     }
 
+    /** SpanNode is public API, so a caller can hand it null tags; the record normalises them to empty. */
+    @Test
+    void anErrorSpanWithoutTagsFallsBackToTheGenericMessage() {
+        SpanNode span = node("span1").status(SpanStatus.ERROR).tags(null).build();
+
+        TraceTree result = detector.detectIssues(tree(span).build());
+
+        assertThat(result.rootSpan().issues()).extracting(SpanIssue::message).containsExactly("Span ended with error");
+    }
+
     /** A tree without a summary has no trace-level query count to judge; the span rules still run. */
     @Test
     void aTreeWithoutASummaryStillGetsItsSpanIssues() {

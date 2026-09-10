@@ -25,6 +25,10 @@ public class ActuatorResponseParser {
     }
 
     public ActuatorParsedData parse(Map<String, Object> rawData) {
+        // convertValue(null, ...) answers null, and every caller dereferences the result
+        if (rawData == null) {
+            return new ActuatorParsedData(null, null, null, null, null, null, null, null);
+        }
         return objectMapper.convertValue(rawData, ActuatorParsedData.class);
     }
 }

@@ -23,6 +23,15 @@ public record SpanNode(
         Long rowCount,
         List<TraceLog> logs) {
 
+    /** Absent collections normalise to empty here, so no reader of a mapped span has to guard for null. */
+    public SpanNode {
+        children = children == null ? List.of() : children;
+        tags = tags == null ? Map.of() : tags;
+        events = events == null ? List.of() : events;
+        issues = issues == null ? List.of() : issues;
+        logs = logs == null ? List.of() : logs;
+    }
+
     public SpanNode withLogs(List<TraceLog> newLogs) {
         return new SpanNode(
                 spanId,
