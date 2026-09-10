@@ -1,6 +1,7 @@
 package org.peekaboot.backend.testsupport;
 
 import java.util.Map;
+import java.util.Optional;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
 
@@ -19,5 +20,10 @@ public final class InsightsCollectors {
             @Override
             public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {}
         };
+    }
+
+    /** Persistence off: the collector starts from empty rings. */
+    public static InsightsCollector.SnapshotSource noSnapshot() {
+        return timeout -> Optional.empty();
     }
 }

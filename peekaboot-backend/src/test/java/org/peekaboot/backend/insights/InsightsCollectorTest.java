@@ -62,7 +62,7 @@ class InsightsCollectorTest {
                 List.of(staticTile, liveTile),
                 registry,
                 listener,
-                InsightsCollector.SnapshotSource.NONE);
+                InsightsCollectors.noSnapshot());
     }
 
     @Test
@@ -268,7 +268,7 @@ class InsightsCollectorTest {
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
-                InsightsCollector.SnapshotSource.NONE);
+                InsightsCollectors.noSnapshot());
         midTick.tick(10_000);
         first.set(5);
         parkSecond.set(true);
@@ -298,7 +298,7 @@ class InsightsCollectorTest {
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
-                InsightsCollector.SnapshotSource.NONE);
+                InsightsCollectors.noSnapshot());
     }
 
     private static void awaitQuietly(CountDownLatch latch) {

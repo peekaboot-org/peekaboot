@@ -286,10 +286,13 @@ class InsightsSsePublisherTest {
      */
     @Test
     void nothingIsQueuedWhileNobodyIsSubscribed() throws Exception {
-        for (int i = 0; i < 300; i++) {
-            publisher.onTick(i, Map.of("a", 1.0));
+        try (LogCapture logs = LogCapture.attach(InsightsSsePublisher.class)) {
+            // more events than the queue holds, so anything queued for nobody would overflow it
+            for (int i = 0; i < 300; i++) {
+                publisher.onTick(i, Map.of("a", 1.0));
+            }
+            assertThat(overflowWarnings(logs)).as("nothing queued for nobody").isZero();
         }
-        assertThat(publisher.queueSize()).as("nothing queued for nobody").isZero();
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         new DispatchedStream(publisher.subscribe(), response);
@@ -316,20 +319,18 @@ class InsightsSsePublisherTest {
         render.awaitParked();
 
         publisher.onTick(2_000, Map.of("a", 2.0)); // queues up behind the wedge
-        assertThat(publisher.queueSize()).isEqualTo(1);
         first.complete(); // ... and its subscriber leaves
         MockHttpServletResponse response = new MockHttpServletResponse();
         new DispatchedStream(publisher.subscribe(), response); // 0 -> 1: must start from an empty queue
 
-        assertThat(publisher.queueSize())
-                .as("the event queued for the departed subscriber is dropped")
-                .isZero();
         render.open();
         publisher.onTick(3_000, Map.of("a", 3.0));
         await().atMost(Duration.ofSeconds(3))
                 .alias("fresh events still flow")
                 .untilAsserted(() -> assertThat(response.getContentAsString()).contains("\"epochMs\":3000"));
-        assertThat(response.getContentAsString()).doesNotContain("\"epochMs\":2000");
+        assertThat(response.getContentAsString())
+                .as("the event queued for the departed subscriber is dropped")
+                .doesNotContain("\"epochMs\":2000");
     }
 
     @Test
@@ -384,11 +385,8 @@ class InsightsSsePublisherTest {
                     .as("the first overflow episode warns")
                     .isEqualTo(1);
 
-            render.allow(1);
+            render.allow(1); // one event off the full queue, so the next offer has a slot
             render.awaitParked();
-            assertThat(publisher.queueSize())
-                    .as("one event taken off the full queue")
-                    .isEqualTo(255);
             publisher.onTick(1_000, Map.of("a", 1.0)); // fits, which ends the episode
             flood(publisher);
             assertThat(overflowWarnings(logs))

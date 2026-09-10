@@ -185,11 +185,6 @@ public final class InsightsSsePublisher implements InsightsCollector.Listener, S
         return subscribers.size();
     }
 
-    /** Events waiting for the dispatch thread; what a test reads instead of waiting out a delivery that must not come. */
-    int queueSize() {
-        return queue.size();
-    }
-
     /**
      * Detaches the subscriber whose emitter this is and interrupts its sender; a no-op for
      * an unknown emitter. Compared by identity: the very emitter being detached, not one

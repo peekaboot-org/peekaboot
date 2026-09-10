@@ -12,6 +12,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 
 class InsightsCollectorLifecycleTest {
 
@@ -40,7 +41,7 @@ class InsightsCollectorLifecycleTest {
                 List.of(),
                 registry,
                 listener,
-                InsightsCollector.SnapshotSource.NONE);
+                InsightsCollectors.noSnapshot());
         collector.start();
         try {
             assertThat(ticks.await(3, TimeUnit.SECONDS)).as("ticks arrived").isTrue();

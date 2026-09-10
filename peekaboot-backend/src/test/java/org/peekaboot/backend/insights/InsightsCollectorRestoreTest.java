@@ -40,7 +40,7 @@ class InsightsCollectorRestoreTest {
                 List.of(),
                 registry,
                 InsightsCollectors.noOpListener(),
-                InsightsCollector.SnapshotSource.NONE);
+                InsightsCollectors.noSnapshot());
     }
 
     @Test
@@ -168,7 +168,7 @@ class InsightsCollectorRestoreTest {
 
     @Test
     void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
-        InsightsCollector source = collector(7, InsightsCollector.SnapshotSource.NONE);
+        InsightsCollector source = collector(7, InsightsCollectors.noSnapshot());
         source.tick(100_000);
         InsightsSnapshot persisted = source.capture();
 

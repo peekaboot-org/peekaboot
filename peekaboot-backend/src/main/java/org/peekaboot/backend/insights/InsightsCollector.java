@@ -39,7 +39,6 @@ public final class InsightsCollector implements SmartLifecycle {
      * slow an application's boot.
      */
     public interface SnapshotSource {
-        SnapshotSource NONE = timeout -> Optional.empty();
 
         /** The persisted rings, or empty if there are none or they did not arrive in time. */
         Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
