@@ -186,8 +186,11 @@ export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupNa
     return {render};
 }
 
-/** Key or rendered value contains the query, case-insensitively; a missing value matches nothing. */
-function propertyMatches(prop, query) {
+/**
+ * Key or rendered value contains the query, case-insensitively; a missing value matches
+ * nothing, since the row shows "-" rather than the word "null". Exported for the browser tests.
+ */
+export function propertyMatches(prop, query) {
     if (!query) return true;
     const needle = query.toLowerCase();
     const value = prop.value == null ? '' : formatPlainValue(prop.value);

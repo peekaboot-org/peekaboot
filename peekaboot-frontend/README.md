@@ -49,11 +49,13 @@ surface:
    server-rendered markup depends on before `toolbar.js` runs has to live in one of those.
 3. **`components.css`**. The `.pk-*` primitives (badge, coloured duration, stat line, label,
    icon button, group, kv row, meter, button, copy control, table with its card and stripe
-   modifiers, tab strip, icon link, empty state, loading block and spinner) every surface's
-   own CSS builds on. A surface stylesheet (`dashboard.css`, `toolbar.css`,
-   `trace-detail.css`) only adds surface-specific chrome, never a second copy of a
-   primitive. A variant one surface needs becomes a modifier here (`.pk-table--kv`, the
-   overlay's key/value table).
+   modifiers, tab strip, icon link, placeholder note with its centred empty-state form,
+   loading block and spinner) every surface's own CSS builds on. A surface stylesheet
+   (`dashboard.css`, `toolbar.css`, `trace-detail.css`) only adds surface-specific chrome,
+   never a second copy of a primitive. A variant one surface needs becomes a modifier here
+   (`.pk-table--kv`, the overlay's key/value table); a surface element that only sizes or
+   spaces a primitive carries its own class beside the primitive's (`.pk-note
+   .pk-insight-empty`).
 
 ### The doubled-selector mechanism
 

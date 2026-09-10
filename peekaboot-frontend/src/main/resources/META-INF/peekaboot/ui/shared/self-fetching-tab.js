@@ -36,7 +36,9 @@ export function selfFetchingTab({fetch, reconcile, loading, renderResult, render
     async function refetch() {
         const container = currentContainer;
         const context = currentContext;
-        if (!context.active) return;
+        // No context before the first render(): a control that survives its own tab's
+        // teardown, or one wired eagerly, can still call refetch() with nothing to fetch for.
+        if (!context?.active) return;
 
         loading?.(container, {firstLoad: !loaded});
         let result;

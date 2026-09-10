@@ -343,10 +343,16 @@
 }
 .pk-icon-link:hover { background: var(--pk-bg-alt); }
 
-/* Empty state — centred, muted placeholder text shown when a list has no data */
-.pk-empty {
+/* Placeholder text — what a value would have read had there been one: an empty list, a
+   masked value, a section nothing was captured for. Every surface says it the same way,
+   muted and italic, so it is never mistaken for content. A caller with its own size or
+   spacing carries its class beside this one; .pk-empty is the centred block form. */
+.pk-note, .pk-empty {
     color: var(--pk-text-muted);
     font-style: italic;
+}
+/* Empty state — centred placeholder shown when a list has no data */
+.pk-empty {
     padding: var(--pk-space-md);
     text-align: center;
 }
