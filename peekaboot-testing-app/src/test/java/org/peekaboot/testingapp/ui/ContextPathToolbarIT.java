@@ -34,6 +34,8 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
 
     private static final String CONTEXT_PATH = "/app";
 
+    private static final String NETWORK_CHANGED = "net::ERR_NETWORK_CHANGED";
+
     /** The bar tracks the page's own trace; the same wait Toolbar.traceId() makes, here with a timeout of the test's choosing. */
     private static final String TRACE_ID_SHOWN = "root => root.querySelector('#pk-trace').textContent.trim() !== '-'";
 
@@ -58,8 +60,11 @@ class ContextPathToolbarIT extends PlaywrightTestBase {
             }
         });
         page.onRequestFailed(request -> {
-            if (request.url().contains("/peekaboot/")) {
-                failedPeekabootRequests.add("failed " + request.url());
+            // Not ERR_NETWORK_CHANGED: that is the browser dropping everything in flight
+            // because the host's network configuration changed, and says nothing about the
+            // context path (see docs/TESTING.md, "Requests the browser loses").
+            if (request.url().contains("/peekaboot/") && !NETWORK_CHANGED.equals(request.failure())) {
+                failedPeekabootRequests.add("failed " + request.url() + ": " + request.failure());
             }
         });
         page.onPageError(pageErrors::add);

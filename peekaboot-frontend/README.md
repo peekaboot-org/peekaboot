@@ -22,6 +22,7 @@ META-INF/peekaboot/ui/
 │                    Insights tab's own insights-stream.js, insights-panels.js,
 │                    insights-store.js, insights-chart.js, insights-markers.js and
 │                    insights-colors.js)
+│                    boot-error.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/: the only third-party code, loaded on demand (see below)
@@ -292,6 +293,30 @@ matches a condition on the host from inside its own shadow tree.
 Both theme blocks in `tokens.css` also declare `color-scheme`: `light` on `:root, :host`,
 `dark` on the dark block. That is what makes native widgets follow the theme. Without it
 scrollbars, the `<select>` popup, checkboxes and the caret stay light on a dark page.
+
+## When the shell does not start
+
+No build step means `main.js` is one module script over a graph of forty-odd separate fetches.
+Lose any one of them and the graph never evaluates: nothing hides `#loading`, nothing raises
+`#error`, and the page sits on the spinner with no way out and nothing in the console but a
+failed request. Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`,
+whenever the host's network configuration changes - a container taking a veth interface up or
+down is enough, and so is a VPN connecting - so a page open on a working machine meets this
+with nothing broken.
+
+`dashboard/boot-error.js` is the one thing that can see it, being outside the graph it
+watches. A classic script in `index.html`'s `<head>`, for the same reasons `theme-boot.js` is
+one: a module would share the failure, and an inline block is dropped by a strict CSP. It
+listens for the single `error` event the browser fires at the module script element for the
+whole graph - in the capture phase, since resource errors do not bubble.
+
+The network change is an instant, not a state, so the first response is one reload: it fetches
+the whole graph again and gets it. One reload only. A `sessionStorage` marker is read and
+cleared on every load, so the reload finds itself marked and raises `#error` instead of
+reloading again, while a load that works leaves the next one a retry of its own. Storage that
+throws takes the banner straight away rather than looping on a marker that was never written.
+The reload waits for `load` first: started during the navigation it would replace it, which
+anything waiting on that navigation reads as an interrupted one.
 
 ## Accessibility invariants
 
