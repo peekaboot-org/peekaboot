@@ -173,6 +173,53 @@ class DashboardShellIT extends PlaywrightTestBase {
     }
 
     /**
+     * No build step means main.js is one module script over a graph of forty-odd separate
+     * fetches, and losing any one of them leaves the graph unevaluated: nothing hides the
+     * loading placeholder and nothing raises the banner, so the page sits on the spinner for
+     * good. Chromium drops every request in flight with ERR_NETWORK_CHANGED whenever the
+     * host's network configuration changes - a container taking a veth interface up or down
+     * is enough - so this is a transient a page meets with nothing broken, and one reload
+     * fetches the whole graph again. Here the module never arrives, so the reload cannot help
+     * and the reader has to be told.
+     */
+    @Test
+    void aScriptThatNeverArrivesRaisesTheBannerAfterTheReloadFailsToo() {
+        page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        page.waitForSelector("#error:not(.hidden)");
+        assertThat(page.textContent("#error .message")).contains("could not start");
+        assertThat(page.isVisible("#loading")).isFalse();
+    }
+
+    /**
+     * The transient itself: one module lost on the first attempt and served on the next. The
+     * dashboard reloads itself out of it, which is what keeps every entry point covered - the
+     * deep-link tests navigate to the page directly rather than through openDashboard().
+     * Two main-frame navigations for the one this test asked for is the reload.
+     */
+    @Test
+    void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
+        List<String> navigations = new ArrayList<>();
+        page.onFrameNavigated(frame -> {
+            if (frame.equals(page.mainFrame())) {
+                navigations.add(frame.url());
+            }
+        });
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+        assertThat(navigations).hasSize(2);
+    }
+
+    /**
      * main.js reads locale/timezone preferences from localStorage during module
      * evaluation (before initTheme()/initTabs() etc. even run). In a storage-blocked
      * context (private browsing, some embedded/iframe contexts, strict cookie policies)

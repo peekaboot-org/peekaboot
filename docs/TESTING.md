@@ -195,6 +195,29 @@ stops the pollers first. Per-test `unroute()` calls would not close the race, si
 itself an interception update over the same wire. Each catch logs what it swallowed at WARN, so
 a teardown hiding a real failure still leaves a line in the output.
 
+## Requests the browser loses
+
+Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`, whenever the host's
+network configuration changes. A container taking a veth interface up or down is enough, and
+nothing in the suite provokes or can prevent it - on a machine with any container churn it
+lands a couple of times in a four-minute run. The dashboard is where it showed: no build step
+means `main.js` is a graph of forty-odd separate fetches, and losing one left the shell
+unevaluated, the loading placeholder up and the page mute, which every waiting test read as a
+30s Playwright timeout with nothing to explain it.
+
+`dashboard/boot-error.js` now reloads the page once out of it and raises the error banner if
+that does not help (see `peekaboot-frontend/README.md`, *When the shell does not start*). The
+recovery is the product's, not the suite's, so it covers the deep-link tests that navigate to
+the dashboard directly as well as `openDashboard()`, and no test retries anything.
+
+`ContextPathToolbarIT` is the one class that has to know: it fails on any Peekaboot request the
+page asked for and did not get, and a dropped request is not the context-path bug it hunts, so
+it excludes that one failure by name.
+
+Pages carrying the toolbar keep the same exposure over a much smaller graph, and have no
+equivalent recovery: `ToolbarShell` renders a "could not start" notice for a script that never
+arrives, but a test waiting for `data-pk-ready` would still time out.
+
 ## Isolation in shared Spring contexts
 No class in this module clears a mutable singleton the suite shares, and none holds a
 `@ResourceLock`. `*IT` classes run concurrently, so a class that cleared the `TraceStore` would

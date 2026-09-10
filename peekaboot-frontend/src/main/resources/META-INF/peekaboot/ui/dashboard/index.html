@@ -9,6 +9,9 @@
          the light palette painted first. Classic and non-deferred on purpose: it has to
          run ahead of first paint, which a module script does not. -->
     <script src="../assets/theme-boot.js"></script>
+    <!-- Listens for main.js failing to load, which nothing inside that graph can report.
+         In the head so the listener is in place before the module script is even parsed. -->
+    <script src="boot-error.js"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
     <link rel="stylesheet" href="../assets/tokens.css">
