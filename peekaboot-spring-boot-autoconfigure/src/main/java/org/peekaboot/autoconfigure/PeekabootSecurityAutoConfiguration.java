@@ -78,7 +78,7 @@ public class PeekabootSecurityAutoConfiguration {
         if (resolvedCredentials != null && resolvedCredentialsFile != null && resolvedGuard != null) {
             return SecurityPosture.armed(
                     resolvedCredentials,
-                    resolvedCredentialsFile.path(),
+                    resolvedCredentialsFile.path().orElse(null),
                     springSecurityPresent(),
                     environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false));
         }
@@ -97,11 +97,11 @@ public class PeekabootSecurityAutoConfiguration {
             if (StringUtils.hasText(configured)) {
                 return new CredentialsFile(Path.of(configured.trim()));
             }
-            // root(), not file(): a password stable across restarts is the point, and storage
-            // defaults off on exactly the deployment launches this exists for - this is the one
-            // file Peekaboot writes outside the storage switch.
             StorageDirectory directory = storageDirectory.getObject();
-            return new CredentialsFile(directory.root().resolve(CREDENTIALS_FILE_NAME));
+            return directory
+                    .file(CREDENTIALS_FILE_NAME)
+                    .map(CredentialsFile::new)
+                    .orElseGet(CredentialsFile::unpersisted);
         }
 
         @Bean

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.security.CredentialsFile;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
 import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.backend.security.NeverAuthenticated;
@@ -22,8 +23,9 @@ class PeekabootSecurityAutoConfigurationTest {
 
     /**
      * Every case that resolves {@code DashboardCredentials} persists a password through
-     * {@code CredentialsFile}, so every test points {@code peekaboot.storage.dir} at a
-     * disposable directory rather than the real {@code user.home}.
+     * {@code CredentialsFile}, so every test turns storage on and points
+     * {@code peekaboot.storage.dir} at a disposable directory rather than the real
+     * {@code user.home}.
      */
     private static WebApplicationContextRunner runner(Path storageDir) {
         return new WebApplicationContextRunner()
@@ -32,6 +34,7 @@ class PeekabootSecurityAutoConfigurationTest {
                 .withPropertyValues(
                         "peekaboot.enabled=true",
                         "peekaboot.security.enabled=true",
+                        "peekaboot.storage.enabled=true",
                         "peekaboot.storage.dir=" + storageDir);
     }
 
@@ -102,6 +105,35 @@ class PeekabootSecurityAutoConfigurationTest {
             assertThat(context).hasSingleBean(SecurityPosture.class);
             assertThat(context).doesNotHaveBean(DashboardCredentials.class);
         });
+    }
+
+    @Test
+    void credentialsFileHasNoPathWhenStorageIsOff(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.storage.enabled=false")
+                .run(context -> assertThat(
+                                context.getBean(CredentialsFile.class).path())
+                        .isEmpty());
+    }
+
+    @Test
+    void credentialsFileSitsUnderTheStorageDirectoryWhenStorageIsOn(@TempDir Path storageDir) {
+        runner(storageDir)
+                .run(context -> assertThat(
+                                context.getBean(CredentialsFile.class).path())
+                        .contains(storageDir.resolve("security.properties")));
+    }
+
+    @Test
+    void anExplicitCredentialsFileWinsOverStorageBeingOff(@TempDir Path storageDir, @TempDir Path credentialsDir) {
+        Path explicit = credentialsDir.resolve("security.properties");
+
+        runner(storageDir)
+                .withPropertyValues(
+                        "peekaboot.storage.enabled=false", "peekaboot.security.credentials-file=" + explicit)
+                .run(context -> assertThat(
+                                context.getBean(CredentialsFile.class).path())
+                        .contains(explicit));
     }
 
     @Test

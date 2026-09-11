@@ -66,6 +66,17 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
+    void resolve_reportsGeneratedUnpersistedWhenThereIsNoCredentialsFile() {
+        var credentials = new DashboardCredentialsResolver(
+                        new PeekabootProperties.Security(), CredentialsFile.unpersisted(), "orders-service")
+                .resolve();
+
+        assertThat(credentials.origin()).isEqualTo(DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+        assertThat(credentials.plaintext()).isNotNull();
+        assertThat(credentials.passwordHash().matches(credentials.plaintext())).isTrue();
+    }
+
+    @Test
     void usernameFor_suffixesTheApplicationName() {
         assertThat(DashboardCredentialsResolver.usernameFor("orders-service")).isEqualTo("orders-service-admin");
     }

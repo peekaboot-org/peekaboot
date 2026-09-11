@@ -69,18 +69,25 @@ class SecurityPostureTest {
     }
 
     @Test
-    void armed_warnsThatAnUnpersistedPasswordWillChange() {
-        var unpersisted = new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of("hunter2"),
-                "hunter2",
-                CREATED,
-                DashboardCredentials.Origin.GENERATED_UNPERSISTED);
+    void armed_warnsThatAWriteFailureWillChangeThePassword() {
+        var report = SecurityPosture.armed(unpersisted("hunter2"), FILE, false, false)
+                .report()
+                .orElseThrow();
 
-        var report =
-                SecurityPosture.armed(unpersisted, FILE, false, false).report().orElseThrow();
+        assertThat(report.text()).contains("change on the next restart").contains(FILE.toString());
+    }
 
-        assertThat(report.text()).contains("change on the next restart");
+    @Test
+    void armed_saysStorageIsOffWhenThereIsNoCredentialsFile() {
+        var report = SecurityPosture.armed(unpersisted("hunter2"), null, false, false)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.text())
+                .contains("hunter2")
+                .contains("peekaboot.storage.enabled")
+                .contains("peekaboot.security.password")
+                .doesNotContain(FILE.toString());
     }
 
     @Test
@@ -122,5 +129,14 @@ class SecurityPostureTest {
     private static DashboardCredentials generated(String password) {
         return new DashboardCredentials(
                 "orders-admin", PasswordHash.of(password), password, CREATED, DashboardCredentials.Origin.GENERATED);
+    }
+
+    private static DashboardCredentials unpersisted(String password) {
+        return new DashboardCredentials(
+                "orders-admin",
+                PasswordHash.of(password),
+                password,
+                CREATED,
+                DashboardCredentials.Origin.GENERATED_UNPERSISTED);
     }
 }

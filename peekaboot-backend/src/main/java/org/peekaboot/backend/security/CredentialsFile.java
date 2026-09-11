@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.Properties;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,18 +35,28 @@ public final class CredentialsFile {
 
     private static final String OWNER_ONLY = "rw-------";
 
+    @Nullable
     private final Path path;
 
     public CredentialsFile(Path path) {
         this.path = path;
     }
 
-    public Path path() {
-        return path;
+    private CredentialsFile() {
+        this.path = null;
+    }
+
+    /** Nowhere to write: storage is off and nothing overrides it with an explicit path. */
+    public static CredentialsFile unpersisted() {
+        return new CredentialsFile();
+    }
+
+    public Optional<Path> path() {
+        return Optional.ofNullable(path);
     }
 
     Optional<StoredCredentials> read() {
-        if (!Files.isReadable(path)) {
+        if (path == null || !Files.isReadable(path)) {
             return Optional.empty();
         }
         Properties properties = new Properties();
@@ -60,6 +71,9 @@ public final class CredentialsFile {
 
     /** False when nothing was persisted, which the caller reports rather than retries. */
     public boolean write(DashboardCredentials credentials) {
+        if (path == null) {
+            return false;
+        }
         Properties properties = new Properties();
         properties.setProperty(USERNAME_KEY, credentials.username());
         properties.setProperty(PASSWORD_KEY, credentials.passwordHash().format());
