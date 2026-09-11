@@ -32,6 +32,14 @@ final class Dashboard {
             Map.entry("config", "#config-groups .pk-group__header"),
             Map.entry("scheduled-tasks", "#scheduled-tasks-groups .pk-group"));
 
+    /**
+     * JS predicate: the tab's panel has finished its fade-in. Hidden tabs render too, so a ready
+     * selector can match mid-fade, and axe blends that opacity into every contrast it measures.
+     * Only the panel's own animations count, since pulses inside it never finish.
+     */
+    private static final String PANEL_FADED_IN =
+            "id => document.getElementById(id + '-tab').getAnimations().every(a => a.playState === 'finished')";
+
     private final Page page;
 
     Dashboard(Page page) {
@@ -42,7 +50,7 @@ final class Dashboard {
         return ".pk-tab[data-tab='" + tabId + "']";
     }
 
-    /** Clicks the tab's button and waits for the tab to render its data. */
+    /** Clicks the tab's button and waits for the tab to render its data and finish fading in. */
     void openTab(String tabId) {
         String ready = TAB_READY_SELECTOR.get(tabId);
         if (ready == null) {
@@ -50,6 +58,7 @@ final class Dashboard {
         }
         page.click(tabButton(tabId));
         page.waitForSelector(ready);
+        page.waitForFunction(PANEL_FADED_IN, tabId);
     }
 
     void openTracesTab() {
