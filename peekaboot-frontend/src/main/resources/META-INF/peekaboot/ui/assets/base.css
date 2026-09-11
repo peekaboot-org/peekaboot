@@ -26,6 +26,41 @@ mark {
     border-radius: 2px;
 }
 
+/* The one focus ring. --pk-primary-text, never --pk-primary: the ring is drawn on the page
+   background and the fill green is 2.6:1 there. A control that sits flush inside a bordered
+   box overrides only the offset (-2px keeps the ring inside the box); the one control on a
+   saturated fill overrides the colour (see .pk-logs-filter-span-clear). */
+:is(button, a, select, input, [tabindex]):focus-visible {
+    outline: 2px solid var(--pk-primary-text);
+    outline-offset: 1px;
+}
+
+/* A <button> that looks like the text or glyph it wraps: the accessibility of a real
+   control without its chrome. In this sheet, not components.css, because the toolbar
+   inlines only tokens, base and its own sheet (see ToolbarShell) and its open button must
+   render for a reader whose authorization gate refuses the rest. */
+.pk-unbutton {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+/* The Peekaboot mark, sized by the surface that shows it (26px in the dashboard header,
+   18px on the toolbar's dashboard link). The url() resolves against this sheet, so it works
+   from inside a shadow root without knowing basePath, and ToolbarShell rewrites it when it
+   inlines this sheet. It swaps per theme: the mark's slate magnifier is 1.4:1 on the dark
+   --pk-bg and would otherwise vanish. Same reason as .pk-unbutton for living here. */
+.pk-logo-mark {
+    flex: none;
+    background: url('logo-mark.png') center / contain no-repeat;
+}
+[data-theme="dark"] .pk-logo-mark, :host([data-theme="dark"]) .pk-logo-mark {
+    background-image: url('logo-mark-dark.png');
+}
+
 /* Honour the OS "reduce motion" setting. Peekaboot runs three infinite animations —
    the health dot's pulse keeps going for as long as the dashboard is open, which is
    exactly the perpetual movement this setting exists to stop. Nothing here is load-

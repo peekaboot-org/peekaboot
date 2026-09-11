@@ -62,8 +62,7 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     @Test
     void reloadingThePageReturnsToMasked() {
         openDashboard();
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-unmask-slot .pk-unmask-toggle");
+        dashboard.openTab("config");
         page.click("#config-unmask-slot .pk-unmask-toggle");
         page.waitForFunction(
                 "() => document.querySelector('#config-unmask-slot .pk-unmask-toggle').getAttribute('aria-pressed') === 'true'");
@@ -86,13 +85,12 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     @Test
     void togglingOnTheConfigTabAlsoRevealsTheEnvironmentTab() {
         openDashboard();
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-unmask-slot .pk-unmask-toggle");
+        dashboard.openTab("config");
         page.click("#config-unmask-slot .pk-unmask-toggle");
         page.waitForFunction(
                 "() => document.querySelector('#config-unmask-slot .pk-unmask-toggle').getAttribute('aria-pressed') === 'true'");
 
-        page.click(".pk-tab[data-tab='environment']");
+        dashboard.openTab("environment");
         page.fill("#env-filter", "spring.datasource.password");
         // Matches DashboardTabsIT.environmentFilterHighlightsMatches: waiting for a
         // generic group header risks resolving against the pre-filter list still on
@@ -107,8 +105,7 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     }
 
     private void openConfigPasswordRow() {
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-groups .pk-group__header");
+        dashboard.openTab("config");
         page.fill("#config-filter", "password");
         // Rows render into the DOM regardless of the group's expand/collapse state - see
         // DashboardTabsIT.configTabMasksSensitiveValues.
@@ -119,32 +116,14 @@ class UnmaskingControlEnabledIT extends PlaywrightTestBase {
     }
 
     private String configPasswordValue() {
-        return (String) page.evaluate("""
-            () => {
-                const row = Array.from(document.querySelectorAll('#config-groups .pk-kv'))
-                    .find(r => r.querySelector('.pk-kv__key').textContent === 'password');
-                return row ? row.querySelector('.pk-kv__value').textContent : null;
-            }
-            """);
+        return dashboard.kvValue("#config-groups", "password");
     }
 
     private void waitForConfigPasswordValue(String expected) {
-        page.waitForFunction("""
-            (expected) => {
-                const row = Array.from(document.querySelectorAll('#config-groups .pk-kv'))
-                    .find(r => r.querySelector('.pk-kv__key').textContent === 'password');
-                return row && row.querySelector('.pk-kv__value').textContent === expected;
-            }
-            """, expected);
+        dashboard.awaitKvValue("#config-groups", "password", expected);
     }
 
     private String environmentPasswordValue() {
-        return (String) page.evaluate("""
-            () => {
-                const row = Array.from(document.querySelectorAll('#property-sources .pk-kv'))
-                    .find(r => r.querySelector('.pk-kv__key').textContent === 'spring.datasource.password');
-                return row ? row.querySelector('.pk-kv__value').textContent : null;
-            }
-            """);
+        return dashboard.kvValue("#property-sources", "spring.datasource.password");
     }
 }

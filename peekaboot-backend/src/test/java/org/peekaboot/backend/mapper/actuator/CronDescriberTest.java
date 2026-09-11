@@ -21,8 +21,8 @@ class CronDescriberTest {
     void describe_everyMinute_germanLocale() {
         String result = describer.describe("0 * * * * *", Locale.GERMAN);
 
-        assertThat(result).isNotNull();
-        assertThat(result.toLowerCase(Locale.ROOT)).contains("minute");
+        // "Minute" reads the same in both languages; the article is what proves the locale reached cron-utils
+        assertThat(result).contains("jede").contains("Minute");
     }
 
     @Test

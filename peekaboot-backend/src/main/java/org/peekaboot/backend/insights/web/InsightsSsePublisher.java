@@ -1,6 +1,5 @@
 package org.peekaboot.backend.insights.web;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import org.peekaboot.backend.insights.AggregateStats;
 import org.peekaboot.backend.insights.InsightsCollector;
+import org.peekaboot.backend.insights.web.Subscriber.OutboundEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -22,30 +22,29 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Fans collector events out to all connected dashboard SSE clients: the single dispatch
  * thread renders each event once and offers it to a bounded per-subscriber lane, whose
- * own sender thread performs the blocking send - no peer can stall another.
+ * own sender thread performs the blocking send - no peer can stall another. The same
+ * thread sends the keep-alive: a poll that comes back empty after
+ * {@link #HEARTBEAT_INTERVAL} means the stream has been idle that long, and a busy
+ * stream needs no heartbeat at all.
  *
  * <p>A {@link SmartLifecycle} so that context shutdown completes every open
  * emitter: an emitter left open holds its async servlet request, and the
  * container's graceful shutdown then waits for it (measured: 30s at JVM exit).
+ * The one exception is a peer still inside a send past {@link #STOP_GRACE}; that
+ * one is detached instead, since its socket write cannot be ended from here.
  */
-public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLifecycle {
+public final class InsightsSsePublisher implements InsightsCollector.Listener, SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsSsePublisher.class);
 
     private static final Duration HEARTBEAT_INTERVAL = Duration.ofSeconds(15);
-    private static final Duration DISPATCH_POLL_TIMEOUT = Duration.ofSeconds(1);
+    private static final String DISPATCH_THREAD = "peekaboot-insights-sse-dispatch";
     /**
      * Events awaiting the dispatch thread. A dispatch step is one JSON render plus
      * non-blocking lane offers, so a backlog this deep (over half an hour of ticks and
      * roll-ups) only ever means the dispatch thread itself is stuck.
      */
     private static final int QUEUE_CAPACITY = 256;
-    /**
-     * Each subscriber's own send lane. A healthy peer drains it as fast as the dispatch
-     * thread fills it and a burst spans a handful of events, so a backlog this deep only
-     * ever means a peer that has stopped reading.
-     */
-    static final int SUBSCRIBER_QUEUE_CAPACITY = 32;
     /**
      * Each emitter pins one of the container's async requests, so the number a single
      * client can open is bounded; a handful of dashboards on one app is the use case.
@@ -56,27 +55,42 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * EventSource reconnects on its own, so no emitter is held open indefinitely on
      * behalf of a peer that has silently gone away.
      */
-    static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(5);
+    static final Duration EMITTER_TIMEOUT = Duration.ofMinutes(30);
+    /**
+     * How long stop() waits for a send in flight before detaching the peer instead. A
+     * healthy peer's socket write takes milliseconds; one that has stopped reading holds
+     * its write far longer than this. The waits run one subscriber after another, so
+     * shutdown is held for at most this times {@link #MAX_SUBSCRIBERS} (6.4s), inside
+     * Spring's default {@code spring.lifecycle.timeout-per-shutdown-phase} of 30s.
+     */
+    static final Duration STOP_GRACE = Duration.ofMillis(200);
 
     private final InsightsEventJson eventJson;
     private final List<Subscriber> subscribers = new CopyOnWriteArrayList<>();
     private final BlockingQueue<SseEvent> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
 
     /**
-     * The single monitor for subscriber-list, queue, and loop lifecycle state. A
+     * The single monitor for subscriber-list, queue, and dispatch thread state. A
      * dedicated private object rather than {@code this} so nothing outside this
      * class can ever contend on (or deadlock against) the internal locking.
      */
     private final Object lock = new Object();
     /**
-     * Guarded by the publisher's {@code lock}, like every other access to the queue:
-     * set when an episode of overflow starts warning, cleared as soon as an offer
-     * succeeds again, so a later episode is never swallowed as a duplicate.
+     * Guarded by the publisher's {@code lock}, together with the drop-then-add pair in
+     * enqueue() that it describes: set when an episode of overflow starts warning,
+     * cleared as soon as an offer succeeds again, so a later episode is never swallowed
+     * as a duplicate. The queue itself is thread-safe; the dispatch thread polls it
+     * without the lock, and taking the lock there would hold enqueue() off for a whole
+     * heartbeat interval at a time, stalling the collector threads that call it.
      */
     private boolean queueOverflowWarned;
 
-    private final ManagedLoop heartbeatLoop = new ManagedLoop("peekaboot-insights-sse-heartbeat", this::heartbeatStep);
-    private final ManagedLoop dispatchLoop = new ManagedLoop("peekaboot-insights-sse-dispatch", this::dispatchStep);
+    /**
+     * The dispatch thread while one is running, guarded by {@code lock}. Start and the
+     * loop's exit check both run under it, so a subscribe() racing the exit can never
+     * see a stale handle.
+     */
+    private Thread dispatcher;
     /**
      * True from construction; only stop() clears it, so a client reconnecting during
      * shutdown is not handed an emitter that would hold the shutdown open.
@@ -93,13 +107,17 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     }
 
     /**
-     * Stops the loops and completes every open emitter, so nothing outlives the context.
+     * Stops the dispatch thread and completes every open emitter, so nothing outlives the
+     * context.
      *
-     * <p>The loops go first, and each sender is interrupted before its emitter is
-     * completed: a sender wedged in a blocking send() holds that emitter's write lock,
-     * and complete() would then queue up behind it while events kept feeding the same
-     * wedge. Subscribers are snapshotted and cleared under the monitor before either
-     * step, so a broadcast racing this has nothing left to iterate.
+     * <p>The dispatch thread goes first and each sender is interrupted before its emitter
+     * is completed, so no further event feeds a wedged send once shutdown has begun. The
+     * interrupt cannot end a send already inside the container's socket write, and
+     * complete() would wait behind it on that emitter's write lock: a healthy peer's
+     * write finishes within {@link #STOP_GRACE} and its stream is then completed, one
+     * still writing after that is only detached, as on timeout. Subscribers are
+     * snapshotted and cleared under the monitor before either step, so a fan-out
+     * racing this has nothing left to iterate.
      */
     @Override
     public void stop() {
@@ -110,12 +128,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
             subscribers.clear();
             queue.clear();
         }
-        dispatchLoop.stop();
-        heartbeatLoop.stop();
+        stopDispatcher();
         for (Subscriber subscriber : open) {
-            subscriber.sender.interrupt();
+            subscriber.interruptSender();
             try {
-                subscriber.emitter.complete();
+                subscriber.emitter().completeUnlessSendingWithin(STOP_GRACE);
             } catch (RuntimeException e) {
                 log.debug("Failed to complete an insights SSE subscriber on shutdown", e);
             }
@@ -132,8 +149,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * that gets it simply retries later; nothing is lost since there is no replay anyway.
      */
     public SseEmitter subscribe() {
-        SseEmitter emitter = newEmitter();
-        Subscriber subscriber = new Subscriber(emitter);
+        SubscriberEmitter emitter = new SubscriberEmitter();
+        Subscriber subscriber = new Subscriber(emitter, () -> removeSubscriber(emitter));
         boolean accepted;
         synchronized (lock) {
             accepted = running;
@@ -151,7 +168,7 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 subscribers.add(subscriber);
                 // Started under the same lock that stop() and a lane overflow interrupt
                 // it from, so the sender is never interrupted before it has been started.
-                subscriber.sender.start();
+                subscriber.startSender();
             }
         }
         if (!accepted) {
@@ -160,14 +177,8 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
         emitter.onCompletion(() -> removeSubscriber(emitter));
         emitter.onError(e -> removeSubscriber(emitter));
-        heartbeatLoop.startIfNeeded();
-        dispatchLoop.startIfNeeded();
+        startDispatcherIfNeeded();
         return emitter;
-    }
-
-    /** Package-visible (rather than inlined into subscribe()) so tests can override the emitter's send behavior. */
-    SseEmitter newEmitter() {
-        return new SubscriberEmitter();
     }
 
     int subscriberCount() {
@@ -184,9 +195,9 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
     private void removeSubscriber(SseEmitter emitter) {
         synchronized (lock) {
             for (Subscriber subscriber : subscribers) {
-                if (subscriber.emitter == emitter) {
+                if (subscriber.emitter() == emitter) {
                     subscribers.remove(subscriber);
-                    subscriber.sender.interrupt();
+                    subscriber.interruptSender();
                 }
             }
         }
@@ -233,27 +244,76 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
     }
 
-    /**
-     * Fans one event out to every subscriber's lane, on the single dispatch thread. The
-     * offers never block, so a peer that has stopped reading wedges only its own sender;
-     * once its lane overflows the peer is dropped (see {@link Subscriber}).
-     *
-     * <p>Package-visible so tests can stand in for (or wedge) the fan-out step.
-     */
-    void broadcast(String eventName, String json) {
-        OutboundEvent event = new OutboundEvent(eventName, json);
-        for (Subscriber subscriber : subscribers) {
-            subscriber.offerOrDrop(event);
+    private void startDispatcherIfNeeded() {
+        synchronized (lock) {
+            if (dispatcher != null) {
+                return;
+            }
+            dispatcher = Thread.ofVirtual().name(DISPATCH_THREAD).unstarted(this::dispatch);
+            dispatcher.start();
         }
     }
 
-    /** Test seam: invoked after each event successfully handed to an emitter's send(). No-op in production. */
-    @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
-    void onDelivered(String eventName) {}
+    /**
+     * Interrupts and joins the dispatch thread. The handle is taken (and cleared)
+     * under the monitor but the join happens outside it - the loop acquires
+     * the same monitor on every iteration, and an interrupt does not free a
+     * thread blocked on monitor entry.
+     */
+    private void stopDispatcher() {
+        Thread thread;
+        synchronized (lock) {
+            thread = dispatcher;
+            dispatcher = null;
+        }
+        if (thread == null) {
+            return;
+        }
+        thread.interrupt();
+        try {
+            thread.join(2_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
-    private void heartbeatStep() throws InterruptedException {
-        Thread.sleep(HEARTBEAT_INTERVAL);
-        heartbeat();
+    /** Repeats {@link #dispatchStep()} while subscribers remain and exits once they don't. */
+    private void dispatch() {
+        while (true) {
+            synchronized (lock) {
+                if (subscribers.isEmpty()) {
+                    dispatcher = null;
+                    return;
+                }
+            }
+            try {
+                dispatchStep();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                synchronized (lock) {
+                    dispatcher = null;
+                }
+                return;
+            } catch (RuntimeException e) {
+                // A failed step must not take the loop with it: the thread
+                // handle would stay set and no subscribe() would ever restart it.
+                log.warn("Insights SSE dispatch step failed; continuing", e);
+            }
+        }
+    }
+
+    /**
+     * One event, or the heartbeat once none has arrived for a whole
+     * {@link #HEARTBEAT_INTERVAL}. A queued event never waits behind the poll, since
+     * offer() wakes a blocked poll() immediately.
+     */
+    private void dispatchStep() throws InterruptedException {
+        SseEvent event = queue.poll(HEARTBEAT_INTERVAL.toMillis(), TimeUnit.MILLISECONDS);
+        if (event == null) {
+            heartbeat();
+            return;
+        }
+        fanOut(new OutboundEvent(event.name(), event.json().get()));
     }
 
     /**
@@ -262,22 +322,17 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * so even an idle stream's wedge is eventually detected by lane overflow.
      */
     void heartbeat() {
-        OutboundEvent heartbeat = OutboundEvent.heartbeat();
-        for (Subscriber subscriber : subscribers) {
-            subscriber.offerOrDrop(heartbeat);
-        }
+        fanOut(OutboundEvent.heartbeat());
     }
 
     /**
-     * Polls with a timeout (rather than a blocking take()) purely so the loop
-     * can periodically re-check whether emitters have drained to zero; a real
-     * queued event never waits longer than this poll timeout, since offer()
-     * wakes a blocked poll() immediately.
+     * Offers one event to every subscriber's lane. The offers never block, so a peer
+     * that has stopped reading wedges only its own sender; once its lane overflows the
+     * peer is dropped (see {@link Subscriber}).
      */
-    private void dispatchStep() throws InterruptedException {
-        SseEvent event = queue.poll(DISPATCH_POLL_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
-        if (event != null) {
-            broadcast(event.name(), event.json().get());
+    private void fanOut(OutboundEvent event) {
+        for (Subscriber subscriber : subscribers) {
+            subscriber.offerOrDrop(event);
         }
     }
 
@@ -295,8 +350,11 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
      * while the write lock is free: a sender wedged in send() holds it, and waiting behind
      * that send on the container's thread is what the per-subscriber lanes exist to
      * prevent. Such a peer is only detached, and Spring's own timeout handling ends it.
+     * {@link #stop()} completes emitters under the same guard, but grants a send in
+     * flight {@link #STOP_GRACE} to finish first: it runs on the context's thread, where
+     * a bounded wait costs less than an async request left open for the container.
      */
-    private final class SubscriberEmitter extends SseEmitter {
+    class SubscriberEmitter extends SseEmitter {
 
         SubscriberEmitter() {
             super(EMITTER_TIMEOUT.toMillis());
@@ -316,7 +374,17 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
         }
 
         private void completeUnlessSending() {
-            if (!writeLock.tryLock()) {
+            completeUnlessSendingWithin(Duration.ZERO);
+        }
+
+        /**
+         * Completes once the write lock is free within {@code grace}; a peer still sending
+         * after that is only detached. The untimed attempt goes first: the timed one throws
+         * on entry for an interrupted caller, and stop() can arrive interrupted with every
+         * idle emitter still to complete.
+         */
+        private void completeUnlessSendingWithin(Duration grace) {
+            if (!writeLock.tryLock() && !awaitWriteLock(grace)) {
                 removeSubscriber(this);
                 return;
             }
@@ -326,146 +394,16 @@ public class InsightsSsePublisher implements InsightsCollector.Listener, SmartLi
                 writeLock.unlock();
             }
         }
-    }
 
-    /** One rendered event on its way to the lanes; {@code name == null} is the heartbeat comment. */
-    private record OutboundEvent(String name, String json) {
-
-        static OutboundEvent heartbeat() {
-            return new OutboundEvent(null, null);
-        }
-
-        boolean isHeartbeat() {
-            return name == null;
-        }
-    }
-
-    /**
-     * One connected dashboard: its emitter plus the bounded lane and sender thread that
-     * decouple it from every other subscriber. The sender performs the blocking send()
-     * calls, so a peer that stops reading wedges only itself; its lane then fills and the
-     * overflow drops the subscriber, mirroring the drop on a failed send. Completing the
-     * emitter on that path would block behind the very send that is stuck (complete()
-     * takes the same write lock), so a dropped emitter is left to its timeout instead.
-     */
-    private final class Subscriber {
-
-        private final SseEmitter emitter;
-        private final BlockingQueue<OutboundEvent> lane = new ArrayBlockingQueue<>(SUBSCRIBER_QUEUE_CAPACITY);
-        private final Thread sender;
-
-        Subscriber(SseEmitter emitter) {
-            this.emitter = emitter;
-            this.sender = Thread.ofVirtual().name("peekaboot-insights-sse-send").unstarted(this::drainLane);
-        }
-
-        void offerOrDrop(OutboundEvent event) {
-            if (lane.offer(event)) {
-                return;
-            }
-            log.debug(
-                    "Dropping insights SSE subscriber that stopped reading (send lane of {} full)",
-                    SUBSCRIBER_QUEUE_CAPACITY);
-            removeSubscriber(emitter);
-        }
-
-        private void drainLane() {
+        private boolean awaitWriteLock(Duration grace) {
             try {
-                while (true) {
-                    OutboundEvent event = lane.take();
-                    if (event.isHeartbeat()) {
-                        emitter.send(SseEmitter.event().comment("hb"));
-                    } else {
-                        emitter.send(SseEmitter.event().name(event.name()).data(event.json()));
-                        onDelivered(event.name());
-                    }
-                }
+                return writeLock.tryLock(grace.toMillis(), TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            } catch (IOException | IllegalStateException e) {
-                log.debug("Dropping insights SSE subscriber after send failure: {}", e.toString());
-                emitter.completeWithError(e);
+                return false;
             }
         }
     }
 
     private record SseEvent(String name, Supplier<String> json) {}
-
-    @FunctionalInterface
-    private interface LoopStep {
-        void run() throws InterruptedException;
-    }
-
-    /**
-     * A named virtual thread that repeats {@code step} while subscribers remain and exits
-     * once they don't. Start and the exit check both run under the publisher's
-     * {@code lock}, so a subscribe() racing the exit can never see a stale thread handle.
-     */
-    private final class ManagedLoop {
-        private final String name;
-        private final LoopStep step;
-        private Thread thread;
-
-        ManagedLoop(String name, LoopStep step) {
-            this.name = name;
-            this.step = step;
-        }
-
-        void startIfNeeded() {
-            synchronized (lock) {
-                if (thread != null) {
-                    return;
-                }
-                thread = Thread.ofVirtual().name(name).unstarted(this::run);
-                thread.start();
-            }
-        }
-
-        /**
-         * Interrupts and joins the loop thread. The handle is taken (and cleared)
-         * under the monitor but the join happens outside it - the loop acquires
-         * the same monitor on every iteration, and an interrupt does not free a
-         * thread blocked on monitor entry.
-         */
-        void stop() {
-            Thread loopThread;
-            synchronized (lock) {
-                loopThread = thread;
-                thread = null;
-            }
-            if (loopThread == null) {
-                return;
-            }
-            loopThread.interrupt();
-            try {
-                loopThread.join(2_000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-
-        private void run() {
-            while (true) {
-                synchronized (lock) {
-                    if (subscribers.isEmpty()) {
-                        thread = null;
-                        return;
-                    }
-                }
-                try {
-                    step.run();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    synchronized (lock) {
-                        thread = null;
-                    }
-                    return;
-                } catch (RuntimeException e) {
-                    // A failed step must not take the loop with it: the thread
-                    // handle would stay set and no subscribe() would ever restart it.
-                    log.warn("Insights SSE loop {} step failed; continuing", name, e);
-                }
-            }
-        }
-    }
 }

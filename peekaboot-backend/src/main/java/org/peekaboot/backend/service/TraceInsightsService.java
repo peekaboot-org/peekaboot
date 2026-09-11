@@ -150,26 +150,12 @@ public class TraceInsightsService {
     }
 
     private TraceTree mapBundle(TraceDataBundle bundle) {
-        TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
-        return withLogsSummary(traceTreeMapper.map(traceData, bundle.truncated()), bundle.logs());
+        return withLogsSummary(traceTreeMapper.map(bundle.snapshot()), bundle.logs());
     }
 
     /** The list's log badges: counted from the logs the bundle already carries, so no extra lookup. */
     private static TraceTree withLogsSummary(TraceTree tree, List<LogCapturedEvent> logs) {
-        return new TraceTree(
-                tree.traceId(),
-                tree.startTimeMs(),
-                tree.durationMs(),
-                tree.status(),
-                tree.slow(),
-                tree.rootActionType(),
-                tree.rootOperation(),
-                tree.rootSpan(),
-                withLogs(tree.summary(), logs),
-                tree.httpExchange(),
-                tree.logs(),
-                tree.queries(),
-                tree.truncated());
+        return tree.withSummary(withLogs(tree.summary(), logs));
     }
 
     private static TraceTabSummary withLogs(TraceTabSummary summary, List<LogCapturedEvent> logs) {
@@ -254,9 +240,9 @@ public class TraceInsightsService {
         }
 
         return traceStore.getTrace(traceId).map(bundle -> {
-            TraceData traceData = TraceData.fromSpans(bundle.traceId(), bundle.spans());
+            TraceData traceData = bundle.snapshot();
             List<QueryInfo> queries = queryExtractor.extract(traceData);
-            TraceTree tree = traceTreeMapper.map(traceData, bundle.truncated());
+            TraceTree tree = traceTreeMapper.map(traceData);
             tree = issueDetector.detectIssues(tree);
             return enrichWithDetails(tree, bundle, queries);
         });
@@ -277,20 +263,9 @@ public class TraceInsightsService {
         RequestCompletedEvent reqEvent = bundle.request();
         HttpExchange httpExchange = reqEvent != null ? HttpExchange.from(reqEvent) : null;
 
-        return new TraceTree(
-                tree.traceId(),
-                tree.startTimeMs(),
-                tree.durationMs(),
-                tree.status(),
-                tree.slow(),
-                tree.rootActionType(),
-                tree.rootOperation(),
-                attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)),
-                withLogs(tree.summary(), capturedLogs),
-                httpExchange,
-                logs,
-                queries,
-                tree.truncated());
+        return tree.withRootSpan(attachLogsToSpan(tree.rootSpan(), groupLogsBySpan(logs)), tree.slow())
+                .withSummary(withLogs(tree.summary(), capturedLogs))
+                .withDetails(httpExchange, logs, queries);
     }
 
     /** Logs by the span they were emitted in; a log with no span id belongs to the flat list only. */
@@ -308,27 +283,11 @@ public class TraceInsightsService {
         if (span == null) {
             return null;
         }
-
+        List<SpanNode> children = span.children().stream()
+                .map(child -> attachLogsToSpan(child, logsBySpan))
+                .toList();
         List<TraceLog> spanLogs = logsBySpan.get(span.spanId());
-
-        List<SpanNode> enrichedChildren = null;
-        if (span.children() != null && !span.children().isEmpty()) {
-            enrichedChildren = span.children().stream()
-                    .map(child -> attachLogsToSpan(child, logsBySpan))
-                    .toList();
-        }
-
-        if (spanLogs != null || enrichedChildren != null) {
-            SpanNode result = span;
-            if (spanLogs != null) {
-                result = result.withLogs(spanLogs);
-            }
-            if (enrichedChildren != null) {
-                result = result.withChildren(enrichedChildren);
-            }
-            return result;
-        }
-
-        return span;
+        SpanNode withChildren = span.withChildren(children);
+        return spanLogs == null ? withChildren : withChildren.withLogs(spanLogs);
     }
 }

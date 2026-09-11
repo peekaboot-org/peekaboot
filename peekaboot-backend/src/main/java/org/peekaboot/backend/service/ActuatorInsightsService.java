@@ -8,6 +8,7 @@ import org.peekaboot.backend.actuator.parsed.ActuatorResponseParser;
 import org.peekaboot.backend.domain.insights.ActuatorInsightsResponse;
 import org.peekaboot.backend.domain.server.ServerInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.mapper.actuator.ApplicationMapper;
 import org.peekaboot.backend.mapper.actuator.ConfigMapper;
 import org.peekaboot.backend.mapper.actuator.DataSourceMapper;
@@ -17,6 +18,7 @@ import org.peekaboot.backend.mapper.actuator.HealthMapper;
 import org.peekaboot.backend.mapper.actuator.LoggersMapper;
 import org.peekaboot.backend.mapper.actuator.RuntimeMapper;
 import org.peekaboot.backend.mapper.actuator.ScheduledTasksMapper;
+import org.peekaboot.backend.masking.MaskingEngine;
 import org.springframework.beans.factory.ObjectProvider;
 
 public final class ActuatorInsightsService {
@@ -34,31 +36,29 @@ public final class ActuatorInsightsService {
     private final ScheduledTasksMapper scheduledTasksMapper;
     private final List<DataSourceMetadata> dataSourceMetadataList;
 
+    /**
+     * The mappers are built here rather than injected: each is stateless and needs at most
+     * the engine, so the service is the one place the masking policy enters the pipeline.
+     */
     public ActuatorInsightsService(
             PeekabootActuatorService actuatorService,
             ActuatorResponseParser responseParser,
-            HealthMapper healthMapper,
-            RuntimeMapper runtimeMapper,
-            DataSourceMapper dataSourceMapper,
-            ApplicationMapper applicationMapper,
-            EnvironmentMapper environmentMapper,
-            LoggersMapper loggersMapper,
-            FlywayMapper flywayMapper,
-            ConfigMapper configMapper,
-            ScheduledTasksMapper scheduledTasksMapper,
-            ObjectProvider<List<DataSourceMetadata>> dataSourceMetadataListProvider) {
+            MaskingEngine maskingEngine,
+            ObjectProvider<DataSourceMetadataList> dataSourceMetadataListProvider) {
         this.actuatorService = actuatorService;
         this.responseParser = responseParser;
-        this.healthMapper = healthMapper;
-        this.runtimeMapper = runtimeMapper;
-        this.dataSourceMapper = dataSourceMapper;
-        this.applicationMapper = applicationMapper;
-        this.environmentMapper = environmentMapper;
-        this.loggersMapper = loggersMapper;
-        this.flywayMapper = flywayMapper;
-        this.configMapper = configMapper;
-        this.scheduledTasksMapper = scheduledTasksMapper;
-        this.dataSourceMetadataList = dataSourceMetadataListProvider.getIfAvailable(List::of);
+        this.healthMapper = new HealthMapper(maskingEngine);
+        this.runtimeMapper = new RuntimeMapper();
+        this.dataSourceMapper = new DataSourceMapper(maskingEngine);
+        this.applicationMapper = new ApplicationMapper(maskingEngine);
+        this.environmentMapper = new EnvironmentMapper(maskingEngine);
+        this.loggersMapper = new LoggersMapper();
+        this.flywayMapper = new FlywayMapper();
+        this.configMapper = new ConfigMapper(maskingEngine);
+        this.scheduledTasksMapper = new ScheduledTasksMapper(maskingEngine);
+        this.dataSourceMetadataList = dataSourceMetadataListProvider
+                .getIfAvailable(() -> DataSourceMetadataList.EMPTY)
+                .entries();
     }
 
     /**

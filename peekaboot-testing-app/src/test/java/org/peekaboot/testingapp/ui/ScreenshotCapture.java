@@ -3,6 +3,7 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.options.ScreenshotAnimations;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -22,8 +23,9 @@ import org.springframework.test.context.DynamicPropertySource;
  * {@code *Test} so surefire's default includes never pick it up.
  *
  * <pre>
- * mvn -pl peekaboot-testing-app test \
+ * mvn -pl peekaboot-testing-app -am test \
  *     -Dtest=ScreenshotCapture \
+ *     -Dsurefire.failIfNoSpecifiedTests=false \
  *     -Dpeekaboot.screenshots.out=/absolute/output/dir
  * </pre>
  *
@@ -56,11 +58,12 @@ class ScreenshotCapture extends PlaywrightTestBase {
     // here are ordered to match the tab strip's own order (see dashboard/main.js's TABS
     // array).
     private static final String OVERVIEW_TAB = "overview";
+    private static final String TRACES_TAB = "traces";
 
     private static final List<String> DASHBOARD_TABS = List.of(
             OVERVIEW_TAB,
             "lifecycle",
-            "traces",
+            TRACES_TAB,
             "meters",
             "environment",
             "flyway",
@@ -71,25 +74,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
     private static final String INSIGHTS_TAB = "insights";
 
     /**
-     * The selector each tab waits for beyond "panel active" before it counts as rendered
-     * with real data. Without this a tab can be photographed mid-fetch (an empty list),
-     * since {@code #<id>-tab.active} only proves the panel is showing, not that its own
-     * render() call has finished populating it.
-     */
-    private static final Map<String, String> TAB_READY_SELECTOR = Map.of(
-            "overview", "#memory-info .pk-meter__fill",
-            "lifecycle", "#lifecycle-runs .pk-lifecycle-table tbody tr",
-            "environment", "#property-sources .pk-group__header",
-            "flyway", "#flyway-timeline .pk-table tbody tr",
-            "loggers", "#loggers-list .pk-group",
-            "config", "#config-groups .pk-group__header",
-            "scheduled-tasks", "#scheduled-tasks-groups .pk-group",
-            "meters", "#meters-list .pk-group",
-            "traces", "#traces-list .pk-trace-item");
-
-    /**
-     * The header of one property group per tab that carries a masked value, keyed the
-     * same way as {@link #TAB_READY_SELECTOR}. Both tabs render every group collapsed by
+     * The header of one property group per tab that carries a masked value, keyed by tab
+     * id. Both tabs render every group collapsed by
      * default, so without this, neither image ever shows a masked value or the reveal
      * control next to one - only collapsed headers.
      *
@@ -202,7 +188,27 @@ class ScreenshotCapture extends PlaywrightTestBase {
             captureInsights(outputDir, theme);
         }
 
-        assertThat(outputDir).isDirectoryContaining(path -> path.toString().endsWith(".png"));
+        for (String name : expectedFileNames(themes)) {
+            assertThat(outputDir.resolve(name + ".png")).as(name).isRegularFile();
+        }
+    }
+
+    /** The canonical file names the website ships (see the module README); a shot that silently did not happen fails here. */
+    private static List<String> expectedFileNames(List<String> themes) {
+        List<String> names = new ArrayList<>();
+        for (String theme : themes) {
+            for (String tabId : DASHBOARD_TABS) {
+                names.add("dashboard-" + tabId + "-" + theme);
+            }
+            names.add("dashboard-" + INSIGHTS_TAB + "-" + theme);
+            for (String tabId : REVEAL_BUTTON_SELECTOR.keySet()) {
+                names.add("dashboard-" + tabId + "-revealed-" + theme);
+            }
+            names.add("trace-detail-" + theme);
+            names.add("trace-detail-queries-" + theme);
+            names.add("toolbar-collapsed-" + theme);
+        }
+        return names;
     }
 
     private Path resolveOutputDir() throws Exception {
@@ -223,12 +229,14 @@ class ScreenshotCapture extends PlaywrightTestBase {
         assertAllTabButtonsVisible();
 
         for (String tabId : DASHBOARD_TABS) {
-            page.click(".pk-tab[data-tab=\"" + tabId + "\"]");
-            page.waitForSelector("#" + tabId + "-tab.active");
-            page.waitForSelector(TAB_READY_SELECTOR.get(tabId));
+            dashboard.openTab(tabId);
             if (OVERVIEW_TAB.equals(tabId)) {
                 // Overview is the one tab that photographs the machine it ran on
                 ScreenshotIdentityScrub.applyTo(page);
+            }
+            if (TRACES_TAB.equals(tabId)) {
+                // an empty list counts as rendered for openTab, and an empty tab is not a shot
+                page.waitForSelector(Dashboard.TRACE_ITEM);
             }
             expandMaskedGroupIfPresent(tabId);
             shoot(outputDir, "dashboard-" + tabId + "-" + theme);
@@ -242,15 +250,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // as its own root-level "connection" trace, and that trace sorts above /orders by
         // the time this runs.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", flagshipTraceId);
-        page.waitForSelector("#peekaboot-trace-overlay");
-        // The host element exists as soon as openTraceDetail() creates it, well before
-        // fetchAndRender() replaces the loading placeholder - wait for that placeholder to
-        // actually be gone, or the screenshot just shows "Loading trace data...".
-        page.waitForFunction(
-                "() => !document.getElementById('peekaboot-trace-overlay').shadowRoot"
-                        + ".querySelector('.pk-overlay__loading')",
-                null,
-                new Page.WaitForFunctionOptions().setTimeout(15000));
+        overlay.awaitTrace(flagshipTraceId);
+        // or the screenshot just shows "Loading trace data..."
+        overlay.awaitLoaded();
         shoot(outputDir, "trace-detail-" + theme);
 
         // Spans and Queries are independent rendering paths - Spans shows span.name
@@ -259,8 +261,8 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // so without this click no shipped image has ever shown QueryExtractor's output. The
         // flagship /orders trace deep-linked above is deliberately the N+1 example, so it is
         // guaranteed to carry real queries to click across to.
-        page.click("#peekaboot-trace-overlay .pk-tabs .pk-tab[data-tab=\"queries\"]");
-        page.waitForSelector("#peekaboot-trace-overlay .pk-query-item");
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-query-item");
         shoot(outputDir, "trace-detail-queries-" + theme);
     }
 
@@ -275,7 +277,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         List<String> expected = new ArrayList<>(DASHBOARD_TABS);
         expected.add(INSIGHTS_TAB);
         for (String tabId : expected) {
-            if (!page.isVisible(".pk-tab[data-tab=\"" + tabId + "\"]")) {
+            if (!page.isVisible(Dashboard.tabButton(tabId))) {
                 missing.add(tabId);
             }
         }
@@ -296,8 +298,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         openDashboard();
         waitForInsightsHistory();
 
-        page.click(".pk-tab[data-tab=\"" + INSIGHTS_TAB + "\"]");
-        page.waitForSelector("#" + INSIGHTS_TAB + "-tab.active");
+        dashboard.openTab(INSIGHTS_TAB);
         page.waitForFunction("""
                 () => {
                     const inViewport = el => {
@@ -320,36 +321,19 @@ class ScreenshotCapture extends PlaywrightTestBase {
      * is derived from the configured level-0 interval rather than assumed: a dozen ticks
      * plus one for the one in flight, so a profile with a slower cadence waits
      * proportionally longer instead of failing.
-     *
-     * <p>Polled with {@code page.evaluate} in a plain loop, not {@code waitForFunction}:
-     * the predicate has to await a fetch, and waitForFunction does not await an async
-     * predicate - the pending Promise itself is truthy, so such a wait "passes" on its
-     * first poll.
      */
     private void waitForInsightsHistory() {
-        Number intervalMs = (Number) page.evaluate("""
-                async () => {
-                    const response = await fetch('/peekaboot/api/insights/config');
-                    return (await response.json()).levels[0].intervalMs;
-                }
-                """);
-        long deadline = System.currentTimeMillis() + intervalMs.longValue() * (MIN_INSIGHTS_SAMPLES + 1);
-        while (true) {
-            Number count = (Number) page.evaluate("""
-                    async () => {
-                        const response = await fetch('/peekaboot/api/insights/data?level=0');
-                        return (await response.json()).count;
-                    }
-                    """);
-            if (count.intValue() >= MIN_INSIGHTS_SAMPLES) {
-                return;
-            }
-            if (System.currentTimeMillis() > deadline) {
-                throw new IllegalStateException("insights level 0 still holds only " + count + " of the "
-                        + MIN_INSIGHTS_SAMPLES + " samples required for a chart worth photographing");
-            }
-            page.waitForTimeout(1000);
-        }
+        int intervalMs = awaitJson("/peekaboot/api/insights/config", "config => config", "the insights config")
+                .path("levels")
+                .get(0)
+                .path("intervalMs")
+                .asInt();
+        awaitJson(
+                "/peekaboot/api/insights/data?level=0",
+                "data => data.count >= " + MIN_INSIGHTS_SAMPLES + " ? data : null",
+                "insights level 0 never held the " + MIN_INSIGHTS_SAMPLES
+                        + " samples required for a chart worth photographing",
+                intervalMs * (MIN_INSIGHTS_SAMPLES + 1));
     }
 
     /**
@@ -396,23 +380,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
         waitForRevealedRowValue(tabId, MASKED_VALUE);
     }
 
-    /**
-     * Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR}
-     * to render {@code expected} as its value. Mirrors
-     * {@code UnmaskingControlEnabledIT.waitForConfigPasswordValue}'s own lookup-by-key
-     * approach rather than a CSS value selector, since {@code kvRow} renders both the key
-     * and the value as plain text nodes with nothing to select the value by other than its
-     * sibling key.
-     */
+    /** Waits for the {@link #REVEALED_ROW_KEY} row inside {@link #REVEALED_ROW_CONTAINER_SELECTOR} to render {@code expected}. */
     private void waitForRevealedRowValue(String tabId, String expected) {
-        page.waitForFunction(
-                """
-                ([container, key, expected]) => {
-                    const row = Array.from(document.querySelectorAll(container + ' .pk-kv'))
-                        .find(r => r.querySelector('.pk-kv__key').textContent === key);
-                    return row && row.querySelector('.pk-kv__value').textContent === expected;
-                }
-                """, List.of(REVEALED_ROW_CONTAINER_SELECTOR.get(tabId), REVEALED_ROW_KEY.get(tabId), expected));
+        dashboard.awaitKvValue(REVEALED_ROW_CONTAINER_SELECTOR.get(tabId), REVEALED_ROW_KEY.get(tabId), expected);
     }
 
     private void captureToolbar(Path outputDir, String theme) {
@@ -422,8 +392,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // The bar shows a "loading" placeholder in its metrics area while it fetches the
         // request's own trace insights; wait for that to resolve so the screenshot shows
         // the real duration/query/log metrics instead of a spinner.
-        page.waitForFunction("() => !document.getElementById('peekaboot-toolbar-host').shadowRoot"
-                + ".querySelector('.pk-toolbar__loading')");
+        toolbar.waitForGone(".pk-toolbar__loading");
         shoot(outputDir, "toolbar-collapsed-" + theme);
     }
 
@@ -431,13 +400,15 @@ class ScreenshotCapture extends PlaywrightTestBase {
         if (page != null) {
             page.context().close();
         }
-        page = browserContextPage();
+        usePage(browserContextPage());
         setStoredTheme(theme);
     }
 
     private void shoot(Path outputDir, String name) {
         page.screenshot(new Page.ScreenshotOptions()
                 .setPath(outputDir.resolve(name + ".png"))
+                // a tab panel fades in over 0.2s, and a shot taken inside that is half-transparent
+                .setAnimations(ScreenshotAnimations.DISABLED)
                 .setFullPage(false));
     }
 
@@ -461,11 +432,7 @@ class ScreenshotCapture extends PlaywrightTestBase {
                     + "cannot deep-link the flagship trace-detail screenshot");
         }
         // The toolbar payload above is read the instant the response committed; the
-        // /orders trace's ~80+ spans arrive at the store asynchronously afterward via
-        // Spring's event listener. No element on this page flips state when that finishes,
-        // so there's nothing to waitForSelector/waitForFunction on - a fixed pause is the
-        // only option to let span capture settle before the dashboard/trace-detail
-        // screenshots below read this trace back.
-        page.waitForTimeout(500);
+        // /orders trace's ~80+ spans arrive at the store asynchronously afterward.
+        awaitTrace(flagshipTraceId, ROOT_SPAN_EXPORTED);
     }
 }

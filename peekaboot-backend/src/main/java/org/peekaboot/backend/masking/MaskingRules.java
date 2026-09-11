@@ -20,16 +20,25 @@ final class MaskingRules {
      * filesystem path, not a secret) and key-alias. Bare "certificate" is absent for the
      * same reason - server.ssl.certificate is a path too; actual key material is caught by
      * the PEM value pattern, so only the two compound names that name a secret outright
-     * are listed.
+     * are listed. Plurals are listed as rules of their own: a {@code @ConfigurationProperties}
+     * group or an env-var prefix is often named "secrets" or "passwords", and whole-token
+     * matching (which keeps "passwordless" readable) never sees the singular inside it.
+     * Nothing strips a trailing "s" generically, so no unlisted word becomes a candidate.
      */
     static final List<String> KEY_NAME_RULES = List.of(
             "password",
+            "passwords",
             "passwd",
+            "passwds",
             "pwd",
             "passphrase",
+            "passphrases",
             "secret",
+            "secrets",
             "client-secret",
+            "client-secrets",
             "token",
+            "tokens",
             "access-token",
             "refresh-token",
             "id-token",
@@ -38,12 +47,19 @@ final class MaskingRules {
             "credential",
             "credentials",
             "api-key",
+            "api-keys",
             "apikey",
+            "apikeys",
             "access-key",
+            "access-keys",
             "private-key",
+            "private-keys",
             "secret-key",
+            "secret-keys",
             "signing-key",
+            "signing-keys",
             "encryption-key",
+            "encryption-keys",
             "authorization",
             "auth",
             "session-id",
@@ -144,9 +160,10 @@ final class MaskingRules {
             new ValuePattern("Legacy OpenAI key", Pattern.compile("\\bsk-[A-Za-z0-9]{20,}\\b")),
             // Group 1 is the userinfo, so MaskingEngine masks it alone and leaves
             // scheme://host:port/path intact. The user may be empty: redis://:secret@host is
-            // the common Redis shape.
+            // the common Redis shape. The scheme is case-insensitive (RFC 3986), so an
+            // upper-cased JDBC:POSTGRESQL:// still counts.
             new ValuePattern(
-                    "Credentials in a URL", 1, Pattern.compile("[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
+                    "Credentials in a URL", 1, Pattern.compile("(?i)[a-z][a-z0-9+.-]*://([^/\\s:@]*:[^/\\s:@]+)@")),
             // Oracle's thin URL (jdbc:oracle:thin:user/password@host) has no "://" ahead of
             // the credentials, so the rule above never sees it. Group 2 is the password.
             new ValuePattern(

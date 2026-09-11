@@ -1,17 +1,10 @@
 package org.peekaboot.autoconfigure;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
 import io.micrometer.tracing.Tracer;
-import jakarta.annotation.PostConstruct;
-import jakarta.annotation.PreDestroy;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
 import org.peekaboot.backend.filter.RequestCaptureFilter;
-import org.peekaboot.backend.log.PeekabootLogbackAppender;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.slf4j.LoggerFactory;
@@ -32,12 +25,14 @@ import org.springframework.core.env.Environment;
 /**
  * The toolbar injection filter, and the request and log capture that feed the store. The
  * capture parts need a {@link TraceStore} bean to land in; the toolbar itself only needs
- * the {@link Tracer}.
+ * the {@link Tracer}, whichever of Boot's two tracing bridges registers it.
  */
 @AutoConfiguration(
         after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
-        afterName =
-                "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration")
+        afterName = {
+            "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
+            "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
+        })
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.DEV_TOOLBAR)
@@ -67,7 +62,7 @@ public class DevToolbarAutoConfiguration {
                 toolbarDataProvider,
                 tracer,
                 peekabootPaths,
-                environment.getProperty("springdoc.swagger-ui.path", DevToolbarFilter.DEFAULT_SWAGGER_UI_PATH)));
+                environment.getProperty("springdoc.swagger-ui.path", PeekabootPaths.DEFAULT_SWAGGER_UI_PATH)));
         registration.addUrlPatterns("/*");
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
@@ -106,71 +101,6 @@ public class DevToolbarAutoConfiguration {
         @ConditionalOnMissingBean
         LogbackAppenderRegistrar logbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
             return new LogbackAppenderRegistrar(eventPublisher);
-        }
-    }
-
-    public static class LogbackAppenderRegistrar {
-
-        /**
-         * JVM-wide, like the {@code LoggerContext}: the appender of every running application
-         * context, for {@link LogbackCaptureReinstaller} to put back after a reset.
-         */
-        private static final Set<PeekabootLogbackAppender> LIVE_APPENDERS = ConcurrentHashMap.newKeySet();
-
-        private final ApplicationEventPublisher eventPublisher;
-        private PeekabootLogbackAppender appender;
-
-        public LogbackAppenderRegistrar(ApplicationEventPublisher eventPublisher) {
-            this.eventPublisher = eventPublisher;
-        }
-
-        @PostConstruct
-        public void registerAppender() {
-            if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
-                return;
-            }
-
-            appender = new PeekabootLogbackAppender();
-            appender.setEventPublisher(eventPublisher);
-            appender.setContext(loggerContext);
-            appender.start();
-
-            Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
-            rootLogger.addAppender(appender);
-            LIVE_APPENDERS.add(appender);
-        }
-
-        @PreDestroy
-        public void detachAppender() {
-            // the LoggerContext outlives the Spring context (devtools restarts);
-            // without detaching, appenders accumulate and pin the closed context
-            if (appender == null) {
-                return;
-            }
-            LIVE_APPENDERS.remove(appender);
-            if (LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext) {
-                loggerContext.getLogger(Logger.ROOT_LOGGER_NAME).detachAppender(appender);
-            }
-            appender.stop();
-            appender = null;
-        }
-
-        /**
-         * Re-attaches the appenders of every application context that is still running, after
-         * a Logback re-initialisation detached them.
-         */
-        static void reattachLiveAppenders() {
-            if (!(LoggerFactory.getILoggerFactory() instanceof LoggerContext loggerContext)) {
-                return;
-            }
-            Logger rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);
-            for (PeekabootLogbackAppender appender : LIVE_APPENDERS) {
-                // a reset stops appenders as well as detaching them, and a stopped appender
-                // that is merely re-attached silently discards every event
-                appender.setContext(loggerContext);
-                appender.start();
-                rootLogger.addAppender(appender);
-            }
         }
     }
 }

@@ -44,9 +44,6 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
-    private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
-    private static final String DEV_TOOLBAR_PROPERTY = PeekabootPropertyKeys.DEV_TOOLBAR;
-    private static final String STORAGE_ENABLED_PROPERTY = PeekabootPropertyKeys.STORAGE_ENABLED;
     private static final String WEB_APPLICATION_TYPE_PROPERTY = "spring.main.web-application-type";
     private static final String DEFAULTS_RESOURCE = "peekaboot-defaults.yml";
     private static final String NO_PUSH_DEFAULTS_RESOURCE = "peekaboot-no-push-defaults.yml";
@@ -64,16 +61,16 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         boolean localDevelopment = localDevelopment();
-        boolean enabled = environment.getProperty(ENABLED_PROPERTY, Boolean.class, localDevelopment);
+        boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
 
         // The toolbar and persistence follow the launch context rather than peekaboot.enabled,
         // so switching Peekaboot on deliberately in a shared environment neither injects a
         // toolbar into every page nor writes files into that host's home directory.
         Map<String, Object> detected = new HashMap<>();
-        detected.put(ENABLED_PROPERTY, localDevelopment);
-        detected.put(DEV_TOOLBAR_PROPERTY, localDevelopment);
-        detected.put(STORAGE_ENABLED_PROPERTY, localDevelopment);
+        detected.put(PeekabootPropertyKeys.ENABLED, localDevelopment);
+        detected.put(PeekabootPropertyKeys.DEV_TOOLBAR, localDevelopment);
+        detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
         contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
                 + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default");
@@ -94,7 +91,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
         // Read back rather than reusing localDevelopment: an application that sets
         // peekaboot.dev-toolbar explicitly, in either direction, decides this.
-        if (!environment.getProperty(DEV_TOOLBAR_PROPERTY, Boolean.class, false)) {
+        if (!environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false)) {
             log.debug("Dev toolbar is off - skipping peekaboot dev toolbar defaults");
             return;
         }
@@ -118,11 +115,18 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
                 .orElse(application.getWebApplicationType());
     }
 
+    /** Overridable for tests: the bundled file of that name. */
+    Resource bundledDefaults(String resourceName) {
+        return new ClassPathResource(resourceName);
+    }
+
     private void applyDefaults(ConfigurableEnvironment environment, String propertySourceName, String resourceName) {
-        Resource resource = new ClassPathResource(resourceName);
+        Resource resource = bundledDefaults(resourceName);
         if (!resource.exists()) {
-            log.warn("Peekaboot defaults resource not found: " + resourceName);
-            return;
+            // only a consumer's shade or repackage filter removes a bundled file; for the
+            // no-push defaults that would start pushing telemetry to localhost silently
+            throw new IllegalStateException(
+                    "Peekaboot defaults resource " + resourceName + " is missing from the classpath");
         }
 
         try {

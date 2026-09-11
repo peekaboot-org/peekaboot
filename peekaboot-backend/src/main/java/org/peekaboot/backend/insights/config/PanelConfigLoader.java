@@ -7,11 +7,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.boot.context.properties.bind.BindException;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySource;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.Resource;
 
@@ -25,23 +27,29 @@ import org.springframework.core.io.Resource;
  * off, or moves it, by id alone - {@code enabled}, {@code order} and {@code level} are taken
  * from the entry, everything else stays the bundled panel's. A patch under an id nothing
  * ships is rejected, since there is nothing to patch.
+ *
+ * <p>The vocabulary ({@link Stat}, {@link Chart}, {@link Unit}, {@link TileFormat}) is
+ * checked by the binder, which reads the YAML words leniently into the enums; only the
+ * rules that span fields are checked here.
  */
 public final class PanelConfigLoader {
-
-    private static final Set<String> STATS = Set.of("value", "rate", "avg", "max");
-    private static final Set<String> CHARTS = Set.of("line", "bars", "bars-line");
-    private static final Set<String> UNITS = Set.of("bytes", "percent", "millis", "count", "persec", "bytes-persec");
-    private static final Set<String> TILE_FORMATS = Set.of("duration", "datetime", "bytes", "count");
 
     private PanelConfigLoader() {}
 
     public static PanelsFile load(Resource defaults, Resource userOverride) {
-        PanelsFile file = validate(read(defaults));
+        PanelsFile file = readValidated(defaults);
         if (userOverride != null && userOverride.exists()) {
-            file = merge(file, validate(read(userOverride)));
+            file = merge(file, readValidated(userOverride));
         }
         file.panels().forEach(PanelConfigLoader::requireTitle);
         return sorted(file);
+    }
+
+    /** Defaults go on before validation, so the rules below never meet a null stat, chart or unit. */
+    private static PanelsFile readValidated(Resource resource) {
+        PanelsFile file = withDefaults(read(resource));
+        validate(file);
+        return file;
     }
 
     private static PanelsFile read(Resource resource) {
@@ -58,12 +66,17 @@ public final class PanelConfigLoader {
             List<TileDef> tiles =
                     binder.bind("tiles", Bindable.listOf(TileDef.class)).orElse(List.of());
             return new PanelsFile(panels, tiles);
+        } catch (BindException e) {
+            throw new IllegalStateException(
+                    "Invalid insights panel config " + resource + ": " + e.getMessage() + ": "
+                            + NestedExceptionUtils.getMostSpecificCause(e).getMessage(),
+                    e);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to load insights panel config " + resource, e);
         }
     }
 
-    private static PanelsFile validate(PanelsFile file) {
+    private static void validate(PanelsFile file) {
         Set<String> panelIds = new HashSet<>();
         for (PanelDef panel : file.panels()) {
             validatePanel(panel);
@@ -74,33 +87,20 @@ public final class PanelConfigLoader {
             validateTile(tile);
             require(tileIds.add(tile.id()), "duplicate tile id '" + tile.id() + "'");
         }
-        return withDefaults(file);
     }
 
     private static void validatePanel(PanelDef panel) {
         require(panel.id() != null, "panel without id");
-        require(
-                panel.chart() == null || CHARTS.contains(panel.chart()),
-                "panel '" + panel.id() + "': unknown chart '" + panel.chart() + "'");
-        require(
-                panel.unit() == null || UNITS.contains(panel.unit()),
-                "panel '" + panel.id() + "': unknown unit '" + panel.unit() + "'");
         Set<String> seriesIds = new HashSet<>();
         for (SeriesDef series : panel.series()) {
             require(series.meter() != null, "panel '" + panel.id() + "': series without meter");
             require(
-                    series.stat() == null || STATS.contains(series.stat()),
-                    "panel '" + panel.id() + "': unknown stat '" + series.stat() + "'");
+                    series.subtractMeter() == null || series.stat() == Stat.VALUE,
+                    "panel '" + panel.id() + "': series '" + series.id() + "': subtract-meter is not supported"
+                            + " for stat '" + series.stat().wireName() + "'");
             require(
-                    series.unit() == null || UNITS.contains(series.unit()),
-                    "panel '" + panel.id() + "': unknown series unit '" + series.unit() + "'");
-            require(
-                    series.subtractMeter() == null || series.stat() == null || "value".equals(series.stat()),
-                    "panel '" + panel.id() + "': series '" + idOf(series) + "': subtract-meter is not supported"
-                            + " for stat '" + series.stat() + "'");
-            require(
-                    seriesIds.add(idOf(series)),
-                    "panel '" + panel.id() + "': duplicate series id '" + idOf(series) + "'");
+                    seriesIds.add(series.id()),
+                    "panel '" + panel.id() + "': duplicate series id '" + series.id() + "'");
         }
     }
 
@@ -111,19 +111,16 @@ public final class PanelConfigLoader {
 
     private static void validateTile(TileDef tile) {
         require(tile.id() != null && tile.meter() != null, "tile without id/meter");
-        require(
-                tile.format() == null || TILE_FORMATS.contains(tile.format()),
-                "tile '" + tile.id() + "': unknown format '" + tile.format() + "'");
     }
 
-    /** Applies stat=value / chart=line / unit=count defaults so downstream code never sees nulls. */
+    /** Applies the id, label, stat, chart and unit defaults, so nothing after this ever sees a null in their place. */
     private static PanelsFile withDefaults(PanelsFile file) {
         List<PanelDef> panels = file.panels().stream()
                 .map(p -> new PanelDef(
                         p.id(),
                         p.title(),
-                        p.chart() == null ? "line" : p.chart(),
-                        p.unit() == null ? "count" : p.unit(),
+                        p.chart() == null ? Chart.LINE : p.chart(),
+                        p.unit() == null ? Unit.COUNT : p.unit(),
                         p.order(),
                         p.enabled(),
                         p.level(),
@@ -133,7 +130,7 @@ public final class PanelConfigLoader {
                                         s.label() == null ? s.meter() : s.label(),
                                         s.meter(),
                                         s.tags(),
-                                        s.stat() == null ? "value" : s.stat(),
+                                        s.stat() == null ? Stat.VALUE : s.stat(),
                                         s.subtractMeter(),
                                         s.unit()))
                                 .toList()))

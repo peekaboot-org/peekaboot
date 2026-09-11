@@ -16,31 +16,81 @@
 - Live threads: wait for the condition the assertion needs (Awaitility; a sample count, say),
   never a fixed `Thread.sleep`. Where a test would otherwise sit out a production timeout, the
   class offers a package-private seam instead (`LifecycleEventLog(file, loadWait)`).
+- Wall clocks and host facts come through seams, never through `System.currentTimeMillis()`
+  read inside the class under test. `LifecycleRuns` and `InsightsCollector` take a
+  `LongSupplier` clock; `IntervalBoundary` takes that clock plus a `Sleeper`, so a schedule is
+  asserted exactly, and `InsightsSnapshotStore` takes an `IntervalBoundary` built on a fixed
+  clock, which dates the file and paces the writer alike; `ApplicationStoppedListener` and
+  `ServerInfo.current(Locale, Clock)` take a `java.time.Clock`, whose zone is the one the
+  timestamps render in. `ContainerRuntime`, `NetworkAddress`, `MachineInfo` and `ProcessInfo`
+  each read the host through a package-private `Signals` record a test states outright. A test
+  that computes its expected value with the same call the production code makes proves
+  nothing; it gets a seam instead.
+- `Locale.setDefault` is JVM-global. `ApplicationReadyListenerTest` and `ByteFormatTest` set
+  it to prove a banner reads the same under any default, restore it in `finally`, and say so in
+  their Javadoc. That is safe only because `peekaboot-backend`'s surefire runs its classes one
+  at a time on one thread (the pom configures no parallelism). Turn parallel execution on for
+  that module and those two tests have to lose the global write first.
+- The default uncaught-exception handler is JVM-global the same way.
+  `InsightsSsePublisherTest`'s `UncaughtExceptions` installs one to prove nothing escapes the SSE
+  sender thread, and restores the previous handler on close. It keeps only what a thread named
+  `Subscriber.SENDER_THREAD` threw, since every other thread alive in the JVM reaches the same
+  handler and would otherwise fail those assertions. Its awaits pass
+  `dontCatchUncaughtExceptions()`, since Awaitility otherwise takes the handler over for the
+  length of the wait and rethrows into the test thread.
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
   holds `obj` weakly and samples turn NaN after a GC. Use `Gauge.builder(name, supplier)`, or
   keep the returned object in a field.
 - Timing a test does not own: `ToolbarLateSpanIT`'s margins are arithmetic against the
   toolbar's fetch ladder (`toolbar.js`, documented in `peekaboot-frontend/README.md`) and the
   test profile's span export delay. Neither has a source of truth a Java test can read.
-  `LateSpanFixture.LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch
-  the ladder, the export delay or the constant and you redo it rather than assume it holds.
+  `LateSpanController.LATE_WORK` carries that arithmetic in its Javadoc. Touch the ladder, the
+  export delay or the constant and you redo it rather than assume it holds.
 
 ## Fixtures
-`peekaboot-backend`'s trace fixtures are built through `org.peekaboot.backend.testsupport`.
-`Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the
-`jdbcQuery`/`jdbcDuplicate` presets for the double-instrumented pair. `SpanNodes.node(id)` builds
-an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the mapped `TraceTree` around one.
-`RequestCompletedEvents.request(traceId)`/`minimal(traceId)` build the request event, and
+`peekaboot-backend`'s fixtures are built through `org.peekaboot.backend.testsupport`.
+`Spans.span(id)` builds a `SpanData` with neutral defaults, alongside the `query` preset for a
+JDBC-shaped query span, `resultSet(id, rowCount)` for the row-count span datasource-proxy
+exports after one, `jdbcQuery`/`jdbcDuplicate` for the double-instrumented pair and
+`jdbcConnection` for the pool acquisition datasource-micrometer exports.
+`TraceDatas.of(traceId, spans...)` runs those through a `TraceDataBundle` and returns its
+`snapshot()`, so a mapper test gets the root and ordering the store would hand it.
+`SpanNodes.node(id)` builds an already-mapped `SpanNode`, `TraceTrees.tree(rootSpan)` the
+mapped `TraceTree` around one. `Logs.log(traceId)` builds a `LogCapturedEvent`,
+`RequestCompletedEvents.request(traceId)`/`minimal(traceId)` the request event, and
 `TraceStores.withDefaults()`/`with(customizer)` an `InMemoryTraceStore` built the way the
-auto-configuration builds it, from `PeekabootTracingProperties`. A test names only what it
-asserts on. A new record component is added to the builder once, not to every test class. The
-domain records carry no test-only constructors.
+auto-configuration builds it, from `PeekabootTracingProperties`.
+`LifecycleStarts.start(epochMs)` builds the START event the lifecycle tests replay; a stop
+is `LifecycleEvent.stop`.
+`SeriesDefs.value(id, meter)` is the plain value series the collector tests share.
+`InsightsCollectors.noOpListener()` is the collector listener for a test that reads the rings
+rather than the events; the collector's only package-private constructor argument is its clock.
+`FailingWriteResponse` is the `MockHttpServletResponse` whose writes fail the way a container's
+do (first write, or every write), and `PosixPermissions` reads a path's mode for the tests that
+pin owner-only storage. OpenTelemetry `SpanData` comes from the SDK's own
+`opentelemetry-sdk-testing` (`TestSpanData.builder()`), not a hand-rolled implementation.
+A test names only what it asserts on. A new record component is added to the builder once, not
+to every test class. The domain records carry no test-only constructors, and a test does not
+wrap a builder in a positional helper of its own (`createSpan(id, 150, OK, tags, children)`):
+that hides the defaults the builder exists to make explicit. `peekaboot-testing-app` cannot
+reach `Spans` (the backend publishes no test jar), so its `integration/TestSpans` is the same
+builder shape for the ITs that write spans straight to the store.
 
 `MaskingEngineTest`'s provider fixtures are split literals (`"xoxb" + "-123..."`) on purpose.
 The file is full of strings shaped exactly like the credentials the engine detects, and
 GitHub's push protection scans for the same shapes. The concatenation folds at compile time,
 so the value under test is unchanged. It just never appears contiguously in the source. A new
 provider fixture is written the same way and never tidied back together.
+
+## Accessibility
+`AccessibilityIT` pins the regressions this project has had - a control that lost its
+accessible name, a target under 24px, a contrast pair - one assertion each, with the reasoning
+in the Javadoc. `AccessibilitySweepIT` runs axe-core (`com.deque.html.axe-core:playwright`,
+pinned in both builds) over the dashboard, the trace overlay and the toolbar's shadow root at
+WCAG 2.1 A and AA, and expects zero violations. The two do not replace each other: the sweep
+knows rules nobody here thought of, and says nothing about why a targeted assertion exists. The
+overlay is swept over the dashboard rather than over a sample-app page, and the toolbar is
+scoped to its own host: the consumer's markup is not Peekaboot's to answer for.
 
 ## Backend to frontend contracts
 The frontend is plain ES modules, so a Java enum and its JS mirror drift silently.
@@ -61,7 +111,13 @@ in-module class whose real construction needs a live container. Cheap in-module 
 Spring and servlet machinery (`MockMvc`, mock requests) is fine. `InsightsSsePublisherTest`
 shows how far that reaches: it drives Spring's real `ResponseBodyEmitterReturnValueHandler` and
 `StandardServletAsyncWebRequest` over mock servlet objects, so a container timeout runs the
-interceptor chain a stubbed emitter would have skipped.
+interceptor chain a stubbed emitter would have skipped. Its `DispatchedStream` still hands that
+handler a plain `ServletWebRequest`, where `RequestMappingHandlerAdapter` hands it the
+`StandardServletAsyncWebRequest` itself, whose response wrapper raises
+`AsyncRequestNotUsableException` on a write once the async request has errored. So every send
+failure in the class is stated by the response fixture rather than produced by that state, and
+closing the gap means routing the class's writes through the wrapper and re-deriving what each
+of them then fails with.
 
 One exception: controller tests that stub a service and assert `isSameAs` pass-through
 (sentinel-identity delegation), even where the service is cheap to construct. A real service
@@ -107,22 +163,26 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
   forked JVM, caused by Mockito's inline mock-maker calling
   `Instrumentation.appendToBootstrapClassLoaderSearch` during its javaagent bootstrap. No config
   knob exists for it.
-- The `sun.misc.Unsafe` deprecation `WARNING:` block, `peekaboot-spring-boot-autoconfigure`
-  only. Fired by protobuf's reflective `Unsafe` access, a transitive OTel/gRPC dependency.
-  Third-party, not application or test code. A real fix means a protobuf/gRPC version bump, out
-  of scope for test cleanup.
-- `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, and the
-  `IllegalStateException: fixedDelay failed` from `Scheduler.fixedDelay()` (logged by Spring's
-  `TaskUtils$LoggingErrorHandler` as `ERROR ... Unexpected error occurred in scheduled task`,
-  with the full stack trace). Deliberate demo signal in `peekaboot-testing-app`, giving the
-  dashboard's Errors bucket a scheduled-job failure to show.
+- The `sun.misc.Unsafe` deprecation `WARNING:` block, printed before the build's own first
+  line. It comes from the Maven distribution's own guava
+  (`AbstractFuture$UnsafeAtomicHelper` in `<maven home>/lib/guava.jar`), not from anything on
+  this project's class path, and depends only on which `mvn` runs the build. The pinned
+  Maven `./mvnw` downloads ships a guava that no longer calls it, so a wrapper build is
+  silent and an older `mvn` on the PATH is not.
+- `ERROR ... o.p.testingapp.Scheduler : fixedRate failed` from `Scheduler.fixedRate()`, fired by
+  the tests that need an error trace. Deliberate demo signal in `peekaboot-testing-app`, giving
+  the dashboard's Errors bucket a scheduled-job failure to show. Its sibling
+  `Scheduler.fixedDelay()`, which throws, cannot fire under `test` or `security` at all:
+  `DeferredSchedulingConfig` parks every timer, and no test runs that job. Only the screenshot
+  profile, which deliberately lets the timers run, sees its stack trace.
 - `WARN ... o.p.testingapp.order.OrderReconciler : order <reference> is still PLACED and has not
   been acknowledged`. Deliberate demo signal giving the Logs tab WARN content on a non-HTTP
   (`SCHEDULED_JOB`) trace. One line per order the context holds, on every run. Nothing ever
   moves an order out of `PLACED`, so the count grows with the orders a run places.
 - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is unreachable`.
   From `OrderController`'s deliberately failing `/boom` endpoint, exercised to populate the
-  Errors bucket and the toolbar's error styling.
+  Errors bucket. Not the toolbar: the throw is handled by the error dispatch, whose path
+  `PeekabootPaths` excludes, so the whitelabel page carries no bar.
 - `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find all
   persons`. From `PersonController`'s deliberate error path (`/?error=true`), same purpose.
 - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than the
@@ -148,24 +208,68 @@ stops the pollers first. Per-test `unroute()` calls would not close the race, si
 itself an interception update over the same wire. Each catch logs what it swallowed at WARN, so
 a teardown hiding a real failure still leaves a line in the output.
 
-## Isolation in shared Spring contexts
-`@SpringBootTest` classes sharing mutable singletons (`TraceStore`, for one) reset that state
-first thing in `@BeforeEach` (`traceStore.clear()`), so tests assert exact counts rather than
-defensive `contains`. Since `*IT` classes run concurrently, a class that clears shared state this
-way MUST hold the corresponding `@ResourceLock(..., mode = READ_WRITE)`, and every class pinning
-its own data in that same store holds the `READ` side. `DashboardTraceViewIT` and `DevToolbarIT`
-are the pattern. A class on its own context configuration needs no lock.
+## Requests the browser loses
 
-Pinning to a traceId does not mean searching the store for it. A JSON endpoint answers with
-`Server-Timing: trace;desc="00-<traceId>-..."` for every captured request, which
-`OrderTraceCaptureIT` matches with a pattern to name the trace its own call produced.
+Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`, whenever the host's
+network configuration changes. A container taking a veth interface up or down is enough, and
+nothing in the suite provokes or can prevent it - on a machine with any container churn it
+lands a couple of times in a four-minute run. The dashboard is where it showed: no build step
+means `main.js` is a graph of forty-odd separate fetches, and losing one left the shell
+unevaluated, the loading placeholder up and the page mute, which every waiting test read as a
+30s Playwright timeout with nothing to explain it.
+
+`dashboard/boot-recovery.js` now reloads the page once out of it and raises the error banner if
+that does not help (see `peekaboot-frontend/README.md`, *When the shell does not start*). The
+recovery is the product's, not the suite's, so it covers the deep-link tests that navigate to
+the dashboard directly as well as `openDashboard()`, and no test retries anything.
+
+`ContextPathToolbarIT` is the one class that has to know: it fails on any Peekaboot request the
+page asked for and did not get, and a dropped request is not the context-path bug it hunts, so
+it excludes that one failure by name.
+
+Pages carrying the toolbar keep the same exposure over a much smaller graph, and are
+deliberately left without an equivalent recovery. The only recovery on offer is a page reload,
+and those pages belong to the host application: reloading one discards whatever a user has typed
+and not saved, which is a worse bug than the mute bar it would fix. The bar degrades visibly
+anyway. `ToolbarShell` renders its "could not start" notice into every page, `toolbar.css`
+reveals it 400ms after paint with a delayed animation, and `toolbar.js` removes it the moment it
+runs, so a script that never arrives leaves a reader with a notice and a real link to the
+dashboard. A test waiting for `data-pk-ready` still times out, and that is the accepted cost.
+
+## Isolation in shared Spring contexts
+No class in this module clears a mutable singleton the suite shares, and none holds a
+`@ResourceLock`. `*IT` classes run concurrently, so a class that cleared the `TraceStore` would
+have to take `@ResourceLock(..., mode = READ_WRITE)` over it while every class pinning its own
+data there took the `READ` side - a lock that serializes half the suite for one class's exact
+counts. Pinning is the cheaper answer and the one every class here takes: assert on your own
+trace, never on what the store holds. A class on its own context configuration is isolated
+anyway.
+
+Pinning to a traceId does not mean searching the store for it. Every captured request answers
+with `Server-Timing: trace;desc="00-<traceId>-..."`, whatever its content type or status.
+`TraceApiClient.get(path)` returns that id for a GET and `traceIdOf(headers)` reads it off a
+response made some other way, so an integration test names the trace its own call produced
+before it reads anything back. A scheduled job answers no request and so has no such header;
+`integration/ScheduledJobs.run` reads its id off the scheduled-task observation instead (the
+recorder is a bean of `DeferredSchedulingConfig`) and returns it, which is how the two classes
+firing `Scheduler.fixedRate` each wait for the run they fired.
+
+Spans reach the store asynchronously (the OTel batch processor, 50 ms in the test profile), so
+a test waits for the fact it is about to assert on, never for a delay.
+`PlaywrightTestBase.awaitTrace(traceId, jsPredicate)` and `awaitListedTrace(query, jsPredicate)`
+poll from the browser; `TraceApiClient.awaitTrace(traceId, predicate)` and its listing waits
+poll over HTTP with Awaitility. `ROOT_SPAN_EXPORTED` on both is the completeness proof: only a
+SERVER root classifies HTTP_REQUEST, that root is the last span of a request to end, and the
+exporter hands spans over in the order they ended. The listing endpoint leaves a trace out
+until its root has arrived, so a listed match already carries its spans.
 
 Two shared things have no lock and need care instead. The JVM-wide Logback context is one. Every
 context that starts re-initialises it, detaching Peekaboot's capture appender until
 `LogbackCaptureReinstaller` puts it back (see `docs/ARCHITECTURE.md`, *Log Capture*), so a
 request served in that window is traced with no logs against it. A test must establish that its
 trace carries the log rather than assume it: `PlaywrightTestBase.openPageThatLogsAnError()`
-reloads until it does, checked against the endpoint the overlay itself reads. The same context is
+reloads until it does, checked with `awaitTrace` against the endpoint the overlay itself reads,
+and logs each reload at INFO so the window's size stays visible. The same context is
 why `PeekabootActuatorServiceIT` re-levels and redirects one logger for the length of each of its
 methods, which every concurrently running class sees. That is inert there because only its own
 context has an endpoint that throws, and the only real remedy, `@Isolated`, stops the whole suite
@@ -217,14 +321,15 @@ test author needs on top of it:
   default-property precedence; it boots no server and costs a fraction of a second.
   `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker threads with
   a Chromium each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test asserting on
-  app-global state shared with other classes must either pin to its own traceId or take a
-  `@ResourceLock` (see `DashboardTraceViewIT` for the store-clearing WRITE side).
+  app-global state shared with other classes pins to its own traceId; nothing here takes a
+  `@ResourceLock`.
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):
 
   ```bash
-  mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+  mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
+      -Dsurefire.failIfNoSpecifiedTests=false \
       -Dpeekaboot.screenshots.out=/absolute/path/to/peekaboot-org.github.io/assets/img/screenshots
   ```
 

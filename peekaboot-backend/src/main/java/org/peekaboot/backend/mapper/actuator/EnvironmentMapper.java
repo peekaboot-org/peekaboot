@@ -22,17 +22,10 @@ public class EnvironmentMapper {
             return new EnvironmentInfo(List.of(), List.of());
         }
 
-        List<String> activeProfiles = env.activeProfiles() != null ? env.activeProfiles() : List.of();
-        List<PropertySourceGroup> propertySources = extractPropertySources(env, unmask);
-
-        return new EnvironmentInfo(activeProfiles, propertySources);
+        return new EnvironmentInfo(env.activeProfiles(), extractPropertySources(env, unmask));
     }
 
     private List<PropertySourceGroup> extractPropertySources(EnvResponse env, boolean unmask) {
-        if (env.propertySources() == null) {
-            return List.of();
-        }
-
         List<PropertySourceGroup> result = new ArrayList<>();
         for (EnvResponse.PropertySource source : env.propertySources()) {
             String name = source.name() != null ? source.name() : "unknown";
@@ -43,10 +36,6 @@ public class EnvironmentMapper {
     }
 
     private List<PropertyValue> extractProperties(EnvResponse.PropertySource source, boolean unmask) {
-        if (source.properties() == null) {
-            return List.of();
-        }
-
         List<PropertyValue> result = new ArrayList<>();
         for (Map.Entry<String, EnvResponse.PropertyValue> entry :
                 source.properties().entrySet()) {

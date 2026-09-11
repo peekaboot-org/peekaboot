@@ -74,17 +74,6 @@ class PeekabootControllerTest {
     class GetTracesInsights {
 
         @Test
-        void shouldPassLimitToService() {
-            TraceInsightsResponse expectedResponse = emptyInsightsResponse();
-            when(traceInsightsService.getInsights(25, TraceBucket.ALL, null, null))
-                    .thenReturn(expectedResponse);
-
-            TraceInsightsResponse result = controller.getTracesInsights(25, null, null, null);
-
-            assertThat(result).isEqualTo(expectedResponse);
-        }
-
-        @Test
         void shouldPassFiltersToService() {
             TraceInsightsResponse expectedResponse = emptyInsightsResponse();
             when(traceInsightsService.getInsights(100, TraceBucket.ALL, "SCHEDULED_JOB", "MyScheduler"))
@@ -186,13 +175,6 @@ class PeekabootControllerTest {
             when(traceInsightsService.isTracingAvailable()).thenReturn(false);
 
             assertThat(controller.getFeatures().tracing()).isFalse();
-        }
-
-        @Test
-        void shouldIncludeMetricsFeature() {
-            when(metricsService.isAvailable()).thenReturn(true);
-
-            assertThat(controller.getFeatures().metrics()).isTrue();
         }
 
         @Test

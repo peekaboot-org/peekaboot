@@ -6,16 +6,16 @@
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatHosts, formatTileValue} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatPlainValue, formatTileValue} from '../../shared/format.js';
+import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
-export const label = 'Overview';
 
 export function render(container, data, context = {}) {
     const {locale, timeZone} = context;
     const {application, runtime, dataSources, health} = data;
 
-    renderInsightTiles(container, context);
+    renderInsightTiles(container, data, context);
     renderBuildInfo(container, application?.build, {locale, timeZone});
     renderGitInfo(container, application?.git, {locale, timeZone});
     renderSpringInfo(container, application);
@@ -50,46 +50,47 @@ function tileIcon(tileId) {
 }
 
 /**
- * Fills the tile row from /api/insights/config, whose tiles carry their current value
+ * The tile row's own fetch of /api/insights/config, whose tiles carry their current value
  * alongside their definition - so the dashboard's own 30s cycle keeps them current and
- * this tab needs none of the Insights tab's SSE machinery. The row is hidden outright,
- * rather than left as an empty box, whenever insights are switched off or unreachable.
+ * this tab needs none of the Insights tab's SSE machinery. On the self-fetching-tab
+ * contract: fetched only while this tab is the one showing, and hidden outright, rather
+ * than left as an empty box, when the endpoint is unreachable.
  */
-async function renderInsightTiles(container, {client, features, locale, timeZone} = {}) {
+const tileRow = selfFetchingTab({
+    // own dedupe key: the Insights tab loads this same path on its own schedule, and on
+    // a "#insights" deep link both fire in the same cycle - sharing the default per-path
+    // counter would leave whichever called first with a null and this row hidden until
+    // the next refresh (see shared/api.js)
+    fetch: ({client}) => client.get('/api/insights/config', {dedupeKey: 'insight-tiles'}),
+    renderResult: (container, config, {locale, timeZone}) => {
+        const tiles = config.tiles ?? [];
+        const row = container.querySelector('#insights-tiles');
+        row.innerHTML = tiles.map(tile => `
+            <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
+                ${tileIcon(tile.id)}
+                <div class="pk-insight-tile__text">
+                    <div class="pk-insight-tile__label pk-label">${escapeHtml(tile.label)}</div>
+                    <div class="pk-insight-tile__value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
+                </div>
+            </div>
+        `).join('');
+        row.classList.toggle('hidden', tiles.length === 0);
+    },
+    renderError: (container, error) => {
+        console.warn('Insight tiles unavailable:', error);
+        container.querySelector('#insights-tiles').classList.add('hidden');
+    }
+});
+
+/** The row is hidden outright when insights are switched off; otherwise the tile fetch above fills it. */
+function renderInsightTiles(container, data, context) {
     const row = container.querySelector('#insights-tiles');
     if (!row) return;
-    if (!features?.insights || !client) {
+    if (!context.features?.insights || !context.client) {
         row.classList.add('hidden');
         return;
     }
-
-    let config;
-    try {
-        // own dedupe key: the Insights tab loads this same path on its own schedule,
-        // and on a "#insights" deep link both fire in the same cycle - sharing the
-        // default per-path counter would leave whichever called first with a null and
-        // this row hidden until the next refresh (see shared/api.js)
-        config = await client.get('/api/insights/config', {dedupeKey: 'insight-tiles'});
-    } catch (error) {
-        console.warn('Insight tiles unavailable:', error);
-        row.classList.add('hidden');
-        return;
-    }
-    // null means this row's own previous call is still in flight and a newer one has
-    // taken over - that newer response is about to render the very same row
-    if (!config) return;
-
-    const tiles = config.tiles ?? [];
-    row.innerHTML = tiles.map(tile => `
-        <div class="pk-insight-tile" data-tile-id="${escapeHtml(tile.id)}">
-            ${tileIcon(tile.id)}
-            <div class="pk-insight-tile__text">
-                <div class="pk-insight-tile-label">${escapeHtml(tile.label)}</div>
-                <div class="pk-insight-tile-value">${escapeHtml(formatTileValue(tile.value, tile.format, {locale, timeZone}))}</div>
-            </div>
-        </div>
-    `).join('');
-    row.classList.toggle('hidden', tiles.length === 0);
+    tileRow.render(container, data, context);
 }
 
 /**
@@ -284,7 +285,7 @@ function renderJvmDefaults(container, server, {locale, timeZone}) {
         }
         if (server.currentTime) {
             el.appendChild(kvRow('Server Time',
-                formatDateTime(server.currentTime, {locale, timeZone, dateStyle: 'medium', timeStyle: 'medium'})));
+                formatDateTimeWith(server.currentTime, {dateStyle: 'medium', timeStyle: 'medium'}, {locale, timeZone})));
         }
         if (server.fileEncoding) el.appendChild(kvRow('File Encoding', server.fileEncoding));
     });
@@ -306,7 +307,7 @@ function renderDataSourceCard(ds) {
     card.dataset.datasource = ds.name || 'DataSource';
 
     const header = document.createElement('div');
-    header.className = 'pk-card__header';
+    header.className = 'pk-card__header pk-label';
     header.innerHTML = `<span class="pk-card__icon" aria-hidden="true">\u{1F5C2}</span>`
             + `<h2 class="pk-card__title">${escapeHtml(ds.name || 'DataSource')}</h2>`;
     if (ds.health) header.appendChild(badge(ds.health, healthSeverity(ds.health)));
@@ -368,7 +369,6 @@ function usageSection(label, caption, percent) {
 
 function renderMemoryInfo(container, runtime) {
     const el = container.querySelector('#memory-info');
-    const processInfo = container.querySelector('#process-info');
     el.innerHTML = '';
 
     const memory = runtime?.memory;
@@ -376,15 +376,11 @@ function renderMemoryInfo(container, runtime) {
 
     if (!memory && (!storage || storage.length === 0)) {
         el.appendChild(emptyState('No memory info available'));
-        processInfo.textContent = '';
         return;
     }
 
-    processInfo.textContent = '';
-
     if (memory) {
-        const hasMax = memory.heapMax && memory.heapMax > 0;
-        const heapPercent = memory.heapUsedPercent ?? (hasMax ? (memory.heapUsed / memory.heapMax) * 100 : 0);
+        const heapPercent = memory.heapUsedPercent;
         el.appendChild(usageSection('Heap',
             `${formatBytes(memory.heapUsed)} / ${formatBytes(memory.heapMax)} (${heapPercent.toFixed(1)}%)`,
             heapPercent));
@@ -397,10 +393,9 @@ function renderMemoryInfo(container, runtime) {
     if (storage && storage.length > 0) {
         storage.forEach(s => {
             const used = s.total - s.free;
-            const percent = s.usedPercent ?? (s.total > 0 ? (used / s.total) * 100 : 0);
             el.appendChild(usageSection(s.path || 'Disk',
                 `${formatBytes(used)} used / ${formatBytes(s.total)} total (${formatBytes(s.free)} free)`,
-                percent));
+                s.usedPercent));
         });
     }
 }
@@ -492,6 +487,5 @@ function renderHealthComponents(container, components) {
 function formatDetailValue(value) {
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (Array.isArray(value)) return value.length > 0 ? value.join(', ') : '-';
-    if (typeof value === 'object') return JSON.stringify(value);
-    return String(value);
+    return formatPlainValue(value);
 }

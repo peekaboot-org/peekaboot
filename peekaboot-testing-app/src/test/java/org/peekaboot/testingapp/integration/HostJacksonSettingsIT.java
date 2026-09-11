@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import java.time.Instant;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testingapp.TestingApp;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,9 +13,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The dashboard reads camelCase names, tests some fields with {@code !== null} and parses
@@ -39,22 +38,16 @@ class HostJacksonSettingsIT {
     @LocalServerPort
     private int port;
 
-    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+    private PeekabootApi api;
 
-    private JsonNode getJson(String uri) {
-        String body = RestClient.builder()
-                .baseUrl("http://localhost:" + port)
-                .build()
-                .get()
-                .uri(uri)
-                .retrieve()
-                .body(String.class);
-        return jsonMapper.readTree(body);
+    @BeforeEach
+    void connect() {
+        api = new PeekabootApi(port);
     }
 
     @Test
     void theApplicationsOwnJsonFollowsItsJacksonSettings() {
-        JsonNode probe = getJson("/host-json-probe");
+        JsonNode probe = api.getJson("/host-json-probe");
 
         assertThat(probe.has("first_name")).isTrue();
         assertThat(probe.has("note")).as("non_null drops the null field").isFalse();
@@ -65,7 +58,7 @@ class HostJacksonSettingsIT {
 
     @Test
     void traceInsightsKeepTheirCamelCaseNames() {
-        JsonNode insights = getJson("/peekaboot/api/traces/insights");
+        JsonNode insights = api.getJson("/peekaboot/api/traces/insights");
 
         assertThat(insights.has("bucketCounts")).isTrue();
         assertThat(insights.has("bucket_counts")).isFalse();
@@ -73,7 +66,7 @@ class HostJacksonSettingsIT {
 
     @Test
     void actuatorInsightsKeepCamelCaseNamesNullsAndIsoInstants() {
-        JsonNode insights = getJson("/peekaboot/api/actuator/all/insights");
+        JsonNode insights = api.getJson("/peekaboot/api/actuator/all/insights");
 
         assertThat(insights.has("dataSources")).isTrue();
         assertThat(insights.has("data_sources")).isFalse();

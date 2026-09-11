@@ -12,10 +12,8 @@
      --pk-primary-text  anything drawn ON --pk-bg/--pk-bg-alt: text, focus
                         rings, borders, the selected-tab underline
 
-   --pk-info does not borrow --pk-primary. The pill it actually sits beside
-   in the health panel is --pk-success, so that is the hue it has to clear:
-   it is held ~51° off it (light) / ~64° (dark), far enough that an INFO pill
-   and an UP pill cannot be confused at pill size. */
+   --pk-info does not borrow --pk-primary; peekaboot-frontend/README.md
+   ("--pk-info is not an alias for --pk-primary") has the reasoning. */
 :root, :host {
     --pk-bg: #ffffff;
     --pk-bg-alt: #f6f8fa;

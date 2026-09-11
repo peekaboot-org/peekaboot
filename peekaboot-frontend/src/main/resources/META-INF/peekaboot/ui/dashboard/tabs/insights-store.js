@@ -46,9 +46,10 @@ function numberOrNull(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function pushCapped(values, value, size) {
-    values.push(value);
-    while (values.length > size) values.shift();
+/** Drops the oldest samples once the ring is over `size` - one splice, however long the gap was. */
+function capAtSize(values, size) {
+    const overflow = values.length - size;
+    if (overflow > 0) values.splice(0, overflow);
 }
 
 function seriesArray(snapshot, key) {
@@ -92,8 +93,9 @@ function appendSample(snapshot, event, keys, pushInto) {
     keys.forEach(key => seriesArray(snapshot, key));
     const missed = missedSamples(snapshot, event);
     const push = (values, value) => {
-        for (let i = 0; i < missed; i++) pushCapped(values, null, snapshot.size);
-        pushCapped(values, numberOrNull(value), snapshot.size);
+        for (let i = 0; i < missed; i++) values.push(null);
+        values.push(numberOrNull(value));
+        capAtSize(values, snapshot.size);
     };
     Object.entries(snapshot.series).forEach(([key, series]) => pushInto(key, series, push));
     snapshot.count = Math.min(snapshot.count + missed + 1, snapshot.size);

@@ -21,18 +21,16 @@ jobs:
       # Major updates wait for a human. So do Gradle-ecosystem updates: CI builds with
       # Maven only, so nothing would ever compile a merged Gradle bump (BUILD.md, CI).
       # So does the Spring Boot line: this starter implements EndpointExposureOutcomeContributor,
-      # discovers actuator endpoints through a private WebEndpointDiscoverer and depends on Boot's
-      # property-source ordering, so a Boot minor is a compatibility event rather than a bump.
-      - name: dependabot-pr-approve
+      # constructs Boot's actuator endpoint objects directly (borrowing only the HealthEndpoint
+      # bean) and depends on Boot's property-source ordering, so a Boot minor is a
+      # compatibility event rather than a bump.
+      # One step for both commands: the condition reads this job's metadata step, which a
+      # job-level `if` cannot see.
+      - name: dependabot-pr-approve-and-auto-merge
         if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.metadata.outputs.package-ecosystem != 'gradle' && steps.metadata.outputs.dependency-group != 'spring-boot'
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
-
-      - name: dependabot-pr-auto-merge
-        if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.metadata.outputs.package-ecosystem != 'gradle' && steps.metadata.outputs.dependency-group != 'spring-boot'
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --merge "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

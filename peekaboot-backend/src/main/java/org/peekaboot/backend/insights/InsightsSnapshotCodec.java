@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.insights.config.InsightsProperties;
 
 /**
  * The insights snapshot's file format, both directions and nothing else.
@@ -23,16 +24,15 @@ import java.util.Map;
  *
  * Every length is checked against a plausibility bound before it is used to allocate:
  * the file is a cache that a crashed write or a stray editor can leave malformed, and
- * a corrupt int must not be able to ask for a multi-gigabyte array.
+ * a corrupt int must not be able to ask for a multi-gigabyte array. The level bounds are
+ * the ones {@link InsightsProperties} enforces, so any geometry that starts can be read back.
  */
 final class InsightsSnapshotCodec {
 
     static final int MAGIC = 0x504B494E; // "PKIN"
     static final int SCHEMA_VERSION = 1;
 
-    private static final int MAX_LEVELS = 16;
     private static final int MAX_SERIES = 10_000;
-    private static final int MAX_RING_SIZE = 1_000_000;
 
     private InsightsSnapshotCodec() {}
 
@@ -90,11 +90,11 @@ final class InsightsSnapshotCodec {
             throw new IOException("unsupported insights snapshot schema " + version);
         }
         long writtenAtEpochMs = in.readLong();
-        int levelCount = bounded(in.readInt(), MAX_LEVELS, "level count");
+        int levelCount = bounded(in.readInt(), InsightsProperties.MAX_LEVELS, "level count");
         List<InsightsSnapshot.Level> levels = new ArrayList<>(levelCount);
         for (int level = 0; level < levelCount; level++) {
             long intervalMs = in.readLong();
-            int size = bounded(in.readInt(), MAX_RING_SIZE, "ring size");
+            int size = bounded(in.readInt(), InsightsProperties.MAX_LEVEL_SIZE, "ring size");
             long endEpochMs = in.readLong();
             int count = bounded(in.readInt(), size, "sample count");
             levels.add(new InsightsSnapshot.Level(intervalMs, size, endEpochMs, count));

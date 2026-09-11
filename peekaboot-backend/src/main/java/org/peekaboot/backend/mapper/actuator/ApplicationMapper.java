@@ -1,11 +1,11 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import org.peekaboot.backend.actuator.parsed.InfoResponse;
 import org.peekaboot.backend.actuator.parsed.SpringInfo;
 import org.peekaboot.backend.domain.application.ApplicationInfo;
+import org.peekaboot.backend.domain.application.GitInfo;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.masking.TreeMasker;
 
@@ -19,16 +19,15 @@ public class ApplicationMapper {
 
     public ApplicationInfo map(InfoResponse info, SpringInfo spring, boolean unmask) {
         Map<String, Object> build = Collections.emptyMap();
-        Map<String, Object> git = Collections.emptyMap();
+        GitInfo git = null;
         String javaVersion = null;
         String javaVendor = null;
 
         if (info != null) {
-            if (info.build() != null) {
-                build = maskBuild(info.build(), unmask);
-            }
+            // free-form: a consuming app supplies info.build itself, so it is masked as a tree
+            build = treeMasker.maskMap(info.build(), unmask);
             if (info.git() != null) {
-                git = mapGitInfo(info.git());
+                git = gitInfo(info.git());
             }
             if (info.java() != null) {
                 javaVersion = info.java().version();
@@ -44,30 +43,8 @@ public class ApplicationMapper {
         return new ApplicationInfo(build, git, bootVersion, frameworkVersion, javaVersion, javaVendor);
     }
 
-    /**
-     * Unlike git and the JVM/Spring version fields, which are all populated here, {@code
-     * info.build} is a free-form map a consuming app supplies itself - not controlled by
-     * this mapper at all.
-     *
-     * <p>The {@code instanceof Map} check is total in practice: {@link TreeMasker} returns a
-     * {@code LinkedHashMap} for a map input and hands the input straight back when unmasking.
-     * It stands to keep the unchecked cast above honest.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> maskBuild(Map<String, Object> build, boolean unmask) {
-        Object masked = treeMasker.mask(build, unmask);
-        return masked instanceof Map ? (Map<String, Object>) masked : Collections.emptyMap();
-    }
-
-    private Map<String, Object> mapGitInfo(InfoResponse.GitInfo gitInfo) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("branch", gitInfo.branch());
-        if (gitInfo.commit() != null) {
-            Map<String, Object> commit = new HashMap<>();
-            commit.put("id", gitInfo.commit().id());
-            commit.put("time", gitInfo.commit().time());
-            result.put("commit", commit);
-        }
-        return result;
+    private static GitInfo gitInfo(InfoResponse.GitInfo git) {
+        InfoResponse.GitInfo.CommitInfo commit = git.commit();
+        return new GitInfo(git.branch(), commit == null ? null : new GitInfo.Commit(commit.id(), commit.time()));
     }
 }

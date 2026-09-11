@@ -8,9 +8,9 @@
  * style attribute in markup: a host page whose CSP omits style-src 'unsafe-inline' drops
  * the attributes, which would flatten every row to depth 0 and every bar to the left edge.
  */
-import {escapeHtml} from '../../shared/markup.js';
+import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
-import {issueSeverity} from '../../shared/severity.js';
+import {issueSeverity, severityClass} from '../../shared/severity.js';
 
 const INDENT_PX = 20;
 
@@ -22,16 +22,14 @@ export function render(container, trace, context = {}) {
     // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
     const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
 
-    container.innerHTML = '<div class="pk-gantt">'
-        + '<div class="pk-gantt-header">'
-        + '<div class="pk-gantt-header__name">Span</div>'
-        + `<div class="pk-gantt-header__timeline">${ticks.map(tick => `<span>${tick}</span>`).join('')}</div>`
-        + '<div class="pk-gantt-header__spacer"></div>'
-        + '</div>'
-        + '<div id="pk-gantt-rows"></div>'
-        + '</div>';
+    const rowsContainer = el('div', {attrs: {id: 'pk-gantt-rows'}});
+    container.replaceChildren(el('div', {className: 'pk-gantt'},
+        el('div', {className: 'pk-gantt-header'},
+            el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
+            el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
+            el('div', {className: 'pk-gantt-header__spacer'})),
+        rowsContainer));
 
-    const rowsContainer = container.querySelector('#pk-gantt-rows');
     renderSpanRows(rowsContainer, trace.rootSpan, 0, traceStart, totalDuration);
 
     rowsContainer.addEventListener('click', (e) => {
@@ -117,45 +115,45 @@ function renderSpanRows(container, span, depth, traceStart, totalDuration) {
 }
 
 function nameCell(span, indent) {
-    const cell = document.createElement('div');
-    cell.className = 'pk-gantt-name';
-    cell.style.paddingLeft = `${indent}px`;
-    cell.innerHTML = nameCellHtml(span);
-    return cell;
-}
-
-function nameCellHtml(span) {
     const hasChildren = span.children && span.children.length > 0;
     const kind = (span.kind || 'internal').toLowerCase();
     const name = span.name || 'unknown';
-    const spanId = escapeHtml(span.spanId);
+    const spanId = span.spanId;
     const logCount = (span.logs || []).length;
-    // The backend decides what a query span is (DbSpans) and ships its masked statement as
-    // span.query; a datasource-proxy result-set span carries the row count as a tag.
-    const rowCount = name.toLowerCase().includes('result-set') ? (span.tags || {})['jdbc.row-count'] : undefined;
 
-    let html = hasChildren
-        ? '<button type="button" class="pk-gantt-toggle" aria-expanded="true" aria-label="Collapse child spans">-</button>'
-        : '<span class="pk-gantt-toggle-spacer"></span>';
+    const cell = el('div', {className: 'pk-gantt-name'});
+    cell.style.paddingLeft = `${indent}px`;
+    cell.append(hasChildren
+        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
+        : el('span', {className: 'pk-gantt-toggle-spacer'}));
     if (kind !== 'internal' && kind !== 'unknown') {
-        html += `<span class="pk-gantt-kind pk-gantt-kind--${escapeHtml(kind)}">${escapeHtml(kind)}</span>`;
+        cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
     }
-    html += `<span class="pk-gantt-name__text" title="${escapeHtml(name)}">${escapeHtml(name)}</span>`;
-    if (rowCount !== undefined) {
-        html += `<span class="pk-span-row-count">${formatCount(Number(rowCount), 'row')}</span>`;
+    cell.append(el('span', {className: 'pk-gantt-name__text', text: name, title: name}));
+    // The backend decides what a query span is (DbSpans) and ships its masked statement
+    // as span.query, and a result-set span's parsed row count as span.rowCount.
+    if (span.rowCount != null) {
+        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row')}));
     }
     if (span.query) {
-        html += `<button type="button" class="pk-span-action pk-span-query-toggle" data-span-id="${spanId}"`
-            + ' title="Show SQL" aria-label="Show SQL for this span">&#128196;</button>'
-            + `<button type="button" class="pk-span-action pk-span-query-link" data-span-id="${spanId}"`
-            + ' title="Show in Queries tab" aria-label="Show this query in the Queries tab">&#10551;</button>';
+        cell.append(
+            button({
+                className: 'pk-span-action pk-span-query-toggle', text: '\u{1F4C4}', title: 'Show SQL',
+                attrs: {'data-span-id': spanId, 'aria-label': 'Show SQL for this span'}
+            }),
+            button({
+                className: 'pk-span-action pk-span-query-link', text: '⤷', title: 'Show in Queries tab',
+                attrs: {'data-span-id': spanId, 'aria-label': 'Show this query in the Queries tab'}
+            }));
     }
     if (logCount > 0) {
         const logs = formatCount(logCount, 'log');
-        html += `<button type="button" class="pk-span-action pk-span-logs-toggle" data-span-id="${spanId}"`
-            + ` title="View logs for this span" aria-label="View ${logs} for this span in the Logs tab">${logs}</button>`;
+        cell.append(button({
+            className: 'pk-span-action pk-span-logs-toggle', text: logs, title: 'View logs for this span',
+            attrs: {'data-span-id': spanId, 'aria-label': `View ${logs} for this span in the Logs tab`}
+        }));
     }
-    return html;
+    return cell;
 }
 
 function track(span, traceStart, totalDuration) {
@@ -165,7 +163,8 @@ function track(span, traceStart, totalDuration) {
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
     const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
     const kind = (span.kind || 'internal').toLowerCase();
-    const hasError = span.status === 'ERROR' || span.errorMessage;
+    // the backend's verdict: ERROR whenever the span recorded an error message or class
+    const hasError = span.status === 'ERROR';
 
     const element = document.createElement('div');
     element.className = 'pk-gantt-track';
@@ -188,7 +187,7 @@ function eventMarker(event, traceStart, totalDuration) {
 
     const marker = document.createElement('button');
     marker.type = 'button';
-    marker.className = 'pk-gantt-event-marker';
+    marker.className = 'pk-unbutton pk-gantt-event-marker';
     marker.style.left = `${left}%`;
     marker.setAttribute('aria-label', `Event: ${event.name}`);
 
@@ -206,7 +205,7 @@ function durationCell(span, totalDuration) {
     const severity = issueSeverity(span.issues);
 
     const cell = document.createElement('span');
-    cell.className = 'pk-gantt-duration' + (severity ? ` pk-gantt-duration--${severity}` : '');
+    cell.className = 'pk-gantt-duration' + (severity ? ` ${severityClass(severity)}` : '');
     cell.textContent = `${formatDurationMs(span.durationMs)} · ${pct}%`;
     return cell;
 }
@@ -220,35 +219,34 @@ function queryDetailRow(span, indent, depth) {
     // expand/collapse walker (which stops at depth <= row depth) passes it
     detail.dataset.depth = depth + 1;
     detail.style.marginLeft = `${indent + INDENT_PX}px`;
-    detail.innerHTML = `<div class="pk-query-label">Query</div><div class="pk-query-text">${escapeHtml(span.query)}</div>`;
+    detail.append(
+        el('div', {className: 'pk-query-label pk-label', text: 'Query'}),
+        el('div', {className: 'pk-query-text', text: span.query}));
     return detail;
 }
 
 /**
- * The span's tags as badges under its row, or null when there are none to show: the
- * statement tags already show in the query detail, and events sit on the track.
+ * The span's tags as badges under its row, or null when there are none: the backend
+ * already keeps the statement tags out (they show in the query detail), and events sit
+ * on the track.
  */
 function tagBadgesRow(span, indent, depth) {
-    const entries = Object.entries(span.tags || {}).filter(([key]) => !isStatementTag(key));
+    const entries = Object.entries(span.tags || {});
     if (entries.length === 0) return null;
 
     const row = document.createElement('div');
     row.className = 'pk-gantt-badges';
     row.dataset.depth = depth + 1;
     row.style.paddingLeft = `${indent + INDENT_PX}px`;
-    row.innerHTML = entries.map(([key, value]) => tagBadgeHtml(key, String(value))).join('');
+    row.append(...entries.map(([key, value]) => tagBadge(key, String(value))));
     return row;
 }
 
-function tagBadgeHtml(key, value) {
+function tagBadge(key, value) {
     const shortKey = key.split('.').pop();
     const shortValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
-    return `<span class="pk-tag-badge" title="${escapeHtml(key)}: ${escapeHtml(value)}">`
-        + `<span class="pk-tag-badge__key">${escapeHtml(shortKey)}</span>=`
-        + `<span class="pk-tag-badge__value">${escapeHtml(shortValue)}</span></span>`;
-}
-
-/** The tags DbSpans.sql reads the statement from - shown once, in the query detail, not again as a badge. */
-function isStatementTag(key) {
-    return key.startsWith('jdbc.query') || key === 'db.query.text' || key === 'db.statement';
+    return el('span', {className: 'pk-tag-badge', title: `${key}: ${value}`},
+        el('span', {className: 'pk-tag-badge__key', text: shortKey}),
+        '=',
+        el('span', {className: 'pk-tag-badge__value', text: shortValue}));
 }

@@ -18,12 +18,14 @@
  * The bar never fetches /api/features: it colours durations by the shared defaults
  * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults.
  */
-import {formatDurationMs} from '../shared/format.js';
+import {createClient} from '../shared/api.js';
+import {badge} from '../shared/components.js';
+import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
-import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
-import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
-import {traceStatParts} from '../shared/trace-stats.js';
+import {bindTheme} from '../shared/theme.js';
+import {copyableId, bindCopyables} from '../shared/copyable.js';
+import {traceStatParts, durationStat} from '../shared/trace-stats.js';
 
 // Four fixed attempts rather than backoff-until-complete: every one runs, so a span that
 // ends after the root - an @Async continuation, a streamed body - still reaches the bar
@@ -43,8 +45,10 @@ if (dataEl && hostEl && hostEl.shadowRoot && !hostEl.dataset.pkReady) {
 
 function initToolbar(host, data) {
     const shadow = host.shadowRoot;
-    applyTheme(host, resolveTheme());
-    watchTheme(theme => applyTheme(host, theme));
+    // The server hands the toolbar its base path; api.js's own default is read off the
+    // module URL, which is the same place but only the dashboard needs to derive it.
+    const client = createClient({basePath: data.basePath});
+    bindTheme(host);
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
     // looking, so the notice the server rendered for the opposite case has served its
@@ -55,10 +59,6 @@ function initToolbar(host, data) {
     const bar = shadow.querySelector('.pk-toolbar');
     const openButton = shadow.querySelector('.pk-toolbar__open');
     const metricsEl = shadow.getElementById('pk-metrics');
-    // A dedicated listener (rather than the inline onclick CSP would block on host pages
-    // whose script-src disallows 'unsafe-inline') keeps the link's own click from also
-    // triggering the bar's open-overlay handler below.
-    shadow.querySelector('.pk-toolbar__link').addEventListener('click', e => e.stopPropagation());
 
     let currentTraceId = null;
 
@@ -66,9 +66,9 @@ function initToolbar(host, data) {
         currentTraceId = traceId;
         openButton.setAttribute('aria-disabled', traceId ? 'false' : 'true');
         renderRequest(traceId, method, path, status);
-        metricsEl.innerHTML = '<span class="pk-toolbar__loading">loading</span>';
+        metricsEl.replaceChildren(el('span', {className: 'pk-toolbar__loading', text: 'loading'}));
         if (traceId) {
-            pollTrace(data.basePath, traceId, {
+            pollTrace(client, traceId, {
                 stillCurrent: () => currentTraceId === traceId,
                 onTrace: renderTrace,
                 onNothingArrived: renderPending
@@ -79,9 +79,11 @@ function initToolbar(host, data) {
     function renderRequest(traceId, method, path, status) {
         // The bar has room for the number alone; the overlay's own pill spells the
         // status out. The colouring is shared, so a 404 reads the same in both places.
-        const statusEl = shadow.getElementById('pk-status');
-        statusEl.textContent = status;
-        statusEl.className = 'pk-badge pk-badge--' + statusVariant(status);
+        // The server-rendered placeholder is swapped for the shared builder's pill,
+        // keeping the id the rest of this module looks it up by.
+        const statusEl = badge(status, statusVariant(status));
+        statusEl.id = 'pk-status';
+        shadow.getElementById('pk-status').replaceWith(statusEl);
 
         // textContent/title are safe sinks on their own; escaping before assigning to them
         // would double-escape (e.g. a literal "&" in the path would render as "&amp;").
@@ -93,7 +95,7 @@ function initToolbar(host, data) {
         shadow.getElementById('pk-controller').textContent = '';
         // full id, labelled and copyable - a truncated id cannot be pasted into a log
         // search, which is the only reason to show it on the bar at all
-        shadow.getElementById('pk-trace').innerHTML = copyableIdHtml(traceId, {label: 'traceId'});
+        shadow.getElementById('pk-trace').replaceChildren(copyableId(traceId, {label: 'traceId'}));
         bindCopyables(shadow);
     }
 
@@ -104,19 +106,17 @@ function initToolbar(host, data) {
             shadow.getElementById('pk-controller').textContent = '→ ' + className + '.' + controller.method;
         }
 
-        const durationClass = durationSeverity(trace.durationMs);
-        const durationStat = document.createElement('span');
-        durationStat.className = 'pk-stat' + (durationClass ? ' pk-stat--' + durationClass : '');
-        durationStat.innerHTML = '<span aria-hidden="true">⏱</span><span class="pk-stat__duration"></span>';
-        durationStat.querySelector('.pk-stat__duration').textContent = formatDurationMs(trace.durationMs);
-
-        metricsEl.replaceChildren(durationStat, ...traceStatParts(trace));
+        const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
+        const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace));
     }
 
     // Nothing ever arrived: replace "loading" with the placeholder row rather than
     // leaving a spinner up forever.
     function renderPending() {
-        metricsEl.innerHTML = '<span class="pk-toolbar__pending">[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]</span>';
+        metricsEl.replaceChildren(el('span', {
+            className: 'pk-toolbar__pending', text: '[⏱ ?] [\u{1F4C4} ?] [\u{1F5C4} ?] [\u{1F4DD} ?]'
+        }));
     }
 
     async function openOverlay() {
@@ -128,10 +128,10 @@ function initToolbar(host, data) {
         loadTrace(data.traceId, data.method, data.path, data.status);
     }
 
-    // Attached to the outer bar (not just the button) so a click anywhere on it - other
-    // than the dashboard link, which stops its own propagation above - opens the overlay.
-    // A real <button> click (mouse or native Enter/Space activation) bubbles up to this
-    // listener like any other click.
+    // Attached to the outer bar (not just the button) so a click anywhere on it opens the
+    // overlay - except on the dashboard link, the bar's one <a> once the auth notice is
+    // gone, whose click is a navigation and nothing else. A real <button> click (mouse or
+    // native Enter/Space activation) bubbles up to this listener like any other click.
     bar.addEventListener('click', function(e) {
         if (e.target.closest('a')) return;
         if (!currentTraceId) return;
@@ -154,7 +154,7 @@ function initToolbar(host, data) {
  * previous render standing - and onNothingArrived once if no attempt ever did. Stops
  * silently the moment stillCurrent() says the bar has moved on to another trace.
  */
-function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived}) {
+function pollTrace(client, traceId, {stillCurrent, onTrace, onNothingArrived}) {
     let rendered = false;
 
     function attempt(index) {
@@ -162,8 +162,9 @@ function pollTrace(basePath, traceId, {stillCurrent, onTrace, onNothingArrived})
         const last = index === ATTEMPT_DELAYS_MS.length - 1;
         setTimeout(() => {
             if (!stillCurrent()) return;
-            fetch(basePath + '/api/traces/' + traceId + '/insights')
-                .then(resp => (resp.ok ? resp.json() : null))
+            // A 404 rejects here (api.js), which the catch below reads the same way as an
+            // empty result: the trace has not arrived yet.
+            client.get('/api/traces/' + traceId + '/insights')
                 .then(trace => {
                     if (!stillCurrent()) return;
                     if (trace && trace.rootSpan) {

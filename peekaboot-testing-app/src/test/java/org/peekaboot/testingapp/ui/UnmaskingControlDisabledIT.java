@@ -19,8 +19,7 @@ class UnmaskingControlDisabledIT extends PlaywrightTestBase {
     @Test
     void unmaskControlIsNotRenderedOnTheEnvironmentTab() {
         openDashboard();
-        page.click(".pk-tab[data-tab='environment']");
-        page.waitForSelector("#property-sources .pk-group__header");
+        dashboard.openTab("environment");
 
         assertThat(page.locator("#env-unmask-slot .pk-unmask-toggle").count()).isZero();
     }
@@ -28,8 +27,7 @@ class UnmaskingControlDisabledIT extends PlaywrightTestBase {
     @Test
     void unmaskControlIsNotRenderedOnTheConfigTab() {
         openDashboard();
-        page.click(".pk-tab[data-tab='config']");
-        page.waitForSelector("#config-groups .pk-group__header");
+        dashboard.openTab("config");
 
         assertThat(page.locator("#config-unmask-slot .pk-unmask-toggle").count())
                 .isZero();

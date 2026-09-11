@@ -3,22 +3,13 @@
  * delay, fixed rate), each expandable to its individual task rows, with a summary badge
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
-import {groupList, expandedKeys, badge, emptyState} from '../../shared/components.js';
+import {badge, iconLink} from '../../shared/components.js';
 import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
+import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
+import {taskStatusVariant} from '../../shared/severity.js';
+import {buildAppHash} from '../../shared/url-state.js';
 
 export const id = 'scheduled-tasks';
-export const label = 'Scheduled Tasks';
-
-let currentData = null;
-
-export function isAvailable(data) {
-    return Boolean(data?.scheduledTasks?.tasks?.length);
-}
-
-export function render(container, data, context) {
-    currentData = data;
-    renderGroups(container, context);
-}
 
 /** Every TaskType the backend emits, in the order the groups render. */
 const TYPE_LABELS = {CRON: 'Cron Tasks', FIXED_DELAY: 'Fixed Delay Tasks', FIXED_RATE: 'Fixed Rate Tasks'};
@@ -26,48 +17,42 @@ const TYPE_PILL_LABELS = {CRON: 'Cron', FIXED_DELAY: 'Fixed Delay', FIXED_RATE: 
 
 export const TASK_TYPES = Object.keys(TYPE_LABELS);
 
-/** SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
-function taskSeverity(status) {
-    if (status === 'SUCCESS') return 'ok';
-    if (status === 'FAILED') return 'error';
-    return 'muted';
+// no inputId: the group shell without a filter (see filtered-group-tab.js)
+const tab = filteredGroupTab({
+    listId: 'scheduled-tasks-groups',
+    select: data => groupsByType(data?.scheduledTasks?.tasks),
+    filterGroup: group => group,
+    key: group => group.type,
+    header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
+    items: (group, list, query, context) => group.tasks.forEach(task =>
+        list.appendChild(renderTaskRow(task, group.type, context))),
+    extraTop: data => renderSummary(data.scheduledTasks),
+    emptyMessage: 'No scheduled tasks configured'
+});
+
+export function isAvailable(data) {
+    return Boolean(data?.scheduledTasks?.tasks?.length);
 }
 
-function renderGroups(container, context) {
-    const scheduledTasks = currentData?.scheduledTasks;
-    const target = container.querySelector('#scheduled-tasks-groups');
-    // Must run before the container is cleared below - see filtered-group-tab.js's renderGroups.
-    const expanded = expandedKeys(target);
-    target.innerHTML = '';
+export function render(container, data, context) {
+    tab.render(container, data, context);
+}
 
-    const tasks = scheduledTasks?.tasks;
-    if (!tasks || tasks.length === 0) {
-        target.appendChild(emptyState('No scheduled tasks configured'));
-        return;
-    }
-
-    renderSummary(container, scheduledTasks, tasks.length);
-
-    const groups = TASK_TYPES
-        .map(type => ({type, tasks: tasks.filter(t => t.type === type)}))
+function groupsByType(tasks) {
+    if (!tasks) return [];
+    return TASK_TYPES
+        .map(type => ({type, tasks: tasks.filter(task => task.type === type)}))
         .filter(group => group.tasks.length > 0);
-
-    groupList(target, groups, {
-        key: group => group.type,
-        header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
-        items: (group, list) => group.tasks.forEach(task =>
-            list.appendChild(renderTaskRow(task, group.type, context))),
-        expandedKeys: expanded
-    });
 }
 
-function renderSummary(container, scheduledTasks, total) {
-    const summaryEl = container.querySelector('#scheduled-tasks-summary');
-    summaryEl.innerHTML = '';
-    summaryEl.appendChild(badge(`Total: ${total}`, 'muted'));
+function renderSummary(scheduledTasks) {
+    const summaryEl = document.createElement('div');
+    summaryEl.className = 'pk-tasks-summary';
+    summaryEl.appendChild(badge(`Total: ${scheduledTasks.tasks.length}`, 'muted'));
     summaryEl.appendChild(badge(`Cron: ${scheduledTasks.cronCount}`, 'muted'));
     summaryEl.appendChild(badge(`Fixed Delay: ${scheduledTasks.fixedDelayCount}`, 'muted'));
     summaryEl.appendChild(badge(`Fixed Rate: ${scheduledTasks.fixedRateCount}`, 'muted'));
+    return summaryEl;
 }
 
 function renderTaskRow(task, type, context) {
@@ -106,7 +91,7 @@ function renderTaskRow(task, type, context) {
     right.className = 'pk-task__right';
     right.appendChild(timingEl('Last:', task.lastExecution ? formatDateTime(task.lastExecution, dateOptions) : 'Never'));
     right.appendChild(timingEl('Next:', task.nextExecution ? formatDateTime(task.nextExecution, dateOptions) : '-'));
-    right.appendChild(badge(task.lastStatus || 'PENDING', taskSeverity(task.lastStatus)));
+    right.appendChild(badge(task.lastStatus || 'PENDING', taskStatusVariant(task.lastStatus)));
 
     row.append(left, right);
     item.appendChild(row);
@@ -121,7 +106,7 @@ function renderTaskRow(task, type, context) {
     targetRow.appendChild(targetEl);
 
     if (context.features?.tracing) {
-        targetRow.appendChild(renderTracesLink(context, task));
+        targetRow.appendChild(renderTracesLink(task));
     }
 
     item.appendChild(targetRow);
@@ -144,25 +129,16 @@ function timingEl(labelText, value) {
 }
 
 /**
- * Navigates to the Traces tab pre-filtered to this scheduler's own SCHEDULED_JOB
- * traces, via context.navigate's third (payload) argument - routed by main.js to
- * traces.js's applyFilter(), which owns the actual filter state (see its doc comment).
+ * A plain deep link into the Traces tab, pre-filtered to this scheduler's own
+ * SCHEDULED_JOB traces: the same "#traces?type=...&op=..." a shared link carries, restored
+ * by traces.js's own URL reconciliation once the hash router lands there.
  */
-function renderTracesLink(context, task) {
-    const link = document.createElement('a');
-    link.href = '#';
-    link.className = 'pk-task__traces-link';
-    // title alone would not become the accessible name here: the emoji textContent is
-    // itself real content, so it (its Unicode name) would win instead. aria-label pins
-    // the name to the same text title already carries.
-    link.title = 'View traces for this scheduler';
-    link.setAttribute('aria-label', 'View traces for this scheduler');
-    link.textContent = '\u{1F50D}';
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        context.navigate('traces', null, {rootActionType: 'SCHEDULED_JOB', rootOperation: task.target});
+function renderTracesLink(task) {
+    return iconLink(buildAppHash({tab: 'traces', params: {type: 'SCHEDULED_JOB', op: task.target}}), {
+        label: 'View traces for this scheduler',
+        icon: '\u{1F50D}',
+        className: 'pk-task__traces-link'
     });
-    return link;
 }
 
 function renderException(lastException) {

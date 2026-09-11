@@ -11,32 +11,40 @@ public record ProcessInfo(String username, String uid, String gid, long pid, Lis
 
     public record ParentProcess(long pid, String command) {}
 
-    private static final Path PROC_SELF_STATUS = Path.of("/proc/self/status");
+    /**
+     * The process facts, read once ({@link #current()} caches the result: they are static
+     * for the JVM's lifetime). A record so tests can state a process tree outright instead
+     * of depending on the one the test runner happens to be.
+     */
+    record Signals(String username, ProcessHandle self, Path status) {
+
+        static Signals fromRuntime() {
+            return new Signals(System.getProperty("user.name"), ProcessHandle.current(), Path.of("/proc/self/status"));
+        }
+    }
 
     /**
      * Lazily computed once: the values are static for the JVM's lifetime and
      * computing them reads {@code /proc} and walks the parent process chain.
      */
     private static final class CurrentHolder {
-        private static final ProcessInfo CURRENT = compute();
+        private static final ProcessInfo CURRENT = read(Signals.fromRuntime());
     }
 
     public static ProcessInfo current() {
         return CurrentHolder.CURRENT;
     }
 
-    private static ProcessInfo compute() {
-        String username = System.getProperty("user.name");
-        long pid = ProcessHandle.current().pid();
-        String uid = procStatusId(PROC_SELF_STATUS, "Uid");
-        String gid = procStatusId(PROC_SELF_STATUS, "Gid");
-        List<ParentProcess> parents = resolveParentProcesses();
-        return new ProcessInfo(username, uid, gid, pid, parents);
+    static ProcessInfo read(Signals signals) {
+        String uid = procStatusId(signals.status(), "Uid");
+        String gid = procStatusId(signals.status(), "Gid");
+        List<ParentProcess> parents = resolveParentProcesses(signals.self());
+        return new ProcessInfo(signals.username(), uid, gid, signals.self().pid(), parents);
     }
 
-    private static List<ParentProcess> resolveParentProcesses() {
+    private static List<ParentProcess> resolveParentProcesses(ProcessHandle self) {
         List<ParentProcess> parents = new ArrayList<>();
-        Optional<ProcessHandle> current = ProcessHandle.current().parent();
+        Optional<ProcessHandle> current = self.parent();
         while (current.isPresent()) {
             ProcessHandle handle = current.get();
             String command =

@@ -1,5 +1,6 @@
 package org.peekaboot.backend.testsupport;
 
+import io.micrometer.tracing.Span;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.domain.trace.SpanEvent;
@@ -25,12 +26,12 @@ public final class SpanNodes {
 
         private final String spanId;
         private String name = "test-op";
-        private String kind = "SERVER";
+        private Span.Kind kind = Span.Kind.SERVER;
         private long startTimeMs;
         private long durationMs;
         private SpanStatus status = SpanStatus.OK;
         private List<SpanNode> children = List.of();
-        private Map<String, Object> tags = Map.of();
+        private Map<String, String> tags = Map.of();
         private List<SpanEvent> events = List.of();
         private List<SpanIssue> issues = List.of();
         private long creationOrder;
@@ -38,6 +39,7 @@ public final class SpanNodes {
         private String errorClass;
         private String remoteServiceName;
         private String query;
+        private Long rowCount;
         private List<TraceLog> logs;
 
         private Builder(String spanId) {
@@ -49,7 +51,7 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder kind(String kind) {
+        public Builder kind(Span.Kind kind) {
             this.kind = kind;
             return this;
         }
@@ -74,8 +76,13 @@ public final class SpanNodes {
             return this;
         }
 
-        public Builder tags(Map<String, Object> tags) {
+        public Builder tags(Map<String, String> tags) {
             this.tags = tags;
+            return this;
+        }
+
+        public Builder events(List<SpanEvent> events) {
+            this.events = events;
             return this;
         }
 
@@ -105,6 +112,11 @@ public final class SpanNodes {
             return this;
         }
 
+        public Builder rowCount(Long rowCount) {
+            this.rowCount = rowCount;
+            return this;
+        }
+
         public Builder logs(List<TraceLog> logs) {
             this.logs = logs;
             return this;
@@ -127,6 +139,7 @@ public final class SpanNodes {
                     errorClass,
                     remoteServiceName,
                     query,
+                    rowCount,
                     logs);
         }
     }

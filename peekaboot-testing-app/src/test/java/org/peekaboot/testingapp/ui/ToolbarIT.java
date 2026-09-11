@@ -22,20 +22,11 @@ import org.junit.jupiter.api.Test;
  */
 class ToolbarIT extends PlaywrightTestBase {
 
-    /**
-     * Headless Chromium's own default is prefers-color-scheme: light, so a naive
-     * "storage wins" test in the light direction would pass even if the stored preference
-     * were ignored entirely. Forcing the OS preference to the opposite of what's stored
-     * makes each test fail if resolveTheme() ever stops preferring localStorage.
-     */
-    private void emulateOppositeOsPreference(ColorScheme osPreference) {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
-    }
-
+    /** The OS preference is the opposite of what is stored (see emulateOsColorScheme), or the light case proves nothing. */
     @Test
     void toolbarFollowsTheStoredLightPreference() {
         setStoredTheme("light");
-        emulateOppositeOsPreference(ColorScheme.DARK);
+        emulateOsColorScheme(ColorScheme.DARK);
         openPersonsPage();
 
         assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#ffffff");
@@ -44,7 +35,7 @@ class ToolbarIT extends PlaywrightTestBase {
     @Test
     void toolbarFollowsTheStoredDarkPreference() {
         setStoredTheme("dark");
-        emulateOppositeOsPreference(ColorScheme.LIGHT);
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openPersonsPage();
 
         assertThat(toolbar.cssVar("--pk-bg")).isEqualTo("#0d1117");
@@ -62,22 +53,23 @@ class ToolbarIT extends PlaywrightTestBase {
         assertThat(path).isEqualTo("/persons");
     }
 
+    /**
+     * The bar runs inside pages Peekaboot does not own, so it may add nothing at all to their
+     * window. Diffed against a snapshot taken before any page script ran, rather than probing
+     * one name a leak would have to be called.
+     */
     @Test
-    void clickingTheBarOpensTheTraceOverlay() {
+    void toolbarDoesNotLeakGlobals() {
+        page.addInitScript("window.__pkGlobalsBeforeToolbar = Object.keys(window);");
         openPersonsPage();
         toolbar.traceId();
 
-        toolbar.click(".pk-toolbar");
+        @SuppressWarnings("unchecked")
+        List<String> added = (List<String>) page.evaluate("() => Object.keys(window)"
+                + ".filter(key => key !== '__pkGlobalsBeforeToolbar'"
+                + " && !window.__pkGlobalsBeforeToolbar.includes(key))");
 
-        page.waitForSelector("#peekaboot-trace-overlay");
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
-    }
-
-    @Test
-    void toolbarDoesNotLeakGlobals() {
-        openPersonsPage();
-
-        assertThat(page.evaluate("() => typeof window.__peekaboot")).isEqualTo("undefined");
+        assertThat(added).isEmpty();
     }
 
     /**
@@ -93,8 +85,8 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
 
-        page.waitForSelector("#peekaboot-trace-overlay");
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
+        overlay.awaitOpened();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
     }
 
     /**
@@ -118,7 +110,7 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.click(".pk-toolbar a");
 
         assertThatThrownBy(() -> page.waitForSelector(
-                        "#peekaboot-trace-overlay",
+                        TraceOverlay.HOST,
                         new Page.WaitForSelectorOptions()
                                 .setState(WaitForSelectorState.ATTACHED)
                                 .setTimeout(1000)))
@@ -127,8 +119,8 @@ class ToolbarIT extends PlaywrightTestBase {
         // Not vacuous: the bar's own action still works on this same page.
         toolbar.traceId();
         toolbar.click(".pk-toolbar");
-        page.waitForSelector("#peekaboot-trace-overlay");
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isTrue();
+        overlay.awaitOpened();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isTrue();
     }
 
     /**
@@ -227,7 +219,7 @@ class ToolbarIT extends PlaywrightTestBase {
                 () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isFalse();
 
         // Not stuck: a second click (still blocked) must still reach the handler and
         // produce its own warning, rather than the listener having wedged or detached
@@ -238,7 +230,7 @@ class ToolbarIT extends PlaywrightTestBase {
                 () -> toolbar.click(".pk-toolbar"));
 
         assertThat(pageErrors).isEmpty();
-        assertThat(page.isVisible("#peekaboot-trace-overlay")).isFalse();
+        assertThat(page.isVisible(TraceOverlay.HOST)).isFalse();
     }
 
     /**

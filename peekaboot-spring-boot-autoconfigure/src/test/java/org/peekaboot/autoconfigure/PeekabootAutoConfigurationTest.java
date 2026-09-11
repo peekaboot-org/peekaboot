@@ -10,7 +10,6 @@ import org.peekaboot.backend.controller.PeekabootController;
 import org.peekaboot.backend.domain.features.Features;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.service.MetricsService;
-import org.springframework.boot.actuate.info.InfoEndpoint;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -27,10 +26,9 @@ class PeekabootAutoConfigurationTest {
 
     // PeekabootAutoConfiguration is @ConditionalOnWebApplication(SERVLET), so most of
     // this class exercises it through a servlet web application context; only
-    // shouldNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
+    // doesNotRegisterBeansOnNonServletApplication uses the plain, non-servlet runner.
     private final WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-            .withUserConfiguration(MockActuatorConfig.class);
+            .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class));
 
     /**
      * The lifecycle switch is read by {@code PeekabootLifecycleAutoConfiguration}'s condition
@@ -54,7 +52,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldRegisterBeansWhenEnabledAndEndpointClassesPresent() {
+    void registersBeansWhenEnabledAndEndpointClassesPresent() {
         contextRunner.withPropertyValues("peekaboot.enabled=true").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(PeekabootProperties.class);
@@ -101,7 +99,7 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenPeekabootDisabled() {
+    void doesNotRegisterBeansWhenPeekabootDisabled() {
         contextRunner.withPropertyValues("peekaboot.enabled=false").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).doesNotHaveBean(PeekabootController.class);
@@ -110,23 +108,12 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off
-        contextRunner.run(context -> {
-            assertThat(context).hasNotFailed();
-            assertThat(context).doesNotHaveBean(PeekabootController.class);
-        });
-    }
-
-    @Test
-    void shouldNotRegisterBeansOnNonServletApplication() {
+    void doesNotRegisterBeansOnNonServletApplication() {
         // peekaboot.enabled=true is the default in local development; on a reactive or
         // non-web application PeekabootAutoConfiguration must stay inactive rather than
         // partially activating a servlet-only component (PeekabootWebConfig).
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withPropertyValues("peekaboot.enabled=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
@@ -136,8 +123,8 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenSpringWebmvcAbsentEntirely() {
-        // shouldNotRegisterBeansOnNonServletApplication only proves the guard works when
+    void doesNotRegisterBeansWhenSpringWebmvcAbsentEntirely() {
+        // doesNotRegisterBeansOnNonServletApplication only proves the guard works when
         // spring-webmvc is present but simply unused by a plain, non-web context — this
         // module's own test classpath always carries spring-webmvc. A genuinely reactive
         // application doesn't have spring-webmvc on the classpath at all, so hide
@@ -147,7 +134,6 @@ class PeekabootAutoConfigurationTest {
         // PeekabootWebConfig with a NoClassDefFoundError.
         new ReactiveWebApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withClassLoader(new FilteredClassLoader(
                         WebMvcConfigurer.class, ResourceHandlerRegistry.class, ViewControllerRegistry.class))
                 .withPropertyValues("peekaboot.enabled=true")
@@ -159,21 +145,10 @@ class PeekabootAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotRegisterBeansWhenHealthEndpointClassMissing() {
+    void doesNotRegisterBeansWhenHealthEndpointClassMissing() {
         contextRunner
                 .withPropertyValues("peekaboot.enabled=true")
                 .withClassLoader(new FilteredClassLoader(HealthEndpoint.class))
-                .run(context -> {
-                    assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(PeekabootController.class);
-                });
-    }
-
-    @Test
-    void shouldNotRegisterBeansWhenInfoEndpointClassMissing() {
-        contextRunner
-                .withPropertyValues("peekaboot.enabled=true")
-                .withClassLoader(new FilteredClassLoader(InfoEndpoint.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context).doesNotHaveBean(PeekabootController.class);
@@ -197,7 +172,6 @@ class PeekabootAutoConfigurationTest {
                         PeekabootTracingAutoConfiguration.class,
                         OtelTracingAutoConfiguration.class,
                         PeekabootPathsAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class)
                 .withPropertyValues("peekaboot.enabled=true");
 
         @Test

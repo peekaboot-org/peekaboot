@@ -10,22 +10,14 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 public class FlywayMapper {
 
     public FlywayInfo map(FlywayResponse flywayData) {
-        if (flywayData == null || flywayData.contexts() == null) {
+        if (flywayData == null) {
             return new FlywayInfo(List.of());
         }
 
         List<MigrationInfo> migrations = new ArrayList<>();
 
         for (FlywayResponse.FlywayContext context : flywayData.contexts().values()) {
-            if (context.flywayBeans() == null) {
-                continue;
-            }
-
             for (FlywayResponse.FlywayBean bean : context.flywayBeans().values()) {
-                if (bean.migrations() == null) {
-                    continue;
-                }
-
                 for (FlywayResponse.Migration migration : bean.migrations()) {
                     migrations.add(mapMigration(migration));
                 }

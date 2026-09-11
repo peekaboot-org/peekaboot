@@ -54,7 +54,7 @@ import org.springframework.scheduling.config.ScheduledTaskHolder;
  */
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-@ConditionalOnClass({HealthEndpoint.class, InfoEndpoint.class})
+@ConditionalOnClass(HealthEndpoint.class)
 @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ENABLED)
 public class ActuatorSourcesAutoConfiguration {
 

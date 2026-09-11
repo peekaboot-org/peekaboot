@@ -16,6 +16,7 @@ class MigrationStateTest {
         "FAILED, FAILED",
         "IGNORED, IGNORED",
         "invalid, UNKNOWN",
+        "'', UNKNOWN",
         // real Flyway states beyond the basic four
         "FUTURE_SUCCESS, SUCCESS",
         "MISSING_SUCCESS, SUCCESS",

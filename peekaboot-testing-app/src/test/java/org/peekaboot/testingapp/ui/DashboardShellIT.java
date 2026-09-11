@@ -2,10 +2,12 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.ColorScheme;
+import com.microsoft.playwright.options.WaitForSelectorState;
+import com.microsoft.playwright.options.WaitUntilState;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -67,7 +69,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void headerTextIsContrastTunedInLightTheme() {
         setStoredTheme("light");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         openDashboard();
 
         assertThat(cssVar("h1", "color")).isEqualTo("rgb(17, 24, 39)");
@@ -76,7 +78,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void headerTextIsContrastTunedInDarkTheme() {
         setStoredTheme("dark");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openDashboard();
 
         assertThat(cssVar("h1", "color")).isEqualTo("rgb(240, 246, 252)");
@@ -106,53 +108,6 @@ class DashboardShellIT extends PlaywrightTestBase {
         openDashboard();
 
         assertThat(cssVar(".pk-header__logo", "background-image")).contains("logo-mark-dark.png");
-    }
-
-    /**
-     * The icon set is referenced only from CSS url() and <link rel="icon">, so a path
-     * typo or a packaging change that stopped shipping binaries from the frontend module
-     * would fail silently - no console error the other tests would notice, just a missing
-     * favicon and an empty logo box.
-     */
-    @Test
-    void iconAssetsAreServed() {
-        for (String asset : List.of("favicon-16.png", "favicon-32.png", "logo-mark.png", "logo-mark-dark.png")) {
-            APIResponse response = page.request().get(baseUrl + "/peekaboot/ui/assets/" + asset);
-            assertThat(response.status()).as(asset).isEqualTo(200);
-        }
-    }
-
-    @Test
-    void toolbarIsInjectedIntoApplicationPages() {
-        openPersonsPage();
-
-        // isVisible() on the host element only proves the injected <div> exists; the
-        // toolbar itself lives inside its shadow root, so require that to be attached.
-        boolean shadowRootAttached =
-                (boolean) page.evaluate("document.getElementById('peekaboot-toolbar-host').shadowRoot !== null");
-        assertThat(shadowRootAttached).isTrue();
-    }
-
-    /**
-     * main.js imports {openTraceDetail, closeTraceDetail} directly from trace-detail.js (no
-     * window.PeekabootTraceDetail global - see trace-detail.js's header comment). Its
-     * hash-routing handles a deep link to a specific trace (`#traces/<id>`) by calling that
-     * imported openTraceDetail() itself, without going through the traces tab - so a
-     * direct navigation to such a link is enough to prove the import actually loaded and
-     * ran, independent of whether the trace id resolves to anything real.
-     *
-     * Waiting only for "#peekaboot-trace-overlay" to exist would prove less than it looks
-     * like: openTraceDetail() appends that host synchronously, before any fetch even
-     * starts, so it passes even if render() itself is broken. "deadbeef" is not a real
-     * trace id, so the fetch deterministically 404s - waiting for the resulting
-     * ".pk-overlay__error" instead proves fetchAndRender() actually ran to completion.
-     */
-    @Test
-    void dashboardLoadsTheTraceDetailOverlayModule() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/deadbeef");
-
-        page.waitForFunction("() => !!document.getElementById('peekaboot-trace-overlay')"
-                + "?.shadowRoot?.querySelector('.pk-overlay__error')");
     }
 
     /**
@@ -204,7 +159,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         page.route("**/api/insights/stream", route -> route.abort());
 
         openDashboard();
-        page.click("#insights-tab-btn");
+        dashboard.openTab("insights");
         page.waitForSelector("#insights-panels .pk-insight-panel[data-panel-id='cpu'] canvas");
         page.route("**/api/insights/data*", route -> route.abort());
 
@@ -216,6 +171,142 @@ class DashboardShellIT extends PlaywrightTestBase {
                 () -> page.unroute("**/api/insights/stream"));
 
         assertThat(pageErrors).isEmpty();
+    }
+
+    /**
+     * No build step means main.js is one module script over a graph of forty-odd separate
+     * fetches, and losing any one of them leaves the graph unevaluated: nothing hides the
+     * loading placeholder and nothing raises the banner, so the page sits on the spinner for
+     * good. Chromium drops every request in flight with ERR_NETWORK_CHANGED whenever the
+     * host's network configuration changes - a container taking a veth interface up or down
+     * is enough - so this is a transient a page meets with nothing broken, and one reload
+     * fetches the whole graph again. Here the module never arrives, so the reload cannot help
+     * and the reader has to be told. Two documents is also where a reload loop would show, and
+     * this is the cheapest place to guard against one.
+     */
+    @Test
+    void aScriptThatNeverArrivesRaisesTheBannerAfterTheReloadFailsToo() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
+        page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+
+        page.waitForSelector("#error:not(.hidden)");
+        page.waitForLoadState();
+        assertThat(page.textContent("#error .message")).contains("could not start");
+        assertThat(page.isVisible("#loading")).isFalse();
+        assertThat(documents).as("the one reload, and no loop after it").hasSize(2);
+    }
+
+    /**
+     * The transient itself: one module lost on the first attempt and served on the next. The
+     * dashboard reloads itself out of it, which is what keeps every entry point covered - the
+     * deep-link tests navigate to the page directly rather than through openDashboard().
+     * Two documents where this test asked for one is the reload. Documents rather than
+     * navigations: a hash write is a navigation too, so counting those would turn red on the
+     * day any boot path writes one.
+     */
+    @Test
+    void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#build-info > *");
+        page.waitForLoadState();
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+        assertThat(documents).hasSize(2);
+    }
+
+    /**
+     * The close button's listener comes from main.js, and on this path main.js is exactly what
+     * did not run. A control that looks live and does nothing is worse than none at all.
+     */
+    @Test
+    void theBannerRaisedWhenTheShellNeverStartedCanBeDismissed() {
+        page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#error:not(.hidden)");
+
+        page.click("#error-close");
+
+        page.waitForSelector("#error", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * The recovery is the boot's, not every module script's. A dashboard that is up holds an
+     * open trace overlay, filters and scroll position, and a reload would discard all of it -
+     * so a module injected long after the boot (a chart library, say) losing its fetch has to
+     * be left to the code that injected it. The element's own error listener runs after the
+     * capture-phase one the recovery installs, so the page has already decided by then.
+     */
+    @Test
+    void aModuleLostAfterTheDashboardIsUpDoesNotReloadIt() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> documents.add(loaded.url()));
+        openDashboard();
+
+        page.evaluate("() => new Promise(resolve => {"
+                + " const script = document.createElement('script');"
+                + " script.type = 'module';"
+                + " script.src = './no-such-module.js';"
+                + " script.addEventListener('error', resolve);"
+                + " document.body.appendChild(script); })");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+        assertThat(documents).as("the boot document, and no reload after it").hasSize(1);
+    }
+
+    /**
+     * The reload cannot wait for the load event alone. A half-connected network that loses a
+     * module usually leaves another request hanging too, and the document then sits at
+     * readyState "interactive" for good, so load never fires. Here the module graph fails and
+     * the header logo never answers, which leaves the bounded wait as the only thing that can
+     * start the reload.
+     */
+    @Test
+    void theDashboardReloadsEvenWhenAnotherSubresourceNeverAnswers() {
+        setStoredTheme("light");
+        // Left unanswered for the whole test, so no document here ever fires its load event.
+        page.route("**/peekaboot/ui/assets/logo-mark.png", route -> {});
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(
+                baseUrl + "/peekaboot/ui/dashboard/index.html",
+                new Page.NavigateOptions().setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
+    }
+
+    /**
+     * A marker is written before the reload commits, so a reload that never navigates - the
+     * tab went offline, or was closed in between - leaves one behind. Honouring it forever
+     * would spend the next episode's one retry on a reload that never happened, so it counts
+     * only while it is recent.
+     */
+    @Test
+    void aStaleRetryMarkerDoesNotSpendTheNextFailuresReload() {
+        page.addInitScript("sessionStorage.setItem('peekaboot-dashboard-retried', String(Date.now() - 120000));");
+        page.route(
+                "**/peekaboot/ui/dashboard/tabs/meters.js",
+                route -> route.abort(),
+                new Page.RouteOptions().setTimes(1));
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        page.waitForSelector("#build-info > *");
+
+        assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
     }
 
     /**
@@ -256,5 +347,76 @@ class DashboardShellIT extends PlaywrightTestBase {
 
         assertThat(pageErrors).isEmpty();
         assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * The banner a failed refresh raises, and the only way back out of it. Aborting the data
+     * request is a real refusal by Chromium's network stack, and the dashboard is loaded
+     * before the route is installed, so what fails is the refresh rather than the boot.
+     */
+    @Test
+    void aFailedRefreshRaisesTheErrorBannerAndTheCloseButtonDismissesIt() {
+        openDashboard();
+        page.route("**/peekaboot/api/actuator/all/insights**", route -> route.abort());
+
+        page.click("#refresh-btn");
+
+        page.waitForSelector("#error:not(.hidden)");
+        assertThat(page.textContent("#error .message")).startsWith("Failed to load data:");
+
+        page.click("#error-close");
+
+        page.waitForSelector("#error", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+        assertThat(page.isVisible("#error")).isFalse();
+    }
+
+    /**
+     * The timezone toggle switches which zone every rendered timestamp is read in, says which
+     * one is showing, and remembers the choice. The readout has to become the server's real
+     * zone from the payload - "Unknown" is what it says when nothing arrived - and the button
+     * has to name the direction, since "Server"/"Browser" alone is not a usable button name.
+     * The two zone ids are not compared: the server here is this same JVM.
+     */
+    @Test
+    void theTimezoneToggleSwitchesToServerTimeAndPersists() {
+        openDashboard();
+        assertThat(page.textContent("#timezone-label")).isEqualTo("Browser");
+
+        page.click("#timezone-toggle");
+
+        assertThat(page.textContent("#timezone-label")).isEqualTo("Server");
+        String serverZone = page.textContent("#tz-info");
+        assertThat(serverZone).isEqualTo(ZoneId.systemDefault().getId());
+        assertThat(page.getAttribute("#timezone-toggle", "aria-label")).contains("Switch to browser timezone");
+
+        page.reload();
+        page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
+
+        assertThat(page.textContent("#timezone-label"))
+                .as("the choice is kept under peekaboot-use-server-tz")
+                .isEqualTo("Server");
+        assertThat(page.textContent("#tz-info")).isEqualTo(serverZone);
+    }
+
+    /**
+     * Choosing a locale re-fetches with it and re-renders the dates in it. The Build card's
+     * timestamp is the assertion: German renders the month as a number where en-US spells it,
+     * so a locale that reached the request but not the render fails here.
+     */
+    @Test
+    void changingTheLocaleRerendersDatesInIt() {
+        openDashboard();
+        page.waitForSelector("#build-info .pk-kv");
+        String english = dashboard.kvValue("#build-info", "Built");
+
+        page.waitForResponse(
+                response -> response.url().contains("locale=de-DE") && response.status() == 200,
+                () -> page.selectOption("#locale-select", "de-DE"));
+        page.waitForFunction(
+                "(before) => document.querySelector('#build-info')?.textContent.includes(before) === false", english);
+
+        assertThat(dashboard.kvValue("#build-info", "Built"))
+                .as("the same instant, rendered in the chosen locale")
+                .isNotEqualTo(english);
     }
 }

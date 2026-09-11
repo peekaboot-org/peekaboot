@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.LongSupplier;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
 import org.peekaboot.backend.insights.config.TileDef;
@@ -27,16 +28,6 @@ public final class InsightsCollector implements SmartLifecycle {
 
     /** Notified after each tick and each roll-up. */
     public interface Listener {
-        // UncommentedEmptyMethodBody: the constant's name is the documentation
-        @SuppressWarnings("PMD.UncommentedEmptyMethodBody")
-        Listener NO_OP = new Listener() {
-            @Override
-            public void onTick(long epochMs, Map<String, Double> values) {}
-
-            @Override
-            public void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries) {}
-        };
-
         void onTick(long epochMs, Map<String, Double> values);
 
         void onRollUp(int level, long epochMs, Map<String, AggregateStats> entries);
@@ -48,7 +39,6 @@ public final class InsightsCollector implements SmartLifecycle {
      * slow an application's boot.
      */
     public interface SnapshotSource {
-        SnapshotSource NONE = timeout -> Optional.empty();
 
         /** The persisted rings, or empty if there are none or they did not arrive in time. */
         Optional<InsightsSnapshot> awaitSnapshot(Duration timeout);
@@ -63,15 +53,7 @@ public final class InsightsCollector implements SmartLifecycle {
     private final List<Thread> threads = new ArrayList<>();
     private volatile boolean running;
     private final SnapshotRestoreBarrier restoreBarrier;
-
-    public InsightsCollector(
-            List<InsightsProperties.Level> levels,
-            List<SeriesDef> series,
-            List<TileDef> tiles,
-            MeterRegistry registry,
-            Listener listener) {
-        this(levels, series, tiles, registry, listener, SnapshotSource.NONE);
-    }
+    private final IntervalBoundary schedule;
 
     public InsightsCollector(
             List<InsightsProperties.Level> levels,
@@ -80,11 +62,24 @@ public final class InsightsCollector implements SmartLifecycle {
             MeterRegistry registry,
             Listener listener,
             SnapshotSource snapshotSource) {
+        this(levels, series, tiles, registry, listener, snapshotSource, System::currentTimeMillis);
+    }
+
+    /** {@code clock} supplies the epoch millis the level threads schedule their boundaries from; tests fix it. */
+    InsightsCollector(
+            List<InsightsProperties.Level> levels,
+            List<SeriesDef> series,
+            List<TileDef> tiles,
+            MeterRegistry registry,
+            Listener listener,
+            SnapshotSource snapshotSource,
+            LongSupplier clock) {
         this.listener = listener;
         this.restoreBarrier = new SnapshotRestoreBarrier(snapshotSource);
+        this.schedule = new IntervalBoundary(clock, Thread::sleep);
         this.intervalMillis = new long[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
-            intervalMillis[i] = levels.get(i).getInterval().toMillis();
+            intervalMillis[i] = levels.get(i).intervalMillis();
         }
 
         for (SeriesDef def : series) {
@@ -137,24 +132,9 @@ public final class InsightsCollector implements SmartLifecycle {
         List<String> names = new ArrayList<>(intervalMillis.length);
         names.add("peekaboot-insights-tick");
         for (int level = 1; level < intervalMillis.length; level++) {
-            names.add("peekaboot-insights-agg-" + formatInterval(Duration.ofMillis(intervalMillis[level])));
+            names.add("peekaboot-insights-agg-" + IntervalFormat.humanize(Duration.ofMillis(intervalMillis[level])));
         }
         return names;
-    }
-
-    /** Renders a duration compactly: whole hours as "Nh", whole minutes as "Nm", else "Ns"/"Nms". */
-    static String formatInterval(Duration duration) {
-        long millis = duration.toMillis();
-        if (millis % 3_600_000 == 0) {
-            return (millis / 3_600_000) + "h";
-        }
-        if (millis % 60_000 == 0) {
-            return (millis / 60_000) + "m";
-        }
-        if (millis % 1_000 == 0) {
-            return (millis / 1_000) + "s";
-        }
-        return millis + "ms";
     }
 
     /**
@@ -168,7 +148,7 @@ public final class InsightsCollector implements SmartLifecycle {
         while (!Thread.currentThread().isInterrupted()) {
             long boundary;
             try {
-                boundary = IntervalBoundary.sleepUntilNext(intervalMs, offsetMs);
+                boundary = schedule.sleepUntilNext(intervalMs, offsetMs);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;

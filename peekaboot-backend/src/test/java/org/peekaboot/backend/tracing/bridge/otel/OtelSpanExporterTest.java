@@ -10,9 +10,9 @@ import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.sdk.common.CompletableResultCode;
-import io.opentelemetry.sdk.common.InstrumentationLibraryInfo;
 import io.opentelemetry.sdk.common.InstrumentationScopeInfo;
 import io.opentelemetry.sdk.resources.Resource;
+import io.opentelemetry.sdk.testing.trace.TestSpanData;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
 import io.opentelemetry.sdk.trace.data.EventData;
 import io.opentelemetry.sdk.trace.data.SpanData;
@@ -38,6 +38,8 @@ class OtelSpanExporterTest {
     private static final AttributeKey<String> HTTP_URL_KEY = AttributeKey.stringKey("http.url");
     private static final AttributeKey<String> HTTP_TARGET_KEY = AttributeKey.stringKey("http.target");
     private static final AttributeKey<String> URL_PATH_KEY = AttributeKey.stringKey("url.path");
+    private static final long START_NANOS =
+            Instant.parse("2026-01-01T00:00:00Z").getEpochSecond() * 1_000_000_000L;
 
     private InMemoryTraceStore storage;
     private List<SpanDataEvent> publishedEvents;
@@ -72,7 +74,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldConvertAndPublishOtelSpan() {
+    void convertsAndPublishesAnOtelSpan() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String spanId = "0123456789abcdef";
         SpanData otelSpan = createTestSpan(traceId, spanId, "test-operation", SpanKind.SERVER);
@@ -93,7 +95,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExportMultipleSpans() {
+    void exportsEachSpanIntoItsOwnTrace() {
         String traceId1 = "aaaabbbbccccddddeeeeffffaaaabbbb";
         String traceId2 = "aaaabbbbccccddddeeeeffffaaaabbbc";
 
@@ -104,8 +106,12 @@ class OtelSpanExporterTest {
         exporter.export(List.of(span1, span2, span3));
 
         assertThat(publishedEvents).hasSize(3);
-        assertThat(storage.getTrace(traceId1).orElseThrow().spans()).hasSize(2);
-        assertThat(storage.getTrace(traceId2).orElseThrow().spans()).hasSize(1);
+        assertThat(storedSpans(traceId1))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("aaaa000000000001", "aaaa000000000002");
+        assertThat(storedSpans(traceId2))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("aaaa000000000003");
     }
 
     /**
@@ -133,10 +139,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldSkipSpanWhenPathAttributeMatchesAnExcludedPrefix() {
+    void skipsSpanWhenPathAttributeMatchesAnExcludedPrefix() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/health", SpanKind.SERVER)
-                .attributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
                 .build();
 
         exporter.export(List.of(span));
@@ -146,7 +152,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldSkipSpanWhenNameContainsPeekabootPath() {
+    void skipsSpanWhenNameContainsPeekabootPath() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /peekaboot/api/traces", SpanKind.SERVER)
                 .build();
@@ -169,11 +175,11 @@ class OtelSpanExporterTest {
         SpanContext rootContext =
                 SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
         SpanData jdbcChild = testSpanBuilder(traceId, "0000000000000002", "connection", SpanKind.CLIENT)
-                .parentSpanContext(rootContext)
-                .attributes(Attributes.of(AttributeKey.stringKey("jdbc.datasource.name"), "dataSource"))
+                .setParentSpanContext(rootContext)
+                .setAttributes(Attributes.of(AttributeKey.stringKey("jdbc.datasource.name"), "dataSource"))
                 .build();
         SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /actuator/health", SpanKind.SERVER)
-                .attributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/actuator/health"))
                 .build();
 
         exporter.export(List.of(jdbcChild));
@@ -183,26 +189,54 @@ class OtelSpanExporterTest {
         assertThat(storage.getTrace(traceId)).isEmpty();
     }
 
-    /** Only a root decides a trace's fate; a skipped span under some other root leaves the trace alone. */
+    /**
+     * The exclusions describe inbound requests. An outbound call is never Peekaboot's own
+     * request, however its name is spelled, so a CLIENT span stays in its trace.
+     */
     @Test
-    void skippingAChildSpanLeavesTheRestOfItsTraceStored() {
+    void keepsAClientSpanWhoseNameSpellsThePeekabootPrefix() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String rootSpanId = "0000000000000001";
         SpanContext rootContext =
                 SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
         SpanData peekabootCall = testSpanBuilder(
                         traceId, "0000000000000002", "GET /peekaboot/api/features", SpanKind.CLIENT)
-                .parentSpanContext(rootContext)
+                .setParentSpanContext(rootContext)
                 .build();
         SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
-                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/api/users"))
                 .build();
 
         exporter.export(List.of(peekabootCall, root));
 
         assertThat(storedSpans(traceId))
                 .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
-                .containsExactly(rootSpanId);
+                .containsExactly("0000000000000002", rootSpanId);
+    }
+
+    /**
+     * A health check against another service carries a remote URL whose path starts with an
+     * excluded prefix. Dropping it would leave a silent gap where the slowest call may be.
+     */
+    @Test
+    void keepsAClientSpanWhoseRemotePathStartsWithAnExcludedPrefix() {
+        String traceId = "0123456789abcdef0123456789abcdef";
+        String rootSpanId = "0000000000000001";
+        SpanContext rootContext =
+                SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
+        SpanData healthCheck = testSpanBuilder(traceId, "0000000000000002", "GET", SpanKind.CLIENT)
+                .setParentSpanContext(rootContext)
+                .setAttributes(Attributes.of(HTTP_URL_KEY, "http://other/actuator/health"))
+                .build();
+        SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /api/users", SpanKind.SERVER)
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .build();
+
+        exporter.export(List.of(healthCheck, root));
+
+        assertThat(storedSpans(traceId))
+                .extracting(org.peekaboot.backend.tracing.store.SpanData::spanId)
+                .containsExactly("0000000000000002", rootSpanId);
     }
 
     /**
@@ -217,10 +251,10 @@ class OtelSpanExporterTest {
         SpanContext rootContext =
                 SpanContext.create(traceId, rootSpanId, TraceFlags.getSampled(), TraceState.getDefault());
         SpanData jdbcChild = testSpanBuilder(traceId, "0000000000000002", "select", SpanKind.CLIENT)
-                .parentSpanContext(rootContext)
+                .setParentSpanContext(rootContext)
                 .build();
         SpanData root = testSpanBuilder(traceId, rootSpanId, "GET /admin/peekaboot/status", SpanKind.SERVER)
-                .attributes(Attributes.of(URL_PATH_KEY, "/admin/peekaboot/status"))
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/admin/peekaboot/status"))
                 .build();
 
         exporter.export(List.of(jdbcChild, root));
@@ -231,12 +265,12 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExportSpanWhenPathDoesNotMatchAnyExclusionRule() {
+    void exportsSpanWhenPathDoesNotMatchAnyExclusionRule() {
         // Negative control for the skip tests above: a span whose path clearly
         // isn't excluded must actually be exported, not just "not asserted".
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /api/users", SpanKind.SERVER)
-                .attributes(Attributes.of(URL_PATH_KEY, "/api/users"))
+                .setAttributes(Attributes.of(URL_PATH_KEY, "/api/users"))
                 .build();
 
         exporter.export(List.of(span));
@@ -246,14 +280,14 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldPreferUrlPathOverHttpTargetTagWhenBothPresent() {
+    void prefersUrlPathOverHttpTargetTagWhenBothPresent() {
         // url.path is present but doesn't itself match any exclusion rule; if
         // extractPath() genuinely checks url.path first (short-circuiting
         // before ever consulting http.target), the span must NOT be skipped
         // even though http.target alone would match.
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /keep-me", SpanKind.SERVER)
-                .attributes(Attributes.builder()
+                .setAttributes(Attributes.builder()
                         .put(URL_PATH_KEY, "/keep-me")
                         .put(HTTP_TARGET_KEY, "/actuator/info")
                         .build())
@@ -266,10 +300,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldPreferUrlPathOverHttpUrlTagWhenBothPresent() {
+    void prefersUrlPathOverHttpUrlTagWhenBothPresent() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /keep-me", SpanKind.SERVER)
-                .attributes(Attributes.builder()
+                .setAttributes(Attributes.builder()
                         .put(URL_PATH_KEY, "/keep-me")
                         .put(HTTP_URL_KEY, "http://localhost:8080/actuator/metrics")
                         .build())
@@ -282,10 +316,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractPathFromHttpTargetTagWhenUrlPathAbsent() {
+    void extractsPathFromHttpTargetTagWhenUrlPathAbsent() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/info", SpanKind.SERVER)
-                .attributes(Attributes.of(HTTP_TARGET_KEY, "/actuator/info"))
+                .setAttributes(Attributes.of(HTTP_TARGET_KEY, "/actuator/info"))
                 .build();
 
         exporter.export(List.of(span));
@@ -295,10 +329,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractPathFromHttpUrlTagAsFallback() {
+    void extractsPathFromHttpUrlTagAsFallback() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "GET /actuator/metrics", SpanKind.SERVER)
-                .attributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/actuator/metrics?x=1"))
+                .setAttributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/actuator/metrics?x=1"))
                 .build();
 
         exporter.export(List.of(span));
@@ -313,19 +347,19 @@ class OtelSpanExporterTest {
      * The span names deliberately carry no matchable route, so the path tags alone decide.
      */
     @Test
-    void shouldSkipTheSameSpansBehindAContextPath() {
+    void skipsTheSameSpansBehindAContextPath() {
         OtelSpanExporter behindContext = new OtelSpanExporter(eventPublisher, new PeekabootPaths("/actuator", "/app"));
         String traceId = "0123456789abcdef0123456789abcdef";
 
         behindContext.export(List.of(
                 testSpanBuilder(traceId, "0000000000000001", "GET", SpanKind.SERVER)
-                        .attributes(Attributes.of(URL_PATH_KEY, "/app/actuator/health"))
+                        .setAttributes(Attributes.of(URL_PATH_KEY, "/app/actuator/health"))
                         .build(),
                 testSpanBuilder(traceId, "0000000000000002", "GET", SpanKind.SERVER)
-                        .attributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/app/peekaboot/api/traces"))
+                        .setAttributes(Attributes.of(HTTP_URL_KEY, "http://localhost:8080/app/peekaboot/api/traces"))
                         .build(),
                 testSpanBuilder(traceId, "0000000000000003", "GET", SpanKind.SERVER)
-                        .attributes(Attributes.of(URL_PATH_KEY, "/app/api/users"))
+                        .setAttributes(Attributes.of(URL_PATH_KEY, "/app/api/users"))
                         .build()));
 
         assertThat(publishedEvents).hasSize(1);
@@ -333,11 +367,11 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldConvertErrorStatusToErrorMessageAndClass() {
+    void convertsErrorStatusToErrorMessageAndClass() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String spanId = "0000000000000001";
         SpanData span = testSpanBuilder(traceId, spanId, "op", SpanKind.SERVER)
-                .status(StatusData.create(StatusCode.ERROR, "boom"))
+                .setStatus(StatusData.create(StatusCode.ERROR, "boom"))
                 .build();
 
         exporter.export(List.of(span));
@@ -390,13 +424,13 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractParentSpanIdWhenParentContextIsValid() {
+    void extractsParentSpanIdWhenParentContextIsValid() {
         String traceId = "0123456789abcdef0123456789abcdef";
         String parentSpanId = "aaaaaaaaaaaaaaaa";
         SpanContext parentContext =
                 SpanContext.create(traceId, parentSpanId, TraceFlags.getSampled(), TraceState.getDefault());
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
-                .parentSpanContext(parentContext)
+                .setParentSpanContext(parentContext)
                 .build();
 
         exporter.export(List.of(span));
@@ -406,10 +440,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractServiceNameFromResource() {
+    void extractsServiceNameFromResource() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
-                .serviceName("orders-service")
+                .setResource(Resource.create(Attributes.of(SERVICE_NAME_KEY, "orders-service")))
                 .build();
 
         exporter.export(List.of(span));
@@ -419,10 +453,10 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractAttributesAsTags() {
+    void extractsAttributesAsTags() {
         String traceId = "0123456789abcdef0123456789abcdef";
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
-                .attributes(Attributes.of(AttributeKey.stringKey("db.system"), "postgresql"))
+                .setAttributes(Attributes.of(AttributeKey.stringKey("db.system"), "postgresql"))
                 .build();
 
         exporter.export(List.of(span));
@@ -432,7 +466,7 @@ class OtelSpanExporterTest {
     }
 
     @Test
-    void shouldExtractEventsFromSpanData() {
+    void extractsEventsFromSpanData() {
         String traceId = "0123456789abcdef0123456789abcdef";
         // A fixed, realistic epoch-nanos value (not System.nanoTime(), which is
         // an arbitrary monotonic reading unrelated to wall-clock time) so the
@@ -442,7 +476,7 @@ class OtelSpanExporterTest {
         long eventNanos = eventInstant.getEpochSecond() * 1_000_000_000L + eventInstant.getNano();
         EventData event = EventData.create(eventNanos, "cache-miss", Attributes.empty());
         SpanData span = testSpanBuilder(traceId, "0000000000000001", "op", SpanKind.SERVER)
-                .events(List.of(event))
+                .setEvents(List.of(event))
                 .build();
 
         exporter.export(List.of(span));
@@ -479,190 +513,21 @@ class OtelSpanExporterTest {
         return storedSpans(traceId).getFirst();
     }
 
-    private SpanData createTestSpan(String traceId, String spanId, String name, SpanKind kind) {
-        return new TestSpanData(
-                traceId,
-                spanId,
-                name,
-                kind,
-                Attributes.empty(),
-                StatusData.ok(),
-                SpanContext.getInvalid(),
-                List.of(),
-                "test-service");
+    private static SpanData createTestSpan(String traceId, String spanId, String name, SpanKind kind) {
+        return testSpanBuilder(traceId, spanId, name, kind).build();
     }
 
-    private TestSpanDataBuilder testSpanBuilder(String traceId, String spanId, String name, SpanKind kind) {
-        return new TestSpanDataBuilder(traceId, spanId, name, kind);
-    }
-
-    private static class TestSpanDataBuilder {
-        private final String traceId;
-        private final String spanId;
-        private final String name;
-        private final SpanKind kind;
-        private Attributes attributes = Attributes.empty();
-        private StatusData status = StatusData.ok();
-        private SpanContext parentSpanContext = SpanContext.getInvalid();
-        private List<EventData> events = List.of();
-        private String serviceName = "test-service";
-
-        TestSpanDataBuilder(String traceId, String spanId, String name, SpanKind kind) {
-            this.traceId = traceId;
-            this.spanId = spanId;
-            this.name = name;
-            this.kind = kind;
-        }
-
-        TestSpanDataBuilder attributes(Attributes attributes) {
-            this.attributes = attributes;
-            return this;
-        }
-
-        TestSpanDataBuilder status(StatusData status) {
-            this.status = status;
-            return this;
-        }
-
-        TestSpanDataBuilder parentSpanContext(SpanContext parentSpanContext) {
-            this.parentSpanContext = parentSpanContext;
-            return this;
-        }
-
-        TestSpanDataBuilder events(List<EventData> events) {
-            this.events = events;
-            return this;
-        }
-
-        TestSpanDataBuilder serviceName(String serviceName) {
-            this.serviceName = serviceName;
-            return this;
-        }
-
-        SpanData build() {
-            return new TestSpanData(
-                    traceId, spanId, name, kind, attributes, status, parentSpanContext, events, serviceName);
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private static class TestSpanData implements SpanData {
-        private final String traceId;
-        private final String spanId;
-        private final String name;
-        private final SpanKind kind;
-        private final Attributes attributes;
-        private final StatusData status;
-        private final SpanContext parentSpanContext;
-        private final List<EventData> events;
-        private final String serviceName;
-        private final long startNanos = Instant.parse("2026-01-01T00:00:00Z").getEpochSecond() * 1_000_000_000L;
-        private final long endNanos = startNanos + 1_000_000_000L;
-
-        TestSpanData(
-                String traceId,
-                String spanId,
-                String name,
-                SpanKind kind,
-                Attributes attributes,
-                StatusData status,
-                SpanContext parentSpanContext,
-                List<EventData> events,
-                String serviceName) {
-            this.traceId = traceId;
-            this.spanId = spanId;
-            this.name = name;
-            this.kind = kind;
-            this.attributes = attributes;
-            this.status = status;
-            this.parentSpanContext = parentSpanContext;
-            this.events = events;
-            this.serviceName = serviceName;
-        }
-
-        @Override
-        public SpanContext getSpanContext() {
-            return SpanContext.create(traceId, spanId, TraceFlags.getSampled(), TraceState.getDefault());
-        }
-
-        @Override
-        public SpanContext getParentSpanContext() {
-            return parentSpanContext;
-        }
-
-        @Override
-        public Resource getResource() {
-            return Resource.create(Attributes.of(SERVICE_NAME_KEY, serviceName));
-        }
-
-        @Override
-        public InstrumentationScopeInfo getInstrumentationScopeInfo() {
-            return InstrumentationScopeInfo.create("test");
-        }
-
-        @Override
-        public InstrumentationLibraryInfo getInstrumentationLibraryInfo() {
-            return InstrumentationLibraryInfo.create("test", "1.0.0");
-        }
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
-        public SpanKind getKind() {
-            return kind;
-        }
-
-        @Override
-        public long getStartEpochNanos() {
-            return startNanos;
-        }
-
-        @Override
-        public Attributes getAttributes() {
-            return attributes;
-        }
-
-        @Override
-        public List<EventData> getEvents() {
-            return events;
-        }
-
-        @Override
-        public List<io.opentelemetry.sdk.trace.data.LinkData> getLinks() {
-            return List.of();
-        }
-
-        @Override
-        public StatusData getStatus() {
-            return status;
-        }
-
-        @Override
-        public long getEndEpochNanos() {
-            return endNanos;
-        }
-
-        @Override
-        public boolean hasEnded() {
-            return true;
-        }
-
-        @Override
-        public int getTotalRecordedEvents() {
-            return 0;
-        }
-
-        @Override
-        public int getTotalRecordedLinks() {
-            return 0;
-        }
-
-        @Override
-        public int getTotalAttributeCount() {
-            return 0;
-        }
+    /** A finished one-second span from {@code test-service}, started 2026-01-01T00:00:00Z; a test sets what it asserts on. */
+    private static TestSpanData.Builder testSpanBuilder(String traceId, String spanId, String name, SpanKind kind) {
+        return TestSpanData.builder()
+                .setSpanContext(SpanContext.create(traceId, spanId, TraceFlags.getSampled(), TraceState.getDefault()))
+                .setName(name)
+                .setKind(kind)
+                .setStartEpochNanos(START_NANOS)
+                .setEndEpochNanos(START_NANOS + 1_000_000_000L)
+                .setHasEnded(true)
+                .setStatus(StatusData.ok())
+                .setResource(Resource.create(Attributes.of(SERVICE_NAME_KEY, "test-service")))
+                .setInstrumentationScopeInfo(InstrumentationScopeInfo.create("test"));
     }
 }

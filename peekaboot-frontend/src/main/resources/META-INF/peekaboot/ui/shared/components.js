@@ -1,27 +1,29 @@
-import {escapeHtml, highlightText} from './markup.js';
+import {highlightText} from './markup.js';
 
 let groupSequence = 0;
 
-/** Every pill variant components.css styles; the neutral one is the fallback. */
-const BADGE_VARIANTS = ['ok', 'warn', 'error', 'error-soft', 'info', 'muted'];
-const NEUTRAL_BADGE_VARIANT = 'muted';
-
-/** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted. */
-export function badge(text, variant = NEUTRAL_BADGE_VARIANT) {
+/** A semantic pill. Variant is one of ok, warn, error, error-soft, info, muted (components.css). */
+export function badge(text, variant = 'muted', {title} = {}) {
     const element = document.createElement('span');
     element.className = `pk-badge pk-badge--${variant}`;
     element.textContent = text == null ? '' : String(text);
+    if (title) element.title = title;
     return element;
 }
 
 /**
- * badge() as an HTML string, for the surfaces that build their markup as strings. The
- * variant lands in a class attribute of markup bound for innerHTML, so it is whitelisted
- * rather than escaped: a variant no stylesheet knows is not worth rendering either way.
+ * A real link whose only content is an icon: `label` becomes both the tooltip and the
+ * accessible name, since the glyph's own Unicode name would otherwise be announced. `href`
+ * is an app hash (see url-state.js's buildAppHash), so the hash router does the rest.
  */
-export function badgeHtml(text, variant = NEUTRAL_BADGE_VARIANT) {
-    const known = BADGE_VARIANTS.includes(variant) ? variant : NEUTRAL_BADGE_VARIANT;
-    return `<span class="pk-badge pk-badge--${known}">${escapeHtml(text == null ? '' : String(text))}</span>`;
+export function iconLink(href, {label, icon, className}) {
+    const link = document.createElement('a');
+    link.href = href;
+    link.className = 'pk-icon-link' + (className ? ` ${className}` : '');
+    link.title = label;
+    link.setAttribute('aria-label', label);
+    link.textContent = icon;
+    return link;
 }
 
 /** The centred, muted placeholder a list shows when it has nothing to list. */
@@ -30,11 +32,6 @@ export function emptyState(message) {
     element.className = 'pk-empty';
     element.textContent = message;
     return element;
-}
-
-/** emptyState() as an HTML string. */
-export function emptyStateHtml(message) {
-    return `<p class="pk-empty">${escapeHtml(message)}</p>`;
 }
 
 /** The spinner with its caption that every loading state shows. */
@@ -78,7 +75,17 @@ export function table(columns, rows, {className} = {}) {
     return scroll;
 }
 
-function setKvText(element, text, highlight) {
+/** A table cell: `children` are text or elements; `title` keeps a truncating cell's full value reachable. */
+export function cell({className, title} = {}, ...children) {
+    const td = document.createElement('td');
+    if (className) td.className = className;
+    if (title) td.title = title;
+    td.append(...children);
+    return td;
+}
+
+/** Text with every match of the query wrapped in <mark>, or plain text when there is no query. */
+function setHighlightedText(element, text, highlight) {
     if (highlight) element.innerHTML = highlightText(text, highlight);
     else element.textContent = text;
 }
@@ -97,11 +104,11 @@ export function kvRow(key, value, {mono = false, tight = false, highlight} = {})
 
     const keyEl = document.createElement('span');
     keyEl.className = 'pk-kv__key';
-    setKvText(keyEl, key == null ? '' : String(key), highlight);
+    setHighlightedText(keyEl, key == null ? '' : String(key), highlight);
 
     const valueEl = document.createElement('span');
     valueEl.className = 'pk-kv__value' + (mono ? ' pk-kv__value--mono' : '');
-    setKvText(valueEl, value == null ? '-' : String(value), highlight);
+    setHighlightedText(valueEl, value == null ? '-' : String(value), highlight);
 
     row.append(keyEl, valueEl);
     return row;
@@ -127,7 +134,7 @@ export function group({name, count, expanded = false, highlight} = {}) {
 
     const nameEl = document.createElement('span');
     nameEl.className = 'pk-group__name';
-    setKvText(nameEl, name == null ? '' : String(name), highlight);
+    setHighlightedText(nameEl, name == null ? '' : String(name), highlight);
 
     const countEl = document.createElement('span');
     countEl.className = 'pk-group__count';

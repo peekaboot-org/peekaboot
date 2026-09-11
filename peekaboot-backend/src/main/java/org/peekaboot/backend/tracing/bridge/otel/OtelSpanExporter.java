@@ -75,10 +75,15 @@ public class OtelSpanExporter implements SpanExporter {
      * name (Spring's matched route pattern) does not, so the path goes through the
      * context-stripping check - and it decides alone, since a host route such as
      * {@code /admin/peekaboot/status} spells the prefix without being Peekaboot's request.
-     * Judged per span: the children of such a request carry neither and are stored, which
-     * is what the discard in {@link #export} undoes once their root arrives.
+     * Only SERVER spans are judged: the exclusions describe inbound requests, and an
+     * outbound call to a remote {@code /actuator/health} is part of its trace. Judged per
+     * span: the children of such a request carry neither and are stored, which is what the
+     * discard in {@link #export} undoes once their root arrives.
      */
     private boolean shouldSkipSpan(SpanData span, Map<String, String> tags) {
+        if (span.getKind() != SpanKind.SERVER) {
+            return false;
+        }
         String path = HttpSpanTags.path(tags);
         if (path != null) {
             return paths.isExcludedRequestPath(path);

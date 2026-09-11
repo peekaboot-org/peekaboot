@@ -2,16 +2,20 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.peekaboot.backend.testsupport.Logs.log;
+import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
-import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.trace.BucketCounts;
+import org.peekaboot.backend.domain.trace.HttpExchange;
+import org.peekaboot.backend.domain.trace.HttpRequest;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.SpanIssue;
 import org.peekaboot.backend.domain.trace.SpanNode;
@@ -26,7 +30,6 @@ import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.Spans;
 import org.peekaboot.backend.testsupport.TraceStores;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.InMemoryTraceStore;
 import org.peekaboot.backend.tracing.store.SpanData;
 import org.peekaboot.backend.tracing.store.TraceBucket;
@@ -84,15 +87,9 @@ class TraceInsightsServiceTest {
     }
 
     @Test
-    void tracingIsAvailableWhenTraceStoreIsPresent() {
+    void tracingIsAvailableExactlyWhenThereIsATraceStore() {
         assertThat(service.isTracingAvailable()).isTrue();
-    }
-
-    @Test
-    void tracingIsUnavailableWithoutTraceStore() {
-        TraceInsightsService serviceWithNullStore = newService(null);
-
-        assertThat(serviceWithNullStore.isTracingAvailable()).isFalse();
+        assertThat(newService(null).isTracingAvailable()).isFalse();
     }
 
     @Test
@@ -173,9 +170,9 @@ class TraceInsightsServiceTest {
     void eachTracesLogsAreCountedByLevel() {
         addTrace("trace1", 100, false);
         addTrace("trace2", 100, false);
-        store.addLog(logAt("trace1", "ERROR"));
-        store.addLog(logAt("trace1", "WARN"));
-        store.addLog(logAt("trace1", "INFO"));
+        for (String level : List.of("ERROR", "WARN", "INFO")) {
+            store.addLog(log("trace1").inSpan("span-trace1").at(level).build());
+        }
 
         TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, null);
 
@@ -190,8 +187,10 @@ class TraceInsightsServiceTest {
     void theDetailIsEnrichedWithLogs() {
         // a trace with an attached log
         addTrace("trace1", 100, false);
-        store.addLog(new LogCapturedEvent(
-                "trace1", "span-trace1", Instant.EPOCH, "INFO", "TestLogger", "Test log message from trace", "main"));
+        store.addLog(log("trace1")
+                .inSpan("span-trace1")
+                .saying("Test log message from trace")
+                .build());
         Optional<TraceTree> result = service.getTraceInsights("trace1");
         assertThat(result).isPresent();
         assertThat(result.get().logs()).hasSize(1);
@@ -224,13 +223,39 @@ class TraceInsightsServiceTest {
     @Test
     void aLogWithoutASpanIdStaysInTheFlatListOnly() {
         addTrace("trace1", 100, false);
-        store.addLog(new LogCapturedEvent("trace1", null, Instant.EPOCH, "INFO", "TestLogger", "spanless", "main"));
+        store.addLog(log("trace1").inSpan(null).saying("spanless").build());
 
         TraceTree result = service.getTraceInsights("trace1").orElseThrow();
 
         assertThat(result.logs()).extracting(TraceLog::message).containsExactly("spanless");
-        assertThat(result.rootSpan().logs()).isNull();
+        assertThat(result.rootSpan().logs()).isEmpty();
         assertThat(result.summary().logs()).isEqualTo(new TraceTabSummary.LogsSummary(1, 0, 0));
+    }
+
+    @Test
+    void aLogEmittedInAGrandchildSpanIsAttachedToThatSpanAlone() {
+        store.addSpan(rootSpan("t1", "GET /x", Span.Kind.SERVER, 100).build());
+        store.addSpan(span("child")
+                .in("t1")
+                .parent("span-t1")
+                .named("service")
+                .at(10, 50)
+                .build());
+        store.addSpan(span("grandchild")
+                .in("t1")
+                .parent("child")
+                .named("repository")
+                .at(20, 20)
+                .build());
+        store.addLog(log("t1").inSpan("grandchild").saying("deep").build());
+
+        TraceTree tree = service.getTraceInsights("t1").orElseThrow();
+
+        SpanNode child = tree.rootSpan().children().getFirst();
+        SpanNode grandchild = child.children().getFirst();
+        assertThat(grandchild.logs()).extracting(TraceLog::message).containsExactly("deep");
+        assertThat(tree.rootSpan().logs()).isEmpty();
+        assertThat(child.logs()).isEmpty();
     }
 
     @Test
@@ -322,6 +347,73 @@ class TraceInsightsServiceTest {
         assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("http1");
         assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(2, 0, 0));
         assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
+    }
+
+    /** The counting pass over the buckets a request did not ask for runs against Slow too, and only a slow match counts. */
+    @Test
+    void theSlowBucketIsFilteredAndCountedLikeTheOthers() {
+        InMemoryTraceStore slowStore = TraceStores.with(p -> p.setSlowTraceThresholdMs(100));
+        slowStore.addSpan(
+                rootSpan("slow-http", "GET /orders", Span.Kind.SERVER, 150).build());
+        slowStore.addSpan(
+                rootSpan("slow-consumer", "receive", Span.Kind.CONSUMER, 150).build());
+        slowStore.addSpan(
+                rootSpan("fast-http", "GET /users", Span.Kind.SERVER, 50).build());
+        TraceInsightsService slowService = newService(slowStore);
+
+        TraceInsightsResponse response = slowService.getInsights(10, TraceBucket.SLOW, "http_request", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("slow-http");
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(3, 0, 2));
+        assertThat(response.filteredBucketCounts()).isEqualTo(new BucketCounts(2, 0, 1));
+    }
+
+    /** Beside the wildcard type, a blank operation is the other half of "nothing filtered", so no counting pass runs. */
+    @Test
+    void aBlankRootOperationFilterIsNoFilterAtAll() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, "*", "   ");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+        assertThat(response.filteredBucketCounts()).isNull();
+    }
+
+    @Test
+    void aRootActionTypeFilterIsTrimmedAndReadCaseInsensitively() {
+        addTrace("trace1", 100, false);
+        addConsumerTrace("trace2", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, " Http_Request ", null);
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("trace1");
+    }
+
+    /** A root span without a name cannot match an operation filter, and must not throw trying. */
+    @Test
+    void aRootSpanWithoutANameNeverMatchesAnOperationFilter() {
+        store.addSpan(span("span-unnamed")
+                .in("unnamed")
+                .named(null)
+                .kind(Span.Kind.SERVER)
+                .at(0, 100)
+                .build());
+        addTraceWithOperation("named", "GET /users", 100);
+
+        TraceInsightsResponse response = service.getInsights(10, TraceBucket.ALL, null, "users");
+
+        assertThat(response.traces()).extracting(TraceTree::traceId).containsExactly("named");
+    }
+
+    /** The limit bounds the page only; the counts describe the store either way. */
+    @Test
+    void aZeroLimitListsNothingButStillCounts() {
+        addTrace("trace1", 100, false);
+
+        TraceInsightsResponse response = service.getInsights(0, TraceBucket.ALL, null, null);
+
+        assertThat(response.traces()).isEmpty();
+        assertThat(response.bucketCounts()).isEqualTo(new BucketCounts(1, 0, 0));
     }
 
     /**
@@ -453,10 +545,10 @@ class TraceInsightsServiceTest {
 
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
-        assertThat(result).isPresent();
-        assertThat(result.get().httpExchange()).isNotNull();
-        assertThat(result.get().httpExchange().request().method()).isEqualTo("GET");
-        assertThat(result.get().httpExchange().response().status()).isEqualTo(200);
+        HttpExchange exchange = result.orElseThrow().httpExchange();
+        assertThat(exchange.request().path()).isEqualTo("/users");
+        assertThat(exchange.request().controller()).isEqualTo(new HttpRequest.Controller("UserController", "list"));
+        assertThat(exchange.response().status()).isEqualTo(200);
     }
 
     @Test
@@ -465,8 +557,11 @@ class TraceInsightsServiceTest {
         // while inside the folded-away duplicate's MDC scope - i.e. carrying the
         // duplicate's spanId, not the surviving span's
         addTraceWithDuplicatedDbSpan("trace1", 100);
-        store.addLog(new LogCapturedEvent(
-                "trace1", "span-db-dup-trace1", Instant.EPOCH, "TRACE", "TestLogger", "Datasource log", "main"));
+        store.addLog(log("trace1")
+                .inSpan("span-db-dup-trace1")
+                .at("TRACE")
+                .saying("Datasource log")
+                .build());
         Optional<TraceTree> result = service.getTraceInsights("trace1");
 
         // the log attaches to the surviving span in the tree rather than being
@@ -532,11 +627,6 @@ class TraceInsightsServiceTest {
         return span(spanId).in(traceId).named(name).build();
     }
 
-    private static LogCapturedEvent logAt(String traceId, String level) {
-        return new LogCapturedEvent(
-                traceId, "span-" + traceId, Instant.EPOCH, level, "TestLogger", level + " line", "main");
-    }
-
     private TraceInsightsService newService(TraceStore store) {
         return new TraceInsightsService(store, traceTreeMapper, issueDetector, queryExtractor);
     }
@@ -574,25 +664,15 @@ class TraceInsightsServiceTest {
      * bundle's root despite carrying a parent id that never arrives.
      */
     private void addExcludedRequestFragment(String traceId) {
-        store.addSpan(span("span-fragment-" + traceId)
+        store.addSpan(jdbcConnection("span-fragment-" + traceId)
                 .in(traceId)
                 .parent("root-span-never-exported")
-                .named("connection")
-                .kind(Span.Kind.CLIENT)
-                .at(0, 30)
-                .tags(Map.of(
-                        "jdbc.datasource.name", "dataSource",
-                        "jdbc.datasource.pool", "HikariPool-1"))
                 .build());
     }
 
     /** The exact root datasource-micrometer exports for a standalone pool acquisition. */
     private void addConnectionPoolTrace(String traceId) {
-        store.addSpan(rootSpan(traceId, "connection", Span.Kind.CLIENT, 30)
-                .tags(Map.of(
-                        "jdbc.datasource.name", "dataSource",
-                        "jdbc.datasource.pool", "HikariPool-1"))
-                .build());
+        store.addSpan(jdbcConnection("span-" + traceId).in(traceId).build());
     }
 
     private void addTraceWithOperation(String traceId, String operationName, long durationMs) {

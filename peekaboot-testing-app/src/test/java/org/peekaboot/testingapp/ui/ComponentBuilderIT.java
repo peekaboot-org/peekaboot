@@ -16,40 +16,27 @@ import org.junit.jupiter.api.Test;
  */
 class ComponentBuilderIT extends PlaywrightTestBase {
 
+    /** Runs {@code body}, a function body over the components module {@code m}, and returns what it returns. */
     private Object evalBuilders(String body) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-        }
-        return page.evaluate(
-                "async (body) => { const m = await import('/peekaboot/ui/shared/components.js');"
-                        + " return await eval('(async () => {' + body + '})()'); }",
-                body);
+        return importModule("shared/components.js", "(async () => {" + body + "})()");
     }
 
-    @Test
-    void badgeCarriesItsVariantClass() {
-        assertThat(evalBuilders("return m.badge('UP', 'ok').className;")).isEqualTo("pk-badge pk-badge--ok");
-    }
-
+    /** The variant class is what the sheet colours by, so it belongs with the escaping rule. */
     @Test
     void badgeUsesTextContentSoMarkupCannotInject() {
-        assertThat(evalBuilders("return m.badge('<b>x</b>', 'ok').innerHTML;")).isEqualTo("&lt;b&gt;x&lt;/b&gt;");
-    }
-
-    @Test
-    void kvRowAppliesMonoAndTightModifiers() {
-        assertThat(evalBuilders("return m.kvRow('k', 'v', {mono: true, tight: true}).className;"))
-                .isEqualTo("pk-kv pk-kv--tight");
-        assertThat(evalBuilders("return m.kvRow('k', 'v', {mono: true}).querySelector('.pk-kv__value').className;"))
-                .isEqualTo("pk-kv__value pk-kv__value--mono");
+        assertThat(evalBuilders("const b = m.badge('<b>x</b>', 'ok'); return b.className + '|' + b.innerHTML;"))
+                .isEqualTo("pk-badge pk-badge--ok|&lt;b&gt;x&lt;/b&gt;");
     }
 
     @Test
     void kvRowWithoutHighlightUsesPlainTextForKeyAndValue() {
         assertThat(evalBuilders("return m.kvRow('k', null).querySelector('.pk-kv__value').textContent;"))
                 .isEqualTo("-");
-        assertThat(evalBuilders("return m.kvRow('k', 'v').querySelector('.pk-kv__value').innerHTML;"))
-                .isEqualTo("v");
+        assertThat(evalBuilders("""
+                const row = m.kvRow('k', 'v', {mono: true, tight: true});
+                return row.className + '|' + row.querySelector('.pk-kv__value').className
+                    + '|' + row.querySelector('.pk-kv__value').innerHTML;
+                """)).isEqualTo("pk-kv pk-kv--tight|pk-kv__value pk-kv__value--mono|v");
     }
 
     @Test
@@ -100,13 +87,14 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 """)).isEqualTo("true:false|false:true");
     }
 
+    /** A real button, not a click-handled div: keyboard activation and the ARIA wiring both. */
     @Test
-    void headerIsWiredToItsListByAria() {
+    void headerIsARealButtonWiredToItsListByAria() {
         assertThat(evalBuilders("""
                 const g = m.group({name: 'n', count: '1 item'});
                 document.body.appendChild(g.element);
-                return g.header.getAttribute('aria-controls') === g.list.id;
-                """)).isEqualTo(true);
+                return g.header.tagName + '|' + (g.header.getAttribute('aria-controls') === g.list.id);
+                """)).isEqualTo("BUTTON|true");
     }
 
     /** Same escaping guarantee as kvRow, applied to the group's name. */
@@ -210,7 +198,9 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 catch (e) { return e.message; }
             }
             """);
-        assertThat((String) message).startsWith("HTTP ");
+        assertThat((String) message)
+                .as("the status is what a caller renders, so it has to survive into the message")
+                .isEqualTo("HTTP 404");
     }
 
     /**
@@ -268,26 +258,9 @@ class ComponentBuilderIT extends PlaywrightTestBase {
                 """)).isEqualTo("pk-table-scroll|pk-table pk-x|col:A,col:B|1");
     }
 
-    /**
-     * badgeHtml() writes its variant straight into a class attribute of markup bound for
-     * innerHTML, so the variant is whitelisted against the set components.css styles
-     * rather than trusted. Anything else falls back to the neutral pill, which is also
-     * what an unstyled variant would have looked like.
-     */
+    /** Every builder writes its text as a text node, so a caller's markup stays literal. */
     @Test
-    void badgeHtmlFallsBackToTheNeutralVariantForOneItDoesNotKnow() {
-        assertThat(evalBuilders("return m.badgeHtml('UP', 'error-soft');"))
-                .isEqualTo("<span class=\"pk-badge pk-badge--error-soft\">UP</span>");
-        assertThat(evalBuilders("return m.badgeHtml('UP', '\" onclick=\"alert(1)');"))
-                .isEqualTo("<span class=\"pk-badge pk-badge--muted\">UP</span>");
-    }
-
-    /** The string builders are the ones that reach innerHTML, so they escape like badge() does. */
-    @Test
-    void stringBuildersEscapeTheirText() {
-        assertThat(evalBuilders("return m.emptyStateHtml('<b>');")).isEqualTo("<p class=\"pk-empty\">&lt;b&gt;</p>");
-        assertThat(evalBuilders("return m.badgeHtml('<i>', 'ok');"))
-                .isEqualTo("<span class=\"pk-badge pk-badge--ok\">&lt;i&gt;</span>");
+    void buildersUseTextContent() {
         assertThat(evalBuilders("return m.emptyState('<b>').outerHTML;"))
                 .isEqualTo("<p class=\"pk-empty\">&lt;b&gt;</p>");
         assertThat(evalBuilders("return m.loadingBlock('Loading x').outerHTML;"))

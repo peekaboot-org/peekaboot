@@ -27,8 +27,6 @@ public class PeekabootEndpointExposureOutcomeContributor implements EndpointExpo
      */
     private static final EndpointId HEALTH_ENDPOINT_ID = EndpointId.of("health");
 
-    private static final String ENABLED_PROPERTY = PeekabootPropertyKeys.ENABLED;
-
     private final Environment environment;
 
     public PeekabootEndpointExposureOutcomeContributor(Environment environment) {
@@ -44,7 +42,7 @@ public class PeekabootEndpointExposureOutcomeContributor implements EndpointExpo
         if (!exposures.contains(EndpointExposure.WEB)) {
             return null;
         }
-        if (!environment.getProperty(ENABLED_PROPERTY, Boolean.class, false)) {
+        if (!environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, false)) {
             return null;
         }
         return ConditionOutcome.match(message.because("peekaboot is enabled and reads the health endpoint in-process"));

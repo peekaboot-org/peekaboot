@@ -1,24 +1,14 @@
 package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse;
 import org.peekaboot.backend.domain.lifecycle.LifecycleRunsResponse.Run;
 
 class LifecycleRunsTest {
-
-    private static LifecycleEvent start(long epochMs, String version, String branch, String commit) {
-        Map<String, String> build = new LinkedHashMap<>();
-        build.put("version", version);
-        Map<String, String> git = new LinkedHashMap<>();
-        git.put("branch", branch);
-        git.put("commit.id", commit);
-        return LifecycleEvent.start(epochMs, 1, build, git);
-    }
 
     private static final long NOW = 100_000;
 
@@ -42,7 +32,7 @@ class LifecycleRunsTest {
 
     @Test
     void aSingleStartIsTheCurrentlyRunningRun() {
-        LifecycleRunsResponse response = runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234")), 6_000);
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).build()), 6_000);
 
         Run run = response.runs().get(0);
         assertThat(run.startedAtEpochMs()).isEqualTo(1_000);
@@ -57,9 +47,9 @@ class LifecycleRunsTest {
     @Test
     void aCleanStopEndsTheRunAndStartsTheDowntimeClock() {
         LifecycleRunsResponse response = runsFor(List.of(
-                start(1_000, "1.0.0", "dev", "abc1234"),
+                start(1_000).build(),
                 LifecycleEvent.stop(4_000, 1),
-                start(9_000, "1.0.0", "dev", "abc1234")));
+                start(9_000).build()));
 
         List<Run> runs = response.runs();
         Run second = runs.get(0);
@@ -83,7 +73,7 @@ class LifecycleRunsTest {
     @Test
     void aLeadingStopOrphanedByCapTrimmingStillMeasuresTheGapToTheNextStart() {
         LifecycleRunsResponse response =
-                runsFor(List.of(LifecycleEvent.stop(500, 1), start(9_000, "1.0.0", "dev", "abc1234")));
+                runsFor(List.of(LifecycleEvent.stop(500, 1), start(9_000).build()));
 
         Run run = response.runs().get(0);
 
@@ -93,7 +83,7 @@ class LifecycleRunsTest {
     @Test
     void backToBackStartsMeanTheFirstRunDiedWithoutRecordingAStop() {
         LifecycleRunsResponse response =
-                runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), start(9_000, "1.0.0", "dev", "abc1234")));
+                runsFor(List.of(start(1_000).build(), start(9_000).build()));
 
         List<Run> runs = response.runs();
         Run second = runs.get(0);
@@ -111,8 +101,8 @@ class LifecycleRunsTest {
 
     @Test
     void aVersionChangeIsReportedAsTheOnlyThingThatChanged() {
-        LifecycleRunsResponse response =
-                runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), start(9_000, "2.0.0", "dev", "abc1234")));
+        LifecycleRunsResponse response = runsFor(
+                List.of(start(1_000).build(), start(9_000).version("2.0.0").build()));
 
         List<Run> runs = response.runs();
         Run first = runs.get(1);
@@ -126,7 +116,7 @@ class LifecycleRunsTest {
     @Test
     void anUnchangedRestartReportsTheCarriedVersionWithoutFlaggingADeployment() {
         LifecycleRunsResponse response =
-                runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), start(9_000, "1.0.0", "dev", "abc1234")));
+                runsFor(List.of(start(1_000).build(), start(9_000).build()));
 
         Run second = response.runs().get(0);
 
@@ -136,8 +126,9 @@ class LifecycleRunsTest {
 
     @Test
     void branchAndCommitChangingTogetherAreBothReportedInFixedOrder() {
-        LifecycleRunsResponse response =
-                runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), start(9_000, "1.0.0", "feat/x", "def5678")));
+        LifecycleRunsResponse response = runsFor(List.of(
+                start(1_000).build(),
+                start(9_000).branch("feat/x").commit("def5678").build()));
 
         Run second = response.runs().get(0);
 
@@ -146,7 +137,7 @@ class LifecycleRunsTest {
 
     @Test
     void theOldestRunIsNeverReportedAsADeploymentEvenThoughEverythingAboutItIsNewlyKnown() {
-        LifecycleRunsResponse response = runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234")));
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).build()));
 
         Run oldest = response.runs().get(0);
 
@@ -155,9 +146,9 @@ class LifecycleRunsTest {
 
     @Test
     void aValueMissingFromARawStartIsCarriedForwardFromTheLastRunThatReportedIt() {
-        LifecycleEvent noGitInfo = LifecycleEvent.start(9_000, 1, Map.of("version", "1.0.0"), Map.of());
+        LifecycleEvent noGitInfo = start(9_000).withoutGit().build();
 
-        LifecycleRunsResponse response = runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), noGitInfo));
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).build(), noGitInfo));
 
         Run second = response.runs().get(0);
 
@@ -171,11 +162,11 @@ class LifecycleRunsTest {
     @Test
     void runsAreServedNewestFirst() {
         LifecycleRunsResponse response = runsFor(List.of(
-                start(1_000, "1.0.0", "dev", "abc1234"),
+                start(1_000).build(),
                 LifecycleEvent.stop(2_000, 1),
-                start(3_000, "1.0.0", "dev", "abc1234"),
+                start(3_000).build(),
                 LifecycleEvent.stop(4_000, 1),
-                start(5_000, "1.0.0", "dev", "abc1234")));
+                start(5_000).build()));
 
         assertThat(response.runs()).extracting(Run::startedAtEpochMs).containsExactly(5_000L, 3_000L, 1_000L);
     }
@@ -183,8 +174,7 @@ class LifecycleRunsTest {
     /** Not reachable from a live application - the log always ends on this run's own start. */
     @Test
     void aLogThatEndsOnAStopIsNeverReportedAsStillRunning() {
-        LifecycleRunsResponse response =
-                runsFor(List.of(start(1_000, "1.0.0", "dev", "abc1234"), LifecycleEvent.stop(4_000, 1)));
+        LifecycleRunsResponse response = runsFor(List.of(start(1_000).build(), LifecycleEvent.stop(4_000, 1)));
 
         Run run = response.runs().get(0);
 

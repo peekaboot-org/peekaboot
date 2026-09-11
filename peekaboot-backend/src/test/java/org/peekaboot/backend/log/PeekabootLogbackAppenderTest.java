@@ -87,6 +87,7 @@ class PeekabootLogbackAppenderTest {
         logger.error("e");
 
         assertThat(captured).extracting(LogCapturedEvent::level).containsExactly("DEBUG", "INFO", "WARN", "ERROR");
+        assertThat(captured).extracting(LogCapturedEvent::spanId).containsOnlyNulls();
     }
 
     @Test

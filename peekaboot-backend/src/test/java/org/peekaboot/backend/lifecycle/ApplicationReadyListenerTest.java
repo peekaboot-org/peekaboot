@@ -2,22 +2,55 @@ package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import javax.sql.DataSource;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
+import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.info.BuildProperties;
+import org.springframework.core.env.Environment;
 import org.springframework.mock.env.MockEnvironment;
 
 class ApplicationReadyListenerTest {
+
+    /** The first line names the application and its profiles; the build line is the coordinates a deploy is checked against. */
+    @Test
+    void banner_namesTheApplicationItsProfilesAndItsBuild() {
+        Properties build = new Properties();
+        build.setProperty("name", "orders");
+        build.setProperty("group", "com.acme");
+        build.setProperty("artifact", "orders-service");
+        build.setProperty("version", "1.2.3");
+        MockEnvironment environment = new MockEnvironment();
+        environment.setActiveProfiles("prod", "eu");
+
+        String report = report(
+                ReadyEvents.webApplication(8083), environment, new BuildInfoProvider(new BuildProperties(build)));
+
+        assertThat(report)
+                .contains(" Application [orders] ready with active profiles [prod, eu]")
+                .contains(" Application Info: com.acme:orders-service:1.2.3");
+    }
+
+    /** Without build-info on the classpath the banner says so instead of printing "unknown:unknown:unknown". */
+    @Test
+    void banner_saysWhenBuildInfoIsUnavailable() {
+        String report = report(ReadyEvents.webApplication(8083));
+
+        assertThat(report)
+                .contains(" Application [unknown] ready with active profiles [default]")
+                .contains(" Application Info: Build information not available");
+    }
 
     @Test
     void banner_linksTheDashboardBelowTheServiceUrlAndSwaggerUi() {
@@ -39,6 +72,10 @@ class ApplicationReadyListenerTest {
      * The banner is read by people in every locale; "1,5 MB" under a German default is not a
      * number to a log parser. A pool without a configured maximum (HotSpot's non-heap by
      * default) says so rather than printing a limit of zero.
+     *
+     * <p>{@code Locale.setDefault} is JVM-global. It is safe here because the backend's
+     * surefire runs its classes one at a time on one thread (the pom sets no parallelism), and
+     * the default is restored in {@code finally}; see TESTING.md.
      */
     @Test
     void banner_reportsMemoryInLocaleIndependentHumanUnits() {
@@ -56,14 +93,24 @@ class ApplicationReadyListenerTest {
         }
     }
 
+    /**
+     * Built by hand rather than read off H2: the driver reports its in-memory URL without
+     * any credential parameter, so no live DataSource in this module can yield one.
+     */
     @Test
     void banner_masksSensitiveConnectionParams() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
-        when(metadata.getConnectionParams())
-                .thenReturn(new LinkedHashMap<>(Map.of(
+        DataSourceMetadata metadata = new DataSourceMetadata(
+                "primary",
+                "app",
+                List.of(),
+                "orders",
+                DatabaseProduct.POSTGRESQL,
+                new LinkedHashMap<>(Map.of(
                         "ssl", new JdbcProperty(PropertySource.QUERY, "true"),
-                        "password", new JdbcProperty(PropertySource.QUERY, "s3cret"))));
+                        "password", new JdbcProperty(PropertySource.QUERY, "s3cret"))),
+                "PostgreSQL",
+                "16",
+                "PostgreSQL JDBC Driver");
 
         String report = report(ReadyEvents.webApplication(8083), List.of(metadata));
 
@@ -76,8 +123,7 @@ class ApplicationReadyListenerTest {
 
     @Test
     void banner_reportsThePoolSettingsOfAHikariDataSource() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
+        DataSourceMetadata metadata = h2Metadata("primary");
         try (HikariDataSource hikari = new HikariDataSource()) {
             hikari.setMinimumIdle(3);
             hikari.setMaximumPoolSize(7);
@@ -101,13 +147,19 @@ class ApplicationReadyListenerTest {
      */
     @Test
     void banner_omitsThePoolLinesWithoutAPoolInfoContributor() {
-        DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-        when(metadata.getDataSourceName()).thenReturn("primary");
+        DataSourceMetadata metadata = h2Metadata("primary");
 
         String report = report(
                 ReadyEvents.webApplication(8083), List.of(metadata), Map.of("primary", mock(DataSource.class)), null);
 
         assertThat(report).contains(" DB Connection [primary]").doesNotContain("DB Pool");
+    }
+
+    /** The metadata a real in-memory H2 reports for {@code name}; the banner reads only the name off it. */
+    private static DataSourceMetadata h2Metadata(String name) {
+        JdbcDataSource dataSource = new JdbcDataSource();
+        dataSource.setURL("jdbc:h2:mem:banner-" + name + ";DB_CLOSE_DELAY=-1");
+        return DataSourceMetadata.fromDataSource(name, dataSource).orElseThrow();
     }
 
     private static String report(ApplicationReadyEvent event) {
@@ -118,15 +170,29 @@ class ApplicationReadyListenerTest {
         return report(event, dataSources, Map.of(), null);
     }
 
-    /** Runs the listener against {@code event} and returns the single banner it logs. */
+    private static String report(ApplicationReadyEvent event, Environment environment, BuildInfoProvider buildInfo) {
+        return report(event, environment, buildInfo, List.of(), Map.of(), null);
+    }
+
     private static String report(
             ApplicationReadyEvent event,
             List<DataSourceMetadata> metadata,
             Map<String, DataSource> dataSources,
             HikariPoolInfo hikariPoolInfo) {
+        return report(event, new MockEnvironment(), new BuildInfoProvider(null), metadata, dataSources, hikariPoolInfo);
+    }
+
+    /** Runs the listener against {@code event} and returns the single banner it logs. */
+    private static String report(
+            ApplicationReadyEvent event,
+            Environment environment,
+            BuildInfoProvider buildInfo,
+            List<DataSourceMetadata> metadata,
+            Map<String, DataSource> dataSources,
+            HikariPoolInfo hikariPoolInfo) {
         var listener = new ApplicationReadyListener(
-                new EnvironmentInfo(new MockEnvironment()),
-                new BuildInfoProvider(null),
+                new EnvironmentInfo(environment),
+                buildInfo,
                 new ServerUrlResolver(new MockEnvironment(), () -> true),
                 metadata,
                 dataSources,

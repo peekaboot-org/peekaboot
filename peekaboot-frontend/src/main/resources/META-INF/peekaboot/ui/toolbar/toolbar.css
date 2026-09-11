@@ -1,5 +1,6 @@
-/* Dev toolbar (collapsed bar). Tokens come from ../assets/tokens.css; the
-   status pill and log counts reuse .pk-badge from ../assets/components.css. */
+/* Dev toolbar (collapsed bar). Tokens come from ../assets/tokens.css, the focus ring, the
+   button reset and the logo mark from ../assets/base.css (the three sheets ToolbarShell
+   inlines); the status pill and log counts reuse .pk-badge from ../assets/components.css. */
 
 /* Positioning lives here rather than in an inline style attribute on the host element:
    DevToolbarFilter renders that element server-side, and a page whose CSP omits
@@ -28,9 +29,8 @@
 .pk-toolbar:hover { background: var(--pk-bg-alt); }
 .pk-toolbar a { color: var(--pk-primary-text); text-decoration: none; }
 .pk-toolbar a:hover { text-decoration: underline; }
-.pk-toolbar a:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: 1px; }
 
-/* Reset to look like the plain flex row it replaces - only its semantics (a real
+/* A .pk-unbutton laid out like the plain flex row it replaces - only its semantics (a real
    <button>) are new, not its appearance. */
 .pk-toolbar__open {
     display: flex;
@@ -40,15 +40,9 @@
     flex: 1;
     min-width: 0;
     gap: var(--pk-space-md);
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
     text-align: left;
-    cursor: pointer;
 }
-.pk-toolbar__open:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-toolbar__open:focus-visible { outline-offset: -2px; }
 
 /* Wrapping (here, on the bar and on the metrics) is what keeps a narrow viewport from
    pushing the bar's content past the right edge: nothing shrinks below its own words. */
@@ -65,16 +59,9 @@
 }
 .pk-toolbar__controller { color: var(--pk-primary-text); }
 
-/* The dashboard link is the Peekaboot mark. url() here resolves against this
-   stylesheet, so it works from the shadow root without knowing basePath.
-   Theme comes off the shadow host, which watchTheme() keeps in sync. */
-.pk-toolbar__link {
-    flex: none;
-    width: 18px;
-    height: 18px;
-    background: url('../assets/logo-mark.png') center / contain no-repeat;
-}
-:host([data-theme="dark"]) .pk-toolbar__link { background-image: url('../assets/logo-mark-dark.png'); }
+/* The dashboard link is the Peekaboot mark (.pk-logo-mark, base.css); theme comes off the
+   shadow host, which watchTheme() keeps in sync. */
+.pk-toolbar__link { width: 18px; height: 18px; }
 /* Forced-colors modes drop background images. The mark is this link's only content
    (it replaced a text glyph), so without a fallback the control becomes an invisible
    18px box - the aria-label keeps it reachable, but not visible. */

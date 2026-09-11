@@ -36,7 +36,7 @@ final class SeriesRings {
         this.intervalMillis = new long[levels.size()];
         this.levelSizes = new int[levels.size()];
         for (int i = 0; i < levels.size(); i++) {
-            intervalMillis[i] = levels.get(i).getInterval().toMillis();
+            intervalMillis[i] = levels.get(i).intervalMillis();
             levelSizes[i] = levels.get(i).getSize();
         }
         this.levelEndEpochMs = new AtomicLongArray(levels.size());
@@ -257,12 +257,15 @@ final class SeriesRings {
         }
     }
 
-    /** seriesCount x (level0Size + sum of higher-level sizes x 8) x 8 bytes. */
+    /**
+     * The doubles the rings hold, at 8 bytes each: level 0 keeps one per sample, every
+     * coarser level one per sample per {@link InsightsSnapshot#STAT_COLUMNS stat column}.
+     */
     static long estimateMemoryBytes(int seriesCount, List<InsightsProperties.Level> levels) {
         long doublesPerSeries = levels.get(0).getSize();
         for (int i = 1; i < levels.size(); i++) {
-            doublesPerSeries += levels.get(i).getSize() * 8L;
+            doublesPerSeries += (long) levels.get(i).getSize() * InsightsSnapshot.STAT_COLUMNS.size();
         }
-        return seriesCount * doublesPerSeries * 8L;
+        return seriesCount * doublesPerSeries * Double.BYTES;
     }
 }

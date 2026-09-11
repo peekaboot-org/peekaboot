@@ -11,24 +11,19 @@ published. The sections below follow the same split: backend, frontend, auto-con
 
 ## Persisted state
 
-Two stores opt into the filesystem behind one switch:
-
-```
-peekaboot.storage.enabled = <local run>                       # on for a local launch
-peekaboot.storage.dir     = ${user.home}/.peekaboot/<app>      # both stores
-```
+Two stores opt into the filesystem behind one switch, `peekaboot.storage.enabled`, and share
+one directory, `peekaboot.storage.dir`. Both properties, their defaults, the per-application
+subdirectory and its fallbacks live on the site under
+[`peekaboot.storage`](https://www.peekaboot.org/docs/configuration/#peekabootstorage).
 
 Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
 `peekaboot.enabled`'s resolved value: on for an IDE or `spring-boot:run` launch, off everywhere
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
 
-`<app>` is `<groupId>.<artifactId>` from `build-info.properties`, sanitized to `[A-Za-z0-9._-]`.
-A build that publishes no build information falls back to `spring.application.name`, and an
-application with neither to `application`. Coordinates rather than the name, so two
-applications sharing a `spring.application.name`, or having none, keep their history apart. An
-explicit `peekaboot.storage.dir` is used verbatim, with no per-application subdirectory
-appended.
+The subdirectory is named from the application's build coordinates rather than its
+`spring.application.name`, so two applications sharing a name, or having none, still keep their
+history apart.
 
 `StorageDirectory` only resolves this path; it never touches the disk. While
 `peekaboot.storage.enabled` is `false`, `StorageDirectory.file(...)` returns empty and neither
@@ -61,15 +56,22 @@ small versioned binary format: magic `"PKIN"`, a schema version, then the header
 each boundary of `peekaboot.insights.persistence.interval` (default: the coarsest level's own
 interval), and once more synchronously at shutdown after the collector has stopped, so the
 final write sees quiesced rings. A run that never ticked skips the write rather than
-overwriting a good file with an empty one.
+overwriting a good file with an empty one. With storage off, `InsightsSnapshotStore.create`
+hands the service `SnapshotStore.NONE`, a store that loads, writes and restores nothing, so
+`InsightsService` drives one store the same way in both cases.
 
 The snapshot is a cache, never a source of truth, so anything wrong with it costs only the
-history. Four things count as wrong: a bad magic number, a schema version this build doesn't
-know, a ring geometry that no longer matches `peekaboot.insights.levels`, and an age past
-`peekaboot.insights.persistence.max-age` (default: the coarsest level's span). The file is then
-deleted and the rings start empty, exactly as they would with storage off. Every length read
-from the file is checked against a plausibility bound before it is used to allocate, so a
-corrupt file cannot provoke an oversized allocation.
+history. Five things count as wrong: a bad magic number, a schema version this build doesn't
+know, a ring geometry that no longer matches `peekaboot.insights.levels`, an age past
+`peekaboot.insights.persistence.max-age` (default: the coarsest level's span), and a date more
+than five minutes in the future (`InsightsSnapshotStore.CLOCK_SKEW`), which is what a
+stepped-back clock or a restored backup leaves behind. The file is then deleted and the rings
+start empty, exactly as they would with storage off.
+
+Every length read from the file is checked against a plausibility bound before it is used to
+allocate, so a corrupt file cannot provoke an oversized allocation. The level-count and
+ring-size bounds are the ones `InsightsProperties` enforces, so a configuration that starts can
+always be read back.
 
 Loading never delays startup. `InsightsSnapshotStore.beginLoad()` submits the parse to a
 virtual thread and returns. Each of the collector's level threads then runs a one-shot restore
@@ -98,12 +100,13 @@ That is cheap at this size (at most 400 KB for the full 1000) and it removes bot
 partial-line corruption window and a second trim code path. A line that fails to parse is
 skipped on read; the rest of the file still loads.
 
-A start event carries its epoch timestamp, its pid, and the `BuildProperties`/`GitProperties`
-entries the two projections read: `version`, `time`, `branch`, `commit.id`, `commit.id.full`,
-`commit.id.abbrev`, `build.version` and `build.time`. No others, because a git remote URL can
-carry the token it was cloned with and the building user's mail address is personal data. A stop
-event carries only its own timestamp and pid, since its build belongs to the start it follows,
-which the log still remembers.
+A start event carries its epoch timestamp, its pid, and a whitelist of
+`BuildProperties`/`GitProperties` entries, no others, because a git remote URL can carry the
+token it was cloned with and the building user's mail address is personal data. The site names
+every kept entry under
+[what Peekaboot writes to disk](https://www.peekaboot.org/docs/security/#what-peekaboot-writes-to-disk).
+A stop event carries only its own timestamp and pid, since its build belongs to the start it
+follows, which the log still remembers.
 
 The log's in-memory half runs independently of `peekaboot.storage.enabled`. With storage off,
 `LifecycleEventLog` still records the current run's start and stop in memory and serves them
@@ -192,10 +195,10 @@ org.peekaboot.backend/
 │   ├── features/           # Features: the /api/features payload, flags plus the effective slow thresholds
 │   └── trace/              # TraceTree, SpanNode, HttpExchange, TraceTabSummary, IssueType, SpanStatus, IssueSeverity, ...
 ├── filter/                 # DevToolbarFilter, RequestCaptureFilter, ContentBufferingResponseWrapper
-├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share)
-│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef)
+├── insights/               # Metric ring buffers: InsightsCollector, StatsRing, snapshot codec/store, IntervalBoundary (the boundary-aligned schedule the level threads and the snapshot writer share; clock and sleeper injectable, so a test pins the schedule exactly), IntervalFormat (the ring interval as "10s"/"1m"/"1h", for thread names and the start-up line)
+│   ├── config/             # InsightsProperties, panels file (PanelDef, SeriesDef, TileDef) and its vocabulary (Stat, Chart, Unit, TileFormat: bound leniently from the YAML words, serialised back as them)
 │   └── web/                # InsightsController, InsightsSsePublisher: /peekaboot/api/insights/*
-├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, DataSourceMetadata, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
+├── lifecycle/              # Ready/stopped banners, LifecycleEventLog + LifecycleEventFile, build info, DataSourceMetadata + DataSourceMetadataList, HikariPoolInfo (the one Hikari reference, wired only with HikariCP present), ByteFormat (the one byte formatter; insights uses it too)
 │   └── web/                # LifecycleController: /peekaboot/api/lifecycle/*
 ├── log/                    # PeekabootLogbackAppender
 ├── mapper/                 # Data transformation
@@ -210,8 +213,8 @@ org.peekaboot.backend/
 │   ├── config/             # PeekabootTracingProperties
 │   ├── event/              # SpanDataEvent, LogCapturedEvent, RequestCompletedEvent
 │   ├── interceptor/        # TracingHandlerInterceptor
-│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, SpanDuplicateMatcher,
-│                           # TraceBucket, TraceStoreEventListener
+│   └── store/              # TraceStore, InMemoryTraceStore, TraceDataBundle, TraceData (its snapshot),
+│                           # SpanData, SpanDuplicateMatcher, TraceBucket, TraceStoreEventListener
 ```
 
 ### Tracing Flow
@@ -221,7 +224,7 @@ org.peekaboot.backend/
 3. **Log capture**: `PeekabootLogbackAppender` reads `traceId`/`spanId` from the event's frozen MDC map (Logback events carry MDC state, not a live span) and drops events without a `traceId`
 4. **Request metadata**: `RequestCaptureFilter` uses `Tracer.currentSpan()` to correlate request details
 5. **Query**: `TraceInsightsService` reads `TraceStore` directly by `TraceBucket` (ALL/ERRORS/SLOW), then assembles and enriches the tree (see *Trace Assembly and Enrichment*)
-6. **Thresholds**: `IssueDetector` raises SLOW/VERY_SLOW/SLOW_QUERY at `UiTracingProperties`' thresholds and sets `TraceTree.slow`, the Traces tab's badge. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
+6. **Thresholds**: `IssueDetector` raises SLOW, VERY_SLOW and SLOW_QUERY at `UiTracingProperties`' thresholds, and ERROR off the span's own status. `TraceTree.slow`, the Traces tab's badge, follows SLOW and VERY_SLOW alone. `GET /peekaboot/api/features` publishes those thresholds plus the Slow bucket's `slowTraceThresholdMs` (`Features`), so the frontend colours by the same numbers instead of keeping a copy
 
 ### Servlet Filters
 
@@ -240,11 +243,11 @@ registrations live only in `DevToolbarAutoConfiguration`, so neither filter runs
 
 `PeekabootPaths` is the one place Peekaboot's URL space is defined: the `/peekaboot` prefix,
 the excluded prefixes, and those same exclusions as MVC patterns for the tracing interceptor.
-The exclusions are `/static/`, `/webjars/`, `/peekaboot/`, `/error/` and the resolved
-management base path (`/actuator/` by default). Note what is not there: Boot's other
-default static locations, `/public/`, `/resources/` and `/META-INF/resources/`. As MVC patterns
-each prefix gains a `**` suffix, and `/x/**` matches bare `/x`, so `/error` is excluded while
-`/errors` stays an application path.
+The site lists the prefixes themselves under
+[what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured). Note what is
+not among them: Boot's other default static locations, `/public/`, `/resources/` and
+`/META-INF/resources/`. As MVC patterns each prefix gains a `**` suffix, and `/x/**` matches
+bare `/x`, so `/error` is excluded while `/errors` stays an application path.
 
 Everything in `PeekabootPaths` is relative to the servlet context. The filters match on the
 container's mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather
@@ -303,7 +306,7 @@ tool that can read response headers from doing the same.
 The backend implements a Backend-for-Frontend pattern:
 
 1. **Raw actuator data**: `PeekabootActuatorService` invokes actuator endpoints in-process (see below)
-2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed beans
+2. **Typed parsing**: `ActuatorResponseParser.parse(...)` converts raw JSON to typed records. A section the service could not read is null; inside a section, a collection the response left out binds as empty (the records' compact constructors), so the mappers guard the section and nothing below it
 3. **Domain mapping**: individual mappers transform to domain models
 4. **Aggregation**: `ActuatorInsightsService` combines all data for the dashboard
 
@@ -313,18 +316,13 @@ syntax does (`servers[0].host`), so the Config tab's filter matches nested keys 
 Masking runs on the tree first (`TreeMasker`, by leaf key), so a sensitive key anywhere in it
 arrives as the single masked leaf its subtree collapsed to.
 
-### The two `insights` URL shapes
+`ApplicationMapper` copies only `branch`, `commit.id` and `commit.time` off `info.git` into the
+`GitInfo` record, for the reason the lifecycle log whitelists its `GitProperties` entries (see
+*`lifecycle.jsonl`*): a remote URL can carry a token and a committer's address is personal data.
+`info.build` stays a free-form map, masked, because the consuming app fills it itself.
 
-Two unrelated things share the word, and only the position in the path tells them apart.
-
-| Shape | Endpoints | What it is |
-|-------|-----------|------------|
-| `insights` as a **suffix** | `GET /peekaboot/api/actuator/all/insights`, `GET /peekaboot/api/traces/insights`, `GET /peekaboot/api/traces/{traceId}/insights` | The BFF enrichment above: raw data assembled into a domain aggregate. Served by `PeekabootController` |
-| `/api/insights/` as a **prefix** | `GET /peekaboot/api/insights/config`, `/data`, `/stream` | The metric ring buffers behind the Insights tab. Served by `InsightsController`, which needs a `MeterRegistry` bean and has nothing to do with the BFF pipeline |
-
-Neither is a version of the other, and they disappear under different conditions: the prefix
-form goes away with the `MeterRegistry`, the suffix form does not. `docs/GLOSSARY.md` draws the
-same line for the word; this is the line for the routes.
+The word `insights` marks these BFF endpoints as a path *suffix* and the unrelated metric
+rings as a path *prefix*. [`GLOSSARY.md`](GLOSSARY.md#the-word-insights) draws that line.
 
 ### JSON on the wire
 
@@ -348,11 +346,12 @@ record and `InsightsController`'s 400 body included, both under that package pre
 ### In-Process Actuator Invocation
 
 Peekaboot never calls `/actuator/*` over HTTP. `PeekabootActuatorService` holds a
-list of `InsightsSource` beans, one per endpoint id (`spring`, `health`, `info`,
+list of `InsightsSource` beans, one per source id (`spring`, `health`, `info`,
 `env`, `configprops`, `loggers`, `scheduledtasks`, `flyway`). Each is a record
-pairing that id with a `Supplier` that reads an endpoint object
-`ActuatorSourcesAutoConfiguration` constructs. Reading a source calls that endpoint
-object directly. There is no discovery step and no HTTP call; a source that reads
+pairing that id with a `Supplier`. Six of them read an endpoint object
+`ActuatorSourcesAutoConfiguration` constructs; `health` reads the application's own
+`HealthEndpoint` bean, and `spring` reads `SpringBootVersion`/`SpringVersion` and is
+no endpoint at all. There is no discovery step and no HTTP call; a source that reads
 `null` contributes no entry, which is how an endpoint whose backing bean is absent
 (`flyway` without a Flyway bean, `health` without a `HealthEndpoint` bean, `loggers`
 without a `LoggingSystem` bean) reports that it has nothing rather than failing.
@@ -447,9 +446,9 @@ hooks that run before or outside the application context are registered in
 
 | Class | Registered via | Purpose |
 |-------|----------------|---------|
-| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, mappers, web config |
+| `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
-| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, `LogbackAppenderRegistrar` |
+| `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` bean |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
@@ -458,8 +457,9 @@ hooks that run before or outside the application context are registered in
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled`, and the default property values |
-| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Makes the health endpoint bean available without web/JMX exposure |
+| `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
+| `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
 | `LocalDevDetector` | (package-private helper) | The local-launch heuristic behind the post-processor (see *Conditional Loading*) |
 
 Every `@Bean` method across these auto-configurations is `@ConditionalOnMissingBean`. Most
@@ -467,19 +467,27 @@ match by type, so an application bean of the same type replaces the default outr
 `FilterRegistrationBean`s match by their deduced generic type, so an application's other
 filter registrations never back one of them off. A named set matches by name instead:
 `tracingInterceptorConfigurer`, because several `WebMvcConfigurer` beans coexist and a type
-match would let one suppress them all; `databaseMetadataList`, because a
-`List<DataSourceMetadata>` bean cannot be conditioned reliably by type; and each
-`InsightsSource` bean in `ActuatorSourcesAutoConfiguration`, because they share that one
-type and a type match would let an application overriding a single source suppress every
-reading.
+match would let one suppress them all; and each `InsightsSource` bean in
+`ActuatorSourcesAutoConfiguration`, because they share that one type and a type match would
+let an application overriding a single source suppress every reading. The datasource
+metadata is a bean of its own type, `DataSourceMetadataList`, rather than a
+`List<DataSourceMetadata>`: Spring resolves the list type by collecting `DataSourceMetadata`
+beans first, so one application bean of that type would have replaced the whole list.
+
+The nine actuator mappers (`HealthMapper`, `ConfigMapper` and the rest of
+`mapper/actuator`) are not beans. `ActuatorInsightsService` builds them from the
+`MaskingEngine`, so the one override point for that pipeline is the service itself. They
+are stateless and need at most the engine, and nine `@ConditionalOnMissingBean` methods
+nobody overrode bought nothing but wiring.
 
 ### Conditional Loading
 
 Most of the auto-configuration classes carry the same two class-level conditions, the
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
-`PeekabootPathsAutoConfiguration`, `DevToolbarAutoConfiguration`,
-`TracingInterceptorAutoConfiguration`, `PeekabootTracingAutoConfiguration`,
-`OtelTracingAutoConfiguration` and `InsightsAutoConfiguration`.
+`PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
+`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
+`InsightsAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -487,11 +495,14 @@ servlet guard and the master switch: `PeekabootAutoConfiguration`,
 ```
 
 Each adds its own on top: `PeekabootAutoConfiguration` and `ActuatorSourcesAutoConfiguration`
-the `HealthEndpoint` and `InfoEndpoint` classes, `DevToolbarAutoConfiguration`
-`peekaboot.dev-toolbar`, `TracingInterceptorAutoConfiguration` the `ObservationRegistry`
-class and bean, `InsightsAutoConfiguration` a `MeterRegistry` bean and
-`peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the OpenTelemetry SDK's
-`SpanExporter` class.
+the `HealthEndpoint` class, `DevToolbarAutoConfiguration` `peekaboot.dev-toolbar`,
+`TracingInterceptorAutoConfiguration` an `ObservationRegistry` bean, `InsightsAutoConfiguration`
+a `MeterRegistry` bean and `peekaboot.insights.enabled`, and `OtelTracingAutoConfiguration` the
+OpenTelemetry SDK's `SpanExporter` class. Class-level conditions guard only what the starter's
+closure leaves optional: `spring-boot-health` and the OpenTelemetry SDK. HikariCP, Logback and
+Flyway are optional too, each guarded a level down on a nested `@Configuration`. `InfoEndpoint`
+and `ObservationRegistry` arrive with hard dependencies of this module and the backend, so no
+consumer of the starter can be without them.
 
 `PeekabootAutoConfiguration` registers the servlet-only `PeekabootWebConfig` next to the
 controllers, services and actuator wiring, all as explicit `@Bean` methods whose names yield
@@ -523,7 +534,9 @@ toolbar is still injected into every page with nothing captured behind it.
 
 There is no `matchIfMissing` fallback for `peekaboot.enabled` or `peekaboot.dev-toolbar`. Both
 default from `PeekabootDefaultsEnvironmentPostProcessor` into a `peekabootDetection` property
-source at lowest precedence, so any explicit application setting wins in either direction. The
+source at lowest precedence, so any explicit application setting wins in either direction.
+`PeekabootOffByDefaultTest` pins that for every registered auto-configuration at once: without
+`peekaboot.enabled`, no Peekaboot bean exists, the toolbar switch alone included. The
 toolbar keys on the same local-development detection as `peekaboot.enabled`, not on
 `peekaboot.enabled`'s resolved value, so turning Peekaboot on deliberately in a shared
 environment does not inject the toolbar into every page as a side effect.
@@ -549,14 +562,16 @@ signals of its own, checked in order:
    a genuine local launch, which shares the thread name and the class loader.
 4. Those three hold for *every* exploded-classpath launch, so two more signals decide
    (`LocalDevDetector.LaunchSignals`, read from the JVM and the host, injectable in tests).
-   `java.class.path` must contain a build tool's output directory: an entry ending in
-   `target/classes`, `build/classes/java/main`, `build/classes/kotlin/main`,
-   `build/classes/groovy/main`, `build/classes/scala/main` or `bin/main`, or containing
-   `out/production/`. An IDE, `spring-boot:run` and `bootRun` always put one there; a Jib image
-   (`/app/classes`) and Boot's `extract` layout (a thin jar with a `Class-Path` manifest) never
-   do. And `ContainerRuntime.current()` must report `NONE`: no `/.dockerenv`, no Podman
-   `/run/.containerenv`, no `KUBERNETES_SERVICE_HOST`, and no `/proc/1/cgroup` naming `docker`,
-   `kubepods` or `containerd`.
+   `java.class.path` must contain a build tool's output directory, and
+   `ContainerRuntime.current()` must report `NONE`. The site names the accepted directory
+   suffixes and the four container markers under
+   [what counts as a local run](https://www.peekaboot.org/docs/configuration/#local-run).
+   A jar's `Class-Path` manifest attribute counts as part of the class path, resolved
+   relative to the jar, because IntelliJ's "JAR manifest" command-line shortening leaves one
+   temp jar on `java.class.path` and moves every real entry into its manifest. An IDE,
+   `spring-boot:run` and `bootRun` always put an output directory there, directly or through
+   that manifest; a Jib image (`/app/classes`) and Boot's `extract` layout (a thin jar whose
+   `Class-Path` manifest names only `lib/*.jar`) never do.
 
 So an IDE run, `mvn spring-boot:run` and `gradle bootRun` default to on. A `java -jar` of the
 packaged artifact, a war in a servlet container, a native image, an AOT-processed build, a
@@ -602,7 +617,7 @@ settings. Health is the one exception. Its bean is borrowed rather than built, a
 source reads and configure trace sampling and `@Observed` support. None of them
 decides value visibility. `management.info.<x>.enabled=false` is the one host lever
 left over dashboard content: it removes an `InfoContributor` bean outright and so
-narrows the Application tab, and an explicit host setting wins because Peekaboot's
+narrows the Overview tab, and an explicit host setting wins because Peekaboot's
 own four `management.info.*` defaults apply at lowest precedence.
 
 `peekaboot.enable-unmasking` is the only visibility switch. `MaskingEngine` masks every
@@ -653,8 +668,11 @@ the rest of the app's OpenTelemetry setup (sampling, other exporters such as Zip
 an OTLP backend) untouched.
 
 It skips Peekaboot's own requests span by span, using the same `PeekabootPaths` prefixes
-the filters and the interceptor use. A child of such a request carries neither the path tag nor
-the route name, so skipping a *root* also publishes a `TraceDiscardedEvent`;
+the filters and the interceptor use. Only SERVER spans are judged: the prefixes describe
+inbound requests, so an outbound call whose remote path happens to start with one (a health
+check against another service, say) stays in its trace. A child of such a request carries
+neither the path tag nor the route name, so skipping a *root* also publishes a
+`TraceDiscardedEvent`;
 `TraceStoreEventListener` turns that into `TraceStore.discard`, which drops the trace from all
 three buckets. Everything else becomes a `SpanData` published as a `SpanDataEvent`. An error is
 recorded only for a span whose status code is `ERROR`: the message is the status description,
@@ -662,7 +680,9 @@ falling back to the `exception` event's `exception.message` when empty, and the 
 event's `exception.type`, or `ERROR` where the span recorded no exception event.
 
 `tracing/bridge/otel` is the only bridge. There is no Brave/Zipkin one, so an application wired
-to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing.
+to Micrometer Tracing's Brave bridge instead of the OpenTelemetry SDK captures nothing. The
+toolbar itself only needs a `Tracer` bean and is injected with either bridge (see
+*Auto-Configuration Ordering*).
 
 ### Handler and View Spans
 
@@ -712,8 +732,8 @@ no header-injection code anywhere in the repo.
 `PeekabootLogbackAppender` publishes a `LogCapturedEvent` per captured event;
 `TraceStoreEventListener` forwards it to `TraceStore`, which stores by traceId, and
 `TraceInsightsService` attaches them to the trace's spans on read (see *Trace Assembly and
-Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which lives
-inside `DevToolbarAutoConfiguration`, so correlated logs require `peekaboot.dev-toolbar=true`.
+Enrichment*). The appender is attached by the `LogbackAppenderRegistrar` bean, which only
+`DevToolbarAutoConfiguration` registers, so correlated logs require `peekaboot.dev-toolbar=true`.
 A trace's Logs tab stays empty without it, independent of `peekaboot.tracing.enabled`.
 
 Capture is off for as long as any application in the JVM is re-initialising Logback. Boot
@@ -731,10 +751,11 @@ even reset-resistant listeners.
 Three collaborators turn a stored bundle into what the API returns, and the split is easy to
 get wrong: `TraceTreeMapper` builds the tree and nothing else.
 
-1. `TraceTreeMapper.map(traceData, truncated)` builds the `TraceTree`. It picks the root span,
-   re-parents orphans, masks tags, error messages and query text, classifies the root action
-   type and computes the tab summary. It leaves `TraceTree.slow` false, every `SpanNode.issues`
-   list empty and every `SpanNode.logs` null. **It attaches no issues and correlates no logs.**
+1. `TraceTreeMapper.map(traceData)` builds the `TraceTree` from a `TraceDataBundle.snapshot()`.
+   It re-parents orphans under the root the snapshot names, masks tags, error messages and
+   query text, classifies the root action type and computes the tab summary. It leaves
+   `TraceTree.slow` false, every `SpanNode.issues` list empty and every `SpanNode.logs` null.
+   **It attaches no issues and correlates no logs.**
 2. `IssueDetector.detectIssues(tree)` fills those issues in and decides `TraceTree.slow`.
    `TraceInsightsService` calls it on both trace endpoints.
 3. `TraceInsightsService.enrichWithDetails` adds what only the stored bundle knows: the flat log
@@ -744,12 +765,22 @@ get wrong: `TraceTreeMapper` builds the tree and nothing else.
    *count* for the row badges, and step 2, so its trees carry issues but no log list and no
    queries.
 
-`findRootSpan` takes the first span with no parent stored in this trace, falling back to the
-first span. `attachOrphansToRoot` then re-parents every other span whose parent is not in the
-trace onto that root, so a subtree whose parent has not been exported yet does not silently
-vanish. `truncated` is passed into the mapper rather than derived from the span list. It is a
-property of how the trace was captured, and the list the mapper sees is already deduplicated
-and already capped, so nothing in it can say whether real spans were dropped.
+Steps 2 and 3 never construct a `TraceTree` or `SpanNode` themselves. They copy the mapper's
+output through `TraceTree.withRootSpan`/`withSummary`/`withDetails` and `SpanNode.withIssues`/
+`withLogs`/`withChildren`, so a stage names only the components it adds.
+
+`TraceDataBundle.snapshot()` reads everything the mapper needs under one lock: the spans in
+creation order, the root span, the trace window and the `truncated` flag. The root is chosen
+there and nowhere else: the earliest-created stored span whose parent is not stored, else the
+earliest-created span. `TraceDataBundle.rootSpan()` answers the same rule without a copy, which
+is what the listing filters classify by, so the row a filter admits and the tree the mapper
+builds agree on what started the trace. `attachOrphansToRoot` then re-parents every other span
+whose parent is not in the trace onto that root, so a subtree whose parent has not been exported
+yet does not silently vanish. The window is the bundle's high-water start and end, the same
+number the Slow bucket admitted the trace by, so a truncated trace never lists a duration below
+the threshold that put it there. `truncated` travels on the snapshot rather than being derived
+from the span list: the list is already deduplicated and already capped, so nothing in it can
+say whether real spans were dropped.
 
 ### Span Deduplication
 
@@ -787,14 +818,15 @@ JDBC/datasource instrumentation on the classpath already emits a span for it, ta
 the CLIENT side of a database call carrying a `db.*` or `jdbc.query*` tag. `jdbc.*` alone is
 not enough, since datasource-proxy's connection and result-set spans carry
 `jdbc.datasource.name`/`jdbc.row-count` and are not queries. The predicate is shared by
-`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY and the
-HIGH_QUERY_COUNT children count) and `QueryExtractor` (the `queries` list), so the three
-numbers a trace reports about its queries are one number; `TraceTreeMapperTest` pins the
-equality.
+`TraceTreeMapper` (`summary.queries.count`), `IssueDetector` (SLOW_QUERY) and
+`QueryExtractor` (the `queries` list), so the three numbers a trace reports about its queries
+are one number; `TraceTreeMapperTest` pins the equality.
 
 `QueryExtractor` builds each trace's `queries` list from those spans, independently of the span
 tree's own names, one entry per query span. A span whose instrumentation recorded no statement
-is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
+is listed with `sql: null`. `DbSpans.sql` checks tags in priority order. The site states the
+outcome under [the trace view](https://www.peekaboot.org/docs/dev-toolbar/#the-trace-view);
+the order and the reasons are here:
 
 1. `db.query.text`, the current OpenTelemetry semantic convention, emitted by
    `datasource-micrometer-opentelemetry`, the default stack `peekaboot-testing-app` uses
@@ -804,12 +836,17 @@ is listed with `sql: null`. `DbSpans.sql` checks tags in priority order:
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
 The same masked text is put on the span itself as `SpanNode.query`, which is what the Spans
-tab's SQL toggle shows. `findDbSystem` mirrors this priority for `db.system.name` /
+tab's SQL toggle shows, and the three statement tags it was read from are dropped from
+`SpanNode.tags` rather than served a second time beside it. A datasource-proxy result-set
+span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount` (null when it does not
+parse), so the Spans tab reads facts the backend decided instead of re-deriving them from
+tag and span names. `DbSpans.system` mirrors this priority for `db.system.name` /
 `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is value-patterns only, not
 column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries the reasoning), so a
 credential with no provider-recognisable shape sitting in an ordinary column is not caught.
-The security page states that as a caveat and tells readers to assume a captured trace carries
-plaintext SQL. It is a caveat, not a promise waiting to be strengthened.
+The [security page](https://www.peekaboot.org/docs/security/#masking) states that as a caveat
+and tells readers to assume a captured trace carries plaintext SQL. It is a caveat, not a
+promise waiting to be strengthened.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for
@@ -825,8 +862,10 @@ both, so `trace-detail-queries-*` is the shipped image demonstrating `QueryExtra
 ```
 TraceData
 ├── traceId: String
-├── startTime, endTime, duration
-└── spans: List<SpanData>
+├── startTime, duration      # the bundle's high-water window
+├── rootSpan: SpanData       # chosen once by the bundle
+├── spans: List<SpanData>    # creation order
+└── truncated: boolean
 
 SpanData
 ├── traceId, spanId, parentId
@@ -843,16 +882,22 @@ SpanData
 
 `InsightsSsePublisher` fans the collector's ticks and roll-ups out to every open dashboard over
 `/peekaboot/api/insights/stream`. A tick carries series values only; tiles are read from
-`/peekaboot/api/insights/config`, not streamed. Each subscriber gets its own bounded send lane
-and sender thread, so one wedged peer drops its own events instead of stalling the stream. A
-15-second heartbeat keeps idle connections open, and the publisher refuses past
+`/peekaboot/api/insights/config`, not streamed. One dispatch thread renders each event once
+and offers it to every `Subscriber`'s bounded send lane, whose own sender thread performs the
+blocking write, so one wedged peer drops its own events instead of stalling the stream. The
+same dispatch thread sends the heartbeat: it polls the event queue with a 15-second timeout,
+and a poll that comes back empty means the stream has been idle that long and gets a
+keep-alive comment instead. A busy stream never needs one. The publisher refuses past
 `MAX_SUBSCRIBERS` with a 503.
 
-Emitters carry a five-minute timeout. It only reclaims a peer that vanished without closing its
-socket, since the heartbeat and the lane overflow already detect one that is merely wedged.
-Every expiry costs a full resync of every series' level-1 ring, for every open dashboard.
-Thirty minutes would cut that by an order of magnitude with nothing functional lost; five is
-the value it was built with, nothing more.
+Emitters carry a thirty-minute timeout (`EMITTER_TIMEOUT`). It only reclaims a peer that
+vanished without closing its socket, since the heartbeat and the lane overflow already detect
+one that is merely wedged.
+
+On context shutdown the publisher stops the dispatch thread, interrupts every sender and then
+completes each emitter. An interrupt cannot end a write already inside the container's socket
+call, so `completeUnlessSendingWithin(STOP_GRACE)` waits 200 ms for that write and detaches the
+peer rather than blocking shutdown behind it.
 
 ### Insights Domain
 
@@ -905,13 +950,6 @@ reached over a `jdbc:mysql:` URL reports MySQL; `databaseProductName` is the dri
 answer and can disagree. Any exception at all is logged at WARN and yields `Optional.empty()`,
 so a DataSource that cannot hand out a connection costs its card and nothing else.
 
-`scheduledTasks` carries each task's last failure verbatim.
-`ScheduledTasksMapper.parseException` builds that field as the exception type, a colon and the
-exception message, taken straight off the actuator response. There is no `MaskingEngine`
-anywhere in that class. An exception message that echoes a JDBC URL, a query or a credential reaches the
-dashboard unmasked. Treat it as a known exposure alongside the rest of the model at
-[www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/).
-
 ## Testing
 
 ### Test Categories
@@ -927,7 +965,7 @@ Two kinds, split by lifecycle (see [`TESTING.md`](TESTING.md)):
 `peekaboot-backend`'s suite uses no `@SpringBootTest` and no embedded server; a bare
 `AnnotationConfigApplicationContext` covers the one case where a bean-name lookup needs a real
 container (`ServerUrlResolverTest`). `peekaboot-spring-boot-autoconfigure` has context-runner
-unit tests per auto-configuration, plus the `*IT`s that boot its own `TestApplication`
+unit tests for its auto-configurations, plus the `*IT`s that boot its own `TestApplication`
 (`DevToolbarAutoConfigurationIT` and `PeekabootOffIT` as `@SpringBootTest`, `StartupBannerIT`
 through `SpringApplicationBuilder`). Everything Playwright lives in `peekaboot-testing-app`
 under `org.peekaboot.testingapp.ui`, which boots the sample app and drives the real
@@ -969,17 +1007,20 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 
 ## Auto-Configuration Ordering
 
-`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists:
+`DevToolbarAutoConfiguration` requires specific ordering to ensure the `Tracer` bean exists,
+whichever of Boot's tracing bridges registers it:
 
 ```java
 @AutoConfiguration(
-    after = PeekabootAutoConfiguration.class,
-    afterName = "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration"
-)
+        after = {PeekabootAutoConfiguration.class, PeekabootTracingAutoConfiguration.class},
+        afterName = {
+            "org.springframework.boot.micrometer.tracing.opentelemetry.autoconfigure.OpenTelemetryTracingAutoConfiguration",
+            "org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration"
+        })
 ```
 
 The string-based `afterName` attribute is used where the referenced auto-configuration lives
-in a module this one does not compile against at all: Boot's OpenTelemetry tracing module
+in a module this one does not compile against at all: Boot's two tracing bridge modules
 here, and `spring-boot-micrometer-metrics` for the `CompositeMeterRegistryAutoConfiguration`
 edge in `InsightsAutoConfiguration`. Boot reads ordering edges from the class metadata without
 loading the named classes, which is why `TracingInterceptorAutoConfiguration` can use a class

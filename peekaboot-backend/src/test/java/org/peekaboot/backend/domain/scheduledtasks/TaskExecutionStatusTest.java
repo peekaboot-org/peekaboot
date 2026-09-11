@@ -16,7 +16,8 @@ class TaskExecutionStatusTest {
         // Boot reports STARTED for a task that is currently executing
         "STARTED, RUNNING",
         "NONE, UNKNOWN",
-        "invalid, UNKNOWN"
+        "invalid, UNKNOWN",
+        "'', UNKNOWN"
     })
     void fromString_shouldParseStatus(String input, TaskExecutionStatus expected) {
         assertThat(TaskExecutionStatus.fromString(input)).isEqualTo(expected);

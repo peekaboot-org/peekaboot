@@ -58,10 +58,10 @@ threads (`-Dpeekaboot.it.threads=N`; `1` serializes when diagnosing a flaky test
 owning its own Chromium, all sharing one Spring context cache and therefore one running
 app per context configuration. The concurrency is deliberate beyond speed: concurrent test
 classes hammer peekaboot the way a real concurrent host application does, so a race in
-peekaboot itself shows up here first. Classes that cannot overlap coordinate through JUnit
-`@ResourceLock` (see `DashboardTraceViewIT` and `DevToolbarIT`). `-Dpeekaboot.it.forks=N`
-still exists on top (forks × threads both apply) but defaults to 1. The coverage gate sees
-the same `jacoco.exec` data it would from a serial run.
+peekaboot itself shows up here first. No class holds a JUnit `@ResourceLock`: every one of
+them pins its own trace id instead of clearing state the others are using.
+`-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults to 1.
+The coverage gate sees the same `jacoco.exec` data it would from a serial run.
 
 `peekaboot-coverage` runs last and adds the coverage gate over the whole reactor:
 
@@ -101,21 +101,29 @@ starter, and `javadoc:jar` builds nothing for the starter or the frontend. So th
 sets `maven.source.forceCreation`, and both modules package their empty `target/apidocs`
 as the `-javadoc` jar through an extra `maven-jar-plugin` execution. Empty is intended.
 
-`peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`, so it
-consumes the starter exactly as a real user would. The cost is duplication: its POM
-re-declares the verify-bound static-analysis gates, the JaCoCo agent wiring, the
-`spotless-apply-local` profile and the Error Prone compiler config by hand, and it picks
-up Spring Boot's plugin versions for everything else rather than the parent's pins. Any
-change to the parent's build config has to be mirrored there. The one deliberate exception
-is the dependency check: the sample app is the module that violates it (see
+`peekaboot-testing-app` deliberately parents to `spring-boot-starter-parent`. The split
+proves two things: the sample app builds on Boot's own plugin defaults (`-parameters`,
+`@..@` resource filtering), and it leans on nothing in `peekaboot-parent`'s build config.
+It proves nothing about consuming the published artifact. Inside the reactor the starter
+resolves from the reactor under either parent, and both parents manage dependencies
+through the same `spring-boot-dependencies` BOM, so dependency resolution is identical. A
+real consume-as-a-user check would build outside the reactor against an installed jar,
+and nothing here does that. The cost of the split is duplication: its POM re-declares the
+verify-bound static-analysis gates, the JaCoCo and Mockito agent wiring, the
+`spotless-apply-local` profile and the Error Prone compiler config by hand, pins the
+compiler, dependency, surefire and failsafe plugins at the parent's versions, and picks
+up Spring Boot's plugin versions for everything else. `BuildVersionLockstepTest` compares
+its build instant, JaCoCo version and Boot parent version with the root pom; every other
+change to the parent's build config has to be mirrored there by hand. The one deliberate
+exception is the dependency check: the sample app is the module that violates it (see
 [the dependency check](#the-dependency-check)), and gating an unpublished sample on a
 third-party version clash would buy nothing but two permanent exclusions.
 
 ## The parallel Gradle build
 
 `settings.gradle.kts` mirrors the reactor module for module. `./gradlew build` is the
-`mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` only) and integration
-tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
+`mvn clean verify` equivalent. It runs unit tests (`test`, `*Test` and `*Tests`) and
+integration tests (`integrationTest`, `*IT`, concurrent classes exactly like failsafe, via
 `peekaboot.it.threads` in `gradle.properties`). It runs the static-analysis gates at the
 same tool versions, reading the same `config/` files, plus the reactor-wide coverage gate
 (`:peekaboot-coverage:coverageGate`, the same 90%/75% floors on merged execution data).
@@ -124,8 +132,9 @@ same tool versions, reading the same `config/` files, plus the reactor-wide cove
 `buildSrc/src/main/kotlin/peekaboot.java-conventions.gradle.kts` plays the role of
 `peekaboot-parent`: shared compiler, gate, JaCoCo and test-split config. Each module's
 `build.gradle.kts` declares only its dependencies; `peekaboot-testing-app` adds the Spring
-Boot and git-properties plugins. The consume-the-starter-as-a-published-artifact proof
-stays with Maven, which is why the Maven module keeps its `spring-boot-starter-parent`.
+Boot and git-properties plugins. Gradle has no counterpart to a Maven parent, so what the
+Maven module's `spring-boot-starter-parent` proves (see [The reactor](#the-reactor)) has
+no Gradle equivalent; the module simply shares the conventions.
 
 ### Lockstep
 
@@ -272,10 +281,8 @@ bans `jakarta.servlet:jakarta.servlet-api`, `org.springframework:spring-webmvc`,
 cannot be banned, because the starter's own dependencies bring them: logback through
 `spring-boot-starter-logging`, `spring-boot-health` and `micrometer-observation` through
 `spring-boot-starter-actuator`, the OpenTelemetry SDK and
-`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. One more,
-`spring-boot-configuration-processor`, is absent and left unbanned: it is an annotation
-processor, so a leak costs a compile-time annoyance rather than a wrong auto-configuration
-decision. Re-check the split after a dependency change with
+`spring-boot-micrometer-observation` through `spring-boot-starter-opentelemetry`. Re-check
+the split after a dependency change with
 `mvn -pl peekaboot-spring-boot-starter -am dependency:tree`.
 
 ### The configuration-metadata check
@@ -336,10 +343,14 @@ and the Playwright teardown rule live in [`docs/TESTING.md`](docs/TESTING.md). T
 covers only the build mechanics.
 
 - Test sources exist in `peekaboot-backend`, `peekaboot-spring-boot-autoconfigure` and
-  `peekaboot-testing-app`. Those three resolve `${org.mockito:mockito-core:jar}` via
-  `maven-dependency-plugin:properties` and pass it to Surefire as `-javaagent`, which
-  keeps Mockito's inline mock-maker from self-attaching and warning about it. Their
-  `argLine` starts with `@{jacocoArgLine}` so the coverage agent survives alongside it.
+  `peekaboot-testing-app`. The parent runs `maven-dependency-plugin:properties` in every
+  module and gives surefire and failsafe one managed `argLine`,
+  `@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}`. The agent keeps
+  Mockito's inline mock-maker from self-attaching and warning about it; the
+  `@{jacocoArgLine}` prefix late-binds the coverage agent so both survive. A module
+  without tests never forks a test JVM, so the placeholder left unresolved there is
+  harmless. `peekaboot-testing-app` carries its own copy, since it does not inherit the
+  parent.
 - `peekaboot-testing-app`'s tests activate the `test` profile: H2 instead of PostgreSQL,
   Docker Compose off. `mvn verify` therefore needs neither Docker nor a database.
 - Its Playwright tests drive real headless Chromium. The driver downloads it on first use;
@@ -350,26 +361,36 @@ covers only the build mechanics.
   [peekaboot-test-support/README.md](peekaboot-test-support/README.md). The backend's own
   fixture builders (`Spans`, `SpanNodes`, `TraceTrees`, `RequestCompletedEvents`,
   `TraceStores`) construct backend domain types and stay in its test tree.
+- The parent sets the runners' includes explicitly: `*Test` and `*Tests` for surefire,
+  `*IT` for failsafe, the same patterns as the Gradle `test`/`integrationTest` tasks.
+  The defaults would also take `Test*`, `*TestCase`, `IT*` and `*ITCase`, which Gradle
+  would not, so a class named that way would run under one build only. The testing-app
+  keeps Boot's defaults; every class the suite runs there is a `*IT`.
 - Two classes are excluded from normal runs by *naming*, not configuration:
   `ScreenshotCapture` (a website-screenshot tool that does need Docker) and
-  `TraceWritePathBenchmark`. Neither matches Surefire's default `*Test` includes nor the
-  Gradle `test`/`integrationTest` includes. Running either is Maven only: `-Dtest=` widens
-  Surefire's includes, while Gradle's `--tests` only filters within a task's own includes,
-  so no Gradle task can reach them.
+  `TraceWritePathBenchmark`. Neither matches those includes. Running either is Maven
+  only: `-Dtest=` widens Surefire's includes, while Gradle's `--tests` only filters within
+  a task's own includes, so no Gradle task can reach them.
 - Never combine `-am` with `-Dtest`.
 
 ## CI
 
 The workflows live under `.github/workflows/`. Both build workflows use the checked-in
 `./mvnw`, and every action is pinned to a commit SHA with the tag in a trailing comment;
-Dependabot's `github-actions` updates move the pins.
+Dependabot's `github-actions` updates move the pins. The composite action below has its
+own `directory` entry in `dependabot.yml`, because `/` covers `.github/workflows` and a
+root `action.yml` only.
 
-### `build-on-push.yml`
+### `.github/actions/prepare-build`
 
-Runs on every branch except `main`. JDK 25 (temurin), `fetch-depth: 0` for the ratchet,
-`~/.cache/ms-playwright` cached under a key derived from the testing-app's
+The steps both build workflows share, as a composite action: JDK 25 (temurin) with the
+Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
 `playwright.version` property (Chromium changes with Playwright, not with any other
-dependency), then `./mvnw --batch-mode clean verify`.
+dependency), the reactor's SNAPSHOTs installed, then Chromium installed. The checkout
+stays in each workflow: a local action resolves from the runner's workspace, so it cannot
+run before the checkout that puts it there. Its inputs hand the release workflow's Central
+server id, credential variable names and GPG key on to `setup-java`; the build workflow
+passes none and gets `setup-java`'s defaults.
 
 The Chromium install is split into two steps on purpose. `exec:java` ignores `-pl` scoping
 when combined with `-am`: it runs the goal against every upstream reactor module too and
@@ -380,6 +401,11 @@ follows runs them all anyway), and the plain `exec:java` call resolves against t
 repo afterwards. That ad-hoc call is why the testing-app pom pins `exec-maven-plugin` in
 `pluginManagement`: `spring-boot-starter-parent` does not manage it, and an unpinned prefix
 invocation resolves whatever is latest that day.
+
+### `build-on-push.yml`
+
+Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
+`prepare-build`, then `./mvnw --batch-mode clean verify`.
 
 ### `build-release-on-main-push.yml`
 
@@ -426,7 +452,8 @@ the poms:
 1. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in
    `_config.yml` to the released version; every dependency snippet on the site reads it.
    The site publishes from its `main`, so merge `dev` into it and push.
-2. Put the released version into the two quick-start snippets in `README.md`.
+2. Put the released version into `README.md`'s dependency snippet, the one place the app
+   repo spells it out.
 
 The profile adds `maven-release-plugin` with Basjes'
 `conventional-commits-version-policy`, so commit message discipline decides the version
@@ -462,9 +489,12 @@ dependency checks and the configuration-metadata check still run.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
-lifecycle plugins Maven would otherwise bind on its own (clean, resources, install, deploy,
-site), which the parent pins at the versions `spring-boot-dependencies` manages so the
-testing-app runs the same ones.
+lifecycle plugins Maven would otherwise bind on its own. Clean, resources, install and
+deploy sit at the versions `spring-boot-dependencies` manages, so the testing-app runs the
+same ones. The site plugin, which Boot does not manage, was pinned at Maven 3.9.16's own
+binding of 3.12.1; Dependabot has since moved it past. Surefire, failsafe, the compiler
+and the dependency plugin have likewise moved past Boot's pins; the testing-app pins those
+four in its own `pluginManagement`, and Dependabot bumps both poms in one pull request.
 
 ### How the next version is chosen
 
@@ -503,13 +533,12 @@ for years, so treat the first as mandatory and the second as the backup. Confirm
 - Local builds reformat your sources mid-build. Expect a dirty tree; that is by design.
 - `mvn verify -DskipTests` fails at the coverage guard, by design; there is no data to
   gate on. Use `-Djacoco.skip=true` alongside it.
-- `git-commit-id-maven-plugin` is *managed but not bound* in the parent. `git.properties`
-  lands at the classpath root and Spring resolves `classpath:git.properties` to a single
-  resource, so a library shipping one can beat the host application's own file and make the
-  dashboard report Peekaboot's branch as the app's. Only `peekaboot-testing-app`, the one
-  runnable application, declares it, and it pins the version itself with
-  `failOnNoGitDirectory=false` because it does not inherit the parent's `pluginManagement`.
-- A worktree whose gitdir pointer does not resolve, or an exported source tree, is fine
-  everywhere thanks to that `failOnNoGitDirectory=false`.
+- `git-commit-id-maven-plugin` is declared only in `peekaboot-testing-app`, the one runnable
+  application, and nowhere in the parent. `git.properties` lands at the classpath root and
+  Spring resolves `classpath:git.properties` to a single resource, so a library shipping one
+  can beat the host application's own file and make the dashboard report Peekaboot's branch
+  as the app's. The testing-app pins the version itself with `failOnNoGitDirectory=false`,
+  so a worktree whose gitdir pointer does not resolve, or an exported source tree, builds
+  fine everywhere.
 - The empty `peekaboot-spring-boot-starter` jar is intentional, and so are the empty
   `-sources`/`-javadoc` jars of the starter and the frontend. Do not "fix" the warnings.

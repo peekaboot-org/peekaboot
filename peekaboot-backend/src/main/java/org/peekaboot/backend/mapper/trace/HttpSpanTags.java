@@ -24,17 +24,17 @@ public final class HttpSpanTags {
     private HttpSpanTags() {}
 
     public static String method(Map<String, String> tags) {
-        return first(tags, METHOD_KEYS);
+        return Tags.first(tags, METHOD_KEYS);
     }
 
     /** The request path, without scheme, authority or query string whichever tag supplied it. */
     public static String path(Map<String, String> tags) {
-        String value = first(tags, PATH_KEYS);
+        String value = Tags.first(tags, PATH_KEYS);
         return value == null ? null : pathOf(value);
     }
 
     public static Integer statusCode(Map<String, String> tags) {
-        String value = first(tags, STATUS_KEYS);
+        String value = Tags.first(tags, STATUS_KEYS);
         if (value == null) {
             return null;
         }
@@ -50,19 +50,9 @@ public final class HttpSpanTags {
      * unprefixed {@code method} together with {@code uri} - the pair no other Spring
      * convention emits, which keeps an RPC span's bare {@code method} from counting.
      */
-    public static boolean describeHttpRequest(Map<String, String> tags) {
+    public static boolean describesHttpRequest(Map<String, String> tags) {
         return tags.keySet().stream().anyMatch(key -> key.startsWith("http."))
                 || (tags.containsKey("method") && tags.containsKey("uri"));
-    }
-
-    private static String first(Map<String, String> tags, String... keys) {
-        for (String key : keys) {
-            String value = tags.get(key);
-            if (value != null) {
-                return value;
-            }
-        }
-        return null;
     }
 
     private static String pathOf(String urlOrPath) {

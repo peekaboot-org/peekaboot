@@ -10,19 +10,25 @@ import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 public class ScheduledTasksMapper {
 
     private final CronDescriber cronDescriber = new CronDescriber();
+    private final MaskingEngine maskingEngine;
+
+    public ScheduledTasksMapper(MaskingEngine maskingEngine) {
+        this.maskingEngine = maskingEngine;
+    }
 
     public ScheduledTasksInfo map(ScheduledTasksResponse response, Locale locale) {
         if (response == null) {
             return new ScheduledTasksInfo(List.of(), 0, 0, 0);
         }
 
-        var cronTasks = orEmpty(response.cron());
-        var fixedDelayTasks = orEmpty(response.fixedDelay());
-        var fixedRateTasks = orEmpty(response.fixedRate());
+        var cronTasks = response.cron();
+        var fixedDelayTasks = response.fixedDelay();
+        var fixedRateTasks = response.fixedRate();
 
         List<ScheduledTaskInfo> tasks = new ArrayList<>();
         for (var cron : cronTasks) {
@@ -38,10 +44,6 @@ public class ScheduledTasksMapper {
         tasks.sort(Comparator.comparing(ScheduledTaskInfo::type).thenComparing(ScheduledTaskInfo::target));
 
         return new ScheduledTasksInfo(tasks, cronTasks.size(), fixedDelayTasks.size(), fixedRateTasks.size());
-    }
-
-    private static <T> List<T> orEmpty(List<T> list) {
-        return list != null ? list : List.of();
     }
 
     private ScheduledTaskInfo mapCronTask(ScheduledTasksResponse.CronTask cron, Locale locale) {
@@ -90,9 +92,13 @@ public class ScheduledTasksMapper {
             return null;
         }
         var ex = execution.exception();
+        String text;
         if (ex.type() != null && ex.message() != null) {
-            return ex.type() + ": " + ex.message();
+            text = ex.type() + ": " + ex.message();
+        } else {
+            text = ex.message() != null ? ex.message() : ex.type();
         }
-        return ex.message() != null ? ex.message() : ex.type();
+        // The message echoes what failed: a JDBC URL, a request line with its query.
+        return maskingEngine.maskValue(text);
     }
 }

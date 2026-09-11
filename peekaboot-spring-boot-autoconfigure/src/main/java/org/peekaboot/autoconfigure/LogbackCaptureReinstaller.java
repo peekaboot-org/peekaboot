@@ -36,7 +36,7 @@ class LogbackCaptureReinstaller implements ApplicationListener<ApplicationEnviro
 
     /** Kept apart so that no Logback type is resolved when Logback is absent. */
     private void reattachCaptureAppenders() {
-        DevToolbarAutoConfiguration.LogbackAppenderRegistrar.reattachLiveAppenders();
+        LogbackAppenderRegistrar.reattachLiveAppenders();
     }
 
     @Override

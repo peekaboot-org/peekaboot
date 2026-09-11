@@ -61,7 +61,7 @@ class AccessibilityIT extends PlaywrightTestBase {
     @Test
     void insightsLevelControlsAreLabelled() {
         openDashboard();
-        page.click("#insights-tab-btn");
+        dashboard.openTab("insights");
         page.waitForSelector("#insights-level .pk-insight-level");
 
         assertThat(page.getAttribute("#insights-level", "role")).isEqualTo("group");
@@ -121,7 +121,10 @@ class AccessibilityIT extends PlaywrightTestBase {
 
         assertThat((Integer) page.evaluate("() => document.querySelectorAll('h1').length"))
                 .isEqualTo(1);
-        assertThat((Integer) page.evaluate("() => document.querySelectorAll('h2').length"))
+        // Every card titles itself with an h2, so the outline is the card list: a card that
+        // grew a styled div for a title instead would leave the two counts apart.
+        assertThat((Integer) page.evaluate("() => document.querySelectorAll('#overview-tab h2').length"))
+                .isEqualTo((Integer) page.evaluate("() => document.querySelectorAll('#overview-tab .pk-card').length"))
                 .isGreaterThanOrEqualTo(6);
     }
 
@@ -208,7 +211,11 @@ class AccessibilityIT extends PlaywrightTestBase {
     void filterFieldsHaveAccessibleNamesBeyondTheirPlaceholder() {
         openDashboard();
         for (String field : List.of("#meters-filter", "#env-filter", "#loggers-filter", "#config-filter")) {
-            assertThat(page.getAttribute(field, "aria-label")).as(field).isNotBlank();
+            String label = page.getAttribute(field, "aria-label");
+            assertThat(label).as(field).isNotBlank();
+            // A label that merely repeats the placeholder disappears with the typed value,
+            // which is exactly when a screen reader still needs it.
+            assertThat(label).as(field).isNotEqualTo(page.getAttribute(field, "placeholder"));
         }
 
         openPageThatLogsAnError();

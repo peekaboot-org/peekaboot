@@ -9,13 +9,18 @@ import org.peekaboot.backend.insights.config.InsightsProperties;
 
 class SeriesRingsTest {
 
+    /**
+     * Three series over a 10-entry tick ring, a 5-entry and a 2-entry aggregated ring. Each
+     * tick entry is one double, each aggregated entry eight (seven stats plus the sample
+     * count): 3 x (10 + 5 x 8 + 2 x 8) doubles at eight bytes each.
+     */
     @Test
-    void memoryEstimateMatchesFormula() {
-        // 2 series x (90 + 1440*8 + 720*8) x 8 bytes
-        List<InsightsProperties.Level> spec = List.of(
-                InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
-                InsightsProperties.Level.of(Duration.ofMinutes(1), 1440),
-                InsightsProperties.Level.of(Duration.ofHours(1), 720));
-        assertThat(SeriesRings.estimateMemoryBytes(2, spec)).isEqualTo(2L * (90 + 1440 * 8 + 720 * 8) * 8);
+    void memoryEstimateCountsOneDoublePerTickAndEightPerAggregatedEntry() {
+        List<InsightsProperties.Level> levels = List.of(
+                InsightsProperties.Level.of(Duration.ofSeconds(1), 10),
+                InsightsProperties.Level.of(Duration.ofMinutes(1), 5),
+                InsightsProperties.Level.of(Duration.ofHours(1), 2));
+
+        assertThat(SeriesRings.estimateMemoryBytes(3, levels)).isEqualTo(1_584);
     }
 }

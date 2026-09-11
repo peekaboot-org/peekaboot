@@ -2,12 +2,15 @@ package org.peekaboot.backend.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.Assertions.within;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.metrics.MetricGroup;
@@ -19,14 +22,7 @@ import org.peekaboot.backend.masking.MaskingEngine;
 class MetricsServiceTest {
 
     @Test
-    void isAvailable_returnsFalse_whenNoMeterRegistry() {
-        MetricsService service = new MetricsService(null, new MaskingEngine());
-
-        assertThat(service.isAvailable()).isFalse();
-    }
-
-    @Test
-    void isAvailable_returnsTrue_whenMeterRegistryPresent() {
+    void isAvailableWithAMeterRegistry() {
         MeterRegistry registry = new SimpleMeterRegistry();
         MetricsService service = new MetricsService(registry, new MaskingEngine());
 
@@ -34,18 +30,19 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_returnsEmpty_whenNoMeterRegistry() {
+    void reportsNoMetricsWithoutAMeterRegistry() {
         MetricsService service = new MetricsService(null, new MaskingEngine());
 
         MetricsInfo result = service.getMetrics();
 
+        assertThat(service.isAvailable()).isFalse();
         assertThat(result.metricCount()).isZero();
         assertThat(result.measurementCount()).isZero();
         assertThat(result.metrics()).isEmpty();
     }
 
     @Test
-    void getMetrics_returnsMetrics_groupedByName() {
+    void groupsMetersByName() {
         MeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong memoryUsed = new AtomicLong(1024);
 
@@ -80,7 +77,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_reportsActualStatisticValueForGauge() {
+    void reportsAGaugesValueStatistic() {
         MeterRegistry registry = new SimpleMeterRegistry();
         AtomicLong memoryUsed = new AtomicLong(1024);
 
@@ -88,12 +85,8 @@ class MetricsServiceTest {
                 .tags("area", "heap")
                 .register(registry);
 
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
+        MetricMeasurement measurement = firstMeasurement(registry);
 
-        MetricsInfo result = service.getMetrics();
-
-        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
-        assertThat(measurement.statistics()).isNotEmpty();
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
                 .contains(tuple("VALUE", 1024.0));
@@ -101,13 +94,11 @@ class MetricsServiceTest {
 
     /** A gauge with nothing to measure yields NaN; JSON has no NaN, so the wire carries null. */
     @Test
-    void getMetrics_reportsANaNStatisticAsNull() {
+    void reportsANaNStatisticAsNull() {
         MeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("cache.hit.ratio", () -> Double.NaN).register(registry);
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
 
-        MetricMeasurement measurement =
-                service.getMetrics().metrics().get(0).measurements().get(0);
+        MetricMeasurement measurement = firstMeasurement(registry);
 
         assertThat(measurement.statistics())
                 .extracting(MetricStatistic::name, MetricStatistic::value)
@@ -115,24 +106,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_reportsActualStatisticValueForCounter() {
-        MeterRegistry registry = new SimpleMeterRegistry();
-
-        Counter.builder("http.requests").tag("method", "GET").register(registry).increment(42);
-
-        MetricsService service = new MetricsService(registry, new MaskingEngine());
-
-        MetricsInfo result = service.getMetrics();
-
-        MetricMeasurement measurement = result.metrics().get(0).measurements().get(0);
-        assertThat(measurement.statistics()).isNotEmpty();
-        assertThat(measurement.statistics())
-                .extracting(MetricStatistic::name, MetricStatistic::value)
-                .contains(tuple("COUNT", 42.0));
-    }
-
-    @Test
-    void getMetrics_includesCounters() {
+    void reportsACounterWithItsDescriptionTagsAndCount() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Counter.builder("http.requests")
@@ -153,10 +127,13 @@ class MetricsServiceTest {
 
         assertThat(group.measurements()).hasSize(1);
         assertThat(group.measurements().get(0).tags()).containsEntry("method", "GET");
+        assertThat(group.measurements().get(0).statistics())
+                .extracting(MetricStatistic::name, MetricStatistic::value)
+                .containsExactly(tuple("COUNT", 42.0));
     }
 
     @Test
-    void getMetrics_sortsByName() {
+    void sortsGroupsByName() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Counter.builder("z.metric").register(registry);
@@ -171,7 +148,7 @@ class MetricsServiceTest {
     }
 
     @Test
-    void getMetrics_preservesTags() {
+    void preservesTags() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Gauge.builder("test.metric", () -> 100)
@@ -194,7 +171,7 @@ class MetricsServiceTest {
      * same conditional risk as a custom HealthIndicator's details.
      */
     @Test
-    void getMetrics_masksASensitiveShapedTag() {
+    void masksASensitiveShapedTag() {
         MeterRegistry registry = new SimpleMeterRegistry();
 
         Gauge.builder("custom.upstream.calls", () -> 1)
@@ -208,5 +185,33 @@ class MetricsServiceTest {
         assertThat(result.metrics().get(0).measurements().get(0).tags())
                 .containsEntry("api-key", "******")
                 .containsEntry("region", "eu-west-1");
+    }
+
+    /** A timer measures three statistics at once; every one reaches the wire, in the registry's base unit. */
+    @Test
+    void reportsEveryStatisticOfATimer() {
+        MeterRegistry registry = new SimpleMeterRegistry();
+        Timer timer = Timer.builder("http.server.requests").register(registry);
+        timer.record(Duration.ofMillis(120));
+        timer.record(Duration.ofMillis(80));
+
+        MetricMeasurement measurement = firstMeasurement(registry);
+
+        assertThat(measurement.statistics())
+                .extracting(MetricStatistic::name)
+                .containsExactly("COUNT", "TOTAL_TIME", "MAX");
+        assertThat(measurement.statistics().get(0).value()).isEqualTo(2.0);
+        assertThat(measurement.statistics().get(1).value()).isCloseTo(0.2, within(1e-9));
+        assertThat(measurement.statistics().get(2).value()).isCloseTo(0.12, within(1e-9));
+    }
+
+    /** The one measurement of the one meter a test registered. */
+    private static MetricMeasurement firstMeasurement(MeterRegistry registry) {
+        return new MetricsService(registry, new MaskingEngine())
+                .getMetrics()
+                .metrics()
+                .get(0)
+                .measurements()
+                .get(0);
     }
 }

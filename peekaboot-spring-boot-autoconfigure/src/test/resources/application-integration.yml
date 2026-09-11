@@ -2,6 +2,9 @@ spring:
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
+  # No migrations in this module. Left on, Flyway validates an empty location and WARNs.
+  flyway:
+    enabled: false
   docker:
     compose:
       enabled: false

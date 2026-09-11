@@ -23,28 +23,12 @@ public class IssueDetector {
             return trace;
         }
 
-        int traceDbQueryCount = trace.summary() != null && trace.summary().queries() != null
-                ? trace.summary().queries().count()
-                : 0;
-        SpanNode processedRoot = processSpan(trace.rootSpan(), true, traceDbQueryCount);
+        SpanNode processedRoot = processSpan(trace.rootSpan());
 
-        return new TraceTree(
-                trace.traceId(),
-                trace.startTimeMs(),
-                trace.durationMs(),
-                trace.status(),
-                hasSlowIssue(processedRoot),
-                trace.rootActionType(),
-                trace.rootOperation(),
-                processedRoot,
-                trace.summary(),
-                trace.httpExchange(),
-                trace.logs(),
-                trace.queries(),
-                trace.truncated());
+        return trace.withRootSpan(processedRoot, hasSlowIssue(processedRoot));
     }
 
-    private SpanNode processSpan(SpanNode span, boolean isRoot, int traceDbQueryCount) {
+    private SpanNode processSpan(SpanNode span) {
         List<SpanIssue> issues = new ArrayList<>();
 
         if (span.durationMs() >= properties.getVerySlowSpanThresholdMs()) {
@@ -75,47 +59,10 @@ public class IssueDetector {
                     IssueSeverity.WARNING));
         }
 
-        if (isRoot && traceDbQueryCount > properties.getHighTraceQueryCountThreshold()) {
-            issues.add(new SpanIssue(
-                    IssueType.HIGH_QUERY_COUNT,
-                    String.format(
-                            "Trace has %d database queries (threshold: %d)",
-                            traceDbQueryCount, properties.getHighTraceQueryCountThreshold()),
-                    IssueSeverity.WARNING));
-        }
+        List<SpanNode> processedChildren =
+                span.children().stream().map(this::processSpan).toList();
 
-        long directQueryChildren =
-                span.children().stream().filter(DbSpans::isQuery).count();
-        if (directQueryChildren > properties.getHighQueryCountThreshold()) {
-            issues.add(new SpanIssue(
-                    IssueType.HIGH_QUERY_COUNT,
-                    String.format(
-                            "Span has %d direct database queries (threshold: %d)",
-                            directQueryChildren, properties.getHighQueryCountThreshold()),
-                    IssueSeverity.WARNING));
-        }
-
-        List<SpanNode> processedChildren = span.children().stream()
-                .map(child -> processSpan(child, false, traceDbQueryCount))
-                .toList();
-
-        return new SpanNode(
-                span.spanId(),
-                span.name(),
-                span.kind(),
-                span.startTimeMs(),
-                span.durationMs(),
-                span.status(),
-                processedChildren,
-                span.tags(),
-                span.events(),
-                issues,
-                span.creationOrder(),
-                span.errorMessage(),
-                span.errorClass(),
-                span.remoteServiceName(),
-                span.query(),
-                span.logs());
+        return span.withIssues(issues, processedChildren);
     }
 
     private static boolean hasSlowIssue(SpanNode span) {
@@ -128,12 +75,7 @@ public class IssueDetector {
         if (span.errorMessage() != null && !span.errorMessage().isBlank()) {
             return span.errorMessage();
         }
-        if (span.tags() != null) {
-            Object errorMessage = span.tags().get("error.message");
-            if (errorMessage != null) {
-                return errorMessage.toString();
-            }
-        }
-        return "Span ended with error";
+        String taggedMessage = span.tags().get("error.message");
+        return taggedMessage != null ? taggedMessage : "Span ended with error";
     }
 }

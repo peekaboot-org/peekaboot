@@ -2,22 +2,15 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.APIResponse;
-import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.Route;
 import com.microsoft.playwright.options.ColorScheme;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ThemeResolutionIT extends PlaywrightTestBase {
 
     private Object evalTheme(String expression) {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        return page.evaluate(
-                "async (expr) => { const m = await import('/peekaboot/ui/shared/theme.js'); return eval(expr); }",
-                expression);
+        return importModule("shared/theme.js", expression);
     }
 
     @Test
@@ -28,30 +21,15 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
     @Test
     void osPreferenceIsTheFallback() {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
     @Test
     void corruptedStoredValueFallsBackToOsPreference() {
         setStoredTheme("purple");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
-    }
-
-    @Test
-    void applyThemeSetsTheAttributeOnAnyTarget() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object result = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
-                const host = document.createElement('div');
-                document.body.appendChild(host);
-                m.applyTheme(host, 'dark');
-                return host.getAttribute('data-theme');
-            }
-            """);
-        assertThat(result).isEqualTo("dark");
     }
 
     /**
@@ -62,7 +40,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void resolveThemeDegradesToOsPreferenceWhenLocalStorageThrows() {
         page.addInitScript("localStorage.getItem = () => { throw new Error('storage blocked'); };");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("dark");
     }
 
@@ -74,19 +52,17 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void resolveThemeDegradesToLightOsPreferenceWhenLocalStorageThrows() {
         page.addInitScript("localStorage.getItem = () => { throw new Error('storage blocked'); };");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         assertThat(evalTheme("m.resolveTheme()")).isEqualTo("light");
     }
 
     @Test
     void storeThemePersistsUnderTheSharedKey() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object stored = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
+        Object stored = evalTheme("""
+            (() => {
                 m.storeTheme('dark');
                 return localStorage.getItem('peekaboot-theme');
-            }
+            })()
             """);
         assertThat(stored).isEqualTo("dark");
     }
@@ -97,47 +73,41 @@ class ThemeResolutionIT extends PlaywrightTestBase {
      */
     @Test
     void watchThemeUnsubscribeStopsFurtherStorageNotifications() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object callCountAfterUnsubscribe = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
+        Object callCountAfterUnsubscribe = evalTheme("""
+            (() => {
                 let calls = 0;
                 const unsubscribe = m.watchTheme(() => { calls++; });
                 unsubscribe();
                 window.dispatchEvent(new StorageEvent('storage', {key: 'peekaboot-theme', newValue: 'dark'}));
                 return calls;
-            }
+            })()
             """);
         assertThat(callCountAfterUnsubscribe).isEqualTo(0);
     }
 
     @Test
     void watchThemeInvokesCallbackOnMatchingStorageEvent() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object result = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
+        Object result = evalTheme("""
+            (() => {
                 localStorage.setItem('peekaboot-theme', 'dark');
                 let received = null;
                 m.watchTheme((theme) => { received = theme; });
                 window.dispatchEvent(new StorageEvent('storage', {key: 'peekaboot-theme', newValue: 'dark'}));
                 return received;
-            }
+            })()
             """);
         assertThat(result).isEqualTo("dark");
     }
 
     @Test
     void watchThemeIgnoresStorageEventsForUnrelatedKeys() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        Object result = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/shared/theme.js');
+        Object result = evalTheme("""
+            (() => {
                 let calls = 0;
                 m.watchTheme(() => { calls++; });
                 window.dispatchEvent(new StorageEvent('storage', {key: 'some-other-key', newValue: 'x'}));
                 return calls;
-            }
+            })()
             """);
         assertThat(result).isEqualTo(0);
     }
@@ -152,7 +122,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void storedThemeIsStampedBeforeTheModuleScriptRuns() {
         setStoredTheme("dark");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         page.route("**/dashboard/main.js", route -> route.abort());
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
@@ -162,7 +132,7 @@ class ThemeResolutionIT extends PlaywrightTestBase {
 
     @Test
     void osPreferenceIsStampedBeforeTheModuleScriptRunsWhenNothingIsStored() {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.DARK));
+        emulateOsColorScheme(ColorScheme.DARK);
         page.route("**/dashboard/main.js", route -> route.abort());
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
@@ -181,14 +151,9 @@ class ThemeResolutionIT extends PlaywrightTestBase {
     @Test
     void theThemeIsStampedBeforeTheModuleScriptRunsUnderAScriptSrcCsp() {
         setStoredTheme("dark");
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(ColorScheme.LIGHT));
+        emulateOsColorScheme(ColorScheme.LIGHT);
         page.route("**/dashboard/main.js", route -> route.abort());
-        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
-            APIResponse response = route.fetch();
-            Map<String, String> headers = new HashMap<>(response.headers());
-            headers.put("content-security-policy", "script-src 'self'");
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
-        });
+        serveWithCsp("**/peekaboot/ui/dashboard/index.html", "script-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
 
@@ -196,5 +161,28 @@ class ThemeResolutionIT extends PlaywrightTestBase {
                 .as("the policy reached the document under test")
                 .containsEntry("content-security-policy", "script-src 'self'");
         assertThat(page.getAttribute("html", "data-theme")).isEqualTo("dark");
+    }
+
+    /**
+     * The OS preference flipping while a surface is open, which is what the media listener is
+     * for: the storage path is covered above, and a test that only sets the preference before
+     * evaluating never runs the listener at all.
+     */
+    @Test
+    void watchThemeFollowsTheOsPreferenceChangingAfterTheModuleLoaded() {
+        emulateOsColorScheme(ColorScheme.LIGHT);
+        openBlankFixture();
+        page.evaluate("""
+            async () => {
+                const m = await import('/peekaboot/ui/shared/theme.js');
+                window.__pkThemes = [];
+                m.watchTheme(theme => window.__pkThemes.push(theme));
+            }
+            """);
+
+        emulateOsColorScheme(ColorScheme.DARK);
+
+        page.waitForFunction("() => window.__pkThemes.includes('dark')");
+        assertThat(page.evaluate("() => window.__pkThemes")).isEqualTo(List.of("dark"));
     }
 }

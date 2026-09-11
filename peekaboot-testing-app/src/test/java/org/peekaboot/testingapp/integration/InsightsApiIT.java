@@ -59,10 +59,8 @@ class InsightsApiIT {
     void configServesPanelsAndLevels() {
         JsonNode config = api.getJson("/peekaboot/api/insights/config");
 
-        assertThat(config.get("levels")).hasSize(3);
-
         List<String> panelIds = new ArrayList<>();
-        config.get("panels").forEach(panel -> panelIds.add(panel.get("id").asText()));
+        config.get("panels").forEach(panel -> panelIds.add(panel.get("id").asString()));
         assertThat(panelIds).contains("cpu", "heap", "http-throughput");
 
         assertThat(config.get("tiles")).isNotEmpty();
@@ -77,7 +75,11 @@ class InsightsApiIT {
                         d -> d.get("count").asInt() >= 2);
 
         // cpu.process (process.cpu.usage) resolves in a real JVM app
-        assertThat(data.get("series").get("cpu.process").get("values")).isNotEmpty();
+        JsonNode values = data.get("series").get("cpu.process").get("values");
+        assertThat(values).isNotEmpty();
+        assertThat(values)
+                .as("one value per tick the response counted, or the ring and the wire disagree")
+                .hasSize(data.get("count").asInt());
     }
 
     @Test

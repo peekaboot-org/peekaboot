@@ -20,20 +20,18 @@ public class PersonController {
         this.personQueryService = personQueryService;
     }
 
-    @GetMapping("/")
-    public String index(@RequestParam(name = "error", defaultValue = "false") boolean error, Model model) {
+    /**
+     * The index and the persons page are the same page. {@code ?error=true} makes the handler
+     * log an ERROR without failing, so one request produces a trace whose logs sit on two
+     * spans: this line and the one PersonQueryService writes inside its own observed span.
+     */
+    @GetMapping({"/", "/persons"})
+    public String persons(@RequestParam(name = "error", defaultValue = "false") boolean error, Model model) {
 
         model.addAttribute("persons", personQueryService.findAll());
         if (error) {
             log.error("An error occurred while trying to find all persons");
         }
-        return "persons";
-    }
-
-    @GetMapping("/persons")
-    public String persons(Model model) {
-
-        model.addAttribute("persons", personQueryService.findAll());
         return "persons";
     }
 }
