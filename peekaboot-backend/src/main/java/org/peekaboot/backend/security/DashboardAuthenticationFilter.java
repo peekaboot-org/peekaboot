@@ -23,6 +23,13 @@ import org.slf4j.LoggerFactory;
  * and sees only requests that chain already let through. A request the application authenticated
  * passes through untouched; one it permitted anonymously is challenged with Peekaboot's own
  * credentials.
+ *
+ * <p>An application that wants its own guard instead overrides this by declaring a
+ * {@code FilterRegistrationBean<DashboardAuthenticationFilter>} bean of its own - the type
+ * {@code @ConditionalOnMissingBean} matches on Peekaboot's registration. A bare
+ * {@code DashboardAuthenticationFilter} bean does not back it off and is auto-registered by Boot
+ * at {@code /*} on top of it, putting HTTP Basic in front of the whole application instead of
+ * standing the guard down.
  */
 public class DashboardAuthenticationFilter implements Filter {
 
