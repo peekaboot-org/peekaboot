@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.lifecycle.LifecycleBanner;
 
 class SecurityPostureTest {
 
     private static final Path FILE = Path.of("/home/app/.peekaboot/com.acme.orders/security.properties");
+
+    private static final Instant CREATED = Instant.parse("2026-09-11T08:15:30Z");
 
     /** Without Spring Security nothing else can be authenticating the dashboard, so the exposure is certain. */
     @Test
@@ -39,15 +43,14 @@ class SecurityPostureTest {
     @Test
     void armed_neverPrintsAPasswordItDidNotGenerate() {
         var loaded = new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of("hunter2"),
-                null,
-                Instant.parse("2026-09-11T08:15:30Z"),
-                DashboardCredentials.Origin.LOADED);
+                "orders-admin", PasswordHash.of("hunter2"), null, CREATED, DashboardCredentials.Origin.LOADED);
 
         var report = SecurityPosture.armed(loaded, FILE, false, false).report().orElseThrow();
 
-        assertThat(report.text()).doesNotContain("hunter2").contains("2026-09-11");
+        String expectedDate = DateTimeFormatter.ISO_LOCAL_DATE
+                .withZone(ZoneId.systemDefault())
+                .format(CREATED);
+        assertThat(report.text()).doesNotContain("hunter2").contains(expectedDate);
     }
 
     @Test
@@ -56,7 +59,7 @@ class SecurityPostureTest {
                 "orders-admin",
                 PasswordHash.of("from-the-vault"),
                 null,
-                Instant.parse("2026-09-11T08:15:30Z"),
+                CREATED,
                 DashboardCredentials.Origin.CONFIGURED);
 
         var report =
@@ -71,7 +74,7 @@ class SecurityPostureTest {
                 "orders-admin",
                 PasswordHash.of("hunter2"),
                 "hunter2",
-                Instant.parse("2026-09-11T08:15:30Z"),
+                CREATED,
                 DashboardCredentials.Origin.GENERATED_UNPERSISTED);
 
         var report =
@@ -104,10 +107,6 @@ class SecurityPostureTest {
 
     private static DashboardCredentials generated(String password) {
         return new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of(password),
-                password,
-                Instant.parse("2026-09-11T08:15:30Z"),
-                DashboardCredentials.Origin.GENERATED);
+                "orders-admin", PasswordHash.of(password), password, CREATED, DashboardCredentials.Origin.GENERATED);
     }
 }
