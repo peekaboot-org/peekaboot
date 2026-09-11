@@ -66,6 +66,7 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         boolean localDevelopment = launchKind == LocalDevDetector.LaunchKind.LOCAL_DEV;
         boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
+        boolean deploymentLaunch = launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT;
 
         // The toolbar and persistence follow the launch context rather than peekaboot.enabled,
         // so switching Peekaboot on deliberately in a shared environment neither injects a
@@ -76,11 +77,16 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
         // Security follows the deployment launch rather than localDevelopment: a test is
         // neither, and a consumer's @SpringBootTest must not start being challenged.
-        detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT);
+        detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, deploymentLaunch);
+        // Not meant for an application to set, so unlike the switch above its resolved value
+        // is always what was detected - including once these entries are folded into
+        // defaultProperties (see #contribute) and this method's own named property source
+        // never appears at all.
+        detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
         contribute(environment, new MapPropertySource(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
                 + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default, security "
-                + (launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT ? "enabled" : "disabled") + " by default");
+                + (deploymentLaunch ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 

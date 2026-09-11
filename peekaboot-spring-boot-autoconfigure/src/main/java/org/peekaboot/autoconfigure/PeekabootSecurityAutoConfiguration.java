@@ -24,9 +24,7 @@ import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.PropertySource;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
@@ -60,31 +58,30 @@ public class PeekabootSecurityAutoConfiguration {
         return new SecurityPostureListener(securityPosture);
     }
 
-    /** Armed: the posture reports what the guard below is doing. */
-    @Bean
-    @ConditionalOnMissingBean
-    @ConditionalOnBooleanProperty(PeekabootPropertyKeys.SECURITY_ENABLED)
-    public SecurityPosture armedSecurityPosture(
-            DashboardCredentials credentials, CredentialsFile credentialsFile, Environment environment) {
-        return SecurityPosture.armed(
-                credentials,
-                credentialsFile.path(),
-                springSecurityPresent(),
-                environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false));
-    }
-
     /**
-     * Not armed. {@code matchIfMissing} covers a context where the property is absent
-     * entirely - the detection post-processor always sets it in a real application, but a
-     * bare test context does not, and exactly one posture bean must exist either way.
+     * Unconditional, and armed only when the credentials, the credentials file and the guard
+     * filter all actually resolved - so the posture can never claim the dashboard is protected
+     * while nothing enforces it, and a {@code peekaboot.security.enabled} value
+     * {@code @ConditionalOnBooleanProperty} does not recognize as true or false (anything but
+     * those two words) still leaves exactly one posture bean rather than none.
      */
     @Bean
     @ConditionalOnMissingBean
-    @ConditionalOnBooleanProperty(
-            name = PeekabootPropertyKeys.SECURITY_ENABLED,
-            havingValue = false,
-            matchIfMissing = true)
-    public SecurityPosture disarmedSecurityPosture(Environment environment) {
+    public SecurityPosture securityPosture(
+            ObjectProvider<DashboardCredentials> credentials,
+            ObjectProvider<CredentialsFile> credentialsFile,
+            ObjectProvider<FilterRegistrationBean<DashboardAuthenticationFilter>> guard,
+            Environment environment) {
+        DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
+        CredentialsFile resolvedCredentialsFile = credentialsFile.getIfAvailable();
+        FilterRegistrationBean<DashboardAuthenticationFilter> resolvedGuard = guard.getIfAvailable();
+        if (resolvedCredentials != null && resolvedCredentialsFile != null && resolvedGuard != null) {
+            return SecurityPosture.armed(
+                    resolvedCredentials,
+                    resolvedCredentialsFile.path(),
+                    springSecurityPresent(),
+                    environment.getProperty(PeekabootPropertyKeys.DEV_TOOLBAR, Boolean.class, false));
+        }
         return deploymentLaunch(environment) ? SecurityPosture.disabledOnADeployment() : SecurityPosture.quiet();
     }
 
@@ -100,6 +97,9 @@ public class PeekabootSecurityAutoConfiguration {
             if (StringUtils.hasText(configured)) {
                 return new CredentialsFile(Path.of(configured.trim()));
             }
+            // root(), not file(): a password stable across restarts is the point, and storage
+            // defaults off on exactly the deployment launches this exists for - this is the one
+            // file Peekaboot writes outside the storage switch.
             StorageDirectory directory = storageDirectory.getObject();
             return new CredentialsFile(directory.root().resolve(CREDENTIALS_FILE_NAME));
         }
@@ -163,21 +163,16 @@ public class PeekabootSecurityAutoConfiguration {
     }
 
     /**
-     * The thread's context classloader, not this class's own: the two differ under a test
-     * runner's {@code FilteredClassLoader}, and only the context one reflects it.
+     * The application's own classloader - what the thread context classloader resolves to under
+     * every Boot launcher - not this class's own, which would answer for whatever loaded
+     * Peekaboot itself rather than the consuming application's classpath.
      */
     static boolean springSecurityPresent() {
-        return ClassUtils.isPresent(
-                SECURITY_CONTEXT_HOLDER, Thread.currentThread().getContextClassLoader());
+        return ClassUtils.isPresent(SECURITY_CONTEXT_HOLDER, ClassUtils.getDefaultClassLoader());
     }
 
-    /** Reads the detection source directly, so an explicit override does not hide what was detected. */
+    /** Detected-only, so an explicit override of {@code peekaboot.security.enabled} does not hide what was detected. */
     private static boolean deploymentLaunch(Environment environment) {
-        if (!(environment instanceof ConfigurableEnvironment configurable)) {
-            return false;
-        }
-        PropertySource<?> detection =
-                configurable.getPropertySources().get(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME);
-        return detection != null && Boolean.TRUE.equals(detection.getProperty(PeekabootPropertyKeys.SECURITY_ENABLED));
+        return environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class, false);
     }
 }
