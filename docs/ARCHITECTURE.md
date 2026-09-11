@@ -267,6 +267,15 @@ after the security chain has run, is the only signal that composes with every se
 application's own security wins where it covers the dashboard, Peekaboot fills the gap where it
 does not, and neither has to know about the other.
 
+An application that wants to supply its own guard overrides the registration by declaring a
+`FilterRegistrationBean<DashboardAuthenticationFilter>` bean of its own -
+`@ConditionalOnMissingBean` matches on that type, not on the filter class, so Peekaboot's
+registration backs off. A bare `DashboardAuthenticationFilter` bean does the opposite of what a
+consumer reaching for it wants: it does not stop Peekaboot's own `FilterRegistrationBean`, and
+Boot auto-registers the bare bean as a second filter at `/*`, putting HTTP Basic in front of the
+whole application. `peekaboot.security.enabled=false` is the other escape hatch, for a consumer
+who wants no guard at all rather than a replacement one.
+
 Tomcat 11 suspends a wrapped response after a `RequestDispatcher.forward`
 (`suspendWrappedResponseAfterForward`, default `true` since 11.0.0-M18), so the toolbar's write
 after the filter chain would be dropped and a `forward:` view served as an empty 200.
