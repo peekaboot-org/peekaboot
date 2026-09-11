@@ -32,6 +32,20 @@ class CredentialsFileTest {
     }
 
     @Test
+    void write_overwritesAnExistingFile(@TempDir Path dir) {
+        var file = new CredentialsFile(dir.resolve("security.properties"));
+        file.write(credentials("orders-admin", PasswordHash.of("s3cret")));
+        var replacement = PasswordHash.of("n3wpass");
+
+        assertThat(file.write(credentials("new-admin", replacement))).isTrue();
+
+        var stored = file.read();
+        assertThat(stored).isPresent();
+        assertThat(stored.get().username()).isEqualTo("new-admin");
+        assertThat(stored.get().passwordHash().matches("n3wpass")).isTrue();
+    }
+
+    @Test
     void write_createsMissingParentDirectories(@TempDir Path dir) {
         var file = new CredentialsFile(dir.resolve("a/b/security.properties"));
 

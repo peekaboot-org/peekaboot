@@ -16,12 +16,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The credentials file: a username, a {@link PasswordHash} and the instant the password was
- * generated. Only ever a hash - the plaintext is printed once and then only lives in memory.
- *
- * <p>Every failure resolves to "no usable file", because the caller's answer to all of them is
- * the same: generate a password for this run and say so. An unwritable or ephemeral file system
- * is the expected case in a container, not an error worth failing a start over.
+ * Only a hash ever reaches disk - the plaintext is printed once and then only lives in memory.
+ * Every failure resolves to "no usable file": the caller's answer to all of them is the same,
+ * generate a password for this run and say so.
  */
 public final class CredentialsFile {
 
@@ -89,11 +86,14 @@ public final class CredentialsFile {
      */
     private void createOwnerOnly() throws IOException {
         try {
-            Files.createFile(path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(OWNER_ONLY)));
+            try {
+                Files.createFile(
+                        path, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(OWNER_ONLY)));
+            } catch (UnsupportedOperationException e) {
+                Files.createFile(path);
+            }
         } catch (FileAlreadyExistsException e) {
             log.debug("Overwriting the existing Peekaboot credentials file {}", path);
-        } catch (UnsupportedOperationException e) {
-            Files.createFile(path);
         }
     }
 
