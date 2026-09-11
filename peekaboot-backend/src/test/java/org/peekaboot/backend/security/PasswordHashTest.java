@@ -53,6 +53,23 @@ class PasswordHashTest {
                 .isEmpty();
         assertThat(PasswordHash.parse("pbkdf2-sha256$210000$not base64!$aGFzaA=="))
                 .isEmpty();
+        assertThat(PasswordHash.parse("pbkdf2-sha256$210000$$aGFzaA==")).isEmpty();
+        assertThat(PasswordHash.parse("pbkdf2-sha256$210000$c2FsdA==$")).isEmpty();
+    }
+
+    @Test
+    void toString_redactsTheSaltAndTheHash() {
+        var hash = PasswordHash.of("correct-horse");
+        var formatted = hash.format();
+        var secondDollar = formatted.indexOf('$', formatted.indexOf('$') + 1);
+        var thirdDollar = formatted.indexOf('$', secondDollar + 1);
+        var salt = formatted.substring(secondDollar + 1, thirdDollar);
+        var digest = formatted.substring(thirdDollar + 1);
+
+        var text = hash.toString();
+
+        assertThat(text).contains("pbkdf2-sha256").contains("210000");
+        assertThat(text).doesNotContain(salt).doesNotContain(digest);
     }
 
     /**
