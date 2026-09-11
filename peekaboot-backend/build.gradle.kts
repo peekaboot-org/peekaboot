@@ -17,6 +17,7 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-web-server")
     compileOnly("org.springframework:spring-webmvc")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
+    compileOnly("org.springframework.security:spring-security-core")
     compileOnly("ch.qos.logback:logback-classic")
     compileOnly("com.zaxxer:HikariCP")
     compileOnly("io.opentelemetry:opentelemetry-sdk-trace")
@@ -28,6 +29,7 @@ dependencies {
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-core")
     // otherwise resolves only transitively through spring-boot-starter-test, so a
     // starter change could remove it silently
     testImplementation("org.awaitility:awaitility")
