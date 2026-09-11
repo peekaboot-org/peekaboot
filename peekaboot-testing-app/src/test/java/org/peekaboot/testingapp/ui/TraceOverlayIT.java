@@ -160,7 +160,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * Fills that reuse --pk-primary (this chip, the gantt "server" kind badge) or
-     * --pk-success (the result-set row-count badge) for their background take the
+     * --pk-success (the query row-count badge) for their background take the
      * contrast-tuned --pk-on-primary/--pk-on-success foreground that components.css's
      * .pk-badge uses for the same fills - --pk-text-strong there would be near-white text
      * on light-blue/light-green at ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
@@ -175,7 +175,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * badge: this test app's real request-capture path (RequestCaptureFilter /
      * TracingHandlerInterceptor) never tags the root span with an OpenTelemetry SERVER
      * kind - only OtelSpanExporter does that - so .pk-gantt-kind.server never actually
-     * renders here, and a result-set row-count badge needs a JDBC instrumentation detail
+     * renders here, and a query row-count badge needs a JDBC instrumentation detail
      * this test has no reason to depend on. The logs-tab span-filter chip needs only one
      * real log entry attached to the trace, which openPageThatLogsAnError() guarantees.
      */
@@ -1004,8 +1004,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * The Spans tab renders the facts the backend serves rather than re-deriving them from
-     * tags and names: the row count is {@code span.rowCount} (parsed server-side, null for
-     * a count that did not parse), an error bar follows {@code span.status} alone, and
+     * tags and names: the row count is {@code span.rowCount}, which the backend pairs onto
+     * the query span itself (null for a count that did not parse, even where the result
+     * set's own tag is right there), an error bar follows {@code span.status} alone, and
      * every tag on the span is shown - the backend already keeps the statement tags out,
      * so the tab does not sniff for them.
      */
@@ -1022,7 +1023,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
                 const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
                 return [
-                    rowCountOf({spanId: 'a', name: 'result-set', rowCount: 3, tags: {'jdbc.row-count': '3'}}),
+                    rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: 'select * from orders'}),
                     rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
                     errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
@@ -1033,7 +1034,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
-        assertThat(spanFacts).containsExactly("3 rows", null, true, false, "system,statement");
+        assertThat(spanFacts).containsExactly("1,234 rows", null, true, false, "system,statement");
     }
 
     /**

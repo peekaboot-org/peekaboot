@@ -3,6 +3,8 @@ package org.peekaboot.backend.mapper.trace;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.peekaboot.backend.testsupport.Spans.jdbcConnection;
+import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
+import static org.peekaboot.backend.testsupport.Spans.resultSet;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
 import io.micrometer.tracing.Span;
@@ -947,41 +949,47 @@ class TraceTreeMapperTest {
                 .containsExactly(tuple(Map.of("db.statement", "select * from orders"), null));
     }
 
-    /** A datasource-proxy result-set span's row count is served parsed; anything else has none. */
+    /**
+     * The row count belongs to the query a reader is looking at, not to the {@code result-set}
+     * span datasource-proxy records it on. The pairing is {@link RowCounts}', the one the
+     * Queries tab reads, so a query reports the same number in both tabs.
+     */
     @Test
-    void readsTheRowCountOffAResultSetSpan() {
+    void servesTheRowCountOnTheQuerySpanItBelongsTo() {
         var root = span("root")
                 .named("GET /orders")
                 .kind(Span.Kind.SERVER)
                 .at(0, 200)
                 .build();
-        var resultSet = span("rs")
+        var ordersQuery = jdbcQuery("q1", "select * from orders")
                 .parent("root")
-                .named("result-set")
-                .kind(Span.Kind.CLIENT)
                 .at(10, 5)
-                .tags(Map.of("jdbc.row-count", "10"))
+                .order(1)
+                .build();
+        var ordersResultSet =
+                resultSet("rs", 10).parent("root").at(20, 5).order(2).build();
+        var queryWithUnparsableCount = jdbcQuery("q2", "select * from items")
+                .parent("root")
+                .at(30, 5)
+                .order(3)
                 .build();
         var unparsable = span("rs2")
                 .parent("root")
                 .named("result-set")
                 .kind(Span.Kind.CLIENT)
-                .at(20, 5)
+                .at(40, 5)
                 .tags(Map.of("jdbc.row-count", "not-a-number"))
-                .build();
-        var otherSpanWithTheTag = span("q1")
-                .parent("root")
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .at(30, 5)
-                .tags(Map.of("jdbc.row-count", "10", "jdbc.query[0]", "SELECT 1"))
+                .order(4)
                 .build();
 
-        TraceTree result = mapper.map(TraceDatas.of("trace1", root, resultSet, unparsable, otherSpanWithTheTag));
+        TraceData trace =
+                TraceDatas.of("trace1", root, ordersQuery, ordersResultSet, queryWithUnparsableCount, unparsable);
+
+        TraceTree result = mapper.map(trace);
 
         assertThat(result.rootSpan().rowCount()).isNull();
         assertThat(result.rootSpan().children())
                 .extracting(SpanNode::spanId, SpanNode::rowCount)
-                .containsExactly(tuple("rs", 10L), tuple("rs2", null), tuple("q1", null));
+                .containsExactly(tuple("q1", 10L), tuple("rs", null), tuple("q2", null), tuple("rs2", null));
     }
 }

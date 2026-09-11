@@ -139,6 +139,9 @@
 .pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; margin-left: var(--pk-space-xs); user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
 .pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 .pk-span-action:active { background: var(--pk-bg-alt); }
+/* Neither gives when the name cell runs out of room: a shrunk badge wraps onto a second
+   line and makes its row taller than every other one. The span name ellipses instead. */
+.pk-span-row-count, .pk-span-action { flex: none; white-space: nowrap; }
 
 /* Indented by spans.js to its row's own depth. */
 .pk-span-query-detail { padding: var(--pk-space-sm) var(--pk-space-md); margin: var(--pk-space-xs) 0; background: var(--pk-bg); border-left: 3px solid var(--pk-purple); border-radius: 0 var(--pk-radius) var(--pk-radius) 0; font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); white-space: pre-wrap; word-break: break-all; display: none; }

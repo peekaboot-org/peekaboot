@@ -14,7 +14,8 @@ export function formatDurationMs(ms) {
  * minutes"), plain seconds below a minute. Mirrors the backend's UptimeFormat.humanize
  * unit-by-unit so a run's duration reads identically in the log banner and this
  * dashboard; null and negative input differ, falling back to this module's own '-'
- * convention instead of the backend's "0 seconds".
+ * convention instead of the backend's "0 seconds", as does a run past 999 days, which is
+ * grouped here (formatCount) and not there.
  */
 export function formatLongDuration(ms) {
     if (ms == null || ms < 0) return '-';
@@ -117,9 +118,13 @@ export function formatPlainValue(value) {
     return String(value);
 }
 
-/** Formats "n noun(s)" - plural defaults to singular + 's', override it for irregular nouns (e.g. 'query'/'queries'). */
+/**
+ * Formats "n noun(s)" - plural defaults to singular + 's', override it for irregular nouns
+ * (e.g. 'query'/'queries'). The number is grouped in the reader's locale, which a row count
+ * in the tens of thousands needs to be readable at all.
+ */
 export function formatCount(n, singular, plural = singular + 's') {
-    return `${n} ${n === 1 ? singular : plural}`;
+    return `${n.toLocaleString()} ${n === 1 ? singular : plural}`;
 }
 
 /** The units a series or panel can carry (the backend's Unit enum, by wire name), and the formats a tile can (TileFormat). */
