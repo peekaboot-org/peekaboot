@@ -268,7 +268,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
     @Test
     void securityIsEnabledByDefaultOnADeploymentLaunch() {
-        MockEnvironment environment = new MockEnvironment();
+        ConfigurableEnvironment environment = new MockEnvironment();
 
         postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
 
@@ -278,7 +278,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
     @Test
     void securityIsOffByDefaultOnALocalDevLaunch() {
-        MockEnvironment environment = new MockEnvironment();
+        ConfigurableEnvironment environment = new MockEnvironment();
 
         postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
 
@@ -289,7 +289,7 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     /** Without this a @SpringBootTest in a consumer's build would start getting 401s. */
     @Test
     void securityIsOffByDefaultOnATestLaunch() {
-        MockEnvironment environment = new MockEnvironment();
+        ConfigurableEnvironment environment = new MockEnvironment();
 
         postProcessor(LocalDevDetector.LaunchKind.TEST).postProcessEnvironment(environment, servletApplication());
 
@@ -299,8 +299,10 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
 
     @Test
     void anExplicitSecuritySettingBeatsTheDetectedDefault() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setProperty("peekaboot.security.enabled", "false");
+        ConfigurableEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addFirst(new MapPropertySource("appProperties", Map.of("peekaboot.security.enabled", "false")));
 
         postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
 
