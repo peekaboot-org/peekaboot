@@ -95,10 +95,10 @@ class DashboardCredentialsResolverTest {
     }
 
     @Test
-    void generatePassword_avoidsAmbiguousCharactersAndIsLongEnough() {
+    void generatePassword_drawsTwentySixCharactersFromTheUnambiguousAlphabet() {
         var password = DashboardCredentialsResolver.generatePassword();
 
-        assertThat(password).hasSize(26).doesNotContain("0", "o", "1", "l");
+        assertThat(password).matches("[23456789abcdefghijkmnpqrstuvwxyz]{26}");
         assertThat(password).isNotEqualTo(DashboardCredentialsResolver.generatePassword());
     }
 }
