@@ -68,6 +68,21 @@ class CredentialsFileTest {
     }
 
     @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void write_tightensThePermissionsOfAPreExistingFile(@TempDir Path dir) throws IOException {
+        var path = dir.resolve("security.properties");
+        Files.createFile(path);
+        Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-r--r--"));
+
+        new CredentialsFile(path).write(credentials("orders-admin", PasswordHash.of("s3cret")));
+
+        assertThat(PosixFilePermissions.toString(Files.getFileAttributeView(path, PosixFileAttributeView.class)
+                        .readAttributes()
+                        .permissions()))
+                .isEqualTo("rw-------");
+    }
+
+    @Test
     void read_isEmptyWhenTheFileIsAbsent(@TempDir Path dir) {
         assertThat(new CredentialsFile(dir.resolve("security.properties")).read())
                 .isEmpty();

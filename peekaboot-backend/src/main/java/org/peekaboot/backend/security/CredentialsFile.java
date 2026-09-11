@@ -94,6 +94,19 @@ public final class CredentialsFile {
             }
         } catch (FileAlreadyExistsException e) {
             log.debug("Overwriting the existing Peekaboot credentials file {}", path);
+            tightenPermissions();
+        }
+    }
+
+    /**
+     * A file that predates this write may hold looser permissions than Peekaboot creates; best
+     * effort, since a file system without POSIX permissions must still write the file.
+     */
+    private void tightenPermissions() {
+        try {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(OWNER_ONLY));
+        } catch (UnsupportedOperationException | IOException e) {
+            log.debug("Could not tighten permissions on the Peekaboot credentials file {}: {}", path, e.getMessage());
         }
     }
 
