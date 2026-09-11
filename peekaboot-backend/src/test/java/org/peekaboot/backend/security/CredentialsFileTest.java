@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.testsupport.LogCapture;
 
 class CredentialsFileTest {
 
@@ -116,6 +117,31 @@ class CredentialsFileTest {
         assertThat(file.write(credentials("orders-admin", PasswordHash.of("s3cret"))))
                 .isFalse();
         assertThat(file.read()).isEmpty();
+    }
+
+    @Test
+    void unpersisted_hasNoPath() {
+        assertThat(CredentialsFile.unpersisted().path()).isEmpty();
+    }
+
+    @Test
+    void unpersisted_readIsEmpty() {
+        assertThat(CredentialsFile.unpersisted().read()).isEmpty();
+    }
+
+    @Test
+    void unpersisted_writeReturnsFalse() {
+        assertThat(CredentialsFile.unpersisted().write(credentials("orders-admin", PasswordHash.of("s3cret"))))
+                .isFalse();
+    }
+
+    @Test
+    void unpersisted_writeLogsNoWarning() {
+        try (LogCapture capture = LogCapture.attach(CredentialsFile.class)) {
+            CredentialsFile.unpersisted().write(credentials("orders-admin", PasswordHash.of("s3cret")));
+
+            assertThat(capture.appender().list).isEmpty();
+        }
     }
 
     private static DashboardCredentials credentials(String username, PasswordHash hash) {

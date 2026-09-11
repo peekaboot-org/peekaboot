@@ -53,7 +53,7 @@ public final class SecurityPosture {
 
     public static SecurityPosture armed(
             DashboardCredentials credentials,
-            Path credentialsFile,
+            @Nullable Path credentialsFile,
             boolean springSecurityPresent,
             boolean devToolbarOn) {
 
@@ -81,7 +81,7 @@ public final class SecurityPosture {
                         + " /peekaboot/**. HTTP Basic has been switched on automatically.";
     }
 
-    private static String passwordLine(DashboardCredentials credentials, Path credentialsFile) {
+    private static String passwordLine(DashboardCredentials credentials, @Nullable Path credentialsFile) {
         return switch (credentials.origin()) {
             case CONFIGURED -> " Password: taken from peekaboot.security.password";
             case LOADED ->
@@ -89,9 +89,14 @@ public final class SecurityPosture {
             case GENERATED ->
                 " Password: " + credentials.plaintext() + "  (shown once; hashed in " + credentialsFile + ")";
             case GENERATED_UNPERSISTED ->
-                " Password: " + credentials.plaintext()
-                        + "  (could not be saved, so it will change on the next restart - set"
-                        + " peekaboot.security.password or mount a volume for " + credentialsFile + ")";
+                credentialsFile == null
+                        ? " Password: " + credentials.plaintext()
+                                + "  (not saved, so it will change on the next restart - set"
+                                + " peekaboot.storage.enabled=true to keep it, or peekaboot.security.password to set"
+                                + " your own)"
+                        : " Password: " + credentials.plaintext()
+                                + "  (could not be saved, so it will change on the next restart - set"
+                                + " peekaboot.security.password or mount a volume for " + credentialsFile + ")";
         };
     }
 }
