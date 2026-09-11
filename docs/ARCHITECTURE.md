@@ -21,6 +21,12 @@ Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
 
+`security.properties`, the PBKDF2 hash of the dashboard's fallback password, is the one
+exception: it is written regardless of `peekaboot.storage.enabled`. Without it the password
+would change on every restart, which is exactly the deployment default where storage is off,
+and a password that cannot survive a restart cannot do the job it exists for. Setting
+`peekaboot.security.password` or `peekaboot.security.enabled=false` is what stops it.
+
 The subdirectory is named from the application's build coordinates rather than its
 `spring.application.name`, so two applications sharing a name, or having none, still keep their
 history apart.
@@ -206,6 +212,8 @@ org.peekaboot.backend/
 │   └── trace/              # TraceTreeMapper, IssueDetector, QueryExtractor, DbSpans (the one "is this a query span" predicate)
 ├── masking/                # MaskingEngine (one bean, declared by PeekabootAutoConfiguration), MaskingRules, TagMasker, TreeMasker,
 │                           # ConnectionParamsMasker: the one place "is this key/value sensitive" is decided; see www.peekaboot.org/docs/security
+├── security/               # DashboardAuthenticationFilter and the credential it checks: PasswordHash (PBKDF2),
+│                           # CredentialsFile, DashboardCredentialsResolver, CredentialCache, SecurityPosture
 ├── service/                # ActuatorInsightsService, TraceInsightsService, PeekabootActuatorService, ...
 ├── storage/                # StorageDirectory resolves peekaboot.storage.dir; OwnerOnlyFiles does owner-only, symlink-safe writes (see Persisted state)
 ├── tracing/                # In-memory tracing
@@ -232,14 +240,32 @@ org.peekaboot.backend/
 |--------|-------|-----------------|---------|
 | `RequestCaptureFilter` | `HIGHEST_PRECEDENCE + 100` | a `Tracer` **and** a `TraceStore` bean exist | Captures request/response metadata for traces, and sets the `Server-Timing` header |
 | `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it |
+| `DashboardAuthenticationFilter` | `spring.security.filter.order` + 100 | `peekaboot.enabled` **and** `peekaboot.security.enabled` | Challenges a `/peekaboot/**` request that reaches it unauthenticated, with Peekaboot's fallback credentials |
 
-Both map `/*`. `RequestCaptureFilter`'s order is documented in the registration: it sits
-*inside* Boot's `ServerHttpObservationFilter` (`HIGHEST_PRECEDENCE + 1`), so the server span is
-current when it runs, and ahead of Spring Security, so a request the security chain rejects is
-still captured. `DevToolbarFilter` is innermost; it wraps the response in a
-`ContentBufferingResponseWrapper` and injects its markup into the buffered body. Both
-registrations live only in `DevToolbarAutoConfiguration`, so neither filter runs while
-`peekaboot.dev-toolbar` is off.
+Both `RequestCaptureFilter` and `DevToolbarFilter` map `/*`. `RequestCaptureFilter`'s order is
+documented in the registration: it sits *inside* Boot's `ServerHttpObservationFilter`
+(`HIGHEST_PRECEDENCE + 1`), so the server span is current when it runs, and ahead of Spring
+Security, so a request the security chain rejects is still captured. `DevToolbarFilter` is
+innermost; it wraps the response in a `ContentBufferingResponseWrapper` and injects its markup
+into the buffered body. Both registrations live only in `DevToolbarAutoConfiguration`, so
+neither filter runs while `peekaboot.dev-toolbar` is off.
+
+`DashboardAuthenticationFilter` maps `/peekaboot/*` rather than `/*`. Its order is read from the
+environment at registration time, `spring.security.filter.order` plus 100, falling back to
+Boot's own default of `-100` where the application has not set the property, so the guard tracks
+the security filter even where an application has moved it. That resolves to `0` at Boot's
+defaults, one past Spring Security's own filter, so `DashboardAuthenticationFilter` only sees a
+request the security chain already let through: `RequestAuthentication` asks whether something
+else already authenticated it and stands down if so, and challenges it with Peekaboot's
+credentials otherwise.
+
+A contributed `SecurityFilterChain` could not do this job. `FilterChainProxy` is
+first-match-wins and has no ordering slot for a last resort: a chain ordered above the
+application's would shadow working security, and one ordered below has nowhere to go, since an
+unordered application chain already sits at `LOWEST_PRECEDENCE`. Asking the request itself,
+after the security chain has run, is the only signal that composes with every setup: the
+application's own security wins where it covers the dashboard, Peekaboot fills the gap where it
+does not, and neither has to know about the other.
 
 Tomcat 11 suspends a wrapped response after a `RequestDispatcher.forward`
 (`suspendWrappedResponseAfterForward`, default `true` since 11.0.0-M18), so the toolbar's write
@@ -461,6 +487,7 @@ hooks that run before or outside the application context are registered in
 | `OtelTracingAutoConfiguration` | `.imports` | OpenTelemetry span exporter |
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
+| `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
 | `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled`, and the default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
@@ -491,8 +518,8 @@ Most of the auto-configuration classes carry the same two class-level conditions
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
 `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
 `DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
-`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration` and
-`InsightsAutoConfiguration`.
+`PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
+`InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
 ```java
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -638,6 +665,41 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
 `peekabootDevToolbarDefaults`. `PeekabootDefaultsRegistrationTest` pins both halves.
+
+### Automatic Dashboard Security
+
+`peekaboot.security.enabled` follows the same idiom as the other three launch-context switches:
+`PeekabootDefaultsEnvironmentPostProcessor` publishes a detected default at lowest precedence,
+and any explicit setting wins over it. Unlike the other three the default does not follow
+`LOCAL_DEV`; it is `true` on a `DEPLOYMENT` launch and `false` on both `LOCAL_DEV` and `TEST`,
+the third value `LocalDevDetector.LaunchKind` grows for this. `TEST` is matched against
+`SKIPPED_STACK_ELEMENTS` before the local-dev checks run at all, not folded into them: several
+of those checks reject on thread name or class loader alone, so a test that fails one of them
+early would otherwise fall through to `DEPLOYMENT` rather than `LOCAL_DEV`. Without the
+stand-alone `TEST` check, a consumer's own dashboard tests, and most of this repo's own
+integration tests, would start receiving 401s.
+
+The detected value also travels under its own key, `peekaboot.security.deployment-detected`,
+never `peekaboot.security.enabled` itself. It exists so `SecurityPosture` can tell a detected
+`true` apart from an operator's explicit one after `peekaboot.security.enabled` has already
+resolved to `true` either way, and so that answer survives the fold into Boot's `defaultProperties`
+described above, which the detection source's own name does not. It is detected-only: nothing an
+application is meant to set.
+
+`PeekabootSecurityAutoConfiguration` wires the credential resolution, the credential file (the
+storage exception noted under *Persisted state* above) and the filter registration (*Servlet
+Filters*). It carries the same servlet-and-`peekaboot.enabled` guard as most auto-configurations
+above; `peekaboot.security.enabled` gates a nested configuration one level down rather than the
+class itself, because the startup posture report is registered whenever Peekaboot is enabled,
+not only while the fallback is armed - an operator who turned the fallback off on a deployment
+launch still gets told at startup that the dashboard is unauthenticated.
+
+There is no throttle on failed authentication attempts. Each wrong password still costs a full
+210,000-iteration PBKDF2 derivation, roughly 100ms, and `CredentialCache` remembers only
+successful verifications, so an attacker who can reach `/peekaboot/**` can burn CPU at that rate
+indefinitely. This is accepted rather than fixed: a real throttle needs per-client state,
+eviction and forwarded-header handling of its own, which is a subsystem and not a stop-gap, and
+rate limiting for a deployed application belongs at the proxy in front of it.
 
 ## Tracing Integration
 
