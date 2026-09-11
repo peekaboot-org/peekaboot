@@ -31,6 +31,8 @@ public class PeekabootProperties {
 
     private Lifecycle lifecycle = new Lifecycle();
 
+    private Security security = new Security();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -69,6 +71,14 @@ public class PeekabootProperties {
 
     public void setLifecycle(Lifecycle lifecycle) {
         this.lifecycle = lifecycle;
+    }
+
+    public Security getSecurity() {
+        return security;
+    }
+
+    public void setSecurity(Security security) {
+        this.security = security;
     }
 
     /**
@@ -122,6 +132,62 @@ public class PeekabootProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    /**
+     * The credentials Peekaboot falls back to when nothing else authenticates
+     * {@code /peekaboot/**}. Everything here is unset by default; {@code enabled} is
+     * defaulted from the launch context like {@code peekaboot.enabled}, and on only for a
+     * deployment launch.
+     */
+    public static class Security {
+
+        /** Whether Peekaboot challenges dashboard requests that reach it unauthenticated. */
+        private boolean enabled = false;
+
+        /** Unset derives {@code <artifact>-admin} from the build coordinates or the application name. */
+        private String username;
+
+        /**
+         * Unset generates a password on first start and persists its hash. An explicit value
+         * is never written to disk.
+         */
+        private String password;
+
+        /** Unset resolves to {@code security.properties} beside Peekaboot's other state. */
+        private String credentialsFile;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public String getCredentialsFile() {
+            return credentialsFile;
+        }
+
+        public void setCredentialsFile(String credentialsFile) {
+            this.credentialsFile = credentialsFile;
         }
     }
 }
