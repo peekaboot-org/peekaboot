@@ -480,6 +480,17 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("format.js", "m.formatCount(0, 'span')")).isEqualTo("0 spans");
     }
 
+    /**
+     * A five-digit row count is unreadable as a run of digits, so every count is grouped in
+     * the reader's own locale - the browser's, which is also what the dashboard's locale
+     * select starts on.
+     */
+    @Test
+    void formatCountGroupsThousands() {
+        assertThat(evalModule("format.js", "m.formatCount(1234567, 'row')")).isEqualTo("1,234,567 rows");
+        assertThat(evalModule("format.js", "m.formatCount(999, 'row')")).isEqualTo("999 rows");
+    }
+
     @Test
     void statusLabelSpellsOutTheReasonPhrase() {
         assertThat(evalModule("http-status.js", "m.statusLabel(200)")).isEqualTo("200 OK");

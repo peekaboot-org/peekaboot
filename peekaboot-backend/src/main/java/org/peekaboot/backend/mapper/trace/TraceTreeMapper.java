@@ -63,7 +63,7 @@ public class TraceTreeMapper {
         TraceTabSummary summary = calculateSummary(spans, rootSpanData);
         TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
-        SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
+        SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId, RowCounts.byQuerySpanId(spans));
 
         long startTimeMs = traceData.startTime() != null ? traceData.startTime().toEpochMilli() : 0L;
         long durationMs = traceData.duration() != null ? traceData.duration().toMillis() : 0L;
@@ -219,7 +219,8 @@ public class TraceTreeMapper {
         return tags.containsKey("code.function") && tags.containsKey("code.namespace");
     }
 
-    private SpanNode buildSpanTree(SpanData spanData, Map<String, List<SpanData>> childrenByParentId) {
+    private SpanNode buildSpanTree(
+            SpanData spanData, Map<String, List<SpanData>> childrenByParentId, Map<String, Long> rowCounts) {
         if (spanData == null) {
             return null;
         }
@@ -227,7 +228,7 @@ public class TraceTreeMapper {
         List<SpanData> childSpans = childrenByParentId.getOrDefault(spanData.spanId(), List.of());
         List<SpanNode> children = childSpans.stream()
                 .sorted(Comparator.comparing(SpanData::startTime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(child -> buildSpanTree(child, childrenByParentId))
+                .map(child -> buildSpanTree(child, childrenByParentId, rowCounts))
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
@@ -249,7 +250,7 @@ public class TraceTreeMapper {
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
                 queryText(spanData),
-                DbSpans.rowCount(spanData),
+                rowCounts.get(spanData.spanId()),
                 null);
     }
 

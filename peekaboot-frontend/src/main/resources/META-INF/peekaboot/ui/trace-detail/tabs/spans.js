@@ -130,8 +130,9 @@ function nameCell(span, indent) {
         cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
     }
     cell.append(el('span', {className: 'pk-gantt-name__text', text: name, title: name}));
-    // The backend decides what a query span is (DbSpans) and ships its masked statement
-    // as span.query, and a result-set span's parsed row count as span.rowCount.
+    // The backend decides what a query span is (DbSpans) and ships its masked statement as
+    // span.query, and the row count of the result-set span it paired to this one (RowCounts)
+    // as span.rowCount.
     if (span.rowCount != null) {
         cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row')}));
     }
