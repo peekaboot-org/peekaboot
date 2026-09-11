@@ -32,8 +32,8 @@ const FALLBACK_BAND_FILL = 'rgba(128, 128, 128, 0.17)';
  * Series strokes, resolved per chart from the design tokens so charts follow the
  * active theme. Text-tuned tokens are preferred where they exist: a 2px stroke is
  * a graphical object and needs the same 3:1 contrast against the card background
- * that the fill-tuned tokens (--pk-primary, --pk-success) do not reach in light
- * mode. Only one green is used, so a green line is never ambiguous.
+ * that the fill-tuned --pk-primary does not reach in light mode. Only one green is
+ * used, so a green line is never ambiguous.
  */
 const STROKE_TOKENS = [
     '--pk-primary-text', '--pk-info-text', '--pk-warning-text', '--pk-purple', '--pk-danger', '--pk-text-muted'
