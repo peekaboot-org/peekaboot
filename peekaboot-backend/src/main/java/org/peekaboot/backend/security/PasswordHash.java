@@ -62,7 +62,13 @@ public final class PasswordHash {
                 return Optional.empty();
             }
             Base64.Decoder decoder = Base64.getDecoder();
-            return Optional.of(new PasswordHash(iterations, decoder.decode(fields[2]), decoder.decode(fields[3])));
+            byte[] salt = decoder.decode(fields[2]);
+            byte[] hash = decoder.decode(fields[3]);
+            if (salt.length == 0 || hash.length == 0) {
+                // PBEKeySpec rejects a zero-length salt, and matches() must never throw
+                return Optional.empty();
+            }
+            return Optional.of(new PasswordHash(iterations, salt, hash));
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
