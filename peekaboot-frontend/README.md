@@ -359,29 +359,36 @@ comment; re-measure and update those comments when a value moves.
 **Never use `--pk-warning`, `--pk-success`, `--pk-primary` or `--pk-info` as text on the
 page background.** In light mode the brand green `--pk-primary` (`#66b327`) is a
 mid-lightness fill. White on it is 2.6:1, well under AA, and contrast is symmetric, so the
-green is equally unreadable as text on white. That is why `--pk-primary-text` (`#447718`,
-5.39:1 on `--pk-bg`) exists as a separate, darker green, and why it also carries focus rings
-and the selected-tab underline, which clear 1.4.11's 3:1 for non-text UI. `--pk-success` is
-3.3:1 as text. `--pk-info` and `--pk-warning` pass by the numbers (5.36:1 and 4.83:1)
-because their light fills sit in the deep tier, but they are ladder-tuned and may move
-again, so text still goes through the `-text` token. `--pk-danger` and `--pk-purple` are the
-two dark enough to serve both roles (5.31:1 and 5.70:1, down to 4.73:1 for danger on
-`--pk-bg-hover`, still AA), which is why neither has a `-text` variant.
+green is equally unreadable as text on white.
+
+That is why `--pk-primary-text` (`#447718`, 5.39:1 on `--pk-bg`) exists as a separate,
+darker green, and why it also carries focus rings and the selected-tab underline, which
+clear 1.4.11's 3:1 for non-text UI.
+
+`--pk-info`, `--pk-warning` and `--pk-success` pass by the numbers (5.36:1, 4.83:1 and
+5.02:1) because their light fills sit in the deep tier, but they are ladder-tuned and may
+move again, so text still goes through the `-text` token.
+
+`--pk-danger` and `--pk-purple` are the two dark enough to serve both roles (5.31:1 and
+5.70:1, down to 4.73:1 for danger on `--pk-bg-hover`, still AA), which is why neither has a
+`-text` variant.
 
 **Never put `--pk-text-strong` or a literal `white`/`#fff` on a saturated fill.** Each fill
 has an `--pk-on-*` counterpart that clears 4.5:1 in both themes by construction;
-`white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode. The
-inks do not follow one rule. In light mode `--pk-warning`, `--pk-danger`, `--pk-info` and
-`--pk-purple` sit deep enough to carry white (4.83:1, 5.31:1, 5.36:1, 5.70:1) while the
-green `--pk-primary` and `--pk-success` take dark ink (7.25:1, 5.74:1). In dark mode every
-saturated fill takes dark ink. `--pk-on-danger-soft` inverts in both directions, because
-that fill recedes rather than lightens so the softer 4xx tier cannot out-glow the full-error
-pill.
+`white`/`--pk-text-strong` measure 2.53:1 and, in another spot, ~2.3:1 in dark mode.
+
+The inks do not follow one rule. In light mode `--pk-warning`, `--pk-danger`, `--pk-info`,
+`--pk-purple` and `--pk-success` sit deep enough to carry white (4.83:1, 5.31:1, 5.36:1,
+5.70:1, 5.02:1) while the brand green `--pk-primary` takes dark ink (7.25:1). In dark mode
+every saturated fill takes dark ink.
+
+`--pk-on-danger-soft` inverts in both directions, because that fill recedes rather than
+lightens so the softer 4xx tier cannot out-glow the full-error pill.
 
 **`--pk-info` is not an alias for `--pk-primary`.** It was, while `--pk-primary` was a blue.
 With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
 `--pk-success` UP pill and reads as the same state, so `--pk-info` is held ~51° (light) /
-~64° (dark) off `--pk-success` in hue, and in light additionally a tier deeper.
+~64° (dark) off `--pk-success` in hue.
 
 ### Controls and markup
 
