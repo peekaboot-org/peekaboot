@@ -21,11 +21,12 @@ Like `peekaboot.dev-toolbar`, the switch follows the launch context rather than
 else, and an explicit setting wins in either direction. Switching Peekaboot on deliberately in
 a shared environment therefore writes nothing to that host's `$HOME`.
 
-`security.properties`, the PBKDF2 hash of the dashboard's fallback password, is the one
-exception: it is written regardless of `peekaboot.storage.enabled`. Without it the password
-would change on every restart, which is exactly the deployment default where storage is off,
-and a password that cannot survive a restart cannot do the job it exists for. Setting
-`peekaboot.security.password` or `peekaboot.security.enabled=false` is what stops it.
+`security.properties`, the PBKDF2 hash of the dashboard's fallback password, follows the same
+switch: with storage off, `CredentialsFile` has no path to write and the password regenerates on
+every restart, which the startup report says explicitly, naming `peekaboot.storage.enabled=true`
+as what keeps it stable. `peekaboot.security.credentials-file` is the one way around the switch:
+an explicit path is written and read regardless of `peekaboot.storage.enabled`, the same way an
+explicit property beats a detected default everywhere else in this codebase.
 
 The subdirectory is named from the application's build coordinates rather than its
 `spring.application.name`, so two applications sharing a name, or having none, still keep their
@@ -695,9 +696,9 @@ resolved to `true` either way, and so that answer survives the fold into Boot's 
 described above, which the detection source's own name does not. It is detected-only: nothing an
 application is meant to set.
 
-`PeekabootSecurityAutoConfiguration` wires the credential resolution, the credential file (the
-storage exception noted under *Persisted state* above) and the filter registration (*Servlet
-Filters*). It carries the same servlet-and-`peekaboot.enabled` guard as most auto-configurations
+`PeekabootSecurityAutoConfiguration` wires the credential resolution, the credential file (see
+*Persisted state* above) and the filter registration (*Servlet Filters*). It carries the same
+servlet-and-`peekaboot.enabled` guard as most auto-configurations
 above; `peekaboot.security.enabled` gates a nested configuration one level down rather than the
 class itself, because the startup posture report is registered whenever Peekaboot is enabled,
 not only while the fallback is armed - an operator who turned the fallback off on a deployment
