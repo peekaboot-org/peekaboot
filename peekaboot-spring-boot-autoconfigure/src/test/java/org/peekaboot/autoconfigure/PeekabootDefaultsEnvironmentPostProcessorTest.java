@@ -29,10 +29,15 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
      * the detection result so both branches are testable.
      */
     private PeekabootDefaultsEnvironmentPostProcessor postProcessor(boolean localDevelopment) {
+        return postProcessor(
+                localDevelopment ? LocalDevDetector.LaunchKind.LOCAL_DEV : LocalDevDetector.LaunchKind.DEPLOYMENT);
+    }
+
+    private PeekabootDefaultsEnvironmentPostProcessor postProcessor(LocalDevDetector.LaunchKind launchKind) {
         return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
             @Override
-            boolean localDevelopment() {
-                return localDevelopment;
+            LocalDevDetector.LaunchKind launchKind() {
+                return launchKind;
             }
         };
     }
@@ -253,11 +258,91 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .containsExactlyInAnyOrder(
                         PeekabootPropertyKeys.ENABLED,
                         PeekabootPropertyKeys.DEV_TOOLBAR,
-                        PeekabootPropertyKeys.STORAGE_ENABLED);
+                        PeekabootPropertyKeys.STORAGE_ENABLED,
+                        PeekabootPropertyKeys.SECURITY_ENABLED,
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
                 .isNull();
+    }
+
+    @Test
+    void securityIsEnabledByDefaultOnADeploymentLaunch() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
+                .isTrue();
+    }
+
+    @Test
+    void securityIsOffByDefaultOnALocalDevLaunch() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
+                .isFalse();
+    }
+
+    /** Without this a @SpringBootTest in a consumer's build would start getting 401s. */
+    @Test
+    void securityIsOffByDefaultOnATestLaunch() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.TEST).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
+                .isFalse();
+    }
+
+    @Test
+    void anExplicitSecuritySettingBeatsTheDetectedDefault() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addFirst(new MapPropertySource("appProperties", Map.of("peekaboot.security.enabled", "false")));
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
+                .isFalse();
+        assertThat(environment
+                        .getPropertySources()
+                        .get(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME)
+                        .getProperty("peekaboot.security.enabled"))
+                .isEqualTo(true);
+        // unlike the switch above, this one is never overridden - PeekabootSecurityAutoConfiguration
+        // reads it to tell this exact case (an explicit false on a real deployment) from a local
+        // or test launch, which the resolved peekaboot.security.enabled alone cannot answer
+        assertThat(environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class))
+                .isTrue();
+    }
+
+    /**
+     * The detection source's own name disappears once Boot's {@code defaultProperties} already
+     * exists (see {@link #foldsItsDefaultsUnderneathTheApplicationsDefaultProperties}) - the
+     * deployment signal has to survive that fold regardless, since
+     * {@code PeekabootSecurityAutoConfiguration} reads it directly off the {@code Environment}
+     * rather than by the source's name.
+     */
+    @Test
+    void theDetectedDeploymentSignalSurvivesTheFoldIntoDefaultProperties() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addLast(new DefaultPropertiesPropertySource(Map.of("peekaboot.security.enabled", "false")));
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getPropertySources().contains(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME))
+                .isFalse();
+        assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
+                .isFalse();
+        assertThat(environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class))
+                .isTrue();
     }
 
     @Test
@@ -411,8 +496,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
             Function<String, Resource> bundledDefaults) {
         return new PeekabootDefaultsEnvironmentPostProcessor(Supplier::get) {
             @Override
-            boolean localDevelopment() {
-                return false;
+            LocalDevDetector.LaunchKind launchKind() {
+                return LocalDevDetector.LaunchKind.DEPLOYMENT;
             }
 
             @Override

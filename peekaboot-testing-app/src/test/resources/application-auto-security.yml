@@ -1,0 +1,27 @@
+# The only profile in this module that arms Peekaboot's own fallback credentials, used by
+# AutoSecuredDashboardIT. A test launch never arms it by detection, so the switch is explicit
+# here; the credentials file is redirected per test so nothing is written to a developer's home.
+# Deliberately does not build on application-test.yml: repeats its exclusions rather than
+# extending it, because the point here is Spring Security auto-configured and stood down by
+# Peekaboot's own guard, not excluded before either ever sees a request.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration
+      - org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+  flyway:
+    enabled: false
+  docker:
+    compose:
+      enabled: false
+
+peekaboot:
+  enabled: true
+  dev-toolbar: false
+  security:
+    enabled: true
