@@ -32,7 +32,7 @@ public class CredentialCache {
         this(DEFAULT_TTL, Clock.systemUTC());
     }
 
-    public CredentialCache(Duration ttl, Clock clock) {
+    CredentialCache(Duration ttl, Clock clock) {
         this.ttl = ttl;
         this.clock = clock;
     }
