@@ -37,6 +37,9 @@ class AutoSecuredDashboardIT {
     /** A resource-handler path, not a redirect: the one place an authenticated GET here answers 200 rather than 302. */
     private static final String DASHBOARD_ASSET = "/peekaboot/ui/dashboard/main.js";
 
+    /** Same endpoint {@code SecuredPeekabootIT} uses, kept identical so the two ITs are not read as testing different APIs. */
+    private static final String INSIGHTS_API = "/peekaboot/api/actuator/all/insights";
+
     @TempDir
     static Path credentialsDir;
 
@@ -67,7 +70,7 @@ class AutoSecuredDashboardIT {
 
     @Test
     void theInsightsApiRejectsAnAnonymousRequest() {
-        assertThat(api().statusOf("/peekaboot/api/insights")).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(api().statusOf(INSIGHTS_API)).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

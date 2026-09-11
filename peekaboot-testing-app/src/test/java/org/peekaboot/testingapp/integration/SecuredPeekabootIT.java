@@ -171,13 +171,23 @@ class SecuredPeekabootIT {
                     .isEqualTo(HttpStatus.OK);
         }
 
-        /** Proves the application's chain is what gates the dashboard, not a Peekaboot challenge standing in for it. */
+        /**
+         * A bad-credentials request never reaches {@code DashboardAuthenticationFilter} at all -
+         * Spring Security's own {@code httpBasic} entry point challenges it directly, before the
+         * request continues down to where Peekaboot's guard is nested (registered at {@code
+         * spring.security.filter.order + 100}). So the 401 alone would pass whether the guard were
+         * armed, stood down, or deleted outright. What pins it on the application's own chain is the
+         * challenge header: Peekaboot's own refusal always carries {@code realm="Peekaboot"} (see
+         * {@code DashboardAuthenticationFilter}), and this one does not.
+         */
         @Test
         void peekabootsOwnGeneratedCredentialsAreNeverRequired() {
-            assertThat(nestedApi
-                            .withBasicAuth(credentials.username(), credentials.plaintext())
-                            .statusOf(DASHBOARD_ASSET))
-                    .isEqualTo(HttpStatus.UNAUTHORIZED);
+            PeekabootApi withGeneratedCredentials =
+                    nestedApi.withBasicAuth(credentials.username(), credentials.plaintext());
+
+            assertThat(withGeneratedCredentials.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(withGeneratedCredentials.headersOf(DASHBOARD_ASSET).getFirst("WWW-Authenticate"))
+                    .doesNotContain("realm=\"Peekaboot\"");
         }
     }
 }
