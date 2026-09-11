@@ -509,17 +509,31 @@ class InsightsSsePublisherTest {
                         "A non-container (application) thread attempted to use "
                                 + "the AsyncContext after an error had occurred and the call to AsyncListener.onError() had returned."));
 
-        try (UncaughtExceptions uncaught = new UncaughtExceptions()) {
+        try (UncaughtExceptions uncaught = new UncaughtExceptions();
+                LogCapture logs = LogCapture.attach(Subscriber.class, Level.DEBUG)) {
             publisher.onTick(1_000, Map.of("a", 1.0));
 
             // Awaitility's own uncaught-exception catching would take the handler over mid-wait
             await().dontCatchUncaughtExceptions()
                     .atMost(Duration.ofSeconds(3))
                     .alias("the sender thread finished")
-                    .until(() -> !uncaught.captured().isEmpty() || publisher.subscriberCount() == 0);
-            assertThat(uncaught.captured())
+                    .until(() -> !uncaught.fromTheSenderThread().isEmpty() || publisher.subscriberCount() == 0);
+            assertThat(uncaught.fromTheSenderThread())
                     .as("nothing escapes the sender thread")
                     .isEmpty();
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+                    .as("a refused completion is no louder than the send failure that led to it")
+                    .isEmpty();
+            assertThat(logs.appender().list)
+                    .filteredOn(event -> event.getFormattedMessage().contains("had already gone"))
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+                        assertThat(event.getThrowableProxy())
+                                .as("one line, not the container's stack trace")
+                                .isNull();
+                    });
         }
         assertThat(publisher.subscriberCount())
                 .as("the peer is detached even though its stream could not be ended")
@@ -528,7 +542,8 @@ class InsightsSsePublisherTest {
 
     /**
      * A completion refused for any other reason is not a peer going away, so it is reported
-     * once with its stack trace rather than swallowed - and the subscriber still goes.
+     * once, with the send failure behind it and its own stack trace - and the subscriber still
+     * goes.
      */
     @Test
     void aCompletionFailingForAnotherReasonIsReportedOnce() throws Exception {
@@ -544,15 +559,23 @@ class InsightsSsePublisherTest {
             await().dontCatchUncaughtExceptions()
                     .atMost(Duration.ofSeconds(3))
                     .alias("the peer is detached")
-                    .until(() -> !uncaught.captured().isEmpty() || publisher.subscriberCount() == 0);
-            assertThat(uncaught.captured())
+                    .until(() -> !uncaught.fromTheSenderThread().isEmpty() || publisher.subscriberCount() == 0);
+            assertThat(uncaught.fromTheSenderThread())
                     .as("nothing escapes the sender thread")
                     .isEmpty();
             assertThat(logs.appender().list)
                     .filteredOn(event -> event.getLevel() == Level.WARN)
                     .singleElement()
-                    .satisfies(event -> assertThat(event.getThrowableProxy()).isNotNull());
+                    .satisfies(event -> {
+                        assertThat(event.getFormattedMessage())
+                                .as("why a completion was attempted, which otherwise sits in a DEBUG line above")
+                                .contains("java.io.IOException: Broken pipe");
+                        assertThat(event.getThrowableProxy()).isNotNull();
+                    });
         }
+        assertThat(publisher.subscriberCount())
+                .as("the subscriber goes even though ending its stream failed")
+                .isZero();
     }
 
     /** A keep-alive is an SSE comment, so an idle connection carries traffic without a data event. */
@@ -639,22 +662,27 @@ class InsightsSsePublisherTest {
     }
 
     /**
-     * Collects what the JVM's default handler would otherwise print for a thread that dies on
-     * an exception. That handler is JVM-global, which is safe here only because
-     * peekaboot-backend's surefire runs its classes one at a time on one thread; close() puts
-     * the previous handler back.
+     * Collects what the JVM's default handler would otherwise print for a sender thread that
+     * dies on an exception. The handler is JVM-global, so every thread in the module's JVM
+     * reaches it and only the sender's exceptions are kept; installing it is safe because
+     * peekaboot-backend's surefire runs its classes one at a time on one thread, and close()
+     * puts the previous handler back.
      */
     private static final class UncaughtExceptions implements AutoCloseable {
 
-        private final List<Throwable> captured = new CopyOnWriteArrayList<>();
+        private final List<Throwable> fromTheSenderThread = new CopyOnWriteArrayList<>();
         private final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
 
         UncaughtExceptions() {
-            Thread.setDefaultUncaughtExceptionHandler((thread, e) -> captured.add(e));
+            Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+                if (Subscriber.SENDER_THREAD.equals(thread.getName())) {
+                    fromTheSenderThread.add(e);
+                }
+            });
         }
 
-        List<Throwable> captured() {
-            return captured;
+        List<Throwable> fromTheSenderThread() {
+            return fromTheSenderThread;
         }
 
         @Override

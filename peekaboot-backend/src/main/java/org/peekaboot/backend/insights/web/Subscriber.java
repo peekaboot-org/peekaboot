@@ -19,6 +19,9 @@ final class Subscriber {
 
     private static final Logger log = LoggerFactory.getLogger(Subscriber.class);
 
+    /** The sender thread's name; package-private so a test can tell its exceptions from other threads'. */
+    static final String SENDER_THREAD = "peekaboot-insights-sse-send";
+
     /**
      * Each subscriber's own send lane. A healthy peer drains it as fast as the dispatch
      * thread fills it and a burst spans a handful of events, so a backlog this deep only
@@ -31,11 +34,11 @@ final class Subscriber {
     private final Thread sender;
     private final Runnable onDrop;
 
-    /** {@code onDrop} detaches this subscriber from the publisher once its lane overflows. */
+    /** {@code onDrop} detaches this subscriber from the publisher. */
     Subscriber(InsightsSsePublisher.SubscriberEmitter emitter, Runnable onDrop) {
         this.emitter = emitter;
         this.onDrop = onDrop;
-        this.sender = Thread.ofVirtual().name("peekaboot-insights-sse-send").unstarted(this::drainLane);
+        this.sender = Thread.ofVirtual().name(SENDER_THREAD).unstarted(this::drainLane);
     }
 
     InsightsSsePublisher.SubscriberEmitter emitter() {
@@ -87,7 +90,10 @@ final class Subscriber {
             // this peer left before we could end its stream - as routine as the failed send.
             log.debug("Insights SSE subscriber had already gone when its stream was ended: {}", e.toString());
         } catch (RuntimeException e) {
-            log.warn("Failed to end an insights SSE subscriber's stream", e);
+            log.warn(
+                    "Failed to end an insights SSE subscriber's stream after send failure: {}",
+                    sendFailure.toString(),
+                    e);
         } finally {
             // The emitter detaches the subscriber itself, but only when the completion goes through.
             onDrop.run();
