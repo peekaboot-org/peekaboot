@@ -21,5 +21,14 @@ final class PeekabootPropertyKeys {
     /** The insights-feature switch; on unless set to false. */
     static final String INSIGHTS_ENABLED = "peekaboot.insights.enabled";
 
+    /** The automatic-security switch; defaulted from the launch context like {@link #ENABLED}. */
+    static final String SECURITY_ENABLED = "peekaboot.security.enabled";
+
+    /**
+     * The property source carrying the launch-context defaults. Readable by name so a
+     * component can see what was detected even where the application overrode it.
+     */
+    static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
+
     private PeekabootPropertyKeys() {}
 }
