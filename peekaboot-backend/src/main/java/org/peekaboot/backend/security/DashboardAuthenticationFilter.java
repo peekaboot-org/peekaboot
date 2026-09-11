@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +30,7 @@ public class DashboardAuthenticationFilter implements Filter {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String CHALLENGE_HEADER = "WWW-Authenticate";
     private static final String CHALLENGE = "Basic realm=\"Peekaboot\", charset=\"UTF-8\"";
-    private static final String BASIC_PREFIX = "basic ";
+    private static final String BASIC_PREFIX = "Basic ";
 
     private final DashboardCredentials credentials;
     private final CredentialCache cache;
@@ -53,8 +52,9 @@ public class DashboardAuthenticationFilter implements Filter {
 
         if (!(request instanceof HttpServletRequest httpRequest)
                 || !(response instanceof HttpServletResponse httpResponse)) {
-            chain.doFilter(request, response);
-            return;
+            // Not HTTP means no 401 can be sent; forwarding would serve the dashboard unguarded,
+            // so refuse instead of failing open.
+            throw new ServletException("DashboardAuthenticationFilter requires an HTTP request");
         }
 
         if (requestAuthentication.alreadyAuthenticated()) {
@@ -80,7 +80,7 @@ public class DashboardAuthenticationFilter implements Filter {
         if (cache.isKnownGood(header)) {
             return true;
         }
-        if (!header.toLowerCase(Locale.ROOT).startsWith(BASIC_PREFIX)) {
+        if (!header.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
             return false;
         }
         String decoded;
@@ -120,7 +120,13 @@ public class DashboardAuthenticationFilter implements Filter {
         response.setContentLength(0);
     }
 
-    /** Username comparison need not be secret, but a variable-time compare here would be an odd asymmetry. */
+    /**
+     * Belt-and-braces over a value that is public anyway - the username is
+     * {@code <application name>-admin}, visible by construction. The {@code ||} short-circuit in
+     * {@link #verify} is deliberate: skipping the 210,000-iteration derivation on a wrong username
+     * means that answer costs microseconds rather than the ~100ms a right one takes, so a wrong
+     * username never buys an attacker a free PBKDF2 derivation.
+     */
     private static boolean constantTimeEquals(String expected, String presented) {
         return MessageDigest.isEqual(
                 expected.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8));
