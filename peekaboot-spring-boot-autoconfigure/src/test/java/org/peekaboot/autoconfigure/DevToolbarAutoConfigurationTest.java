@@ -368,6 +368,29 @@ class DevToolbarAutoConfigurationTest {
                 });
     }
 
+    @Test
+    void registersTheTomcatForwardCustomizerWhenTomcatIsPresent() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).hasSingleBean(TomcatForwardResponseCustomizer.class);
+                });
+    }
+
+    @Test
+    void doesNotRegisterTheTomcatForwardCustomizerWithoutTomcat() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .withClassLoader(new FilteredClassLoader(org.apache.catalina.Context.class))
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context).doesNotHaveBean(TomcatForwardResponseCustomizer.class);
+                });
+    }
+
     private int peekabootAppenderCount() {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();
         Logger root = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME);

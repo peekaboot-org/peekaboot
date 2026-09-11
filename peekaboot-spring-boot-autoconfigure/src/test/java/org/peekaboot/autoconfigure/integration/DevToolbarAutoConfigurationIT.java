@@ -79,6 +79,23 @@ class DevToolbarAutoConfigurationIT {
         assertThat(data.path("traceId").asString()).matches("[a-f0-9]{32}");
     }
 
+    /**
+     * A {@code forward:} view writes the page during the outer dispatch's view rendering, so
+     * the toolbar's write lands after the forward returned. See TomcatForwardResponseCustomizer.
+     */
+    @Test
+    void toolbarShouldBeInjectedIntoAForwardedHtmlResponse() {
+        String response = restClient
+                .get()
+                .uri("/forwarded")
+                .accept(MediaType.TEXT_HTML)
+                .retrieve()
+                .body(String.class);
+
+        assertThat(response).contains("<h1>Test Page</h1>");
+        assertThat(response).contains("<!-- Peekaboot Dev Toolbar -->");
+    }
+
     private static JsonNode toolbarData(String html) {
         Matcher matcher = TOOLBAR_DATA.matcher(html);
         assertThat(matcher.find())

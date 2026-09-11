@@ -34,4 +34,15 @@ public class PersonController {
         }
         return "persons";
     }
+
+    /**
+     * The person list's former path, kept as a forward. Exists so a trace with a nested
+     * dispatch in it - a second DispatcherServlet dispatch running inside the first one's
+     * view rendering - is something the trace view can be pointed at.
+     */
+    @GetMapping("/people")
+    public String people() {
+
+        return "forward:/persons";
+    }
 }
