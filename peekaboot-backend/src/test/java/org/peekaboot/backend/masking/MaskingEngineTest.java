@@ -870,6 +870,16 @@ class MaskingEngineTest {
             assertThat(engine.mask("http.response.header.set-cookie", "session=abc123; Path=/"))
                     .isEqualTo("******");
         }
+
+        // The one new property this feature adds whose value is a live credential on a deployed
+        // application's Config tab; pinned by name rather than relying on the generic "password"
+        // rule to keep covering it.
+        @Test
+        void mask_shouldNeverSurfaceThePeekabootSecurityPasswordValue() {
+            String result = engine.mask("peekaboot.security.password", "hunter2");
+
+            assertThat(result).isEqualTo("******").doesNotContain("hunter2");
+        }
     }
 
     @Nested

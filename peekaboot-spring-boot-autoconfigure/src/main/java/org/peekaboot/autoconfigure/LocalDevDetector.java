@@ -176,14 +176,39 @@ final class LocalDevDetector {
         if (!classLoader.getClass().getName().contains("AppClassLoader")) {
             return false;
         }
+        return !isTestLaunch(stackTrace) && isDeveloperLaunch(signals);
+    }
+
+    /**
+     * What kind of launch this is. {@code TEST} covers an AOT processing run as well as a
+     * test: neither serves traffic, and both are recognised by the same stack frames.
+     */
+    enum LaunchKind {
+        LOCAL_DEV,
+        TEST,
+        DEPLOYMENT
+    }
+
+    static LaunchKind launchKind(Thread thread) {
+        return launchKind(thread, thread.getStackTrace(), LaunchSignals.fromRuntime());
+    }
+
+    static LaunchKind launchKind(Thread thread, StackTraceElement[] stackTrace, LaunchSignals signals) {
+        if (isTestLaunch(stackTrace)) {
+            return LaunchKind.TEST;
+        }
+        return isLocalDevelopment(thread, stackTrace, signals) ? LaunchKind.LOCAL_DEV : LaunchKind.DEPLOYMENT;
+    }
+
+    private static boolean isTestLaunch(StackTraceElement[] stackTrace) {
         for (StackTraceElement element : stackTrace) {
             for (String skipped : SKIPPED_STACK_ELEMENTS) {
                 if (element.getClassName().startsWith(skipped)) {
-                    return false;
+                    return true;
                 }
             }
         }
-        return isDeveloperLaunch(signals);
+        return false;
     }
 
     /** The two signals a class loader and a clean stack cannot see, shared by every branch that gets this far. */

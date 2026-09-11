@@ -25,6 +25,10 @@ dependencies {
     compileOnly("io.micrometer:micrometer-observation")
     compileOnly("org.springframework.boot:spring-boot-micrometer-observation")
 
+    // so PeekabootSecurityAutoConfigurationTest can prove the on-classpath branch of the
+    // SecurityContextHolder presence check; the main code holds only its class name as a
+    // String and needs no dependency to compile
+    testImplementation("org.springframework.security:spring-security-core")
     // shared test support (LogCapture)
     testImplementation(project(":peekaboot-test-support"))
     testImplementation("org.springframework.boot:spring-boot-starter-test")

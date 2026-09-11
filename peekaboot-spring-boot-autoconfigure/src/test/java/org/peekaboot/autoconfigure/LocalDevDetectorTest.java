@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
@@ -251,6 +252,73 @@ class LocalDevDetectorTest {
         thread.join();
 
         assertThat(result).isTrue();
+    }
+
+    @Test
+    void launchKind_isTestWhenAJunitFrameIsOnTheStack() {
+        var stack = stackOf("org.junit.platform.launcher.core.DefaultLauncher", "com.acme.App");
+        var signals = new LaunchSignals("/home/dev/app/target/classes", false);
+
+        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+
+        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.TEST);
+    }
+
+    /** A test running under a loader the local-dev branch rejects is still a test. */
+    @Test
+    void launchKind_isTestEvenWhenNoBuildOutputIsOnTheClassPath() {
+        var stack = stackOf("org.springframework.boot.test.context.SpringBootContextLoader", "com.acme.App");
+        var signals = new LaunchSignals("/opt/app/app.jar", false);
+
+        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+
+        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.TEST);
+    }
+
+    @Test
+    void launchKind_isLocalDevForAnIdeLaunch() {
+        var stack = stackOf("com.acme.App");
+        var signals = new LaunchSignals("/home/dev/app/target/classes", false);
+
+        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+
+        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.LOCAL_DEV);
+    }
+
+    @Test
+    void launchKind_isDeploymentForAPackagedJar() {
+        var stack = stackOf("com.acme.App");
+        var signals = new LaunchSignals("/opt/app/app.jar", false);
+
+        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+
+        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.DEPLOYMENT);
+    }
+
+    @Test
+    void launchKind_isDeploymentInAContainerDespiteBuildOutput() {
+        var stack = stackOf("com.acme.App");
+        var signals = new LaunchSignals("/app/target/classes", true);
+
+        var kind = LocalDevDetector.launchKind(mainThread(), stack, signals);
+
+        assertThat(kind).isEqualTo(LocalDevDetector.LaunchKind.DEPLOYMENT);
+    }
+
+    private static Thread mainThread() {
+        return Thread.currentThread().getName().equals("main") ? Thread.currentThread() : namedMainThread();
+    }
+
+    private static Thread namedMainThread() {
+        var thread = new Thread(() -> {}, "main");
+        thread.setContextClassLoader(ClassLoader.getSystemClassLoader());
+        return thread;
+    }
+
+    private static StackTraceElement[] stackOf(String... classNames) {
+        return Arrays.stream(classNames)
+                .map(name -> new StackTraceElement(name, "run", null, 1))
+                .toArray(StackTraceElement[]::new);
     }
 
     private static LaunchSignals signals(String... classPathEntries) {

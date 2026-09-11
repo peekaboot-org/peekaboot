@@ -2,14 +2,21 @@ package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.security.DashboardCredentials;
 import org.peekaboot.example.security.PeekabootSecurityConfig;
 import org.peekaboot.testingapp.TestingApp;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -119,5 +126,68 @@ class SecuredPeekabootIT {
     @Test
     void theApplicationsOwnPathsStayAnonymouslyReachable() {
         assertThat(api.statusOf("/persons")).isEqualTo(HttpStatus.OK);
+    }
+
+    /**
+     * The application's chain already authenticates /peekaboot/** so the guard stands down and
+     * the application's own admin credentials keep working - Peekaboot's generated ones are
+     * never required. If the guard were absent this class would fail to autowire
+     * {@link DashboardCredentials} rather than pass by accident.
+     */
+    @Nested
+    @SpringBootTest(
+            classes = {TestingApp.class, PeekabootSecurityConfig.class},
+            webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+            properties = "peekaboot.security.enabled=true")
+    @ActiveProfiles("security")
+    class WithPeekabootsOwnGuardArmed {
+
+        @TempDir
+        static Path credentialsDir;
+
+        @LocalServerPort
+        private int nestedPort;
+
+        @Autowired
+        private DashboardCredentials credentials;
+
+        private PeekabootApi nestedApi;
+
+        @DynamicPropertySource
+        static void credentialsFile(DynamicPropertyRegistry registry) {
+            registry.add(
+                    "peekaboot.security.credentials-file",
+                    () -> credentialsDir.resolve("security.properties").toString());
+        }
+
+        @BeforeEach
+        void connect() {
+            nestedApi = new PeekabootApi(nestedPort);
+        }
+
+        @Test
+        void theApplicationsCredentialsStillOpenTheDashboard() {
+            assertThat(nestedApi.withBasicAuth("admin", "admin-password").statusOf(DASHBOARD_ASSET))
+                    .isEqualTo(HttpStatus.OK);
+        }
+
+        /**
+         * A bad-credentials request never reaches {@code DashboardAuthenticationFilter} at all -
+         * Spring Security's own {@code httpBasic} entry point challenges it directly, before the
+         * request continues down to where Peekaboot's guard is nested (registered at {@code
+         * spring.security.filter.order + 100}). So the 401 alone would pass whether the guard were
+         * armed, stood down, or deleted outright. What pins it on the application's own chain is the
+         * challenge header: Peekaboot's own refusal always carries {@code realm="Peekaboot"} (see
+         * {@code DashboardAuthenticationFilter}), and this one does not.
+         */
+        @Test
+        void peekabootsOwnGeneratedCredentialsAreNeverRequired() {
+            PeekabootApi withGeneratedCredentials =
+                    nestedApi.withBasicAuth(credentials.username(), credentials.plaintext());
+
+            assertThat(withGeneratedCredentials.statusOf(DASHBOARD_ASSET)).isEqualTo(HttpStatus.UNAUTHORIZED);
+            assertThat(withGeneratedCredentials.headersOf(DASHBOARD_ASSET).getFirst("WWW-Authenticate"))
+                    .doesNotContain("realm=\"Peekaboot\"");
+        }
     }
 }

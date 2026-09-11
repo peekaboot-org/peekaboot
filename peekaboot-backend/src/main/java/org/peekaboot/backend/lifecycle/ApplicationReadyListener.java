@@ -18,7 +18,8 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 
-@Order(Ordered.LOWEST_PRECEDENCE)
+// room for SecurityPostureListener, which reports below this banner at LOWEST_PRECEDENCE
+@Order(Ordered.LOWEST_PRECEDENCE - 100)
 public class ApplicationReadyListener implements ApplicationListener<ApplicationReadyEvent> {
 
     private static final Logger logger = LoggerFactory.getLogger(ApplicationReadyListener.class);

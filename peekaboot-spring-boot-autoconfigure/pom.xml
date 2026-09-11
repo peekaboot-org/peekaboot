@@ -92,6 +92,14 @@
         </dependency>
 
         <!-- Test dependencies -->
+        <!-- so PeekabootSecurityAutoConfigurationTest can prove the on-classpath branch of the
+             SecurityContextHolder presence check; the main code holds only its class name as a
+             String and needs no dependency to compile -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- shared test support (LogCapture) -->
         <dependency>
             <groupId>org.peekaboot</groupId>

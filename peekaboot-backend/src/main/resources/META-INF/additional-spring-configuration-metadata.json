@@ -1,0 +1,9 @@
+{
+  "properties": [
+    {
+      "name": "peekaboot.security.deployment-detected",
+      "type": "java.lang.Boolean",
+      "description": "Detected-only: whether the launch context was a deployment, independent of any explicit peekaboot.security.enabled override. Set by Peekaboot's own launch-context detection; an application must never set this itself."
+    }
+  ]
+}
