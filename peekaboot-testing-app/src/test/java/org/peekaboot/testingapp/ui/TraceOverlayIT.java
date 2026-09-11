@@ -13,6 +13,9 @@ import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import io.micrometer.tracing.Span;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -41,6 +45,9 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class TraceOverlayIT extends PlaywrightTestBase {
 
+    /** The colour of the stand-in page header {@link #overlayStacksAboveHostPageChrome} puts on the page. */
+    private static final int HOST_HEADER_RGB = 0x123456;
+
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
@@ -50,6 +57,38 @@ class TraceOverlayIT extends PlaywrightTestBase {
     private void openOverlayFromToolbar() {
         openPersonsPage();
         toolbar.openOverlay();
+    }
+
+    /**
+     * A host page's own chrome routinely stacks above the page flow - Bulma's {@code .navbar}
+     * is {@code z-index: 30}, Bootstrap's {@code .fixed-top} is {@code 1030}. The overlay host
+     * is appended to {@code document.body}, so it has to outrank that on its own or the page's
+     * header paints across the open overlay and hides the overlay's own header row.
+     *
+     * <p>Asserted on the painted pixel rather than on hit testing: the overlay makes its
+     * siblings {@code inert}, which already stops them taking clicks, so
+     * {@code elementFromPoint} names the overlay either way and only paint order tells the two
+     * states apart.
+     */
+    @Test
+    void overlayStacksAboveHostPageChrome() throws IOException {
+        openPersonsPage();
+        page.evaluate("""
+                () => {
+                    const header = document.createElement('div');
+                    header.id = 'host-page-header';
+                    header.style.cssText =
+                        'position:fixed;top:0;left:0;right:0;height:60px;z-index:30;background:#123456';
+                    document.body.prepend(header);
+                }""");
+
+        toolbar.openOverlay();
+
+        BufferedImage screen = ImageIO.read(new ByteArrayInputStream(page.screenshot()));
+        int painted = screen.getRGB(screen.getWidth() / 2, screen.getHeight() / 20) & 0xFFFFFF;
+        assertThat(painted)
+                .as("the host page's header is painting over the open overlay")
+                .isNotEqualTo(HOST_HEADER_RGB);
     }
 
     /**

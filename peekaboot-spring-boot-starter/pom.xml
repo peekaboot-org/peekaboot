@@ -37,6 +37,31 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-opentelemetry</artifactId>
         </dependency>
+
+        <!-- Query capture. A query reaches a trace only because something instruments the
+             DataSource and emits a span per statement; nothing in peekaboot does that, and
+             nothing in peekaboot can tell an uninstrumented DataSource apart from an endpoint
+             that genuinely runs no queries - both read as "0 queries". The starter brings the
+             instrumentation so the Queries tab works out of the box.
+
+             Both wrap the application's own DataSource beans. A host that instruments its
+             DataSource itself excludes them here or sets jdbc.datasource-proxy.enabled=false.
+
+             -opentelemetry is <optional> in -spring-boot's own pom, so it has to be asked for
+             by name. It supplies the convention that tags query spans with the current
+             OpenTelemetry semantics (db.query.text, db.system.name) and gives them their
+             SQL-summary span names; without it the spans carry datasource-micrometer's own
+             jdbc.query[N] tags, which DbSpans reads as well, but less precisely. -->
+        <dependency>
+            <groupId>net.ttddyy.observation</groupId>
+            <artifactId>datasource-micrometer-spring-boot</artifactId>
+            <version>2.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>net.ttddyy.observation</groupId>
+            <artifactId>datasource-micrometer-opentelemetry</artifactId>
+            <version>2.2.1</version>
+        </dependency>
     </dependencies>
 
     <build>

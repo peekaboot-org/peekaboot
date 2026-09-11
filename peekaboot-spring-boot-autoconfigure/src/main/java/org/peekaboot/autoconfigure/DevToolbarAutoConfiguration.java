@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.tomcat.TomcatContextCustomizer;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
@@ -90,6 +91,18 @@ public class DevToolbarAutoConfiguration {
         registration.setName("requestCaptureFilter");
         log.debug("RequestCaptureFilter registered for all URLs");
         return registration;
+    }
+
+    /** See {@link TomcatForwardResponseCustomizer}. */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass({TomcatContextCustomizer.class, org.apache.catalina.Context.class})
+    static class TomcatForwardConfiguration {
+
+        @Bean
+        @ConditionalOnMissingBean
+        TomcatForwardResponseCustomizer tomcatForwardResponseCustomizer() {
+            return new TomcatForwardResponseCustomizer();
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

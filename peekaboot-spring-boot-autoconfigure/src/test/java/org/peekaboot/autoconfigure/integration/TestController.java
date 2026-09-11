@@ -20,6 +20,12 @@ public class TestController {
             """;
     }
 
+    /** A servlet forward, see TomcatForwardResponseCustomizer. */
+    @GetMapping("/forwarded")
+    public String forwardedPage() {
+        return "forward:/test";
+    }
+
     @GetMapping(value = "/api/data", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public String apiData() {
