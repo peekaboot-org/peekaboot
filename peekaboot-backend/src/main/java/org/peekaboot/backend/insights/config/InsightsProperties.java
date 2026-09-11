@@ -9,6 +9,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "peekaboot.insights")
 public class InsightsProperties {
 
+    /**
+     * The widest geometry the snapshot codec accepts. A ring past these bounds would be
+     * written at shutdown and refused as implausible on the next start, so the bound
+     * is enforced here, before the collector ever runs.
+     */
+    public static final int MAX_LEVELS = 16;
+
+    /** The most entries one level's ring may hold; the codec bounds every ring size it reads by this. */
+    public static final int MAX_LEVEL_SIZE = 1_000_000;
+
     /** Whether the collector, the /api/insights endpoints and the Insights tab exist at all; also needs a MeterRegistry bean. */
     private boolean enabled = true;
 
@@ -41,18 +51,30 @@ public class InsightsProperties {
         if (levels == null || levels.isEmpty()) {
             throw new IllegalStateException("peekaboot.insights.levels must contain at least one level");
         }
+        if (levels.size() > MAX_LEVELS) {
+            throw new IllegalStateException("peekaboot.insights.levels: at most " + MAX_LEVELS
+                    + " levels fit the insights.snapshot format (" + levels.size() + " configured)");
+        }
         Level previous = null;
         for (Level level : levels) {
-            if (level.interval == null || level.interval.isZero() || level.interval.isNegative()) {
-                throw new IllegalStateException("peekaboot.insights.levels: interval must be positive");
-            }
-            if (level.size <= 0) {
-                throw new IllegalStateException("peekaboot.insights.levels: size must be > 0");
-            }
+            validateLevel(level);
             if (previous != null) {
                 validateRollUp(level, previous);
             }
             previous = level;
+        }
+    }
+
+    private static void validateLevel(Level level) {
+        if (level.interval == null || level.interval.isZero() || level.interval.isNegative()) {
+            throw new IllegalStateException("peekaboot.insights.levels: interval must be positive");
+        }
+        if (level.size <= 0) {
+            throw new IllegalStateException("peekaboot.insights.levels: size must be > 0");
+        }
+        if (level.size > MAX_LEVEL_SIZE) {
+            throw new IllegalStateException("peekaboot.insights.levels: size must be at most " + MAX_LEVEL_SIZE
+                    + " to fit the insights.snapshot format (" + level.size + " configured)");
         }
     }
 
@@ -177,6 +199,11 @@ public class InsightsProperties {
 
         public void setInterval(Duration interval) {
             this.interval = interval;
+        }
+
+        /** The interval as the rings, the snapshot and the API carry it. */
+        public long intervalMillis() {
+            return interval.toMillis();
         }
 
         public int getSize() {

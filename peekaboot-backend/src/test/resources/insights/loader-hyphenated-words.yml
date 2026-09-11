@@ -1,0 +1,15 @@
+panels:
+  - id: net
+    title: Network
+    chart: bars-line
+    unit: bytes-persec
+    series:
+      - id: in
+        label: In
+        meter: net.bytes.in
+        stat: rate
+      - id: packets
+        label: Packets
+        meter: net.packets.in
+        stat: rate
+        unit: persec

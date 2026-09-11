@@ -10,6 +10,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * shape a real {@code spring.security.oauth2.client.registration} bean has. That starter
  * isn't on this app's classpath, so this fixture reproduces the same nesting without it: see
  * {@code application-test.yml}'s {@code nested-fixture} block for the bound values.
+ *
+ * <p>Enabled by {@code SharedFixturesConfig}, not by the tests that read it: an
+ * {@code @EnableConfigurationProperties} on a test class gives it a Spring context of its own.
  */
 @ConfigurationProperties(prefix = "nested-fixture")
 public record NestedConfigPropertiesFixture(Map<String, Object> registration) {}

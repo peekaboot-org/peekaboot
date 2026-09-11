@@ -5,9 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import ch.qos.logback.classic.Level;
 import java.lang.reflect.RecordComponent;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.config.UiTracingProperties;
 import org.peekaboot.backend.domain.features.Features;
@@ -15,6 +18,9 @@ import org.peekaboot.backend.domain.flyway.MigrationState;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
 import org.peekaboot.backend.domain.trace.IssueType;
 import org.peekaboot.backend.domain.trace.RootActionType;
+import org.peekaboot.backend.insights.config.Chart;
+import org.peekaboot.backend.insights.config.TileFormat;
+import org.peekaboot.backend.insights.config.Unit;
 import org.peekaboot.backend.lifecycle.UptimeFormat;
 import org.peekaboot.backend.masking.MaskingEngine;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
@@ -34,23 +40,13 @@ class SharedModuleIT extends PlaywrightTestBase {
         return evalUiModule("shared/" + module, expression);
     }
 
-    /**
-     * The blank same-origin host page these tests import their modules from. Its status is
-     * asserted because a 404 whitelabel page hosts an {@code import()} just as well as the
-     * fixture does - the suite would stay green with the fixture unreachable.
-     */
-    private void openBlankFixture() {
-        String url = baseUrl + "/peekaboot/ui/pk-blank.html";
-        if (!page.url().equals(url)) {
-            assertThat(page.navigate(url).status()).as("GET %s", url).isEqualTo(200);
-        }
+    private Object evalUiModule(String path, String expression) {
+        return importModule(path, expression);
     }
 
-    private Object evalUiModule(String path, String expression) {
-        openBlankFixture();
-        return page.evaluate(
-                "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
-                List.of("/peekaboot/ui/" + path, expression));
+    /** Runs {@code body}, a function body over the insights store module {@code m}, and returns what it returns. */
+    private Object evalInsightsStore(String body) {
+        return evalUiModule("dashboard/tabs/insights-store.js", "(() => {" + body + "})()");
     }
 
     private static List<String> names(Enum<?>[] constants) {
@@ -98,6 +94,27 @@ class SharedModuleIT extends PlaywrightTestBase {
     void highlightTextWrapsEveryMatchAndEscapesTheRest() {
         assertThat(evalModule("markup.js", "m.highlightText('a<b>a', 'a')"))
                 .isEqualTo("<mark>a</mark>&lt;b&gt;<mark>a</mark>");
+    }
+
+    /** The query is a filter string, so its regex metacharacters mean themselves. */
+    @Test
+    void highlightTextTreatsTheQueryLiterally() {
+        assertThat(evalModule("markup.js", "m.highlightText('a.b (c) [d]', '(c)')"))
+                .isEqualTo("a.b <mark>(c)</mark> [d]");
+        assertThat(evalModule("markup.js", "m.highlightText('a.b', '.')")).isEqualTo("a<mark>.</mark>b");
+    }
+
+    /**
+     * Matched on the original string with Unicode case folding: an upper-case match keeps
+     * its own spelling inside the mark, and a letter whose lower-case form is longer than
+     * itself does not shift the marks that follow it.
+     */
+    @Test
+    void highlightTextFoldsCaseWithoutShiftingLaterMarks() {
+        assertThat(evalModule("markup.js", "m.highlightText('\u00c4rger', '\u00e4')"))
+                .isEqualTo("<mark>\u00c4</mark>rger");
+        assertThat(evalModule("markup.js", "m.highlightText('\u0130x-ab-ab', 'ab')"))
+                .isEqualTo("\u0130x-<mark>ab</mark>-<mark>ab</mark>");
     }
 
     @Test
@@ -232,7 +249,7 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("slow");
         assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'SLOW'}, {type: 'VERY_SLOW'}])"))
                 .isEqualTo("very-slow");
-        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'HIGH_QUERY_COUNT'}])"))
+        assertThat(evalModule("severity.js", "m.issueSeverity([{type: 'ERROR'}])"))
                 .isEqualTo("");
         assertThat(evalModule("severity.js", "m.issueSeverity(undefined)")).isEqualTo("");
     }
@@ -255,8 +272,7 @@ class SharedModuleIT extends PlaywrightTestBase {
 
     @Test
     void migrationStatesMirrorTheBackendEnum() {
-        assertThat(evalUiModule("dashboard/tabs/flyway.js", "m.MIGRATION_STATES"))
-                .isEqualTo(names(MigrationState.values()));
+        assertThat(evalModule("severity.js", "m.MIGRATION_STATES")).isEqualTo(names(MigrationState.values()));
     }
 
     /**
@@ -298,35 +314,46 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalModule("severity.js", "m.healthSeverity('WHATEVER')")).isEqualTo("muted");
     }
 
+    /**
+     * Every root-action type renders an icon of its own: a plain character (an HTML entity
+     * would arrive as literal text through textContent) and distinct from every sibling, so a
+     * mapping that folded two types onto one glyph fails here. The characters themselves are
+     * not pinned - which emoji stands for a database is a design choice, not a contract.
+     */
     @Test
-    void rootActionsExposeIconsAsPlainCharacters() {
+    void rootActionsExposeADistinctPlainCharacterIconPerType() {
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('SCHEDULED_JOB')"))
                 .isEqualTo("Scheduled Job");
         assertThat(evalModule("root-actions.js", "m.rootActionLabel('NOPE')")).isEqualTo("Unknown");
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST').startsWith('&')"))
-                .isEqualTo(false);
-        assertThat(evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.length")).isEqualTo(8);
+
+        @SuppressWarnings("unchecked")
+        List<String> icons = (List<String>) evalModule("root-actions.js", "m.ROOT_ACTION_TYPES.map(m.rootActionIcon)");
+
+        assertThat(icons).hasSameSizeAs(RootActionType.values());
+        assertThat(icons).doesNotHaveDuplicates();
+        assertThat(icons).allSatisfy(icon -> assertThat(icon).isNotBlank().doesNotStartWith("&"));
     }
 
+    /**
+     * The Environment and Config tabs filter on what a row actually reads: the key, or the
+     * value as formatPlainValue renders it. A structured value is therefore matched by its
+     * JSON, and a null value by nothing at all - the row shows "-", and matching the word
+     * "null" would hand back rows whose value is precisely what the reader cannot search for.
+     */
     @Test
-    void rootActionIconsMatchTheExpectedLiteralCharacters() {
-        // Pins every icon explicitly so a mapping swap (e.g. DATABASE <-> RPC_CALL)
-        // fails here instead of slipping through on the "not an entity" check alone.
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('HTTP_REQUEST') === '\\u{1F310}'"))
+    void propertyFilterMatchesTheRenderedValue() {
+        String module = "filtered-group-tab.js";
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server', value: {port: 8080}}, '8080')"))
                 .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('SCHEDULED_JOB') === '\\u{1F551}'"))
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server', value: {port: 8080}}, 'PORT')"))
                 .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('MESSAGE_CONSUMER') === '\\u{1F4E9}'"))
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.address', value: null}, 'null')"))
+                .isEqualTo(false);
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.address', value: null}, 'ADDRESS')"))
                 .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('RPC_CALL') === '\\u{1F517}'"))
+        assertThat(evalModule(module, "m.propertyMatches({key: 'spring.profiles', value: 'PROD'}, 'prod')"))
                 .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('DATABASE') === '\\u{1F5C2}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('CONNECTION_POOL') === '\\u{1F50C}'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('INTERNAL') === '⚙'"))
-                .isEqualTo(true);
-        assertThat(evalModule("root-actions.js", "m.rootActionIcon('UNKNOWN') === '❓'"))
+        assertThat(evalModule(module, "m.propertyMatches({key: 'server.port', value: 8080}, '')"))
                 .isEqualTo(true);
     }
 
@@ -407,28 +434,35 @@ class SharedModuleIT extends PlaywrightTestBase {
     @Test
     void formatDateTimeTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isNotEqualTo("-");
+                .isEqualTo("Jan 1, 1970, 12:00 AM");
     }
 
     /**
-     * The dashboard header's "Updated ..." readout passes hour/minute/second only; a
-     * date-first formatter would still prepend the day, which that one-line readout has
-     * no room for.
+     * The dashboard header's "Updated ..." readout passes hour/minute/second only; the
+     * options given are the whole set, so no date-first default prepends the day the
+     * one-line readout has no room for.
      */
     @Test
-    void formatDateTimeWithTimeOnlyOptionsRendersNoDate() {
+    void formatDateTimeWithRendersExactlyTheOptionsGiven() {
         String time = (String) evalModule(
                 "format.js",
-                "m.formatDateTime(0, {locale: 'en-US', timeZone: 'UTC',"
-                        + " hour: '2-digit', minute: '2-digit', second: '2-digit'})");
+                "m.formatDateTimeWith(0, {hour: '2-digit', minute: '2-digit', second: '2-digit'},"
+                        + " {locale: 'en-US', timeZone: 'UTC'})");
         assertThat(time).contains("12:00:00");
         assertThat(time).doesNotContain("1970").doesNotContain("Jan");
+    }
+
+    /** formatTimeOfDay is formatDateTimeWith at millisecond precision: no date, three fraction digits. */
+    @Test
+    void formatTimeOfDayRendersTheTimeToTheMillisecond() {
+        assertThat(evalModule("format.js", "m.formatTimeOfDay(1500, {locale: 'en-US', timeZone: 'UTC'})"))
+                .isEqualTo("00:00:01.500");
     }
 
     @Test
     void formatTimeOfDayTreatsEpochZeroAsAValidTimestamp() {
         assertThat(evalModule("format.js", "m.formatTimeOfDay(0, {locale: 'en-US', timeZone: 'UTC'})"))
-                .isNotEqualTo("-");
+                .isEqualTo("00:00:00.000");
     }
 
     /**
@@ -502,11 +536,21 @@ class SharedModuleIT extends PlaywrightTestBase {
      */
     @Test
     void formatLongDurationMirrorsTheBackendsUptimeFormat() {
-        long ms = 93_784_000L;
-        assertThat(evalModule("format.js", "m.formatLongDuration(" + ms + ")"))
-                .isEqualTo(UptimeFormat.humanize(Duration.ofMillis(ms)));
-        assertThat(evalModule("format.js", "m.formatLongDuration(45000)"))
-                .isEqualTo(UptimeFormat.humanize(Duration.ofSeconds(45)));
+        // The cases UptimeFormatTest pins on the Java side: singular units, an exact unit
+        // standing alone, a zero unit left out rather than padded, and a run too short to
+        // measure. Each is a place the two implementations could drift apart on their own.
+        for (Duration uptime : List.of(
+                Duration.ofSeconds(45),
+                Duration.ofSeconds(1),
+                Duration.ofHours(1),
+                Duration.ofHours(2),
+                Duration.ofDays(1).plusHours(2).plusMinutes(3).plusSeconds(4),
+                Duration.ofDays(1).plusMinutes(3),
+                Duration.ZERO)) {
+            assertThat(evalModule("format.js", "m.formatLongDuration(" + uptime.toMillis() + ")"))
+                    .as("%s", uptime)
+                    .isEqualTo(UptimeFormat.humanize(uptime));
+        }
     }
 
     /**
@@ -520,30 +564,25 @@ class SharedModuleIT extends PlaywrightTestBase {
     void insightsStoreAppendsTicksWithGapNullsAndIgnoresStaleOnes() {
         String setup = "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
                 + " series: {a: {values: [1, 2, 3]}}}, 5);";
-        assertThat(evalUiModule(
-                        "dashboard/tabs/insights-store.js",
-                        setup
-                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
-                                + " JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs])"))
+        assertThat(evalInsightsStore(setup
+                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4, b: 7}});"
+                        + " return JSON.stringify([s.series.a, s.series.b, s.count, s.endEpochMs]);"))
                 .isEqualTo("[[2,3,null,null,4],[null,null,null,null,7],5,13000]");
-        assertThat(evalUiModule(
-                        "dashboard/tabs/insights-store.js",
-                        setup
-                                + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
-                                + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
-                                + " JSON.stringify(s.series.a)"))
+        assertThat(evalInsightsStore(setup
+                        + " m.appendTick(s, {epochMs: 13000, values: {a: 4}});"
+                        + " m.appendTick(s, {epochMs: 12000, values: {a: 9}});"
+                        + " return JSON.stringify(s.series.a);"))
                 .isEqualTo("[2,3,null,null,4]");
     }
 
     @Test
     void insightsStoreAppendsRollupsPerStat() {
         assertThat(
-                        evalUiModule(
-                                "dashboard/tabs/insights-store.js",
+                        evalInsightsStore(
                                 "const r = m.normalizeLevel({level: 1, intervalMs: 60000, endEpochMs: 60000, count: 1,"
                                         + " series: {a: {stats: {min: [1], max: [3], avg: [2]}}}}, 4);"
                                         + " m.appendRollup(r, {level: 1, epochMs: 120000, entries: {a: {min: 0, max: 5, avg: 2.5}}});"
-                                        + " JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count])"))
+                                        + " return JSON.stringify([r.series.a.min, r.series.a.max, r.series.a.avg, r.series.a.p99, r.count]);"))
                 .isEqualTo("[[1,0],[3,5],[2,2.5],[null],2]");
     }
 
@@ -559,5 +598,103 @@ class SharedModuleIT extends PlaywrightTestBase {
         assertThat(evalUiModule(
                         "dashboard/tabs/insights-store.js", "m.missedSamples(" + snapshot + ", {epochMs: 20000})"))
                 .isEqualTo(5);
+    }
+
+    /**
+     * A gap longer than the ring itself leaves nothing of the old samples: the mirror is
+     * the newest sample behind a ring's worth of nulls, and the count is the ring size.
+     */
+    @Test
+    void insightsStoreCapsAGapLongerThanTheRingAtTheRingSize() {
+        assertThat(evalInsightsStore(
+                        "const s = m.normalizeLevel({level: 0, intervalMs: 1000, endEpochMs: 10000, count: 3,"
+                                + " series: {a: {values: [1, 2, 3]}}}, 5);"
+                                + " m.appendTick(s, {epochMs: 99000, values: {a: 4}});"
+                                + " return JSON.stringify([s.series.a, s.count]);"))
+                .isEqualTo("[[null,null,null,null,4],5]");
+    }
+
+    /**
+     * The panel vocabulary is typed on the backend (Chart, Unit, TileFormat) and read as
+     * literals by format.js and insights-chart.js; the wire words must not drift apart.
+     */
+    @Test
+    void panelVocabularyMirrorsTheBackendEnums() {
+        assertThat(evalModule("format.js", "m.METRIC_UNITS"))
+                .isEqualTo(Stream.of(Unit.values()).map(Unit::wireName).toList());
+        assertThat(evalModule("format.js", "m.TILE_FORMATS"))
+                .isEqualTo(
+                        Stream.of(TileFormat.values()).map(TileFormat::wireName).toList());
+        assertThat(evalUiModule("dashboard/tabs/insights-chart.js", "m.CHART_TYPES"))
+                .isEqualTo(Stream.of(Chart.values()).map(Chart::wireName).toList());
+    }
+
+    /**
+     * insights-colors.js repeats tokens.css's light values, for a chart drawn in a document
+     * whose stylesheet never applied. A recolour of a token would leave those copies painting
+     * the old palette, silently and only on that path. {@code --pk-font} is out: it falls back
+     * to a short system stack rather than to tokens.css's full one.
+     */
+    @Test
+    void insightsChartFallbacksMirrorTheLightThemeTokens() {
+        @SuppressWarnings("unchecked")
+        Map<String, String> fallbacks = new LinkedHashMap<>(
+                (Map<String, String>) evalUiModule("dashboard/tabs/insights-colors.js", "m.LIGHT_FALLBACKS"));
+        fallbacks.remove("--pk-font");
+
+        setStoredTheme("light");
+        openDashboard();
+
+        assertThat(fallbacks)
+                .isNotEmpty()
+                .allSatisfy((token, fallback) -> assertThat(cssVar(":root", token))
+                        .as("%s in tokens.css's light block", token)
+                        .isEqualTo(fallback));
+    }
+
+    /**
+     * ToolbarShell links the three shared sheets shadow-styles.js links into the overlay,
+     * then the bar's own: the two lists must name the same files in the same order, or the
+     * bar and the overlay drift apart in cascade.
+     */
+    @Test
+    void toolbarLinksTheSharedSheetsTheOverlayLinks() {
+        @SuppressWarnings("unchecked")
+        List<String> shared = (List<String>) evalModule("shadow-styles.js", "m.SHARED_SHEETS");
+        List<String> expected = new ArrayList<>(
+                shared.stream().map(name -> "/peekaboot/ui/assets/" + name).toList());
+        expected.add("/peekaboot/ui/toolbar/toolbar.css");
+
+        openPersonsPage();
+        Object linked = toolbar.evaluate(
+                "root => [...root.querySelectorAll('link[rel=\"stylesheet\"]')].map(link => link.getAttribute('href'))");
+
+        assertThat(linked).isEqualTo(expected);
+    }
+
+    /**
+     * Every unit a series or tile can carry, so a chart's axis and a tile's readout cannot
+     * silently render a raw number. percent is the one that scales (the backend ships 0..1),
+     * and the two rate units are the only ones with a suffix.
+     */
+    @Test
+    void formatMetricValueRendersEveryUnitItsOwnWay() {
+        assertThat(evalModule("format.js", "m.formatMetricValue(1536, 'bytes')"))
+                .isEqualTo("1.50 KB");
+        assertThat(evalModule("format.js", "m.formatMetricValue(0.42, 'percent')"))
+                .isEqualTo("42.0%");
+        assertThat(evalModule("format.js", "m.formatMetricValue(1500, 'millis')"))
+                .isEqualTo("1.50s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(12.345, 'persec')"))
+                .isEqualTo("12/s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(2048, 'bytes-persec')"))
+                .isEqualTo("2.00 KB/s");
+        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'count')")).isEqualTo("7");
+        assertThat(evalModule("format.js", "m.formatMetricValue(7, 'no-such-unit')"))
+                .as("an unknown unit falls back to the count format rather than to nothing")
+                .isEqualTo("7");
+        assertThat(evalModule("format.js", "m.formatMetricValue(null, 'bytes')"))
+                .isEqualTo("-");
+        assertThat(evalModule("format.js", "m.formatMetricValue(NaN, 'bytes')")).isEqualTo("-");
     }
 }

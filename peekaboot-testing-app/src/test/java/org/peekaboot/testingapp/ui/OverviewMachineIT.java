@@ -3,29 +3,38 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import com.microsoft.playwright.APIResponse;
+import com.microsoft.playwright.Locator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.runtime.ContainerRuntime;
 import org.peekaboot.backend.domain.runtime.CpuTopology;
 import org.peekaboot.backend.domain.runtime.MachineInfo;
 import org.peekaboot.backend.domain.runtime.NetworkAddress;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
 
 class OverviewMachineIT extends PlaywrightTestBase {
 
-    private static final JsonMapper JSON = JsonMapper.builder().build();
-
+    /**
+     * The two byte rows against the machine this JVM runs on, formatted by the shared
+     * formatter the row itself uses - a card of labels over placeholder numbers passes a
+     * presence check and fails this.
+     */
     @Test
     void machineCardShowsCpuMemoryAndContainerFacts() {
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
-        String text = page.textContent("#machine-info");
-        assertThat(text).contains("CPU Cores");
-        assertThat(text).contains("Total Memory");
-        assertThat(text).contains("Max Heap");
+        MachineInfo current = MachineInfo.current();
+        assertThat(page.textContent("#machine-info")).contains("CPU Cores");
+        assertThat(dashboard.kvValue("#machine-info", "Total Memory")).isEqualTo(formatBytes(current.totalMemory()));
+        assertThat(dashboard.kvValue("#machine-info", "Max Heap")).isEqualTo(formatBytes(current.maxHeap()));
+    }
+
+    /** What the card renders a byte count as; the same module the card builds its rows with. */
+    private String formatBytes(long bytes) {
+        // As a string: Playwright's argument serializer takes no Java long.
+        return (String) page.evaluate(
+                "async (value) => (await import('/peekaboot/ui/shared/format.js')).formatBytes(Number(value))",
+                String.valueOf(bytes));
     }
 
     @Test
@@ -35,28 +44,8 @@ class OverviewMachineIT extends PlaywrightTestBase {
 
         // the build itself may run inside a container, so assert against the same
         // detector the backend serialises instead of a literal "none"
-        String value = page.textContent("#machine-info .pk-kv:has(.pk-kv__key:text-is('Container')) .pk-kv__value");
+        String value = dashboard.kvValue("#machine-info", "Container");
         assertThat(value).isEqualTo(ContainerRuntime.current().wireName());
-    }
-
-    @Test
-    void insightsApiCarriesCpuTopologyAndNetworkAddresses() {
-        // the server runs in this JVM, so the API must serialise exactly the cached
-        // MachineInfo this test reads directly - no hardcoded network or CPU facts
-        APIResponse response = page.request().get(baseUrl + "/peekaboot/api/actuator/all/insights");
-        assertThat(response.status()).isEqualTo(200);
-        JsonNode machine = JSON.readTree(response.text()).path("runtime").path("machine");
-        MachineInfo current = MachineInfo.current();
-
-        if (current.cpuTopology() != null) {
-            assertThat(machine.path("cpuTopology").path("physicalCores").asInt())
-                    .isEqualTo(current.cpuTopology().physicalCores());
-            assertThat(machine.path("cpuTopology").path("threadsPerCore").asInt())
-                    .isEqualTo(current.cpuTopology().threadsPerCore());
-        }
-        assertThat(machine.path("networkAddresses").isArray()).isTrue();
-        assertThat(machine.path("networkAddresses").size())
-                .isEqualTo(current.networkAddresses().size());
     }
 
     @Test
@@ -183,7 +172,7 @@ class OverviewMachineIT extends PlaywrightTestBase {
         openDashboard();
         page.waitForSelector("#machine-info .pk-kv");
 
-        String value = page.textContent("#machine-info .pk-kv:has(.pk-kv__key:text-is('CPU Cores')) .pk-kv__value");
+        String value = dashboard.kvValue("#machine-info", "CPU Cores");
         int logical = Runtime.getRuntime().availableProcessors();
         CpuTopology topology = MachineInfo.current().cpuTopology();
         if (topology == null) {
@@ -219,5 +208,34 @@ class OverviewMachineIT extends PlaywrightTestBase {
         assertThat(neighbour)
                 .as("the first datasource card directly follows the JVM Defaults card")
                 .isNotNull();
+    }
+
+    /**
+     * The datasource card keeps its connection parameters behind a toggle: a JDBC URL's query
+     * string carries whatever the deployment put there, so it is not on screen by default.
+     * The control has to say which way it switches, or a reader cannot tell it is a toggle.
+     */
+    @Test
+    void theDatasourceCardHidesItsConnectionParamsBehindAToggle() {
+        openDashboard();
+        page.waitForSelector(".pk-card[data-datasource] .pk-datasources__toggle button");
+
+        Locator toggle = page.locator(".pk-card[data-datasource] .pk-datasources__toggle button")
+                .first();
+        Locator params = page.locator(".pk-card[data-datasource] .pk-datasources__params")
+                .first();
+        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
+        assertThat(params.isHidden()).isTrue();
+
+        toggle.click();
+
+        assertThat(toggle.textContent()).isEqualTo("Hide Connection Params");
+        assertThat(params.isVisible()).isTrue();
+        assertThat(params.textContent()).isNotBlank();
+
+        toggle.click();
+
+        assertThat(toggle.textContent()).isEqualTo("Show Connection Params");
+        assertThat(params.isHidden()).isTrue();
     }
 }

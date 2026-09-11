@@ -34,24 +34,15 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      * <p>Fired per test through the scheduler's own runnable rather than relying on the
      * boot-time run: every /?error=true and /boom the concurrent classes issue pushes an
      * older error trace further down the list, so only a freshly minted one is guaranteed
-     * to be found. The poll matches on the root span's name, which is what proves the
-     * trace's spans - exported asynchronously, unlike its logs - have landed.
+     * to be found. DashboardTabsIT fires the same job against the same store, so the wait
+     * names the run this call fired rather than any trace of that job. The listing names a
+     * trace by its root span, so a listed match proves the spans - exported asynchronously,
+     * unlike the logs - have landed.
      */
     private String freshFixedRateSchedulerTraceId() {
-        ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate");
-        openDashboard();
-        return (String) page.evaluate("""
-                async () => {
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const response = await fetch('/peekaboot/api/traces/insights?bucket=errors&limit=50');
-                        const result = await response.json();
-                        const match = (result.traces || []).find(t => (t.rootSpan?.name || '').includes('fixedRate'));
-                        if (match) return match.traceId;
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no scheduler.fixedRate trace reached the errors bucket within 15s');
-                }
-                """);
+        String traceId =
+                awaitErrorLoggingJobRun(() -> ScheduledJobs.run(scheduledTaskHolder, Scheduler.class, "fixedRate"));
+        return awaitListedTrace("bucket=errors&limit=50", "trace => trace.traceId === '" + traceId + "'");
     }
 
     @Test
@@ -118,16 +109,15 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
         // Establishes a real pushed '#traces' history entry - the state Back below must
         // land on once it unwinds the trace-open, tab-switch and filter-change entry that
         // were all written via replaceState.
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
         // Deep-link (rather than clicking the trace's own open button): a real navigation,
         // like Back/Forward, so this test can drive main.js's hash-routing path - the one
         // that threads urlState into the overlay - the same way deepLinkOpensTheRequestedTab
         // and revisitingAnAlreadyOpenTraceAfterSwitchingDoesNotRebuildTheOverlay do.
         page.evaluate("id => { window.location.hash = '#traces/' + id; }", traceId);
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        overlay.awaitTrace(traceId);
         overlay.openTab("logs");
         overlay.waitFor("#pk-log-level");
 
@@ -188,15 +178,14 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void clickingATraceRowThenSwitchingTabsUpdatesTheUrl() {
+        openPersonsPage();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
         openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
-        String traceId =
-                (String) page.evaluate("() => document.querySelector('#traces-list .pk-trace-item').dataset.traceId");
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
-        page.click("#traces-list .pk-trace-item__open");
-        page.waitForFunction(
-                "id => document.getElementById('peekaboot-trace-overlay')?.dataset.traceId === id", traceId);
+        dashboard.openListedTrace(traceId);
         overlay.openTab("request");
 
         assertThat(page.url()).endsWith("#traces/" + traceId + "/request");
@@ -214,7 +203,6 @@ class TraceDeepLinkIT extends PlaywrightTestBase {
      */
     @Test
     void logsTextAndLevelFiltersSurviveChangingTheSpanFilter() {
-        setStoredTheme("light");
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.openLogsTab();

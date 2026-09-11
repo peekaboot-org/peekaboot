@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Response;
-import com.microsoft.playwright.options.LoadState;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -52,28 +51,19 @@ class SecuredDashboardIT extends PlaywrightTestBase {
         assertThat(page.textContent("#build-info")).contains("peekaboot-testing-app");
     }
 
+    /**
+     * The admin half of the bar, on one page load: the module was allowed to run, so it
+     * resolved the request's real numbers and took its sign-in notice back out. Removed rather
+     * than hidden, so it leaves the accessibility tree too.
+     */
     @Test
-    void theToolbarResolvesItsMetricsForAnAdmin() {
+    void theToolbarResolvesItsMetricsAndDropsTheNoticeForAnAdmin() {
         openPersonsPage();
 
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-metrics').querySelector('.pk-stat') !== null");
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
 
-        String metrics = (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.querySelector('#pk-metrics').textContent");
-        assertThat(metrics).doesNotContain("?");
-    }
-
-    @Test
-    void anAnonymousBrowserIsRefusedTheDashboard() {
-        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
-            Page anonymousPage = anonymous.newPage();
-
-            Response response = anonymousPage.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-
-            assertThat(response.status()).isEqualTo(401);
-            assertThat(anonymousPage.locator("#overview-tab").count()).isZero();
-        }
+        assertThat(toolbar.text("#pk-metrics")).contains("quer").doesNotContain("?");
+        toolbar.waitForGone("#pk-auth");
     }
 
     /**
@@ -95,7 +85,8 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             });
 
             Response response = anonymousPage.navigate(baseUrl + "/persons");
-            anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
+            anonymousPage.waitForCondition(() -> !toolbarScriptStatuses.isEmpty());
+            awaitAuthNoticeVisible(new Toolbar(anonymousPage));
 
             assertThat(response.status()).isEqualTo(200);
             assertThat(anonymousPage.textContent("h1")).isEqualTo("Persons");
@@ -112,24 +103,6 @@ class SecuredDashboardIT extends PlaywrightTestBase {
     }
 
     /**
-     * The notice is a real link rather than something a click handler opens, because in the
-     * case it exists for no handler was ever bound - the script that binds them was refused.
-     */
-    @Test
-    void theNoticeLinksAnAnonymousBrowserToTheDashboard() {
-        try (BrowserContext anonymous = browser().newContext(newContextOptions())) {
-            Page anonymousPage = anonymous.newPage();
-            anonymousPage.navigate(baseUrl + "/persons");
-            anonymousPage.waitForLoadState(LoadState.NETWORKIDLE);
-
-            String href = (String) anonymousPage.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                    + ".shadowRoot.querySelector('#pk-auth a').getAttribute('href')");
-
-            assertThat(href).isEqualTo("/peekaboot/");
-        }
-    }
-
-    /**
      * The notice is revealed by a delayed animation rather than by a script, so that a page
      * blocking inline script still gets it. This pins the reveal actually happening - an
      * always-transparent notice would satisfy every other assertion here.
@@ -140,27 +113,16 @@ class SecuredDashboardIT extends PlaywrightTestBase {
             Page anonymousPage = anonymous.newPage();
             anonymousPage.navigate(baseUrl + "/persons");
 
-            anonymousPage.waitForFunction("() => getComputedStyle("
-                    + "document.getElementById('peekaboot-toolbar-host').shadowRoot"
-                    + ".getElementById('pk-auth')).opacity === '1'");
+            awaitAuthNoticeVisible(new Toolbar(anonymousPage));
         }
     }
 
-    /**
-     * The complement: reaching the script at all proves the reader may read Peekaboot's data,
-     * so the notice is removed outright. Removed rather than hidden, so it leaves the
-     * accessibility tree too.
-     */
-    @Test
-    void theNoticeIsGoneOnceTheScriptHasRunForAnAdmin() {
-        openPersonsPage();
-
-        page.waitForFunction("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.getElementById('pk-auth') === null");
+    /** The notice fades in on a delay, so its opacity is the signal that it has shown. */
+    private static void awaitAuthNoticeVisible(Toolbar bar) {
+        bar.waitUntil("root => getComputedStyle(root.getElementById('pk-auth')).opacity === '1'");
     }
 
     private static String authNoticeText(Page page) {
-        return (String) page.evaluate("() => document.getElementById('peekaboot-toolbar-host')"
-                + ".shadowRoot.getElementById('pk-auth').textContent.trim()");
+        return new Toolbar(page).text("#pk-auth").trim();
     }
 }

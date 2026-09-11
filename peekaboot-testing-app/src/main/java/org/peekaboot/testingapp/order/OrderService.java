@@ -48,8 +48,8 @@ public class OrderService {
     }
 
     /**
-     * Deliberate N+1: one query for the orders, then three per order. Trips the
-     * high-trace-query-count threshold so the Traces tab has a warning to render.
+     * Deliberate N+1: one query for the orders, then three per order, so the Traces tab has a
+     * page with a query count worth looking at.
      */
     public List<OrderSummary> listOrders() {
 
@@ -62,9 +62,12 @@ public class OrderService {
 
         List<OrderSummary> summaries = new ArrayList<>();
         for (CustomerOrder order : orders) {
+            // Three queries where one would do, and the last two answer questions already
+            // answered: lines.size() is the count, and an order loaded a moment ago still
+            // exists. They are here to pad the trace's query count - padding, not a bug.
             List<OrderLine> lines = orderLineRepository.findByOrderId(order.getId());
             long lineCount = orderLineRepository.countByOrderId(order.getId());
-            boolean known = orderRepository.existsById(order.getId());
+            orderRepository.existsById(order.getId());
 
             BigDecimal total = lines.stream()
                     .map(line -> line.getUnitPrice().multiply(BigDecimal.valueOf(line.getQuantity())))
@@ -73,7 +76,7 @@ public class OrderService {
             summaries.add(new OrderSummary(
                     order.getId(),
                     order.getReference(),
-                    known ? order.getStatus() : "UNKNOWN",
+                    order.getStatus(),
                     order.getPlacedAt(),
                     (int) lineCount,
                     total,

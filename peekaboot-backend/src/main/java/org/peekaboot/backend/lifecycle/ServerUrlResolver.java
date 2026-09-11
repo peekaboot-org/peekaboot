@@ -16,8 +16,6 @@ public class ServerUrlResolver {
 
     private static final String SPRINGDOC_MARKER_CLASS = "org.springdoc.core.properties.SwaggerUiConfigProperties";
 
-    private static final String DEFAULT_SWAGGER_UI_PATH = "/swagger-ui.html";
-
     // Looked up by name rather than by type: resolving PeekabootWebConfig.class would load
     // WebMvcConfigurer, and spring-webmvc is optional - absent from a reactive application,
     // which still reaches this resolver.
@@ -67,7 +65,8 @@ public class ServerUrlResolver {
     private String buildBaseUrl(int port) {
         String scheme = sslEnabled() ? "https" : "http";
         String host = resolveHost();
-        String contextPath = normalizeContextPath(environment.getProperty("server.servlet.context-path", ""));
+        String contextPath =
+                PeekabootPaths.normaliseContextPath(environment.getProperty("server.servlet.context-path", ""));
         return scheme + "://" + host + ":" + port + contextPath;
     }
 
@@ -91,21 +90,10 @@ public class ServerUrlResolver {
         return host;
     }
 
-    private static String normalizeContextPath(String contextPath) {
-        if (contextPath == null || contextPath.isBlank() || "/".equals(contextPath)) {
-            return "";
-        }
-        String normalized = contextPath.startsWith("/") ? contextPath : "/" + contextPath;
-        while (normalized.endsWith("/")) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
-        return normalized;
-    }
-
     private String swaggerUiPath() {
         String configured = environment.getProperty("springdoc.swagger-ui.path");
         if (configured == null || configured.isBlank()) {
-            return DEFAULT_SWAGGER_UI_PATH;
+            return PeekabootPaths.DEFAULT_SWAGGER_UI_PATH;
         }
         return configured.startsWith("/") ? configured : "/" + configured;
     }

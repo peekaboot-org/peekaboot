@@ -68,12 +68,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Configuration processor for IDE support -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <optional>true</optional>
-        </dependency>
         <dependency>
             <groupId>net.osslabz</groupId>
             <artifactId>jdbc-url-parser</artifactId>
@@ -113,6 +107,12 @@
         <dependency>
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- the SDK's own SpanData fixture for the exporter tests; versioned by the BOM -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- full servlet stack for unit tests (main deps are optional) -->
@@ -177,28 +177,6 @@
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>
-            <!-- resolves org.mockito:mockito-core:jar to its local repo path so
-                 surefire can register it as a Java agent below, avoiding the
-                 inline-mock-maker's self-attach warning -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>mockito-agent-path</id>
-                        <goals>
-                            <goal>properties</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
-                </configuration>
             </plugin>
         </plugins>
     </build>

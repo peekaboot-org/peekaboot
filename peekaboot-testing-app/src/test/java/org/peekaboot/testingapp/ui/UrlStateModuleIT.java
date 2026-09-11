@@ -2,7 +2,6 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -12,12 +11,7 @@ import org.junit.jupiter.api.Test;
 class UrlStateModuleIT extends PlaywrightTestBase {
 
     private Object evalModule(String expression) {
-        if (!page.url().equals(baseUrl + "/peekaboot/ui/pk-blank.html")) {
-            page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-        }
-        return page.evaluate(
-                "async ([mod, expr]) => { const m = await import(mod); return eval(expr); }",
-                List.of("/peekaboot/ui/shared/url-state.js", expression));
+        return importModule("shared/url-state.js", expression);
     }
 
     @Test
@@ -53,5 +47,12 @@ class UrlStateModuleIT extends PlaywrightTestBase {
         // A subview is only ever emitted alongside a detail segment.
         assertThat(evalModule("m.buildAppHash({tab: 'traces', subview: 'logs'})"))
                 .isEqualTo("#traces");
+    }
+
+    /** Only the first '?' starts the query: a later one belongs to a param value. */
+    @Test
+    void parseAppHashSplitsAtTheFirstQuestionMarkOnly() {
+        assertThat(evalModule("JSON.stringify(m.parseAppHash('#loggers?q=what?'))"))
+                .isEqualTo("{\"tab\":\"loggers\",\"detail\":null,\"subview\":null,\"params\":{\"q\":\"what?\"}}");
     }
 }

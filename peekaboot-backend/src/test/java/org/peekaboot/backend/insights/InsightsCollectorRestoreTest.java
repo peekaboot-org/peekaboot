@@ -2,6 +2,7 @@ package org.peekaboot.backend.insights;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.peekaboot.backend.testsupport.SeriesDefs.value;
 
 import ch.qos.logback.classic.Level;
 import io.micrometer.core.instrument.Gauge;
@@ -12,13 +13,16 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.insights.config.InsightsProperties;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 
 class InsightsCollectorRestoreTest {
@@ -26,9 +30,8 @@ class InsightsCollectorRestoreTest {
     private static InsightsCollector collector(String... seriesIds) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> 7).register(registry);
-        List<SeriesDef> series = List.of(seriesIds).stream()
-                .map(id -> new SeriesDef(id, id, "g", Map.<String, String>of(), "value", null, null))
-                .toList();
+        List<SeriesDef> series =
+                List.of(seriesIds).stream().map(id -> value(id, "g")).toList();
         return new InsightsCollector(
                 List.of(
                         InsightsProperties.Level.of(Duration.ofSeconds(10), 90),
@@ -36,7 +39,8 @@ class InsightsCollectorRestoreTest {
                 series,
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP);
+                InsightsCollectors.noOpListener(),
+                InsightsCollectors.noSnapshot());
     }
 
     @Test
@@ -68,8 +72,7 @@ class InsightsCollectorRestoreTest {
 
         double[][] level1 = source.capture().series().get("cpu.process").get(1);
 
-        assertThat(InsightsSnapshot.STAT_COLUMNS.indexOf("samples")).isEqualTo(7);
-        assertThat(level1[7]).containsExactly(2.0);
+        assertThat(level1[InsightsSnapshot.STAT_COLUMNS.indexOf("samples")]).containsExactly(2.0);
     }
 
     @Test
@@ -146,27 +149,34 @@ class InsightsCollectorRestoreTest {
 
     /** One level, one series on gauge "g" fixed at {@code gaugeValue} - the collector's live reading. */
     private static InsightsCollector collector(long gaugeValue, InsightsCollector.SnapshotSource source) {
+        return collector(gaugeValue, source, System::currentTimeMillis);
+    }
+
+    private static InsightsCollector collector(
+            long gaugeValue, InsightsCollector.SnapshotSource source, LongSupplier clock) {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         Gauge.builder("g", () -> gaugeValue).register(registry);
         return new InsightsCollector(
                 List.of(InsightsProperties.Level.of(Duration.ofMillis(100), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(value("cpu.process", "g")),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP,
-                source);
+                InsightsCollectors.noOpListener(),
+                source,
+                clock);
     }
 
     @Test
     void theFirstTickAppliesWhateverThePersistedSnapshotHeld() throws Exception {
-        InsightsCollector source = collector(7, InsightsCollector.SnapshotSource.NONE);
-        // real wall-clock epoch: restore() also restores endEpochMs, and the live collector's
-        // own first tick fills any gap between it and "now" - keep that gap tiny so it stays a
-        // no-op rather than flooding the restored ring with NaNs.
-        source.tick(System.currentTimeMillis());
+        InsightsCollector source = collector(7, InsightsCollectors.noSnapshot());
+        source.tick(100_000);
         InsightsSnapshot persisted = source.capture();
 
-        InsightsCollector collector = collector(1, timeout -> Optional.of(persisted));
+        // the live clock advances one interval per read, so the first live tick lands on the
+        // boundary right after the persisted one and every later tick on the next: no gap for
+        // the collector to pad with NaN
+        AtomicLong clock = new AtomicLong(99_900);
+        InsightsCollector collector = collector(1, timeout -> Optional.of(persisted), () -> clock.addAndGet(100));
         collector.start();
         try {
             awaitLevel0Samples(collector, 2); // the restored 7 and at least one live tick
@@ -174,11 +184,9 @@ class InsightsCollectorRestoreTest {
             collector.stop();
         }
 
-        // oldest entry is the persisted 7, everything ticked live afterwards is the gauge's 1
         double[] ticks = collector.snapshot(0).tickValues().get("cpu.process");
-        assertThat(ticks).hasSizeGreaterThan(1);
         assertThat(ticks[0]).isEqualTo(7.0);
-        assertThat(ticks[ticks.length - 1]).isEqualTo(1.0);
+        assertThat(Arrays.copyOfRange(ticks, 1, ticks.length)).isNotEmpty().containsOnly(1.0);
     }
 
     @Test
@@ -198,6 +206,10 @@ class InsightsCollectorRestoreTest {
         assertThat(ticks).containsOnly(1.0);
     }
 
+    /**
+     * Every level thread passes the barrier before its first write; the two arriving together
+     * is {@link SnapshotRestoreBarrierTest}'s subject, this pins that later writes never ask again.
+     */
     @Test
     void theSourceIsAskedOnlyOnceHoweverManyTicksFollow() throws Exception {
         AtomicInteger asked = new AtomicInteger();
@@ -207,17 +219,12 @@ class InsightsCollectorRestoreTest {
                 List.of(
                         InsightsProperties.Level.of(Duration.ofMillis(100), 20),
                         InsightsProperties.Level.of(Duration.ofMillis(500), 20)),
-                List.of(new SeriesDef("cpu.process", "cpu", "g", Map.of(), "value", null, null)),
+                List.of(value("cpu.process", "g")),
                 List.of(),
                 registry,
-                InsightsCollector.Listener.NO_OP,
+                InsightsCollectors.noOpListener(),
                 timeout -> {
                     asked.incrementAndGet();
-                    try {
-                        Thread.sleep(80); // widens the window the other level thread can race into
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                    }
                     return Optional.empty();
                 });
         collector.start();
@@ -225,7 +232,7 @@ class InsightsCollectorRestoreTest {
             // both level threads have been through the barrier once each has written
             await().atMost(Duration.ofSeconds(5))
                     .pollInterval(Duration.ofMillis(20))
-                    .until(() -> collector.snapshot(0).count() >= 1
+                    .until(() -> collector.snapshot(0).count() >= 3
                             && collector.snapshot(1).count() >= 1);
         } finally {
             collector.stop();

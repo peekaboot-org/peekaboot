@@ -3,6 +3,7 @@ package org.peekaboot.backend.mapper.trace;
 import io.micrometer.tracing.Span;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -28,18 +29,11 @@ public class TraceTreeMapper {
         this.tagMasker = new TagMasker(maskingEngine);
     }
 
-    /**
-     * Builds the {@link TraceTree} for a captured trace.
-     *
-     * @param truncated whether the {@code max-spans-per-trace} cap dropped real spans for
-     *                  this trace before it reached here - a property of how the trace was
-     *                  captured, not of its (already-deduplicated) span list, so it must be
-     *                  passed in rather than derived from {@code traceData}.
-     */
-    public TraceTree map(TraceData traceData, boolean truncated) {
-        if (traceData == null || traceData.spans() == null || traceData.spans().isEmpty()) {
+    /** Builds the {@link TraceTree} for a captured trace. */
+    public TraceTree map(TraceData traceData) {
+        if (traceData.spans().isEmpty()) {
             return new TraceTree(
-                    traceData != null ? traceData.traceId() : null,
+                    traceData.traceId(),
                     0L,
                     0L,
                     TraceStatus.OK,
@@ -47,15 +41,11 @@ public class TraceTreeMapper {
                     RootActionType.UNKNOWN,
                     null,
                     null,
-                    new TraceTabSummary(
-                            null,
-                            new TraceTabSummary.SpansSummary(0, 0L, 0),
-                            new TraceTabSummary.QueriesSummary(0, 0L),
-                            new TraceTabSummary.LogsSummary(0, 0, 0)),
+                    TraceTabSummary.empty(),
                     null,
                     List.of(),
                     List.of(),
-                    truncated);
+                    traceData.truncated());
         }
 
         List<SpanData> spans = traceData.spans();
@@ -64,14 +54,14 @@ public class TraceTreeMapper {
         Map<String, List<SpanData>> childrenByParentId =
                 spans.stream().filter(s -> s.parentId() != null).collect(Collectors.groupingBy(SpanData::parentId));
 
-        SpanData rootSpanData = findRootSpan(spans, spanById);
+        SpanData rootSpanData = traceData.rootSpan();
 
         // Re-parent orphan subtrees (parent not in this trace, e.g. not yet
         // exported) under the root so they don't silently vanish from the tree
         attachOrphansToRoot(spans, spanById, childrenByParentId, rootSpanData);
 
         TraceTabSummary summary = calculateSummary(spans, rootSpanData);
-        TraceStatus status = determineStatus(spans);
+        TraceStatus status = summary.spans().errorCount() > 0 ? TraceStatus.HAS_ERRORS : TraceStatus.OK;
 
         SpanNode rootSpan = buildSpanTree(rootSpanData, childrenByParentId);
 
@@ -93,7 +83,7 @@ public class TraceTreeMapper {
                 null,
                 List.of(),
                 List.of(),
-                truncated);
+                traceData.truncated());
     }
 
     private void attachOrphansToRoot(
@@ -103,6 +93,13 @@ public class TraceTreeMapper {
             SpanData rootSpanData) {
         if (rootSpanData == null) {
             return;
+        }
+        // in a cycle the root has a stored parent; cutting that edge is what ends the walk.
+        // map(TraceData) is public, so the root need not be one of `spans` and the group can be absent
+        List<SpanData> rootSiblings =
+                rootSpanData.parentId() == null ? null : childrenByParentId.get(rootSpanData.parentId());
+        if (rootSiblings != null) {
+            rootSiblings.remove(rootSpanData);
         }
         List<SpanData> orphans = new ArrayList<>();
         for (SpanData span : spans) {
@@ -121,16 +118,6 @@ public class TraceTreeMapper {
                     .computeIfAbsent(rootSpanData.spanId(), k -> new ArrayList<>())
                     .addAll(orphans);
         }
-    }
-
-    /** The span the tree hangs from: the first span with no parent stored in this trace, else the first span. */
-    private static SpanData findRootSpan(List<SpanData> spans, Map<String, SpanData> spanById) {
-        for (SpanData span : spans) {
-            if (span.parentId() == null || !spanById.containsKey(span.parentId())) {
-                return span;
-            }
-        }
-        return spans.getFirst();
     }
 
     public RootActionType detectRootActionType(SpanData rootSpan) {
@@ -209,7 +196,7 @@ public class TraceTreeMapper {
      * HTTP request than anything else Peekaboot can name.
      */
     private static RootActionType detectServerActionType(Map<String, String> tags) {
-        if (HttpSpanTags.describeHttpRequest(tags)) {
+        if (HttpSpanTags.describesHttpRequest(tags)) {
             return RootActionType.HTTP_REQUEST;
         }
         if (hasTagPrefix(tags, "rpc.")) {
@@ -244,16 +231,14 @@ public class TraceTreeMapper {
                 .toList();
 
         SpanStatus status = spanData.hasError() ? SpanStatus.ERROR : SpanStatus.OK;
-        String kind = spanData.kind() != null ? spanData.kind().name() : null;
         long startTimeMs = spanData.startTime() != null ? spanData.startTime().toEpochMilli() : 0L;
-        long durationMs = spanData.duration() != null ? spanData.duration().toMillis() : 0L;
 
         return new SpanNode(
                 spanData.spanId(),
                 spanData.name(),
-                kind,
+                spanData.kind(),
                 startTimeMs,
-                durationMs,
+                spanData.durationMs(),
                 status,
                 children,
                 maskedTags(spanData),
@@ -264,16 +249,30 @@ public class TraceTreeMapper {
                 spanData.errorClass(),
                 spanData.remoteServiceName(),
                 queryText(spanData),
+                DbSpans.rowCount(spanData),
                 null);
     }
 
     /**
-     * Every tag stays on its own span, masked - db.statement, http.url etc. may carry a
-     * credential the key name alone can't catch. A span's errorMessage and query text are
-     * masked the same way: an exception message can echo back the failing request's URL.
+     * Every tag stays on its own span, masked - http.url etc. may carry a credential the
+     * key name alone can't catch. A span's errorMessage and query text are masked the same
+     * way: an exception message can echo back the failing request's URL. The statement
+     * tags are the exception: the statement is served once, masked, as the span's
+     * {@code query}, and shipping the raw tag beside it would say it twice. That holds
+     * only on a query span, the one shape {@code query} is populated for.
      */
-    private Map<String, Object> maskedTags(SpanData spanData) {
-        return spanData.tags() == null ? Map.of() : Map.<String, Object>copyOf(tagMasker.mask(spanData.tags()));
+    private Map<String, String> maskedTags(SpanData spanData) {
+        if (spanData.tags() == null) {
+            return Map.of();
+        }
+        boolean servedAsQuery = DbSpans.isQuery(spanData);
+        Map<String, String> kept = new LinkedHashMap<>();
+        spanData.tags().forEach((key, value) -> {
+            if (!servedAsQuery || !DbSpans.isStatementTag(key)) {
+                kept.put(key, value);
+            }
+        });
+        return tagMasker.mask(kept);
     }
 
     private static List<SpanEvent> mapEvents(SpanData spanData) {
@@ -299,7 +298,7 @@ public class TraceTreeMapper {
             if (span.hasError()) {
                 errorCount++;
             }
-            long durationMs = span.duration() != null ? span.duration().toMillis() : 0L;
+            long durationMs = span.durationMs();
             totalDurationMs += durationMs;
             if (DbSpans.isQuery(span)) {
                 dbQueryCount++;
@@ -327,14 +326,5 @@ public class TraceTreeMapper {
             return null;
         }
         return new TraceTabSummary.RequestSummary(method, path, statusCode);
-    }
-
-    private TraceStatus determineStatus(List<SpanData> spans) {
-        for (SpanData span : spans) {
-            if (span.hasError()) {
-                return TraceStatus.HAS_ERRORS;
-            }
-        }
-        return TraceStatus.OK;
     }
 }

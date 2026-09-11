@@ -11,17 +11,19 @@ import org.peekaboot.backend.domain.scheduledtasks.ScheduledTaskInfo;
 import org.peekaboot.backend.domain.scheduledtasks.ScheduledTasksInfo;
 import org.peekaboot.backend.domain.scheduledtasks.TaskExecutionStatus;
 import org.peekaboot.backend.domain.scheduledtasks.TaskType;
+import org.peekaboot.backend.masking.MaskingEngine;
 
 class ScheduledTasksMapperTest {
 
-    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper();
+    private final ScheduledTasksMapper mapper = new ScheduledTasksMapper(new MaskingEngine());
 
     @Test
     void map_shouldExtractCronTasks() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(new ScheduledTasksResponse.CronTask(
                         "0 0 * * * *",
-                        null,
+                        new ScheduledTasksResponse.TaskExecution(
+                                null, "SUCCESS", Instant.parse("2026-01-11T06:00:00Z")),
                         new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:00:00Z")),
                         new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
                 List.of(),
@@ -34,6 +36,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).type()).isEqualTo(TaskType.CRON);
         assertThat(result.tasks().get(0).schedule()).isEqualTo("0 0 * * * *");
         assertThat(result.tasks().get(0).target()).isEqualTo("com.example.Scheduler.cronTask");
+        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:00:00Z"));
+        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
     }
 
     @Test
@@ -56,6 +60,8 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).schedule()).isNull();
         assertThat(result.tasks().get(0).intervalMs()).isEqualTo(5000L);
         assertThat(result.tasks().get(0).lastStatus()).isEqualTo(TaskExecutionStatus.SUCCESS);
+        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:25Z"));
+        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:30Z"));
     }
 
     @Test
@@ -107,6 +113,31 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(0).lastException()).isEqualTo("java.lang.NullPointerException: Task failed");
     }
 
+    // A failed task's message routinely echoes what failed: a JDBC URL, a request line.
+    // It runs through the value rules like any other free text on the dashboard.
+    @Test
+    void map_shouldMaskACredentialInsideTheExceptionMessage() {
+        ScheduledTasksResponse response = new ScheduledTasksResponse(
+                List.of(),
+                List.of(new ScheduledTasksResponse.FixedTask(
+                        1000L,
+                        new ScheduledTasksResponse.TaskExecution(
+                                new ScheduledTasksResponse.TaskExceptionInfo(
+                                        "Connection to jdbc:postgresql://dbuser:hunter2@db.example.com/orders refused",
+                                        "java.sql.SQLException"),
+                                "ERROR",
+                                Instant.parse("2026-01-11T06:49:20Z")),
+                        null,
+                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.reconcile"))),
+                List.of());
+
+        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
+
+        assertThat(result.tasks().get(0).lastException())
+                .isEqualTo(
+                        "java.sql.SQLException: Connection to jdbc:postgresql://******@db.example.com/orders refused");
+    }
+
     @Test
     void map_shouldSortByTypeAndTarget() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
@@ -124,18 +155,27 @@ class ScheduledTasksMapperTest {
         assertThat(result.tasks().get(2).target()).isEqualTo("c.Scheduler.fixed");
     }
 
-    /** The interval reaches the frontend as milliseconds only; the frontend formats it. */
+    /**
+     * The interval reaches the frontend as milliseconds only; the frontend formats it, and
+     * there is no cron text to describe. None of these has run yet, which the status says
+     * outright rather than leaving the frontend to infer it from a missing timestamp.
+     */
     @Test
-    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleString() {
+    void map_fixedTasks_shouldCarryTheIntervalWithoutAScheduleOrADescription() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
-                List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b"), createFixedTask(120000L, "c")),
-                List.of());
+                List.of(createFixedTask(500L, "a"), createFixedTask(30000L, "b")),
+                List.of(createFixedTask(120000L, "c")));
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
         assertThat(result.tasks()).extracting(ScheduledTaskInfo::intervalMs).containsExactly(500L, 30000L, 120000L);
         assertThat(result.tasks()).extracting(ScheduledTaskInfo::schedule).containsOnlyNulls();
+        assertThat(result.tasks())
+                .extracting(ScheduledTaskInfo::scheduleDescription)
+                .containsOnlyNulls();
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::lastExecution).containsOnlyNulls();
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::lastStatus).containsOnly(TaskExecutionStatus.PENDING);
     }
 
     @Test
@@ -151,68 +191,40 @@ class ScheduledTasksMapperTest {
                 .contains("hour");
     }
 
+    /** Boot omits the runnable for a task it cannot describe; the row still has a name. */
     @Test
-    void map_fixedDelayTask_shouldHaveNullScheduleDescription() {
+    void map_shouldNameAnUnknownTargetWhenTheRunnableIsMissing() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(), List.of(createFixedTask(5000L, "com.example.Scheduler.fixedDelayTask")), List.of());
+                List.of(), List.of(new ScheduledTasksResponse.FixedTask(1000L, null, null, null)), List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
-        assertThat(result.tasks()).hasSize(1);
-        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
+        assertThat(result.tasks()).extracting(ScheduledTaskInfo::target).containsExactly("unknown");
     }
 
+    /** An exception reported with only one of its two halves is rendered as that half, with no dangling separator. */
     @Test
-    void map_fixedRateTask_shouldHaveNullScheduleDescription() {
+    void map_shouldRenderAnExceptionCarryingOnlyAMessageOrOnlyAType() {
         ScheduledTasksResponse response = new ScheduledTasksResponse(
                 List.of(),
-                List.of(),
-                List.of(new ScheduledTasksResponse.FixedTask(
-                        10000L,
-                        null,
-                        null,
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedRateTask"))));
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks()).hasSize(1);
-        assertThat(result.tasks().get(0).scheduleDescription()).isNull();
-    }
-
-    @Test
-    void map_shouldParseLastAndNextExecutionTimesForCronTask() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(new ScheduledTasksResponse.CronTask(
-                        "0 0 * * * *",
-                        new ScheduledTasksResponse.TaskExecution(
-                                null, "SUCCESS", Instant.parse("2026-01-11T06:00:00Z")),
-                        new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T07:00:00Z")),
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.cronTask"))),
-                List.of(),
+                List.of(
+                        failedTask("a", new ScheduledTasksResponse.TaskExceptionInfo("Task failed", null)),
+                        failedTask("b", new ScheduledTasksResponse.TaskExceptionInfo(null, "java.io.IOException"))),
                 List.of());
 
         ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
 
-        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:00:00Z"));
-        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T07:00:00Z"));
+        assertThat(result.tasks())
+                .extracting(ScheduledTaskInfo::lastException)
+                .containsExactly("Task failed", "java.io.IOException");
     }
 
-    @Test
-    void map_shouldParseLastAndNextExecutionTimesForFixedTask() {
-        ScheduledTasksResponse response = new ScheduledTasksResponse(
-                List.of(),
-                List.of(new ScheduledTasksResponse.FixedTask(
-                        5000L,
-                        new ScheduledTasksResponse.TaskExecution(
-                                null, "SUCCESS", Instant.parse("2026-01-11T06:49:25Z")),
-                        new ScheduledTasksResponse.TaskExecution(null, null, Instant.parse("2026-01-11T06:49:30Z")),
-                        new ScheduledTasksResponse.RunnableTarget("com.example.Scheduler.fixedDelay"))),
-                List.of());
-
-        ScheduledTasksInfo result = mapper.map(response, Locale.ENGLISH);
-
-        assertThat(result.tasks().get(0).lastExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:25Z"));
-        assertThat(result.tasks().get(0).nextExecution()).isEqualTo(Instant.parse("2026-01-11T06:49:30Z"));
+    private ScheduledTasksResponse.FixedTask failedTask(String target, ScheduledTasksResponse.TaskExceptionInfo ex) {
+        return new ScheduledTasksResponse.FixedTask(
+                1000L,
+                new ScheduledTasksResponse.TaskExecution(ex, "ERROR", Instant.parse("2026-01-11T06:49:20Z")),
+                null,
+                new ScheduledTasksResponse.RunnableTarget(target));
     }
 
     private ScheduledTasksResponse.CronTask createCronTask(String expr, String target) {

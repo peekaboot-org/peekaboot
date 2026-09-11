@@ -22,6 +22,11 @@ class ByteFormatTest {
         assertThat(ByteFormat.humanize(bytes)).isEqualTo(expected);
     }
 
+    /**
+     * {@code Locale.setDefault} is JVM-global. Safe here because the backend's surefire runs
+     * its classes one at a time on one thread (the pom sets no parallelism), and the default
+     * is restored in {@code finally}; see TESTING.md.
+     */
     @Test
     void writesTheDecimalPointWhateverTheDefaultLocale() {
         Locale defaultLocale = Locale.getDefault();

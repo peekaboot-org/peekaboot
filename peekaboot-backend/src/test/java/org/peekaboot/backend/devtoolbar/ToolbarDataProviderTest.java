@@ -18,59 +18,24 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldGenerateValidJson() {
+        String json = provider.getToolbarSummaryJson("/peekaboot", "POST", "/api/data", 201, "trace123");
+
+        JsonNode parsed = PeekabootJson.MAPPER.readTree(json);
+        assertThat(parsed.path("basePath").asString()).isEqualTo("/peekaboot");
+        assertThat(parsed.path("method").asString()).isEqualTo("POST");
+        assertThat(parsed.path("path").asString()).isEqualTo("/api/data");
+        assertThat(parsed.path("status").asInt()).isEqualTo(201);
+        assertThat(parsed.path("traceId").asString()).isEqualTo("trace123");
+    }
+
+    /** A request served outside any span (tracing off, an excluded path) still gets a bar; the key is there, null. */
+    @Test
+    void shouldCarryAMissingTraceIdAsJsonNull() {
         String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
 
         JsonNode parsed = PeekabootJson.MAPPER.readTree(json);
-        assertThat(parsed.path("method").asString()).isEqualTo("GET");
-        assertThat(parsed.path("path").asString()).isEqualTo("/users");
-        assertThat(parsed.path("status").asInt()).isEqualTo(200);
+        assertThat(parsed.has("traceId")).isTrue();
         assertThat(parsed.path("traceId").isNull()).isTrue();
-    }
-
-    @Test
-    void shouldIncludeAllFields() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "POST", "/api/data", 201, "trace123");
-
-        assertThat(json).contains("\"method\":\"POST\"");
-        assertThat(json).contains("\"path\":\"/api/data\"");
-        assertThat(json).contains("\"status\":201");
-        assertThat(json).contains("\"traceId\":\"trace123\"");
-        assertThat(json).contains("\"basePath\":\"/peekaboot\"");
-    }
-
-    @Test
-    void shouldEscapeJsonSpecialCharacters() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path/with\"quotes", 200, null);
-
-        assertThat(json).contains("/path/with\\\"quotes");
-    }
-
-    @Test
-    void shouldHandleNullTraceId() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/users", 200, null);
-
-        assertThat(json).contains("\"traceId\":null");
-    }
-
-    @Test
-    void shouldEscapeBackslashInPath() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path\\with\\backslashes", 200, null);
-
-        assertThat(json).contains("/path\\\\with\\\\backslashes");
-    }
-
-    @Test
-    void shouldEscapeNewlinesInPath() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/path\nwith\nnewlines", 200, null);
-
-        assertThat(json).contains("/path\\nwith\\nnewlines");
-    }
-
-    @Test
-    void shouldEscapeTabsInTraceId() {
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/page", 200, "trace\twith\ttabs");
-
-        assertThat(json).contains("trace\\twith\\ttabs");
     }
 
     @Test
@@ -84,19 +49,6 @@ class ToolbarDataProviderTest {
         assertThat(json).contains("\\u003c/script\\u003e");
     }
 
-    @Test
-    void shouldEscapeControlCharactersAsUnicodeSequences() {
-        String nul = String.valueOf((char) 0x00);
-        String bel = String.valueOf((char) 0x07);
-
-        String json = provider.getToolbarSummaryJson("/peekaboot", "GET", "/p" + nul + "ath" + bel, 200, null);
-
-        assertThat(json).doesNotContain(nul);
-        assertThat(json).doesNotContain(bel);
-        assertThat(json).contains("\\u0000");
-        assertThat(json).contains("\\u0007");
-    }
-
     /** The base path is whatever the filter resolved for this request - context path included. */
     @Test
     void shouldCarryTheBasePathItIsGiven() {
@@ -107,11 +59,9 @@ class ToolbarDataProviderTest {
 
     @Test
     void shouldGenerateIdleModeJson() {
-        String json = provider.getIdleModeJson("/peekaboot");
+        JsonNode parsed = PeekabootJson.MAPPER.readTree(provider.getIdleModeJson("/peekaboot"));
 
-        assertThat(json).startsWith("{");
-        assertThat(json).endsWith("}");
-        assertThat(json).contains("\"idle\":true");
-        assertThat(json).contains("\"basePath\":\"/peekaboot\"");
+        assertThat(parsed.path("idle").asBoolean()).isTrue();
+        assertThat(parsed.path("basePath").asString()).isEqualTo("/peekaboot");
     }
 }

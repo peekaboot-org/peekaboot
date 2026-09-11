@@ -1,13 +1,8 @@
 package org.peekaboot.testingapp.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import java.lang.reflect.RecordComponent;
 import java.util.Arrays;
 import java.util.List;
@@ -15,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import net.osslabz.jdbc.DatabaseProduct;
 import net.osslabz.jdbc.Host;
 import net.osslabz.jdbc.JdbcProperty;
 import net.osslabz.jdbc.PropertySource;
@@ -25,10 +21,11 @@ import org.peekaboot.backend.actuator.InsightsSource;
 import org.peekaboot.backend.actuator.parsed.ActuatorParsedData;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.lifecycle.DataSourceMetadata;
+import org.peekaboot.backend.lifecycle.DataSourceMetadataList;
 import org.peekaboot.backend.service.ActuatorInsightsService;
 import org.peekaboot.backend.service.PeekabootActuatorService;
 import org.peekaboot.testingapp.TestingApp;
-import org.slf4j.LoggerFactory;
+import org.peekaboot.testsupport.LogCapture;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -62,29 +59,19 @@ class PeekabootActuatorServiceIT {
     @Autowired
     private ActuatorInsightsService insightsService;
 
-    private final Logger serviceLogger = (Logger) LoggerFactory.getLogger(PeekabootActuatorService.class);
-    private final ListAppender<ILoggingEvent> serviceLog = new ListAppender<>();
-    private boolean additivity;
-    private Level level;
+    private LogCapture serviceLog;
 
     // The throwing endpoint makes every getInsightsData() call log its failure - WARN with
     // the cause the first time, DEBUG afterwards; capture both so they can be asserted on
     // and never reach the console.
     @BeforeEach
     void captureServiceLog() {
-        additivity = serviceLogger.isAdditive();
-        level = serviceLogger.getLevel();
-        serviceLogger.setAdditive(false);
-        serviceLogger.setLevel(Level.DEBUG);
-        serviceLog.start();
-        serviceLogger.addAppender(serviceLog);
+        serviceLog = LogCapture.attach(PeekabootActuatorService.class, Level.DEBUG);
     }
 
     @AfterEach
     void releaseServiceLog() {
-        serviceLogger.detachAppender(serviceLog);
-        serviceLogger.setLevel(level);
-        serviceLogger.setAdditive(additivity);
+        serviceLog.close();
     }
 
     // flyway.enabled: false in the test profile leaves the flyway source absent from
@@ -112,13 +99,13 @@ class PeekabootActuatorServiceIT {
     @Test
     void aFailingEndpointIsLeftOutAndLoggedWithoutBreakingTheOthers() {
         service.getInsightsData();
-        serviceLog.list.clear();
+        serviceLog.appender().list.clear();
 
         Map<String, Object> data = service.getInsightsData();
 
         assertThat(data).doesNotContainKey("loggers");
         assertThat(data).containsKeys("health", "info", "env");
-        assertThat(serviceLog.list)
+        assertThat(serviceLog.appender().list)
                 .filteredOn(event -> event.getFormattedMessage().contains("'loggers' failed"))
                 .singleElement()
                 .satisfies(event -> {
@@ -154,26 +141,30 @@ class PeekabootActuatorServiceIT {
     }
 
     /**
-     * The bean name matches the one {@code PeekabootLifecycleAutoConfiguration}
-     * guards with {@code @ConditionalOnMissingBean(name = "databaseMetadataList")},
-     * so this fixture bean wins over the real one and this module's real, H2-backed
-     * DataSource is never consulted. A mock (same pattern as {@code DataSourceMapperTest})
-     * is used instead of a live DataSource so a real {@link Host} and a password
-     * parameter can be stubbed in - the H2 in-memory URL this module's test DataSource
-     * actually uses yields neither.
+     * {@code PeekabootLifecycleAutoConfiguration} backs its {@code DataSourceMetadataList}
+     * bean off for one of the same type, so this fixture bean wins over the real one and
+     * this module's real, H2-backed DataSource is never consulted. The record is built by
+     * hand rather than read off a live DataSource so it carries a real {@link Host} and a
+     * password parameter - the H2 in-memory URL this module's test DataSource actually
+     * uses yields neither.
      */
     @TestConfiguration
     static class DataSourceMetadataFixtureConfig {
         @Bean
-        List<DataSourceMetadata> databaseMetadataList() {
-            DataSourceMetadata metadata = mock(DataSourceMetadata.class);
-            when(metadata.getDataSourceName()).thenReturn("primary");
-            when(metadata.getHosts()).thenReturn(List.of(new Host("db.example.com", 5432, null)));
-            when(metadata.getConnectionParams())
-                    .thenReturn(Map.of(
+        DataSourceMetadataList dataSourceMetadataList() {
+            DataSourceMetadata metadata = new DataSourceMetadata(
+                    "primary",
+                    "app",
+                    List.of(new Host("db.example.com", 5432, null)),
+                    "orders",
+                    DatabaseProduct.POSTGRESQL,
+                    Map.of(
                             "MODE", new JdbcProperty(PropertySource.DERIVED, "MEMORY"),
-                            "password", new JdbcProperty(PropertySource.QUERY, "hunter2")));
-            return List.of(metadata);
+                            "password", new JdbcProperty(PropertySource.QUERY, "hunter2")),
+                    "PostgreSQL",
+                    "16",
+                    "PostgreSQL JDBC Driver");
+            return new DataSourceMetadataList(List.of(metadata));
         }
     }
 }

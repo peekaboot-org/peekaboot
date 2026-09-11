@@ -13,7 +13,7 @@ class TreeMaskerTest {
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldReplaceWholeValueForATopLevelSensitiveKey() {
-        Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"));
+        Object masked = treeMasker.mask(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP"), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("apiKey", "******");
     }
@@ -27,7 +27,7 @@ class TreeMaskerTest {
                         "password", Map.of("value", "hunter2", "source", "QUERY"),
                         "mode", Map.of("value", "MEMORY", "source", "DERIVED")));
 
-        Object masked = treeMasker.mask(tree);
+        Object masked = treeMasker.mask(tree, false);
 
         Map<String, Object> connectionParams =
                 (Map<String, Object>) ((Map<String, Object>) masked).get("connectionParams");
@@ -38,7 +38,7 @@ class TreeMaskerTest {
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldApplyValuePatternRulesToStringLeavesUnderInnocuousKeys() {
-        Object masked = treeMasker.mask(Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"));
+        Object masked = treeMasker.mask(Map.of("url", "jdbc:postgresql://admin:hunter2@localhost/db"), false);
 
         assertThat(((Map<String, Object>) masked).get("url")).isEqualTo("jdbc:postgresql://******@localhost/db");
     }
@@ -46,24 +46,58 @@ class TreeMaskerTest {
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldRecurseIntoLists() {
-        Object masked = treeMasker.mask(Map.of("items", List.of(Map.of("password", "hunter2"), Map.of("name", "ok"))));
+        Object masked =
+                treeMasker.mask(Map.of("items", List.of(Map.of("password", "hunter2"), Map.of("name", "ok"))), false);
 
         List<Object> items = (List<Object>) ((Map<String, Object>) masked).get("items");
         assertThat((Map<String, Object>) items.get(0)).containsEntry("password", "******");
         assertThat((Map<String, Object>) items.get(1)).containsEntry("name", "ok");
     }
 
+    // A plural key names a group of secrets, so the whole subtree under it is replaced,
+    // not only the leaves whose own key happens to be sensitive.
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldReplaceAListUnderAPluralSensitiveKey() {
+        Object masked = treeMasker.mask(Map.of("passwords", List.of("hunter2", "hunter3")), false);
+
+        assertThat((Map<String, Object>) masked).containsEntry("passwords", "******");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mask_shouldReplaceANestedMapUnderAPluralSensitiveKey() {
+        Object masked = treeMasker.mask(Map.of("secrets", Map.of("db", "hunter2")), false);
+
+        assertThat((Map<String, Object>) masked).containsEntry("secrets", "******");
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void mask_shouldLeaveNonStringScalarsUntouched() {
-        Object masked = treeMasker.mask(Map.of("port", 8080, "enabled", true));
+        Object masked = treeMasker.mask(Map.of("port", 8080, "enabled", true), false);
 
         assertThat((Map<String, Object>) masked).containsEntry("port", 8080).containsEntry("enabled", true);
     }
 
     @Test
     void mask_shouldReturnNullForNullNode() {
-        assertThat(treeMasker.mask(null)).isNull();
+        assertThat(treeMasker.mask(null, false)).isNull();
+    }
+
+    @Test
+    void maskMap_masksLikeMaskAndKeepsTheMapType() {
+        Map<String, Object> masked =
+                treeMasker.maskMap(Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP", "nested", Map.of("password", "x")), false);
+
+        assertThat(masked).containsEntry("apiKey", "******").containsEntry("nested", Map.of("password", "******"));
+    }
+
+    @Test
+    void maskMap_handsTheMapBackUnchangedWhenUnmaskIsTrue() {
+        Map<String, Object> build = Map.of("apiKey", "AKIAABCDEFGHIJKLMNOP");
+
+        assertThat(treeMasker.maskMap(build, true)).isSameAs(build);
     }
 
     @Test
@@ -89,7 +123,7 @@ class TreeMaskerTest {
     // overload exists to also check the root against isSensitiveKey.
     @Test
     void mask_withKey_shouldReplaceTheWholeValueWhenTheRootKeyItselfIsSensitive() {
-        Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue");
+        Object masked = treeMasker.mask("client-secret", "GOCSPX-SuperSecretValue", false);
 
         assertThat(masked).isEqualTo("******");
     }
@@ -99,7 +133,7 @@ class TreeMaskerTest {
     void mask_withKey_shouldStillRecurseIntoDescendantsWhenTheRootKeyIsInnocuous() {
         Map<String, Object> google = Map.of("clientId", "abc123", "clientSecret", "GOCSPX-SuperSecretValue");
 
-        Object masked = treeMasker.mask("registration", Map.of("google", google));
+        Object masked = treeMasker.mask("registration", Map.of("google", google), false);
 
         Map<String, Object> registration = (Map<String, Object>) masked;
         Map<String, Object> maskedGoogle = (Map<String, Object>) registration.get("google");
@@ -117,7 +151,7 @@ class TreeMaskerTest {
         Map<String, Object> cookie = Map.of("sameSite", "Lax", "httpOnly", true);
         Map<String, Object> servlet = Map.of("session", Map.of("cookie", cookie));
 
-        Object masked = treeMasker.mask("servlet", servlet);
+        Object masked = treeMasker.mask("servlet", servlet, false);
 
         Map<String, Object> session = (Map<String, Object>) ((Map<String, Object>) masked).get("session");
         assertThat(session.get("cookie")).isEqualTo(cookie);
@@ -125,7 +159,7 @@ class TreeMaskerTest {
 
     @Test
     void mask_withKey_shouldStillApplyAWholeKeyRuleToTheRootKey() {
-        assertThat(treeMasker.mask("cookie", "session=abc123")).isEqualTo("******");
+        assertThat(treeMasker.mask("cookie", "session=abc123", false)).isEqualTo("******");
     }
 
     @Test

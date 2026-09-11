@@ -78,62 +78,39 @@ public class ApplicationReadyListener implements ApplicationListener<Application
 
         String appName = buildInfoProvider.getName();
         String profiles = environmentInfo.getActiveProfilesAsString();
-        report.append(String.format(" Application [%s] ready with active profiles [%s]", appName, profiles))
-                .append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
+        LifecycleBanner.line(
+                report, String.format(" Application [%s] ready with active profiles [%s]", appName, profiles));
     }
 
     private void appendServiceUrl(StringBuilder report, ApplicationReadyEvent event) {
 
-        serverUrlResolver.resolveServiceUrl(event).ifPresent(url -> {
-            report.append(" Service URL: ").append(url).append("\n");
-            report.append(LifecycleBanner.LINE).append("\n");
-        });
-
-        serverUrlResolver.resolveSwaggerUiUrl(event).ifPresent(url -> {
-            report.append(" Swagger UI: ").append(url).append("\n");
-            report.append(LifecycleBanner.LINE).append("\n");
-        });
-
-        serverUrlResolver.resolveDashboardUrl(event).ifPresent(url -> {
-            report.append(" Peekaboot Dashboard: ").append(url).append("\n");
-            report.append(LifecycleBanner.LINE).append("\n");
-        });
+        serverUrlResolver
+                .resolveServiceUrl(event)
+                .ifPresent(url -> LifecycleBanner.line(report, " Service URL: " + url));
+        serverUrlResolver
+                .resolveSwaggerUiUrl(event)
+                .ifPresent(url -> LifecycleBanner.line(report, " Swagger UI: " + url));
+        serverUrlResolver
+                .resolveDashboardUrl(event)
+                .ifPresent(url -> LifecycleBanner.line(report, " Peekaboot Dashboard: " + url));
     }
 
     private void appendBuildInfo(StringBuilder report) {
 
-        if (buildInfoProvider.isBuildInfoAvailable()) {
-            report.append(" Application Info: ")
-                    .append(buildInfoProvider.getFormattedInfo())
-                    .append("\n");
-        } else {
-            report.append(" Application Info: Build information not available\n");
-        }
-        report.append(LifecycleBanner.LINE).append("\n");
+        LifecycleBanner.line(report, " Application Info: " + buildInfoProvider.getFormattedInfo());
     }
 
     private void appendSystemInfo(StringBuilder report) {
 
-        report.append(" Default Timezone: ")
-                .append(TimeZone.getDefault().getID())
-                .append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
-
-        String vmName = System.getProperty("java.vm.name");
-        report.append(" Java VM Name: ").append(vmName).append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
-
-        String vmVersion = System.getProperty("java.version");
-        report.append(" Java VM Version: ").append(vmVersion).append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
+        LifecycleBanner.line(
+                report, " Default Timezone: " + TimeZone.getDefault().getID());
+        LifecycleBanner.line(report, " Java VM Name: " + System.getProperty("java.vm.name"));
+        LifecycleBanner.line(report, " Java VM Version: " + System.getProperty("java.version"));
 
         String osName = System.getProperty("os.name");
         String osVersion = System.getProperty("os.version");
         String osArch = System.getProperty("os.arch");
-        report.append(String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch))
-                .append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
+        LifecycleBanner.line(report, String.format(" Operating System: %s %s (%s)", osName, osVersion, osArch));
 
         ProcessInfo processInfo = ProcessInfo.current();
         report.append(String.format(
@@ -159,11 +136,11 @@ public class ApplicationReadyListener implements ApplicationListener<Application
         report.append(String.format(
                         " Heap Memory: used=%s, max=%s", ByteFormat.humanize(heapMemory.getUsed()), maxOf(heapMemory)))
                 .append("\n");
-        report.append(String.format(
+        LifecycleBanner.line(
+                report,
+                String.format(
                         " Non-Heap Memory: used=%s, max=%s",
-                        ByteFormat.humanize(nonHeapMemory.getUsed()), maxOf(nonHeapMemory)))
-                .append("\n");
-        report.append(LifecycleBanner.LINE).append("\n");
+                        ByteFormat.humanize(nonHeapMemory.getUsed()), maxOf(nonHeapMemory)));
     }
 
     /** A pool without a configured maximum (HotSpot's non-heap by default) reports -1, not a limit of zero. */
@@ -174,36 +151,30 @@ public class ApplicationReadyListener implements ApplicationListener<Application
     private void appendDatabaseInfo(StringBuilder report) {
 
         if (dataSourceMetadataList.isEmpty()) {
-            report.append(" Database: No database configured\n");
-            report.append(LifecycleBanner.LINE).append("\n");
+            LifecycleBanner.line(report, " Database: No database configured");
             return;
         }
 
         for (DataSourceMetadata metadata : dataSourceMetadataList) {
             report.append(String.format(
                             " DB Connection [%s]: %s on %s (user: %s)",
-                            metadata.getDataSourceName(),
-                            metadata.getDatabaseName(),
-                            metadata.getHosts(),
-                            metadata.getUsername()))
+                            metadata.dataSourceName(), metadata.databaseName(), metadata.hosts(), metadata.username()))
                     .append("\n\n");
 
-            if (!metadata.getConnectionParams().isEmpty()) {
-                String params = connectionParamsMasker.mask(metadata.getConnectionParams()).entrySet().stream()
+            if (!metadata.connectionParams().isEmpty()) {
+                String params = connectionParamsMasker.mask(metadata.connectionParams()).entrySet().stream()
                         .map(e -> e.getKey() + "=" + e.getValue())
                         .reduce((a, b) -> a + ", " + b)
                         .orElse("");
-                report.append(" DB Connection Params: ").append(params).append("\n");
-                report.append(LifecycleBanner.LINE).append("\n");
+                LifecycleBanner.line(report, " DB Connection Params: " + params);
             }
 
-            report.append(String.format(
-                            " DB Version: %s %s",
-                            metadata.getDatabaseProductName(), metadata.getDatabaseProductVersion()))
-                    .append("\n");
-            report.append(LifecycleBanner.LINE).append("\n");
+            LifecycleBanner.line(
+                    report,
+                    String.format(
+                            " DB Version: %s %s", metadata.databaseProductName(), metadata.databaseProductVersion()));
 
-            appendPoolInfo(report, metadata.getDataSourceName());
+            appendPoolInfo(report, metadata.dataSourceName());
         }
     }
 
@@ -220,10 +191,7 @@ public class ApplicationReadyListener implements ApplicationListener<Application
                             settings.minimumIdle(), settings.maximumPoolSize()))
                     .append("\n\n");
 
-            report.append(" Connection Timeout: ")
-                    .append(settings.connectionTimeoutMs())
-                    .append(" ms\n");
-            report.append(LifecycleBanner.LINE).append("\n");
+            LifecycleBanner.line(report, " Connection Timeout: " + settings.connectionTimeoutMs() + " ms");
         });
     }
 }

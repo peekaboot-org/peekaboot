@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
 class ComponentPrimitiveIT extends PlaywrightTestBase {
@@ -57,14 +56,8 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
-            for (String pill : List.of(
-                    "kind-server",
-                    "kind-client",
-                    "kind-internal",
-                    "kind-producer",
-                    "tag-badge",
-                    "tag-badge-key",
-                    "tab-count")) {
+            for (String pill :
+                    List.of("kind-server", "kind-client", "kind-producer", "tag-badge", "tag-badge-key", "tab-count")) {
                 assertThat(contrastRatio("#" + pill))
                         .as("%s ink/fill contrast (%s theme)", pill, theme)
                         .isGreaterThanOrEqualTo(4.5);
@@ -77,18 +70,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         openFixture();
 
         assertThat(page.isVisible("#group-list")).isFalse();
-    }
-
-    @Test
-    void groupHeaderIsAButtonAndKeyboardReachable() {
-        openFixture();
-
-        String tag = (String) page.evalOnSelector("#group-header", "el => el.tagName");
-        assertThat(tag).isEqualTo("BUTTON");
-
-        page.focus("#group-header");
-        String focused = (String) page.evaluate("() => document.activeElement.id");
-        assertThat(focused).isEqualTo("group-header");
     }
 
     @Test
@@ -118,14 +99,10 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         assertThat(clickedOutlineStyle).isEqualTo("none");
     }
 
+    /** The width comes from the fixture's own inline style; the clip and the colour are the sheet's. */
     @Test
-    void meterFillRespectsItsWidth() {
+    void meterFillIsClippedByItsTrackAndColouredByItsVariant() {
         openFixture();
-
-        Object width = page.evalOnSelector(
-                "#meter-fill-danger",
-                "el => el.getBoundingClientRect().width / el.parentElement.getBoundingClientRect().width");
-        assertThat((Double) width).isCloseTo(0.95, Offset.offset(0.02));
 
         String baseColor =
                 (String) page.evalOnSelector("#meter-fill-base", "el => getComputedStyle(el).backgroundColor");

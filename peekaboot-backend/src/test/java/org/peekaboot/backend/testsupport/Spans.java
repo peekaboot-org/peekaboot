@@ -27,16 +27,23 @@ public final class Spans {
         return new SpanBuilder(spanId);
     }
 
+    /** A query span as the JDBC instrumentations shape it: CLIENT kind, named {@code query}, 10ms long, no tags yet. */
+    public static SpanBuilder query(String spanId) {
+        return span(spanId).named("query").kind(Span.Kind.CLIENT).at(0, 10);
+    }
+
     /**
-     * A datasource-proxy query span: CLIENT kind, named {@code query}, carrying the SQL under
-     * {@code jdbc.query[0]} and the real datasource name under {@code peer.service}.
+     * The span datasource-proxy exports after a query, carrying its row count: shaped like
+     * {@link #query} but named {@code result-set} and with no statement tag, so it is a
+     * result set and not a query of its own.
      */
+    public static SpanBuilder resultSet(String spanId, int rowCount) {
+        return query(spanId).named("result-set").tag("jdbc.row-count", String.valueOf(rowCount));
+    }
+
+    /** {@link #query} carrying the SQL under {@code jdbc.query[0]} and the real datasource name under {@code peer.service}. */
     public static SpanBuilder jdbcQuery(String spanId, String sql) {
-        return span(spanId)
-                .named("query")
-                .kind(Span.Kind.CLIENT)
-                .tag("jdbc.query[0]", sql)
-                .tag("peer.service", "sample_app_db");
+        return query(spanId).tag("jdbc.query[0]", sql).tag("peer.service", "sample_app_db");
     }
 
     /**
@@ -45,6 +52,21 @@ public final class Spans {
      */
     public static SpanBuilder jdbcDuplicate(String spanId, String realSpanId, String sql) {
         return jdbcQuery(spanId, sql).parent(realSpanId).tag("peer.service", "dataSource");
+    }
+
+    /**
+     * The span datasource-micrometer exports for acquiring a pooled connection: CLIENT kind,
+     * named {@code connection}, 30ms long, carrying the {@code jdbc.datasource.*} keys and no
+     * {@code db.*} tag. Parentless it is the root of a pool-maintenance trace.
+     */
+    public static SpanBuilder jdbcConnection(String spanId) {
+        return span(spanId)
+                .named("connection")
+                .kind(Span.Kind.CLIENT)
+                .at(0, 30)
+                .tag("jdbc.datasource.name", "dataSource")
+                .tag("jdbc.datasource.pool", "HikariPool-1")
+                .tag("jdbc.datasource.driver", "org.h2.Driver");
     }
 
     public static final class SpanBuilder {

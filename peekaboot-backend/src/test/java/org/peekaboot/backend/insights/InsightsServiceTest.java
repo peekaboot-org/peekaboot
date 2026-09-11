@@ -12,7 +12,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.domain.insights.InsightsConfigResponse;
 import org.peekaboot.backend.domain.insights.LevelDataResponse;
+import org.peekaboot.backend.insights.config.Chart;
 import org.peekaboot.backend.insights.config.InsightsProperties;
+import org.peekaboot.backend.insights.config.Unit;
+import org.peekaboot.backend.testsupport.InsightsCollectors;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.DefaultResourceLoader;
@@ -32,7 +35,7 @@ class InsightsServiceTest {
                 registry,
                 new InsightsProperties(),
                 new DefaultResourceLoader(),
-                InsightsCollector.Listener.NO_OP,
+                InsightsCollectors.noOpListener(),
                 null);
     }
 
@@ -47,6 +50,39 @@ class InsightsServiceTest {
                 .extracting(InsightsConfigResponse.Panel::id)
                 .doesNotContain("thread-states"); // disabled by default
         assertThat(config.tiles()).hasSize(4);
+    }
+
+    /** The frontend renders a series by unit; the shipped latency panel must keep saying millis. */
+    @Test
+    void theHttpLatencyPanelChartsItsSeriesInMillis() {
+        InsightsConfigResponse.Panel latency = service.config().panels().stream()
+                .filter(panel -> panel.id().equals("http-latency"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(latency.unit()).isEqualTo(Unit.MILLIS);
+        assertThat(latency.series())
+                .extracting(InsightsConfigResponse.Series::id)
+                .containsExactly("http-latency.avg", "http-latency.max");
+    }
+
+    /** The one shipped panel drawn as bars behind a line; its YAML word only binds through lenient matching. */
+    @Test
+    void theGcPanelIsChartedAsBarsBehindALine() {
+        assertThat(service.config().panels())
+                .filteredOn(panel -> panel.id().equals("gc"))
+                .singleElement()
+                .extracting(InsightsConfigResponse.Panel::chart)
+                .isEqualTo(Chart.BARS_LINE);
+    }
+
+    /** No shipped tile resolves on a bare registry; each has to leave as null, never as NaN. */
+    @Test
+    void configMapsAnUnresolvedTileValueToNull() {
+        List<InsightsConfigResponse.Tile> tiles = service.config().tiles();
+
+        assertThat(tiles).isNotEmpty();
+        assertThat(tiles).extracting(InsightsConfigResponse.Tile::value).containsOnlyNulls();
     }
 
     @Test
@@ -69,12 +105,8 @@ class InsightsServiceTest {
      */
     @Test
     void invalidUserPanelFileIsIgnoredInFavourOfTheDefaults() {
-        InsightsProperties properties = new InsightsProperties();
-        properties.setConfigLocation("classpath:insights/loader-invalid.yml");
-
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
-            InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+            InsightsService fallback = withUserPanels("classpath:insights/loader-invalid.yml");
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -97,12 +129,8 @@ class InsightsServiceTest {
      */
     @Test
     void aSubtractMeterOnANonValueStatCostsTheWholeUserOverride() {
-        InsightsProperties properties = new InsightsProperties();
-        properties.setConfigLocation("classpath:insights/loader-subtract-meter-rate.yml");
-
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
-            InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+            InsightsService fallback = withUserPanels("classpath:insights/loader-subtract-meter-rate.yml");
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -137,7 +165,7 @@ class InsightsServiceTest {
         };
 
         InsightsService loaded = new InsightsService(
-                registry, new InsightsProperties(), recording, InsightsCollector.Listener.NO_OP, null);
+                registry, new InsightsProperties(), recording, InsightsCollectors.noOpListener(), null);
 
         assertThat(requested).contains("classpath:peekaboot-insights-defaults.yml");
         assertThat(loaded.config().panels())
@@ -158,7 +186,7 @@ class InsightsServiceTest {
         };
 
         assertThatThrownBy(() -> new InsightsService(
-                        registry, new InsightsProperties(), deepDefaults, InsightsCollector.Listener.NO_OP, null))
+                        registry, new InsightsProperties(), deepDefaults, InsightsCollectors.noOpListener(), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("panel 'deep': level 7");
     }
@@ -170,7 +198,7 @@ class InsightsServiceTest {
 
         try (LogCapture logs = LogCapture.attach(InsightsService.class)) {
             InsightsService fallback = new InsightsService(
-                    registry, properties, new DefaultResourceLoader(), InsightsCollector.Listener.NO_OP, null);
+                    registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
 
             assertThat(fallback.config().panels())
                     .extracting(InsightsConfigResponse.Panel::id)
@@ -196,7 +224,7 @@ class InsightsServiceTest {
         };
 
         assertThatThrownBy(() -> new InsightsService(
-                        registry, new InsightsProperties(), brokenDefaults, InsightsCollector.Listener.NO_OP, null))
+                        registry, new InsightsProperties(), brokenDefaults, InsightsCollectors.noOpListener(), null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bogus");
     }
@@ -212,5 +240,13 @@ class InsightsServiceTest {
                 assertThat(event.getFormattedMessage()).containsPattern("~\\d+(\\.\\d+)? MB");
             });
         }
+    }
+
+    /** The service over the bundled panels plus the operator's override at {@code location}. */
+    private InsightsService withUserPanels(String location) {
+        InsightsProperties properties = new InsightsProperties();
+        properties.setConfigLocation(location);
+        return new InsightsService(
+                registry, properties, new DefaultResourceLoader(), InsightsCollectors.noOpListener(), null);
     }
 }

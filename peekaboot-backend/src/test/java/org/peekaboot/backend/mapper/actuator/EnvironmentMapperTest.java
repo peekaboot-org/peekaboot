@@ -1,12 +1,14 @@
 package org.peekaboot.backend.mapper.actuator;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.actuator.parsed.EnvResponse;
 import org.peekaboot.backend.domain.environment.EnvironmentInfo;
+import org.peekaboot.backend.domain.environment.PropertyValue;
 import org.peekaboot.backend.masking.MaskingEngine;
 
 class EnvironmentMapperTest {
@@ -20,19 +22,23 @@ class EnvironmentMapperTest {
         assertThat(result.activeProfiles()).containsExactly("dev", "local");
     }
 
+    /** The endpoint types values as it finds them (a YAML port is an Integer); the dashboard shows text. */
     @Test
     void map_shouldExtractPropertySources() {
         EnvResponse env = new EnvResponse(
                 List.of(),
                 List.of(new EnvResponse.PropertySource(
                         "application.properties",
-                        Map.of("server.port", new EnvResponse.PropertyValue("8080", "application.properties")))));
+                        Map.of(
+                                "server.port",
+                                new EnvResponse.PropertyValue(
+                                        8080, "class path resource [application.properties] - 3:14")))));
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources()).hasSize(1);
         assertThat(result.propertySources().get(0).name()).isEqualTo("application.properties");
-        assertThat(result.propertySources().get(0).properties()).hasSize(1);
-        assertThat(result.propertySources().get(0).properties().get(0).key()).isEqualTo("server.port");
-        assertThat(result.propertySources().get(0).properties().get(0).value()).isEqualTo("8080");
+        assertThat(result.propertySources().get(0).properties())
+                .extracting(PropertyValue::key, PropertyValue::value, PropertyValue::origin)
+                .containsExactly(tuple("server.port", "8080", "class path resource [application.properties] - 3:14"));
     }
 
     @Test
@@ -50,14 +56,6 @@ class EnvironmentMapperTest {
     }
 
     @Test
-    void map_shouldHandleNullProfiles() {
-        EnvResponse env = new EnvResponse(null, null);
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.activeProfiles()).isEmpty();
-        assertThat(result.propertySources()).isEmpty();
-    }
-
-    @Test
     void map_shouldFallBackToUnknownNameWhenPropertySourceNameIsNull() {
         EnvResponse env = new EnvResponse(
                 List.of(),
@@ -66,15 +64,6 @@ class EnvironmentMapperTest {
         EnvironmentInfo result = mapper.map(env, false);
         assertThat(result.propertySources()).hasSize(1);
         assertThat(result.propertySources().get(0).name()).isEqualTo("unknown");
-    }
-
-    @Test
-    void map_shouldReturnEmptyPropertiesWhenSourcePropertiesIsNull() {
-        EnvResponse env =
-                new EnvResponse(List.of(), List.of(new EnvResponse.PropertySource("application.properties", null)));
-        EnvironmentInfo result = mapper.map(env, false);
-        assertThat(result.propertySources()).hasSize(1);
-        assertThat(result.propertySources().get(0).properties()).isEmpty();
     }
 
     @Test

@@ -2,18 +2,16 @@ package org.peekaboot.backend.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 
 class OwnerOnlyFilesTest {
 
@@ -22,7 +20,7 @@ class OwnerOnlyFilesTest {
 
     @BeforeEach
     void requiresPosixPermissions() {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
     }
 
     @Test
@@ -31,10 +29,8 @@ class OwnerOnlyFilesTest {
 
         OwnerOnlyFiles.createDirectories(nested);
 
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(nested)))
-                .isEqualTo("rwx------");
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(nested.getParent())))
-                .isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(nested)).isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(nested.getParent())).isEqualTo("rwx------");
     }
 
     @Test
@@ -43,8 +39,7 @@ class OwnerOnlyFilesTest {
 
         write(file, "content");
 
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
-                .isEqualTo("rw-------");
+        assertThat(PosixPermissions.of(file)).isEqualTo("rw-------");
         assertThat(Files.readString(file)).isEqualTo("content");
     }
 
@@ -81,8 +76,7 @@ class OwnerOnlyFilesTest {
         replace(file, "second");
 
         assertThat(Files.readString(file)).isEqualTo("second");
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(file)))
-                .isEqualTo("rw-------");
+        assertThat(PosixPermissions.of(file)).isEqualTo("rw-------");
         assertThat(directory.resolve("nested").resolve("state.tmp")).doesNotExist();
     }
 

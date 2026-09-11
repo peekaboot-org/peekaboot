@@ -9,28 +9,30 @@
  * This file holds only the shell (open/close, the chrome, tab wiring); each tab's
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
  */
-import {escapeHtml} from '../shared/markup.js';
-import {durationSeverity} from '../shared/severity.js';
+import {el, button} from '../shared/dom.js';
 import {formatCount, formatDurationMs} from '../shared/format.js';
+import {severityClass} from '../shared/severity.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
-import {resolveTheme, applyTheme, watchTheme} from '../shared/theme.js';
+import {bindTheme} from '../shared/theme.js';
 import {attachSharedStyles} from '../shared/shadow-styles.js';
 import {createClient, BASE_PATH} from '../shared/api.js';
-import {badgeHtml, tabStrip} from '../shared/components.js';
-import {copyableIdHtml, bindCopyables} from '../shared/copyable.js';
+import {badge, tabStrip} from '../shared/components.js';
+import {copyableId, bindCopyables} from '../shared/copyable.js';
+import {truncatedBadge} from '../shared/trace-stats.js';
 import * as request from './tabs/request.js';
 import * as spans from './tabs/spans.js';
 import * as queries from './tabs/queries.js';
 import * as logs from './tabs/logs.js';
 
 // label/count feed the tab strip built in wireTabs() below - label becomes each
-// button's text, count (when present) the small badge next to it.
+// button's text, count (when present) the small badge next to it. The counts are the
+// backend's TraceTabSummary, the same numbers the Traces tab and the toolbar show.
 const TABS = [
     {id: 'request', label: 'Request', render: request.render},
-    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary?.spans?.count ?? countSpans(t.rootSpan)},
-    {id: 'queries', label: 'Queries', render: queries.render, count: t => (t.queries || []).length},
-    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => (t.logs || []).length}
+    {id: 'spans',   label: 'Spans',   render: spans.render,   count: t => t.summary.spans.count},
+    {id: 'queries', label: 'Queries', render: queries.render, count: t => t.summary.queries.count},
+    {id: 'logs',    label: 'Logs',    render: logs.render,    count: t => t.summary.logs.count}
 ];
 
 // How long a cross-link jump's highlight stays on its target (see jumpToElement).
@@ -109,10 +111,18 @@ export function openTraceDetail(traceId, options = {}) {
     overlayHost.style.cssText = 'position:fixed;inset:0;';
     document.body.appendChild(overlayHost);
     setBackgroundInert(overlayHost);
+    // Bound here rather than in render(): from this line on the page behind is inert, and a
+    // reader waiting out the trace fetch (or looking at the error state) must be able to
+    // leave. closeTraceDetail() unbinds it, however the overlay is dismissed.
+    escHandler = event => {
+        if (event.key === 'Escape') {
+            closeTraceDetail();
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 
     const shadow = overlayHost.attachShadow({mode: 'open'});
-    applyTheme(overlayHost, resolveTheme());
-    themeUnwatch = watchTheme(theme => applyTheme(overlayHost, theme));
+    themeUnwatch = bindTheme(overlayHost);
     // attachSharedStyles keeps the host visibility:hidden until its <link> sheets settle;
     // an element under a visibility:hidden ancestor cannot take focus, so the eventual
     // render() -> container.focus() call must wait for this to resolve too, not just the
@@ -121,7 +131,8 @@ export function openTraceDetail(traceId, options = {}) {
 
     const content = document.createElement('div');
     shadow.appendChild(content);
-    content.innerHTML = '<div class="pk-overlay"><div class="pk-overlay__loading">Loading trace data...</div></div>';
+    content.replaceChildren(el('div', {className: 'pk-overlay'},
+        el('div', {className: 'pk-overlay__loading', text: 'Loading trace data...'})));
 
     const display = {locale: options.locale, timeZone: options.timeZone, features: options.features};
     fetchAndRender(content, traceId, {basePath, session, styleReady, urlState: options.urlState, display});
@@ -129,7 +140,7 @@ export function openTraceDetail(traceId, options = {}) {
 
 export function closeTraceDetail() {
     // Invalidates any fetchAndRender() still in flight from the overlay just removed, so
-    // it cannot re-render into (or re-register an ESC listener for) a detached node.
+    // it cannot re-render into a detached node.
     currentSession += 1;
     const existing = document.getElementById('peekaboot-trace-overlay');
     if (existing) {
@@ -166,53 +177,35 @@ async function fetchAndRender(content, traceId, {basePath, session, styleReady, 
         render(content, trace, urlState, display);
     } catch (error) {
         if (session !== currentSession) return;
-        // Not a full dialog (no focus-in, no ESC) - consistent with the loading state,
-        // which never was one either - but this screen is reachable and has a working
-        // control, so it needs a role and a name at minimum for a screen-reader user to
-        // know what landed on the page.
-        content.innerHTML = `<div class="pk-overlay" role="alertdialog" aria-modal="true" aria-label="Failed to load trace">`
-            + `<div class="pk-overlay__error">`
-            + `Failed to load trace: ${escapeHtml(error.message)}<br><br>`
-            + `<button type="button" class="pk-btn">Close</button></div></div>`;
-        content.querySelector('.pk-overlay__error button').addEventListener('click', closeTraceDetail);
+        // Not a full dialog (no focus-in) - consistent with the loading state, which never
+        // was one either - but this screen is reachable and has a working control, so it
+        // needs a role and a name at minimum for a screen-reader user to know what landed
+        // on the page. Escape closes it, bound since the open.
+        const close = button({className: 'pk-btn', text: 'Close'});
+        close.addEventListener('click', closeTraceDetail);
+        content.replaceChildren(el('div', {
+            className: 'pk-overlay',
+            attrs: {role: 'alertdialog', 'aria-modal': 'true', 'aria-label': 'Failed to load trace'}
+        }, el('div', {className: 'pk-overlay__error'}, `Failed to load trace: ${error.message}`, el('br'), el('br'), close)));
     }
 }
 
 function render(content, trace, urlState, display) {
-    // delegated once on the container, which outlives every innerHTML swap below
+    // delegated once on the container, which outlives every re-render below
     bindCopyables(content);
 
-    content.innerHTML = `
-        <div class="pk-overlay" role="dialog" aria-modal="true" aria-labelledby="pk-overlay-title" tabindex="-1">
-            <div class="pk-overlay__container">
-                ${headerHtml(trace, display)}
-                <div class="pk-tabs"></div>
-                <div class="pk-overlay__content" id="pk-tab-content"></div>
-            </div>
-        </div>
-    `;
-
-    const container = content.querySelector('.pk-overlay');
-    container.querySelector('.pk-overlay__title-icon').textContent = rootActionIcon(trace.rootActionType);
+    const container = el('div', {
+        className: 'pk-overlay',
+        attrs: {role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pk-overlay-title', tabindex: '-1'}
+    }, el('div', {className: 'pk-overlay__container'},
+        header(trace, display),
+        el('div', {className: 'pk-tabs'}),
+        el('div', {className: 'pk-overlay__content', attrs: {id: 'pk-tab-content'}})));
+    content.replaceChildren(container);
 
     container.querySelector('.pk-overlay__close').addEventListener('click', closeTraceDetail);
-    container.addEventListener('click', (e) => {
-        if (e.target === container) closeTraceDetail();
-    });
 
     wireTabs(container, trace, urlState, display);
-
-    // ESC key to close; closeTraceDetail removes the listener however
-    // the overlay is dismissed (buttons, overlay click, ESC)
-    if (escHandler) {
-        document.removeEventListener('keydown', escHandler);
-    }
-    escHandler = (e) => {
-        if (e.key === 'Escape') {
-            closeTraceDetail();
-        }
-    };
-    document.addEventListener('keydown', escHandler);
 
     // Move focus into the dialog. No single interior control is the obvious "first" one
     // given the tab strip + header controls, so the dialog itself (a real ARIA APG
@@ -220,7 +213,7 @@ function render(content, trace, urlState, display) {
     container.focus();
 }
 
-function headerHtml(trace, display) {
+function header(trace, display) {
     const rootSpan = trace.rootSpan || {};
     const httpExchange = trace.httpExchange || {};
     const req = httpExchange.request || {};
@@ -233,33 +226,32 @@ function headerHtml(trace, display) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-    const durationClass = durationSeverity(trace.durationMs, display.features);
+    const {spans: spanSummary, queries: querySummary, logs: logSummary} = trace.summary;
 
-    const queryCount = (trace.queries || []).length;
-    const logCount = (trace.logs || []).length;
-    const spanCount = trace.summary?.spans?.count ?? countSpans(trace.rootSpan);
+    const title = el('h2', {className: 'pk-overlay__title', attrs: {id: 'pk-overlay-title'}},
+        el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(trace.rootActionType), attrs: {'aria-hidden': 'true'}}),
+        el('span', {className: 'pk-overlay__title-method', text: method ?? rootActionLabel(trace.rootActionType)}),
+        el('span', {className: 'pk-overlay__title-path', text: path, title: path}),
+        el('span', {className: 'pk-overlay__title-traceid'}, copyableId(trace.traceId, {label: 'traceId'})));
 
-    return `
-        <div class="pk-overlay__header">
-            <div class="pk-overlay__header-main">
-                <h2 class="pk-overlay__title" id="pk-overlay-title">
-                    <span class="pk-overlay__title-icon" aria-hidden="true"></span>
-                    <span class="pk-overlay__title-method">${escapeHtml(method ?? rootActionLabel(trace.rootActionType))}</span>
-                    <span class="pk-overlay__title-path" title="${escapeHtml(path)}">${escapeHtml(path)}</span>
-                    <span class="pk-overlay__title-traceid">${copyableIdHtml(trace.traceId, {label: 'traceId'})}</span>
-                </h2>
-                <div class="pk-overlay__meta">
-                    <span class="pk-overlay__duration${durationClass ? ' pk-overlay__duration--' + durationClass : ''}">${formatDurationMs(trace.durationMs)}</span>
-                    ${badgeHtml(statusLabel(status), statusVariant(status))}
-                    <span>${formatCount(spanCount, 'span')}</span>
-                    <span>${formatCount(queryCount, 'query', 'queries')}</span>
-                    <span>${formatCount(logCount, 'log')}</span>
-                    ${trace.truncated ? '<span class="pk-badge pk-badge--warn" title="This trace hit the max-spans-per-trace cap - the oldest spans were dropped, so span, query and log counts above may be incomplete.">Truncated</span>' : ''}
-                </div>
-            </div>
-            <button type="button" class="pk-overlay__close" title="Close" aria-label="Close trace details">&times;</button>
-        </div>
-    `;
+    // trace.slow is the backend's verdict, the same flag the Traces tab's badge reads:
+    // some span carries a SLOW or VERY_SLOW issue. The span thresholds applied to the
+    // trace's total would call a 120 ms request slow here while the list did not.
+    const meta = el('div', {className: 'pk-overlay__meta'},
+        el('span', {
+            className: 'pk-overlay__duration' + (trace.slow ? ` ${severityClass('slow')}` : ''),
+            text: formatDurationMs(trace.durationMs)
+        }),
+        badge(statusLabel(status), statusVariant(status)),
+        trace.slow ? badge('SLOW', 'warn') : null,
+        el('span', {text: formatCount(spanSummary.count, 'span')}),
+        el('span', {text: formatCount(querySummary.count, 'query', 'queries')}),
+        el('span', {text: formatCount(logSummary.count, 'log')}),
+        trace.truncated ? truncatedBadge() : null);
+
+    return el('div', {className: 'pk-overlay__header'},
+        el('div', {className: 'pk-overlay__header-main'}, title, meta),
+        button({className: 'pk-unbutton pk-overlay__close', text: '×', title: 'Close', attrs: {'aria-label': 'Close trace details'}}));
 }
 
 /**
@@ -362,13 +354,4 @@ function wireTabs(container, trace, urlState, display) {
 function renderTabContent(container, tabId, trace, view) {
     const tab = TABS.find(t => t.id === tabId);
     if (tab) tab.render(container, trace, view);
-}
-
-function countSpans(span) {
-    if (!span) return 0;
-    let count = 1;
-    (span.children || []).forEach(child => {
-        count += countSpans(child);
-    });
-    return count;
 }

@@ -12,7 +12,7 @@ import org.peekaboot.backend.domain.loggers.LoggersInfo;
 public class LoggersMapper {
 
     public LoggersInfo map(LoggersResponse loggersData) {
-        if (loggersData == null || loggersData.loggers() == null) {
+        if (loggersData == null) {
             return new LoggersInfo(List.of(), 0, 0);
         }
 

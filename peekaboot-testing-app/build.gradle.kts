@@ -6,10 +6,10 @@ plugins {
 
 description = "Peekaboot Testing App - sample application for manual and automated UI testing"
 
-// In Maven this module deliberately parents to spring-boot-starter-parent so it consumes
-// the published starter exactly as a real user would. The Gradle build cannot reproduce
-// that proof either way (project() substitution is inherent here), so it simply shares
-// the conventions; the Maven build remains the consume-as-a-user check.
+// In Maven this module deliberately parents to spring-boot-starter-parent, which proves
+// it builds on Boot's plugin defaults and on nothing in peekaboot-parent (BUILD.md, "The
+// reactor"). Gradle has no counterpart to a Maven parent, so this module simply shares
+// the conventions.
 
 val springBootVersion = providers.gradleProperty("springBootVersion").get()
 
@@ -44,7 +44,11 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-security")
     testImplementation("com.h2database:h2")
     testImplementation("io.micrometer:micrometer-observation-test")
+    // shared test support (LogCapture)
+    testImplementation(project(":peekaboot-test-support"))
     testImplementation("com.microsoft.playwright:playwright:1.62.0")
+    // the axe-core rule engine, in lockstep with pom.xml
+    testImplementation("com.deque.html.axe-core:playwright:4.13.0")
 }
 
 // Maven compiles this module with -parameters (spring-boot-starter-parent default).

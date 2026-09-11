@@ -2,14 +2,26 @@ package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.WriteListener;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.ThrowingConsumer;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class ContentBufferingResponseWrapperTest {
@@ -24,7 +36,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldBufferOutputStreamContent() throws IOException {
+    void buffersOutputStreamContent() throws IOException {
         ServletOutputStream outputStream = wrapper.getOutputStream();
         outputStream.write("Hello World".getBytes(StandardCharsets.UTF_8));
 
@@ -34,7 +46,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldBufferWriterContent() throws IOException {
+    void buffersWriterContent() throws IOException {
         PrintWriter writer = wrapper.getWriter();
         writer.write("Hello Writer");
         writer.flush();
@@ -51,8 +63,22 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.getContentAsString()).isEqualTo("Test Content");
     }
 
+    /**
+     * The container never sees this wrapper's getWriter(), so it never locks the character
+     * encoding; a content type declared after the writer wrote changes what the response
+     * says while the buffered bytes stay encoded as they were.
+     */
     @Test
-    void shouldCopyBufferedContentToOriginalResponse() throws IOException {
+    void contentIsDecodedWithTheCharsetTheWriterEncodedWith() throws IOException {
+        wrapper.setContentType("text/html;charset=UTF-8");
+        wrapper.getWriter().write("Grüße");
+        wrapper.setContentType("text/html;charset=ISO-8859-1");
+
+        assertThat(wrapper.getContentAsString()).isEqualTo("Grüße");
+    }
+
+    @Test
+    void copiesBufferedContentToOriginalResponse() throws IOException {
         wrapper.getWriter().write("Buffered Content");
         wrapper.flushBuffer();
         wrapper.copyBodyToResponse();
@@ -63,7 +89,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldCopyModifiedContentToResponse() throws IOException {
+    void copiesModifiedContentToResponse() throws IOException {
         byte[] modifiedContent = "Modified Content".getBytes(StandardCharsets.UTF_8);
         wrapper.copyBodyToResponse(modifiedContent);
 
@@ -73,7 +99,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldPreventGetWriterAfterGetOutputStream() throws IOException {
+    void preventsGetWriterAfterGetOutputStream() throws IOException {
         wrapper.getOutputStream();
 
         assertThatThrownBy(() -> wrapper.getWriter())
@@ -82,7 +108,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldPreventGetOutputStreamAfterGetWriter() throws IOException {
+    void preventsGetOutputStreamAfterGetWriter() throws IOException {
         wrapper.getWriter();
 
         assertThatThrownBy(() -> wrapper.getOutputStream())
@@ -91,7 +117,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldReturnSameOutputStreamOnMultipleCalls() throws IOException {
+    void returnsTheSameOutputStreamOnEveryCall() throws IOException {
         ServletOutputStream first = wrapper.getOutputStream();
         ServletOutputStream second = wrapper.getOutputStream();
 
@@ -99,7 +125,7 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldReturnSameWriterOnMultipleCalls() throws IOException {
+    void returnsTheSameWriterOnEveryCall() throws IOException {
         PrintWriter first = wrapper.getWriter();
         PrintWriter second = wrapper.getWriter();
 
@@ -107,17 +133,12 @@ class ContentBufferingResponseWrapperTest {
     }
 
     @Test
-    void shouldResetBuffer() throws IOException {
+    void resetBufferClearsTheBufferedBody() throws IOException {
         wrapper.getWriter().write("Initial Content");
         wrapper.flushBuffer();
         wrapper.resetBuffer();
 
         assertThat(wrapper.getContentAsString()).isEmpty();
-    }
-
-    @Test
-    void shouldNotBeCommittedInitially() {
-        assertThat(wrapper.isCommitted()).isFalse();
     }
 
     @Test
@@ -226,6 +247,8 @@ class ContentBufferingResponseWrapperTest {
 
     @Test
     void isCommittedFollowsTheRealResponse() {
+        assertThat(wrapper.isCommitted()).isFalse();
+
         originalResponse.setCommitted(true);
 
         assertThat(wrapper.isCommitted()).isTrue();
@@ -253,6 +276,31 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
     }
 
+    /** Servlet 6.1 added overloads to both families; each one replaces the body the same way. */
+    @ParameterizedTest
+    @MethodSource("bodyReplacingOverloads")
+    void everySendErrorAndSendRedirectOverloadDropsTheBufferedBody(
+            ThrowingConsumer<ContentBufferingResponseWrapper> send) throws Throwable {
+        wrapper.getOutputStream().write("<html><body>half".getBytes(StandardCharsets.UTF_8));
+
+        send.accept(wrapper);
+
+        assertThat(originalResponse.isCommitted()).isTrue();
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    static Stream<Arguments> bodyReplacingOverloads() {
+        return Stream.of(
+                overload("sendError(int)", w -> w.sendError(500)),
+                overload("sendRedirect(String, int)", w -> w.sendRedirect("/elsewhere", 301)),
+                overload("sendRedirect(String, boolean)", w -> w.sendRedirect("/elsewhere", false)),
+                overload("sendRedirect(String, int, boolean)", w -> w.sendRedirect("/elsewhere", 301, false)));
+    }
+
+    private static Arguments overload(String name, ThrowingConsumer<ContentBufferingResponseWrapper> send) {
+        return Arguments.of(Named.of(name, send));
+    }
+
     /** An HTML body past the cap streams through rather than being held in heap; it gets no toolbar. */
     @Test
     void htmlBodyBeyondTheCapSwitchesToPassthrough() throws IOException {
@@ -270,5 +318,180 @@ class ContentBufferingResponseWrapperTest {
         assertThat(wrapper.isPassthrough()).isTrue();
         assertThat(originalResponse.getContentAsByteArray()).hasSize(chunks * chunk.length + 1);
         assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
+     * The writer's encoder is mid-flush when its bytes tip the buffer over the cap, so the
+     * hand-over happens from inside a write. Nothing may be dropped or repeated on the way.
+     */
+    @Test
+    void writerContentBeyondTheCapSwitchesToPassthroughIntact() throws IOException {
+        wrapper.setContentType("text/html");
+        char[] chunk = new char[64 * 1024];
+        Arrays.fill(chunk, 'x');
+        int chunks = ContentBufferingResponseWrapper.MAX_BUFFERED_BYTES / chunk.length + 1;
+        StringBuilder expected = new StringBuilder();
+
+        PrintWriter writer = wrapper.getWriter();
+        for (int i = 0; i < chunks; i++) {
+            writer.write(chunk);
+            expected.append(chunk);
+        }
+        writer.write('!');
+        expected.append('!');
+        writer.flush();
+
+        assertThat(wrapper.isPassthrough()).isTrue();
+        assertThat(originalResponse.getContentAsString()).isEqualTo(expected.toString());
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
+     * An async handler's worker can write while the request thread is still handing the
+     * buffered bytes over. The real response below stalls the hand-over inside its write,
+     * starts the worker there, and resumes once the worker has either finished (it overtook
+     * the hand-over) or is blocked waiting for it, so the outcome is deterministic either way.
+     */
+    @Test
+    void aWriteDuringTheHandOverLandsAfterTheBufferedBytes() throws Exception {
+        CountDownLatch handOverStarted = new CountDownLatch(1);
+        Worker[] worker = new Worker[1];
+        originalResponse = new MockHttpServletResponse() {
+            private final ServletOutputStream stalling =
+                    new StallingServletOutputStream(super.getOutputStream(), () -> {
+                        handOverStarted.countDown();
+                        awaitBlockedOrDone(worker[0]);
+                    });
+
+            @Override
+            public ServletOutputStream getOutputStream() {
+                return stalling;
+            }
+        };
+        wrapper = new ContentBufferingResponseWrapper(originalResponse);
+        ServletOutputStream out = wrapper.getOutputStream();
+        out.write("early".getBytes(StandardCharsets.UTF_8));
+        worker[0] = new Worker(() -> {
+            handOverStarted.await();
+            out.write("-late".getBytes(StandardCharsets.UTF_8));
+        });
+
+        wrapper.enablePassthrough();
+        worker[0].join();
+
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /**
+     * The writer variant: chars a worker writes after the request thread drained the writer
+     * but before the hand-over sit in the encoder, unflushed because passthrough was still
+     * off, and in passthrough nothing drains the writer at end of request. The wrapper's
+     * package-private seam runs the worker in exactly that window.
+     */
+    @Test
+    void aWriterWriteBetweenTheDrainAndTheHandOverStillReachesTheResponse() throws Exception {
+        CountDownLatch writerDrained = new CountDownLatch(1);
+        Worker[] worker = new Worker[1];
+        wrapper = new ContentBufferingResponseWrapper(originalResponse, () -> {
+            writerDrained.countDown();
+            awaitBlockedOrDone(worker[0]);
+        });
+        PrintWriter writer = wrapper.getWriter();
+        writer.write("early");
+        worker[0] = new Worker(() -> {
+            writerDrained.await();
+            writer.write("-late");
+        });
+
+        wrapper.enablePassthrough();
+        worker[0].join();
+
+        assertThat(originalResponse.getContentAsString()).isEqualTo("early-late");
+        assertThat(wrapper.getContentAsByteArray()).isEmpty();
+    }
+
+    /** Resumes once the worker has finished, or is blocked on a monitor the calling thread holds. */
+    private static void awaitBlockedOrDone(Worker worker) {
+        await().pollDelay(Duration.ZERO)
+                .pollInterval(Duration.ofMillis(1))
+                .until(() -> worker.isDone() || worker.isBlocked());
+    }
+
+    /**
+     * A second thread writing through the wrapper. Starts at once; a failure in the body is
+     * kept for {@link #join()} to report instead of reaching stderr as an uncaught exception.
+     */
+    private static final class Worker {
+
+        private final Thread thread;
+        private final CountDownLatch done = new CountDownLatch(1);
+        private final AtomicReference<Throwable> failure = new AtomicReference<>();
+
+        Worker(ThrowingCallable body) {
+            thread = new Thread(
+                    () -> {
+                        try {
+                            body.call();
+                        } catch (Throwable t) {
+                            failure.set(t);
+                        } finally {
+                            done.countDown();
+                        }
+                    },
+                    "async-writer");
+            thread.start();
+        }
+
+        boolean isDone() {
+            return done.getCount() == 0;
+        }
+
+        boolean isBlocked() {
+            return thread.getState() == Thread.State.BLOCKED;
+        }
+
+        void join() throws InterruptedException {
+            assertThat(thread.join(Duration.ofSeconds(5))).as("worker finished").isTrue();
+            assertThat(failure.get()).as("worker failure").isNull();
+        }
+    }
+
+    /** Runs {@code beforeHandOver} once, at the first write from the thread that created it, the request thread. */
+    private static final class StallingServletOutputStream extends ServletOutputStream {
+
+        private final ServletOutputStream delegate;
+        private final Runnable beforeHandOver;
+        private final Thread requestThread = Thread.currentThread();
+        private boolean handedOver;
+
+        StallingServletOutputStream(ServletOutputStream delegate, Runnable beforeHandOver) {
+            this.delegate = delegate;
+            this.beforeHandOver = beforeHandOver;
+        }
+
+        @Override
+        public void write(int b) throws IOException {
+            delegate.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            if (Thread.currentThread().equals(requestThread) && !handedOver) {
+                handedOver = true;
+                beforeHandOver.run();
+            }
+            delegate.write(b, off, len);
+        }
+
+        @Override
+        public boolean isReady() {
+            return true;
+        }
+
+        @Override
+        public void setWriteListener(WriteListener listener) {
+            // not needed by the wrapper under test
+        }
     }
 }

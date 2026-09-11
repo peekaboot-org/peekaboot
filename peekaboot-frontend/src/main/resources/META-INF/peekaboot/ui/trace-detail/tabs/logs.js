@@ -5,38 +5,55 @@
  * full id on every row); see spans.js's "N logs" toggle, which lands here with this
  * tab's own span filter already seeded.
  */
-import {escapeHtml} from '../../shared/markup.js';
+import {el, button} from '../../shared/dom.js';
 import {formatTimeOfDay} from '../../shared/format.js';
 import {LOG_LEVELS} from '../../shared/severity.js';
-import {buildSpanNames} from '../../shared/span-names.js';
-import {copyableIdHtml} from '../../shared/copyable.js';
-import {emptyStateHtml} from '../../shared/components.js';
+import {copyableId} from '../../shared/copyable.js';
+import {emptyState} from '../../shared/components.js';
 
-function renderLogRows(logs, spanNames, dateOptions, canJumpToSpan) {
-    return logs.map(log => {
-        const spanId = log.spanId || '';
-        // Cross-link to the span's row in the Spans tab tree - distinct from the name
-        // button beside it, which filters this list (see trace-detail.js's goToSpan).
-        const treeLink = canJumpToSpan && spanId
-            ? `<button type="button" class="pk-log__goto-span" data-span-id="${escapeHtml(spanId)}"`
-                + ` title="Show this span in the span tree"`
-                + ` aria-label="Show span ${escapeHtml(spanId)} in the span tree">&#10550;</button>`
-            : '';
-        const spanCell = `<span class="pk-log__span-cell">`
-            + `<span class="pk-log__span-row">`
-            + `<button type="button" class="pk-log__span" data-span-id="${escapeHtml(spanId)}" title="${escapeHtml(spanId)}" aria-label="Filter logs to span ${escapeHtml(spanId)}">`
-            + `${escapeHtml(spanNames?.get(spanId) || spanId)}</button>`
-            + treeLink
-            + `</span>`
-            + copyableIdHtml(spanId, {label: 'spanId', truncate: true})
-            + `</span>`;
-        return `<div class="pk-log" data-level="${escapeHtml(log.level)}" data-span-id="${escapeHtml(spanId)}">`
-             + `<span class="pk-log__time">${escapeHtml(formatTimeOfDay(log.timestamp, dateOptions))}</span>`
-             + spanCell
-             + `<span class="pk-log__level pk-log__level--${escapeHtml(String(log.level).toLowerCase())}">${escapeHtml(log.level)}</span>`
-             + `<span class="pk-log__message">${escapeHtml(log.message)}</span>`
-             + `</div>`;
-    }).join('');
+/** A spanId -> name lookup over the span tree, to name the span each log row belongs to. */
+function buildSpanNames(rootSpan) {
+    const names = new Map();
+    (function walk(span) {
+        if (!span) return;
+        names.set(span.spanId, span.name);
+        (span.children || []).forEach(walk);
+    })(rootSpan);
+    return names;
+}
+
+function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
+    const spanId = log.spanId || '';
+
+    const nameButton = button({
+        className: 'pk-unbutton pk-log__span',
+        text: spanNames.get(spanId) || spanId,
+        title: spanId,
+        attrs: {'data-span-id': spanId, 'aria-label': `Filter logs to span ${spanId}`}
+    });
+    nameButton.addEventListener('click', () => {
+        if (spanId) onFilterToSpan(spanId);
+    });
+
+    const spanRow = el('span', {className: 'pk-log__span-row'}, nameButton);
+    // Cross-link to the span's row in the Spans tab tree - distinct from the name
+    // button beside it, which filters this list (see trace-detail.js's goToSpan).
+    if (view.goToSpan && spanId) {
+        const treeLink = button({
+            className: 'pk-unbutton pk-icon-btn pk-log__goto-span',
+            text: '⤶',
+            title: 'Show this span in the span tree',
+            attrs: {'data-span-id': spanId, 'aria-label': `Show span ${spanId} in the span tree`}
+        });
+        treeLink.addEventListener('click', () => view.goToSpan(spanId));
+        spanRow.append(treeLink);
+    }
+
+    return el('div', {className: 'pk-log', attrs: {'data-level': log.level, 'data-span-id': spanId}},
+        el('span', {className: 'pk-log__time', text: formatTimeOfDay(log.timestamp, dateOptions)}),
+        el('span', {className: 'pk-log__span-cell'}, spanRow, copyableId(spanId, {label: 'spanId', truncate: true})),
+        el('span', {className: `pk-log__level pk-log__level--${String(log.level).toLowerCase()}`, text: log.level}),
+        el('span', {className: 'pk-log__message', text: log.message}));
 }
 
 /**
@@ -54,7 +71,7 @@ export function render(container, trace, view = {}) {
     const logs = trace.logs || [];
 
     if (logs.length === 0) {
-        container.innerHTML = emptyStateHtml('No logs recorded for this trace');
+        container.replaceChildren(emptyState('No logs recorded for this trace'));
         return;
     }
 
@@ -80,10 +97,17 @@ export function render(container, trace, view = {}) {
         view.setFilters?.(next);
     }
 
+    function filterToSpan(spanId) {
+        state.span = spanId;
+        publishFilters();
+        renderView();
+    }
+
     function renderView() {
         const dateOptions = {locale: view.locale, timeZone: view.timeZone};
-        container.innerHTML = filterBarHtml(state, spanNames)
-            + `<div id="pk-logs-list">${renderLogRows(logs, spanNames, dateOptions, Boolean(view.goToSpan))}</div>`;
+        const list = el('div', {attrs: {id: 'pk-logs-list'}},
+            ...logs.map(log => logRow(log, spanNames, dateOptions, view, filterToSpan)));
+        container.replaceChildren(filterBar(state, spanNames), list);
 
         // Establishes the initial visibility (filters restored from the URL, or a span
         // filter set before this render) before any control has fired an event.
@@ -104,52 +128,45 @@ export function render(container, trace, view = {}) {
             publishFilters();
             renderView();
         });
-        container.querySelectorAll('.pk-log__span').forEach(el => {
-            el.addEventListener('click', () => {
-                if (!el.dataset.spanId) return;
-                state.span = el.dataset.spanId;
-                publishFilters();
-                renderView();
-            });
-        });
-        // Cross-link to the span tree (see renderLogRows)
-        container.querySelectorAll('.pk-log__goto-span').forEach(el => {
-            el.addEventListener('click', () => view.goToSpan?.(el.dataset.spanId));
-        });
     }
 
     renderView();
 }
 
-function filterBarHtml(state, spanNames) {
-    let html = '<div class="pk-logs-filter">';
-    html += `<input type="text" placeholder="Filter logs..." aria-label="Filter logs" id="pk-log-filter" value="${escapeHtml(state.q)}">`;
-    html += '<select id="pk-log-level" aria-label="Log level">';
-    html += `<option value=""${state.level === '' ? ' selected' : ''}>All Levels</option>`;
-    LOG_LEVELS.forEach(level => {
-        html += `<option${state.level === level ? ' selected' : ''}>${level}</option>`;
-    });
-    html += '</select>';
-    if (state.span) html += spanFilterChipHtml(state.span, spanNames);
-    html += '</div>';
-    return html;
+function filterBar(state, spanNames) {
+    const input = el('input', {attrs: {type: 'text', placeholder: 'Filter logs...', 'aria-label': 'Filter logs', id: 'pk-log-filter'}});
+    input.value = state.q;
+
+    const select = el('select', {attrs: {id: 'pk-log-level', 'aria-label': 'Log level'}},
+        el('option', {text: 'All Levels', attrs: {value: ''}}),
+        ...LOG_LEVELS.map(level => el('option', {text: level})));
+    select.value = state.level;
+
+    const bar = el('div', {className: 'pk-logs-filter'}, input, select);
+    if (state.span) bar.append(spanFilterChip(state.span, spanNames));
+    return bar;
 }
 
 /** The active span filter as a chip: "name (shortId)", or the short id alone with the full id as its title. */
-function spanFilterChipHtml(spanId, spanNames) {
+function spanFilterChip(spanId, spanNames) {
     const shortId = spanId.slice(0, 8);
     const spanName = spanNames.get(spanId);
     let label;
-    let title = '';
+    let title;
     if (spanName) {
         const shortName = spanName.length > 20 ? spanName.substring(0, 20) + '...' : spanName;
-        label = `${escapeHtml(shortName)} (${escapeHtml(shortId)})`;
+        label = `${shortName} (${shortId})`;
     } else {
-        label = escapeHtml(shortId);
-        title = ` title="${escapeHtml(spanId)}"`;
+        label = shortId;
+        title = spanId;
     }
-    return `<span class="pk-logs-filter-span"${title}>Span: ${label} `
-        + '<button type="button" class="pk-logs-filter-span-clear" id="pk-clear-span-filter" aria-label="Clear span filter">&times;</button></span>';
+    return el('span', {className: 'pk-logs-filter-span', title},
+        `Span: ${label} `,
+        button({
+            className: 'pk-unbutton pk-logs-filter-span-clear',
+            text: '×',
+            attrs: {id: 'pk-clear-span-filter', 'aria-label': 'Clear span filter'}
+        }));
 }
 
 function applyFilters(container, state) {

@@ -1,6 +1,6 @@
-/* Dashboard-only chrome. Shared primitives (badge, group, kv, meter, btn,
-   tabs, empty, spinner keyframes) live in ../assets/components.css and are
-   not duplicated here. */
+/* Dashboard-only chrome. Shared primitives (badge, group, kv, meter, btn, tabs, empty,
+   loading, label, icon button, card table) live in ../assets/components.css and are not
+   duplicated here; the focus ring, the button reset and the logo mark in ../assets/base.css. */
 
 /* Header. A neutral surface, not a --pk-primary slab: the brand green is
    fill-tuned and mid-lightness, so a full-bleed green bar would swallow the
@@ -18,18 +18,10 @@
     font-size: var(--pk-text-lg);
     font-weight: 600;
 }
-/* The mark repeats what the wordmark beside it already says, so it is a
-   background image on an empty span rather than an <img> wanting alt text.
-   It swaps per theme: the mark's slate magnifier is 1.4:1 on the dark
-   --pk-bg and would otherwise vanish. */
+/* The mark repeats what the wordmark beside it already says, so it is a background image
+   (.pk-logo-mark, base.css) on an empty span rather than an <img> wanting alt text. */
 .pk-header__brand { display: flex; align-items: center; gap: var(--pk-space-sm); }
-.pk-header__logo {
-    flex: none;
-    width: 26px;
-    height: 26px;
-    background: url('../assets/logo-mark.png') center / contain no-repeat;
-}
-[data-theme="dark"] .pk-header__logo { background-image: url('../assets/logo-mark-dark.png'); }
+.pk-header__logo { width: 26px; height: 26px; }
 .pk-header__content {
     display: flex;
     align-items: center;
@@ -100,6 +92,7 @@
     letter-spacing: inherit;
     text-transform: inherit;
 }
+/* Carries .pk-label for its type; only the layout is its own. */
 .pk-card__header {
     display: flex;
     align-items: center;
@@ -107,15 +100,8 @@
     padding: var(--pk-space-sm) var(--pk-space-md);
     background: var(--pk-bg-alt);
     border-bottom: 1px solid var(--pk-border);
-    font-size: var(--pk-text-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--pk-text-muted);
 }
 .pk-card__icon { font-size: var(--pk-text-sm); }
-/* Trailing, non-uppercase text in a card header, e.g. the memory card's PID. */
-.pk-card__meta { margin-left: auto; font-weight: normal; text-transform: none; letter-spacing: normal; }
 .pk-card__body { padding: var(--pk-space-md); }
 
 /* Footer */
@@ -135,30 +121,6 @@
     text-decoration: underline;
 }
 
-.pk-footer__link:focus-visible {
-    outline: 2px solid var(--pk-primary-text);
-    outline-offset: 1px;
-}
-
-/* Loading */
-.pk-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: var(--pk-space-xl);
-    color: var(--pk-text-muted);
-    gap: var(--pk-space-md);
-}
-.pk-spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--pk-border);
-    border-top-color: var(--pk-primary-text);
-    border-radius: 50%;
-    animation: pk-spin 1s linear infinite;
-}
-
 /* Error banner. The tint is faint enough (0.04 alpha) that the danger-red text keeps
    clear AA headroom in both themes (4.99:1 light, 5.54:1 dark). */
 .pk-error-banner {
@@ -174,23 +136,9 @@
 }
 /* .message stays unprefixed: the browser tests read the literal selector "#error .message". */
 .pk-error-banner .message { color: var(--pk-danger); }
-/* 24x24 minimum: as a bare glyph button this measured 10.5x18, under WCAG 2.2's
+/* .pk-unbutton .pk-icon-btn: as a bare glyph button this measured 10.5x18, under WCAG 2.2's
    target-size floor. The box grows, the glyph does not. */
-.pk-error-banner__close {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: none;
-    min-width: 24px;
-    min-height: 24px;
-    background: none;
-    border: none;
-    color: var(--pk-danger);
-    cursor: pointer;
-    font-size: var(--pk-text-lg);
-    padding: 0;
-    line-height: 1;
-}
+.pk-error-banner__close { color: var(--pk-danger); font-size: var(--pk-text-lg); line-height: 1; }
 
 /* Filter (search box used by the environment/loggers/config/meters tabs) */
 /* A row, not a block: the count sits beside the input, and the icon is centred
@@ -216,7 +164,7 @@
     font-size: var(--pk-text-sm);
     transition: border-color var(--pk-transition), background-color var(--pk-transition);
 }
-.pk-filter__input:focus { outline: none; border-color: var(--pk-primary-text); }
+.pk-filter__input:focus { border-color: var(--pk-primary-text); }
 .pk-filter__input::placeholder { color: var(--pk-text-muted); }
 .pk-filter__icon {
     position: absolute;
@@ -257,7 +205,7 @@
     transition: background-color var(--pk-transition);
 }
 .pk-health:hover { background: var(--pk-bg-hover); }
-.pk-health:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-health:focus-visible { outline-offset: -2px; }
 .pk-health--down { border-left-color: var(--pk-danger); }
 /* The text-tuned amber, not the fill, so the stripe and the --unknown dots below
    match the warning text they sit beside. */
@@ -342,23 +290,16 @@
    the extra weight that marks a logger with an explicit configured level. */
 .pk-kv__key--configured { font-weight: 700; }
 
-/* Flyway - a table of migrations; see .pk-table in components.css for the shared shape.
-   The state stripe moves to a row-leading border so a failed migration is still findable
-   at a glance in a history hundreds of rows long. */
-.pk-flyway-table { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
+/* Flyway - a .pk-table--card of migrations (components.css); the state stripes are its
+   row modifiers. */
 .pk-flyway-row__version { font-weight: 600; color: var(--pk-primary-text); font-family: var(--pk-font-mono); }
 .pk-flyway-row__description { color: var(--pk-text-strong); }
 /* Only the script column may truncate - everything else is short and fixed-width. */
 .pk-flyway-row__script { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pk-text-muted); }
-.pk-flyway-row--failed td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
-.pk-flyway-row--pending td:first-child { box-shadow: inset 3px 0 0 var(--pk-text-muted); }
-.pk-flyway-row__time--slow { color: var(--pk-warning-text); }
-.pk-flyway-row__time--very-slow { color: var(--pk-danger); }
 
 /* Traces controls - the bucket buttons row and the type filter checkbox row share this
    layout, hence one shared class rather than two near-identical rules. */
 .pk-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-md); }
-.pk-filter-row__label { font-size: var(--pk-text-xs); font-weight: 600; color: var(--pk-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .pk-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); margin-bottom: var(--pk-space-md); font-size: var(--pk-text-sm); color: var(--pk-text-muted); }
 
 /* Trace list item */
@@ -371,25 +312,26 @@
 }
 .pk-trace-item__header { display: flex; align-items: center; gap: var(--pk-space-md); padding: var(--pk-space-md); transition: background-color var(--pk-transition); flex-wrap: wrap; }
 .pk-trace-item__header:hover { background: var(--pk-bg-alt); }
-/* Reset to look like the plain flex column it replaces - only its semantics (a real
-   <button>) are new, not its appearance. Sibling to .pk-trace-item__scheduler-link, not
-   its parent - a <button> cannot contain interactive content (the link), so the two
-   live side by side in .pk-trace-item__header instead of one nesting the other. */
-.pk-trace-item__open {
+/* The column the row's two lines used to get from .pk-trace-item__open itself. The button
+   now covers the main line alone, because the stats line below it carries the traceId's
+   copy control and a <button> cannot contain interactive content. The scheduler link is a
+   sibling of this column for the same reason. */
+.pk-trace-item__body {
     display: flex;
     flex-direction: column;
     flex: 1;
     min-width: 0;
     gap: var(--pk-space-xs);
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
 }
-.pk-trace-item__open:focus-visible { outline: 2px solid var(--pk-primary-text); outline-offset: -2px; }
+.pk-trace-item__open {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    /* the hit-target floor the project holds every control to; one line of text is under it */
+    min-height: 24px;
+    text-align: left;
+}
+.pk-trace-item__open:focus-visible { outline-offset: -2px; }
 .pk-trace-item__main-line { display: flex; align-items: center; gap: var(--pk-space-sm); width: 100%; }
 .pk-trace-item__icon { margin-right: var(--pk-space-sm); font-size: 1.1em; }
 .pk-trace-item__path { flex: 1; font-family: var(--pk-font-mono); font-size: var(--pk-text-sm); color: var(--pk-text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -434,31 +376,15 @@
     .pk-task__right { width: 100%; justify-content: flex-start; }
 }
 
-/* Cross-linking between the scheduled-tasks and traces tabs */
-.pk-task__traces-link, .pk-trace-item__scheduler-link {
-    display: inline-block;
-    margin-left: var(--pk-space-sm);
-    padding: 2px 6px;
-    font-size: var(--pk-text-xs);
-    color: var(--pk-primary-text);
-    text-decoration: none;
-    border-radius: var(--pk-radius);
-    transition: background-color var(--pk-transition);
-}
-.pk-task__traces-link:hover, .pk-trace-item__scheduler-link:hover {
-    background: var(--pk-bg-alt);
-}
-
 /* Metric group. The collapsible header/body is the shared .pk-group primitive (see its
-   --mono name modifier, reserved for metric names) - only the type-badge/unit slot and
-   the measurement rows inside the group's list are metric-specific. */
+   --mono name modifier, reserved for metric names) and a measurement row is the shared
+   .pk-kv one - only the type-badge/unit slot and what sits inside a row are
+   metric-specific. */
 .pk-metric__unit { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-metric__description { padding: var(--pk-space-sm) var(--pk-space-md); background: var(--pk-bg); font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-style: italic; border-bottom: 1px solid var(--pk-border); }
-.pk-metric__measurement { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--pk-space-md); padding: var(--pk-space-sm) var(--pk-space-md); border-bottom: 1px solid var(--pk-border); }
-.pk-metric__measurement:last-child { border-bottom: none; }
 .pk-metric__tags { display: flex; flex-wrap: wrap; gap: var(--pk-space-xs); flex: 1; }
 .pk-metric__tag { display: inline-block; padding: 2px 6px; background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: var(--pk-radius); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); color: var(--pk-text); }
-.pk-metric__no-tags { font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-style: italic; }
+.pk-metric__no-tags { font-size: var(--pk-text-xs); }
 .pk-metric__stats { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); justify-content: flex-end; }
 .pk-metric__stat { display: inline-flex; align-items: center; gap: 4px; font-size: var(--pk-text-xs); }
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
@@ -475,16 +401,17 @@
    they annotate, which are what the row is actually for. */
 .pk-insight-tile__icon { flex: none; color: var(--pk-text-muted); }
 .pk-insight-tile__text { min-width: 0; }
-.pk-insight-tile-label { font-size: var(--pk-text-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pk-text-muted); }
 /* --pk-text-base, not --pk-text-lg: the longest value in the row is a formatted
    date, and at the larger size it wraps and leaves the row visibly ragged. */
-.pk-insight-tile-value { font-size: var(--pk-text-base); font-weight: 600; color: var(--pk-text-strong); }
+.pk-insight-tile__value { font-size: var(--pk-text-base); font-weight: 600; color: var(--pk-text-strong); }
 
 /* Insights tab: toolbar and panel cards. uPlot mounts into .pk-insight-chart and
    brings its own stylesheet (vendor/uplot/uplot.min.css, lazy-loaded with the
    library); only the legend is re-tuned here to sit in the card's type scale.
    .pk-blink is retriggered on every panel readout an SSE tick actually changed. */
 #insights-toolbar { display: flex; align-items: center; gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
+/* The text-tuned amber: a warning drawn on the page background, not a fill. */
+.pk-insight-stream-note { font-size: var(--pk-text-xs); color: var(--pk-warning-text); }
 /* The interval switch: one button per configured level, active state from the shared
    .pk-btn[aria-pressed="true"] rule. Segments touch, so only the outer corners are
    rounded and shared borders are collapsed. Shared by the toolbar's own switch
@@ -513,7 +440,7 @@
 .pk-insight-chart { min-height: 180px; }
 /* Cards for an absent subsystem carry a message instead of a chart (see insights.js). */
 .pk-insight-panel--empty .pk-insight-chart { display: flex; align-items: center; justify-content: center; }
-.pk-insight-empty { color: var(--pk-text-muted); font-size: var(--pk-text-sm); font-style: italic; }
+.pk-insight-empty { font-size: var(--pk-text-sm); }
 .pk-insight-chart .u-legend { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-insight-chart .u-legend th { font-weight: 500; }
 /* min/max band edges and percentile hairlines take their panel series' colour and
@@ -539,11 +466,8 @@
 @keyframes pk-insight-blink { from { background-color: var(--pk-primary-light); } to { background-color: transparent; } }
 .pk-blink { animation: pk-insight-blink 0.6s ease-out; }
 
-/* Lifecycle - a table of runs; see .pk-table in components.css for the shared shape.
-   Row accents mirror .pk-flyway-row--failed's box-shadow-on-first-cell treatment. */
-.pk-lifecycle-table { background: var(--pk-bg); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); }
-.pk-lifecycle-row--running td:first-child { box-shadow: inset 3px 0 0 var(--pk-primary); }
-.pk-lifecycle-row--unclean td:first-child { box-shadow: inset 3px 0 0 var(--pk-danger); }
+/* Lifecycle - a .pk-table--card of runs (components.css); the row stripes are its
+   modifiers. */
 .pk-lifecycle-row__build { min-width: 14ch; }
 .pk-lifecycle-row__version { font-weight: 600; color: var(--pk-text-strong); font-family: var(--pk-font-mono); }
 /* Branch and commit, muted beneath the version - same demotion .pk-group__count uses

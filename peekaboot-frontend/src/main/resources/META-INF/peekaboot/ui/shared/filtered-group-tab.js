@@ -1,9 +1,11 @@
 /**
- * The shell shared by the dashboard tabs that show a filterable list of collapsible groups
- * (config.js, environment.js, loggers.js, meters.js): the module-level data/context, the
- * filter input wired once, the URL <-> filter reconciliation, the expansion state that
- * survives a re-render, and the empty states. A tab supplies only what differs - where its
- * groups come from, how one group is filtered, and how a group's header and items look.
+ * The shell shared by the dashboard tabs that show a list of collapsible groups, filterable
+ * or not (config.js, environment.js, loggers.js, meters.js, scheduled-tasks.js): the
+ * module-level data/context, the filter input wired once, the URL <-> filter
+ * reconciliation, the expansion state that survives a re-render, and the empty states. A
+ * tab supplies only what differs - where its groups come from, how one group is filtered,
+ * and how a group's header and items look. A tab with no `inputId` has no filter: every
+ * group renders, and its `filterGroup` is called with an empty query.
  *
  *   select(data)                -> the groups array, or nothing when the payload has none
  *   filterGroup(group, query)   -> the group narrowed to the query, or null when nothing
@@ -21,11 +23,10 @@
  *                               -> optional hook run after every (re-)render, the empty
  *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
- *                                  instead of the shared payload render() receives. Called
- *                                  only for the active tab (active-tab guard, see main.js's
- *                                  renderTab). Resolves to the data select() reads, or null
- *                                  when superseded (see shared/api.js); a rejection renders
- *                                  fetchErrorMessage.
+ *                                  instead of the shared payload render() receives, on the
+ *                                  self-fetching-tab.js contract (active-tab guard,
+ *                                  supersession, rejection). Resolves to the data select()
+ *                                  reads; a rejection renders fetchErrorMessage.
  *   loadingMessage              -> shown while the very first fetchData() is in flight
  *   fetchErrorMessage(error)    -> shown when fetchData() rejects
  *
@@ -33,8 +34,11 @@
  * refresh(container), which re-renders with the current filter for a control the tab wires
  * itself (loggers.js's checkbox).
  */
-import {groupList, expandedKeys, emptyState, loadingBlock} from './components.js';
+import {groupList, expandedKeys, emptyState, loadingBlock, kvRow} from './components.js';
+import {formatCount, formatPlainValue} from './format.js';
 import {reconcileTextFilter, writeTextFilter} from './url-filter.js';
+import {selfFetchingTab} from './self-fetching-tab.js';
+import {renderUnmaskControl} from './unmask-control.js';
 
 export function filteredGroupTab({
     inputId, listId, select, filterGroup, key, header, items, extraTop,
@@ -52,43 +56,44 @@ export function filteredGroupTab({
     const reconcile = urlFilter?.reconcile ?? ((input, container, context) => reconcileTextFilter(input, context));
     const write = urlFilter?.write ?? ((input, container, context) => writeTextFilter(input, context));
 
+    const fetcher = fetchData && selfFetchingTab({
+        fetch: fetchData,
+        reconcile: (container, context) => reconcile(input(container), container, context),
+        // Only before the very first data arrives - a background refresh of an
+        // already-populated, currently visible list must not blank it for the round
+        // trip's duration (renderGroups replaces the content once the response is in).
+        loading: (container, {firstLoad}) => {
+            if (firstLoad) list(container).replaceChildren(loadingBlock(loadingMessage));
+        },
+        renderResult: (container, result) => {
+            currentData = result;
+            renderGroups(container);
+        },
+        renderError: (container, error) => list(container).replaceChildren(emptyState(fetchErrorMessage(error)))
+    });
+
     function render(container, data, context) {
-        if (!fetchData) currentData = data;
         currentContext = context;
         wireFilter(container);
+        if (fetcher) {
+            fetcher.render(container, data, context);
+            return;
+        }
+        currentData = data;
         if (context.active) reconcile(input(container), container, context);
-        if (fetchData) fetchAndRender(container, context);
-        else renderGroups(container);
+        renderGroups(container);
     }
 
     function refresh(container) {
         renderGroups(container);
     }
 
-    async function fetchAndRender(container, context) {
-        if (!context.active) return;
-
-        const target = container.querySelector(`#${listId}`);
-        // Only before the very first data arrives - a background refresh of an
-        // already-populated, currently visible list must not blank it for the round
-        // trip's duration (renderGroups replaces the content once the response is in).
-        if (currentData === null) target.replaceChildren(loadingBlock(loadingMessage));
-
-        let result;
-        try {
-            result = await fetchData(context);
-        } catch (error) {
-            target.replaceChildren(emptyState(fetchErrorMessage(error)));
-            return;
-        }
-        if (result === null) return; // superseded by a newer request
-
-        currentData = result;
-        renderGroups(container);
+    function list(container) {
+        return container.querySelector(`#${listId}`);
     }
 
     function input(container) {
-        return container.querySelector(`#${inputId}`);
+        return inputId ? container.querySelector(`#${inputId}`) : null;
     }
 
     function currentQuery(container) {
@@ -107,7 +112,7 @@ export function filteredGroupTab({
 
     function renderGroups(container) {
         const query = currentQuery(container);
-        const target = container.querySelector(`#${listId}`);
+        const target = list(container);
         // Must run before the container is cleared below - it reads the DOM's current
         // aria-expanded state so a re-render (e.g. the 30s auto-refresh) can restore it.
         const expanded = expandedKeys(target);
@@ -142,4 +147,53 @@ export function filteredGroupTab({
     }
 
     return {render, refresh};
+}
+
+/**
+ * The property-list case of filteredGroupTab, shared by config.js and environment.js:
+ * groups of {key, value} properties matched on either, values rendered as one line of
+ * text (a structured value as JSON), and the "Show secrets" control (unmask-control.js)
+ * in the slot `unmaskSlotId` names. `groupName(group)` names a group - config's prefix, a
+ * property source's name - and doubles as its identity for expansion restore.
+ */
+export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupName, extraTop, emptyMessage}) {
+    const tab = filteredGroupTab({
+        inputId,
+        listId,
+        select,
+        filterGroup: (group, query) => {
+            const properties = (group.properties || []).filter(prop => propertyMatches(prop, query));
+            return properties.length > 0 ? {...group, properties} : null;
+        },
+        key: groupName,
+        header: (group, query) => ({
+            name: groupName(group),
+            count: formatCount(group.properties.length, 'property', 'properties'),
+            highlight: query
+        }),
+        items: (group, list, query) => group.properties.forEach(prop =>
+            list.appendChild(kvRow(prop.key, formatPlainValue(prop.value), {highlight: query}))),
+        extraTop,
+        emptyMessage,
+        noMatchMessage: query => `No properties matching "${query}"`
+    });
+
+    function render(container, data, context) {
+        renderUnmaskControl(container.querySelector(`#${unmaskSlotId}`), context);
+        tab.render(container, data, context);
+    }
+
+    return {render};
+}
+
+/**
+ * Key or rendered value contains the query, case-insensitively. A missing value is matched
+ * as the empty string, so such a row matches on its key alone; the dash the row renders in
+ * its place is no part of the filter text. Exported for the browser tests.
+ */
+export function propertyMatches(prop, query) {
+    if (!query) return true;
+    const needle = query.toLowerCase();
+    const value = prop.value == null ? '' : formatPlainValue(prop.value);
+    return prop.key.toLowerCase().includes(needle) || value.toLowerCase().includes(needle);
 }

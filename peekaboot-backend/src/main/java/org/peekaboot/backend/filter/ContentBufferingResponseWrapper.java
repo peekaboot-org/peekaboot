@@ -37,11 +37,26 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     private ServletOutputStream outputStream;
     private PrintWriter writer;
+    /**
+     * What the writer encodes with. The container never sees this wrapper's getWriter(), so
+     * it never locks the encoding; a content type declared later changes {@link #charset()}
+     * but not the bytes already buffered.
+     */
+    private Charset writerCharset;
+
     private volatile boolean committed = false;
     private volatile boolean passthrough = false;
 
+    /** Runs between draining the writer and the hand-over; a seam for the concurrent-write test. */
+    private final Runnable beforeHandOver;
+
     public ContentBufferingResponseWrapper(HttpServletResponse response) {
+        this(response, () -> {});
+    }
+
+    ContentBufferingResponseWrapper(HttpServletResponse response, Runnable beforeHandOver) {
         super(response);
+        this.beforeHandOver = beforeHandOver;
     }
 
     @Override
@@ -67,7 +82,7 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     private void passThroughUnlessHtml(String contentType) {
-        if (contentType != null && !contentType.contains(CONTENT_TYPE_HTML)) {
+        if (contentType != null && !isHtml(contentType)) {
             try {
                 enablePassthrough();
             } catch (IOException e) {
@@ -76,9 +91,20 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         }
     }
 
+    /** Whether the declared content type is HTML, the only kind the toolbar goes into; false while none is declared. */
+    public boolean isHtml() {
+        return isHtml(getContentType());
+    }
+
+    private static boolean isHtml(String contentType) {
+        return contentType != null && contentType.contains(CONTENT_TYPE_HTML);
+    }
+
     /**
-     * Stops buffering: flushes anything buffered so far to the real response
-     * and routes all subsequent writes directly to it.
+     * Stops buffering: flushes anything buffered so far to the real response and routes all
+     * subsequent writes directly to it. The writer is drained again after the hand-over: a
+     * concurrent write that landed between the first drain and the switch sat in the encoder
+     * unflushed, and in passthrough nothing drains the writer at end of request.
      */
     public void enablePassthrough() throws IOException {
         if (passthrough) {
@@ -87,29 +113,39 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
         if (writer != null) {
             writer.flush();
         }
+        beforeHandOver.run();
         switchToPassthrough();
+        if (writer != null) {
+            writer.flush();
+        }
     }
 
     /**
      * The hand-over itself, without flushing the writer: called from inside a write when the
-     * buffer outgrows the cap, where the writer's encoder is mid-flush already.
+     * buffer outgrows the cap, where the writer's encoder is mid-flush already. Holds the
+     * buffer's monitor for the whole sequence: an async worker writing meanwhile must land
+     * after the buffered bytes, and neither in a buffer already handed over nor ahead of it.
      */
     private void switchToPassthrough() throws IOException {
-        passthrough = true;
-        if (buffer.size() > 0) {
-            buffer.writeTo(getResponse().getOutputStream());
-            buffer.reset();
+        synchronized (buffer) {
+            passthrough = true;
+            if (buffer.size() > 0) {
+                buffer.writeTo(getResponse().getOutputStream());
+                buffer.reset();
+            }
         }
     }
 
     private void bufferOrPassThrough(byte[] b, int off, int len) throws IOException {
-        if (passthrough) {
-            getResponse().getOutputStream().write(b, off, len);
-            return;
-        }
-        buffer.write(b, off, len);
-        if (buffer.size() > MAX_BUFFERED_BYTES) {
-            switchToPassthrough();
+        synchronized (buffer) {
+            if (passthrough) {
+                getResponse().getOutputStream().write(b, off, len);
+                return;
+            }
+            buffer.write(b, off, len);
+            if (buffer.size() > MAX_BUFFERED_BYTES) {
+                switchToPassthrough();
+            }
         }
     }
 
@@ -134,8 +170,9 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
             throw new IllegalStateException("getOutputStream() has already been called");
         }
         if (writer == null) {
+            writerCharset = charset();
             writer = new PrintWriter(
-                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), charset())));
+                    new SwitchableWriter(new OutputStreamWriter(new SwitchableServletOutputStream(), writerCharset)));
         }
         return writer;
     }
@@ -217,10 +254,11 @@ public class ContentBufferingResponseWrapper extends HttpServletResponseWrapper 
     }
 
     public String getContentAsString() {
-        if (writer != null) {
-            writer.flush();
+        if (writer == null) {
+            return buffer.toString(charset());
         }
-        return buffer.toString(charset());
+        writer.flush();
+        return buffer.toString(writerCharset);
     }
 
     /** The response's declared character encoding, UTF-8 while none is declared. */

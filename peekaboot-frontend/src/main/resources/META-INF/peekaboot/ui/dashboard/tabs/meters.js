@@ -10,7 +10,6 @@ import {formatBytes, formatCount} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
-export const label = 'Meters';
 
 const tab = filteredGroupTab({
     inputId: 'meters-filter',
@@ -112,13 +111,13 @@ function matchesMetricFilter(metric, query) {
 
 function renderMeasurement(measurement, filterQuery, baseUnit, locale) {
     const el = document.createElement('div');
-    el.className = 'pk-metric__measurement';
+    el.className = 'pk-kv';
 
     const tagsEl = document.createElement('div');
     tagsEl.className = 'pk-metric__tags';
     const tags = Object.entries(measurement.tags || {});
     if (tags.length === 0) {
-        tagsEl.innerHTML = '<span class="pk-metric__no-tags">no tags</span>';
+        tagsEl.innerHTML = '<span class="pk-note pk-metric__no-tags">no tags</span>';
     } else {
         tags.forEach(([key, value]) => {
             const tagEl = document.createElement('span');

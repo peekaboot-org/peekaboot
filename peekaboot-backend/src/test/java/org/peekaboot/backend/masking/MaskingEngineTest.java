@@ -55,6 +55,37 @@ class MaskingEngineTest {
             assertThat(engine.isSensitiveKey(key)).isTrue();
         }
 
+        // A @ConfigurationProperties group or an env-var prefix is often named in the
+        // plural (app.secrets.*, DB_PASSWORDS). Matching is whole-token, so the singular
+        // rule never sees "secrets": each plural is listed as a rule of its own. The last
+        // three rows are the cost, accepted the same way as XDG_SESSION_ID above: "tokens"
+        // and "secrets" also name an LLM budget or a Kubernetes secrets mount, none of them
+        // secret, and a masked number on the Config tab costs less than a leaked subtree.
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "passwords",
+                    "app.passwds",
+                    "app.passphrases.primary",
+                    "app.secrets.db",
+                    "app.tokens.github",
+                    "app.api-keys",
+                    "apikeys",
+                    "app.access-keys",
+                    "app.private-keys",
+                    "app.secret-keys",
+                    "app.signing-keys.current",
+                    "app.encryption-keys.primary",
+                    "app.client-secrets",
+                    "DB_PASSWORDS",
+                    "spring.ai.openai.chat.options.max-tokens",
+                    "maxTokens",
+                    "spring.cloud.kubernetes.secrets.enabled",
+                })
+        void isSensitiveKey_shouldMatchThePluralOfARuleWord(String key) {
+            assertThat(engine.isSensitiveKey(key)).isTrue();
+        }
+
         // The three environment variables a developer meets on the systemEnvironment
         // property source that the rules catch without being secrets themselves; see
         // MaskingRules.KEY_NAME_EXCEPTIONS for why none of them is exempted.
@@ -418,6 +449,22 @@ class MaskingEngineTest {
             assertThat(result).isEqualTo("key=******&ok=1");
         }
 
+        /**
+         * Two different rules claiming overlapping spans: the userinfo rule wants
+         * {@code ci:ghp_...} and the GitHub rule wants the token inside it. The
+         * earlier-starting span wins and the inner one is skipped, so the value masks once
+         * rather than stacking two masks or leaving a fragment of the token behind.
+         */
+        @Test
+        void maskValue_shouldMaskAnOverlappingSpanOnceWhenTwoRulesClaimIt() {
+            String token = "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a";
+            String value = "https://ci:" + token + "@github.example.com/org/repo.git";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("https://******@github.example.com/org/repo.git");
+        }
+
         @Test
         void maskValue_shouldMaskOnlyUserinfoInJdbcUrl() {
             String value = "jdbc:postgresql://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
@@ -426,6 +473,17 @@ class MaskingEngineTest {
 
             assertThat(result).isEqualTo("jdbc:postgresql://******@localhost:5432/mydb");
             assertThat(result).contains("localhost", "5432", "mydb").doesNotContain("dbuser", "S3cr3tPassw0rd");
+        }
+
+        // A scheme is case-insensitive (RFC 3986), and a JDBC URL pasted from a Windows
+        // tool or an upper-cased env var spells it that way.
+        @Test
+        void maskValue_shouldMaskUserinfoBehindAnUpperCaseScheme() {
+            String value = "JDBC:POSTGRESQL://dbuser:S3cr3tPassw0rd@localhost:5432/mydb";
+
+            String result = engine.maskValue(value);
+
+            assertThat(result).isEqualTo("JDBC:POSTGRESQL://******@localhost:5432/mydb");
         }
 
         /** The common Redis shape: no user at all, only a password in front of the '@'. */
@@ -769,11 +827,9 @@ class MaskingEngineTest {
 
         @Test
         void mask_shouldFallBackToValueRulesWhenKeyIsNull() {
-            String value = "aws_access_key_id=AKIAIOSFODNN7EXAMPLE";
+            String result = engine.mask(null, "aws_access_key_id=AKIAIOSFODNN7EXAMPLE");
 
-            String result = engine.mask(null, value);
-
-            assertThat(result).isEqualTo(engine.maskValue(value));
+            assertThat(result).isEqualTo("aws_access_key_id=******");
         }
 
         @Test

@@ -12,19 +12,25 @@ import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import io.micrometer.tracing.Span;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
+import org.peekaboot.testingapp.integration.TestSpans;
 import org.peekaboot.testingapp.order.OrderReconciler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real trace-detail overlay served by the running app in a real browser.
@@ -38,42 +44,33 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Autowired
     private ScheduledTaskHolder scheduledTaskHolder;
 
+    @Autowired
+    private TraceStore traceStore;
+
     private void openOverlayFromToolbar() {
         openPersonsPage();
         toolbar.openOverlay();
     }
 
     /**
-     * Polls the insights endpoint for the trace the toolbar currently tracks until its
-     * spans carry logs on more than one span - shared by both the hash-route and
-     * toolbar-path variants of the span-logs filter test below, since both need the
-     * same real, non-vacuous precondition. It counts spans carrying logs the way spans.js
-     * itself derives them (span.logs, walked down span.children), so the precondition is
-     * measured against the very shape the Spans tab renders its "N logs" toggles from. The
-     * poll lives in a single evaluate() rather than separate Java-side calls: a second,
-     * separate fetch could race the trace's eviction from a bounded store.
+     * Waits until the trace the toolbar currently tracks carries logs on more than one span,
+     * and returns its id - shared by both the hash-route and toolbar-path variants of the
+     * span-logs filter test below, since both need the same real, non-vacuous precondition.
+     * It counts spans carrying logs the way spans.js itself derives them (span.logs, walked
+     * down span.children), so the precondition is measured against the very shape the Spans
+     * tab renders its "N logs" toggles from.
      */
     private String waitForMultiSpanLogTraceId() {
-        return (String) toolbar.evaluate("""
-                async root => {
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, """
+                trace => {
                     const spansWithLogs = span => !span ? 0
                         : ((span.logs || []).length > 0 ? 1 : 0)
                           + (span.children || []).reduce((n, child) => n + spansWithLogs(child), 0);
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const copyEl = root.querySelector('#pk-trace .pk-copy');
-                        const id = copyEl ? copyEl.dataset.pkCopy : null;
-                        if (id) {
-                            const response = await fetch('/peekaboot/api/traces/' + id + '/insights');
-                            if (response.ok) {
-                                const trace = await response.json();
-                                if (spansWithLogs(trace.rootSpan) > 1) return id;
-                            }
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no trace with logs on more than one span arrived within 15s');
+                    return spansWithLogs(trace.rootSpan) > 1;
                 }
                 """);
+        return traceId;
     }
 
     /**
@@ -100,21 +97,14 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Headless Chromium's own default is prefers-color-scheme: light, so a naive
-     * "storage wins" test in the light direction would pass even with resolveTheme()/
-     * applyTheme() deleted entirely - light is also tokens.css's bare :root,:host default.
-     * Forcing the OS preference to the opposite of what's stored (mirroring ToolbarIT)
-     * makes each test fail if the stored preference ever stops taking priority.
+     * A light dashboard must not open a dark overlay. The OS preference is set to the
+     * opposite of what is stored (see emulateOsColorScheme), or the light case would pass
+     * with resolveTheme()/applyTheme() deleted: light is also tokens.css's bare default.
      */
-    private void emulateOppositeOsPreference(ColorScheme osPreference) {
-        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(osPreference));
-    }
-
-    /** A light dashboard must not open a dark overlay. */
     @Test
     void overlayIsLightWhenTheStoredPreferenceIsLight() {
         setStoredTheme("light");
-        emulateOppositeOsPreference(ColorScheme.DARK);
+        emulateOsColorScheme(ColorScheme.DARK);
         openOverlayFromToolbar();
 
         assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#ffffff");
@@ -123,7 +113,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
     @Test
     void overlayIsDarkWhenTheStoredPreferenceIsDark() {
         setStoredTheme("dark");
-        emulateOppositeOsPreference(ColorScheme.LIGHT);
+        emulateOsColorScheme(ColorScheme.LIGHT);
         openOverlayFromToolbar();
 
         assertThat(overlay.cssVar("--pk-bg")).isEqualTo("#0d1117");
@@ -193,14 +183,33 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(selected).isEqualTo("spans");
     }
 
+    /**
+     * Escape has to reach the overlay from the moment it opens, not from its first render:
+     * between the two the reader is looking at a loading dialog with the whole page behind
+     * it inert, which is exactly when they reach for Escape.
+     *
+     * <p>Every insights request is parked - held, not stubbed - rather than only the
+     * overlay's: the toolbar's own fetch ladder reads the same URL, and holding them all is
+     * what keeps the overlay on its loading placeholder for the length of the press.
+     */
     @Test
-    void escapeClosesTheOverlay() {
-        openOverlayFromToolbar();
+    void escapeClosesAnOverlayWhoseTraceHasNotArrivedYet() {
+        openPersonsPage();
+        toolbar.traceId();
+        toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
+        List<Route> parkedTraceRequests = new CopyOnWriteArrayList<>();
+        page.route("**/api/traces/*/insights", parkedTraceRequests::add);
 
+        page.keyboard().press("Enter");
+        overlay.awaitOpened();
+        overlay.waitFor(".pk-overlay__loading");
         page.keyboard().press("Escape");
 
         overlay.awaitClosed();
-        assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+        boolean focusIsBackOnTheInvoker = (Boolean)
+                toolbar.evaluate("root => root.activeElement?.classList.contains('pk-toolbar__open') ?? false");
+        assertThat(focusIsBackOnTheInvoker).isTrue();
+        parkedTraceRequests.forEach(Route::resume);
     }
 
     /** role=dialog + aria-modal, and a real accessible name, not just visual chrome. */
@@ -231,7 +240,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         toolbar.traceId();
         toolbar.evaluate("root => root.querySelector('.pk-toolbar__open').focus()");
         page.keyboard().press("Enter");
-        page.waitForSelector("#peekaboot-trace-overlay");
+        overlay.awaitOpened();
         // container.focus() only happens once render() actually runs (after the trace
         // fetch and shared stylesheets both resolve) - wait for real content so the
         // assertion below cannot race a still-loading overlay.
@@ -263,7 +272,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         overlay.click(".pk-overlay__error button");
 
         overlay.awaitClosed();
-        assertThat(page.querySelector("#peekaboot-trace-overlay")).isNull();
+        assertThat(page.querySelector(TraceOverlay.HOST)).isNull();
     }
 
     /**
@@ -284,8 +293,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(focused).isEqualTo("queries");
         assertThat(selected).isEqualTo("queries");
 
-        String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
-        assertThat(content).isNotEmpty();
+        // The panel really swapped: the Spans tab's gantt is what was showing a moment ago,
+        // and an innerHTML that merely stayed non-empty would keep it.
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-gantt')"))
+                .as("the arrow key swapped the panel, it did not merely restyle the strip")
+                .isFalse();
     }
 
     /**
@@ -358,41 +370,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
         // backend to actually serve the query before opening the overlay - the same
         // endpoint and field the overlay's TABS.count reads (trace.queries).
         openPersonsPage();
-        toolbar.traceId();
-        // Polls (inside one evaluate(), not a separate waitForFunction + a later re-fetch)
-        // until the query span lands, then returns the span count from that very same
-        // response - both to dodge the ingestion race documented above, and to read the
-        // count from the exact same JSON payload the "queries present" check just parsed,
-        // rather than a second independent fetch that could race the trace being evicted
-        // from the store (a bounded ring buffer under constant pressure from this app's
-        // own background scheduler). Reads the id from the copy button's data-pk-copy
-        // attribute - #pk-trace's own textContent is "traceId<hex>⧉" (label + icon baked
-        // in by copyableIdHtml), not the bare id a URL path segment needs.
-        int spanCount = ((Number) toolbar.evaluate("async root => {"
-                        + "for (let i = 0; i < 150; i++) {"
-                        + "  const copyEl = root.querySelector('#pk-trace .pk-copy');"
-                        + "  const id = copyEl ? copyEl.dataset.pkCopy : null;"
-                        + "  if (id) {"
-                        + "    const response = await fetch('/peekaboot/api/traces/' + id + '/insights');"
-                        + "    if (response.ok) {"
-                        + "      const trace = await response.json();"
-                        + "      if ((trace.queries || []).length > 0) {"
-                        + "        return trace.summary?.spans?.count ?? 0;"
-                        + "      }"
-                        + "    }"
-                        + "  }"
-                        + "  await new Promise(r => setTimeout(r, 100));"
-                        + "}"
-                        + "throw new Error('query span never arrived within 15s');"
-                        + "}"))
-                .intValue();
+        // The count is read from the very response that proved the query span landed, so a
+        // second fetch cannot race the trace's eviction from the bounded store.
+        JsonNode trace = awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        int spanCount = trace.path("summary").path("spans").path("count").asInt();
         // Not openOverlayFromToolbar(): that helper re-navigates, which would mint a
         // fresh trace and reopen the very race waited out above. Open the overlay for
         // the already-verified trace directly.
         toolbar.openOverlay();
         overlay.openTab("queries");
 
-        Locator tablist = page.locator("#peekaboot-trace-overlay .pk-overlay__container > .pk-tabs");
+        Locator tablist = page.locator(TraceOverlay.HOST + " .pk-overlay__container > .pk-tabs");
         String snapshot = tablist.ariaSnapshot();
 
         assertThat(snapshot).contains("tablist");
@@ -417,16 +405,27 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(status).isEqualTo("200 OK");
     }
 
+    /**
+     * Each tab against the element only its own renderer builds. The error page's trace is
+     * the one that has all four: an HTTP exchange, a span tree, a JDBC query and a captured
+     * log, so no tab can pass on its empty state.
+     */
     @Test
     void everyOverlayTabRendersContent() {
-        openOverlayFromToolbar();
+        openOverlayForTheMultiSpanLogTrace();
 
-        for (String tab : List.of("request", "spans", "queries", "logs")) {
-            overlay.evaluate("(root, id) => root.querySelector(`.pk-tab[data-tab=\"${id}\"]`).click()", tab);
-
-            String content = (String) overlay.evaluate("root => root.querySelector('#pk-tab-content').innerHTML");
-            assertThat(content).as("tab %s renders something", tab).isNotEmpty();
-        }
+        Map<String, String> tabRoot = new LinkedHashMap<>();
+        tabRoot.put("request", ".pk-table--kv");
+        tabRoot.put("spans", "#pk-gantt-rows");
+        tabRoot.put("queries", ".pk-code-block");
+        tabRoot.put("logs", ".pk-log");
+        tabRoot.forEach((tab, root) -> {
+            overlay.openTab(tab);
+            overlay.waitFor(root);
+            assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-tab-content .pk-empty')"))
+                    .as("tab %s fell back to its empty state", tab)
+                    .isFalse();
+        });
     }
 
     /**
@@ -633,12 +632,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(focusedRowSpanId).isEqualTo(spanId);
     }
 
+    /** The query span lands after the response, so the overlay is opened once the store serves it. */
     @Test
     void queriesTabListsTheJdbcQueryFromThePersonsPage() {
-        openOverlayFromToolbar();
-        overlay.click(".pk-tab[data-tab=\"queries\"]");
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-code-block");
 
-        String sql = (String) overlay.evaluate("root => root.querySelector('.pk-query__sql')?.textContent ?? ''");
+        String sql = overlay.text(".pk-code-block");
         assertThat(sql.toLowerCase(Locale.ROOT)).contains("select");
     }
 
@@ -670,9 +673,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .as("the axis origin is the trace's start, not a sub-millisecond measurement")
                 .isEqualTo("0ms");
 
-        BoundingBox headerBox = page.locator("#peekaboot-trace-overlay .pk-gantt-header__timeline")
-                .boundingBox();
-        BoundingBox trackBox = page.locator("#peekaboot-trace-overlay .pk-gantt-row")
+        BoundingBox headerBox =
+                page.locator(TraceOverlay.HOST + " .pk-gantt-header__timeline").boundingBox();
+        BoundingBox trackBox = page.locator(TraceOverlay.HOST + " .pk-gantt-row")
                 .first()
                 .locator(".pk-gantt-track")
                 .boundingBox();
@@ -697,11 +700,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void queriesTabSlowLabelFollowsTheQueryThresholdAtTheBoundary() {
-        page.navigate(baseUrl + "/peekaboot/ui/pk-blank.html");
-
-        Object labels = page.evaluate("""
-            async () => {
-                const m = await import('/peekaboot/ui/trace-detail/tabs/queries.js');
+        Object labels = importModule("trace-detail/tabs/queries.js", """
+            (() => {
                 const queries = [
                     {sql: 'SELECT 1', durationMs: 49, dbSystem: 'h2', rowCount: 1},
                     {sql: 'SELECT 2', durationMs: 50, dbSystem: 'h2', rowCount: 1}
@@ -713,7 +713,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const labelsIn = el =>
                     Array.from(el.querySelectorAll('.pk-query__duration')).map(cell => cell.textContent);
                 return [...labelsIn(fallback), ...labelsIn(published)];
-            }
+            })()
             """);
 
         @SuppressWarnings("unchecked")
@@ -745,9 +745,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 .isFalse();
 
         BoundingBox closeBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__close").boundingBox();
+                page.locator(TraceOverlay.HOST + " .pk-overlay__close").boundingBox();
         BoundingBox titleBox =
-                page.locator("#peekaboot-trace-overlay .pk-overlay__title").boundingBox();
+                page.locator(TraceOverlay.HOST + " .pk-overlay__title").boundingBox();
 
         assertThat(closeBox.y)
                 .as("close button top should be within the title's vertical span")
@@ -799,33 +799,6 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Polls the traces list API - the same one the dashboard's Traces tab reads - for a
-     * trace Peekaboot itself classified SCHEDULED_JOB, rather than asserting against
-     * anything this test constructed. Whichever trace turns up first is fair game: the
-     * assertions below hold for any correctly-captured scheduled-job trace, not
-     * specifically the one the test just fired, so a trace left behind
-     * by an earlier test in this JVM's shared Spring context is just as valid a fixture.
-     */
-    private String waitForScheduledJobTraceId() {
-        page.navigate(baseUrl + "/persons");
-        return (String) page.evaluate("""
-                async () => {
-                    for (let attempt = 0; attempt < 150; attempt++) {
-                        const response = await fetch(
-                            '/peekaboot/api/traces/insights?bucket=all&rootActionType=SCHEDULED_JOB');
-                        if (response.ok) {
-                            const body = await response.json();
-                            const trace = (body.traces || [])[0];
-                            if (trace) return trace.traceId;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    throw new Error('no SCHEDULED_JOB trace arrived within 15s');
-                }
-                """);
-    }
-
-    /**
      * On a non-HTTP trace (a scheduled job here) trace-detail.js's method falls back to
      * null, which the header renders as the trace's root-action label (root-actions.js):
      * httpExchange/http.* tags are only ever populated for real HTTP requests, so a
@@ -844,8 +817,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
-        ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
-        String traceId = waitForScheduledJobTraceId();
+        String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+        // The run's own trace, and the wait is on its root span: the exporter hands spans over
+        // in the order they ended, so the query span the header counts is there with it.
+        awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-overlay__title-method");
@@ -888,12 +863,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         });
         openPersonsPage();
         String traceId = toolbar.traceId();
-        page.route("**/peekaboot/ui/dashboard/index.html", route -> {
-            APIResponse response = route.fetch();
-            Map<String, String> headers = new HashMap<>(response.headers());
-            headers.put("content-security-policy", "style-src 'self'");
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
-        });
+        serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-gantt-row[data-depth='1']");
@@ -951,5 +921,200 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         .doubleValue())
                 .as("the track keeps a usable width")
                 .isGreaterThan(40.0);
+    }
+
+    /**
+     * Serves the toolbar's current trace with its trace-level {@code slow} flag and total
+     * duration replaced, so the header can be driven through both verdicts on one real trace.
+     */
+    private void openOverlayWithTracePatched(boolean slow, long durationMs) {
+        page.route("**/api/traces/*/insights", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode trace = (ObjectNode) readJson(response.text());
+            trace.put("slow", slow).put("durationMs", durationMs);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
+        });
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-overlay__meta");
+        page.unroute("**/api/traces/*/insights");
+    }
+
+    /**
+     * The header's SLOW marking is the backend's per-trace verdict ({@code trace.slow}: some
+     * span carries a SLOW or VERY_SLOW issue), the very flag the Traces tab's badge reads.
+     * Applying the span thresholds to the trace's total instead called a 120 ms request slow
+     * in the header while the list beside it did not, and a 5 s trace with no slow span
+     * (the toolbar's own fetch ladder, say) the other way round.
+     */
+    @Test
+    void headerSlowMarkingFollowsTheBackendsVerdict() {
+        openPersonsPage();
+        toolbar.traceId();
+
+        openOverlayWithTracePatched(true, 5);
+        assertThat(overlay.text(".pk-overlay__meta .pk-badge--warn").trim()).isEqualTo("SLOW");
+        assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
+                .contains("slow");
+
+        openOverlayWithTracePatched(false, 5000);
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('.pk-overlay__meta .pk-badge--warn')"))
+                .isFalse();
+        assertThat((String) overlay.evaluate("root => root.querySelector('.pk-overlay__duration').className"))
+                .doesNotContain("slow");
+    }
+
+    /**
+     * The Spans tab renders the facts the backend serves rather than re-deriving them from
+     * tags and names: the row count is {@code span.rowCount} (parsed server-side, null for
+     * a count that did not parse), an error bar follows {@code span.status} alone, and
+     * every tag on the span is shown - the backend already keeps the statement tags out,
+     * so the tab does not sniff for them.
+     */
+    @Test
+    void spansTabTrustsTheBackendsSpanFacts() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const rendered = span => {
+                    const container = document.createElement('div');
+                    m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span});
+                    return container;
+                };
+                const rowCountOf = span => rendered(span).querySelector('.pk-span-row-count')?.textContent ?? null;
+                const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
+                const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
+                return [
+                    rowCountOf({spanId: 'a', name: 'result-set', rowCount: 3, tags: {'jdbc.row-count': '3'}}),
+                    rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
+                    errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
+                    errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
+                    tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
+                ];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> spanFacts = (List<Object>) facts;
+        assertThat(spanFacts).containsExactly("3 rows", null, true, false, "system,statement");
+    }
+
+    /**
+     * The gantt's subtree toggle: collapsing the root hides every deeper row and flips the
+     * control's own state, so a screen reader and the eye agree. Measured on rows rather than
+     * on the button, since hiding is what the reader came for.
+     */
+    @Test
+    void collapsingASpanHidesItsSubtreeAndSaysSo() {
+        openOverlayFromToolbar();
+        overlay.waitFor("#pk-gantt-rows .pk-gantt-toggle");
+
+        int allRows = visibleGanttRows();
+        assertThat(allRows)
+                .as("a nested tree is what makes a collapse observable")
+                .isGreaterThan(1);
+
+        overlay.click("#pk-gantt-rows .pk-gantt-toggle");
+
+        assertThat(visibleGanttRows()).isEqualTo(1);
+        assertThat(overlay.evaluate(
+                        "root => root.querySelector('#pk-gantt-rows .pk-gantt-toggle').getAttribute('aria-expanded')"))
+                .isEqualTo("false");
+
+        overlay.click("#pk-gantt-rows .pk-gantt-toggle");
+
+        assertThat(visibleGanttRows()).isEqualTo(allRows);
+    }
+
+    private int visibleGanttRows() {
+        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-row')]"
+                        + ".filter(row => row.style.display !== 'none').length"))
+                .intValue();
+    }
+
+    /**
+     * A query span's SQL sits collapsed under its row until the reader asks: the statement can
+     * be hundreds of characters and the tree is what the tab is for. The toggle's title is the
+     * only name it has, so it has to say which way it switches.
+     */
+    @Test
+    void theSqlToggleRevealsTheStatementUnderItsSpan() {
+        openPersonsPage();
+        awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-span-query-toggle");
+
+        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
+                        + ".classList.contains('pk-span-query-detail--expanded')"))
+                .isFalse();
+
+        overlay.click(".pk-span-query-toggle");
+
+        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
+                        + ".classList.contains('pk-span-query-detail--expanded')"))
+                .isTrue();
+        assertThat(overlay.text(".pk-span-query-detail .pk-query-text").toLowerCase(Locale.ROOT))
+                .contains("select");
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-span-query-toggle').title"))
+                .isEqualTo("Hide SQL");
+    }
+
+    /**
+     * A level filter that matches no row leaves the list rendered but empty rather than
+     * dropping back to "no logs recorded": the trace does carry logs, the filter is simply
+     * hiding them, and clearing it has to bring them back.
+     */
+    @Test
+    void aLevelFilterThatMatchesNoRowHidesEveryLog() {
+        openOverlayForTheMultiSpanLogTrace();
+        overlay.openTab("logs");
+        overlay.waitFor(".pk-log");
+
+        int allLogs = visibleLogRows();
+        assertThat(allLogs).isPositive();
+
+        overlay.evaluate("root => { const select = root.querySelector('#pk-log-level');"
+                + " select.value = 'TRACE'; select.dispatchEvent(new Event('change')); }");
+
+        assertThat(visibleLogRows())
+                .as("nothing in this trace logs at TRACE level")
+                .isZero();
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-logs-list')"))
+                .as("the list stays; it is the rows that are filtered out")
+                .isTrue();
+
+        overlay.evaluate("root => { const select = root.querySelector('#pk-log-level');"
+                + " select.value = ''; select.dispatchEvent(new Event('change')); }");
+
+        assertThat(visibleLogRows()).isEqualTo(allLogs);
+    }
+
+    private int visibleLogRows() {
+        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('.pk-log')]"
+                        + ".filter(row => !row.classList.contains('pk-log--hidden')).length"))
+                .intValue();
+    }
+
+    /**
+     * A span event is drawn on that span's own track, named, so a reader spots an exception or
+     * a checkpoint without opening anything. Written straight to the store: the sample app's
+     * instrumentation records no events, and one that started to would not do it on request.
+     */
+    @Test
+    void aSpanEventIsMarkedOnItsTrackWithItsName() {
+        String traceId = "overlay-event-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("GET /events-fixture")
+                .kind(Span.Kind.SERVER)
+                .at(0, 40)
+                .tag("http.method", "GET")
+                .tag("url.path", "/events-fixture")
+                .event("exception", 20)
+                .build());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.waitFor("#pk-gantt-rows");
+
+        assertThat(overlay.evaluate("root => root.querySelector('.pk-gantt-event-marker').getAttribute('aria-label')"))
+                .isEqualTo("Event: exception");
+        assertThat(overlay.text(".pk-gantt-event-tooltip")).isEqualTo("exception");
     }
 }

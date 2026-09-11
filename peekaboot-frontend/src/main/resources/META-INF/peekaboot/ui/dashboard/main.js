@@ -3,14 +3,15 @@
  *
  * Owns theme wiring, the tab registry, hash routing, auto-refresh, the locale/timezone
  * controls and the single error banner. Each tab's own rendering lives in its own module
- * under tabs/ (see the contract documented on overview.js) - this file never renders
- * domain data itself, only decides which tab module to hand the fetched payload to.
+ * under tabs/ (the contract is documented in peekaboot-frontend/README.md, "How to add a
+ * dashboard tab") - this file never renders domain data itself, only decides which tab
+ * module to hand the fetched payload to.
  */
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
-import {resolveTheme, applyTheme, storeTheme, watchTheme} from '../shared/theme.js';
+import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
 import {readSetting, writeSetting} from '../shared/storage.js';
-import {formatDateTime} from '../shared/format.js';
+import {formatDateTimeWith} from '../shared/format.js';
 import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
 import * as overview from './tabs/overview.js';
@@ -56,6 +57,9 @@ let urlChangeInProgress = false;
 function handleHashChange() {
     const {tab, detail, subview, params} = parseAppHash();
     const tabId = resolveTabId(tab);
+    // an unknown id renders Overview, so the URL says Overview too - the same correction
+    // fallBackToOverview() makes for a tab this instance does not have
+    if (tabId !== tab) replaceAppHash({tab: tabId});
     mainTabs.select(tabId, {silent: true});
     showTab(tabId);
     urlChangeInProgress = true;
@@ -118,33 +122,13 @@ function openTrace(traceId) {
     expandTraceById(traceId);
 }
 
-/**
- * Passed to every tab module as context.navigate. `payload`, when given, goes to the
- * target tab's own applyFilter(payload, context) instead of the generic render - the
- * target is expected to fetch for itself, and doing both would fire two overlapping
- * fetches. A tab that was already active is not re-rendered either: nothing new to
- * show, and self-fetching tabs would pay an extra round trip.
- */
-function navigate(tabId, detail = null, payload = null) {
-    const resolvedId = resolveTabId(tabId);
-    const wasAlreadyActive = document.getElementById(`${resolvedId}-tab`)?.classList.contains('active') ?? false;
-    mainTabs.select(resolvedId, {silent: true});
-    showTab(resolvedId);
-    pushAppHash({tab: resolvedId, detail});
-    if (payload) {
-        TABS.find(tab => tab.id === resolvedId)?.applyFilter?.(payload, currentContext({active: true}));
-    } else if (!wasAlreadyActive) {
-        renderTabById(resolvedId);
-    }
-}
-
 // --- Tab strip ----------------------------------------------------------------------
 
 /**
- * tabId comes straight from the URL hash (see handleHashChange) or from another tab
- * module's navigate() call - never trusted outright, so an unknown id (e.g. a stale
- * or hand-edited hash) falls back to the overview tab instead of leaving every panel
- * hidden or the tab strip's selection pointing at nothing.
+ * tabId comes straight from the URL hash (see handleHashChange) - never trusted
+ * outright, so an unknown id (e.g. a stale or hand-edited hash) falls back to the
+ * overview tab instead of leaving every panel hidden or the tab strip's selection
+ * pointing at nothing.
  */
 function resolveTabId(tabId) {
     return TAB_IDS.includes(tabId) ? tabId : 'overview';
@@ -160,7 +144,8 @@ function showTab(tabId) {
 
 function initTabs() {
     const initialTabId = resolveTabId(parseAppHash().tab);
-    mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id, label: tab.label})), {
+    // the strip's buttons are static in index.html, so only the ids are needed here
+    mainTabs = tabStrip(document.getElementById('main-tabs'), TABS.map(tab => ({id: tab.id})), {
         onSelect: tabId => {
             showTab(tabId);
             pushAppHash({tab: tabId});
@@ -194,7 +179,6 @@ function currentContext({active = false} = {}) {
         client,
         locale,
         timeZone: useServerTimezone && serverTimezone ? serverTimezone.timezone : undefined,
-        navigate,
         openTrace,
         features,
         active,
@@ -256,10 +240,29 @@ function renderTab(tab) {
     const available = tab.isAvailable ? tab.isAvailable(data, features) : true;
     const button = document.querySelector(`.pk-tab[data-tab="${tab.id}"]`);
     if (button) button.classList.toggle('hidden', !available);
-    if (!available) return;
-
     const section = document.getElementById(`${tab.id}-tab`);
+    if (!available) {
+        if (section?.classList.contains('active')) fallBackToOverview();
+        return;
+    }
+
     if (section) tab.render(section, data, currentContext({active: section.classList.contains('active')}));
+}
+
+/**
+ * A deep link or a stale bookmark can name a tab this instance does not have (tracing
+ * switched off, no Flyway). An empty panel with no tab selected looks broken, so the
+ * reader lands on Overview instead and the hash is corrected to it - a replace, like
+ * every other correction of a URL that asked for a state that does not exist.
+ */
+function fallBackToOverview() {
+    mainTabs.select('overview', {silent: true});
+    showTab('overview');
+    replaceAppHash({tab: 'overview'});
+    // A "#traces/<id>" link with tracing off may have opened the overlay before the data
+    // arrived; the hash no longer names it, so its own close-time cleanup stays a no-op.
+    closeTraceDetail();
+    renderTabById('overview');
 }
 
 /** Renders every registered tab against the latest data - the 30s auto-refresh path. */
@@ -306,7 +309,7 @@ async function fetchData() {
 
 function updateLastUpdated() {
     const {locale: currentLocale, timeZone} = currentContext();
-    const time = formatDateTime(new Date(), {locale: currentLocale, timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit'});
+    const time = formatDateTimeWith(new Date(), {hour: '2-digit', minute: '2-digit', second: '2-digit'}, {locale: currentLocale, timeZone});
     document.getElementById('last-updated').textContent = `Updated ${time}`;
 }
 
@@ -390,19 +393,12 @@ function updateThemeIcon(theme) {
 }
 
 function initTheme() {
-    const theme = resolveTheme();
-    applyTheme(document.documentElement, theme);
-    updateThemeIcon(theme);
+    bindTheme(document.documentElement, updateThemeIcon);
 
     document.getElementById('theme-toggle').addEventListener('click', () => {
         const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
         applyTheme(document.documentElement, next);
         storeTheme(next);
-        updateThemeIcon(next);
-    });
-
-    watchTheme(next => {
-        applyTheme(document.documentElement, next);
         updateThemeIcon(next);
     });
 }

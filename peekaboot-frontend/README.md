@@ -19,8 +19,10 @@ META-INF/peekaboot/ui/
 │                    favicon-16/32.png, logo-mark.png, logo-mark-dark.png: the icon set
 ├── shared/          the modules used by two or more surfaces; see the inventory below
 ├── dashboard/       index.html, dashboard.css, main.js, tabs/*.js  (one per tab, plus the
-│                    Insights tab's own insights-store.js, insights-chart.js,
-│                    insights-markers.js and insights-colors.js)
+│                    Insights tab's own insights-stream.js, insights-panels.js,
+│                    insights-store.js, insights-chart.js, insights-markers.js and
+│                    insights-colors.js)
+│                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
 └── vendor/          uplot/: the only third-party code, loaded on demand (see below)
@@ -40,13 +42,21 @@ surface:
    other sheets use resolves through a `--pk-*` token, which is what keeps a literal from
    settling into a component rule. Light palette on `:root`, dark under
    `[data-theme="dark"]`.
-2. **`base.css`**. The reset (`box-sizing`) and bare element defaults (`body`, `mark`). No
-   component classes.
-3. **`components.css`**. The `.pk-*` primitives (badge, group, kv row, meter, button, tab
-   strip, empty state, spinner) every surface's own CSS builds on. A surface stylesheet
+2. **`base.css`**. The reset (`box-sizing`), bare element defaults (`body`, `mark`), the one
+   `:focus-visible` ring, and the two classes the dev toolbar needs before it can load
+   `components.css`: `.pk-unbutton` (a `<button>` with its chrome reset away) and
+   `.pk-logo-mark` (the Peekaboot mark with its dark-theme swap). The toolbar inlines only
+   `tokens.css`, `base.css` and `toolbar.css` (see `ToolbarShell`), so anything its
+   server-rendered markup depends on before `toolbar.js` runs has to live in one of those.
+3. **`components.css`**. The `.pk-*` primitives (badge, coloured duration, stat line, label,
+   icon button, group, kv row, meter, button, copy control, table with its card and stripe
+   modifiers, tab strip, icon link, placeholder note with its centred empty-state form,
+   loading block and spinner) every surface's own CSS builds on. A surface stylesheet
    (`dashboard.css`, `toolbar.css`, `trace-detail.css`) only adds surface-specific chrome,
    never a second copy of a primitive. A variant one surface needs becomes a modifier here
-   (`.pk-table--kv`, the overlay's key/value table).
+   (`.pk-table--kv`, the overlay's key/value table); a surface element that only sizes or
+   spaces a primitive carries its own class beside the primitive's (`.pk-note
+   .pk-insight-empty`).
 
 ### The doubled-selector mechanism
 
@@ -99,15 +109,17 @@ gloss) turns to noise, and the two places the UI shows a logo are 26px and 18px.
 There are two variants because the mark is two-tone. Its slate magnifier (`#263238`)
 measures 13.2:1 on white and 1.4:1 on the dark theme's `--pk-bg`, where it disappears, so
 `logo-mark-dark.png` is the same artwork with that slate recoloured to a light neutral.
-Both surfaces swap it with a CSS `background-image` override, no JavaScript:
+One class, `.pk-logo-mark` in `base.css`, paints it on both surfaces and swaps it with a
+doubled-selector `background-image` override, no JavaScript:
 
 ```css
-[data-theme="dark"] .pk-header__logo   { background-image: url('../assets/logo-mark-dark.png'); }  /* dashboard */
-:host([data-theme="dark"]) .pk-toolbar__link { background-image: url('../assets/logo-mark-dark.png'); }  /* shadow root */
+.pk-logo-mark { flex: none; background: url('logo-mark.png') center / contain no-repeat; }
+[data-theme="dark"] .pk-logo-mark, :host([data-theme="dark"]) .pk-logo-mark { background-image: url('logo-mark-dark.png'); }
 ```
 
-The toolbar's `url()` resolves against `toolbar.css`'s own URL, which is why it works from
-inside a shadow root without knowing `basePath`.
+The `url()` resolves against `base.css`'s own URL, which is why it works from inside a
+shadow root without knowing `basePath`, and `ToolbarShell` rewrites it to the served path
+when it inlines the sheet. Each surface only sizes it (`.pk-header__logo`, `.pk-toolbar__link`).
 
 To regenerate from new source artwork (the masters live outside this repo, alongside it in
 `peekaboot-org/assets/`), crop to the bounding box, centre it in a square with ~6% padding,
@@ -126,22 +138,23 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | Module | Exports |
 |---|---|
 | `api.js` | `createClient({basePath})`, a fetch wrapper; a per-path generation counter makes an overtaken response resolve to `null` instead of racing a newer one. `BASE_PATH`, the default `basePath`, read off this module's own URL (`<context-path>/peekaboot`), so the dashboard and the overlay it opens follow a `server.servlet.context-path` without being told; the toolbar gets the same value from the server in its data blob. |
-| `components.js` | `badge`, `badgeHtml`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `emptyState`, `emptyStateHtml`, `loadingBlock`. The JS builders behind the `.pk-*` primitives; the `*Html` variants serve the surfaces that build their markup as strings. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). |
-| `copyable.js` | `copyableIdHtml`, `copyableId`, `bindCopyables`. The click-to-copy trace/span id control, as an HTML string or a detached element, with one delegated click listener per root (document or shadow root). |
-| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a filterable list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `config.js`, `environment.js`, `loggers.js` and `meters.js` are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it is called only while the tab is active, with loading and error states handled by the shell. |
-| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatCount`, `formatMetricValue`, `formatTileValue`. |
+| `components.js` | `badge(text, variant, {title})`, `kvRow`, `group`, `meter`, `groupList`, `expandedKeys`, `tabStrip`, `table`, `cell`, `emptyState`, `loadingBlock`, `iconLink`. The JS builders behind the `.pk-*` primitives, every one a detached element. `tabStrip`'s `panel` option wires a runtime-built strip to its tabpanel (`aria-controls`, `aria-labelledby`). `iconLink(href, {label, icon})` is the icon-only link with a real accessible name (see the a11y rules below). |
+| `copyable.js` | `copyableId`, `bindCopyables`. The click-to-copy trace/span id control as a detached element, with one delegated click listener per root (document or shadow root). |
+| `dom.js` | `el(tag, {className, text, title, attrs}, ...children)`, `button(props, ...children)`. The element builder every surface renders with: text and children become nodes, never parsed markup, so a builder call can carry backend data without escaping it. The only `innerHTML` sites left are cleared containers and the few templates that pass every value through `markup.js`. |
+| `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `loggers.js`, `meters.js` and `scheduled-tasks.js` (no `inputId`, so no filter) are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. `propertyGroupTab({inputId, listId, unmaskSlotId, select, groupName, extraTop, emptyMessage})` is its property-list case: groups of `{key, value}` rows matched on either, plus the "Show secrets" control; `config.js` and `environment.js` are the two callers. |
+| `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `formatCount`, `formatPlainValue`, `formatMetricValue`, `formatTileValue`, and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL`, the fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). |
 | `unmask-control.js` | `renderUnmaskControl(slot, context)`, the Environment/Config "Show secrets" toggle. Renders nothing into an empty slot unless `context.features.unmaskingEnabled` is true; the frontend does not decide what is sensitive, only whether the reveal control can work at all. |
 | `root-actions.js` | `ROOT_ACTION_TYPES`, `rootActionIcon`, `rootActionLabel`. The icon and label map for a trace's root action type (HTTP request, scheduled job, and so on). |
-| `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`. The one place a duration, a span's issues, a log level or a health status is turned into a colour. See *Thresholds and the SLOW badge* below. |
-| `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. |
-| `span-names.js` | `buildSpanNames(rootSpan)`. A spanId → name lookup, used by the overlay's Logs tab to name the span each log row belongs to. |
+| `self-fetching-tab.js` | `selfFetchingTab({fetch, reconcile, loading, renderResult, renderError})`. The shell of a dashboard tab whose data comes from its own endpoint instead of the shared payload: the one place for the active-tab guard (a background render skips the round trip), supersession (a `null` from `api.js` renders nothing) and the error path. `traces.js`, `lifecycle.js`, the Overview tab's tile row and `filteredGroupTab`'s `fetchData` path are built on it. Exposes `render`, `refetch()` for a control the tab wires itself, and the latest render's `container()`/`context()`. |
+| `severity.js` | `durationSeverity(ms, features)`, `querySeverity(ms, features)`, `threshold(features, key)`, `DEFAULT_THRESHOLDS`, `issueSeverity(issues)`, `severityClass(severity)`, `ISSUE_TYPES`, `LOG_LEVELS`, `logLevelVariant(level)`, `healthSeverity(status)`, `taskStatusVariant(status)`, `migrationStateVariant(state)`, `MIGRATION_STATES`. The one place a duration, a span's issues, a log level, a health status, a scheduled task's outcome or a migration's state is turned into a colour; `severityClass` names the `components.css` class (`.pk-duration--slow`, `--very-slow`) every surface colours a duration with. See *Thresholds and the SLOW badge* below. |
+| `shadow-styles.js` | `attachSharedStyles(shadowRoot, hostElement, basePath, ownSheetHref)`. Links the shared sheets (plus the surface's own) into a shadow root; see below. `SHARED_SHEETS`, that list, which `ToolbarShell`'s linked sheets mirror (`SharedModuleIT` pins the two). |
 | `storage.js` | `readSetting`, `writeSetting`. Guarded `localStorage` access for per-browser settings; a blocked store reads as `null` and writes are dropped instead of throwing during module evaluation. |
-| `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`. |
-| `trace-stats.js` | `traceStatParts(trace, features)`. A trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. |
+| `theme.js` | `resolveTheme`, `applyTheme`, `storeTheme`, `watchTheme`, `bindTheme(target, onChange)` (resolve, apply and watch in one call, the way every surface starts; returns the unsubscribe). |
+| `trace-stats.js` | `traceStatParts(trace, features)`. A trace's stat line (query count with total query time, error and warning log counts) as detached elements; the Traces tab's rows and the dev toolbar's bar both render it, so neither can drift in wording or colouring. `durationStat(lead, ms, severity)`, the `.pk-stat` element behind it, is also the toolbar's own trace-duration stat. `truncatedBadge()`, the one wording for a trace that hit the max-spans cap, shown by the Traces tab and the overlay header. |
 | `url-state.js` | `parseAppHash`, `buildAppHash`, `pushAppHash`, `replaceAppHash`. The `#<tab>[/<detail>[/<subview>]][?<query>]` hash routing format; structural segments (tab, detail) push a history entry, subview and params replace it. |
-| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})`, the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation. `reconcileTextFilter`/`writeTextFilter(input, context)`, the single-text-input case built on it (`config.js`, `environment.js` and `meters.js`'s own filter; `loggers.js` composes the lower-level helper directly for its q+checkbox pair, `traces.js` for bucket/type/op, `insights.js` for its level/percentiles/restarts/panels params and `lifecycle.js` for its page). |
+| `url-filter.js` | `reconcileFilterWithUrl(context, urlKeys, {seed, hasNonDefaultState, writeBack})`, the shared URL-authoritative-vs-current-state direction logic behind every dashboard tab's filter-URL reconciliation. `reconcileTextFilter`/`writeTextFilter(input, context)`, the single-text-input case built on it (`filteredGroupTab`'s default, so `config.js`, `environment.js` and `meters.js`; `loggers.js` composes the lower-level helper directly for its q+checkbox pair, `traces.js` for bucket/type/op, `insights.js` for its level/percentiles/restarts/panels params and `lifecycle.js` for its page). |
 
 ## URL state (deep links)
 
@@ -173,7 +186,9 @@ shared link must not impose the sender's display preferences on the reader. An i
 param value (unknown bucket, root action type, level, log level, page, checkbox flag or
 panel override) falls back to its default instead of reaching the backend or filtering
 invisibly, and the URL is rewritten to the state that restored. A lower-case `type` is
-folded the way the backend folds it.
+folded the way the backend folds it. A tab this instance does not have (`#traces` with
+tracing off, `#flyway` without migrations) falls back to `#overview` the same way, rather
+than landing on an empty panel.
 
 ### Cross-links in the trace overlay
 
@@ -204,7 +219,10 @@ SLOW/VERY_SLOW/SLOW_QUERY at `duration >= threshold`, and `durationSeverity()`/
 default thresholds, a 50 ms query already slow. Where a span's own issues are in hand,
 `issueSeverity(span.issues)` is the backend's verdict and colours the gantt duration cells;
 `durationSeverity()` re-derives a severity only for durations no issue describes, meaning a
-trace's total, a trace's total query time and a Flyway migration's execution time. The
+trace's total query time and the dev toolbar's trace duration. The overlay's header marks a
+trace SLOW by the backend's per-trace `slow` flag (below), the same flag the Traces tab's
+badge reads. A Flyway migration's execution time is not coloured at all: the span
+thresholds describe request spans, and a migration that takes seconds is doing its job. The
 Queries tab's per-query SLOW label uses `querySeverity()`, the threshold behind the
 backend's SLOW_QUERY issue (`slowQueryThresholdMs`, 50 ms by default), never the span
 thresholds.
@@ -276,6 +294,47 @@ Both theme blocks in `tokens.css` also declare `color-scheme`: `light` on `:root
 `dark` on the dark block. That is what makes native widgets follow the theme. Without it
 scrollbars, the `<select>` popup, checkboxes and the caret stay light on a dark page.
 
+## When the shell does not start
+
+No build step means `main.js` is one module script over a graph of forty-odd separate fetches.
+Lose any one of them and the graph never evaluates: nothing hides `#loading`, nothing raises
+`#error`, and the page sits on the spinner with no way out and nothing in the console but a
+failed request. Chromium drops every request in flight, with `net::ERR_NETWORK_CHANGED`,
+whenever the host's network configuration changes - a container taking a veth interface up or
+down is enough, and so is a VPN connecting - so a page open on a working machine meets this
+with nothing broken.
+
+`dashboard/boot-recovery.js` is the one thing that can see it, being outside the graph it
+watches. A classic script in `index.html`'s `<head>`, for the same reasons `theme-boot.js` is
+one: a module would share the failure, and an inline block is dropped by a strict CSP. It
+listens for the single `error` event the browser fires at the module script element for the
+whole graph - in the capture phase, since resource errors do not bubble.
+
+The network change is an instant, not a state, so the first response is one reload: it fetches
+the whole graph again and gets it. One reload per failure episode. A `sessionStorage` marker is
+read and cleared on every load, so the reload finds itself marked and raises `#error` instead of
+reloading again, while a load that works leaves the next one a retry of its own. The marker
+carries the time it was written and counts only for 30 seconds, because it is written before the
+reload commits: one that never navigated - the tab went offline, or was closed in between -
+would otherwise spend the next episode's retry. Storage that throws takes the banner straight
+away rather than looping on a marker that was never written.
+
+The reload waits for `load` first, since one started during the navigation replaces it, which
+anything waiting on that navigation reads as an interrupted one. That wait is bounded at five
+seconds: a half-connected network that loses a module usually leaves another request hanging
+too, and the document then sits at `readyState` "interactive" for good, so `load` never comes.
+
+It acts only while `#loading` is still showing, which is what keeps it the boot's recovery. The
+one remedy it has is a reload, and a dashboard that is up has an open overlay, filters and a
+scroll position to lose, so a module script injected at runtime is left to whatever injected it.
+
+The banner is the same `#error` element `main.js` raises, unhidden before its message is
+written, since a `role="alert"` populated while it is still `display: none` is not reliably
+announced. `boot-recovery.js` binds the close button too, because `main.js`, which normally
+binds it, is exactly what did not run. Both of its log lines name the module script whose graph
+failed: the browser fires one error for the whole graph and never says which fetch under it
+broke, so that is as precise as a field report can be.
+
 ## Accessibility invariants
 
 Each of these has been broken at least once and caught only in review. Keep them true.
@@ -327,19 +386,29 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
 ### Controls and markup
 
 - **Interactive elements are real controls with `:focus-visible`**, not `div`/`role`
-  approximations. In particular a `role="button"` container must not wrap a focusable child
+  approximations. The ring itself is one rule in `base.css`
+  (`:is(button, a, select, input, [tabindex]):focus-visible`), so a new control gets it
+  without asking; a component overrides only the offset (`-2px` where the control sits
+  inside a bordered box) or, on a saturated fill, the colour. A control that resets the
+  ring to `none` needs another visible focus indicator. The overlay's jump targets show the
+  shape: `.pk-jump-flash` marks one while it lasts, and a `:focus-visible` rule of their own
+  keeps a ring once it is gone, which is the state a keyboard jump leaves them in.
+  In particular a `role="button"` container must not wrap a focusable child
   such as a link: ARIA defines a button's children as presentational, so assistive tech can
   prune the nested control right out of the accessibility tree while nothing looks wrong
   visually. The fix is always the same shape. The container stays a plain element, a real
   `<button>` carries the primary action, and the other interactive element becomes the
-  button's sibling rather than its descendant. The toolbar's open button and the traces tab's
-  trace item header needed it; watch for it in any "make this row clickable" change.
+  button's sibling rather than its descendant. The toolbar's open button needed it, and the
+  traces tab's row twice: once for its scheduler link, once for the traceId's copy control,
+  which is why the row's button now covers its main line alone and the stats line beside it
+  is no longer part of the click target. Watch for it in any "make this row clickable" change.
 
   The trace-detail overlay's small controls are all `<button>`s with the browser's button
-  chrome reset away, so each is reachable by keyboard. That covers the gantt
-  expand/collapse triangle, the SQL and logs toggles, the gantt event markers, the "show
-  logs for all spans" link, the log span-filter cell and the span-filter clear. A new
-  control that needs `cursor: pointer` is the smell; make it a `<button>` first.
+  chrome reset away (`.pk-unbutton`, plus `.pk-icon-btn` for the 24px glyph box), so each
+  is reachable by keyboard. That covers the gantt expand/collapse triangle, the SQL and
+  logs toggles, the gantt event markers, the "show logs for all spans" link, the log
+  span-filter cell and the span-filter clear. A new control that needs `cursor: pointer` is
+  the smell; make it a `<button>` first.
 
 - **A control whose only content is an icon needs an explicit `aria-label`, and the icon
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title
@@ -396,7 +465,7 @@ streamed body. The last attempt lands 4.75s after the response finished. With
 a pending placeholder rather than leaving a spinner up forever. A response that arrived but
 was empty (a 404, or `rootSpan` missing) leaves the previous render standing.
 
-`ToolbarLateSpanIT` is timed against this ladder: `LateSpanFixture.LateSpanController.LATE_WORK`
+`ToolbarLateSpanIT` is timed against this ladder: `LateSpanController.LATE_WORK`
 is arithmetic over the four attempts and the test profile's export delay, so moving an
 attempt means redoing that arithmetic.
 
@@ -412,15 +481,16 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
 
 ## How to add a dashboard tab
 
-1. Create `dashboard/tabs/<id>.js` exporting `id`, `label` and
-   `render(container, data, context)`. `context` comes from `main.js`'s `currentContext()`
-   and carries `{client, locale, timeZone, navigate, openTrace, features, active,
-   unmaskRequested, toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`. The five
-   that need explaining:
+1. Create `dashboard/tabs/<id>.js` exporting `id` and `render(container, data, context)`.
+   `context` comes from `main.js`'s `currentContext()`
+   and carries `{client, locale, timeZone, openTrace, features, active, unmaskRequested,
+   toggleUnmask, urlParams, urlIsAuthoritative, setUrlParams}`. The five that need
+   explaining:
    - `active`: whether the tab being rendered is the visible one. Every tab is rendered on
      the 30s cycle whichever is showing, so a tab only reconciles its filter with
      `urlParams` (which reflect the URL's tab, not this one) and only fetches its own data
-     while `active`. `main.js` renders it again the moment it is switched to.
+     while `active`. `main.js` renders it again the moment it is switched to. A tab with
+     its own endpoint builds on `shared/self-fetching-tab.js`, which applies that guard.
    - `unmaskRequested` / `toggleUnmask()`: whether the current payload was fetched with
      real values instead of `"******"`, and the shared flip that re-fetches (see
      `shared/unmask-control.js`). One state for every tab, never persisted.
@@ -435,12 +505,15 @@ overlay's spans, queries and logs tabs would assert against a trace that had not
      (hash push, URL sync of the overlay's own tabs and filters, hash cleanup on close), so
      a tab's click-to-open path cannot drift from the deep-link one.
 
-   Two optional exports: `isAvailable(data, features)` gates whether the tab's strip button
-   is shown at all (`meters.js`, `traces.js` gate on a feature flag), and
-   `applyFilter(payload, context)` lets another tab jump here with a pre-selected filter via
-   `context.navigate(id, detail, payload)` (see `traces.js`). A tab that is a filterable list
-   of collapsible groups builds on `shared/filtered-group-tab.js` rather than hand-rolling
-   the shell: `config.js` is the smallest example, `loggers.js` one with a second control.
+   One optional export: `isAvailable(data, features)` gates whether the tab's strip button
+   is shown at all (`meters.js`, `traces.js` gate on a feature flag). A tab links into
+   another tab with a plain `<a href>` built by `buildAppHash(...)` (`shared/components.js`'s
+   `iconLink` for the icon-only ones); the hash router restores the target's filters from
+   the URL like any deep link, so there is no hand-off channel to wire (`scheduled-tasks.js`
+   and `traces.js` link each other this way). A tab that is a list of collapsible groups
+   builds on `shared/filtered-group-tab.js` rather than hand-rolling the shell:
+   `scheduled-tasks.js` is the smallest example (no filter), `loggers.js` one with a
+   second control, and `config.js`/`environment.js` sit on its `propertyGroupTab` case.
 2. In `dashboard/main.js`, `import * as <name> from './tabs/<id>.js';` and add `<name>` to
    the `TABS` array. `main.js` never renders domain data itself; it only decides which tab
    module gets the fetched payload, so this is the only wiring the file needs.

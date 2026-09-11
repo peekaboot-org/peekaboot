@@ -1,9 +1,11 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.jdbcQuery;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -27,18 +29,24 @@ class TraceDataBundleTest {
         assertThat(spans).extracting(SpanData::spanId).containsExactly("span1", "span2", "span3");
     }
 
+    /** The flag flips on the first eviction and stays: a trimmed trace never reads as complete again. */
     @Test
     void addSpanTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 5; i++) {
+        for (int i = 1; i <= 3; i++) {
             bundle.addSpan(createSpan("span" + i, i), 3);
         }
+        assertThat(bundle.truncated()).isFalse();
+
+        bundle.addSpan(createSpan("span4", 4), 3);
+        bundle.addSpan(createSpan("span5", 5), 3);
 
         assertThat(bundle.spans()).extracting(SpanData::spanId).containsExactly("span3", "span4", "span5");
+        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test
-    void addSpan_collapsesDuplicateChildArrivingBeforeItsRealParent() {
+    void collapsesADuplicateChildArrivingBeforeItsRealParent() {
         // The expected OTel BatchSpanProcessor export ordering: a duplicate span is a
         // direct child of the real span it duplicates, and a span cannot end (and so
         // export) before the ancestor containing it does - so the duplicate normally
@@ -54,7 +62,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_collapsesDuplicateWhoseRealParentIsAlreadyStored() {
+    void collapsesADuplicateWhoseRealParentIsAlreadyStored() {
         // The uncommon ordering - covered for robustness, not because it's expected in
         // production, since a faithful fold must not assume the child-before-parent
         // ordering is the only one it will ever see.
@@ -69,7 +77,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_reparentsAGrandchildThatArrivedBeforeItsDuplicateAncestorWasFolded() {
+    void reparentsAGrandchildThatArrivedBeforeItsDuplicateAncestorWasFolded() {
         // Nesting depth means the grandchild ends (and so exports) before the duplicate
         // that contains it, which in turn ends before the real span - so all three arrive
         // in the reverse of their logical parent-child order.
@@ -94,7 +102,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void resolveSpanId_followsTheRedirectChainToTheSurvivingSpan() {
+    void resolveSpanIdFollowsTheRedirectChainToTheSurvivingSpan() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData duplicate = jdbcSpan("dup1", "parent1", "query", "dataSource", 1);
         SpanData real = jdbcSpan("parent1", null, "query", "sample_app_db", 2);
@@ -108,7 +116,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_doesNotCollapseAChildWithDifferentTagsFromItsParent() {
+    void doesNotCollapseAChildWithDifferentTagsFromItsParent() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         SpanData parent = jdbcSpan("parent1", null, "query", "SELECT * FROM person", "sample_app_db", 1);
         SpanData child = jdbcSpan("child1", "parent1", "query", "SELECT * FROM orders", "dataSource", 2);
@@ -120,7 +128,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_capCountsRealSpansNotDuplicateArtifacts() {
+    void theCapCountsRealSpansNotDuplicateArtifacts() {
         // Five real spans, each followed by its double-instrumented duplicate arriving
         // first (as in production) - ten raw addSpan calls against a cap of five. If the
         // cap counted raw arrivals rather than folded spans, this trace would truncate.
@@ -141,7 +149,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_boundsTheRedirectTableAsRealSpansAreEvicted() {
+    void theRedirectTableIsPrunedAsRealSpansAreEvicted() {
         // The redirect table gains one entry per fold; unless it is pruned as spans are
         // evicted it grows for the trace's whole life regardless of maxSpans. Here 500
         // real+duplicate pairs are folded against a cap of 10 - unpruned, the table would
@@ -165,7 +173,7 @@ class TraceDataBundleTest {
     }
 
     @Test
-    void addSpan_boundsTheRedirectTableAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
+    void theRedirectTableIsPrunedAcrossChainedFoldsEvenWhenTheIntermediateSurvivorIsEvicted() {
         // Chained-redirect residue: when a duplicate (dup1) is itself
         // later folded into a further survivor, an earlier fold that had targeted dup1
         // (gc -> dup1) stays keyed on dup1 in the reverse index. dup1 was folded away and
@@ -195,26 +203,6 @@ class TraceDataBundleTest {
                 .as("the redirect table must not leak an entry per chained fold whose "
                         + "intermediate survivor was itself later folded away and evicted")
                 .isLessThanOrEqualTo(cap * 2);
-    }
-
-    @Test
-    void truncated_isFalseUntilRealSpansExceedTheCap() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 3; i++) {
-            bundle.addSpan(createSpan("span" + i, i), 3);
-        }
-
-        assertThat(bundle.truncated()).isFalse();
-    }
-
-    @Test
-    void truncated_becomesTrueOnceRealSpansExceedTheCapAndStaysTrue() {
-        TraceDataBundle bundle = new TraceDataBundle("trace1");
-        for (int i = 1; i <= 5; i++) {
-            bundle.addSpan(createSpan("span" + i, i), 3);
-        }
-
-        assertThat(bundle.truncated()).isTrue();
     }
 
     @Test
@@ -259,18 +247,78 @@ class TraceDataBundleTest {
         assertThat(bundle.rootSpan().spanId()).isEqualTo("parent");
     }
 
+    /**
+     * The Slow bucket admits a trace by the window its spans have covered, and the listed
+     * duration must be that same number: a truncated trace whose earliest spans were evicted
+     * must not display a duration below the threshold it was admitted at.
+     */
+    @Test
+    void snapshotReportsTheWindowTheSlowBucketAdmittedEvenAfterEviction() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(createSpan("span1", 1, null), 2);
+        bundle.addSpan(createSpan("span2", 2, null), 2);
+        bundle.addSpan(createSpan("span3", 3, null), 2);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.spans()).extracting(SpanData::spanId).containsExactly("span2", "span3");
+        assertThat(snapshot.startTime()).isEqualTo(Instant.EPOCH.plusMillis(100));
+        assertThat(snapshot.duration()).isEqualTo(Duration.ofMillis(250));
+        assertThat(snapshot.truncated()).isTrue();
+    }
+
+    @Test
+    void snapshotCarriesTheRootSpanTheBundleChose() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(createSpan("child", 1, "parent"), 10);
+        bundle.addSpan(createSpan("parent", 2, null), 10);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.traceId()).isEqualTo("trace1");
+        assertThat(snapshot.rootSpan().spanId()).isEqualTo("parent");
+        assertThat(snapshot.truncated()).isFalse();
+    }
+
+    /**
+     * The mapper hangs the tree from the snapshot's root and skips it by equality when it
+     * re-parents orphans, so the root must be the same value the span list carries, parent
+     * redirects included. A cycle is the only shape where no span is parentless and the
+     * fallback picks a span whose parent a fold rewrote; it does not occur in production,
+     * but the invariant must hold for every shape the fold can leave.
+     */
+    @Test
+    void snapshotsRootIsAnElementOfItsSpansAfterARedirectRewroteItsParent() {
+        TraceDataBundle bundle = new TraceDataBundle("trace1");
+        bundle.addSpan(jdbcSpan("a", "dup", "query", "SELECT 1", "sample_app_db", 1), 100);
+        bundle.addSpan(jdbcSpan("b", "a", "query", "SELECT 2", "sample_app_db", 2), 100);
+        bundle.addSpan(jdbcSpan("dup", "b", "query", "SELECT 2", "dataSource", 3), 100);
+
+        TraceData snapshot = bundle.snapshot();
+
+        assertThat(snapshot.rootSpan().spanId()).isEqualTo("a");
+        assertThat(snapshot.rootSpan().parentId()).isEqualTo("b");
+        assertThat(snapshot.spans()).contains(snapshot.rootSpan());
+    }
+
+    @Test
+    void snapshotOfAnEmptyBundleHasNoRootAndNoWindow() {
+        TraceData snapshot = new TraceDataBundle("trace1").snapshot();
+
+        assertThat(snapshot.spans()).isEmpty();
+        assertThat(snapshot.rootSpan()).isNull();
+        assertThat(snapshot.startTime()).isNull();
+        assertThat(snapshot.duration()).isNull();
+    }
+
     @Test
     void addLogTrimsOldestBeyondLimit() {
         TraceDataBundle bundle = new TraceDataBundle("trace1");
         for (int i = 1; i <= 5; i++) {
-            bundle.addLog(createLog("log" + i), 3);
+            bundle.addLog(log("trace1").saying("log" + i).build(), 3);
         }
 
         assertThat(bundle.logs()).extracting(LogCapturedEvent::message).containsExactly("log3", "log4", "log5");
-    }
-
-    private LogCapturedEvent createLog(String message) {
-        return new LogCapturedEvent("trace1", "span1", Instant.now(), "INFO", "TestLogger", message, "main");
     }
 
     /** A JDBC-shaped span carrying the same query text every time, differing only by

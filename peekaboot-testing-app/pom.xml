@@ -26,10 +26,10 @@
         <jacoco.version>0.8.15</jacoco.version>
         <jacocoArgLine />
         <!-- The *IT suite parallelizes INSIDE one JVM (threads, below) rather than
-             across forks: one JVM means one Spring context cache, so the ~12 distinct
-             application contexts boot once instead of once per fork - and concurrent
-             classes hammering the same running app is deliberate, it exercises
-             peekaboot the way a real concurrent host application does. Forks remain
+             across forks: one JVM means one Spring context cache, so the suite's 11
+             distinct context configurations boot once each instead of once per fork -
+             and concurrent classes hammering the same running app is deliberate, it
+             exercises peekaboot the way a real concurrent host application does. Forks remain
              available (forks x threads both apply) but 1 is the intended default. -->
         <peekaboot.it.forks>1</peekaboot.it.forks>
         <!-- Worker threads for concurrent *IT classes; each worker owns a Chromium.
@@ -166,10 +166,26 @@
             <artifactId>micrometer-observation-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- shared test support (LogCapture); an unpublished reactor module -->
+        <dependency>
+            <groupId>org.peekaboot</groupId>
+            <artifactId>peekaboot-test-support</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>com.microsoft.playwright</groupId>
             <artifactId>playwright</artifactId>
             <version>${playwright.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- The axe-core rule engine, injected into a page Playwright already drives:
+             the targeted a11y tests pin the regressions we know about, this catches the
+             control nobody labelled. Keep the version in lockstep with build.gradle.kts. -->
+        <dependency>
+            <groupId>com.deque.html.axe-core</groupId>
+            <artifactId>playwright</artifactId>
+            <version>4.13.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -185,6 +201,29 @@
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>exec-maven-plugin</artifactId>
                     <version>3.6.3</version>
+                </plugin>
+                <!-- Pinned with the root pom, which has moved these four past the versions
+                     spring-boot-starter-parent manages. Dependabot bumps both poms in one
+                     pull request, so the reactor keeps running one version of each. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.16.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.6.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-failsafe-plugin</artifactId>
+                    <version>3.6.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -271,10 +310,12 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- This module deliberately does not inherit peekaboot-parent, so the
-                 parent's pluginManagement (version 10.0.1, failOnNoGitDirectory=false)
-                 does not apply here; without this block the bare declaration falls back
-                 to Spring Boot's managed 9.2.0, which fails the build when no usable
+            <!-- Only this module, the one runnable application, declares this plugin:
+                 git.properties lands at the classpath ROOT, and Spring Boot resolves
+                 "classpath:git.properties" to a SINGLE resource, so a library that ships
+                 one competes with the host application's own file and can win. Version
+                 and configuration are pinned here because a bare declaration falls back
+                 to Spring Boot's managed version, which fails the build when no usable
                  .git is present (e.g. a worktree whose absolute gitdir pointer does not
                  resolve on this machine, or an exported source tree). -->
             <plugin>

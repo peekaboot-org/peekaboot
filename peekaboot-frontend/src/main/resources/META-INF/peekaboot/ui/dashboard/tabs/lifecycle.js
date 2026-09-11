@@ -4,8 +4,7 @@
  * Paired with Insights in main.js's TABS order - both are views of the application over
  * time, Insights on what it measured, this on when it existed.
  *
- * Fetched from its own endpoint; a background render skips the round trip (active-tab
- * guard, see main.js's renderTab).
+ * Fetched from its own endpoint, on the self-fetching-tab.js contract.
  *
  * The current page is module-level state, not derived from the fetch response, so it
  * survives across those 30s re-renders - a reader on page 3 is not bounced back to page
@@ -14,29 +13,40 @@
  *
  * There is no isAvailable() - the tab always shows. peekaboot.lifecycle.enabled=false
  * removes the endpoint outright, and an operator who set that flag will not be
- * surprised; failedFetch below renders an honest "unavailable" line instead.
+ * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
-import {badge, emptyState, table} from '../../shared/components.js';
+import {badge, cell, emptyState, table} from '../../shared/components.js';
 import {formatDateTime, formatLongDuration} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'lifecycle';
-export const label = 'Lifecycle';
 
 const PAGE_SIZE = 20;
 const COLUMNS = ['Started', 'Ran for', 'Stopped', 'Down before', 'Build'];
 
-let currentContainer = null;
-let currentContext = null;
 let runs = null;        // most recent /api/lifecycle/runs response's `runs`, or null before the first load
-let fetchFailed = false;
 let currentPage = 0;    // 0-indexed, survives across render() calls - see doc comment above
 
+const tab = selfFetchingTab({
+    fetch: context => context.client.get('/api/lifecycle/runs'),
+    reconcile: (container, context) => reconcileWithUrl(context),
+    renderResult: (container, result, context) => {
+        runs = result.runs || [];
+        renderTable(container, context);
+    },
+    renderError: (container, error) => {
+        // peekaboot.lifecycle.enabled=false removes the endpoint entirely - that is an
+        // expected, operator-chosen state, not a bug, so this logs quietly and renders
+        // an honest sentence rather than throwing.
+        console.warn('Lifecycle history unavailable:', error);
+        runs = null;
+        container.querySelector('#lifecycle-runs').replaceChildren(emptyState('Lifecycle history is unavailable'));
+    }
+});
+
 export function render(container, data, context) {
-    currentContainer = container;
-    currentContext = context;
-    if (context.active) reconcileWithUrl(context);
-    fetchAndRender();
+    tab.render(container, data, context);
 }
 
 /**
@@ -69,42 +79,12 @@ function reconcileWithUrl(context) {
  * page one so the default yields a clean "#lifecycle" hash. A replace, never a push.
  */
 function writePageParam() {
-    currentContext.setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
-}
-
-async function fetchAndRender() {
-    const container = currentContainer;
-    const context = currentContext;
-    if (!context.active) return;
-
-    let result;
-    try {
-        result = await context.client.get('/api/lifecycle/runs');
-    } catch (error) {
-        // peekaboot.lifecycle.enabled=false removes the endpoint entirely - that is an
-        // expected, operator-chosen state, not a bug, so this logs quietly and renders
-        // an honest sentence rather than throwing.
-        console.warn('Lifecycle history unavailable:', error);
-        fetchFailed = true;
-        runs = null;
-        renderTable(container, context);
-        return;
-    }
-    if (result === null) return; // superseded by a newer request
-
-    fetchFailed = false;
-    runs = result.runs || [];
-    renderTable(container, context);
+    tab.context().setUrlParams(currentPage === 0 ? {} : {page: String(currentPage + 1)});
 }
 
 function renderTable(container, context) {
     const target = container.querySelector('#lifecycle-runs');
     target.innerHTML = '';
-
-    if (fetchFailed) {
-        target.appendChild(emptyState('Lifecycle history is unavailable'));
-        return;
-    }
 
     if (!runs || runs.length === 0) {
         target.appendChild(emptyState('No runs recorded yet'));
@@ -126,7 +106,7 @@ function renderTable(container, context) {
     const {locale, timeZone} = context;
 
     const rows = runs.slice(start, start + PAGE_SIZE).map(run => renderRow(run, {locale, timeZone}));
-    target.appendChild(table(COLUMNS, rows, {className: 'pk-lifecycle-table'}));
+    target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
     target.appendChild(renderPager(totalPages));
@@ -134,8 +114,8 @@ function renderTable(container, context) {
 
 function renderRow(run, dateOptions) {
     const row = document.createElement('tr');
-    if (run.running) row.classList.add('pk-lifecycle-row--running');
-    if (run.uncleanExit) row.classList.add('pk-lifecycle-row--unclean');
+    if (run.running) row.classList.add('pk-table__stripe--primary');
+    if (run.uncleanExit) row.classList.add('pk-table__stripe--danger');
 
     row.append(
         startedCell(run, dateOptions),
@@ -147,71 +127,48 @@ function renderRow(run, dateOptions) {
     return row;
 }
 
+const SHRINK = {className: 'pk-table__shrink'};
+
 function startedCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
-    td.append(document.createTextNode(formatDateTime(run.startedAtEpochMs, dateOptions)));
-    if (run.running) {
-        td.append(' ');
-        td.appendChild(badge('Running', 'ok'));
-    }
+    const td = cell(SHRINK, formatDateTime(run.startedAtEpochMs, dateOptions));
+    if (run.running) td.append(' ', badge('Running', 'ok'));
     return td;
 }
 
 function ranForCell(run) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
     // null means the run ended without a matching stop - a crash or a kill - so we
     // genuinely do not know how long it ran. A dash, never a computed guess.
-    if (run.ranForMs == null) {
-        td.textContent = '-';
-        return td;
-    }
-    td.append(document.createTextNode(formatLongDuration(run.ranForMs)));
-    if (run.running) {
-        // The server sent elapsed-so-far, not a final duration - say so, rather than
-        // let it read like the run is already over.
-        td.append(' ');
-        td.appendChild(badge('still counting', 'muted'));
-    }
+    if (run.ranForMs == null) return cell(SHRINK, '-');
+    const td = cell(SHRINK, formatLongDuration(run.ranForMs));
+    // The server sent elapsed-so-far, not a final duration - say so, rather than
+    // let it read like the run is already over.
+    if (run.running) td.append(' ', badge('still counting', 'muted'));
     return td;
 }
 
 function stoppedCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
-    if (run.stoppedAtEpochMs != null) {
-        td.textContent = formatDateTime(run.stoppedAtEpochMs, dateOptions);
-        return td;
-    }
+    if (run.stoppedAtEpochMs != null) return cell(SHRINK, formatDateTime(run.stoppedAtEpochMs, dateOptions));
     // No stop recorded - either still running (no badge, it is not an error), or it
     // died uncleanly (kill -9, crash, power loss - flagged so it reads as a fact, not
     // as missing data).
-    td.append(document.createTextNode('-'));
-    if (run.uncleanExit) {
-        td.append(' ');
-        td.appendChild(badge('Unclean exit', 'error'));
-    }
+    const td = cell(SHRINK, '-');
+    if (run.uncleanExit) td.append(' ', badge('Unclean exit', 'error'));
     return td;
 }
 
 function downBeforeCell(run) {
-    const td = document.createElement('td');
-    td.className = 'pk-table__shrink';
     // null means unknowable - either nothing precedes this run, or the previous run
     // itself ended uncleanly and left no stop to measure from. Never render that as 0.
-    td.textContent = run.downForMs != null ? formatLongDuration(run.downForMs) : '-';
-    return td;
+    return cell(SHRINK, run.downForMs != null ? formatLongDuration(run.downForMs) : '-');
 }
 
 function buildCell(run, dateOptions) {
-    const td = document.createElement('td');
-    td.className = 'pk-lifecycle-row__build';
     // The build time is not shown as its own line (the row is already dense) - it is
     // available on hover instead, same as flyway.js's truncated-script tooltip.
-    if (run.buildTimeEpochMs != null) {
-        td.title = `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}`;
-    }
+    const td = cell({
+        className: 'pk-lifecycle-row__build',
+        title: run.buildTimeEpochMs != null ? `Built ${formatDateTime(run.buildTimeEpochMs, dateOptions)}` : undefined
+    });
 
     const version = document.createElement('div');
     version.className = 'pk-lifecycle-row__version';
@@ -239,32 +196,26 @@ function renderPager(totalPages) {
     const pager = document.createElement('div');
     pager.className = 'pk-lifecycle-pager';
 
-    const prevBtn = document.createElement('button');
-    prevBtn.type = 'button';
-    prevBtn.className = 'pk-btn pk-btn--small';
-    prevBtn.textContent = 'Previous';
-    prevBtn.disabled = currentPage === 0;
-    prevBtn.addEventListener('click', () => {
-        currentPage -= 1;
-        writePageParam();
-        renderTable(currentContainer, currentContext);
-    });
+    // The step is all the two buttons differ by: it says where a click goes and, with
+    // totalPages, whether there is a page to go to at all.
+    function pagerButton(label, delta) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pk-btn pk-btn--small';
+        btn.textContent = label;
+        btn.disabled = currentPage + delta < 0 || currentPage + delta >= totalPages;
+        btn.addEventListener('click', () => {
+            currentPage += delta;
+            writePageParam();
+            renderTable(tab.container(), tab.context());
+        });
+        return btn;
+    }
 
     const readout = document.createElement('span');
     readout.className = 'pk-lifecycle-pager__readout';
     readout.textContent = `Page ${currentPage + 1} of ${totalPages}`;
 
-    const nextBtn = document.createElement('button');
-    nextBtn.type = 'button';
-    nextBtn.className = 'pk-btn pk-btn--small';
-    nextBtn.textContent = 'Next';
-    nextBtn.disabled = currentPage >= totalPages - 1;
-    nextBtn.addEventListener('click', () => {
-        currentPage += 1;
-        writePageParam();
-        renderTable(currentContainer, currentContext);
-    });
-
-    pager.append(prevBtn, readout, nextBtn);
+    pager.append(pagerButton('Previous', -1), readout, pagerButton('Next', 1));
     return pager;
 }

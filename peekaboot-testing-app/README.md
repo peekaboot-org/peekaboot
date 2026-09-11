@@ -23,13 +23,13 @@ give Peekaboot's trace view something worth looking at.
 
 | Endpoint | What it demonstrates |
 | --- | --- |
-| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. Trips the high-trace-query-count warning in the Traces tab. |
+| `GET /orders` | A deliberate N+1: one query for all orders, then three more per order, plus an outbound HTTP call per page load. The Traces tab lists it with all of those counted in the row's query stat. |
 | `GET /api/orders/{id}/report` | Three artificially slow, individually `@Observed` stages (`load-lines`, `price-lines`, `apply-discounts`), so the Slow bucket has a trace whose span tree shows where the time went. |
-| `POST /api/orders` | Places a new order. Shows up as its own `HTTP_REQUEST`-classified trace, distinct from a page load. |
+| `POST /api/orders` | Places the order and its line in one transaction, so the trace shows a single pooled connection for both writes. The `OrderPlacedEvent` listener runs inside the request, adding an `order.placed` span with a log line on it. |
 | `GET /` and `GET /persons` | The person lookup behind both pages is `@Observed`, so it is a span of its own rather than an anonymous gap above the JDBC spans it triggers, and it logs its result inside that span. Add `?error=true` to the index page and the handler logs an `ERROR` of its own. That gives one trace whose logs sit on two different spans, which is what the trace overlay's per-span "N logs" navigation is there to show. |
 | `GET /api/person/all` | The same `@Observed` lookup over JSON. A `@RestController` renders no view, so the span tree has no view-render span under the handler. |
-| `GET /api/person/{id}` | A single-row lookup that is *not* `@Observed`. Its JDBC span hangs straight off the handler span, which is what the observed lookup above avoids. |
-| `GET /boom` | Always throws. Gives the Errors bucket, the error badge and the toolbar's error styling something real to render. |
+| `GET /api/person/{id}` | A single-row lookup that is *not* `@Observed`. Its JDBC span hangs straight off the handler span, which is what the observed lookup above avoids. An unknown id answers 404, not 200 with an empty body. |
+| `GET /boom` | Always throws. Gives the Errors bucket and the error badge something real to render. The bar is not among them: the throw is served by the error dispatch, a path Peekaboot excludes. |
 | `OrderReconciler.reconcileOrders()` (`@Scheduled`, every 2 minutes) | Logs a `WARN` per still-`PLACED` order. Fired by Spring's scheduler, its scheduled-task observation wraps the call and becomes the root span (named `task orderReconciler.reconcileOrders`), carrying the `code.function`/`code.namespace` tags that classify the trace `SCHEDULED_JOB`. A direct call, as some integration tests make, skips that observation: the method's own `@Observed` span becomes the root instead and classifies `INTERNAL`. |
 
 `OrderTraceCaptureIT` asserts what Peekaboot actually captured from these endpoints, not
@@ -49,6 +49,27 @@ mvn -pl peekaboot-testing-app verify -Dit.test=<Class>         # one *IT class
 ```
 
 This module is not published to Maven Central (`maven.deploy.skip`).
+
+### Page objects and helpers (`ui/`)
+
+`PlaywrightTestBase` binds three page objects to each test's page: `toolbar` (the dev
+toolbar's shadow root), `overlay` (the trace-detail overlay: `awaitOpened`, `awaitTrace(id)`,
+`awaitLoaded`, `openTab`, `awaitClosed`) and `dashboard` (the tab strip: `openTab(id)` waits
+for the tab's own data, `openTracesTab`, `awaitListedTrace(id)`, `openListedTrace(id)`,
+`selectedTab`, and `kvValue`/`awaitKvValue` for a `.pk-kv` row found by its key). Every
+shadow-root lookup goes through them; a test never spells
+`document.getElementById(...).shadowRoot` itself. The base also offers
+`openDashboard(hash, readySelector)`, `awaitTrace(traceId, jsPredicate)` and
+`awaitListedTrace(query, jsPredicate)` (see `docs/TESTING.md`, *Isolation in shared Spring
+contexts*), `openPageThatLogsAnError()` and `awaitErrorLoggingJobRun(run)` for the two traces
+that only exist if their log was captured, `importModule(path, expression)` to evaluate an
+expression over an ES module imported into the blank fixture page, `serveWithCsp(urlGlob,
+policy)` and `emulateOsColorScheme(scheme)`.
+
+The trace store is shared with every class in the suite, so a test pins its own trace: it
+triggers a request, takes the id from the toolbar (or from `TraceApiClient.get(path)` under
+`integration/`, which reads the `Server-Timing` header) and waits for that id, never for
+whichever trace happens to be listed first.
 
 ### Playwright browser (UI tests under `ui/`)
 
@@ -92,16 +113,23 @@ Playwright, and with it Chromium, changes. GitHub-hosted Ubuntu runners have pas
 
 `src/test/java/.../ui/ScreenshotCapture.java` photographs every dashboard tab, the
 trace-detail overlay and the dev toolbar, in both light and dark themes, for the
-peekaboot.org website. It is a tool, not a test, and is deliberately not named `*Test`, so
+peekaboot.org website. It is a tool, not a test (its one assertion is that a file was
+written for each of the canonical names below), and is deliberately not named `*Test`, so
 surefire's default includes never pick it up and a normal `mvn test` never runs it or
 touches Docker. It is Maven-only. The Gradle build has no task that includes it, because
 Gradle's `--tests` filter cannot widen the `*Test`/`*IT` includes the way surefire's
 `-Dtest` does.
 
 ```bash
-mvn -pl peekaboot-testing-app test -Dtest=ScreenshotCapture \
+mvn -pl peekaboot-testing-app -am test -Dtest=ScreenshotCapture \
+    -Dsurefire.failIfNoSpecifiedTests=false \
     -Dpeekaboot.screenshots.out=/absolute/path/to/output/dir
 ```
+
+`-am` builds the other reactor modules rather than resolving them from the local
+repository, which may hold an older install and would then photograph that code.
+`-Dtest` applies to every module `-am` pulls in, and only this one has the class, hence
+the second flag.
 
 It runs under the `screenshots` profile (`application-screenshots.yml`), which points at
 the real PostgreSQL container from `compose.yml` with Flyway on, so the Flyway, Config,

@@ -9,8 +9,9 @@ term twice and letting the two copies drift.
 
 ### Trace
 There is no `Trace` class. A trace is a `traceId` and whatever is filed under it, in three
-shapes: `TraceDataBundle` while the store is writing, `TraceData` when its spans are read back
-flat and creation-ordered (`TraceData.fromSpans`), and `TraceTree` once mapped for the UI. Only
+shapes: `TraceDataBundle` while the store is writing, `TraceData` when the bundle is read back
+in one go (`TraceDataBundle.snapshot()`: the spans flat and creation-ordered, the root, the
+window and the truncated flag), and `TraceTree` once mapped for the UI. Only
 the third leaves the process. What lands in the store is on the site:
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured).
 
@@ -18,15 +19,16 @@ the third leaves the process. What lands in the store is on the site:
 Two records, one concept. `SpanData` is the store's copy of an exported OpenTelemetry span:
 `spanId` and `parentId`, `Map<String, String>` tags, a nullable Micrometer `Span.Kind` (OTel's
 `INTERNAL` has no Micrometer constant and maps to null), and a `creationOrder` minted in export
-order. `SpanNode` is the mapped tree node the API serves: `kind` as a plain string, plus
-`children`, `issues`, `logs` and a masked `query`. Issues and logs hang off the node;
+order. `SpanNode` is the mapped tree node the API serves: the same `Span.Kind` and tag map,
+plus `children`, `issues`, `logs` and a masked `query`. Issues and logs hang off the node;
 `SpanData` carries neither.
 
 ### Root Span
-`TraceTreeMapper.findRootSpan` takes the first span in creation order whose parent is not in the
-trace, falling back to the first span. `TraceDataBundle.rootSpan()` is the store-side twin over
-stored spans with deduplication redirects resolved, used to classify a bundle for filtering
-without building a tree. `TraceTree.rootSpan` is the mapped `SpanNode` at the top.
+`TraceDataBundle` chooses it, once: the earliest-created stored span whose parent is not stored,
+with deduplication redirects resolved, else the earliest-created span. `snapshot()` carries that
+choice to `TraceTreeMapper` as `TraceData.rootSpan`, and `rootSpan()` answers the same rule
+without a copy so the list filters can classify a bundle without building a tree.
+`TraceTree.rootSpan` is the mapped `SpanNode` at the top.
 
 ### Root Action Type
 `RootActionType`, serialised by constant name. `TraceTreeMapper.detectRootActionType`
@@ -54,11 +56,11 @@ bucket. See [trace status](https://www.peekaboot.org/docs/traces/#trace-status).
 
 ### Issue
 `SpanIssue(IssueType type, String message, IssueSeverity severity)`, held in `SpanNode.issues`.
-`IssueType`'s constants are `SLOW`, `VERY_SLOW`, `ERROR`, `SLOW_QUERY` and
-`HIGH_QUERY_COUNT`; `IssueSeverity` has two and serialises lowercase through `@JsonValue`.
+`IssueType`'s constants are `SLOW`, `VERY_SLOW`, `ERROR` and `SLOW_QUERY`; `IssueSeverity`
+has two and serialises lowercase through `@JsonValue`.
 
 Detection is `IssueDetector`, called from `TraceInsightsService`. `TraceTreeMapper` leaves
-`issues` empty on every node it builds, and leaves `logs` empty too. Firing conditions:
+`issues` empty on every node it builds, and leaves `logs` null. Firing conditions:
 [issues](https://www.peekaboot.org/docs/traces/#issues). Thresholds and property names:
 [peekaboot.ui.tracing](https://www.peekaboot.org/docs/configuration/#peekabootuitracing).
 
@@ -181,13 +183,15 @@ The word carries two unrelated features in the URL space, plus a prose shorthand
   `/peekaboot/api/insights/{config,data,stream}`.
 - **The insights suffix** marks the enriched read models: `/peekaboot/api/actuator/all/insights`,
   `/peekaboot/api/traces/insights` and `/peekaboot/api/traces/{traceId}/insights`. Nothing to do
-  with the tab. `ActuatorInsightsResponse` and `TraceInsightsResponse` are their payloads.
+  with the tab. `PeekabootController` serves them; `ActuatorInsightsResponse` and
+  `TraceInsightsResponse` are their payloads.
 - **Insights Data** in prose means the enriched shape itself: `TraceTree` and `SpanNode` rather
   than `TraceData` and `SpanData`.
 
 So `/api/insights/**` and `/api/*/insights` are two different features that happen to share a
 word. A path with `insights` in the middle is the tab's; a path ending in `insights` is a read
-model.
+model. Neither is a version of the other, and they disappear under different conditions: the
+prefix form goes away without a `MeterRegistry` bean, the suffix form does not.
 
 ### Backend-for-Frontend (BFF)
 The pattern behind the suffix. The backend assembles, correlates and masks before the frontend

@@ -54,7 +54,7 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat((String) page.evaluate("() => navigator.clipboard.readText()"))
                 .as("the full id reaches the clipboard")
                 .isEqualTo(traceId);
-        assertThat(page.querySelector("#peekaboot-trace-overlay"))
+        assertThat(page.querySelector(TraceOverlay.HOST))
                 .as("the whole toolbar bar opens the overlay on click; copying an id must not "
                         + "also trigger it, which needs the copy handler to run in the capture phase")
                 .isNull();
@@ -85,18 +85,16 @@ class CopyableIdIT extends PlaywrightTestBase {
 
     @Test
     void traceListRendersCopyableIds() {
-        page.navigate(baseUrl + "/");
+        openPageWithToolbar();
+        String traceId = toolbar.traceId();
+        awaitTrace(traceId, ROOT_SPAN_EXPORTED);
         openDashboard();
-        page.click(".pk-tab[data-tab='traces']");
-        page.waitForSelector("#traces-list .pk-trace-item");
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
 
-        assertThat(page.querySelectorAll("#traces-list .pk-trace-item .pk-copy"))
-                .as("every listed trace exposes its id for copying")
-                .isNotEmpty();
-        assertThat((String) page.evaluate(
-                        "() => document.querySelector('#traces-list .pk-trace-item .pk-copy').dataset.pkCopy"))
+        assertThat(page.getAttribute(Dashboard.traceItem(traceId) + " .pk-copy", "data-pk-copy"))
                 .as("the row shows a shortened id but copies the whole one")
-                .hasSize(TRACE_ID_LENGTH);
+                .isEqualTo(traceId);
     }
 
     /**
@@ -142,5 +140,28 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat(filterChip)
                 .as("copying an id is not a request to also filter by it - same capture-phase handler as the toolbar")
                 .isNull();
+    }
+
+    /**
+     * The toolbar's usual home: an application served over plain HTTP, where
+     * {@code navigator.clipboard} does not exist and the control falls back to the legacy
+     * selection copy. Both outcomes are pinned - execCommand may or may not be honoured in a
+     * headless run, and the point is that the reader is told which one happened rather than
+     * left with a control that did nothing.
+     */
+    @Test
+    void anInsecureContextFallsBackToTheLegacyCopyAndSaysHowItWent() {
+        page.addInitScript("Object.defineProperty(window, 'isSecureContext', {get: () => false});");
+        openPageWithToolbar();
+
+        toolbar.click("#pk-trace .pk-copy");
+
+        String state = (String) toolbar.waitUntil("root => { const copy ="
+                + " root.querySelector('#pk-trace .pk-copy');"
+                + " return copy.classList.contains('pk-copy--copied') ? 'copied'"
+                + "      : copy.classList.contains('pk-copy--failed') ? 'failed' : null; }");
+        assertThat(state).isIn("copied", "failed");
+        assertThat(toolbar.text("#pk-trace .pk-copy__status"))
+                .isEqualTo("copied".equals(state) ? "Copied" : "Copy failed");
     }
 }

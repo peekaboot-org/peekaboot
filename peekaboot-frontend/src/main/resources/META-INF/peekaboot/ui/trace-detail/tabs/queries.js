@@ -4,52 +4,52 @@
  * Spans tab's query link can land on it - and links back to that span in the span tree
  * via view.goToSpan (see trace-detail.js's jumpToElement).
  */
-import {escapeHtml} from '../../shared/markup.js';
-import {emptyStateHtml} from '../../shared/components.js';
-import {querySeverity} from '../../shared/severity.js';
+import {emptyState} from '../../shared/components.js';
+import {el, button} from '../../shared/dom.js';
+import {querySeverity, severityClass} from '../../shared/severity.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 
 export function render(container, trace, view = {}) {
     const queries = trace.queries || [];
 
     if (queries.length === 0) {
-        container.innerHTML = emptyStateHtml('No database queries recorded');
+        container.replaceChildren(emptyState('No database queries recorded'));
         return;
     }
 
-    let html = '';
-    queries.forEach((query, idx) => {
-        const sql = query.sql || 'Unknown query';
-        const duration = query.durationMs || 0;
-        const durationClass = querySeverity(duration, view.features);
-        const system = query.dbSystem || 'SQL';
-        const rowCount = query.rowCount;
-        const spanId = query.spanId || '';
+    container.replaceChildren(...queries.map((query, index) => queryItem(query, index, view)));
+}
 
-        html += `<div class="pk-query-item"${spanId ? ` data-span-id="${escapeHtml(spanId)}"` : ''}>`;
-        html += '<div class="pk-query-header">';
-        html += `<span class="pk-query-system">${idx + 1}. ${escapeHtml(system.toUpperCase())}</span>`;
-        html += '<span class="pk-query-meta">';
-        html += `<span class="pk-query__duration${durationClass ? ' pk-query__duration--' + durationClass : ''}">${formatDurationMs(duration)}${durationClass ? ' SLOW' : ''}</span>`;
-        if (rowCount !== null && rowCount !== undefined) {
-            html += `<span class="pk-query-rows">${formatCount(Number(rowCount), 'row')}</span>`;
-        }
-        if (spanId && view.goToSpan) {
-            html += `<button type="button" class="pk-span-action pk-query-span-link" data-span-id="${escapeHtml(spanId)}"`
-                + ` title="Show this query's span in the span tree"`
-                + ` aria-label="Show this query's span in the span tree">&#10550;</button>`;
-        }
-        html += '</span>';
-        html += '</div>';
-        html += `<div class="pk-query__sql">${escapeHtml(sql)}</div>`;
-        html += '</div>';
-    });
+function queryItem(query, index, view) {
+    const duration = query.durationMs || 0;
+    const durationClass = querySeverity(duration, view.features);
+    const system = query.dbSystem || 'SQL';
+    const spanId = query.spanId || '';
 
-    container.innerHTML = html;
+    const meta = el('span', {className: 'pk-query-meta'},
+        el('span', {
+            className: 'pk-query__duration' + (durationClass ? ` ${severityClass(durationClass)}` : ''),
+            text: formatDurationMs(duration) + (durationClass ? ' SLOW' : '')
+        }));
+    if (query.rowCount != null) {
+        meta.append(el('span', {className: 'pk-query-rows', text: formatCount(Number(query.rowCount), 'row')}));
+    }
+    if (spanId && view.goToSpan) {
+        const link = button({
+            className: 'pk-span-action pk-query-span-link',
+            text: '⤶',
+            title: "Show this query's span in the span tree",
+            attrs: {'data-span-id': spanId, 'aria-label': "Show this query's span in the span tree"}
+        });
+        // Fresh elements on every render, so per-element listeners cannot accumulate on the
+        // shared tab-content container the way a delegated one would.
+        link.addEventListener('click', () => view.goToSpan(spanId));
+        meta.append(link);
+    }
 
-    // Fresh elements on every render, so per-element listeners cannot accumulate on the
-    // shared tab-content container the way a delegated one would.
-    container.querySelectorAll('.pk-query-span-link').forEach(link => {
-        link.addEventListener('click', () => view.goToSpan?.(link.dataset.spanId));
-    });
+    return el('div', {className: 'pk-query-item', attrs: {'data-span-id': spanId || null}},
+        el('div', {className: 'pk-query-header'},
+            el('span', {className: 'pk-query-system', text: `${index + 1}. ${system.toUpperCase()}`}),
+            meta),
+        el('div', {className: 'pk-code-block', text: query.sql || 'Unknown query'}));
 }

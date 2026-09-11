@@ -1,25 +1,24 @@
 /**
  * The "Traces" tab: recent request/job/message traces, bucketed (all/errors/slow) and
  * filterable by root action type, each opening the shared trace-detail overlay when
- * clicked. Owns its bucket control, type filter and list, but exposes one entry point -
- * applyFilter() - for another tab (via context.navigate's payload) to pre-select a type
- * and root operation without reaching into this module's private filter state.
+ * clicked. Owns its bucket control, type filter and list; another tab pre-selects a
+ * filter here with a plain "#traces?type=...&op=..." link, which the URL reconciliation
+ * below restores like any deep link.
  *
- * Fetched from its own endpoint (not part of the main dashboard payload); a background
- * render skips the round trip (active-tab guard, see main.js's renderTab). context.client's
- * per-path generation counter is the guard against a slow older response overwriting a
- * newer one.
+ * Fetched from its own endpoint (not part of the main dashboard payload), on the
+ * self-fetching-tab.js contract: a background render skips the round trip, and a slow
+ * older response never overwrites a newer one.
  */
-import {badge, emptyStateHtml, loadingBlock} from '../../shared/components.js';
+import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
 import {formatDurationMs, formatDateTime} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
-import {traceStatParts} from '../../shared/trace-stats.js';
-import {parseAppHash} from '../../shared/url-state.js';
+import {traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
+import {parseAppHash, buildAppHash} from '../../shared/url-state.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
+import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'traces';
-export const label = 'Traces';
 
 // Empty set means no type in the request, which the backend answers with its default
 // view - every type except the routine pool maintenance it keeps out. Every chip,
@@ -28,56 +27,39 @@ let selectedRootActionTypes = new Set();
 let currentRootOperationFilter = null;
 let currentBucket = 'all';
 
-// The most recent render() call's container/context - read by the persistent bucket/
-// filter/clear listeners below (wired once, see wireControls) so a later locale or
-// timezone change, or a later fetch, always uses fresh values instead of whatever was
-// current the first time this tab was rendered.
-let currentContainer = null;
-let currentContext = null;
-
 const BUCKET_EMPTY_MESSAGES = {
     all: 'No traces recorded',
     errors: 'No error traces recorded',
     slow: 'No slow traces recorded'
 };
 
+const tab = selfFetchingTab({
+    fetch: context => context.client.get('/api/traces/insights', {params: requestParams()}),
+    reconcile: reconcileWithUrl,
+    loading: container => {
+        container.querySelector('#traces-loading').classList.remove('hidden');
+        container.querySelector('#no-traces').classList.add('hidden');
+    },
+    renderResult: (container, result, context) => {
+        updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts);
+        renderList(container, result, context);
+        container.querySelector('#traces-loading').classList.add('hidden');
+    },
+    renderError: (container, error) => {
+        container.querySelector('#traces-list').replaceChildren(emptyState(`Failed to load traces: ${error.message}`));
+        container.querySelector('#traces-loading').classList.add('hidden');
+    }
+});
+
 export function isAvailable(data, features) {
     return Boolean(features?.tracing);
 }
 
 export function render(container, data, context) {
-    currentContainer = container;
-    currentContext = context;
     // delegated on the panel, which survives every re-render of the trace list
     bindCopyables(container);
     wireControls(container);
-    if (context.active) reconcileWithUrl(container);
-    fetchAndRender();
-}
-
-/**
- * Pre-selects a root action type and/or root operation, called from another tab's
- * cross-link via context.navigate(tabId, detail, payload) - see main.js's navigate().
- * Needs a prior render() to have wired the controls; a link that lands here only exists
- * once this tab is available, which is after its first render.
- */
-export function applyFilter({rootActionType, rootOperation} = {}, context) {
-    if (!currentContainer) return;
-    currentContext = context;
-
-    selectedRootActionTypes.clear();
-    if (rootActionType) selectedRootActionTypes.add(rootActionType);
-    currentRootOperationFilter = rootOperation || null;
-
-    currentContainer.querySelectorAll('#traces-filter input').forEach(cb => {
-        cb.checked = cb.value === rootActionType;
-    });
-
-    // main.js's navigate() already pushed the plain "#traces" hash before calling this -
-    // this replaces it with the filter's own params so the cross-tab link lands on a
-    // shareable URL, without adding a second history entry for one navigation.
-    writeUrlParams();
-    fetchAndRender();
+    tab.render(container, data, context);
 }
 
 /**
@@ -86,10 +68,10 @@ export function applyFilter({rootActionType, rootOperation} = {}, context) {
  * no seed, no write (main.js's setUrlParams drops the write side of the same rule) -
  * the overlay's own level/q params are not this tab's bucket/type/op.
  */
-function reconcileWithUrl(container) {
+function reconcileWithUrl(container, context) {
     if (parseAppHash().detail) return;
 
-    reconcileFilterWithUrl(currentContext, ['bucket', 'type', 'op'], {
+    reconcileFilterWithUrl(context, ['bucket', 'type', 'op'], {
         seed: params => {
             seedFromUrl(container, params);
             // corrects a bogus or non-canonical value in the URL to the state that actually restored
@@ -143,7 +125,16 @@ function writeUrlParams() {
     if (currentBucket !== 'all') params.bucket = currentBucket;
     if (selectedRootActionTypes.size > 0) params.type = Array.from(selectedRootActionTypes).join(',');
     if (currentRootOperationFilter) params.op = currentRootOperationFilter;
-    currentContext.setUrlParams(params);
+    tab.context().setUrlParams(params);
+}
+
+/** The listing request's query, from the same state the URL params are written from. */
+function requestParams() {
+    const params = {limit: 50};
+    if (currentBucket !== 'all') params.bucket = currentBucket;
+    if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
+    if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
+    return params;
 }
 
 function wireControls(container) {
@@ -160,7 +151,7 @@ function wireControls(container) {
             container.querySelectorAll('#traces-bucket .pk-btn').forEach(b =>
                 b.setAttribute('aria-pressed', String(b === btn)));
             writeUrlParams();
-            fetchAndRender();
+            tab.refetch();
         });
     });
 
@@ -190,7 +181,7 @@ function renderTypeFilterCheckboxes(container) {
             if (checkbox.checked) selectedRootActionTypes.add(type);
             else selectedRootActionTypes.delete(type);
             writeUrlParams();
-            fetchAndRender();
+            tab.refetch();
         });
 
         checkboxLabel.append(checkbox, document.createTextNode(' ' + rootActionLabel(type)));
@@ -201,38 +192,9 @@ function renderTypeFilterCheckboxes(container) {
 function resetFilter() {
     selectedRootActionTypes.clear();
     currentRootOperationFilter = null;
-    currentContainer.querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
+    tab.container().querySelectorAll('#traces-filter input').forEach(cb => { cb.checked = false; });
     writeUrlParams();
-    fetchAndRender();
-}
-
-async function fetchAndRender() {
-    const container = currentContainer;
-    const context = currentContext;
-    if (!context.active) return;
-
-    const loadingEl = container.querySelector('#traces-loading');
-    const listEl = container.querySelector('#traces-list');
-    const noTracesEl = container.querySelector('#no-traces');
-
-    loadingEl.classList.remove('hidden');
-    noTracesEl.classList.add('hidden');
-
-    const params = {limit: 50};
-    if (currentBucket !== 'all') params.bucket = currentBucket;
-    if (selectedRootActionTypes.size > 0) params.rootActionType = Array.from(selectedRootActionTypes).join(',');
-    if (currentRootOperationFilter) params.rootOperation = currentRootOperationFilter;
-
-    try {
-        const result = await context.client.get('/api/traces/insights', {params});
-        if (result === null) return; // superseded by a newer request
-        updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts);
-        renderList(container, result, context);
-    } catch (error) {
-        listEl.innerHTML = emptyStateHtml(`Failed to load traces: ${error.message}`);
-    } finally {
-        loadingEl.classList.add('hidden');
-    }
+    tab.refetch();
 }
 
 /**
@@ -256,9 +218,9 @@ function updateBucketCounts(container, counts, filteredCounts) {
 }
 
 function renderList(container, result, context) {
-    // Not cleared until the response is in hand (see fetchAndRender) - otherwise every
-    // 30s refresh of the currently visible tab would blank the list for the network
-    // round trip's duration, even though nothing about it changed.
+    // Not cleared until the response is in hand - otherwise every 30s refresh of the
+    // currently visible tab would blank the list for the network round trip's duration,
+    // even though nothing about it changed.
     const listEl = container.querySelector('#traces-list');
     const noTracesEl = container.querySelector('#no-traces');
     listEl.innerHTML = '';
@@ -320,19 +282,24 @@ function renderTraceItem(trace, context) {
     const header = document.createElement('div');
     header.className = 'pk-trace-item__header';
 
-    // A real <button>; the scheduler link below is its sibling, not its child, because a
+    // A real <button> over the main line alone. The scheduler link and the stats line are
+    // its siblings, not its children: the stats carry the traceId's copy control, and a
     // button cannot contain interactive content (see ToolbarShell for the same shape).
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
-    openBtn.className = 'pk-trace-item__open';
+    openBtn.className = 'pk-unbutton pk-trace-item__open';
     openBtn.appendChild(renderMainLine(trace, actionType, hasErrors, rootOperation));
-    openBtn.appendChild(renderStats(trace, context));
     if (trace.traceId) {
         openBtn.addEventListener('click', () => context.openTrace(trace.traceId));
     }
-    header.appendChild(openBtn);
 
-    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink(context));
+    const body = document.createElement('div');
+    body.className = 'pk-trace-item__body';
+    body.appendChild(openBtn);
+    body.appendChild(renderStats(trace, context));
+    header.appendChild(body);
+
+    if (actionType === 'SCHEDULED_JOB') header.appendChild(renderSchedulerLink());
 
     item.appendChild(header);
     return item;
@@ -376,33 +343,18 @@ function renderMainLine(trace, actionType, hasErrors, rootOperation) {
     if (hasErrors) mainLine.appendChild(badge('ERROR', 'error'));
     else if (trace.slow) mainLine.appendChild(badge('SLOW', 'warn'));
 
-    if (trace.truncated) {
-        const truncatedBadge = badge('TRUNCATED', 'warn');
-        truncatedBadge.title = 'This trace hit the max-spans-per-trace cap - the oldest spans were dropped.';
-        mainLine.appendChild(truncatedBadge);
-    }
+    if (trace.truncated) mainLine.appendChild(truncatedBadge());
 
     return mainLine;
 }
 
-/** Plain "jump to Scheduled Tasks" navigation, deliberately unfiltered. */
-function renderSchedulerLink(context) {
-    const link = document.createElement('a');
-    link.href = '#';
-    link.className = 'pk-trace-item__scheduler-link';
-    // title alone would not become the accessible name here: the emoji textContent is
-    // itself real content, so it (its Unicode name) would win instead. aria-label pins
-    // the name to the same text title already carries.
-    link.title = 'View Scheduled Tasks';
-    link.setAttribute('aria-label', 'View Scheduled Tasks');
-    link.textContent = '\u{1F551}';
-    // No stopPropagation needed: the link is header's sibling, not a descendant of
-    // .pk-trace-item__open, so its click never reaches that button's own listener.
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        context.navigate('scheduled-tasks');
+/** Plain "jump to Scheduled Tasks" link, deliberately unfiltered. A sibling of the open button, not a descendant, so its click never reaches that button's listener. */
+function renderSchedulerLink() {
+    return iconLink(buildAppHash({tab: 'scheduled-tasks'}), {
+        label: 'View Scheduled Tasks',
+        icon: '\u{1F551}',
+        className: 'pk-trace-item__scheduler-link'
     });
-    return link;
 }
 
 function renderStats(trace, context) {

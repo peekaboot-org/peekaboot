@@ -31,6 +31,7 @@ import org.springframework.boot.bootstrap.DefaultBootstrapContext;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.boot.context.logging.LoggingApplicationListener;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.micrometer.tracing.brave.autoconfigure.BraveAutoConfiguration;
 import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -50,17 +51,16 @@ class DevToolbarAutoConfigurationTest {
                     DevToolbarAutoConfiguration.class,
                     PeekabootAutoConfiguration.class,
                     PeekabootPathsAutoConfiguration.class))
-            .withPropertyValues("peekaboot.enabled=true")
-            .withUserConfiguration(MockActuatorConfig.class);
+            .withPropertyValues("peekaboot.enabled=true");
 
     @Test
-    void shouldCreateBeansWhenDevToolbarEnabled() {
+    void createsBeansWhenDevToolbarEnabled() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
-                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
                 });
     }
 
@@ -119,7 +119,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenDevToolbarDisabled() {
+    void doesNotCreateBeansWhenDevToolbarDisabled() {
         contextRunner.withPropertyValues("peekaboot.dev-toolbar=false").run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
             assertThat(context).doesNotHaveBean("devToolbarFilter");
@@ -127,7 +127,7 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateBeansWhenDevToolbarPropertyMissing() {
+    void doesNotCreateBeansWhenDevToolbarPropertyMissing() {
         contextRunner.run(context -> {
             assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
             assertThat(context).doesNotHaveBean("devToolbarFilter");
@@ -148,12 +148,12 @@ class DevToolbarAutoConfigurationTest {
                     assertThat(context).hasSingleBean(ToolbarDataProvider.class);
                     assertThat(context).hasBean("devToolbarFilter");
                     assertThat(context).doesNotHaveBean("requestCaptureFilter");
-                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
 
     @Test
-    void shouldNotCreateFilterBeansWhenTracerBeanMissing() {
+    void doesNotCreateFilterBeansWhenTracerBeanMissing() {
         // TraceStore is on the classpath and present as a bean, but no Tracer
         // bean exists: devToolbarFilter/requestCaptureFilter's
         // @ConditionalOnBean(Tracer.class) must keep them unregistered, while
@@ -169,19 +169,26 @@ class DevToolbarAutoConfigurationTest {
                 });
     }
 
+    /**
+     * Micrometer Tracing's Brave bridge gets its {@link Tracer} from Boot's
+     * {@code BraveAutoConfiguration}, which sorts after every {@code org.peekaboot} class by
+     * name. Without an ordering edge the {@code @ConditionalOnBean(Tracer.class)} checks run
+     * before that bean is defined, and the toolbar is silently never injected. The user
+     * configurations of the other tests here register their Tracer ahead of every
+     * auto-configuration, so only an auto-configuration of that name can prove the edge.
+     */
     @Test
-    void shouldNotCreateBeansWhenGlobalEnabledPropertyMissing() {
-        // matchIfMissing = false: without the environment post-processor's detected
-        // default the safe fallback is off, even with the toolbar flag set
+    void theToolbarSeesATracerFromBravesAutoConfiguration() {
         new WebApplicationContextRunner()
-                .withConfiguration(
-                        AutoConfigurations.of(DevToolbarAutoConfiguration.class, PeekabootAutoConfiguration.class))
-                .withUserConfiguration(MockActuatorConfig.class, MockTracingConfig.class)
-                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withConfiguration(AutoConfigurations.of(
+                        DevToolbarAutoConfiguration.class,
+                        PeekabootAutoConfiguration.class,
+                        PeekabootPathsAutoConfiguration.class,
+                        BraveAutoConfiguration.class))
+                .withPropertyValues("peekaboot.enabled=true", "peekaboot.dev-toolbar=true")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(ToolbarDataProvider.class);
-                    assertThat(context).doesNotHaveBean("devToolbarFilter");
+                    assertThat(context).hasBean("devToolbarFilter");
                 });
     }
 
@@ -208,7 +215,7 @@ class DevToolbarAutoConfigurationTest {
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .run(context -> {
-                    assertThat(context).hasSingleBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).hasSingleBean(LogbackAppenderRegistrar.class);
                     assertThat(peekabootAppenderCount())
                             .as("appender attached while context runs")
                             .isEqualTo(before + 1);
@@ -350,14 +357,14 @@ class DevToolbarAutoConfigurationTest {
     }
 
     @Test
-    void shouldNotCreateLogbackRegistrarWhenLogbackMissing() {
+    void doesNotCreateLogbackRegistrarWhenLogbackMissing() {
         contextRunner
                 .withPropertyValues("peekaboot.dev-toolbar=true")
                 .withUserConfiguration(MockTracingConfig.class)
                 .withClassLoader(new FilteredClassLoader(LoggerContext.class))
                 .run(context -> {
                     assertThat(context).hasNotFailed();
-                    assertThat(context).doesNotHaveBean(DevToolbarAutoConfiguration.LogbackAppenderRegistrar.class);
+                    assertThat(context).doesNotHaveBean(LogbackAppenderRegistrar.class);
                 });
     }
 

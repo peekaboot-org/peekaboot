@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.peekaboot.backend.insights.config.SeriesDef;
+import org.peekaboot.backend.insights.config.Stat;
 import org.peekaboot.backend.insights.config.TileDef;
 
 /**
@@ -24,7 +25,8 @@ final class TileTracker {
 
     TileTracker(List<TileDef> defs, MeterRegistry registry) {
         for (TileDef def : defs) {
-            SeriesDef tileSeries = new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), "value", null, null);
+            SeriesDef tileSeries =
+                    new SeriesDef(def.id(), def.label(), def.meter(), def.tags(), Stat.VALUE, null, null);
             boolean live = Boolean.TRUE.equals(def.live());
             tiles.put(def.id(), new TileState(new SeriesSampler(tileSeries, registry), live));
         }

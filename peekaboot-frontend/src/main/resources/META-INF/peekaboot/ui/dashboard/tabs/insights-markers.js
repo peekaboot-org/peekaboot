@@ -24,13 +24,11 @@
  * the other by hand.
  */
 import {escapeHtml} from '../../shared/markup.js';
-import {formatDateTime} from '../../shared/format.js';
+import {formatDateTimeWith} from '../../shared/format.js';
 import {themeToken, withAlpha} from './insights-colors.js';
 
 const BAND_ALPHA = '1f';                  // ~12% - the downtime tint
-// Fallbacks mirror the tokens.css light --pk-text-muted.
-const FALLBACK_INK = '#626c79';
-const FALLBACK_BAND = 'rgba(98, 108, 121, 0.12)';
+const FALLBACK_BAND = 'rgba(98, 108, 121, 0.12)';   // the light --pk-text-muted at that alpha
 const HIT_RADIUS = 5;                     // CSS px around a marker that shows its tooltip
 const FLAG_WIDTH = 3;                     // half-width of a start's top flag
 const FLAG_HEIGHT = 5;
@@ -45,7 +43,7 @@ const TIMESTAMP_OPTIONS = {
  * every chart from scratch anyway, so there is nothing a per-draw reread could catch.
  */
 function ink() {
-    const stroke = themeToken('--pk-text-muted', FALLBACK_INK);
+    const stroke = themeToken('--pk-text-muted');
     return {stroke, band: withAlpha(stroke, BAND_ALPHA, FALLBACK_BAND)};
 }
 
@@ -170,13 +168,13 @@ export function createMarkerLayer({intervalMs, dateOptions = () => ({})}) {
     }
 
     function describe({event}) {
-        const options = {...TIMESTAMP_OPTIONS, ...dateOptions()};
-        const when = formatDateTime(event.epochMs, options);
+        const display = dateOptions();
+        const when = formatDateTimeWith(event.epochMs, TIMESTAMP_OPTIONS, display);
         const rows = [];
         if (event.version) rows.push(['Version', event.version]);
         if (event.branch) rows.push(['Branch', event.branch]);
         if (event.shortCommitId) rows.push(['Commit', event.shortCommitId]);
-        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTime(event.buildTimeEpochMs, options)]);
+        if (event.buildTimeEpochMs) rows.push(['Built', formatDateTimeWith(event.buildTimeEpochMs, TIMESTAMP_OPTIONS, display)]);
 
         const title = `${event.type === 'stop' ? 'Stopped' : 'Started'} ${escapeHtml(when)}`;
         const details = rows

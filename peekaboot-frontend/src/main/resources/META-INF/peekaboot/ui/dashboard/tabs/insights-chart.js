@@ -18,6 +18,8 @@ import {themeToken, withAlpha} from './insights-colors.js';
 const UPLOT_SCRIPT = new URL('../../vendor/uplot/uplot.iife.min.js', import.meta.url);
 const UPLOT_STYLES = new URL('../../vendor/uplot/uplot.min.css', import.meta.url);
 
+/** The chart shapes a panel can ask for (the backend's Chart enum, by wire name); line is the default. */
+export const CHART_TYPES = Object.freeze(['line', 'bars', 'bars-line']);
 const CHART_HEIGHT = 180;
 const MIN_CHART_WIDTH = 200;
 const PERCENTILES = ['p90', 'p95', 'p99'];
@@ -31,16 +33,10 @@ const FALLBACK_BAND_FILL = 'rgba(128, 128, 128, 0.17)';
  * active theme. Text-tuned tokens are preferred where they exist: a 2px stroke is
  * a graphical object and needs the same 3:1 contrast against the card background
  * that the fill-tuned tokens (--pk-primary, --pk-success) do not reach in light
- * mode. Only one green is used, so a green line is never ambiguous. The fallbacks
- * (here and in themeColors) mirror the tokens.css light-theme values.
+ * mode. Only one green is used, so a green line is never ambiguous.
  */
 const STROKE_TOKENS = [
-    ['--pk-primary-text', '#447718'],
-    ['--pk-info-text', '#0a6e7f'],
-    ['--pk-warning-text', '#9a5e06'],
-    ['--pk-purple', '#7c3aed'],
-    ['--pk-danger', '#d21f1f'],
-    ['--pk-text-muted', '#626c79']
+    '--pk-primary-text', '--pk-info-text', '--pk-warning-text', '--pk-purple', '--pk-danger', '--pk-text-muted'
 ];
 
 let uplotReady = null;
@@ -78,10 +74,10 @@ export function ensureUplot() {
 
 function themeColors() {
     return {
-        strokes: STROKE_TOKENS.map(([name, fallback]) => themeToken(name, fallback)),
-        axis: themeToken('--pk-text-muted', '#626c79'),
-        grid: themeToken('--pk-border', '#d1d5db'),
-        font: '12px ' + themeToken('--pk-font', 'system-ui, sans-serif')
+        strokes: STROKE_TOKENS.map(themeToken),
+        axis: themeToken('--pk-text-muted'),
+        grid: themeToken('--pk-border'),
+        font: '12px ' + themeToken('--pk-font')
     };
 }
 

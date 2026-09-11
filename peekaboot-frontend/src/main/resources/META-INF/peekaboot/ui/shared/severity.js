@@ -35,6 +35,11 @@ export function durationSeverity(ms, features) {
     return '';
 }
 
+/** A severity suffix as the components.css class that colours a duration by it; '' for none. */
+export function severityClass(severity) {
+    return severity ? `pk-duration--${severity}` : '';
+}
+
 /**
  * Severity of a query's duration at the query threshold - the one behind the backend's
  * SLOW_QUERY issue, which knows a single tier: a query at or above it (>=) is slow.
@@ -49,8 +54,7 @@ const ISSUE_SEVERITIES = Object.freeze({
     SLOW: 'slow',
     VERY_SLOW: 'very-slow',
     ERROR: '',
-    SLOW_QUERY: 'slow',
-    HIGH_QUERY_COUNT: ''
+    SLOW_QUERY: 'slow'
 });
 
 export const ISSUE_TYPES = Object.keys(ISSUE_SEVERITIES);
@@ -79,4 +83,22 @@ export function healthSeverity(status) {
     if (status === 'UP') return 'ok';
     if (status === 'DOWN' || status === 'OUT_OF_SERVICE') return 'error';
     return 'muted';
+}
+
+/** A scheduled task's last-execution status: SUCCESS -> ok, FAILED -> error, everything else (PENDING/RUNNING/UNKNOWN/unset) -> muted. */
+export function taskStatusVariant(status) {
+    if (status === 'SUCCESS') return 'ok';
+    if (status === 'FAILED') return 'error';
+    return 'muted';
+}
+
+/** Every MigrationState the backend collapses Flyway's states onto, and the badge tier each gets. */
+const MIGRATION_STATE_VARIANTS = Object.freeze({
+    SUCCESS: 'ok', PENDING: 'muted', FAILED: 'error', IGNORED: 'muted', UNKNOWN: 'muted'
+});
+
+export const MIGRATION_STATES = Object.keys(MIGRATION_STATE_VARIANTS);
+
+export function migrationStateVariant(state) {
+    return MIGRATION_STATE_VARIANTS[state] || 'muted';
 }

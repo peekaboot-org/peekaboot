@@ -4,7 +4,7 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 /*
  * The Gradle counterpart of peekaboot-parent: compiler setup (release 25, Error Prone,
  * configuration-processor-friendly), the four static-analysis gates at `check`, JaCoCo,
- * reproducible archives, and the unit/IT lifecycle split (`test` runs *Test only,
+ * reproducible archives, and the unit/IT lifecycle split (`test` runs *Test and *Tests,
  * `integrationTest` runs *IT and hangs off `check`). Tool versions and config file
  * locations must stay in lockstep with the Maven build - Maven is the system of record;
  * the Gradle build mirrors it.
@@ -89,7 +89,7 @@ tasks.withType<Test>().configureEach {
     }
 }
 
-// Lifecycle split, same naming convention as surefire/failsafe: *Test at `test`,
+// Lifecycle split, same naming convention as surefire/failsafe: *Test and *Tests at `test`,
 // *IT (everything that boots a real application) at `integrationTest`.
 tasks.test {
     // Surefire's include semantics, not a bare *IT exclusion: a class matching neither

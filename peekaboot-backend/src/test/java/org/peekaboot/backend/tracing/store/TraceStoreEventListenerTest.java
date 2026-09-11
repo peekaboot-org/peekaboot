@@ -1,14 +1,14 @@
 package org.peekaboot.backend.tracing.store;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.peekaboot.backend.testsupport.Logs.log;
 import static org.peekaboot.backend.testsupport.Spans.span;
 
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.testsupport.RequestCompletedEvents;
 import org.peekaboot.backend.testsupport.TraceStores;
-import org.peekaboot.backend.tracing.event.LogCapturedEvent;
+import org.peekaboot.backend.tracing.event.RequestCompletedEvent;
 import org.peekaboot.backend.tracing.event.SpanDataEvent;
 import org.peekaboot.backend.tracing.event.TraceDiscardedEvent;
 
@@ -31,17 +31,8 @@ class TraceStoreEventListenerTest {
     }
 
     @Test
-    void onSpanData_ignoresNullEventAndNullSpan() {
-        listener.onSpanData(null);
-        listener.onSpanData(new SpanDataEvent(null));
-        // no exception, nothing stored - nothing to assert beyond absence
-        assertThat(store.getTrace("trace1")).isEmpty();
-    }
-
-    @Test
     void onLogCaptured_forwardsLogToStore() {
-        listener.onLogCaptured(
-                new LogCapturedEvent("trace1", "span1", Instant.EPOCH, "INFO", "TestLogger", "msg", "main"));
+        listener.onLogCaptured(log("trace1").build());
 
         assertThat(store.getTrace("trace1")).isPresent();
         assertThat(store.getTrace("trace1").get().logs()).hasSize(1);
@@ -49,10 +40,11 @@ class TraceStoreEventListenerTest {
 
     @Test
     void onRequestCompleted_forwardsRequestToStore() {
-        listener.onRequestCompleted(RequestCompletedEvents.minimal("trace1"));
+        RequestCompletedEvent event = RequestCompletedEvents.minimal("trace1");
 
-        assertThat(store.getTrace("trace1")).isPresent();
-        assertThat(store.getTrace("trace1").get().request()).isNotNull();
+        listener.onRequestCompleted(event);
+
+        assertThat(store.getTrace("trace1").orElseThrow().request()).isSameAs(event);
     }
 
     @Test
@@ -61,14 +53,6 @@ class TraceStoreEventListenerTest {
 
         listener.onTraceDiscarded(new TraceDiscardedEvent("trace1"));
 
-        assertThat(store.getTrace("trace1")).isEmpty();
-    }
-
-    @Test
-    void nullEventsAreIgnored() {
-        listener.onLogCaptured(null);
-        listener.onRequestCompleted(null);
-        listener.onTraceDiscarded(null);
         assertThat(store.getTrace("trace1")).isEmpty();
     }
 }

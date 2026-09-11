@@ -2,7 +2,12 @@ package org.peekaboot.backend.actuator.parsed;
 
 import java.util.Map;
 
+/** An absent {@code build} section binds as empty (see {@link ActuatorResponseParser}). */
 public record InfoResponse(GitInfo git, Map<String, Object> build, JavaInfo java, OsInfo os, ProcessInfo process) {
+
+    public InfoResponse {
+        build = Absent.orEmpty(build);
+    }
 
     public record GitInfo(String branch, CommitInfo commit) {
         public record CommitInfo(String id, String time) {}

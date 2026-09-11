@@ -9,6 +9,9 @@
          the light palette painted first. Classic and non-deferred on purpose: it has to
          run ahead of first paint, which a module script does not. -->
     <script src="../assets/theme-boot.js"></script>
+    <!-- Listens for main.js failing to load, which nothing inside that graph can report.
+         In the head so the listener is in place before the module script is even parsed. -->
+    <script src="boot-recovery.js"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
     <link rel="stylesheet" href="../assets/tokens.css">
@@ -21,7 +24,7 @@
         <div class="pk-container">
             <div class="pk-header__content">
                 <div class="pk-header__brand">
-                    <span class="pk-header__logo" aria-hidden="true"></span>
+                    <span class="pk-header__logo pk-logo-mark" aria-hidden="true"></span>
                     <h1>peekaboot</h1>
                 </div>
                 <div class="pk-header__actions">
@@ -72,9 +75,9 @@
         </div>
         </nav>
 
-        <!-- Static rather than built by shared/components.js's loadingBlock(): it is on
-             screen before main.js has run, and the browser tests read it as the
-             dashboard's readiness signal. -->
+        <!-- Static rather than built by shared/components.js's loadingBlock() (same
+             markup, same components.css rules): it is on screen before main.js has run,
+             and the browser tests read it as the dashboard's readiness signal. -->
         <div id="loading" class="pk-loading">
             <div class="pk-spinner"></div>
             <p>Loading data...</p>
@@ -84,7 +87,7 @@
              un-hides and a screen-reader user is left on silently stale data. -->
         <div id="error" class="pk-error-banner hidden" role="alert">
             <span class="message"></span>
-            <button class="pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
+            <button class="pk-unbutton pk-icon-btn pk-error-banner__close" id="error-close" aria-label="Dismiss error">&times;</button>
         </div>
 
         <!-- Overview Tab -->
@@ -95,7 +98,7 @@
 
             <div class="pk-grid">
                 <div class="pk-card" id="build-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128230;</span>
                         <h2 class="pk-card__title">Build</h2>
                     </div>
@@ -103,7 +106,7 @@
                 </div>
 
                 <div class="pk-card" id="git-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128256;</span>
                         <h2 class="pk-card__title">Git</h2>
                     </div>
@@ -111,7 +114,7 @@
                 </div>
 
                 <div class="pk-card" id="spring-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#127807;</span>
                         <h2 class="pk-card__title">Spring</h2>
                     </div>
@@ -119,7 +122,7 @@
                 </div>
 
                 <div class="pk-card" id="java-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#9749;</span>
                         <h2 class="pk-card__title">Java</h2>
                     </div>
@@ -127,7 +130,7 @@
                 </div>
 
                 <div class="pk-card" id="os-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128187;</span>
                         <h2 class="pk-card__title">System</h2>
                     </div>
@@ -135,7 +138,7 @@
                 </div>
 
                 <div class="pk-card" id="machine-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128421;&#65039;</span>
                         <h2 class="pk-card__title">Machine</h2>
                     </div>
@@ -143,7 +146,7 @@
                 </div>
 
                 <div class="pk-card" id="jvm-defaults-card">
-                    <div class="pk-card__header">
+                    <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#9881;</span>
                         <h2 class="pk-card__title">JVM Defaults</h2>
                     </div>
@@ -152,10 +155,9 @@
             </div>
 
             <div class="pk-card pk-section" id="memory-card">
-                <div class="pk-card__header">
+                <div class="pk-card__header pk-label">
                     <span class="pk-card__icon" aria-hidden="true">&#128202;</span>
                     <h2 class="pk-card__title">Memory &amp; Storage</h2>
-                    <span class="pk-card__meta" id="process-info"></span>
                 </div>
                 <div class="pk-card__body" id="memory-info"></div>
             </div>
@@ -200,7 +202,7 @@
                 <button class="pk-btn pk-btn--bucket" data-bucket="slow" aria-pressed="false">Slow</button>
             </div>
             <div id="traces-filter" class="pk-filter-row">
-                <span class="pk-filter-row__label">Filter by type:</span>
+                <span class="pk-filter-row__label pk-label">Filter by type:</span>
                 <!-- checkbox per ROOT_ACTION_TYPES entry, injected by traces.js -->
                 <button id="traces-filter-clear" class="pk-btn pk-btn--small hidden" title="Show all types">Clear filter</button>
             </div>
@@ -238,9 +240,6 @@
         <!-- Flyway Tab -->
         <section class="pk-tab-panel" id="flyway-tab" role="tabpanel" aria-labelledby="flyway-tab-btn">
             <div id="flyway-timeline"></div>
-            <div id="no-flyway" class="pk-empty hidden">
-                <p>No Flyway migrations found</p>
-            </div>
         </section>
 
         <!-- Loggers Tab -->
@@ -272,7 +271,6 @@
 
         <!-- Scheduled Tasks Tab -->
         <section class="pk-tab-panel" id="scheduled-tasks-tab" role="tabpanel" aria-labelledby="scheduled-tasks-tab-btn">
-            <div id="scheduled-tasks-summary" class="pk-tasks-summary"></div>
             <div id="scheduled-tasks-groups"></div>
         </section>
     </main>

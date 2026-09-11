@@ -1,14 +1,21 @@
 package org.peekaboot.testingapp.ui;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.PlaywrightException;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.impl.TargetClosedError;
+import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -20,12 +27,28 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.ActiveProfiles;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(classes = TestingApp.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 abstract class PlaywrightTestBase {
 
     private static final Logger log = LoggerFactory.getLogger(PlaywrightTestBase.class);
+
+    /**
+     * A JS predicate on the trace JSON: the request's own root span has reached the store.
+     * Only a SERVER-kind root classifies HTTP_REQUEST, the root is the last span of a request
+     * to end, and the exporter hands spans over in the order they ended, so every span that
+     * ended before it is there too. Logs need no wait of their own: they are captured
+     * synchronously during the request.
+     */
+    protected static final String ROOT_SPAN_EXPORTED = "trace => trace.rootActionType === 'HTTP_REQUEST'";
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+    private static final int API_TIMEOUT_MS = 15_000;
+    private static final int API_POLL_INTERVAL_MS = 100;
+    private static final int LOG_CAPTURE_ATTEMPTS = 5;
 
     /**
      * One browser per worker thread, launched on first use. Playwright's Java objects are
@@ -53,6 +76,7 @@ abstract class PlaywrightTestBase {
     protected Page page;
     protected Toolbar toolbar;
     protected TraceOverlay overlay;
+    protected Dashboard dashboard;
     protected String baseUrl;
 
     private final List<String> browserSignals = new CopyOnWriteArrayList<>();
@@ -95,9 +119,20 @@ abstract class PlaywrightTestBase {
     @BeforeEach
     void openPage() {
         baseUrl = "http://localhost:" + port;
-        page = browserContextPage();
+        usePage(browserContextPage());
+    }
+
+    /** Binds the page objects to {@code newPage}; a tool that swaps pages mid-run rebinds them the same way. */
+    protected void usePage(Page newPage) {
+        page = newPage;
         toolbar = new Toolbar(page);
         overlay = new TraceOverlay(page);
+        dashboard = new Dashboard(page);
+    }
+
+    /** The servlet context path the application is mounted under; the root unless a subclass says otherwise. */
+    protected String contextPath() {
+        return "";
     }
 
     /**
@@ -175,20 +210,64 @@ abstract class PlaywrightTestBase {
     }
 
     protected void openDashboard() {
-        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
-        page.waitForSelector("#overview-tab.active");
-        // #loading is the app's own readiness signal: hidden only after fetchData() -> renderData()
+        openDashboard("", "#build-info > *");
+    }
+
+    /**
+     * Opens the dashboard at {@code hash} and waits for the render it lands on.
+     * {@code readySelector} is the positive proof of that render on whichever tab the hash
+     * names: #loading is the app's own readiness signal, hidden only after fetchData() ->
+     * renderData(), but it also hides on the failure path.
+     */
+    protected void openDashboard(String hash, String readySelector) {
+        page.navigate(baseUrl + contextPath() + "/peekaboot/ui/dashboard/index.html" + hash);
         page.waitForSelector("#loading", new Page.WaitForSelectorOptions().setState(WaitForSelectorState.HIDDEN));
-        // ...but #loading also hides on the failure path, so require positive proof of a render
-        page.waitForSelector("#build-info > *, #error:not(.hidden)");
+        page.waitForSelector(readySelector + ", #error:not(.hidden)");
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
     }
 
     protected void openPersonsPage() {
-        page.navigate(baseUrl + "/persons");
+        page.navigate(baseUrl + contextPath() + "/persons");
         page.waitForSelector("#peekaboot-toolbar-host");
+    }
+
+    /**
+     * Imports {@code /peekaboot/ui/<path>} into the blank fixture page as {@code m} and
+     * returns what {@code expression} evaluates to, awaited if it is a promise. The
+     * expression is spliced into the function source rather than eval'd, so a host page's
+     * CSP cannot refuse it and a failure names its line.
+     */
+    protected Object importModule(String path, String expression) {
+        return importModule(path, expression, null);
+    }
+
+    /** {@link #importModule(String, String)} with {@code arg} in scope of the expression. */
+    protected Object importModule(String path, String expression, Object arg) {
+        openBlankFixture();
+        return page.evaluate(
+                "async ([mod, arg]) => { const m = await import(mod); return await (" + expression + "); }",
+                Arrays.asList(contextPath() + "/peekaboot/ui/" + path, arg));
+    }
+
+    /** Serves the real response for {@code urlGlob} with a Content-Security-Policy header added, its body untouched. */
+    protected void serveWithCsp(String urlGlob, String policy) {
+        page.route(urlGlob, route -> {
+            APIResponse response = route.fetch();
+            Map<String, String> headers = new HashMap<>(response.headers());
+            headers.put("content-security-policy", policy);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setHeaders(headers));
+        });
+    }
+
+    /**
+     * Emulates the OS colour-scheme preference. Headless Chromium's own default is light,
+     * so a test of "the stored preference wins" sets the OS to the opposite of what it
+     * stored, or it passes with the preference ignored entirely.
+     */
+    protected void emulateOsColorScheme(ColorScheme scheme) {
+        page.emulateMedia(new Page.EmulateMediaOptions().setColorScheme(scheme));
     }
 
     /**
@@ -202,33 +281,141 @@ abstract class PlaywrightTestBase {
      * throughout a suite run. The toolbar publishes its trace id from the server-rendered
      * blob before it has fetched anything, and the overlay fetches its trace once and never
      * refreshes - so a caller that navigates and opens the Logs tab on that signal alone
-     * renders a tab that stays empty, with nothing left to bring the rows in.
+     * renders a tab that stays empty, with nothing left to bring the rows in. Once the root
+     * span is stored the verdict is final, since logs are captured synchronously.
      */
     protected String openPageThatLogsAnError() {
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < LOG_CAPTURE_ATTEMPTS; attempt++) {
             page.navigate(baseUrl + "/?error=true");
             String traceId = toolbar.traceId();
-            if (traceCarriesALog(traceId)) {
+            if (!awaitTrace(traceId, ROOT_SPAN_EXPORTED).path("logs").isEmpty()) {
                 return traceId;
             }
+            log.info(
+                    "trace {} of /?error=true carries no log (capture appender detached by a context boot), reloading",
+                    traceId);
         }
         throw new AssertionError("no /?error=true request produced a trace carrying its own ERROR log");
     }
 
-    /** Polls the endpoint the overlay itself reads, so a caller sees what the overlay would. */
-    private boolean traceCarriesALog(String traceId) {
-        return (Boolean) page.evaluate("""
-                async traceId => {
-                    for (let attempt = 0; attempt < 20; attempt++) {
-                        const response = await fetch('/peekaboot/api/traces/' + traceId + '/insights');
-                        if (response.ok && ((await response.json()).logs || []).length > 0) {
-                            return true;
-                        }
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    return false;
-                }
-                """, traceId);
+    /**
+     * Fires {@code run}, which answers with the trace id of the run it made, and repeats until
+     * that run's trace carries the ERROR line it logged. Returns that trace's id.
+     *
+     * <p>{@code Scheduler.fixedRate} throws nothing, so its trace reaches the Errors bucket
+     * through the captured log alone. A run served while a concurrent context boot had the
+     * capture appender detached (see {@code LogbackCaptureReinstaller}) leaves a trace that
+     * never reaches the bucket, and only a fresh run can produce one - the same window
+     * {@link #openPageThatLogsAnError()} reloads for. Waiting for the root span is enough to
+     * decide: logs are captured synchronously during the run, so a trace whose root span has
+     * been exported carries every log it will ever have.
+     */
+    protected String awaitErrorLoggingJobRun(Supplier<String> run) {
+        for (int attempt = 0; attempt < LOG_CAPTURE_ATTEMPTS; attempt++) {
+            String traceId = run.get();
+            JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
+            if (carriesAnErrorLog(trace)) {
+                return traceId;
+            }
+            log.info(
+                    "trace {} of the failing job carries no ERROR log (capture appender detached by a "
+                            + "context boot), firing it again",
+                    traceId);
+        }
+        throw new AssertionError("no run of the failing job produced a trace carrying its own ERROR log");
+    }
+
+    private static boolean carriesAnErrorLog(JsonNode trace) {
+        for (JsonNode entry : trace.path("logs")) {
+            if ("ERROR".equals(entry.path("level").asString(""))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Polls the trace's own insights endpoint, the one the overlay and the toolbar read, until
+     * {@code jsPredicate} (a JS function of the trace JSON) holds, and returns the trace as
+     * served at that moment. A 404 counts as "not yet": the endpoint answers nothing until the
+     * first span is exported. The predicate is the assertion's precondition, so a test asserts
+     * on what it waited for rather than on whatever had arrived.
+     */
+    protected JsonNode awaitTrace(String traceId, String jsPredicate) {
+        return awaitJson(
+                contextPath() + "/peekaboot/api/traces/" + traceId + "/insights",
+                "trace => (" + jsPredicate + ")(trace) ? trace : null",
+                "trace " + traceId + " never satisfied " + jsPredicate);
+    }
+
+    /**
+     * Polls the listing endpoint with {@code query} until a listed trace satisfies
+     * {@code jsPredicate}, and returns that trace's id. The listing is shared with every class
+     * running against this application, so the predicate names the caller's own trace (its
+     * {@code rootOperation}, say) rather than accepting whichever is listed first.
+     */
+    protected String awaitListedTrace(String query, String jsPredicate) {
+        return awaitJson(
+                        contextPath() + "/peekaboot/api/traces/insights?" + query,
+                        "listing => (listing.traces || []).find(" + jsPredicate + ")",
+                        "no listed trace for '" + query + "' satisfied " + jsPredicate)
+                .path("traceId")
+                .asString();
+    }
+
+    /**
+     * Polls a JSON endpoint from the page until {@code jsSelect} (a JS function of the parsed
+     * body) returns something truthy, and hands that value back. Runs as one in-page loop
+     * rather than a Java-side one, so a single fetch serves both the check and the returned
+     * value. The page has to be on the application's origin for the fetch, so a page that is
+     * not (a fresh context, say) is pointed at the blank fixture first.
+     */
+    protected JsonNode awaitJson(String path, String jsSelect, String failure) {
+        return awaitJson(path, jsSelect, failure, API_TIMEOUT_MS);
+    }
+
+    protected static JsonNode readJson(String json) {
+        return JSON.readTree(json);
+    }
+
+    protected JsonNode awaitJson(String path, String jsSelect, String failure, int timeoutMs) {
+        if (!page.url().startsWith(baseUrl)) {
+            openBlankFixture();
+        }
+        String json = (String) page.evaluate(
+                "async ([url, failure, timeoutMs, pollIntervalMs]) => {"
+                        + " const select = (" + jsSelect + ");"
+                        + " const deadline = Date.now() + timeoutMs;"
+                        + " let last = null;"
+                        + " while (Date.now() < deadline) {"
+                        + "  const response = await fetch(url);"
+                        + "  if (response.ok) {"
+                        + "   const body = await response.json();"
+                        + "   const value = select(body);"
+                        + "   if (value) return JSON.stringify(value);"
+                        + "   last = body;"
+                        + "  }"
+                        + "  await new Promise(resolve => setTimeout(resolve, pollIntervalMs));"
+                        + " }"
+                        + " throw new Error(failure + ' within ' + timeoutMs + 'ms; last body: ' + JSON.stringify(last));"
+                        + "}",
+                List.of(path, failure, timeoutMs, API_POLL_INTERVAL_MS));
+        return readJson(json);
+    }
+
+    /**
+     * The blank same-origin fixture page, for module imports and API polls that need no
+     * surface. Its status is asserted because a 404 whitelabel page hosts an {@code import()}
+     * or a {@code fetch()} just as well as the fixture does.
+     */
+    protected void openBlankFixture() {
+        String url = baseUrl + contextPath() + "/peekaboot/ui/pk-blank.html";
+        if (!page.url().equals(url)) {
+            int status = page.navigate(url).status();
+            if (status != 200) {
+                throw new AssertionError("GET " + url + " answered " + status);
+            }
+        }
     }
 
     /**

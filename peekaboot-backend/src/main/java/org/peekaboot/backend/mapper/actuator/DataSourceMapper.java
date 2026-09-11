@@ -2,8 +2,6 @@ package org.peekaboot.backend.mapper.actuator;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import net.osslabz.jdbc.Host;
 import org.peekaboot.backend.actuator.parsed.HealthResponse;
 import org.peekaboot.backend.domain.datasource.DataSourceInfo;
 import org.peekaboot.backend.domain.health.HealthStatus;
@@ -24,24 +22,20 @@ public class DataSourceMapper {
             return List.of();
         }
 
-        return metadataList.stream()
-                .filter(Objects::nonNull)
-                .map(m -> mapSingle(m, health, unmask))
-                .toList();
+        return metadataList.stream().map(m -> mapSingle(m, health, unmask)).toList();
     }
 
     private DataSourceInfo mapSingle(DataSourceMetadata metadata, HealthResponse health, boolean unmask) {
-        HealthStatus dbHealth = extractDbHealth(health, metadata.getDataSourceName());
-        List<Host> hosts = metadata.getHosts() != null ? metadata.getHosts() : List.of();
-        Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.getConnectionParams(), unmask);
+        HealthStatus dbHealth = extractDbHealth(health, metadata.dataSourceName());
+        Map<String, String> maskedProperties = connectionParamsMasker.mask(metadata.connectionParams(), unmask);
 
         return new DataSourceInfo(
-                metadata.getDataSourceName(),
-                metadata.getDatabaseProduct(),
-                metadata.getDriverName(),
-                hosts,
-                metadata.getDatabaseName(),
-                metadata.getUsername(),
+                metadata.dataSourceName(),
+                metadata.databaseProduct(),
+                metadata.driverName(),
+                metadata.hosts(),
+                metadata.databaseName(),
+                metadata.username(),
                 dbHealth,
                 maskedProperties);
     }
@@ -52,7 +46,7 @@ public class DataSourceMapper {
      * without a child of its own, and the single-DataSource case, get {@code db}'s status.
      */
     private HealthStatus extractDbHealth(HealthResponse health, String dataSourceName) {
-        if (health == null || health.components() == null) {
+        if (health == null) {
             return HealthStatus.UNKNOWN;
         }
 
@@ -61,8 +55,7 @@ public class DataSourceMapper {
             return HealthStatus.UNKNOWN;
         }
 
-        HealthResponse.HealthComponent own =
-                db.components() != null ? db.components().get(dataSourceName) : null;
+        HealthResponse.HealthComponent own = db.components().get(dataSourceName);
         return HealthStatus.fromString(own != null ? own.status() : db.status());
     }
 }

@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
  * configuration has since changed - costs the history and nothing else: the file is
  * deleted, the rings start empty, and the application never notices.
  */
-public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSource {
+public final class InsightsSnapshotStore implements SnapshotStore {
 
     private static final Logger log = LoggerFactory.getLogger(InsightsSnapshotStore.class);
 
@@ -41,7 +41,11 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private final List<InsightsSnapshot.Level> geometry;
     private final Duration interval;
     private final Duration maxAge;
-    private final CompletableFuture<Optional<InsightsSnapshot>> loaded = new CompletableFuture<>();
+    private final IntervalBoundary schedule;
+    /** Released once the load has ended, however it ended; {@link #persisted} no longer changes by then. */
+    private final CountDownLatch loaded = new CountDownLatch(1);
+
+    private volatile Optional<InsightsSnapshot> persisted = Optional.empty();
 
     private volatile Supplier<InsightsSnapshot> capture;
     private volatile BooleanSupplier historyRestored = () -> false;
@@ -50,50 +54,64 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     private volatile boolean unclaimedHistory;
 
     public InsightsSnapshotStore(Path file, List<InsightsSnapshot.Level> geometry, Duration interval, Duration maxAge) {
+        this(file, geometry, interval, maxAge, new IntervalBoundary(System::currentTimeMillis, Thread::sleep));
+    }
+
+    /**
+     * {@code schedule} is the writer's cadence and the clock a file's age is judged against;
+     * tests build it on a fixed clock.
+     */
+    InsightsSnapshotStore(
+            Path file,
+            List<InsightsSnapshot.Level> geometry,
+            Duration interval,
+            Duration maxAge,
+            IntervalBoundary schedule) {
         this.file = file;
         this.geometry = List.copyOf(geometry);
         this.interval = interval;
         this.maxAge = maxAge;
+        this.schedule = schedule;
     }
 
-    /** The store for {@code properties}' persistence settings, or null while storage is off. */
-    static InsightsSnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
+    /** The store for {@code properties}' persistence settings, or {@link SnapshotStore#NONE} while storage is off. */
+    static SnapshotStore create(StorageDirectory storage, InsightsProperties properties) {
         if (storage == null) {
-            return null;
+            return NONE;
         }
         return storage.file(FILE_NAME)
-                .map(path -> new InsightsSnapshotStore(
+                .<SnapshotStore>map(path -> new InsightsSnapshotStore(
                         path,
                         geometry(properties),
                         properties.resolvePersistenceInterval(),
                         properties.resolvePersistenceMaxAge()))
-                .orElse(null);
+                .orElse(NONE);
     }
 
     /** The ring shape a persisted snapshot has to match; endEpochMs and count play no part. */
     private static List<InsightsSnapshot.Level> geometry(InsightsProperties properties) {
         return properties.getLevels().stream()
-                .map(level -> new InsightsSnapshot.Level(level.getInterval().toMillis(), level.getSize(), 0, 0))
+                .map(level -> new InsightsSnapshot.Level(level.intervalMillis(), level.getSize(), 0, 0))
                 .toList();
     }
 
-    /** Submits the parse; returns immediately, so no context refresh ever waits on a file. */
+    @Override
     public void beginLoad() {
         Thread.ofVirtual().name("peekaboot-insights-restore").start(() -> completeLoaded(this::load));
     }
 
     /**
-     * Runs {@code source} and completes {@link #loaded} with what it returns, or with empty
-     * however it ends. An Error {@code load()} does not catch - an OutOfMemoryError from a
+     * Runs {@code source}, publishes what it returns and releases the waiters however it
+     * ends. An Error {@code load()} does not catch - an OutOfMemoryError from a
      * pathological file, say - would otherwise leave every waiter parked for the full
      * {@link #awaitSnapshot} timeout, on a collector level thread the host application is
      * paying for. Package-private so a test can hand in a source that throws.
      */
     void completeLoaded(Supplier<Optional<InsightsSnapshot>> source) {
         try {
-            loaded.complete(source.get());
+            persisted = source.get();
         } finally {
-            loaded.complete(Optional.empty());
+            loaded.countDown();
         }
     }
 
@@ -107,21 +125,18 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     @Override
     public Optional<InsightsSnapshot> awaitSnapshot(Duration timeout) {
         try {
-            return loaded.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (loaded.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                return persisted;
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Optional.empty();
-        } catch (Exception e) {
-            log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
-            return Optional.empty();
         }
+        log.info("Peekaboot insights: persisted history did not arrive in time; starting empty");
+        return Optional.empty();
     }
 
-    /**
-     * Starts the periodic writer against {@code capture}, the collector's current state.
-     * {@code historyRestored} reports whether that collector has taken the persisted rings
-     * over, which is what decides whether its state may replace them.
-     */
+    @Override
     public void start(Supplier<InsightsSnapshot> capture, BooleanSupplier historyRestored) {
         this.historyRestored = historyRestored;
         this.capture = capture;
@@ -131,10 +146,10 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
     }
 
     /**
-     * Stops the writer and takes the final snapshot. Called after the collector has
-     * stopped, so what it captures is quiesced; synchronous, because there is no later
-     * to defer to - the JVM is on its way out.
+     * Synchronous, because there is no later to defer to - the JVM is on its way out. What
+     * it captures is quiesced, since the collector has stopped by then.
      */
+    @Override
     public void stop() {
         Thread thread = writer;
         writer = null;
@@ -147,6 +162,11 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
             }
         }
         writeNow();
+    }
+
+    @Override
+    public String startupNote() {
+        return ", persisted across restarts";
     }
 
     synchronized void writeNow() {
@@ -188,7 +208,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
         long intervalMs = interval.toMillis();
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                IntervalBoundary.sleepUntilNext(intervalMs, 0);
+                schedule.sleepUntilNext(intervalMs, 0);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -236,7 +256,7 @@ public final class InsightsSnapshotStore implements InsightsCollector.SnapshotSo
      * ever filled and the newest samples keep timestamps that never arrive.
      */
     private boolean isImplausiblyDated(InsightsSnapshotCodec.Header header) {
-        long now = System.currentTimeMillis();
+        long now = schedule.now();
         return header.writtenAtEpochMs() < now - maxAge.toMillis()
                 || header.writtenAtEpochMs() > now + CLOCK_SKEW.toMillis();
     }

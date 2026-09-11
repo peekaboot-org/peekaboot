@@ -57,7 +57,7 @@ class InsightsTilesIT {
 
     private static JsonNode tileById(JsonNode tiles, String id) {
         for (JsonNode tile : tiles) {
-            if (id.equals(tile.get("id").asText())) {
+            if (id.equals(tile.get("id").asString())) {
                 return tile;
             }
         }

@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.testsupport.LogCapture;
 import org.springframework.context.ApplicationContext;
@@ -12,9 +15,11 @@ import org.springframework.context.event.ContextClosedEvent;
 
 class ApplicationStoppedListenerTest {
 
+    private static final Clock STOP = Clock.fixed(Instant.parse("2026-09-09T10:15:30Z"), ZoneId.of("UTC"));
+
     private static ApplicationContext contextUpFor(Duration uptime) {
         ApplicationContext context = mock(ApplicationContext.class);
-        when(context.getStartupDate()).thenReturn(System.currentTimeMillis() - uptime.toMillis());
+        when(context.getStartupDate()).thenReturn(STOP.millis() - uptime.toMillis());
         return context;
     }
 
@@ -26,7 +31,7 @@ class ApplicationStoppedListenerTest {
 
     private static String banner(Duration uptime, BuildInfoProvider buildInfo) {
         ApplicationContext context = contextUpFor(uptime);
-        ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo, context);
+        ApplicationStoppedListener listener = new ApplicationStoppedListener(buildInfo, context, STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
             listener.onApplicationEvent(closing(context));
 
@@ -43,7 +48,7 @@ class ApplicationStoppedListenerTest {
     @Test
     void anotherContextsCloseIsNotThisApplicationsStop() {
         ApplicationStoppedListener listener =
-                new ApplicationStoppedListener(new BuildInfoProvider(null), contextUpFor(Duration.ofMinutes(5)));
+                new ApplicationStoppedListener(new BuildInfoProvider(null), contextUpFor(Duration.ofMinutes(5)), STOP);
         try (LogCapture capture = LogCapture.attach(ApplicationStoppedListener.class)) {
             listener.onApplicationEvent(closing(contextUpFor(Duration.ofMinutes(4))));
 
@@ -55,13 +60,18 @@ class ApplicationStoppedListenerTest {
     void theBannerNamesTheApplicationAndHowLongItRan() {
         String report = banner(Duration.ofDays(1).plusHours(2).plusMinutes(3), new BuildInfoProvider(null));
 
-        assertThat(report).contains(":: ApplicationStopped ::").contains("stopped after 1 day, 2 hours, 3 minutes");
+        assertThat(report)
+                .contains(":: ApplicationStopped ::")
+                .contains("Application [unknown] stopped after 1 day, 2 hours, 3 minutes");
     }
 
+    /** Both instants are rendered in the clock's zone, so the two lines can be read against each other. */
     @Test
     void theBannerSaysWhichStartItMeasuresFrom() {
         String report = banner(Duration.ofMinutes(5), new BuildInfoProvider(null));
 
-        assertThat(report).containsSubsequence("Up since (context start):", "Stopped:");
+        assertThat(report)
+                .contains("Up since (context start): 2026-09-09 10:10:30")
+                .contains("Stopped:                  2026-09-09 10:15:30");
     }
 }

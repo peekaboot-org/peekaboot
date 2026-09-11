@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.server.PathContainer;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -13,35 +14,6 @@ import org.springframework.web.util.pattern.PathPatternParser;
 class PeekabootPathsTest {
 
     private final PeekabootPaths paths = PeekabootPaths.defaults();
-
-    @Test
-    void staticPathsAreExcluded() {
-        assertThat(paths.isExcluded("/static/")).isTrue();
-        assertThat(paths.isExcluded("/static/css/app.css")).isTrue();
-        assertThat(paths.isExcluded("/webjars/")).isTrue();
-        assertThat(paths.isExcluded("/webjars/bootstrap/5.0.0/css/bootstrap.min.css"))
-                .isTrue();
-    }
-
-    @Test
-    void actuatorPathsAreExcluded() {
-        assertThat(paths.isExcluded("/actuator/")).isTrue();
-        assertThat(paths.isExcluded("/actuator/health")).isTrue();
-        assertThat(paths.isExcluded("/actuator/info")).isTrue();
-    }
-
-    @Test
-    void peekabootsOwnPathsAreExcluded() {
-        assertThat(paths.isExcluded("/peekaboot/")).isTrue();
-        assertThat(paths.isExcluded("/peekaboot/api/v1/traces")).isTrue();
-        assertThat(paths.isExcluded("/peekaboot/dashboard")).isTrue();
-    }
-
-    @Test
-    void errorPathsAreExcluded() {
-        assertThat(paths.isExcluded("/error")).isTrue();
-        assertThat(paths.isExcluded("/error/404")).isTrue();
-    }
 
     @Test
     void applicationPathsAreNotExcluded() {
@@ -68,13 +40,19 @@ class PeekabootPathsTest {
     @ValueSource(
             strings = {
                 "/peekaboot",
+                "/peekaboot/",
                 "/peekaboot/api/traces",
+                "/peekaboot/dashboard",
                 "/actuator",
+                "/actuator/",
                 "/actuator/health",
                 "/error",
                 "/error/404",
                 "/static",
-                "/webjars"
+                "/static/",
+                "/static/css/app.css",
+                "/webjars",
+                "/webjars/bootstrap/5.0.0/css/bootstrap.min.css"
             })
     void theFiltersAndTheInterceptorExcludeTheSamePaths(String path) {
         assertThat(paths.isExcluded(path)).isTrue();
@@ -146,6 +124,16 @@ class PeekabootPathsTest {
         assertThat(PeekabootPaths.pathWithinApplication(request)).isEqualTo("/api/persons");
     }
 
+    /** Under a {@code /*} servlet mapping the servlet path is empty and the whole path is path info. */
+    @Test
+    void pathWithinApplicationIsThePathInfoWhenTheServletIsMappedToEverything() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/peekaboot/api/traces");
+        request.setServletPath("");
+        request.setPathInfo("/peekaboot/api/traces");
+
+        assertThat(PeekabootPaths.pathWithinApplication(request)).isEqualTo("/peekaboot/api/traces");
+    }
+
     @Test
     void basePathSitsBehindTheRequestsContextPath() {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/app/persons");
@@ -185,6 +173,13 @@ class PeekabootPathsTest {
     void requestPathsMatchDirectlyAtTheRootContextPath() {
         assertThat(paths.isExcludedRequestPath("/actuator/health")).isTrue();
         assertThat(paths.isExcludedRequestPath("/api/users")).isFalse();
+    }
+
+    /** Every spelling a {@code server.servlet.context-path} property can carry, as the one strippable prefix. */
+    @ParameterizedTest
+    @CsvSource({"/app, /app", "/app/, /app", "/app//, /app", "app, /app", "/, ''", "'', ''"})
+    void theContextPathNormalisesToOnePrefixForm(String configured, String prefix) {
+        assertThat(PeekabootPaths.normaliseContextPath(configured)).isEqualTo(prefix);
     }
 
     /** Tolerates the trailing-slash and bare-root spellings the context-path property can carry. */

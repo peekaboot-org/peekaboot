@@ -1,15 +1,22 @@
 package org.peekaboot.testingapp.integration;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.awaitility.core.ConditionTimeoutException;
 import org.peekaboot.backend.domain.trace.RootActionType;
-import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -20,15 +27,31 @@ import tools.jackson.databind.JsonNode;
  *
  * <p>Spans reach the {@code TraceStore} asynchronously via the OTel BatchSpanProcessor
  * (50ms in the test profile), so every read is a poll with a deadline rather than a
- * single fetch.
+ * single fetch, and a caller names the fact it is about to assert on as the condition.
  */
 class TraceApiClient {
 
-    /** The toolbar embeds its payload as JSON in a {@code <script id="peekaboot-toolbar-data">} tag. */
-    private static final Pattern TOOLBAR_TRACE_ID = Pattern.compile("\"traceId\"\\s*:\\s*\"([0-9a-fA-F]+)\"");
+    /**
+     * The request's own root span has reached the store. Only a SERVER-kind root classifies
+     * HTTP_REQUEST, the root is the last span of a request to end, and the exporter hands
+     * spans over in the order they ended, so every span that ended before it is there too.
+     * Logs need no wait of their own: they are captured synchronously during the request.
+     */
+    static final Predicate<JsonNode> ROOT_SPAN_EXPORTED = trace -> RootActionType.HTTP_REQUEST
+            .name()
+            .equals(trace.path("rootActionType").asString(""));
+
+    /** The trace carries at least one captured log; see {@link #awaitTrace(Supplier, Predicate)}. */
+    static final Predicate<JsonNode> LOG_CAPTURED = trace -> !trace.path("logs").isEmpty();
+
+    private static final Logger log = LoggerFactory.getLogger(TraceApiClient.class);
+
+    /** RequestCaptureFilter answers every captured request with its trace id in Server-Timing. */
+    private static final Pattern SERVER_TIMING_TRACE_ID = Pattern.compile("trace;desc=\"00-([0-9a-f]+)-");
 
     private static final Duration TIMEOUT = Duration.ofSeconds(15);
-    private static final long POLL_INTERVAL_MS = 50;
+    private static final Duration POLL_INTERVAL = Duration.ofMillis(50);
+    private static final int RETRIGGER_ATTEMPTS = 5;
 
     private final PeekabootApi api;
     private final RestClient restClient;
@@ -42,67 +65,108 @@ class TraceApiClient {
         return restClient;
     }
 
-    String triggerAndCaptureTraceId(String path) {
-        String html = restClient
-                .get()
-                .uri(path)
-                .accept(MediaType.TEXT_HTML)
-                .retrieve()
-                .body(String.class);
+    /**
+     * Requests {@code path} and returns the trace id its response named in Server-Timing,
+     * for any content type and any status: /boom answers 500 by design and is captured all
+     * the same. A response without the header was never captured, which no later read could
+     * tell from a capture that lost everything, so that fails here.
+     */
+    String get(String path) {
+        return traceIdOf(api.headersOf(path));
+    }
 
-        Matcher matcher = TOOLBAR_TRACE_ID.matcher(html == null ? "" : html);
-        assertThat(matcher.find())
-                .as(
-                        "dev toolbar must embed a trace id for %s - without one the request was "
-                                + "never traced and any capture assertion would be meaningless",
-                        path)
-                .isTrue();
+    /** The trace id a captured response names in Server-Timing, for a request made some other way. */
+    static String traceIdOf(HttpHeaders headers) {
+        String serverTiming = headers.getFirst("Server-Timing");
+        Matcher matcher = SERVER_TIMING_TRACE_ID.matcher(serverTiming == null ? "" : serverTiming);
+        if (!matcher.find()) {
+            throw new AssertionError(
+                    "Server-Timing must carry the trace id, or the request was never captured: " + serverTiming);
+        }
         return matcher.group(1);
     }
 
-    void trigger(String path) {
+    /**
+     * Polls the trace's own insights endpoint until {@code ready} holds and returns the trace
+     * as served at that moment. A 404 counts as "not yet": the endpoint answers nothing until
+     * the first span is exported. The predicate is the assertion's precondition
+     * ({@link #ROOT_SPAN_EXPORTED} for most), so a test asserts on what it waited for rather
+     * than on whatever had arrived.
+     */
+    JsonNode awaitTrace(String traceId, Predicate<JsonNode> ready) {
+        String uri = "/peekaboot/api/traces/" + traceId + "/insights";
+        AtomicReference<JsonNode> lastSeen = new AtomicReference<>();
         try {
-            restClient.get().uri(path).accept(MediaType.ALL).retrieve().toBodilessEntity();
-        } catch (RuntimeException expectedForErrorPaths) {
-            // /boom answers 500 by design; the trace is what matters, not the response
+            return await().atMost(TIMEOUT)
+                    .pollInterval(POLL_INTERVAL)
+                    .until(
+                            () -> {
+                                JsonNode trace = fetchOrNull(uri);
+                                lastSeen.set(trace);
+                                return trace;
+                            },
+                            trace -> trace != null && ready.test(trace));
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(
+                    "trace " + traceId + " never became ready within " + TIMEOUT + "; last response: " + lastSeen.get(),
+                    e);
         }
     }
 
-    JsonNode awaitTrace(String traceId) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        JsonNode lastSeen = null;
-        int previousSpanCount = -1;
-        while (System.nanoTime() < deadline) {
-            JsonNode trace = fetchOrNull("/peekaboot/api/traces/" + traceId + "/insights");
-            if (trace != null) {
-                lastSeen = trace;
-                int spanCount =
-                        trace.path("summary").path("spans").path("count").asInt();
-                // A trace with an outbound call is exported in more than one BatchSpanProcessor
-                // flush, so a single non-zero read can be a partial snapshot. Requiring the count
-                // to hold steady across two consecutive polls confirms the flushes have caught up.
-                //
-                // Two consecutive equal polls is a heuristic, not a completeness proof: the poll
-                // interval (50ms) equals the BatchSpanProcessor schedule-delay in
-                // application-test.yml, so a trace whose spans land in three or more flushes can
-                // look stable across two polls and still be partial. Widen the window before
-                // trusting a new multi-flush trace shape.
-                if (spanCount > 0 && spanCount == previousSpanCount) {
-                    return trace;
-                }
-                previousSpanCount = spanCount;
+    /**
+     * Fires {@code request}, which answers with its trace id, waits for that trace's root
+     * span, and fires again while the stored trace does not satisfy {@code captured}. For a
+     * fact that is final once the root span is stored yet can be lost for good: a log written
+     * while a concurrent context boot had detached the capture appender (see
+     * {@code LogbackCaptureReinstaller}) is gone, and only a fresh request can produce one.
+     */
+    JsonNode awaitTrace(Supplier<String> request, Predicate<JsonNode> captured) {
+        JsonNode trace = null;
+        for (int attempt = 0; attempt < RETRIGGER_ATTEMPTS; attempt++) {
+            String traceId = request.get();
+            trace = awaitTrace(traceId, ROOT_SPAN_EXPORTED);
+            if (captured.test(trace)) {
+                return trace;
             }
-            sleepBriefly();
+            log.info("trace {} lacks what its request should have captured, requesting again", traceId);
         }
-        throw new AssertionError("trace " + traceId + " never had a stable exported span count within " + TIMEOUT
-                + "; last response: " + lastSeen);
+        throw new AssertionError(RETRIGGER_ATTEMPTS
+                + " requests produced no trace carrying what they should have captured; last response: " + trace);
     }
 
-    JsonNode awaitTraceInBucket(String bucket, String rootOperationFragment) {
+    /**
+     * Waits for the caller's own trace to be listed in {@code bucket}. The bucket is the
+     * assertion: a trace the backend classified elsewhere never arrives here. Pinned by id
+     * rather than by a name fragment, since every other class fills the same listing.
+     */
+    JsonNode awaitTraceInBucket(String bucket, String traceId) {
         return awaitListedTrace(
                 "bucket=" + bucket,
-                trace -> trace.path("rootOperation").asString("").contains(rootOperationFragment),
-                "a trace whose rootOperation contains '" + rootOperationFragment + "' in the " + bucket + " bucket");
+                trace -> traceId.equals(trace.path("traceId").asString("")),
+                "trace " + traceId + " in the " + bucket + " bucket");
+    }
+
+    /**
+     * Waits for a trace of {@code rootOperation} that was not listed when this call started.
+     * The fallback for work that answers no request and runs through no scheduled-task
+     * observation, so nothing hands the caller an id: a direct method call.
+     */
+    JsonNode awaitTraceAppearing(String rootOperation, Runnable trigger) {
+        Predicate<JsonNode> named =
+                trace -> rootOperation.equals(trace.path("rootOperation").asString(""));
+        Set<String> listedBefore = new HashSet<>();
+        for (JsonNode trace :
+                api.getJson("/peekaboot/api/traces/insights?bucket=all").path("traces")) {
+            if (named.test(trace)) {
+                listedBefore.add(trace.path("traceId").asString(""));
+            }
+        }
+        trigger.run();
+        return awaitListedTrace(
+                "bucket=all",
+                trace -> named.test(trace)
+                        && !listedBefore.contains(trace.path("traceId").asString("")),
+                "a new '" + rootOperation + "' trace");
     }
 
     /**
@@ -115,22 +179,35 @@ class TraceApiClient {
         return awaitListedTrace("rootActionType=" + type.name(), match, "a " + type + " trace");
     }
 
-    /** Polls the listing endpoint with {@code query} until a listed trace satisfies {@code match}. */
+    /**
+     * Polls the listing endpoint with {@code query} until a listed trace satisfies
+     * {@code match}. The listing leaves out a trace whose root span has not arrived, so a
+     * listed match already carries its spans.
+     */
     private JsonNode awaitListedTrace(String query, Predicate<JsonNode> match, String description) {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        List<String> seen = new ArrayList<>();
-        while (System.nanoTime() < deadline) {
-            JsonNode response = api.getJson("/peekaboot/api/traces/insights?" + query);
-            seen.clear();
-            for (JsonNode trace : response.path("traces")) {
-                seen.add(trace.path("rootOperation").asString(""));
-                if (match.test(trace)) {
-                    return trace;
-                }
-            }
-            sleepBriefly();
+        String uri = "/peekaboot/api/traces/insights?" + query;
+        // written on Awaitility's poll thread, read on the test thread once the wait gave up
+        AtomicReference<List<String>> lastListing = new AtomicReference<>(List.of());
+        try {
+            return await().atMost(TIMEOUT)
+                    .pollInterval(POLL_INTERVAL)
+                    .until(
+                            () -> {
+                                List<String> listed = new ArrayList<>();
+                                for (JsonNode trace : api.getJson(uri).path("traces")) {
+                                    listed.add(trace.path("rootOperation").asString(""));
+                                    if (match.test(trace)) {
+                                        return trace;
+                                    }
+                                }
+                                lastListing.set(listed);
+                                return null;
+                            },
+                            trace -> trace != null);
+        } catch (ConditionTimeoutException e) {
+            throw new AssertionError(
+                    description + " was not listed within " + TIMEOUT + "; the listing held: " + lastListing.get(), e);
         }
-        throw new AssertionError(description + " was not listed within " + TIMEOUT + "; the listing held: " + seen);
     }
 
     private JsonNode fetchOrNull(String uri) {
@@ -139,15 +216,6 @@ class TraceApiClient {
         } catch (HttpClientErrorException.NotFound notYetAvailable) {
             // single-trace endpoint returns 404 until the first span for the trace is exported
             return null;
-        }
-    }
-
-    private void sleepBriefly() {
-        try {
-            Thread.sleep(POLL_INTERVAL_MS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("interrupted while waiting for trace export", e);
         }
     }
 }

@@ -2,18 +2,16 @@ package org.peekaboot.backend.lifecycle;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.peekaboot.backend.testsupport.LifecycleStarts.start;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.peekaboot.backend.testsupport.PosixPermissions;
 
 class LifecycleEventFileTest {
 
@@ -24,10 +22,6 @@ class LifecycleEventFileTest {
         return new LifecycleEventFile(directory.resolve("lifecycle.jsonl"));
     }
 
-    private static LifecycleEvent start(long epochMs) {
-        return LifecycleEvent.start(epochMs, 4711, Map.of("version", "1.2.3"), Map.of("branch", "dev"));
-    }
-
     @Test
     void anAbsentFileReadsAsAnEmptyLog() {
         assertThat(file().read()).isEmpty();
@@ -36,7 +30,7 @@ class LifecycleEventFileTest {
     @Test
     void everyPropertyOfAnEventSurvivesTheRoundTrip() throws IOException {
         LifecycleEventFile file = file();
-        file.write(List.of(start(1_000), LifecycleEvent.stop(2_000, 4711)));
+        file.write(List.of(start(1_000).pid(4711).build(), LifecycleEvent.stop(2_000, 4711)));
 
         List<LifecycleEvent> read = file.read();
 
@@ -44,7 +38,7 @@ class LifecycleEventFileTest {
         assertThat(read.get(0).type()).isEqualTo(LifecycleEvent.Type.START);
         assertThat(read.get(0).epochMs()).isEqualTo(1_000);
         assertThat(read.get(0).pid()).isEqualTo(4711);
-        assertThat(read.get(0).build()).containsEntry("version", "1.2.3");
+        assertThat(read.get(0).build()).containsEntry("version", "1.0.0");
         assertThat(read.get(0).git()).containsEntry("branch", "dev");
         assertThat(read.get(1).type()).isEqualTo(LifecycleEvent.Type.STOP);
     }
@@ -53,7 +47,7 @@ class LifecycleEventFileTest {
     void oneEventPerLineSoADamagedLineCostsOnlyItself() throws IOException {
         Path path = directory.resolve("lifecycle.jsonl");
         LifecycleEventFile file = file();
-        file.write(List.of(start(1_000), start(2_000)));
+        file.write(List.of(start(1_000).build(), start(2_000).build()));
         List<String> lines = Files.readAllLines(path);
         lines.set(0, "{not json");
         Files.write(path, lines);
@@ -73,7 +67,7 @@ class LifecycleEventFileTest {
     void aLineThatParsesIntoNoEventAtAllIsSkippedLikeADamagedOne() throws IOException {
         Path path = directory.resolve("lifecycle.jsonl");
         LifecycleEventFile file = file();
-        file.write(List.of(start(2_000)));
+        file.write(List.of(start(2_000).build()));
         List<String> lines = new ArrayList<>();
         lines.add("{\"x\":1}");
         lines.addAll(Files.readAllLines(path));
@@ -88,8 +82,8 @@ class LifecycleEventFileTest {
     @Test
     void aRewriteLeavesNoTemporaryFileBehind() throws IOException {
         LifecycleEventFile file = file();
-        file.write(List.of(start(1_000)));
-        file.write(List.of(start(1_000), start(2_000)));
+        file.write(List.of(start(1_000).build()));
+        file.write(List.of(start(1_000).build(), start(2_000).build()));
 
         assertThat(file.read()).hasSize(2);
         try (var files = Files.list(directory)) {
@@ -101,28 +95,26 @@ class LifecycleEventFileTest {
     /** The log carries build and git details verbatim; the file is the owner's business and no one else's. */
     @Test
     void theLogAndItsDirectoryAreReadableByTheOwnerAlone() throws IOException {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
         Path stateDirectory = directory.resolve("state");
         LifecycleEventFile file = new LifecycleEventFile(stateDirectory.resolve("lifecycle.jsonl"));
 
-        file.write(List.of(start(1_000)));
+        file.write(List.of(start(1_000).build()));
 
-        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(stateDirectory)))
-                .isEqualTo("rwx------");
-        assertThat(PosixFilePermissions.toString(
-                        Files.getPosixFilePermissions(stateDirectory.resolve("lifecycle.jsonl"))))
+        assertThat(PosixPermissions.of(stateDirectory)).isEqualTo("rwx------");
+        assertThat(PosixPermissions.of(stateDirectory.resolve("lifecycle.jsonl")))
                 .isEqualTo("rw-------");
     }
 
     @Test
     void aSymlinkPlantedAtTheTemporaryPathIsReplacedNotFollowed() throws IOException {
-        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        PosixPermissions.assumeSupported();
         Path victim = directory.resolve("victim");
         Files.writeString(victim, "untouched");
         Files.createSymbolicLink(directory.resolve("lifecycle.jsonl.tmp"), victim);
         LifecycleEventFile file = file();
 
-        file.write(List.of(start(1_000)));
+        file.write(List.of(start(1_000).build()));
 
         assertThat(Files.readString(victim)).isEqualTo("untouched");
         assertThat(file.read()).hasSize(1);
@@ -134,7 +126,7 @@ class LifecycleEventFileTest {
         Files.createDirectories(target.resolve("occupied"));
         LifecycleEventFile file = new LifecycleEventFile(target);
 
-        assertThatThrownBy(() -> file.write(List.of(start(1_000)))).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> file.write(List.of(start(1_000).build()))).isInstanceOf(IOException.class);
         assertThat(directory.resolve("lifecycle.jsonl.tmp")).doesNotExist();
     }
 }
