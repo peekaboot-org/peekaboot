@@ -25,9 +25,12 @@ import org.springframework.core.io.Resource;
 /**
  * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar} and
  * {@code peekaboot.storage.enabled} from the launch context (on only when running locally
- * in an IDE or via spring-boot:run/bootRun) and applies Peekaboot's defaults at the lowest
- * precedence, so any application property wins - {@code SpringApplication.setDefaultProperties}
- * included. An explicit setting for any of the three always overrides the detection.
+ * in an IDE or via spring-boot:run/bootRun), and for {@code peekaboot.security.enabled} from
+ * the same detection reading {@link LocalDevDetector.LaunchKind#DEPLOYMENT} rather than local
+ * development: a test launch is neither, so a consumer's own {@code @SpringBootTest} is not
+ * made to start authenticating against a dashboard it never armed. Peekaboot's defaults apply
+ * at the lowest precedence, so any application property wins - {@code SpringApplication.setDefaultProperties}
+ * included. An explicit setting for any of the four always overrides the detection.
  *
  * <p>All defaults live in yml resources. {@code peekaboot-no-push-defaults.yml} is applied
  * unconditionally, so the starter never pushes telemetry anywhere unless the application
