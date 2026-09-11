@@ -79,7 +79,7 @@ Each row is a place a grep for the UI's word will not find the code, or the reve
 | `metrics` on `/api/features`, `MetricsInfo`, `GET /api/metrics` | **Meters** tab | The tab module is `tabs/meters.js` and its `isAvailable` reads `features.metrics`. |
 | `rootOperation` | **Target** in the Traces tab's filter banner | The banner also shortens the value to its last dot-segment. |
 | `rootActionType`, `rootOperation` query parameters | `type`, `op` in the dashboard hash | `traces.js` translates between them; the hash is the shareable form. |
-| `TraceTree.slow` | **SLOW** badge | True when any span carries a SLOW or VERY_SLOW issue. The Slow bucket is a whole-trace threshold. See [the slow badge is not the slow bucket](https://www.peekaboot.org/docs/traces/#the-slow-badge-is-not-the-slow-bucket). |
+| `TraceTree.slow` | **SLOW** badge | True when any span carries a SLOW or VERY_SLOW issue. The Slow bucket is a whole-trace threshold. See [the slow badge is not the slow bucket](https://www.peekaboot.org/docs/traces/#slow-badge-vs-slow-bucket). |
 | `TraceStatus.HAS_ERRORS` | **ERROR** badge | Rendered instead of SLOW, never beside it. |
 | `TraceTree.truncated` | **TRUNCATED** badge | Set when the per-trace span cap dropped a real span. |
 | `HttpRequest.Controller.className` | `class` on the wire | Renamed by `@JsonProperty("class")`. |
