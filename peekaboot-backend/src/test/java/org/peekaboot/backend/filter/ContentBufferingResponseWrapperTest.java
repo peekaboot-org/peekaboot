@@ -64,6 +64,24 @@ class ContentBufferingResponseWrapperTest {
     }
 
     /**
+     * Tomcat closes this wrapper's writer once a forward returns, and the toolbar writes the
+     * page it injected only after that (see TomcatForwardResponseCustomizer). The close has to
+     * drain the encoder into the buffer and leave the real response writable, or a forwarded
+     * view is served without what it rendered.
+     */
+    @Test
+    void aWriterTheContainerClosedAfterAForwardLeavesTheBufferedBodyIntact() throws IOException {
+        wrapper.setContentType("text/html;charset=UTF-8");
+        wrapper.getWriter().write("<html><body>Grüße</body></html>");
+
+        wrapper.getWriter().close();
+
+        assertThat(wrapper.getContentAsString()).isEqualTo("<html><body>Grüße</body></html>");
+        wrapper.copyBodyToResponse();
+        assertThat(originalResponse.getContentAsString()).isEqualTo("<html><body>Grüße</body></html>");
+    }
+
+    /**
      * The container never sees this wrapper's getWriter(), so it never locks the character
      * encoding; a content type declared after the writer wrote changes what the response
      * says while the buffered bytes stay encoded as they were.
