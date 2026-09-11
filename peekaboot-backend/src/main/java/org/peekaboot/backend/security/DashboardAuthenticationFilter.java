@@ -12,6 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +65,9 @@ public class DashboardAuthenticationFilter implements Filter {
 
         String header = httpRequest.getHeader(AUTHORIZATION_HEADER);
         if (header == null || !verify(header)) {
+            if (header != null) {
+                logFailedVerification(httpRequest, header);
+            }
             challenge(httpRequest, httpResponse);
             return;
         }
@@ -80,8 +84,19 @@ public class DashboardAuthenticationFilter implements Filter {
         if (cache.isKnownGood(header)) {
             return true;
         }
-        if (!header.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
+        Presented presented = parse(header);
+        if (presented == null
+                || !constantTimeEquals(credentials.username(), presented.username())
+                || !credentials.passwordHash().matches(presented.password())) {
             return false;
+        }
+        cache.remember(header);
+        return true;
+    }
+
+    private static @Nullable Presented parse(String header) {
+        if (!header.regionMatches(true, 0, BASIC_PREFIX, 0, BASIC_PREFIX.length())) {
+            return null;
         }
         String decoded;
         try {
@@ -90,21 +105,25 @@ public class DashboardAuthenticationFilter implements Filter {
                             .decode(header.substring(BASIC_PREFIX.length()).trim()),
                     StandardCharsets.UTF_8);
         } catch (IllegalArgumentException notBase64) {
-            return false;
+            return null;
         }
         int separator = decoded.indexOf(':');
         if (separator < 0) {
-            return false;
+            return null;
         }
-        String username = decoded.substring(0, separator);
-        String password = decoded.substring(separator + 1);
-        if (!constantTimeEquals(credentials.username(), username)
-                || !credentials.passwordHash().matches(password)) {
-            return false;
-        }
-        cache.remember(header);
-        return true;
+        return new Presented(decoded.substring(0, separator), decoded.substring(separator + 1));
     }
+
+    /** DEBUG rather than WARN: the one-time WARN already says the dashboard is unauthenticated. */
+    private static void logFailedVerification(HttpServletRequest request, String header) {
+        Presented presented = parse(header);
+        log.debug(
+                "Rejected credentials for {} - presented username was {}",
+                request.getRequestURI(),
+                presented != null ? presented.username() : "<unparseable>");
+    }
+
+    private record Presented(String username, String password) {}
 
     /** A bare 401 rather than {@code sendError}, which would dispatch to the error page and re-enter the chain. */
     private void challenge(HttpServletRequest request, HttpServletResponse response) {

@@ -29,11 +29,12 @@ class DashboardAuthenticationFilterTest {
 
     private LogCapture logs;
 
-    // Every challenge-path test emits the filter's one-time WARN; captured here so none of
-    // them leaves a stray line in the test output, with the WARN itself asserted separately.
+    // Every challenge-path test emits the filter's one-time WARN, and a wrong-credentials one
+    // also emits the per-attempt DEBUG line; captured here so neither leaves a stray line in the
+    // test output, with both asserted separately where a test cares.
     @BeforeEach
     void captureLogs() {
-        logs = LogCapture.attach(DashboardAuthenticationFilter.class);
+        logs = LogCapture.attach(DashboardAuthenticationFilter.class, Level.DEBUG);
     }
 
     @AfterEach
@@ -62,6 +63,25 @@ class DashboardAuthenticationFilterTest {
 
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chainCalls).hasValue(0);
+    }
+
+    /** A brute-force attempt must leave a trace even though {@code CredentialCache} never caches it. */
+    @Test
+    void logsAFailedVerificationAtDebugNamingThePathAndPresentedUsername() throws Exception {
+        var response = new MockHttpServletResponse();
+        var request = get("/peekaboot/api/insights");
+        request.addHeader("Authorization", basic("orders-admin", "wrong"));
+
+        filter(new NeverAuthenticated()).doFilter(request, response, chain);
+
+        assertThat(logs.appender().list).anySatisfy(event -> {
+            assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
+            assertThat(event.getFormattedMessage())
+                    .contains("/peekaboot/api/insights")
+                    .contains("orders-admin")
+                    .doesNotContain("wrong")
+                    .doesNotContain(PASSWORD);
+        });
     }
 
     @Test
