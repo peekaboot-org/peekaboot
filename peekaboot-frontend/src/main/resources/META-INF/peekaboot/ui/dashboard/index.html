@@ -96,7 +96,25 @@
                  and left hidden when the insights feature is off (see its renderInsightTiles). -->
             <div id="insights-tiles" class="pk-insight-tiles hidden"></div>
 
-            <div class="pk-grid">
+            <!-- Health Banner (a real button so it is keyboard operable; expands the details region below) -->
+            <button type="button" class="pk-health" id="health-banner"
+                    aria-expanded="false" aria-controls="health-components">
+                <span class="pk-health__status">
+                    <span class="pk-health__dot" id="health-dot"></span>
+                    <span class="pk-health__text">Health: <span id="health-status-container"></span></span>
+                </span>
+                <span class="pk-health__right">
+                    <span class="pk-health__summary" id="health-summary"></span>
+                    <span class="pk-health__expand" id="health-expand" aria-hidden="true">&#9654;</span>
+                </span>
+            </button>
+
+            <!-- Health Components (hidden by default, shown on click) -->
+            <div id="health-components" class="pk-section" hidden>
+                <div class="pk-component-grid" id="components-grid"></div>
+            </div>
+
+            <div class="pk-grid pk-section">
                 <div class="pk-card" id="build-card">
                     <div class="pk-card__header pk-label">
                         <span class="pk-card__icon" aria-hidden="true">&#128230;</span>
@@ -160,24 +178,6 @@
                     <h2 class="pk-card__title">Memory &amp; Storage</h2>
                 </div>
                 <div class="pk-card__body" id="memory-info"></div>
-            </div>
-
-            <!-- Health Banner (a real button so it is keyboard operable; expands the details region below) -->
-            <button type="button" class="pk-health pk-section" id="health-banner"
-                    aria-expanded="false" aria-controls="health-components">
-                <span class="pk-health__status">
-                    <span class="pk-health__dot" id="health-dot"></span>
-                    <span class="pk-health__text">Health: <span id="health-status-container"></span></span>
-                </span>
-                <span class="pk-health__right">
-                    <span class="pk-health__summary" id="health-summary"></span>
-                    <span class="pk-health__expand" id="health-expand" aria-hidden="true">&#9654;</span>
-                </span>
-            </button>
-
-            <!-- Health Components (hidden by default, shown on click) -->
-            <div id="health-components" class="pk-section" hidden>
-                <div class="pk-component-grid" id="components-grid"></div>
             </div>
         </section>
 

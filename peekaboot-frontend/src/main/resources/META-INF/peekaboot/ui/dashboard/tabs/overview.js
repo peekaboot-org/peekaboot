@@ -423,8 +423,8 @@ function renderHealthBanner(container, health) {
     pill.id = 'health-status-text';
     statusContainer.appendChild(pill);
 
-    // classList, not className - a full reassignment would also wipe out the layout
-    // class (pk-section) the static markup put on #health-banner.
+    // classList, not className - a full reassignment would also wipe out the base
+    // classes (pk-health, pk-health__dot) the static markup put on both elements.
     dot.classList.remove('pk-health__dot--down', 'pk-health__dot--unknown');
     banner.classList.remove('pk-health--down', 'pk-health--unknown');
     if (modifier) {
