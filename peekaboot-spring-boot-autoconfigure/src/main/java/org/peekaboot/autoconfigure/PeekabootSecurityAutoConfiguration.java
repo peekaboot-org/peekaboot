@@ -144,11 +144,22 @@ public class PeekabootSecurityAutoConfiguration {
             registration.addUrlPatterns(PeekabootPaths.BASE_PATH + "/*");
             // after Spring Security's own filter wherever the application has put it, so the
             // guard sees only requests that chain already let through
-            registration.setOrder(environment.getProperty(
-                            "spring.security.filter.order", Integer.class, DEFAULT_SECURITY_FILTER_ORDER)
-                    + GUARD_ORDER_MARGIN);
+            registration.setOrder(guardOrder(environment.getProperty(
+                    "spring.security.filter.order", Integer.class, DEFAULT_SECURITY_FILTER_ORDER)));
             registration.setName("dashboardAuthenticationFilter");
             return registration;
+        }
+
+        /**
+         * Saturates at {@code Integer.MAX_VALUE} instead of overflowing, so a
+         * {@code spring.security.filter.order} near that bound cannot wrap negative and order
+         * the guard ahead of Spring Security's own filter.
+         */
+        private static int guardOrder(int securityFilterOrder) {
+            if (securityFilterOrder > Integer.MAX_VALUE - GUARD_ORDER_MARGIN) {
+                return Integer.MAX_VALUE;
+            }
+            return securityFilterOrder + GUARD_ORDER_MARGIN;
         }
 
         /** The artifact alone: {@code com.acme.orders-admin} is a worse username than {@code orders-admin}. */

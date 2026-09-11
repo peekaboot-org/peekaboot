@@ -140,6 +140,14 @@ class PeekabootSecurityAutoConfigurationTest {
                 .run(context -> assertThat(registration(context).getOrder()).isEqualTo(600));
     }
 
+    /** A configured order within 100 of {@code Integer.MAX_VALUE} must not wrap negative. */
+    @Test
+    void clampsTheGuardOrderInsteadOfOverflowing(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("spring.security.filter.order=" + Integer.MAX_VALUE)
+                .run(context -> assertThat(registration(context).getOrder()).isEqualTo(Integer.MAX_VALUE));
+    }
+
     /**
      * Detected-only: an explicit override of {@code peekaboot.security.enabled} does not hide
      * what the launch context detected - see

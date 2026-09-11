@@ -69,7 +69,8 @@ public final class SecurityPosture {
         LifecycleBanner.line(report, " This is a stop-gap. Put /peekaboot/** behind your own security: " + DOCS);
         LifecycleBanner.close(report);
 
-        return new SecurityPosture(new Report(springSecurityPresent ? Level.INFO : Level.WARN, report.toString()));
+        Level level = springSecurityPresent && !devToolbarOn ? Level.INFO : Level.WARN;
+        return new SecurityPosture(new Report(level, report.toString()));
     }
 
     private static String headline(boolean springSecurityPresent) {

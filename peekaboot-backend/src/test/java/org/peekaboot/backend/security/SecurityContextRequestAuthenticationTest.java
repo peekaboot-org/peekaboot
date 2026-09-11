@@ -42,14 +42,23 @@ class SecurityContextRequestAuthenticationTest {
         assertThat(requestAuthentication.alreadyAuthenticated()).isTrue();
     }
 
+    /**
+     * Starts from a non-empty context (an anonymous token, as Spring Security's own filter
+     * leaves it) so the assertion can tell a restored context from any other non-authenticating
+     * state, which {@code alreadyAuthenticated() == false} alone cannot.
+     */
     @Test
     void record_thenClear_leavesTheContextAsItFoundIt() {
+        var anonymous = new AnonymousAuthenticationToken(
+                "key", "anonymous", List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS")));
+        SecurityContextHolder.getContext().setAuthentication(anonymous);
+
         requestAuthentication.record("orders-admin");
         assertThat(requestAuthentication.alreadyAuthenticated()).isTrue();
 
         requestAuthentication.clear();
 
-        assertThat(requestAuthentication.alreadyAuthenticated()).isFalse();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isSameAs(anonymous);
     }
 
     @Test

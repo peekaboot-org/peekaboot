@@ -92,6 +92,20 @@ class SecurityPostureTest {
         assertThat(report.text()).contains("dev toolbar");
     }
 
+    /**
+     * A WARN nested inside an INFO-level report is invisible to anyone running at WARN, which is
+     * exactly the audience that needs to hear that the toolbar will now raise credential dialogs
+     * on ordinary application pages.
+     */
+    @Test
+    void armed_warnsEvenWithSpringSecurityPresentWhenTheToolbarIsOn() {
+        var report = SecurityPosture.armed(generated("hunter2"), FILE, true, true)
+                .report()
+                .orElseThrow();
+
+        assertThat(report.level()).isEqualTo(SecurityPosture.Level.WARN);
+    }
+
     @Test
     void disabledOnADeployment_isOneWarningLineWithNoBanner() {
         var report = SecurityPosture.disabledOnADeployment().report().orElseThrow();
