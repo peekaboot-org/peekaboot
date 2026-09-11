@@ -39,12 +39,6 @@
             <artifactId>spring-boot-health</artifactId>
             <optional>true</optional>
         </dependency>
-        <!-- compile-only reference for the SecurityContextHolder presence check -->
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-core</artifactId>
-            <optional>true</optional>
-        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-flyway</artifactId>
@@ -98,6 +92,14 @@
         </dependency>
 
         <!-- Test dependencies -->
+        <!-- so PeekabootSecurityAutoConfigurationTest can prove the on-classpath branch of the
+             SecurityContextHolder presence check; the main code holds only its class name as a
+             String and needs no dependency to compile -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- shared test support (LogCapture) -->
         <dependency>
             <groupId>org.peekaboot</groupId>

@@ -3,7 +3,6 @@ package org.peekaboot.autoconfigure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
-import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.peekaboot.backend.security.DashboardAuthenticationFilter;
@@ -18,8 +17,6 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.env.MapPropertySource;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 class PeekabootSecurityAutoConfigurationTest {
 
@@ -43,7 +40,9 @@ class PeekabootSecurityAutoConfigurationTest {
         runner(storageDir).run(context -> {
             assertThat(context).hasSingleBean(DashboardCredentials.class);
             assertThat(context).hasSingleBean(SecurityPostureListener.class);
-            assertThat(context.getBean("dashboardAuthenticationFilter")).isNotNull();
+            FilterRegistrationBean<DashboardAuthenticationFilter> registration = registration(context);
+            assertThat(registration.getUrlPatterns()).containsExactly("/peekaboot/*");
+            assertThat(registration.getFilter()).isInstanceOf(DashboardAuthenticationFilter.class);
         });
     }
 
@@ -58,7 +57,10 @@ class PeekabootSecurityAutoConfigurationTest {
     void registersNoGuardWhileSecurityIsOff(@TempDir Path storageDir) {
         runner(storageDir)
                 .withPropertyValues("peekaboot.security.enabled=false")
-                .run(context -> assertThat(context).doesNotHaveBean(DashboardCredentials.class));
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(DashboardCredentials.class);
+                    assertThat(context).doesNotHaveBean("dashboardAuthenticationFilter");
+                });
     }
 
     /** The posture still reports, so switching the fallback off in a deployment is not silent. */
@@ -71,9 +73,9 @@ class PeekabootSecurityAutoConfigurationTest {
 
     /**
      * A bare context runner never sets {@code peekaboot.security.enabled} itself - only the
-     * launch-context detection does, in a real application. Without {@code matchIfMissing} on
-     * the disarmed posture, this configuration would create neither posture bean here and
-     * {@code securityPostureListener} would fail to resolve its dependency.
+     * launch-context detection does, in a real application. The posture bean is unconditional
+     * and keyed off what actually resolved rather than off this property, so its absence still
+     * leaves exactly one posture bean and no guard.
      */
     @Test
     void registersExactlyOnePostureBeanWithNoSecurityPropertyAtAll(@TempDir Path storageDir) {
@@ -88,6 +90,28 @@ class PeekabootSecurityAutoConfigurationTest {
                 });
     }
 
+    /**
+     * {@code @ConditionalOnBooleanProperty} matches neither {@code true} nor {@code false} for a
+     * value like this, so a typo here must not be able to leave zero posture beans and break
+     * {@code securityPostureListener}'s dependency resolution.
+     */
+    @Test
+    void contextStartsWithANonBooleanSecurityEnabledValue(@TempDir Path storageDir) {
+        runner(storageDir).withPropertyValues("peekaboot.security.enabled=yes").run(context -> {
+            assertThat(context).hasNotFailed();
+            assertThat(context).hasSingleBean(SecurityPosture.class);
+            assertThat(context).doesNotHaveBean(DashboardCredentials.class);
+        });
+    }
+
+    @Test
+    void securityPostureIsArmedWhenTheGuardResolves(@TempDir Path storageDir) {
+        runner(storageDir)
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .isPresent());
+    }
+
     @Test
     void usesTheSecurityContextWhenSpringSecurityIsPresent(@TempDir Path storageDir) {
         runner(storageDir)
@@ -98,7 +122,7 @@ class PeekabootSecurityAutoConfigurationTest {
     @Test
     void fallsBackWhenSpringSecurityIsAbsent(@TempDir Path storageDir) {
         runner(storageDir)
-                .withClassLoader(new FilteredClassLoader(SecurityContextHolder.class))
+                .withClassLoader(new FilteredClassLoader("org.springframework.security"))
                 .run(context -> assertThat(context.getBean(RequestAuthentication.class))
                         .isInstanceOf(NeverAuthenticated.class));
     }
@@ -116,16 +140,17 @@ class PeekabootSecurityAutoConfigurationTest {
                 .run(context -> assertThat(registration(context).getOrder()).isEqualTo(600));
     }
 
-    /** Reads the detection source directly, so an explicit override does not hide what was detected. */
+    /**
+     * Detected-only: an explicit override of {@code peekaboot.security.enabled} does not hide
+     * what the launch context detected - see
+     * {@link PeekabootPropertyKeys#SECURITY_DEPLOYMENT_DETECTED}.
+     */
     @Test
     void reportsTheDeploymentWarningWhenDetectionMarkedTheLaunchADeployment(@TempDir Path storageDir) {
         runner(storageDir)
-                .withPropertyValues("peekaboot.security.enabled=false")
-                .withInitializer(context -> context.getEnvironment()
-                        .getPropertySources()
-                        .addLast(new MapPropertySource(
-                                PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME,
-                                Map.of(PeekabootPropertyKeys.SECURITY_ENABLED, true))))
+                .withPropertyValues(
+                        "peekaboot.security.enabled=false",
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED + "=true")
                 .run(context -> assertThat(
                                 context.getBean(SecurityPosture.class).report())
                         .hasValueSatisfying(
