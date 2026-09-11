@@ -44,7 +44,7 @@ public final class CredentialsFile {
         return path;
     }
 
-    public Optional<StoredCredentials> read() {
+    Optional<StoredCredentials> read() {
         if (!Files.isReadable(path)) {
             return Optional.empty();
         }
@@ -126,5 +126,5 @@ public final class CredentialsFile {
         }
     }
 
-    public record StoredCredentials(String username, PasswordHash passwordHash, Instant createdAt) {}
+    record StoredCredentials(String username, PasswordHash passwordHash, Instant createdAt) {}
 }
