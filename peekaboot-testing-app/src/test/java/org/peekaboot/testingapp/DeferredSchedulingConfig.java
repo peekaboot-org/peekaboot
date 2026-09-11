@@ -25,12 +25,12 @@ import org.springframework.scheduling.support.ScheduledTaskObservationContext;
  *
  * <p>It lives in test sources under the application's own package and carries a plain
  * {@code @Configuration}, so {@link TestingApp}'s component scan finds it for every
- * {@code @SpringBootTest} without any of them having to name it. Naming the two profiles the
+ * {@code @SpringBootTest} without any of them having to name it. Naming the profiles the
  * IT suite boots under keeps it out of the app when the app is run for real - and out of the
  * screenshot run, whose whole point is a dashboard photographed with lifelike data.
  */
 @Configuration
-@Profile({"test", "security"})
+@Profile({"test", "security", "auto-security"})
 public class DeferredSchedulingConfig {
 
     @Bean
