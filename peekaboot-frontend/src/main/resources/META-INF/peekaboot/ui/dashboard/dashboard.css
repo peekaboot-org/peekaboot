@@ -390,13 +390,13 @@
 .pk-metric__stat-name { color: var(--pk-text-muted); text-transform: uppercase; font-size: 0.65rem; }
 .pk-metric__stat-value { font-family: var(--pk-font-mono); font-weight: 600; color: var(--pk-text-strong); }
 
-/* Insights stat tiles - rendered on the Overview tab (overview.js), not the Insights
-   tab. A wrapping flex row rather than equal grid columns: the tiles hold values of very
-   different widths (a formatted date next to a core count), and equal columns make the
-   date wrap to two lines while the rest of the row sits half empty. Growing from the
-   content width instead keeps all five on one line, and they wrap once they cannot. */
-.pk-insight-tiles { display: flex; flex-wrap: wrap; gap: var(--pk-space-sm); margin-bottom: var(--pk-space-lg); }
-.pk-insight-tile { flex: 1 1 auto; min-width: 150px; display: flex; align-items: center; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
+/* Insights stat tiles - rendered on the Overview tab (overview.js), not the Insights tab.
+   Twice .pk-grid's columns on its gap, so every pair of tiles spans exactly one card column. */
+.pk-insight-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--pk-space-md); margin-bottom: var(--pk-space-lg); }
+@media (min-width: 768px) {
+    .pk-insight-tiles { grid-template-columns: repeat(4, 1fr); }
+}
+.pk-insight-tile { display: flex; align-items: center; gap: var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border: 1px solid var(--pk-border); border-radius: var(--pk-radius-lg); background: var(--pk-bg); }
 /* Muted rather than accented: five accented glyphs in a row would outweigh the values
    they annotate, which are what the row is actually for. */
 .pk-insight-tile__icon { flex: none; color: var(--pk-text-muted); }
