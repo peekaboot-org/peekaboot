@@ -176,10 +176,7 @@ final class LocalDevDetector {
         if (!classLoader.getClass().getName().contains("AppClassLoader")) {
             return false;
         }
-        if (isTestLaunch(stackTrace)) {
-            return false;
-        }
-        return isDeveloperLaunch(signals);
+        return !isTestLaunch(stackTrace) && isDeveloperLaunch(signals);
     }
 
     /**
