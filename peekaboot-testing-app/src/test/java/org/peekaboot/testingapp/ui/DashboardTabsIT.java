@@ -599,6 +599,18 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .isLessThan(Integer.parseInt(counts.group(2)));
     }
 
+    /** Every meter's type badge fits its column whole, clipped nowhere and clear of the unit beside it. */
+    @Test
+    void everyMeterTypeBadgeFitsItsColumn() {
+        openDashboard();
+        dashboard.openTab("meters");
+
+        assertThat(page.locator("#meters-list .pk-group__meta .pk-badge").allTextContents())
+                .as("the app registers a long task timer, the longest type it has")
+                .contains("LONG_TASK_TIMER");
+        assertThat(meterTypeBadgesOutsideTheirColumn("#meters-list")).isEmpty();
+    }
+
     /**
      * A deep link into the meters tab must restore the text filter from the URL, and
      * typing further into it must keep writing the URL back (via replaceState - see

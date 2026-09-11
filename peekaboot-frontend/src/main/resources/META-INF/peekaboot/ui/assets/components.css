@@ -110,12 +110,14 @@
 .pk-group__meta {
     flex: 0 0 auto;
     display: grid;
-    grid-template-columns: 5.5rem 5rem 8.5rem;
+    /* the first track fits DISTRIBUTION_SUMMARY, the longest meter type, as its badge renders */
+    grid-template-columns: 12rem 5rem 8.5rem;
     align-items: center;
     gap: var(--pk-space-sm);
     justify-items: start;
 }
-.pk-group__meta > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* justify-items: start sizes a cell to its content; max-width holds a longer one inside its track. */
+.pk-group__meta > * { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-group__meta .pk-group__count { justify-self: end; font-variant-numeric: tabular-nums; }
 .pk-group__list {
     border: 1px solid var(--pk-border);

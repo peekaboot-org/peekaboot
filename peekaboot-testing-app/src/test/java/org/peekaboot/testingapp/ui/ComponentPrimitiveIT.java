@@ -115,6 +115,17 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
+     * DISTRIBUTION_SUMMARY, the longest meter type and one no testing-app meter carries, fits its
+     * badge column whole.
+     */
+    @Test
+    void theLongestMeterTypeBadgeFitsItsColumn() {
+        openFixture();
+
+        assertThat(meterTypeBadgesOutsideTheirColumn("#meter-group")).isEmpty();
+    }
+
+    /**
      * WCAG contrast ratio between an element's computed color and the effective fill
      * behind it: its own background-color, or - where that is fully transparent, like
      * the tag badge's key span - the nearest ancestor's.
