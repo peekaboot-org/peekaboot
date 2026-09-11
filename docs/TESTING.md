@@ -33,7 +33,9 @@
   that module and those two tests have to lose the global write first.
 - The default uncaught-exception handler is JVM-global the same way.
   `InsightsSsePublisherTest`'s `UncaughtExceptions` installs one to prove nothing escapes the SSE
-  sender thread, and restores the previous handler on close. Its awaits pass
+  sender thread, and restores the previous handler on close. It keeps only what a thread named
+  `Subscriber.SENDER_THREAD` threw, since every other thread alive in the JVM reaches the same
+  handler and would otherwise fail those assertions. Its awaits pass
   `dontCatchUncaughtExceptions()`, since Awaitility otherwise takes the handler over for the
   length of the wait and rethrows into the test thread.
 - Micrometer gauges: never `registry.gauge(name, obj)` with the result discarded. The registry
@@ -109,7 +111,13 @@ in-module class whose real construction needs a live container. Cheap in-module 
 Spring and servlet machinery (`MockMvc`, mock requests) is fine. `InsightsSsePublisherTest`
 shows how far that reaches: it drives Spring's real `ResponseBodyEmitterReturnValueHandler` and
 `StandardServletAsyncWebRequest` over mock servlet objects, so a container timeout runs the
-interceptor chain a stubbed emitter would have skipped.
+interceptor chain a stubbed emitter would have skipped. Its `DispatchedStream` still hands that
+handler a plain `ServletWebRequest`, where `RequestMappingHandlerAdapter` hands it the
+`StandardServletAsyncWebRequest` itself, whose response wrapper raises
+`AsyncRequestNotUsableException` on a write once the async request has errored. So every send
+failure in the class is stated by the response fixture rather than produced by that state, and
+closing the gap means routing the class's writes through the wrapper and re-deriving what each
+of them then fails with.
 
 One exception: controller tests that stub a service and assert `isSameAs` pass-through
 (sentinel-identity delegation), even where the service is cheap to construct. A real service
