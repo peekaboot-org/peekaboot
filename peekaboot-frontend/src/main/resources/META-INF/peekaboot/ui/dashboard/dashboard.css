@@ -70,8 +70,8 @@
 @media (min-width: 768px) {
     .pk-grid { grid-template-columns: repeat(2, 1fr); }
 }
-/* Vertical rhythm between stacked dashboard sections (memory card, health
-   banner, its details) that sit outside the .pk-grid flow. */
+/* Vertical rhythm between stacked Overview sections (card grid, memory card, health
+   details). Not on the health banner, which leads the tab whenever the tile row is hidden. */
 .pk-section { margin-top: var(--pk-space-md); }
 
 /* Card */
@@ -392,7 +392,7 @@
 
 /* Insights stat tiles - rendered on the Overview tab (overview.js), not the Insights tab.
    Twice .pk-grid's columns on its gap, so every pair of tiles spans exactly one card column. */
-.pk-insight-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--pk-space-md); margin-bottom: var(--pk-space-lg); }
+.pk-insight-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--pk-space-md); margin-bottom: var(--pk-space-md); }
 @media (min-width: 768px) {
     .pk-insight-tiles { grid-template-columns: repeat(4, 1fr); }
 }

@@ -178,6 +178,11 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 rect.get("bottom").doubleValue());
     }
 
+    /** The card grid's own row gap at two columns, the spacing every stacked Overview section keeps. */
+    private double cardRowGap() {
+        return box("#spring-card").top() - box("#build-card").bottom();
+    }
+
     /** Two tiles side by side on one row, together spanning {@code column} edge to edge. */
     private static void assertPairSpans(Box leftTile, Box rightTile, Box column) {
         assertThat(rightTile.top()).as("the pair shares a row").isCloseTo(leftTile.top(), ONE_PIXEL);
@@ -284,6 +289,64 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(readyTime.top()).as("the second pair wraps below the first").isGreaterThan(startedAt.bottom());
         assertThat(readyTime.right()).as("the columns line up row to row").isCloseTo(startedAt.right(), ONE_PIXEL);
         assertThat(startupTime.width()).as("two equal columns").isCloseTo(startedAt.width(), ONE_PIXEL);
+    }
+
+    /**
+     * The health banner, and its details once opened, stack between the stat tiles and the cards,
+     * one card row gap apart.
+     */
+    @Test
+    void theHealthBannerAndItsDetailsSitBetweenTheTilesAndTheCards() {
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+        double gap = cardRowGap();
+
+        Box banner = box("#health-banner");
+        assertThat(banner.top() - box("#insights-tiles").bottom())
+                .as("tiles to banner")
+                .isCloseTo(gap, ONE_PIXEL);
+        assertThat(box("#build-card").top() - banner.bottom())
+                .as("banner to cards")
+                .isCloseTo(gap, ONE_PIXEL);
+
+        page.click("#health-banner");
+        page.waitForSelector("#health-components");
+
+        Box details = box("#health-components");
+        assertThat(details.top() - box("#health-banner").bottom())
+                .as("banner to details")
+                .isCloseTo(gap, ONE_PIXEL);
+        assertThat(box("#build-card").top() - details.bottom())
+                .as("details to cards")
+                .isCloseTo(gap, ONE_PIXEL);
+    }
+
+    /** With insights off the health banner leads the Overview from where the tile row would have started. */
+    @Test
+    void withInsightsOffTheHealthBannerTakesTheTileRowsPlace() {
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+        double tileRowOffset =
+                box("#insights-tiles").top() - box("#overview-tab").top();
+
+        page.route("**/peekaboot/api/features", route -> {
+            APIResponse features = route.fetch();
+            route.fulfill(new Route.FulfillOptions()
+                    .setResponse(features)
+                    .setBody(features.text().replace("\"insights\":true", "\"insights\":false")));
+        });
+        openDashboard();
+        assertThat(page.isVisible(Dashboard.tabButton("insights")))
+                .as("the insights flag was flipped")
+                .isFalse();
+
+        Box banner = box("#health-banner");
+        assertThat(banner.top() - box("#overview-tab").top())
+                .as("the banner starts where the tile row did")
+                .isCloseTo(tileRowOffset, ONE_PIXEL);
+        assertThat(box("#build-card").top() - banner.bottom())
+                .as("banner to cards")
+                .isCloseTo(cardRowGap(), ONE_PIXEL);
     }
 
     @Test
