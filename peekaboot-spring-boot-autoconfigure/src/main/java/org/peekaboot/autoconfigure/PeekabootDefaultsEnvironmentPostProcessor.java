@@ -41,7 +41,6 @@ import org.springframework.core.io.Resource;
 public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final String PROPERTY_SOURCE_NAME = "peekabootDefaults";
-    private static final String DETECTION_PROPERTY_SOURCE_NAME = "peekabootDetection";
     private static final String NO_PUSH_PROPERTY_SOURCE_NAME = "peekabootNoPushDefaults";
     private static final String DEV_TOOLBAR_PROPERTY_SOURCE_NAME = "peekabootDevToolbarDefaults";
     private static final String WEB_APPLICATION_TYPE_PROPERTY = "spring.main.web-application-type";
@@ -60,7 +59,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
-        boolean localDevelopment = localDevelopment();
+        LocalDevDetector.LaunchKind launchKind = launchKind();
+        boolean localDevelopment = launchKind == LocalDevDetector.LaunchKind.LOCAL_DEV;
         boolean enabled = environment.getProperty(PeekabootPropertyKeys.ENABLED, Boolean.class, localDevelopment);
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
 
@@ -71,9 +71,13 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         detected.put(PeekabootPropertyKeys.ENABLED, localDevelopment);
         detected.put(PeekabootPropertyKeys.DEV_TOOLBAR, localDevelopment);
         detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
-        contribute(environment, new MapPropertySource(DETECTION_PROPERTY_SOURCE_NAME, detected));
+        // Security follows the deployment launch rather than localDevelopment: a test is
+        // neither, and a consumer's @SpringBootTest must not start being challenged.
+        detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT);
+        contribute(environment, new MapPropertySource(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
-                + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default");
+                + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default, security "
+                + (launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 
@@ -100,8 +104,8 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
     }
 
     /** Overridable for tests: real detection reads the launch context of the current thread. */
-    boolean localDevelopment() {
-        return LocalDevDetector.isLocalDevelopment(Thread.currentThread());
+    LocalDevDetector.LaunchKind launchKind() {
+        return LocalDevDetector.launchKind(Thread.currentThread());
     }
 
     /**
