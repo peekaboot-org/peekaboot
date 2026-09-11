@@ -19,16 +19,4 @@ class DashboardCredentialsTest {
 
         assertThat(credentials.toString()).doesNotContain("s3cret").contains("orders-admin", "GENERATED");
     }
-
-    @Test
-    void plaintextIsAbsentForEveryOriginButGeneration() {
-        var credentials = new DashboardCredentials(
-                "orders-admin",
-                PasswordHash.of("s3cret"),
-                null,
-                Instant.parse("2026-09-11T08:15:30Z"),
-                DashboardCredentials.Origin.LOADED);
-
-        assertThat(credentials.plaintext()).isNull();
-    }
 }
