@@ -1,18 +1,18 @@
 package org.peekaboot.backend.lifecycle;
 
-/** The frame Peekaboot's lifecycle banners are drawn in, shared so the two cannot drift apart. */
-final class LifecycleBanner {
+/** The frame Peekaboot's startup and shutdown banners are drawn in, shared so they cannot drift apart. */
+public final class LifecycleBanner {
 
-    static final String SEPARATOR =
+    public static final String SEPARATOR =
             "===========================================================================================";
 
-    static final String LINE =
+    public static final String LINE =
             " ------------------------------------------------------------------------------------------";
 
     private LifecycleBanner() {}
 
     /** Opens a banner with its title block, ready for the report's own lines. */
-    static StringBuilder open(String title) {
+    public static StringBuilder open(String title) {
         return new StringBuilder()
                 .append("\n")
                 .append(SEPARATOR)
@@ -25,11 +25,11 @@ final class LifecycleBanner {
     }
 
     /** One line of the report, closed by the rule that separates it from the next. */
-    static void line(StringBuilder report, String text) {
+    public static void line(StringBuilder report, String text) {
         report.append(text).append("\n").append(LINE).append("\n");
     }
 
-    static void close(StringBuilder report) {
+    public static void close(StringBuilder report) {
         report.append(SEPARATOR);
     }
 }
