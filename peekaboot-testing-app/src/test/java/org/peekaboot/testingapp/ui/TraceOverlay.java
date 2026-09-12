@@ -20,6 +20,7 @@ final class TraceOverlay extends ShadowHost {
     TraceOverlay awaitLoaded() {
         page.waitForSelector(HOST);
         waitForGone(".pk-overlay__loading");
+        Fonts.awaitReady(page);
         return this;
     }
 
