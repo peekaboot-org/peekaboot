@@ -2,6 +2,7 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.within;
 
 import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Locator;
@@ -16,9 +17,11 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
+import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 import org.peekaboot.backend.tracing.config.PeekabootTracingProperties;
 import org.peekaboot.backend.tracing.store.TraceStore;
@@ -70,6 +73,9 @@ class DashboardTabsIT extends PlaywrightTestBase {
 
     /** A duration as format.js renders it: a number and its unit ("850ms", "1.23s", "1.50m"). */
     private static final Pattern RENDERED_DURATION = Pattern.compile("([0-9.]+)(ms|s|m)$");
+
+    /** Layout edges compare to within a pixel: grid tracks land on subpixel positions. */
+    private static final Offset<Double> ONE_PIXEL = within(1.0);
 
     /**
      * Puts an ordinary HTTP_REQUEST trace in the store by loading the page under the dev
@@ -147,6 +153,43 @@ class DashboardTabsIT extends PlaywrightTestBase {
         return traceId;
     }
 
+    /** One Overview stat tile, by the id its insights config gives it. */
+    private static String tile(String tileId) {
+        return "#insights-tiles .pk-insight-tile[data-tile-id='" + tileId + "']";
+    }
+
+    /** An element's border box in viewport pixels, as getBoundingClientRect reports it. */
+    private record Box(double left, double right, double top, double bottom) {
+        double width() {
+            return right - left;
+        }
+    }
+
+    private Box box(String selector) {
+        @SuppressWarnings("unchecked")
+        Map<String, Number> rect = (Map<String, Number>) page.evalOnSelector(
+                selector,
+                "el => { const r = el.getBoundingClientRect();"
+                        + " return {left: r.left, right: r.right, top: r.top, bottom: r.bottom}; }");
+        return new Box(
+                rect.get("left").doubleValue(),
+                rect.get("right").doubleValue(),
+                rect.get("top").doubleValue(),
+                rect.get("bottom").doubleValue());
+    }
+
+    /** The card grid's own row gap at two columns, the spacing every stacked Overview section keeps. */
+    private double cardRowGap() {
+        return box("#spring-card").top() - box("#build-card").bottom();
+    }
+
+    /** Two tiles side by side on one row, together spanning {@code column} edge to edge. */
+    private static void assertPairSpans(Box leftTile, Box rightTile, Box column) {
+        assertThat(rightTile.top()).as("the pair shares a row").isCloseTo(leftTile.top(), ONE_PIXEL);
+        assertThat(leftTile.left()).as("the pair's left edge").isCloseTo(column.left(), ONE_PIXEL);
+        assertThat(rightTile.right()).as("the pair's right edge").isCloseTo(column.right(), ONE_PIXEL);
+    }
+
     /**
      * Both values travel the actuator endpoints and the mappers before they reach a row, so
      * pinning them to the running JVM's own is what tells a real render from a card of
@@ -209,6 +252,101 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(page.textContent("#insights-tiles [data-tile-id='uptime'] .pk-insight-tile__value"))
                 .as("a live tile resolves in a real app")
                 .isNotEqualTo("-");
+    }
+
+    /**
+     * Beside two card columns the four stat tiles share one row, each pair spanning one card
+     * column edge to edge.
+     */
+    @Test
+    void theInsightTilesLineUpWithTheTwoCardColumns() {
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+
+        Box startedAt = box(tile("started-at"));
+        Box readyTime = box(tile("ready-time"));
+        assertPairSpans(startedAt, box(tile("startup-time")), box("#build-card"));
+        assertPairSpans(readyTime, box(tile("uptime")), box("#git-card"));
+        assertThat(readyTime.top()).as("both pairs share one row").isCloseTo(startedAt.top(), ONE_PIXEL);
+    }
+
+    /**
+     * Over a single card column the stat tiles form a two-by-two, both rows spanning the cards
+     * edge to edge.
+     */
+    @Test
+    void theInsightTilesFormATwoByTwoOverASingleCardColumn() {
+        page.setViewportSize(600, 900);
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+
+        Box cards = box("#build-card");
+        Box startedAt = box(tile("started-at"));
+        Box startupTime = box(tile("startup-time"));
+        Box readyTime = box(tile("ready-time"));
+        assertPairSpans(startedAt, startupTime, cards);
+        assertPairSpans(readyTime, box(tile("uptime")), cards);
+        assertThat(readyTime.top()).as("the second pair wraps below the first").isGreaterThan(startedAt.bottom());
+        assertThat(readyTime.right()).as("the columns line up row to row").isCloseTo(startedAt.right(), ONE_PIXEL);
+        assertThat(startupTime.width()).as("two equal columns").isCloseTo(startedAt.width(), ONE_PIXEL);
+    }
+
+    /**
+     * The health banner, and its details once opened, stack between the stat tiles and the cards,
+     * one card row gap apart.
+     */
+    @Test
+    void theHealthBannerAndItsDetailsSitBetweenTheTilesAndTheCards() {
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+        double gap = cardRowGap();
+
+        Box banner = box("#health-banner");
+        assertThat(banner.top() - box("#insights-tiles").bottom())
+                .as("tiles to banner")
+                .isCloseTo(gap, ONE_PIXEL);
+        assertThat(box("#build-card").top() - banner.bottom())
+                .as("banner to cards")
+                .isCloseTo(gap, ONE_PIXEL);
+
+        page.click("#health-banner");
+        page.waitForSelector("#health-components");
+
+        Box details = box("#health-components");
+        assertThat(details.top() - box("#health-banner").bottom())
+                .as("banner to details")
+                .isCloseTo(gap, ONE_PIXEL);
+        assertThat(box("#build-card").top() - details.bottom())
+                .as("details to cards")
+                .isCloseTo(gap, ONE_PIXEL);
+    }
+
+    /** With insights off the health banner leads the Overview from where the tile row would have started. */
+    @Test
+    void withInsightsOffTheHealthBannerTakesTheTileRowsPlace() {
+        openDashboard();
+        page.waitForSelector(tile("uptime"));
+        double tileRowOffset =
+                box("#insights-tiles").top() - box("#overview-tab").top();
+
+        page.route("**/peekaboot/api/features", route -> {
+            APIResponse features = route.fetch();
+            route.fulfill(new Route.FulfillOptions()
+                    .setResponse(features)
+                    .setBody(features.text().replace("\"insights\":true", "\"insights\":false")));
+        });
+        openDashboard();
+        assertThat(page.isVisible(Dashboard.tabButton("insights")))
+                .as("the insights flag was flipped")
+                .isFalse();
+
+        Box banner = box("#health-banner");
+        assertThat(banner.top() - box("#overview-tab").top())
+                .as("the banner starts where the tile row did")
+                .isCloseTo(tileRowOffset, ONE_PIXEL);
+        assertThat(box("#build-card").top() - banner.bottom())
+                .as("banner to cards")
+                .isCloseTo(cardRowGap(), ONE_PIXEL);
     }
 
     @Test
@@ -459,6 +597,44 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .as("jvm.memory matches some meters but not all of them: %s", readout)
                 .isPositive()
                 .isLessThan(Integer.parseInt(counts.group(2)));
+    }
+
+    /** Every meter's type badge fits its column whole, clipped nowhere and clear of the unit beside it. */
+    @Test
+    void everyMeterTypeBadgeFitsItsColumn() {
+        openDashboard();
+        dashboard.openTab("meters");
+
+        assertThat(page.locator("#meters-list .pk-group__meta .pk-badge").allTextContents())
+                .as("the app registers a long task timer, the longest type it has")
+                .contains("LONG_TASK_TIMER");
+        assertThat(meterTypeBadgesOutsideTheirColumn("#meters-list")).isEmpty();
+    }
+
+    /**
+     * The meta columns are wide enough to push a phone-width header off screen while they share
+     * the name's row, squeezing the name itself to nothing. Below the stylesheet's breakpoint
+     * they take a row of their own instead.
+     */
+    @Test
+    void meterGroupHeadersFitAPhoneViewport() {
+        page.setViewportSize(375, 800);
+        openDashboard();
+        dashboard.openTab("meters");
+
+        double sidewaysScroll = ((Number) page.evaluate(
+                        "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"))
+                .doubleValue();
+        double narrowestName = ((Number) page.evaluate("""
+                        () => Math.min(...[...document.querySelectorAll('#meters-list .pk-group__name')]
+                            .map(name => name.getBoundingClientRect().width
+                                / name.closest('.pk-group__header').getBoundingClientRect().width))
+                        """)).doubleValue();
+
+        assertThat(sidewaysScroll).as("pixels the page scrolls sideways").isNotPositive();
+        assertThat(narrowestName)
+                .as("the narrowest metric name's share of its header")
+                .isGreaterThan(0.5);
     }
 
     /**

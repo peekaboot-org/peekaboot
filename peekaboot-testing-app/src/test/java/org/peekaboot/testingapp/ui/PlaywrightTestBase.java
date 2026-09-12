@@ -453,6 +453,27 @@ abstract class PlaywrightTestBase {
     }
 
     /**
+     * The meter group headers under {@code scope} whose type badge does not fit its column: the
+     * name clipped inside the badge, or the badge painted past its column onto the unit cell.
+     */
+    @SuppressWarnings("unchecked")
+    protected List<String> meterTypeBadgesOutsideTheirColumn(String scope) {
+        return (List<String>) page.evaluate("""
+                scope => [...document.querySelectorAll(scope + ' .pk-group__meta')].flatMap(meta => {
+                    const badge = meta.querySelector('.pk-badge');
+                    const unit = meta.querySelector('.pk-metric__unit');
+                    const name = meta.parentElement.querySelector('.pk-group__name').textContent;
+                    const problems = [];
+                    if (badge.scrollWidth > badge.clientWidth) problems.push('clipped');
+                    if (badge.getBoundingClientRect().right > unit.getBoundingClientRect().left) {
+                        problems.push('over the unit');
+                    }
+                    return problems.length ? [name + ': ' + badge.textContent + ' ' + problems.join(', ')] : [];
+                })
+                """, scope);
+    }
+
+    /**
      * Seeds the shared theme preference before any Peekaboot script runs.
      * Note: {@code addInitScript} re-runs on every navigation of this page, not just the
      * first — a test that toggles the theme and then reloads will see the seeded value

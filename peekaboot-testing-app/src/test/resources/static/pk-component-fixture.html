@@ -56,6 +56,19 @@
         </div>
     </div>
 
+    <!-- a meter group header exactly as dashboard/tabs/meters.js's decorateGroupHeaders builds it -->
+    <div class="pk-group" id="meter-group">
+        <button type="button" class="pk-group__header" aria-expanded="false" aria-controls="meter-group-list">
+            <span class="pk-group__name pk-group__name--mono">jetty.connections.bytes.in</span>
+            <span class="pk-group__meta">
+                <span class="pk-badge pk-badge--info">DISTRIBUTION_SUMMARY</span>
+                <span class="pk-metric__unit">bytes</span>
+                <span class="pk-group__count">1 measurement</span>
+            </span>
+        </button>
+        <div class="pk-group__list" id="meter-group-list" hidden></div>
+    </div>
+
     <div class="pk-meter" id="meter-base">
         <div class="pk-meter__fill" id="meter-fill-base" style="width:40%"></div>
     </div>
