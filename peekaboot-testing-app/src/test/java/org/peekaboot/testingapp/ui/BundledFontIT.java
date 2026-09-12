@@ -12,16 +12,17 @@ import org.junit.jupiter.api.Test;
  * Every surface renders in the bundled Geist, served from the jar and never from a CDN.
  *
  * <p>The toolbar and the overlay each get their own test because an {@code @font-face} rule
- * cannot reach them. CSS Shadow Parts scopes font family names to the tree that declares
- * them, with upward fallback only: a document-level {@code @font-face} is visible inside a
- * shadow tree, one declared inside a shadow root is ignored. Peekaboot contributes no
- * document-level CSS to a host page, so tokens.css styles the dashboard and would silently
- * leave both injected surfaces on system fonts - a regression that looks like nothing at all
- * unless each shadow-rooted surface is asserted separately.
+ * cannot reach them. CSS scopes font family names to the tree that declares them, with
+ * upward fallback only: a document-level {@code @font-face} is visible inside a shadow tree,
+ * one declared inside a shadow root is ignored. Peekaboot contributes no document-level CSS
+ * to a host page, so tokens.css styles the dashboard and would silently leave both injected
+ * surfaces on system fonts - a regression that looks like nothing at all unless each
+ * shadow-rooted surface is asserted separately.
  *
- * <p>Each probe asserts the family is really being used, not merely named: it measures the
- * same string with the family and against the default monospace, since a computed
- * {@code font-family} reads back the CSS list whether or not any of it resolved.
+ * <p>Each probe measures text the surface really renders, not a span of its own: the same
+ * node with the family the cascade gives it, then again with the bundled family struck out
+ * of that list. A face that loaded but never reached the page measures the same both ways
+ * and fails here, which is the case {@code font-display: optional} licences outright.
  */
 class BundledFontIT extends PlaywrightTestBase {
 
@@ -32,33 +33,35 @@ class BundledFontIT extends PlaywrightTestBase {
     private static final String FONT_PATH = "/peekaboot/ui/vendor/geist/";
 
     /**
-     * Loads {@code family}, then reports whether it is loaded, whether it renders differently
-     * from the default monospace (proof the glyphs are the bundled face rather than a
-     * fallback), and what {@code selector} computes its family to. {@code root} is the
-     * document or a shadow root; the probe is appended into that same tree, so a shadow
-     * surface is measured in the scope it actually renders in.
+     * Loads {@code family}, then measures {@code selector}'s own text twice: once as the
+     * cascade renders it, once with {@code family} removed from that element's font stack.
+     * Equal widths mean the page is painting the fallback whatever it asks for. {@code root}
+     * is the document or a shadow root, so a shadow surface is measured in the scope it
+     * really renders in. A Range is used rather than the element box because a block element
+     * measures its container, not its glyphs.
      */
     private static final String FONT_PROBE = """
             async (root, args) => {
                 const [family, selector] = args;
-                const styled = root.querySelector(selector);
-                const size = getComputedStyle(styled).fontSize;
-                const shorthand = size + ' "' + family + '"';
-                await document.fonts.load(shorthand);
-                const probe = document.createElement('span');
-                probe.textContent = 'Peekaboot 0123456789';
-                probe.style.cssText =
-                    'position:absolute;visibility:hidden;white-space:pre;font-size:' + size;
-                (root.body ?? root).appendChild(probe);
-                probe.style.fontFamily = '"' + family + '", monospace';
-                const withFamily = probe.getBoundingClientRect().width;
-                probe.style.fontFamily = 'monospace';
-                const withoutFamily = probe.getBoundingClientRect().width;
-                probe.remove();
+                const node = root.querySelector(selector);
+                const style = getComputedStyle(node);
+                const declared = style.fontFamily;
+                await document.fonts.load(style.fontSize + ' "' + family + '"');
+                const range = document.createRange();
+                range.selectNodeContents(node);
+                const painted = range.getBoundingClientRect().width;
+                const inlineBefore = node.style.fontFamily;
+                node.style.fontFamily = declared.split(',')
+                    .filter(entry => entry.trim().replace(/['"]/g, '') !== family)
+                    .join(',');
+                const withoutTheFamily = range.getBoundingClientRect().width;
+                node.style.fontFamily = inlineBefore;
                 return {
-                    loaded: document.fonts.check(shorthand),
-                    rendersDifferentlyFromTheFallback: withFamily > 0 && withFamily !== withoutFamily,
-                    declared: getComputedStyle(styled).fontFamily
+                    loadedFace: [...document.fonts].some(face =>
+                        face.family.replace(/['"]/g, '') === family && face.status === 'loaded'),
+                    paintedWidth: painted,
+                    fallbackWidth: withoutTheFamily,
+                    firstDeclared: declared.split(',')[0].trim().replace(/['"]/g, '')
                 };
             }
             """;
@@ -67,21 +70,14 @@ class BundledFontIT extends PlaywrightTestBase {
     void theDashboardRendersInTheBundledSans() {
         openDashboard();
 
-        assertRendersIn(probeDocument(SANS, "body"), SANS);
+        assertRendersIn(probeDocument(SANS, ".pk-header h1"), SANS);
     }
 
     @Test
     void theDashboardRendersMonospaceTextInTheBundledMono() {
         openDashboard();
 
-        Map<String, Object> probe = probeDocument(MONO, "body");
-        assertThat(probe.get("loaded")).as("%s is loaded from the jar", MONO).isEqualTo(true);
-        assertThat(probe.get("rendersDifferentlyFromTheFallback"))
-                .as("%s renders its own glyphs, not the fallback's", MONO)
-                .isEqualTo(true);
-        assertThat(cssVar(":root", "--pk-font-mono"))
-                .as("the mono token leads with the bundled family")
-                .startsWith(MONO);
+        assertRendersIn(probeDocument(MONO, "#build-info .pk-kv__key"), MONO);
     }
 
     /** The bar is shadow-rooted, so tokens.css's @font-face never reaches it. */
@@ -90,7 +86,7 @@ class BundledFontIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.traceId();
 
-        assertRendersIn(toolbar.evaluate(FONT_PROBE, List.of(SANS, ".pk-toolbar")), SANS);
+        assertRendersIn(toolbar.evaluate(FONT_PROBE, List.of(SANS, ".pk-toolbar__path")), SANS);
     }
 
     /** The overlay is shadow-rooted too, and opens over host pages the dashboard's CSS never touched. */
@@ -99,7 +95,7 @@ class BundledFontIT extends PlaywrightTestBase {
         openPersonsPage();
         toolbar.openOverlay();
 
-        assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-overlay")), SANS);
+        assertRendersIn(overlay.evaluate(FONT_PROBE, List.of(SANS, ".pk-overlay__title-method")), SANS);
     }
 
     /**
@@ -134,21 +130,32 @@ class BundledFontIT extends PlaywrightTestBase {
         assertThat(statuses.keySet()).allSatisfy(url -> assertThat(url).startsWith(baseUrl + FONT_PATH));
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> probeDocument(String family, String selector) {
-        return (Map<String, Object>)
-                page.evaluate("args => (" + FONT_PROBE + ")(document, args)", List.of(family, selector));
+        return asProbe(page.evaluate("args => (" + FONT_PROBE + ")(document, args)", List.of(family, selector)));
+    }
+
+    private static void assertRendersIn(Object probeResult, String family) {
+        Map<String, Object> probe = asProbe(probeResult);
+        double painted = ((Number) probe.get("paintedWidth")).doubleValue();
+        double fallback = ((Number) probe.get("fallbackWidth")).doubleValue();
+
+        assertThat(probe.get("loadedFace"))
+                .as("a face named %s is registered on the document and has loaded", family)
+                .isEqualTo(true);
+        assertThat(probe.get("firstDeclared"))
+                .as("the surface asks for %s ahead of the system stack", family)
+                .isEqualTo(family);
+        assertThat(painted).as("the measured node renders some text").isGreaterThan(0.0);
+        assertThat(painted)
+                .as(
+                        "the node's own text measures differently without %s in its stack; the same "
+                                + "width both ways means the page painted the fallback",
+                        family)
+                .isNotEqualTo(fallback);
     }
 
     @SuppressWarnings("unchecked")
-    private static void assertRendersIn(Object probeResult, String family) {
-        Map<String, Object> probe = (Map<String, Object>) probeResult;
-        assertThat(probe.get("loaded")).as("%s is loaded from the jar", family).isEqualTo(true);
-        assertThat(probe.get("rendersDifferentlyFromTheFallback"))
-                .as("%s renders its own glyphs, not a system fallback's", family)
-                .isEqualTo(true);
-        assertThat((String) probe.get("declared"))
-                .as("the surface asks for %s ahead of the system stack", family)
-                .startsWith(family);
+    private static Map<String, Object> asProbe(Object probeResult) {
+        return (Map<String, Object>) probeResult;
     }
 }
