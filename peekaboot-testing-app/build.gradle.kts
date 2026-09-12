@@ -93,6 +93,13 @@ gitProperties {
 // Maven build (peekaboot.it.threads in gradle.properties, 1 serializes for debugging).
 tasks.named<Test>("integrationTest") {
     val threads = providers.gradleProperty("peekaboot.it.threads").getOrElse("2")
+    val browser = providers.gradleProperty("peekaboot.it.browser").getOrElse("chromium")
+    systemProperty("peekaboot.it.browser", browser)
+    // Same split as the Maven per-engine profiles: only Chromium runs the tests whose
+    // subject is Chromium's own behaviour.
+    if (browser != "chromium") {
+        useJUnitPlatform { excludeTags("chromium-only") }
+    }
     systemProperty("junit.jupiter.execution.parallel.enabled", "true")
     systemProperty("junit.jupiter.execution.parallel.mode.default", "same_thread")
     systemProperty("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")

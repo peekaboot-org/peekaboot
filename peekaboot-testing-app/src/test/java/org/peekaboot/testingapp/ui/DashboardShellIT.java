@@ -10,9 +10,25 @@ import com.microsoft.playwright.options.WaitUntilState;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 class DashboardShellIT extends PlaywrightTestBase {
+
+    /**
+     * Collects the documents that load, minus the {@code about:blank} a fresh context starts
+     * on: Firefox fires a load event for that one and Chromium does not, and it is not a
+     * document any of these tests is counting.
+     */
+    private List<String> recordDocumentLoads() {
+        List<String> documents = new ArrayList<>();
+        page.onLoad(loaded -> {
+            if (!"about:blank".equals(loaded.url())) {
+                documents.add(loaded.url());
+            }
+        });
+        return documents;
+    }
 
     /**
      * The dashboard is the one Peekaboot surface a user reaches without already knowing the
@@ -152,6 +168,9 @@ class DashboardShellIT extends PlaywrightTestBase {
      * a reconnect of its own, and once the tab has loaded its level the data endpoint is
      * refused too, so the resync the reconnect triggers has to fail.
      */
+    // Firefox closes an EventSource whose first connection was refused instead of reconnecting,
+    // so the resync this test provokes never happens there.
+    @Tag("chromium-only")
     @Test
     void insightsResyncFailureIsCaughtRatherThanEscapingAsAPageError() {
         List<String> pageErrors = new ArrayList<>();
@@ -186,8 +205,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void aScriptThatNeverArrivesRaisesTheBannerAfterTheReloadFailsToo() {
-        List<String> documents = new ArrayList<>();
-        page.onLoad(loaded -> documents.add(loaded.url()));
+        List<String> documents = recordDocumentLoads();
         page.route("**/peekaboot/ui/dashboard/tabs/meters.js", route -> route.abort());
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
@@ -209,8 +227,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
-        List<String> documents = new ArrayList<>();
-        page.onLoad(loaded -> documents.add(loaded.url()));
+        List<String> documents = recordDocumentLoads();
         page.route(
                 "**/peekaboot/ui/dashboard/tabs/meters.js",
                 route -> route.abort(),
@@ -249,8 +266,7 @@ class DashboardShellIT extends PlaywrightTestBase {
      */
     @Test
     void aModuleLostAfterTheDashboardIsUpDoesNotReloadIt() {
-        List<String> documents = new ArrayList<>();
-        page.onLoad(loaded -> documents.add(loaded.url()));
+        List<String> documents = recordDocumentLoads();
         openDashboard();
 
         page.evaluate("() => new Promise(resolve => {"

@@ -2,11 +2,9 @@ package org.peekaboot.testingapp.ui;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Request;
 import com.microsoft.playwright.Route;
-import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,36 +26,80 @@ class InsightsTabIT extends PlaywrightTestBase {
 
     /**
      * A left-to-right drag across the middle of a chart's plotting area - uPlot's
-     * drag-select gesture. Targets .u-over (uPlot's own pointer-event-receiving overlay),
-     * not the canvas: the canvas's left edge sits under the y-axis label gutter
-     * (~60px), which would skew the selected window if used as the drag's origin.
-     * {@code dist} on cursor.drag defaults to 0, so any non-zero width selects.
+     * drag-select gesture.
+     *
+     * <p>Dispatched rather than driven through {@code page.mouse()}: uPlot ignores a
+     * mousemove that reports no movement at all while a drag is in progress (its guard
+     * against phantom moves), and Playwright's WebKit engine synthesizes every move with
+     * movementX/movementY of 0, so a real-mouse drag selects nothing there. The release goes
+     * to the document, which is where uPlot listens for it once a drag has started.
+     *
+     * <p>Targets .u-over (uPlot's own pointer-event-receiving overlay), not the canvas: the
+     * canvas's left edge sits under the y-axis label gutter (~60px), which would skew the
+     * selected window if used as the drag's origin. {@code dist} on cursor.drag defaults to
+     * 0, so any non-zero width selects.
      */
+    private static final String DRAG_SELECT = """
+            panelSelector => {
+                const over = document.querySelector(panelSelector + ' .u-over');
+                const box = over.getBoundingClientRect();
+                const y = box.top + box.height / 2;
+                const from = box.left + box.width * 0.25;
+                const to = box.left + box.width * 0.75;
+                const steps = 10;
+                const step = (to - from) / steps;
+                const fire = (target, type, x, movementX, buttons) => target.dispatchEvent(new MouseEvent(type, {
+                    bubbles: true, cancelable: true, view: window,
+                    clientX: x, clientY: y, button: 0, buttons, movementX, movementY: 0
+                }));
+                fire(over, 'mousedown', from, 0, 1);
+                for (let i = 1; i <= steps; i++) {
+                    fire(over, 'mousemove', from + step * i, step, 1);
+                }
+                fire(document, 'mouseup', to, 0, 0);
+            }
+            """;
+
     private void dragZoomOnChart(String panelSelector) {
-        BoundingBox box = page.locator(panelSelector + " .u-over").boundingBox();
-        double y = box.y + box.height / 2.0;
-        double left = box.x + box.width * 0.25;
-        double right = box.x + box.width * 0.75;
-        Mouse mouse = page.mouse();
-        mouse.move(left, y);
-        mouse.down();
-        mouse.move(right, y, new Mouse.MoveOptions().setSteps(10));
-        mouse.up();
+        page.evaluate(DRAG_SELECT, panelSelector);
+    }
+
+    /** The width of the x window a panel is charting, off its own setScale readback. */
+    private double chartedSpan(String panelSelector) {
+        return Double.parseDouble(page.getAttribute(panelSelector, "data-zoom-max"))
+                - Double.parseDouble(page.getAttribute(panelSelector, "data-zoom-min"));
     }
 
     /**
-     * Every chart auto-ranges its x scale on construction, so data-zoom-min/-max (see
-     * insights-chart.js's setScale hook) is never absent once a chart exists - only ever
-     * different. A zoom/reset is proven by that value actually changing, not by being set.
+     * Waits until the panel charts a window materially narrower than {@code previousSpan}.
+     *
+     * <p>The narrowing is what proves a drag zoomed. Every chart auto-ranges its x scale on
+     * construction and again on every live tick, so data-zoom-min/-max (see
+     * insights-chart.js's setScale hook) is never absent, and once the level's ring is full
+     * the window's left edge moves on its own with every tick: a wait on "that value
+     * changed" is satisfied by a tick that zoomed nothing. An auto-range never narrows the
+     * window, and the gesture selects the middle half of the plot, so a drag roughly halves
+     * it.
      */
-    private void waitForZoomMinChange(String panelSelector, String previousValue) {
-        waitForZoomMinChange(panelSelector, previousValue, 30000);
+    private void waitForZoomIn(String panelSelector, double previousSpan) {
+        page.waitForFunction(
+                "([sel, previous]) => { const el = document.querySelector(sel); if (!el) return false;"
+                        + " const span = Number(el.dataset.zoomMax) - Number(el.dataset.zoomMin);"
+                        + " return span > 0 && span < previous * 0.8; }",
+                List.of(panelSelector, previousSpan),
+                new Page.WaitForFunctionOptions().setTimeout(30000));
     }
 
-    private void waitForZoomMinChange(String panelSelector, String previousValue, int timeoutMs) {
+    /** Waits until the panel's window has widened back out well past {@code zoomedSpan} - a reset. */
+    private void waitForZoomOut(String panelSelector, double zoomedSpan) {
+        waitForZoomOut(panelSelector, zoomedSpan, 30000);
+    }
+
+    private void waitForZoomOut(String panelSelector, double zoomedSpan, int timeoutMs) {
         page.waitForFunction(
-                "([sel, prev]) => document.querySelector(sel)?.getAttribute('data-zoom-min') !== prev",
-                List.of(panelSelector, previousValue),
+                "([sel, zoomed]) => { const el = document.querySelector(sel); if (!el) return false;"
+                        + " return Number(el.dataset.zoomMax) - Number(el.dataset.zoomMin) > zoomed * 1.5; }",
+                List.of(panelSelector, zoomedSpan),
                 new Page.WaitForFunctionOptions().setTimeout(timeoutMs));
     }
 
@@ -292,13 +334,12 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForSelector(load + " canvas");
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
 
-        String cpuBefore = page.getAttribute(cpu, "data-zoom-min");
+        double cpuSpanBefore = chartedSpan(cpu);
         dragZoomOnChart(cpu);
-        waitForZoomMinChange(cpu, cpuBefore);
+        waitForZoomIn(cpu, cpuSpanBefore);
 
         String cpuMin = page.getAttribute(cpu, "data-zoom-min");
         String cpuMax = page.getAttribute(cpu, "data-zoom-max");
-        assertThat(cpuMin).isNotEqualTo(cpuBefore);
         assertThat(page.getAttribute(load, "data-zoom-min")).isEqualTo(cpuMin);
         assertThat(page.getAttribute(load, "data-zoom-max")).isEqualTo(cpuMax);
         assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
@@ -326,27 +367,23 @@ class InsightsTabIT extends PlaywrightTestBase {
         String cpu = "#insights-panels .pk-insight-panel[data-panel-id='cpu']";
         page.waitForSelector(cpu + " canvas");
 
-        String initialMin = page.getAttribute(cpu, "data-zoom-min");
+        double initialSpan = chartedSpan(cpu);
         dragZoomOnChart(cpu);
-        waitForZoomMinChange(cpu, initialMin);
+        waitForZoomIn(cpu, initialSpan);
         assertThat(page.isVisible("#insights-zoom-reset")).isTrue();
 
-        String zoomedMin = page.getAttribute(cpu, "data-zoom-min");
-        double zoomedSpan = Double.parseDouble(page.getAttribute(cpu, "data-zoom-max")) - Double.parseDouble(zoomedMin);
-
+        double zoomedSpan = chartedSpan(cpu);
         page.click("#insights-zoom-reset");
-        waitForZoomMinChange(cpu, zoomedMin, 5000);
-
-        double resetSpan = Double.parseDouble(page.getAttribute(cpu, "data-zoom-max"))
-                - Double.parseDouble(page.getAttribute(cpu, "data-zoom-min"));
-        assertThat(resetSpan)
-                .as("the window widens back out to the full data extent on reset")
-                .isGreaterThan(zoomedSpan);
+        waitForZoomOut(cpu, zoomedSpan, 5000);
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
 
         // live updates reach the readout again once the stream is let back in, exactly as
         // before a zoom/reset cycle - proves the reset did not leave anything wedged
         page.unroute("**/api/insights/stream");
+        // Firefox gives up on the aborted stream for good (readyState CLOSED, see
+        // insights-stream.js) where the other engines retry it themselves, so the reopen is
+        // driven here rather than left to the 30s refresh cycle this wait would be racing.
+        page.click("#refresh-btn");
         String value = cpu + " .pk-insight-current";
         page.waitForFunction("(selector) => document.querySelector(selector)?.textContent.trim()", value);
         String before = page.textContent(value);
@@ -376,16 +413,16 @@ class InsightsTabIT extends PlaywrightTestBase {
         page.waitForSelector(cpu + " canvas");
         page.waitForSelector(load + " canvas");
 
-        String cpuInitial = page.getAttribute(cpu, "data-zoom-min");
+        double cpuInitialSpan = chartedSpan(cpu);
         dragZoomOnChart(cpu);
-        waitForZoomMinChange(cpu, cpuInitial);
-        String cpuZoomed = page.getAttribute(cpu, "data-zoom-min");
+        waitForZoomIn(cpu, cpuInitialSpan);
+        double cpuZoomedSpan = chartedSpan(cpu);
 
         // uPlot's cursor overlay (.u-over) sits above the canvas and is what actually
         // receives pointer events - the element Playwright must click, not the canvas itself
         page.locator(load + " .u-over").dblclick();
 
-        waitForZoomMinChange(cpu, cpuZoomed);
+        waitForZoomOut(cpu, cpuZoomedSpan);
         assertThat(page.isVisible("#insights-zoom-reset")).isFalse();
     }
 

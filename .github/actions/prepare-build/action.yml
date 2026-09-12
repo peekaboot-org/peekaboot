@@ -1,9 +1,9 @@
 name: prepare-build
 description: >
-  Everything both build workflows do between the checkout and their Maven build: JDK,
-  Chromium cache, the reactor's SNAPSHOTs, Chromium. The checkout itself stays in the
-  workflow, because a local action resolves from the runner's workspace and so cannot run
-  before it. See BUILD.md, CI.
+  Everything the build workflows do between the checkout and their Maven build: JDK, the
+  Playwright browser cache, the reactor's SNAPSHOTs, the browsers themselves. The checkout
+  itself stays in the workflow, because a local action resolves from the runner's workspace
+  and so cannot run before it. See BUILD.md, CI.
 
 inputs:
   server-id:
@@ -21,6 +21,17 @@ inputs:
   gpg-passphrase:
     description: Name of the environment variable holding that key's passphrase.
     default: ''
+  browsers:
+    description: >
+      Playwright engines to install, space-separated (chromium, firefox, webkit). The
+      default keeps the push build on chromium alone; the cross-browser workflow asks for
+      one engine per matrix leg.
+    default: chromium
+  with-deps:
+    description: >
+      'true' adds --with-deps, which apt-installs the engines' system libraries and needs
+      passwordless sudo. WebKit on Linux does not start without them.
+    default: 'false'
 
 runs:
   using: composite
@@ -37,8 +48,10 @@ runs:
         gpg-private-key: ${{ inputs.gpg-private-key }}
         gpg-passphrase: ${{ inputs.gpg-passphrase }}
 
-    # Chromium changes with the Playwright version and nothing else, so the cache is
-    # keyed on that property rather than on every pom.
+    # A browser build changes with the Playwright version and nothing else, so the cache is
+    # keyed on that property rather than on every pom. The engine list joins the key because
+    # each matrix leg installs only its own: sharing one entry would have them overwrite it
+    # in turn, and every leg would restore an engine it cannot use.
     - name: playwright-version
       id: playwright
       shell: bash
@@ -48,8 +61,8 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-        restore-keys: playwright-${{ runner.os }}-
+        key: playwright-${{ runner.os }}-${{ inputs.browsers }}-${{ steps.playwright.outputs.version }}
+        restore-keys: playwright-${{ runner.os }}-${{ inputs.browsers }}-
 
     # Explicit install so a cold cache doesn't depend on Playwright.create()'s implicit
     # download happening to work mid-test-run. Two steps, not one: see BUILD.md, CI.
@@ -63,10 +76,12 @@ runs:
 
     # classpathScope=test is required because the playwright dependency is test-scoped;
     # without it exec:java can't find com.microsoft.playwright.CLI.
-    - name: install-playwright-browser
+    - name: install-playwright-browsers
       shell: bash
+      env:
+        PLAYWRIGHT_INSTALL_ARGS: ${{ inputs.with-deps == 'true' && '--with-deps' || '' }} ${{ inputs.browsers }}
       run: >
         ./mvnw --batch-mode -pl peekaboot-testing-app exec:java
         -Dexec.mainClass=com.microsoft.playwright.CLI
         -Dexec.classpathScope=test
-        -Dexec.args="install chromium"
+        -Dexec.args="install $PLAYWRIGHT_INSTALL_ARGS"

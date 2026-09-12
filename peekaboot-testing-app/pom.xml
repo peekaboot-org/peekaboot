@@ -37,7 +37,13 @@
              own runtime through CPU contention faster than the extra overlap pays back.
              Set to 1 to serialize when diagnosing a flaky test. -->
         <peekaboot.it.threads>2</peekaboot.it.threads>
-        <!-- A property, not an inline version: the CI workflows key their Chromium cache on it. -->
+        <!-- Playwright engine the *IT suite drives: chromium, firefox or webkit. The nightly
+             cross-browser workflow runs all three; every other build takes the default. -->
+        <peekaboot.it.browser>chromium</peekaboot.it.browser>
+        <!-- Empty so a chromium run holds nothing back. The per-engine profiles below set it
+             to chromium-only, the tag on tests whose subject is Chromium's own behaviour. -->
+        <peekaboot.it.excludedTags />
+        <!-- A property, not an inline version: the CI workflows key their browser cache on it. -->
         <playwright.version>1.62.0</playwright.version>
         <!-- Not a published artifact: it exists to host the sample app and its UI tests.
              This module does not inherit peekaboot-parent, so the peekaboot-release
@@ -255,6 +261,10 @@
                 <configuration>
                     <argLine>@{jacocoArgLine} -javaagent:${org.mockito:mockito-core:jar}</argLine>
                     <forkCount>${peekaboot.it.forks}</forkCount>
+                    <excludedGroups>${peekaboot.it.excludedTags}</excludedGroups>
+                    <systemPropertyVariables>
+                        <peekaboot.it.browser>${peekaboot.it.browser}</peekaboot.it.browser>
+                    </systemPropertyVariables>
                     <properties>
                         <configurationParameters>
                             junit.jupiter.execution.parallel.enabled = true
@@ -454,6 +464,35 @@
     </build>
 
     <profiles>
+        <!-- Firefox and WebKit hold back the chromium-only tests, whose subject is Chromium's
+             own behaviour rather than peekaboot's. One profile per engine rather than a
+             negated match: an unset property matches a negated value too, which would strip
+             those tests from the default build, and a later chromium channel (chrome, msedge)
+             has to keep running the whole suite. -->
+        <profile>
+            <id>it-firefox</id>
+            <activation>
+                <property>
+                    <name>peekaboot.it.browser</name>
+                    <value>firefox</value>
+                </property>
+            </activation>
+            <properties>
+                <peekaboot.it.excludedTags>chromium-only</peekaboot.it.excludedTags>
+            </properties>
+        </profile>
+        <profile>
+            <id>it-webkit</id>
+            <activation>
+                <property>
+                    <name>peekaboot.it.browser</name>
+                    <value>webkit</value>
+                </property>
+            </activation>
+            <properties>
+                <peekaboot.it.excludedTags>chromium-only</peekaboot.it.excludedTags>
+            </properties>
+        </profile>
         <profile>
             <!-- Mirrors peekaboot-parent's profile of the same id (this module deliberately
                  does not inherit that parent): auto-format on local builds, check-only on
