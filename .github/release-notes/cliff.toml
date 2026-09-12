@@ -1,0 +1,60 @@
+# Release notes for peekaboot, grouped by conventional-commit type.
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+body = """
+{% if version %}\
+## {{ version }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## Unreleased
+{% endif %}
+{% set breaking = commits | filter(attribute="breaking", value=true) | unique(attribute="message") %}\
+{% if breaking | length > 0 %}\
+### Breaking changes
+{% for commit in breaking %}\
+{# A `!` marker with no BREAKING CHANGE footer leaves breaking_description == message. #}\
+{% set detail = commit.breaking_description | default(value="") | split(pat="\n") | first %}\
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{{ commit.message | upper_first }}\
+{% if detail and detail != commit.message %}. {{ detail }}{% endif %}
+{% endfor %}
+{% endif %}\
+{% for group, group_commits in commits | group_by(attribute="group") %}\
+### {{ group | striptags | trim }}
+{% for commit in group_commits | unique(attribute="message") %}\
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{% if commit.breaking %}[**breaking**] {% endif %}\
+{{ commit.message | upper_first }}
+{% endfor %}
+{% endfor %}\
+{% if previous.version %}\
+**Full changelog**: <REPO>/compare/{{ previous.version }}...{% if version %}{{ version }}{% else %}dev{% endif %}
+
+{% endif %}\
+"""
+trim = true
+postprocessors = [
+    { pattern = '<REPO>', replace = "https://github.com/peekaboot-org/peekaboot" },
+]
+
+[git]
+conventional_commits = true
+# Drops merge commits and maven-release-plugin's `[release] ...` commits: neither parses.
+filter_unconventional = true
+protect_breaking_commits = true
+# Only semver tags are release boundaries, so a stray `unreleased` tag cannot become one.
+tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
+commit_parsers = [
+    { message = '^feat', group = "<!-- 01 -->Features" },
+    { message = '^fix', group = "<!-- 02 -->Bug fixes" },
+    { message = '^perf', group = "<!-- 03 -->Performance" },
+    { message = '^build\(deps', group = "<!-- 04 -->Dependency upgrades" },
+    { message = '^revert', group = "<!-- 05 -->Reverts" },
+    { message = '^docs', group = "<!-- 06 -->Documentation" },
+    { message = '^refactor', group = "<!-- 07 -->Internal changes" },
+    { message = '^test', group = "<!-- 08 -->Tests" },
+    { message = '^build|^ci|^chore|^style', group = "<!-- 09 -->Build, CI and chores" },
+]
+# No `.*` catch-all: an unknown type is dropped here and caught by the push gate instead.
+filter_commits = true
+sort_commits = "oldest"
