@@ -414,7 +414,25 @@ invocation resolves whatever is latest that day.
 ### `build-on-push.yml`
 
 Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
-`prepare-build`, then `./mvnw --batch-mode clean verify`.
+`prepare-build`, then `./mvnw --batch-mode clean verify`. After the build it installs
+git-cliff, runs the release-notes tests, gates the pushed commit subjects and writes the
+pending notes into the run summary. The job keeps `contents: read`; none of those steps
+write anything. See [Release notes](#release-notes).
+
+### `draft-release-notes.yml`
+
+Pushes to `dev` only. Renders the unreleased notes and upserts a draft release named
+`Unreleased` on the placeholder tag name `unreleased`, so the notes for the cycle in
+progress are readable on the Releases page rather than only inside a workflow run. A draft
+carries no git tag, since GitHub creates the ref only on publish.
+
+Separate from `build-on-push` because it needs `contents: write`, and that workflow runs on
+every branch including Dependabot's, whose token is read-only. It also stays clear of the
+`build-on-push` check context the `dev` ruleset requires.
+
+The release job deletes the draft once the real release exists. It does not reappear until
+the next real commit on `dev`: the merge-back PR merges with `GITHUB_TOKEN`, and pushes made
+with that token trigger no workflows.
 
 ### `cross-browser.yml`
 
@@ -459,7 +477,10 @@ signs or publishes anything. A push to `main` whose message does not contain `[r
 1. `./mvnw --batch-mode verify`
 2. `./mvnw -P peekaboot-release release:prepare`
 3. `./mvnw -P peekaboot-release release:perform`
-4. GitHub release notes from the new tag, then a pull request `main` → `dev` with
+4. Grouped release notes for the new tag, rendered by git-cliff into the release body;
+   `CHANGELOG.md` regenerated whole and committed to `main` behind the `[release]` prefix;
+   and the `unreleased` draft deleted. See [Release notes](#release-notes).
+5. A pull request `main` → `dev` with
    auto-merge enabled (`gh pr create` + `gh pr merge --auto`), carrying the two `[release]`
    version commits back. A PR and not a push because `dev`'s `green-default-branch` ruleset
    requires the `build-on-push` check and only admins bypass it; a merge commit pushed by
@@ -517,6 +538,49 @@ same ones. The site plugin, which Boot does not manage, was pinned at Maven 3.9.
 binding of 3.12.1; Dependabot has since moved it past. Surefire, failsafe, the compiler
 and the dependency plugin have likewise moved past Boot's pins; the testing-app pins those
 four in its own `pluginManagement`, and Dependabot bumps both poms in one pull request.
+
+### Release notes
+
+Everything lives in `.github/release-notes/`. `cliff.toml` classifies commits by
+conventional-commit type into numbered groups and holds the markdown template, `site.jq`
+reshapes git-cliff's `--context` JSON into the website's data file,
+`check-commit-subjects.sh` is the push gate, and `test/` holds a fixture repo with golden
+files.
+
+`render.sh` is the only place git-cliff is invoked, and it refuses to run without the
+config. That guard earns its keep: `git-cliff --config <missing>` merely warns, falls back
+to its own built-in grouping and still exits 0, so a mistyped path would publish wrongly
+grouped notes with nothing failing.
+
+Commits sharing a subject collapse to one entry even when their bodies differ, because in
+conventional mode git-cliff's `commit.message` holds only the description. Merge commits and
+the `[release]` commits drop out via `filter_unconventional`, neither being conventional.
+`filter_commits` is on with no `.*` catch-all, so an unrecognised type is dropped rather than
+bucketed — which is what the gate is for.
+
+The gate rejects any non-merge subject in the pushed range that is not a conventional commit.
+This is not about the notes: `conventional-commits-version-policy` derives the release
+version from these subjects, so one it cannot parse is a change it cannot weigh. It does not
+enforce the 50-character subject limit, because Dependabot's own `build(deps): bump ...`
+lines routinely exceed it.
+
+Two things in `cliff.toml` are load-bearing. `^build\(deps` must stay above the generic
+`^build`, or every Dependabot commit lands in "Build, CI and chores". And group numbers must
+stay zero-padded to two digits, because git-cliff sorts group names as strings — `<!-- 10 -->`
+would sort ahead of `<!-- 2 -->`. `site.jq` hardcodes groups `00`-`05` as the user-facing set
+the website shows, so a tenth group means editing both files.
+
+The tests need git-cliff on `PATH`; the version and its sha512 are pinned in
+`.github/actions/install-git-cliff`.
+
+```bash
+.github/release-notes/test/run.sh
+```
+
+Its expectations are golden files rendered from a fixture repo with fixed commit dates, so
+they do not drift as `dev` grows. The fixture carries both spellings of a breaking change, a
+subject repeated with a different body, a non-conventional subject, and two tags cut in the
+same second.
 
 ### How the next version is chosen
 
