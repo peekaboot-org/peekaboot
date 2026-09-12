@@ -103,40 +103,37 @@ tool has no business making a host application's pages call a third party.
 Both are the variable woff2 faces from the upstream release, shipped whole rather than
 subset, so one file per family covers every weight the UI asks for. `VERSION` records the
 upstream version, the release it came from and the date. The files are renamed only because
-the upstream names carry square brackets (`Geist[wght].woff2`), which are not legal
-unencoded in a URL path. There is no italic face, so the two rules asking for one get
-synthetic oblique. Both upstream licence files travel with the fonts (`OFL.txt`,
-`LICENSE.txt`) and the root `NOTICE` points at them.
+the upstream names carry square brackets (`Geist[wght].woff2`), illegal unencoded in a URL.
+
+Upstream ships italic faces too; bundling neither is a payload decision, so the two rules
+asking for italic get synthetic oblique. Both upstream licence files travel with the fonts
+(`OFL.txt`, `LICENSE.txt`) and the root `NOTICE` points at them.
 
 `tokens.css` declares the faces and puts them at the front of `--pk-font` and
 `--pk-font-mono`, keeping the system stacks behind them. The dashboard's rules use
 `font-display: optional`, the only value with a no-layout-shift guarantee, which costs
-nothing there because `index.html` preloads both faces. No `size-adjust` or metric overrides
-go with it, because no shipping Safari implements them.
+nothing there because `index.html` preloads both. No `size-adjust`: no shipping Safari has it.
 
 ### Why the shadow surfaces need JavaScript for this
 
 An `@font-face` rule in `tokens.css` styles the dashboard and nothing else. CSS scopes font
-family names to the tree that declares them, with upward fallback only: a document-level
-rule is visible inside a shadow tree, one declared inside a shadow root is ignored. The
-toolbar and the overlay are shadow-rooted, and Peekaboot contributes no document-level CSS
-to a host page, so both would silently go on rendering in the host's system font.
+family names to the tree that declares them, with upward fallback only: a rule declared
+inside a shadow root is ignored. The toolbar and the overlay are shadow-rooted and Peekaboot
+adds no document-level CSS to a host page, so both would go on rendering in its system font.
 
 `shared/fonts.js` registers the same two faces with `document.fonts.add(new FontFace(...))`
-instead. That adds no rule to the host page's cascade, which is the isolation both surfaces
-promise. `toolbar.js` calls it while enhancing the bar, `trace-detail.js` as it opens. The
-call is idempotent and skips a document that already declares the faces, which is the
-dashboard, where `main.js` imports the overlay statically. A missing or blocked file is
-caught and warned about rather than left to surface as the host page's own error.
-`BundledFontIT` asserts all three surfaces separately, because this is the regression that
-looks like nothing at all.
+instead, adding no rule to the host page's cascade, which is the isolation both surfaces
+promise. `toolbar.js` calls it while enhancing the bar, `trace-detail.js` as it opens.
 
-Those two faces are registered with `display: 'swap'`, not the `optional` the dashboard
-uses. They are added only after the host page has loaded, and `optional` licences the
-browser never to paint a face that missed its block period, which is exactly what happened
-before the split: the face loaded and the bar went on rendering in the host's font. The
-repaint a swap costs is confined to Peekaboot's own fixed-position surfaces and never moves
-host content.
+The call is idempotent and skips a document that already declares the faces: the dashboard,
+where `main.js` imports the overlay statically. A missing or blocked file is caught and
+warned about, not left to surface as the host page's own error. `BundledFontIT` asserts all
+three surfaces separately, because this is the regression that looks like nothing at all.
+
+Those two faces use `display: 'swap'`, not the `optional` the dashboard uses. They are added
+only after the host page has loaded, and `optional` licences the browser never to paint a
+face that missed its block period, which is what happened before the split: the face loaded
+and the bar kept the host's font. A swap's repaint stays inside Peekaboot's fixed surfaces.
 
 ### What a host page's CSP needs
 
@@ -146,10 +143,9 @@ has to include `'self'`. No `data:` URIs are involved, so no host has to widen i
 to take them.
 
 The woff2 files are also the one thing under `/peekaboot/ui/**` that does not revalidate.
-`PeekabootWebConfig` serves them `max-age=31536000, immutable`, scoped to `*.woff2` alone:
-the toolbar rides on every page of the host application, and the upstream version in the
-file name is what makes `immutable` honest, since an upgrade changes the URL rather than the
-bytes behind it.
+`PeekabootWebConfig` serves the two of them `max-age=31536000, immutable`, named one by one:
+the toolbar rides on every page of the host application, and the upstream version in the file
+name is what makes `immutable` honest, since an upgrade changes the URL, not the bytes.
 
 ## The icon set
 
