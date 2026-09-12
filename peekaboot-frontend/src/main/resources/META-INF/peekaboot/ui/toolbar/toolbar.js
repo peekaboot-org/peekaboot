@@ -24,6 +24,7 @@ import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {bindTheme} from '../shared/theme.js';
+import {registerBundledFonts} from '../shared/fonts.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
 import {traceStatParts, durationStat} from '../shared/trace-stats.js';
 
@@ -49,6 +50,7 @@ function initToolbar(host, data) {
     // module URL, which is the same place but only the dashboard needs to derive it.
     const client = createClient({basePath: data.basePath});
     bindTheme(host);
+    registerBundledFonts(data.basePath);
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
     // looking, so the notice the server rendered for the opposite case has served its

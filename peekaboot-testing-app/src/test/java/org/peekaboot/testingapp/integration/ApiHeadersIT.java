@@ -50,6 +50,22 @@ class ApiHeadersIT {
     }
 
     /**
+     * The bundled webfont is the one asset under {@code /peekaboot/ui/**} that does not
+     * revalidate. The toolbar is injected into every host-application page, so a revalidating
+     * font would cost a conditional request per page load; the version sits in the file name,
+     * which is what makes {@code immutable} true rather than merely convenient.
+     */
+    @Test
+    void theBundledFontIsCachedForAYearWhileTheRestOfTheUiRevalidates() {
+        HttpHeaders font = api.headersOf("/peekaboot/ui/vendor/geist/Geist-1.7.2.woff2");
+
+        assertThat(font.getCacheControl()).isEqualTo("max-age=31536000, immutable");
+        assertThat(api.headersOf("/peekaboot/ui/assets/tokens.css").getCacheControl())
+                .as("the rest of the UI still revalidates")
+                .isEqualTo("no-cache");
+    }
+
+    /**
      * The icon set is referenced only from CSS {@code url()} and {@code <link rel="icon">}, so a
      * path typo or a packaging change that stopped shipping binaries from the frontend module
      * would fail silently - no console error a UI test would notice, just a missing favicon and
