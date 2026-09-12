@@ -104,6 +104,10 @@ abstract class PlaywrightTestBase {
         return WORKER_BROWSER.get();
     }
 
+    protected static boolean isChromium() {
+        return "chromium".equals(BROWSER);
+    }
+
     /** An unknown value fails here rather than falling back, which would retest Chromium unnoticed. */
     private static BrowserType engine(Playwright playwright) {
         return switch (BROWSER) {
