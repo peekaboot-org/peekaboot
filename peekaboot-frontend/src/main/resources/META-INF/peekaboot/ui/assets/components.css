@@ -104,9 +104,9 @@
     white-space: nowrap;
 }
 .pk-group__count { font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
-/* Trailing metadata as fixed columns. Each group is its own subtree, so grid cannot
-   align across rows - only fixed track widths keep the left edge of each column steady
-   from row to row instead of shifting with the content's length. */
+/* Trailing metadata as fixed columns, down to the phone breakpoint below. Each group is
+   its own subtree, so grid cannot align across rows - only fixed track widths keep the left
+   edge of each column steady from row to row instead of shifting with the content's length. */
 .pk-group__meta {
     flex: 0 0 auto;
     display: grid;
@@ -123,6 +123,13 @@
     border: 1px solid var(--pk-border);
     border-top: none;
     border-radius: 0 0 var(--pk-radius) var(--pk-radius);
+}
+@media (max-width: 767px) {
+    /* The fixed tracks are wider than a phone-width header and leave the metric name no room
+       at all, so the meta takes a row of its own and sizes to its content. Columns stop lining
+       up from row to row; a header that fits is worth more. */
+    .pk-group__header { flex-wrap: wrap; }
+    .pk-group__meta { flex-basis: 100%; grid-template-columns: auto auto 1fr; }
 }
 
 /* Key/value row. Values are mono by default because property/config rows

@@ -612,6 +612,32 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
+     * The meta columns are wide enough to push a phone-width header off screen while they share
+     * the name's row, squeezing the name itself to nothing. Below the stylesheet's breakpoint
+     * they take a row of their own instead.
+     */
+    @Test
+    void meterGroupHeadersFitAPhoneViewport() {
+        page.setViewportSize(375, 800);
+        openDashboard();
+        dashboard.openTab("meters");
+
+        double sidewaysScroll = ((Number) page.evaluate(
+                        "() => document.documentElement.scrollWidth - document.documentElement.clientWidth"))
+                .doubleValue();
+        double narrowestName = ((Number) page.evaluate("""
+                        () => Math.min(...[...document.querySelectorAll('#meters-list .pk-group__name')]
+                            .map(name => name.getBoundingClientRect().width
+                                / name.closest('.pk-group__header').getBoundingClientRect().width))
+                        """)).doubleValue();
+
+        assertThat(sidewaysScroll).as("pixels the page scrolls sideways").isNotPositive();
+        assertThat(narrowestName)
+                .as("the narrowest metric name's share of its header")
+                .isGreaterThan(0.5);
+    }
+
+    /**
      * A deep link into the meters tab must restore the text filter from the URL, and
      * typing further into it must keep writing the URL back (via replaceState - see
      * url-state.js's push/replace rule) without growing browser history, so every
