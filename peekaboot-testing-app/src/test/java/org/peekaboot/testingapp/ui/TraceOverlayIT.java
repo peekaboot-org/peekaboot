@@ -905,7 +905,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        overlay.waitFor(".pk-gantt-row[data-depth='1']");
+        overlay.awaitMeasurable(".pk-gantt-row[data-depth='1']");
 
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")

@@ -393,6 +393,9 @@ class ScreenshotCapture extends PlaywrightTestBase {
         // request's own trace insights; wait for that to resolve so the screenshot shows
         // the real duration/query/log metrics instead of a spinner.
         toolbar.waitForGone(".pk-toolbar__loading");
+        // The bar's faces are registered with display: swap, so a shot taken before they land
+        // publishes the system font to peekaboot.org.
+        Fonts.awaitReady(page);
         shoot(outputDir, "toolbar-collapsed-" + theme);
     }
 

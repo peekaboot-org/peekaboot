@@ -103,4 +103,5 @@ Further reading:
 
 ## License
 
-Apache License 2.0
+Apache License 2.0. Bundled third-party components and their licences are listed in
+[`NOTICE`](NOTICE).
