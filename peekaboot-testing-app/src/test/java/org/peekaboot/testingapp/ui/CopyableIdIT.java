@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -20,7 +21,11 @@ class CopyableIdIT extends PlaywrightTestBase {
 
     @BeforeEach
     void grantClipboard() {
-        page.context().grantPermissions(List.of("clipboard-read", "clipboard-write"));
+        // Only Chromium's Playwright build knows these permission names - Firefox and WebKit
+        // reject them outright - and every test here but one asserts on the DOM alone.
+        if (isChromium()) {
+            page.context().grantPermissions(List.of("clipboard-read", "clipboard-write"));
+        }
     }
 
     private void openPageWithToolbar() {
@@ -43,6 +48,8 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat(text).contains(copied);
     }
 
+    // Reading the clipboard back needs the clipboard-read permission, which only Chromium has.
+    @Tag("chromium-only")
     @Test
     void clickingTheTraceIdCopiesItWithoutOpeningTheOverlay() {
         openPageWithToolbar();
