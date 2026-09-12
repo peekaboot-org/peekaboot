@@ -226,11 +226,16 @@ abstract class PlaywrightTestBase {
         if (page.isVisible("#error")) {
             throw new IllegalStateException("dashboard failed to load: " + page.textContent("#error .message"));
         }
+        Fonts.awaitReady(page);
     }
 
     protected void openPersonsPage() {
         page.navigate(baseUrl + contextPath() + "/persons");
-        page.waitForSelector("#peekaboot-toolbar-host");
+        // data-pk-ready rather than the host alone: toolbar.js stamps it once it has enhanced
+        // the server-rendered bar, which is also when it has registered the bundled faces, so
+        // the wait below has something to wait for.
+        page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
+        Fonts.awaitReady(page);
     }
 
     /**
