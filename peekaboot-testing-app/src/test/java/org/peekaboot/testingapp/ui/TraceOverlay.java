@@ -24,6 +24,16 @@ final class TraceOverlay extends ShadowHost {
         return this;
     }
 
+    /**
+     * Waits for {@code selector} and then the webfont, the two things a geometry assertion
+     * needs. A test that navigates straight to a deep link never passes through
+     * {@link #awaitLoaded()} and would otherwise measure the system fallback.
+     */
+    void awaitMeasurable(String selector) {
+        waitFor(selector);
+        Fonts.awaitReady(page);
+    }
+
     /** Waits for the host alone: openTraceDetail() creates it before any fetch, so this proves an open was started, nothing more. */
     void awaitOpened() {
         page.waitForSelector(HOST);

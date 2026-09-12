@@ -12,9 +12,20 @@ import com.microsoft.playwright.Page;
  */
 final class Fonts {
 
+    /** Long enough for a cold jar-served face, short enough to fail inside the suite's own runtime. */
+    private static final double LOAD_TIMEOUT_MS = 10_000;
+
     private Fonts() {}
 
+    /**
+     * Waits until no face is loading. Not {@code document.fonts.ready}: that promise re-arms
+     * every time another face starts loading, and awaiting it through {@code page.evaluate}
+     * carries no timeout at all, so a woff2 that never arrives hangs the build with no output.
+     */
     static void awaitReady(Page page) {
-        page.evaluate("() => document.fonts.ready.then(() => null)");
+        page.waitForFunction(
+                "() => document.fonts.status === 'loaded'",
+                null,
+                new Page.WaitForFunctionOptions().setTimeout(LOAD_TIMEOUT_MS));
     }
 }

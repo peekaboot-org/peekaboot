@@ -231,9 +231,9 @@ abstract class PlaywrightTestBase {
 
     protected void openPersonsPage() {
         page.navigate(baseUrl + contextPath() + "/persons");
-        // data-pk-ready rather than the host alone: toolbar.js stamps it once it has enhanced
-        // the server-rendered bar, which is also when it has registered the bundled faces, so
-        // the wait below has something to wait for.
+        // data-pk-ready rather than the host alone: toolbar.js stamps it and registers the
+        // bundled faces in one task, so the wait below cannot land between the two and read a
+        // font set that has not been asked for anything yet.
         page.waitForSelector("#peekaboot-toolbar-host[data-pk-ready='true']");
         Fonts.awaitReady(page);
     }
