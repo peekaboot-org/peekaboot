@@ -37,7 +37,9 @@ function addFace({family, file}, basePath) {
     // alongside them for nothing.
     if (documentDeclares(family)) return;
     try {
-        const font = new FontFace(family, `url(${basePath}/ui/vendor/geist/${file})`, DESCRIPTORS);
+        // Quoted: an unquoted url() token cannot carry whitespace or parens, which a host's
+        // context path can.
+        const font = new FontFace(family, `url("${basePath}/ui/vendor/geist/${file}")`, DESCRIPTORS);
         document.fonts.add(font);
         // A missing or blocked file must not surface as an unhandled rejection on a page
         // Peekaboot does not own.
