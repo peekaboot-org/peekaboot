@@ -12,17 +12,23 @@ public class PeekabootWebConfig implements WebMvcConfigurer {
 
     /**
      * The bundled webfont, matched ahead of the rest of the UI by being the more specific
-     * pattern. Deliberately narrow: it covers the woff2 files alone, so the VERSION and
-     * licence files beside them keep revalidating like everything else.
+     * pattern. The wildcards spell out a hyphen and a dotted version ahead of {@code .woff2}:
+     * a year of immutable caching is only honest for a URL whose bytes cannot change, and what
+     * guarantees that here is the upstream version in the file name. An unversioned face
+     * dropped in beside them ({@code Geist-Italic.woff2}, say) does not match and revalidates
+     * like the rest of the UI, as do the VERSION and licence files.
+     *
+     * <p>The file name has to come from a wildcard rather than be spelled out. Spring resolves
+     * a resource against the part of the path its pattern matched with a wildcard, so naming
+     * the files exactly leaves nothing to resolve and serves a 404.
      */
-    private static final String FONT_PATTERN = PeekabootPaths.BASE_PATH + "/ui/vendor/geist/*.woff2";
+    private static final String FONT_PATTERN = PeekabootPaths.BASE_PATH + "/ui/vendor/geist/*-*.*.*.woff2";
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // The dev toolbar rides on every page of the host application, so a font that
-        // revalidated would cost a conditional request per page load. The upstream version is
-        // part of the file name, which is what makes immutable honest rather than convenient:
-        // an upgrade changes the URL instead of the bytes behind it.
+        // revalidated would cost a conditional request per page load. An upgrade changes the
+        // URL instead of the bytes behind it, which is what the year below rests on.
         registry.addResourceHandler(FONT_PATTERN)
                 .addResourceLocations("classpath:" + PeekabootPaths.CLASSPATH_ROOT + "/ui/vendor/geist/")
                 .setCacheControl(CacheControl.maxAge(Duration.ofDays(365)).immutable());
