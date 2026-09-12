@@ -1,0 +1,49 @@
+name: cross-browser
+
+# Playwright's three engines on Linux. The webkit leg drives Playwright's own WebKit build:
+# the engine Safari is built on, at a different version and feature set. It is not Safari,
+# and a green leg says nothing about Safari itself.
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:17 UTC. Off the hour on purpose: hosted runners queue behind everyone's midnight cron.
+    - cron: '17 3 * * *'
+
+concurrency:
+  group: cross-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration-tests:
+    name: ${{ matrix.browser }}
+    runs-on: ubuntu-latest
+    # The push build needs 30; webkit and firefox run the UI suite slower than chromium does.
+    timeout-minutes: 45
+
+    permissions:
+      contents: read
+
+    strategy:
+      # Every engine reports for itself: one engine's failure must not hide the other two.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # full history: the spotless ratchet resolves a fixed base commit
+          fetch-depth: 0
+
+      # A local action resolves from the runner's workspace, so the checkout has to come first.
+      - name: prepare-build
+        uses: ./.github/actions/prepare-build
+        with:
+          browsers: ${{ matrix.browser }}
+          # WebKit on Linux needs ~60 system libraries, which only --with-deps installs.
+          # Hosted runners have the passwordless sudo it wants; a dev machine may not.
+          with-deps: 'true'
+
+      - name: maven-build-verify
+        run: ./mvnw --batch-mode clean verify -Dpeekaboot.it.browser=${{ matrix.browser }}
