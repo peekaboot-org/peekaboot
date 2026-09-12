@@ -55,13 +55,19 @@ unit tests → package → sources jar → javadoc jar → integration tests (*I
 
 `peekaboot-testing-app` runs its `*IT` classes concurrently inside one JVM: 2 worker
 threads (`-Dpeekaboot.it.threads=N`; `1` serializes when diagnosing a flaky test), each
-owning its own Chromium, all sharing one Spring context cache and therefore one running
+owning its own browser, all sharing one Spring context cache and therefore one running
 app per context configuration. The concurrency is deliberate beyond speed: concurrent test
 classes hammer peekaboot the way a real concurrent host application does, so a race in
 peekaboot itself shows up here first. No class holds a JUnit `@ResourceLock`: every one of
 them pins its own trace id instead of clearing state the others are using.
 `-Dpeekaboot.it.forks=N` still exists on top (forks × threads both apply) but defaults to 1.
 The coverage gate sees the same `jacoco.exec` data it would from a serial run.
+
+`-Dpeekaboot.it.browser=<chromium|firefox|webkit>` picks the Playwright engine that suite
+drives, and defaults to `chromium`. An unknown value fails the run rather than falling back.
+Firefox and WebKit hold back the tests tagged `chromium-only`, whose subject is Chromium's
+own behaviour; the per-engine profiles in the testing-app pom do that. Nightly coverage of
+all three is [`cross-browser.yml`](#cross-browseryml).
 
 `peekaboot-coverage` runs last and adds the coverage gate over the whole reactor:
 
@@ -383,10 +389,13 @@ root `action.yml` only.
 
 ### `.github/actions/prepare-build`
 
-The steps both build workflows share, as a composite action: JDK 25 (temurin) with the
+The steps the build workflows share, as a composite action: JDK 25 (temurin) with the
 Maven cache, `~/.cache/ms-playwright` cached under a key derived from the testing-app's
-`playwright.version` property (Chromium changes with Playwright, not with any other
-dependency), the reactor's SNAPSHOTs installed, then Chromium installed. The checkout
+`playwright.version` property and the engines asked for (a browser build changes with
+Playwright, not with any other dependency), the reactor's SNAPSHOTs installed, then those
+browsers installed. The `browsers` input names them and defaults to `chromium`, which
+leaves the push build as it was; `with-deps` adds `--with-deps`, the flag that apt-installs
+the engines' system libraries and wants passwordless sudo. The checkout
 stays in each workflow: a local action resolves from the runner's workspace, so it cannot
 run before the checkout that puts it there. Its inputs hand the release workflow's Central
 server id, credential variable names and GPG key on to `setup-java`; the build workflow
@@ -406,6 +415,19 @@ invocation resolves whatever is latest that day.
 
 Runs on every branch except `main`: checkout with `fetch-depth: 0` for the ratchet,
 `prepare-build`, then `./mvnw --batch-mode clean verify`.
+
+### `cross-browser.yml`
+
+Nightly at 03:17 UTC, and on demand through `workflow_dispatch`: the same `clean verify`
+once per Playwright engine, one `ubuntu-latest` job each, `fail-fast: false` so a red engine
+does not cancel the other two. `-Dpeekaboot.it.browser=<engine>` selects it and
+`prepare-build` installs that one engine with `--with-deps`, which WebKit on Linux needs for
+its ~60 system libraries. Firefox and WebKit hold back the `chromium-only` tests.
+
+The webkit leg drives Playwright's own WebKit build: the engine Safari is built on, at a
+different version and feature set. It is not Safari, and a green leg says nothing about
+Safari. This workflow is separate from `build-on-push`, which stays the check the `dev`
+ruleset requires.
 
 ### `build-release-on-main-push.yml`
 
