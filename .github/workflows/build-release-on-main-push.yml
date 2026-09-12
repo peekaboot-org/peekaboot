@@ -40,6 +40,14 @@ jobs:
       - name: maven-build-verify
         run: ./mvnw --batch-mode verify
 
+      # Before release:prepare and release:perform: a failed download or checksum here must
+      # not strand a job that has already published to Central.
+      - name: install-git-cliff
+        uses: ./.github/actions/install-git-cliff
+
+      - name: check-release-notes-renderable
+        run: .github/release-notes/render.sh --unreleased > /dev/null
+
       - name: configure-git-user
         uses: qoomon/actions--setup-git@8e6bd30ac05e17a81b61169daae62cb6b7e61294 # v1.1.1
         with:
@@ -62,11 +70,47 @@ jobs:
         id: 'get-latest-tag'
         uses: WyriHaximus/github-action-get-previous-tag@61819f33034117e6c686e6a31dba995a85afc9de # v2.0.0
 
+      - name: render-release-notes
+        run: |
+          .github/release-notes/render.sh --latest \
+            --output release-notes.md
+          # A tag_pattern that stops matching makes git-cliff render all history as
+          # "## Unreleased" and still exit 0, which would publish as the release body.
+          grep -q "^## ${{ steps.get-latest-tag.outputs.tag }} " release-notes.md
+
+      # Regenerated whole rather than prepended: deterministic, and no header_marker to
+      # manage. No --tag needed, the tag release:prepare created is already in the repo.
+      - name: render-changelog
+        run: |
+          .github/release-notes/render.sh --output CHANGELOG.md
+          grep -q "^## ${{ steps.get-latest-tag.outputs.tag }} " CHANGELOG.md
+
+      - name: commit-changelog
+        run: |
+          git add CHANGELOG.md
+          git diff --cached --quiet || git commit \
+            -m "[release] update the changelog for ${{ steps.get-latest-tag.outputs.tag }}"
+          git push origin HEAD:main
+
       - name: create-release-notes
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          generate_release_notes: true
+          body_path: release-notes.md
           tag_name: ${{ steps.get-latest-tag.outputs.tag }}
+
+      # After the real release exists, so a failure between the two leaves the draft
+      # standing rather than losing the notes. A skipped delete only strands a cosmetic
+      # draft, which the new cycle's first push to dev overwrites. No --cleanup-tag: a
+      # draft has no tag.
+      - name: delete-unreleased-draft
+        run: |
+          if gh release view unreleased > /dev/null 2>&1; then
+            gh release delete unreleased --yes
+          else
+            echo "no unreleased draft to clean up"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # A direct push would be refused: the ruleset on dev requires the build-on-push
       # status check, and a merge commit pushed here has none. A pull request with

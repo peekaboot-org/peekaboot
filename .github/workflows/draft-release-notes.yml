@@ -1,0 +1,49 @@
+name: draft-release-notes
+
+# A separate workflow rather than steps in build-on-push: this needs `contents: write`,
+# and build-on-push runs on every branch including dependabot's, whose token is read-only.
+# It also stays clear of the `build-on-push` check context the ruleset on dev requires.
+on:
+  push:
+    branches:
+      - dev
+
+concurrency:
+  group: draft-release-notes
+  cancel-in-progress: true
+
+jobs:
+  draft-release-notes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # full history: git-cliff resolves the range back to the previous tag
+          fetch-depth: 0
+
+      - name: install-git-cliff
+        uses: ./.github/actions/install-git-cliff
+
+      - name: render-unreleased-notes
+        run: |
+          .github/release-notes/render.sh --unreleased \
+            --output unreleased-notes.md
+
+      # `unreleased` is a name, not a tag: GitHub creates the ref only when a draft is
+      # published, and cliff.toml's tag_pattern excludes it even then.
+      - name: upsert-draft-release
+        run: |
+          if gh release view unreleased > /dev/null 2>&1; then
+            gh release edit unreleased --notes-file unreleased-notes.md
+          else
+            gh release create unreleased --draft \
+              --title Unreleased --notes-file unreleased-notes.md
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

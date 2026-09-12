@@ -24,9 +24,33 @@ jobs:
           # full history: the spotless ratchet resolves a fixed base commit
           fetch-depth: 0
 
+      # A push that creates a branch reports the zero SHA as `before`, and the gate then
+      # compares against origin/dev. checkout fetches history but not necessarily that
+      # remote-tracking ref, so fetch it rather than depend on checkout's behaviour.
+      - name: check-commit-subjects
+        run: |
+          git fetch --no-tags origin dev:refs/remotes/origin/dev
+          .github/release-notes/check-commit-subjects.sh . \
+            "${{ github.event.before }}" "${{ github.event.after }}"
+
       # A local action resolves from the runner's workspace, so the checkout has to come first.
       - name: prepare-build
         uses: ./.github/actions/prepare-build
 
       - name: maven-build-verify
         run: ./mvnw --batch-mode clean verify
+
+      - name: install-git-cliff
+        uses: ./.github/actions/install-git-cliff
+
+      - name: release-notes-tests
+        run: .github/release-notes/test/run.sh
+
+      # On a feature branch there is no draft release, so this summary is the only place
+      # the pending notes are visible before the branch is merged.
+      - name: unreleased-notes-preview
+        run: |
+          {
+            echo '## Pending release notes'
+            .github/release-notes/render.sh --unreleased
+          } >> "$GITHUB_STEP_SUMMARY"

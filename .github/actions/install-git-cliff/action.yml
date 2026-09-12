@@ -1,0 +1,32 @@
+name: install-git-cliff
+description: Put a checksum-verified git-cliff on PATH.
+
+inputs:
+  version:
+    description: git-cliff release version, without the leading v
+    required: false
+    default: "2.14.1"
+  sha512:
+    description: sha512 of the x86_64 musl tarball for that version
+    required: false
+    default: "b5ce5da0189e50fe6c64753bb205b4c8a4a657b5ab9301d2690d7bb66238388e8146237ba0eb407a5b8ee49d9a1646ea02b392b470d8ca19f0b948cf8a62965f"
+
+runs:
+  using: composite
+  steps:
+    # The upstream git-cliff-action resolves the release through the API at run time and
+    # verifies nothing, so pinning its SHA would secure nothing downstream. The musl build
+    # is static, so it does not care which glibc the runner image ships.
+    - name: install-git-cliff
+      shell: bash
+      run: |
+        set -euo pipefail
+        archive="git-cliff-${{ inputs.version }}-x86_64-unknown-linux-musl.tar.gz"
+        target="${RUNNER_TEMP}/git-cliff"
+        mkdir -p "$target"
+        curl --silent --show-error --fail --location \
+          --output "${target}/${archive}" \
+          "https://github.com/orhun/git-cliff/releases/download/v${{ inputs.version }}/${archive}"
+        echo "${{ inputs.sha512 }}  ${target}/${archive}" | sha512sum --check --quiet
+        tar xzf "${target}/${archive}" -C "$target" --strip-components=1
+        echo "$target" >> "$GITHUB_PATH"
