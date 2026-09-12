@@ -27,6 +27,6 @@ runs:
         curl --silent --show-error --fail --location \
           --output "${target}/${archive}" \
           "https://github.com/orhun/git-cliff/releases/download/v${{ inputs.version }}/${archive}"
-        echo "${{ inputs.sha512 }}  ${target}/${archive}" | sha512sum --check
+        echo "${{ inputs.sha512 }}  ${target}/${archive}" | sha512sum --check --quiet
         tar xzf "${target}/${archive}" -C "$target" --strip-components=1
         echo "$target" >> "$GITHUB_PATH"

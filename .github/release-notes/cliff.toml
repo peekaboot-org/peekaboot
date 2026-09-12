@@ -44,6 +44,9 @@ filter_unconventional = true
 protect_breaking_commits = true
 # Only semver tags are release boundaries, so a stray `unreleased` tag cannot become one.
 tag_pattern = '^[0-9]+\.[0-9]+\.[0-9]+$'
+# Two constraints: `^build\(deps` must stay above the generic `^build`, and the numbers must
+# stay zero-padded two digits because git-cliff sorts group names as strings. A tenth group
+# would sort ahead of `<!-- 2 -->` and would also need site.jq's 0[1-5] cutoff widened.
 commit_parsers = [
     { message = '^feat', group = "<!-- 01 -->Features" },
     { message = '^fix', group = "<!-- 02 -->Bug fixes" },

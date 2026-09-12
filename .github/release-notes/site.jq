@@ -3,8 +3,9 @@
 
 def strip_group_prefix: sub("^<!-- [0-9]+ -->"; "");
 
-# Groups 00-05 are the user-facing half of the numbering in the design doc.
-def is_user_facing: test("^<!-- 0[0-5] -->");
+# Groups 01-05 are the user-facing half of the numbering. Breaking changes are synthesised
+# below from the `breaking` flag, not matched here - no commit parser emits a group 00.
+def is_user_facing: test("^<!-- 0[1-5] -->");
 
 # Matches the release body's `upper_first`, so both renderings read the same.
 def upper_first: (.[0:1] | ascii_upcase) + .[1:];

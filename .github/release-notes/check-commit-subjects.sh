@@ -16,12 +16,28 @@ repo="$1"
 base="$2"
 head="$3"
 
-# A push that creates a branch reports the all-zero SHA as its `before`, and a force-push
-# reports a tip a fresh clone need not have. Both mean the same thing here: there is no
-# usable previous state, so compare against the default branch.
-if [ "$base" = "$ZERO" ] \
-    || ! git -C "$repo" rev-parse --verify --quiet "$base^{commit}" > /dev/null; then
+resolves() {
+    git -C "$repo" rev-parse --verify --quiet "$1^{commit}" > /dev/null
+}
+
+# A push that creates a branch reports the all-zero SHA as its `before`; a force-push
+# reports a tip a fresh clone need not have. Neither leaves a usable previous state, so
+# compare against the default branch instead.
+rewritten=false
+if [ "$base" = "$ZERO" ]; then
     base="origin/dev"
+elif ! resolves "$base"; then
+    base="origin/dev"
+    rewritten=true
+fi
+
+# A force-push to the default branch lands here with the fallback base equal to the pushed
+# head, an empty range that would report success without inspecting anything. The commits
+# since the last release are the range that matters there. A brand-new branch pointing at
+# the default branch's tip is a genuinely empty range and keeps it.
+if [ "$rewritten" = true ] && resolves "$base" \
+    && [ "$(git -C "$repo" rev-parse "$base")" = "$(git -C "$repo" rev-parse "$head")" ]; then
+    base="$(git -C "$repo" describe --tags --abbrev=0 "$head")"
 fi
 
 # Captured separately so a failure to read the range cannot reach the filters below, where

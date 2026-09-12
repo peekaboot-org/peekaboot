@@ -567,7 +567,7 @@ lines routinely exceed it.
 Two things in `cliff.toml` are load-bearing. `^build\(deps` must stay above the generic
 `^build`, or every Dependabot commit lands in "Build, CI and chores". And group numbers must
 stay zero-padded to two digits, because git-cliff sorts group names as strings — `<!-- 10 -->`
-would sort ahead of `<!-- 2 -->`. `site.jq` hardcodes groups `00`-`05` as the user-facing set
+would sort ahead of `<!-- 2 -->`. `site.jq` hardcodes groups `01`-`05` as the user-facing set
 the website shows, so a tenth group means editing both files.
 
 The tests need git-cliff on `PATH`; the version and its sha512 are pinned in

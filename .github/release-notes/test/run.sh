@@ -23,6 +23,14 @@ echo "checking the site data"
     | jq -f "$HERE/../site.jq" > "$WORK/releases.json"
 diff -u "$HERE/expected-releases.json" "$WORK/releases.json"
 
+echo "checking the --latest render (the release body)"
+"$HERE/../render.sh" --repository "$FIXTURE" --latest > "$WORK/latest.md"
+diff -u "$HERE/expected-latest.md" "$WORK/latest.md"
+
+echo "checking the --unreleased render (the draft and the push preview)"
+"$HERE/../render.sh" --repository "$FIXTURE" --unreleased > "$WORK/unreleased.md"
+diff -u "$HERE/expected-unreleased.md" "$WORK/unreleased.md"
+
 # 1.1.0..1.2.0 is one conventional commit: a real pass, not an empty range.
 echo "checking the commit-subject gate accepts a clean range"
 "$HERE/../check-commit-subjects.sh" "$FIXTURE" 1.1.0 1.2.0

@@ -28,6 +28,7 @@ commit() {
 
 readonly FIRST="2026-01-01T10:00:00+00:00"
 readonly SECOND="2026-02-01T10:00:00+00:00"
+readonly THIRD="2026-03-01T10:00:00+00:00"
 
 commit "$FIRST" "feat: add the first thing"
 commit "$FIRST" "fix: correct the first thing"
@@ -49,5 +50,8 @@ git -C "$DIR" tag 1.1.0
 # Same second as 1.1.0: proves release ordering survives a timestamp tie.
 commit "$SECOND" "fix: correct the rename"
 git -C "$DIR" tag 1.2.0
+
+# Untagged, so --unreleased has something to render and --latest has something to exclude.
+commit "$THIRD" "feat: add something after the last tag"
 
 echo "$DIR ready"

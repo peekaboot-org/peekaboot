@@ -40,6 +40,14 @@ jobs:
       - name: maven-build-verify
         run: ./mvnw --batch-mode verify
 
+      # Before release:prepare and release:perform: a failed download or checksum here must
+      # not strand a job that has already published to Central.
+      - name: install-git-cliff
+        uses: ./.github/actions/install-git-cliff
+
+      - name: check-release-notes-renderable
+        run: .github/release-notes/render.sh --unreleased > /dev/null
+
       - name: configure-git-user
         uses: qoomon/actions--setup-git@8e6bd30ac05e17a81b61169daae62cb6b7e61294 # v1.1.1
         with:
@@ -62,19 +70,20 @@ jobs:
         id: 'get-latest-tag'
         uses: WyriHaximus/github-action-get-previous-tag@61819f33034117e6c686e6a31dba995a85afc9de # v2.0.0
 
-      - name: install-git-cliff
-        uses: ./.github/actions/install-git-cliff
-
       - name: render-release-notes
         run: |
           .github/release-notes/render.sh --latest \
             --output release-notes.md
+          # A tag_pattern that stops matching makes git-cliff render all history as
+          # "## Unreleased" and still exit 0, which would publish as the release body.
+          grep -q "^## ${{ steps.get-latest-tag.outputs.tag }} " release-notes.md
 
       # Regenerated whole rather than prepended: deterministic, and no header_marker to
       # manage. No --tag needed, the tag release:prepare created is already in the repo.
       - name: render-changelog
         run: |
           .github/release-notes/render.sh --output CHANGELOG.md
+          grep -q "^## ${{ steps.get-latest-tag.outputs.tag }} " CHANGELOG.md
 
       - name: commit-changelog
         run: |
