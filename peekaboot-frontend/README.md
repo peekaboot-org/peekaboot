@@ -25,7 +25,8 @@ META-INF/peekaboot/ui/
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
-└── vendor/          uplot/: the only third-party code, loaded on demand (see below)
+└── vendor/          uplot/: the chart library, loaded on demand (see below)
+                     geist/: the bundled webfont, with both its licence files
 ```
 
 The Insights tab charts with [uPlot](https://github.com/leeoniya/uPlot), vendored under
@@ -93,6 +94,63 @@ Every rule reading one of them repeats the light-theme literal as its `var()` fa
 that goes missing then costs the dark palette for that rule and nothing else, rather than
 leaving the element with no fill or no ink.
 
+## The bundled webfont
+
+The UI renders in [Geist and Geist Mono](https://github.com/vercel/geist-font), vendored
+under `vendor/geist/` and served from the jar. Never a CDN and never Google Fonts: a dev
+tool has no business making a host application's pages call a third party.
+
+Both are the variable woff2 faces from the upstream release, shipped whole rather than
+subset, so one file per family covers every weight the UI asks for. `VERSION` records the
+upstream version, the release it came from and the date. The files are renamed only because
+the upstream names carry square brackets (`Geist[wght].woff2`), which are not legal
+unencoded in a URL path. There is no italic face, so the two rules asking for one get
+synthetic oblique. Both upstream licence files travel with the fonts (`OFL.txt`,
+`LICENSE.txt`) and the root `NOTICE` points at them.
+
+`tokens.css` declares the faces and puts them at the front of `--pk-font` and
+`--pk-font-mono`, keeping the system stacks behind them. The dashboard's rules use
+`font-display: optional`, the only value with a no-layout-shift guarantee, which costs
+nothing there because `index.html` preloads both faces. No `size-adjust` or metric overrides
+go with it, because no shipping Safari implements them.
+
+### Why the shadow surfaces need JavaScript for this
+
+An `@font-face` rule in `tokens.css` styles the dashboard and nothing else. CSS scopes font
+family names to the tree that declares them, with upward fallback only: a document-level
+rule is visible inside a shadow tree, one declared inside a shadow root is ignored. The
+toolbar and the overlay are shadow-rooted, and Peekaboot contributes no document-level CSS
+to a host page, so both would silently go on rendering in the host's system font.
+
+`shared/fonts.js` registers the same two faces with `document.fonts.add(new FontFace(...))`
+instead. That adds no rule to the host page's cascade, which is the isolation both surfaces
+promise. `toolbar.js` calls it while enhancing the bar, `trace-detail.js` as it opens. The
+call is idempotent and skips a document that already declares the faces, which is the
+dashboard, where `main.js` imports the overlay statically. A missing or blocked file is
+caught and warned about rather than left to surface as the host page's own error.
+`BundledFontIT` asserts all three surfaces separately, because this is the regression that
+looks like nothing at all.
+
+Those two faces are registered with `display: 'swap'`, not the `optional` the dashboard
+uses. They are added only after the host page has loaded, and `optional` licences the
+browser never to paint a face that missed its block period, which is exactly what happened
+before the split: the face loaded and the bar went on rendering in the host's font. The
+repaint a swap costs is confined to Peekaboot's own fixed-position surfaces and never moves
+host content.
+
+### What a host page's CSP needs
+
+Fonts are governed by `font-src`, never `style-src`. The files are same-origin, so a host
+setting `default-src 'self'` needs nothing extra, and one that names `font-src` explicitly
+has to include `'self'`. No `data:` URIs are involved, so no host has to widen its policy
+to take them.
+
+The woff2 files are also the one thing under `/peekaboot/ui/**` that does not revalidate.
+`PeekabootWebConfig` serves them `max-age=31536000, immutable`, scoped to `*.woff2` alone:
+the toolbar rides on every page of the host application, and the upstream version in the
+file name is what makes `immutable` honest, since an upgrade changes the URL rather than the
+bytes behind it.
+
 ## The icon set
 
 `assets/` holds the icon set, every file derived from one piece of source artwork: the
@@ -142,6 +200,7 @@ magick master.png -fuzz 20% -fill '#e6edf3' -opaque '#263238' master-dark.png   
 | `copyable.js` | `copyableId`, `bindCopyables`. The click-to-copy trace/span id control as a detached element, with one delegated click listener per root (document or shadow root). |
 | `dom.js` | `el(tag, {className, text, title, attrs}, ...children)`, `button(props, ...children)`. The element builder every surface renders with: text and children become nodes, never parsed markup, so a builder call can carry backend data without escaping it. The only `innerHTML` sites left are cleared containers and the few templates that pass every value through `markup.js`. |
 | `filtered-group-tab.js` | `filteredGroupTab({inputId, listId, select, filterGroup, key, header, items, extraTop, emptyMessage, noMatchMessage, urlFilter, decorate, afterRender, fetchData, loadingMessage, fetchErrorMessage})`. The shell of a dashboard tab that shows a list of collapsible groups (module state, the filter input wired once, URL reconciliation, expansion restore, empty states); `loggers.js`, `meters.js` and `scheduled-tasks.js` (no `inputId`, so no filter) are built on it and supply only what differs. `fetchData(context)` is the hook for a tab whose data comes from its own endpoint instead of the shared payload (`meters.js`); it runs on `self-fetching-tab.js`'s contract, with loading and error states handled by the shell. `propertyGroupTab({inputId, listId, unmaskSlotId, select, groupName, extraTop, emptyMessage})` is its property-list case: groups of `{key, value}` rows matched on either, plus the "Show secrets" control; `config.js` and `environment.js` are the two callers. |
+| `fonts.js` | `registerBundledFonts(basePath)`. Adds the bundled Geist faces to the document a shadow-rooted surface renders into, which an `@font-face` rule cannot reach. Idempotent, and a no-op on the dashboard, which declares them in `tokens.css`. See *The bundled webfont* above. |
 | `format.js` | `formatDurationMs`, `formatLongDuration`, `formatInterval`, `formatBytes`, `formatHosts`, `formatDateTime`, `formatTimeOfDay`, `formatDateTimeWith(value, options, display)` (the two above are it with a fixed option set; a caller with its own set passes the whole set, never a delta), `formatCount`, `formatPlainValue`, `formatMetricValue`, `formatTileValue`, and `METRIC_UNITS`/`TILE_FORMATS`, the wire words of the backend's `Unit` and `TileFormat` enums (pinned by `SharedModuleIT`, as is `insights-chart.js`'s `CHART_TYPES`). |
 | `http-status.js` | `statusLabel` (`404` → `"404 Not Found"`), `statusVariant` (the badge tier per response family). |
 | `markup.js` | `escapeHtml`, `highlightText`, `MASK_LITERAL`, the fallback for the backend's masked-value literal (`Features.maskLiteral`, `"******"`), used only by the surfaces that never load `/api/features` (the dev toolbar and the overlay it opens). |

@@ -466,6 +466,10 @@ inventory of every module under `META-INF/peekaboot/ui/`.
   identical stylesheet apply in both contexts, so no surface carries its own palette,
   `escapeHtml`, duration thresholds or collapsible-group CSS
 - **Shadow DOM**: toolbar and trace-detail overlay isolated from host app styles
+- **Bundled webfont**: Geist and Geist Mono ship inside the frontend jar and are served from
+  it, never a CDN. The dashboard picks them up from an `@font-face` rule in `tokens.css`; the
+  two shadow-rooted surfaces cannot (a rule declared inside a shadow root is ignored) and
+  register the same faces through `shared/fonts.js`
 - **Responsive dashboard, desktop-first toolbar and overlay**: the toolbar wraps and the
   overlay's gantt reflows below 768px, but both assume a desktop viewport for their full layout
 - **Lazy loading**: trace-detail overlay JS loaded only on first use (dynamic `import()` from
