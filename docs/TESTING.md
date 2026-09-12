@@ -236,6 +236,17 @@ reveals it 400ms after paint with a delayed animation, and `toolbar.js` removes 
 runs, so a script that never arrives leaves a reader with a notice and a real link to the
 dashboard. A test waiting for `data-pk-ready` still times out, and that is the accepted cost.
 
+## Geometry waits on the bundled webfont
+
+Peekaboot serves Geist from its own jar, so a size or position assertion has to wait for the
+face: a measurement taken while it loads measures the system fallback and passes anyway.
+`Fonts.awaitReady(page)` is that gate. It waits on `document.fonts.status`, not
+`document.fonts.ready`, which re-arms per face and carries no timeout through `page.evaluate`.
+
+The three points a surface first becomes measurable own the wait: `openDashboard()`,
+`openPersonsPage()` and `overlay.awaitLoaded()`. A test that navigates straight to a deep link
+passes through none of them and takes `overlay.awaitMeasurable(selector)` instead.
+
 ## Isolation in shared Spring contexts
 No class in this module clears a mutable singleton the suite shares, and none holds a
 `@ResourceLock`. `*IT` classes run concurrently, so a class that cleared the `TraceStore` would

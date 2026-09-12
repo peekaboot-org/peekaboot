@@ -14,6 +14,12 @@
     <script src="boot-recovery.js"></script>
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png">
+    <!-- Ahead of the sheet that asks for them: tokens.css is itself a linked sheet, so
+         without this the faces are not requested until it has arrived and parsed. The
+         crossorigin attribute is required even same-origin - a font is fetched in CORS mode,
+         and a preload without it is never matched to that fetch, so the file arrives twice. -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="../vendor/geist/Geist-1.7.2.woff2">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="../vendor/geist/GeistMono-1.7.2.woff2">
     <link rel="stylesheet" href="../assets/tokens.css">
     <link rel="stylesheet" href="../assets/base.css">
     <link rel="stylesheet" href="../assets/components.css">
