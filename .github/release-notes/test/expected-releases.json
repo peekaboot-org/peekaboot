@@ -1,0 +1,101 @@
+[
+  {
+    "version": "1.2.0",
+    "date": "2026-02-01",
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.2.0",
+    "groups": [
+      {
+        "title": "Bug fixes",
+        "entries": [
+          {
+            "text": "Correct the rename",
+            "scope": null,
+            "breaking": false,
+            "detail": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "1.1.0",
+    "date": "2026-02-01",
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.1.0",
+    "groups": [
+      {
+        "title": "Breaking changes",
+        "entries": [
+          {
+            "text": "Drop the legacy endpoint",
+            "scope": null,
+            "breaking": true,
+            "detail": "/v1 is gone, use /v2"
+          },
+          {
+            "text": "Rename the field",
+            "scope": "api",
+            "breaking": true,
+            "detail": null
+          }
+        ]
+      },
+      {
+        "title": "Features",
+        "entries": [
+          {
+            "text": "Drop the legacy endpoint",
+            "scope": null,
+            "breaking": true,
+            "detail": "/v1 is gone, use /v2"
+          },
+          {
+            "text": "Rename the field",
+            "scope": "api",
+            "breaking": true,
+            "detail": null
+          }
+        ]
+      },
+      {
+        "title": "Dependency upgrades",
+        "entries": [
+          {
+            "text": "Bump com.example:thing",
+            "scope": "deps",
+            "breaking": false,
+            "detail": null
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "version": "1.0.0",
+    "date": "2026-01-01",
+    "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.0.0",
+    "groups": [
+      {
+        "title": "Features",
+        "entries": [
+          {
+            "text": "Add the first thing",
+            "scope": null,
+            "breaking": false,
+            "detail": null
+          }
+        ]
+      },
+      {
+        "title": "Bug fixes",
+        "entries": [
+          {
+            "text": "Correct the first thing",
+            "scope": null,
+            "breaking": false,
+            "detail": null
+          }
+        ]
+      }
+    ]
+  }
+]

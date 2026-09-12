@@ -17,4 +17,9 @@ echo "checking the rendered notes"
 "$HERE/../render.sh" --repository "$FIXTURE" > "$WORK/notes.md"
 diff -u "$HERE/expected-notes.md" "$WORK/notes.md"
 
+echo "checking the site data"
+"$HERE/../render.sh" --repository "$FIXTURE" --context \
+    | jq -f "$HERE/../site.jq" > "$WORK/releases.json"
+diff -u "$HERE/expected-releases.json" "$WORK/releases.json"
+
 echo "all release-notes checks passed"
