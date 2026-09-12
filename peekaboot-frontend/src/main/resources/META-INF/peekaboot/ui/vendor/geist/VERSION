@@ -1,0 +1,11 @@
+1.7.2
+https://github.com/vercel/geist-font/releases/tag/v1.7.2
+2026-06-01
+
+Geist-1.7.2.woff2      upstream Geist/webfonts/Geist[wght].woff2
+GeistMono-1.7.2.woff2  upstream GeistMono/webfonts/GeistMono[wght].woff2
+
+Both files are the unmodified variable woff2 faces from the release archive, renamed
+only because square brackets are not legal unencoded in a URL path and Tomcat rejects a
+request target carrying them. The version is in the file name so the served URL can be
+cached immutably; bump both together with this file.
