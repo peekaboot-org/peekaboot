@@ -134,8 +134,9 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   console message, page error, failed request and error response the test provokes and prints
   them only when the test fails (a `TestWatcher`; a green run prints nothing). Collection stops
   when teardown starts, so the `about:blank` navigation aborting the Insights tab's EventSource
-  is not recorded. There is no shared listener that filters, and no allow-list. The Chromium
-  engine has no incompatibilities of its own to excuse.
+  is not recorded. There is no shared listener that filters, and no allow-list. Where an
+  engine's own behaviour is the subject, the test carries a `chromium-only` tag and the other
+  engines skip it; nothing is excused at the output.
 - Tests that trigger error paths capture the log event (logback `ListAppender`) and assert it
   instead of letting it print. The shared helper is `org.peekaboot.testsupport.LogCapture` from
   `peekaboot-test-support`, an unpublished reactor module both `peekaboot-backend` and
@@ -331,9 +332,15 @@ test author needs on top of it:
   `SpringApplication` so the fast gate covers `spring.factories` registration and
   default-property precedence; it boots no server and costs a fraction of a second.
   `peekaboot-testing-app` runs its `*IT`s as concurrent classes in one JVM, 2 worker threads with
-  a Chromium each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test asserting on
+  a browser each (`-Dpeekaboot.it.threads=1` to serialize while debugging). A test asserting on
   app-global state shared with other classes pins to its own traceId; nothing here takes a
   `@ResourceLock`.
+- Playwright engine: `-Dpeekaboot.it.browser=chromium|firefox|webkit`, default `chromium`. An
+  unknown value fails the run instead of falling back. Firefox and WebKit hold back the tests
+  tagged `chromium-only`, whose subject is Chromium's own behaviour rather than peekaboot's; a
+  Chromium run still executes every one of them. `.github/workflows/cross-browser.yml` runs all
+  three nightly. The webkit engine is Playwright's own WebKit build - what Safari is built on,
+  at a different version and feature set. It is not Safari and proves nothing about Safari.
 - Write-path benchmark, excluded from the default suite:
   `mvn -pl peekaboot-backend test -Dtest=TraceWritePathBenchmark`
 - Regenerate the website's screenshots (needs Docker for real PostgreSQL and Flyway):

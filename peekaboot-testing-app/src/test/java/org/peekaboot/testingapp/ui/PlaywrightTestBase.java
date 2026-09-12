@@ -60,10 +60,13 @@ abstract class PlaywrightTestBase {
      */
     private static final List<Playwright> STARTED_PLAYWRIGHTS = new CopyOnWriteArrayList<>();
 
+    /** Playwright engine every worker launches; {@code peekaboot.it.browser} selects it. */
+    private static final String BROWSER = System.getProperty("peekaboot.it.browser", "chromium");
+
     private static final ThreadLocal<Browser> WORKER_BROWSER = ThreadLocal.withInitial(() -> {
         Playwright playwright = Playwright.create();
         STARTED_PLAYWRIGHTS.add(playwright);
-        return playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
+        return engine(playwright).launch(new BrowserType.LaunchOptions().setHeadless(true));
     });
 
     static {
@@ -99,6 +102,22 @@ abstract class PlaywrightTestBase {
 
     protected static Browser browser() {
         return WORKER_BROWSER.get();
+    }
+
+    protected static boolean isChromium() {
+        return "chromium".equals(BROWSER);
+    }
+
+    /** An unknown value fails here rather than falling back, which would retest Chromium unnoticed. */
+    private static BrowserType engine(Playwright playwright) {
+        return switch (BROWSER) {
+            case "chromium" -> playwright.chromium();
+            case "firefox" -> playwright.firefox();
+            case "webkit" -> playwright.webkit();
+            default ->
+                throw new IllegalArgumentException(
+                        "peekaboot.it.browser=" + BROWSER + " is not one of chromium, firefox, webkit");
+        };
     }
 
     private static void closeBrowsers() {
