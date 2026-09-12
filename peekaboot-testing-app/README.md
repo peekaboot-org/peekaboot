@@ -73,12 +73,13 @@ whichever trace happens to be listed first.
 
 ### Playwright browser (UI tests under `ui/`)
 
-The `PlaywrightTestBase`-derived tests drive a real headless Chromium instance. The first
-time `Playwright.create()` runs on a machine, the Playwright Java driver downloads the
-Chromium build it needs into `~/.cache/ms-playwright`. No manual step is required as long
-as the machine has network access. A first
+The `PlaywrightTestBase`-derived tests drive a real headless browser: Chromium, unless
+`-Dpeekaboot.it.browser` names `firefox` or `webkit`. The first time `Playwright.create()`
+runs on a machine, the Playwright Java driver downloads the build it needs into
+`~/.cache/ms-playwright`. No manual step is required as long as the machine has network
+access. A first
 `mvn -pl peekaboot-testing-app verify -Dit.test=DashboardShellIT` on a clean machine
-downloads Chromium on its own and then runs the tests.
+downloads the browser on its own and then runs the tests.
 
 If the automatic download does not happen (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD` is set, say,
 or the cache was wiped), install the browser explicitly with Playwright's own CLI, run
@@ -93,7 +94,8 @@ mvn -pl peekaboot-testing-app exec:java \
 
 `-Dexec.classpathScope=test` is required. The `playwright` dependency is test-scoped, and
 without this flag `exec:java` cannot find `com.microsoft.playwright.CLI` on its default
-(compile/runtime) classpath.
+(compile/runtime) classpath. Name `firefox` or `webkit` in `exec.args` for the other
+engines; they can be listed together.
 
 Do not add `--with-deps` to `exec.args` unless you can `sudo` without a password. It tries
 to `apt-get install` OS-level shared libraries for every Playwright-supported browser and
@@ -101,13 +103,15 @@ fails outright in a sandboxed or non-root shell. Plain `install chromium` only d
 the browser binary and does not need root. On a fresh machine missing an OS library
 (`libwoff2dec.so.1.0.2` was the one observed here), Playwright prints a non-fatal "Host
 validation warning" at the start of the test run. It does not affect headless Chromium
-runs.
+runs. WebKit is the engine that does need those libraries on Linux, which is why the
+nightly cross-browser workflow installs with `--with-deps`.
 
 CI (`.github/workflows/build-on-push.yml`) caches `~/.cache/ms-playwright` keyed on the
-`playwright.version` property in this module's pom, so the download only happens when
-Playwright, and with it Chromium, changes. GitHub-hosted Ubuntu runners have passwordless
-`sudo`, so `--with-deps` would be available there if a missing OS library ever turned a
-"Host validation warning" into an actual failure. That has not been necessary so far.
+`playwright.version` property in this module's pom and on the engines it installs, so the
+download only happens when Playwright, and with it the browser build, changes.
+`.github/workflows/cross-browser.yml` runs the suite nightly on all three engines and does
+install with `--with-deps`: GitHub-hosted Ubuntu runners have passwordless `sudo`, and
+WebKit does not start without those libraries.
 
 ## Screenshot capture (`ScreenshotCapture`)
 
