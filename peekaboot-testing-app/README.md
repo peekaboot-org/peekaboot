@@ -66,6 +66,11 @@ that only exist if their log was captured, `importModule(path, expression)` to e
 expression over an ES module imported into the blank fixture page, `serveWithCsp(urlGlob,
 policy)` and `emulateOsColorScheme(scheme)`.
 
+Geometry assertions sit behind the bundled webfont. `Fonts.awaitReady(page)` is awaited by
+`openDashboard`, `openPersonsPage` and `overlay.awaitLoaded()`, the three points a surface
+first becomes measurable, so a measurement never lands on the system fallback while the face
+is still loading and passes anyway.
+
 The trace store is shared with every class in the suite, so a test pins its own trace: it
 triggers a request, takes the id from the toolbar (or from `TraceApiClient.get(path)` under
 `integration/`, which reads the `Server-Timing` header) and waits for that id, never for

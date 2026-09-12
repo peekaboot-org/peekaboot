@@ -14,6 +14,33 @@
 
    --pk-info does not borrow --pk-primary; peekaboot-frontend/README.md
    ("--pk-info is not an alias for --pk-primary") has the reasoning. */
+/* The bundled Geist faces, served from the jar (peekaboot-frontend/README.md, "The bundled
+   webfont"). One variable file per family covers every weight the UI asks for, so the whole
+   type system costs two downloads.
+
+   font-display: optional is the only value that guarantees no layout shift: a face that
+   misses its short block period sits that render out instead of reflowing the page under
+   the reader. No metric overrides go with it - no shipping Safari implements them.
+
+   These rules reach the dashboard document only. A shadow root ignores an @font-face
+   declared inside it and Peekaboot adds no CSS to a host page, so the toolbar and the
+   overlay register the same two faces through shared/fonts.js instead. */
+@font-face {
+    font-family: 'Geist';
+    src: url('../vendor/geist/Geist-1.7.2.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: optional;
+}
+
+@font-face {
+    font-family: 'Geist Mono';
+    src: url('../vendor/geist/GeistMono-1.7.2.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: optional;
+}
+
 :root, :host {
     --pk-bg: #ffffff;
     --pk-bg-alt: #f6f8fa;
@@ -52,8 +79,10 @@
     --pk-space-lg: 24px;
     --pk-space-xl: 32px;
 
-    --pk-font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --pk-font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+    /* Unquoted on purpose: a custom property keeps the quoting it was written with, and the
+       tests read the bundled family off the front of these two values. */
+    --pk-font: Geist, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --pk-font-mono: Geist Mono, ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
     --pk-text-xs: 0.75rem;
     --pk-text-sm: 0.875rem;
     --pk-text-base: 1rem;
