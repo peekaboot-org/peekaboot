@@ -22,3 +22,10 @@ buildNumber.properties
 release-notes.md
 unreleased-notes.md
 releases.json
+
+# Working notes between sessions, not part of the documentation
+docs/session-handover/
+
+# Local exports of the public signing key; the copy that matters is on the keyservers
+peekaboot-public.asc
+peekaboot-public.ascgpg
