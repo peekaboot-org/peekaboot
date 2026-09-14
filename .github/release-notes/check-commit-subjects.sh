@@ -2,9 +2,9 @@
 #
 # Fails if any non-merge commit subject in the range is not a conventional commit.
 #
-# These subjects do more than fill the release notes: conventional-commits-version-policy
-# derives the release version from them, so a subject it cannot parse is a change it cannot
-# weigh when choosing the next version.
+# These subjects do more than fill the release notes: git-cliff derives the release version
+# from them too, so a subject it cannot parse is a change it cannot weigh when choosing the
+# next version.
 #
 # Usage: check-commit-subjects.sh <repo> <before-sha> <after-sha>
 set -euo pipefail
