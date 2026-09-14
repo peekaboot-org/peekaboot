@@ -479,12 +479,14 @@ signs or publishes anything. A push to `main` whose message does not contain `[r
 (which is how recursion is prevented) runs:
 
 1. `./mvnw --batch-mode verify`
-2. `./mvnw -P peekaboot-release release:prepare`
-3. `./mvnw -P peekaboot-release release:perform`
-4. Grouped release notes for the new tag, rendered by git-cliff into the release body;
-   `CHANGELOG.md` regenerated whole and committed to `main` behind the `[release]` prefix;
-   and the `unreleased` draft deleted. See [Release notes](#release-notes).
-5. `main` merged back into `dev` and pushed, carrying the `[release]` version commits and
+2. The release version resolved with `git-cliff --bumped-version`, and `CHANGELOG.md`
+   regenerated whole against it and staged. See [Release notes](#release-notes).
+3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
+   picks the staged changelog up, so version bump, changelog and tag are one commit.
+4. `./mvnw -P peekaboot-release release:perform`
+5. Grouped release notes for the new tag rendered by git-cliff into the release body, and
+   the `unreleased` draft deleted.
+6. `main` merged back into `dev` and pushed, carrying the `[release]` version commits and
    the changelog. This needs GitHub Actions on the `green-default-branch` ruleset's bypass
    list: the ruleset requires the `build-on-push` check, and a commit pushed here by
    `GITHUB_TOKEN` never carries one, because that token starts no workflows and
@@ -503,9 +505,9 @@ the poms:
 2. Put the released version into `README.md`'s dependency snippet, the one place the app
    repo spells it out.
 
-The profile adds `maven-release-plugin` with Basjes'
-`conventional-commits-version-policy`, so commit message discipline decides the version
-bump. Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
+The profile adds `maven-release-plugin`, which the workflow drives with an explicit
+`-DreleaseVersion`; see [How the next version is chosen](#how-the-next-version-is-chosen).
+Tags are bare `@{project.version}`; release commits are prefixed `[release]`. It also
 GPG-signs with `raphael@peekaboot.org` and publishes through
 `central-publishing-maven-plugin`, which runs with `autoPublish=true` /
 `waitUntil=published`, so the job does not go green until the artifacts are live on
@@ -526,14 +528,22 @@ the bundle is still uploaded from `peekaboot-coverage`, the reactor's last modul
 `spring-boot-starter-parent` pom, so the plain `maven-deploy-plugin` runs for it, and
 `maven.deploy.skip` keeps the sample app out.
 
-`release:prepare` bumps the POMs to the release version, commits, tags, runs its
-`preparationGoals` (`clean verify`) against that tag and then commits the next `-SNAPSHOT`
-version; it deploys nothing. `release:perform` checks the tag out into `target/checkout`
-and runs the configured `<goals>` (`deploy`) there, which is where signing and the upload
-to Central happen. The workflow passes it `-Darguments="-DskipTests -Djacoco.skip=true"`.
-That tree has passed `verify` twice by then (the job's own build, then `preparationGoals`),
-so a third run would only repeat the Playwright suite. The static-analysis gates, both
+`release:prepare` bumps the POMs to the release version, runs its `preparationGoals`
+(`clean verify`) against that tree, then commits it, tags it and commits the next
+`-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
+`target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where
+signing and the upload to Central happen. The workflow passes it
+`-Darguments="-DskipTests -Djacoco.skip=true"`. That tree passed `verify` in
+`preparationGoals`, and the job's own build verified the same sources beforehand, so a
+third run would only repeat the Playwright suite. The static-analysis gates, both
 dependency checks and the configuration-metadata check still run.
+
+The changelog reaches the tagged commit because that commit is a plain `git commit` over
+the whole index: maven-scm stages the POMs and then commits everything staged. So the
+workflow renders and stages `CHANGELOG.md` before prepare runs, and
+`checkModificationExcludes` stops the modification check refusing the staged file. No
+version of maven-scm documents that, so `verify-release-commit` greps the new tag and
+fails the job while the only damage is a tag nobody has consumed.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
@@ -564,10 +574,10 @@ the `[release]` commits drop out via `filter_unconventional`, neither being conv
 bucketed — which is what the gate is for.
 
 The gate rejects any non-merge subject in the pushed range that is not a conventional commit.
-This is not about the notes: `conventional-commits-version-policy` derives the release
-version from these subjects, so one it cannot parse is a change it cannot weigh. It does not
-enforce the 50-character subject limit, because Dependabot's own `build(deps): bump ...`
-lines routinely exceed it.
+This is not only about the notes: git-cliff derives the release version from these subjects
+too, so one it cannot parse is a change it cannot weigh. It does not enforce the
+50-character subject limit, because Dependabot's own `build(deps): bump ...` lines routinely
+exceed it.
 
 Two things in `cliff.toml` are load-bearing. `^build\(deps` must stay above the generic
 `^build`, or every Dependabot commit lands in "Build, CI and chores". And group numbers must
@@ -589,17 +599,19 @@ same second.
 
 ### How the next version is chosen
 
-`ConventionalCommitsVersionPolicy` takes the highest step among the commits since the most
-recent `x.y.z` tag and applies it to that tag's version. `feat:` gives a minor bump;
-`type!:` or a `BREAKING CHANGE:` line anywhere in the message gives a major one; otherwise
-the `-SNAPSHOT` is just stripped. With no tag at all it walks the whole history and starts
-from the pom version. Check the answer before releasing with
-`./mvnw -P peekaboot-release release:prepare -DdryRun=true`, which reports the tag it
-started from, the step it chose and the version it would release.
+`git-cliff --bumped-version` takes the highest step among the commits since the most recent
+tag matching `tag_pattern` and applies it to that tag's version: `feat:` gives a minor bump,
+`type!:` or a `BREAKING CHANGE:` footer a major one, anything else a patch. `cliff.toml`
+leaves `[bump]` unset, so those are git-cliff's defaults, and `0.x` is no exception — one
+breaking change takes the project to `1.0.0`. Check the answer before releasing:
 
-`./mvnw --batch-mode -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`
-bypasses the policy for that one run. A push-triggered workflow cannot carry that flag, so
-it is the fallback for a release run by hand, not the plan.
+```bash
+.github/release-notes/render.sh --bumped-version
+```
+
+The workflow hands that answer to `release:prepare` as `-DreleaseVersion`, so the POM's
+`-SNAPSHOT` is a placeholder rather than an input; editing it steers nothing. The plugin
+derives the next development version from the released one by incrementing its patch.
 
 ### Signing and secrets
 

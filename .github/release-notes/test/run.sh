@@ -10,6 +10,8 @@ readonly HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly WORK="$(mktemp -d)"
 readonly FIXTURE="$WORK/fixture"
 readonly UNKNOWN_SHA="deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+# The fixture's one untagged commit is a feat:, so the next version off 1.2.0 is a minor bump.
+readonly BUMPED="1.3.0"
 trap 'rm -rf "$WORK"' EXIT
 
 "$HERE/fixture.sh" "$FIXTURE" > /dev/null
@@ -30,6 +32,23 @@ diff -u "$HERE/expected-latest.md" "$WORK/latest.md"
 echo "checking the --unreleased render (the draft and the push preview)"
 "$HERE/../render.sh" --repository "$FIXTURE" --unreleased > "$WORK/unreleased.md"
 diff -u "$HERE/expected-unreleased.md" "$WORK/unreleased.md"
+
+echo "checking the bumped version"
+bumped="$("$HERE/../render.sh" --repository "$FIXTURE" --bumped-version)"
+if [ "$bumped" != "$BUMPED" ]; then
+    echo "expected the untagged feat: to bump 1.2.0 to $BUMPED, got $bumped" >&2
+    exit 1
+fi
+
+# The release renders its changelog before the tag exists, so --tag has to label the tip.
+echo "checking the --tag render (the changelog the release commit carries)"
+"$HERE/../render.sh" --repository "$FIXTURE" --tag "$BUMPED" > "$WORK/tagged.md"
+grep -q "^## $BUMPED - [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}$" "$WORK/tagged.md"
+# Below the heading it is the plain render with the compare link closed at the tag, so the
+# two lines that differ are normalised back rather than kept in a second golden file.
+sed -e "1s/.*/## Unreleased/" -e "s|/1\.2\.0\.\.\.$BUMPED$|/1.2.0...dev|" \
+    "$WORK/tagged.md" > "$WORK/tagged-as-unreleased.md"
+diff -u "$HERE/expected-notes.md" "$WORK/tagged-as-unreleased.md"
 
 # 1.1.0..1.2.0 is one conventional commit: a real pass, not an empty range.
 echo "checking the commit-subject gate accepts a clean range"
