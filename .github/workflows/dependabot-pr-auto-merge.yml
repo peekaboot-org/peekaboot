@@ -28,9 +28,12 @@ jobs:
       # job-level `if` cannot see.
       - name: dependabot-pr-approve-and-auto-merge
         if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.metadata.outputs.package-ecosystem != 'gradle' && steps.metadata.outputs.dependency-group != 'spring-boot'
+        # --rebase, not --merge: the dev ruleset requires linear history. Dependabot's single
+        # commit already carries a conventional subject, which rebase keeps and squash would
+        # replace with the pull request title.
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto --merge "$PR_URL"
+          gh pr merge --auto --rebase "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
