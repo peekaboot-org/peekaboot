@@ -3,6 +3,7 @@
     "version": "1.2.0",
     "date": "2026-02-01",
     "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.2.0",
+    "initial": false,
     "groups": [
       {
         "title": "Bug fixes",
@@ -21,6 +22,7 @@
     "version": "1.1.0",
     "date": "2026-02-01",
     "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.1.0",
+    "initial": false,
     "groups": [
       {
         "title": "Breaking changes",
@@ -73,29 +75,7 @@
     "version": "1.0.0",
     "date": "2026-01-01",
     "url": "https://github.com/peekaboot-org/peekaboot/releases/tag/1.0.0",
-    "groups": [
-      {
-        "title": "Features",
-        "entries": [
-          {
-            "text": "Add the first thing",
-            "scope": null,
-            "breaking": false,
-            "detail": null
-          }
-        ]
-      },
-      {
-        "title": "Bug fixes",
-        "entries": [
-          {
-            "text": "Correct the first thing",
-            "scope": null,
-            "breaking": false,
-            "detail": null
-          }
-        ]
-      }
-    ]
+    "initial": true,
+    "groups": []
   }
 ]

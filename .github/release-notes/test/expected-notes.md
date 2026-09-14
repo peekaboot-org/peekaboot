@@ -38,9 +38,5 @@
 
 ## 1.0.0 - 2026-01-01
 
-### Features
-- Add the first thing
-
-### Bug fixes
-- Correct the first thing
+Initial release.
 

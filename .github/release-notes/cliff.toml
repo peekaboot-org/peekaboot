@@ -8,6 +8,14 @@ body = """
 {% else %}\
 ## Unreleased
 {% endif %}
+{# A tagged release with no predecessor has nothing to diff against, so its notes would
+   otherwise be every commit since the repository began. An UNRELEASED section with no
+   predecessor is different: that is the work going into the first release, and listing it
+   is the point. #}\
+{% if version and not previous.version %}\
+Initial release.
+
+{% else %}\
 {% set breaking = commits | filter(attribute="breaking", value=true) | unique(attribute="message") %}\
 {% if breaking | length > 0 %}\
 ### Breaking changes
@@ -30,6 +38,7 @@ body = """
 {% if previous.version %}\
 **Full changelog**: <REPO>/compare/{{ previous.version }}...{% if version %}{{ version }}{% else %}dev{% endif %}
 
+{% endif %}\
 {% endif %}\
 """
 trim = true

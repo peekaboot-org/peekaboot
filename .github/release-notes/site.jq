@@ -41,7 +41,10 @@ def to_entries_list:
     { version: .version,
       date: (.timestamp | todate | split("T")[0]),
       url: ("https://github.com/peekaboot-org/peekaboot/releases/tag/" + .version),
-      groups: ((
+      # A first release has no predecessor to diff against, so listing its commits means
+      # listing every commit since the repository began. The page renders a sentence.
+      initial: (.previous.version == null),
+      groups: (if .previous.version == null then [] else ((
         [ { title: "Breaking changes",
             entries: ([ .commits[] | select(.breaking) ] | to_entries_list) } ]
         | map(select(.entries | length > 0))
@@ -50,4 +53,4 @@ def to_entries_list:
         [ .commits[] | select(.group | is_user_facing) ]
         | group_by(.group)
         | map({ title: (.[0].group | strip_group_prefix), entries: to_entries_list })
-      )) })
+      )) end) })
