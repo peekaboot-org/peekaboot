@@ -424,7 +424,11 @@ write anything. See [Release notes](#release-notes).
 Pushes to `dev` only. Renders the unreleased notes and upserts a draft release named
 `Unreleased` on the placeholder tag name `unreleased`, so the notes for the cycle in
 progress are readable on the Releases page rather than only inside a workflow run. A draft
-carries no git tag, since GitHub creates the ref only on publish.
+carries no git tag, since GitHub creates the ref only on publish. So it has no
+`/releases/tag/unreleased` URL - that 404s. GitHub parks it under
+`/releases/tag/untagged-<hash>`; find it at the top of the Releases page, badged
+Draft. It is visible only to accounts with write access, so a signed-out visitor
+sees nothing there.
 
 Separate from `build-on-push` because it needs `contents: write`, and that workflow runs on
 every branch including Dependabot's, whose token is read-only. It also stays clear of the
