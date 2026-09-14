@@ -526,14 +526,15 @@ the bundle is still uploaded from `peekaboot-coverage`, the reactor's last modul
 `spring-boot-starter-parent` pom, so the plain `maven-deploy-plugin` runs for it, and
 `maven.deploy.skip` keeps the sample app out.
 
-`release:prepare` bumps the POMs to the release version, commits, tags, runs its
-`preparationGoals` (`clean verify`) against that tag and then commits the next `-SNAPSHOT`
-version; it deploys nothing. `release:perform` checks the tag out into `target/checkout`
-and runs the configured `<goals>` (`deploy`) there, which is where signing and the upload
-to Central happen. The workflow passes it `-Darguments="-DskipTests -Djacoco.skip=true"`.
-That tree has passed `verify` twice by then (the job's own build, then `preparationGoals`),
-so a third run would only repeat the Playwright suite. The static-analysis gates, both
-dependency checks and the configuration-metadata check still run.
+`release:prepare` bumps the POMs to the release version, runs its `preparationGoals`
+(`clean verify`) against that tree, then commits it, tags it and commits the next
+`-SNAPSHOT` version; it deploys nothing. `release:perform` checks the tag out into
+`target/checkout` and runs the configured `<goals>` (`deploy`) there, which is where
+signing and the upload to Central happen. The workflow passes it
+`-Darguments="-DskipTests -Djacoco.skip=true"`. That tree has passed `verify` twice by then
+(the job's own build, then `preparationGoals`), so a third run would only repeat the
+Playwright suite. The static-analysis gates, both dependency checks and the
+configuration-metadata check still run.
 
 Reproducibility depends on `project.build.outputTimestamp` being pinned in the root pom and
 in the testing-app's, and on every plugin version being explicit. That includes the
