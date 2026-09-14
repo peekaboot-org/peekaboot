@@ -170,25 +170,48 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         return (String) page.evalOnSelector(selector, "el => getComputedStyle(el).backgroundColor");
     }
 
+    /** Moves the pointer clear of every button and waits for the resting paint. */
+    private void awaitResting(String selector) {
+        page.mouse().move(0, 0);
+        awaitSettledPaint(selector, false);
+    }
+
+    /** Hovers {@code selector} and waits for its hover cue to finish. */
+    private void awaitHovered(String selector) {
+        page.hover(selector);
+        awaitSettledPaint(selector, true);
+    }
+
     /**
-     * Waits until the element's background-color and filter hold still across consecutive
-     * reads - .pk-btn transitions both over 0.2s, so a read right after a theme flip or
-     * hover/un-hover would otherwise catch a mid-blend value and assert against noise.
+     * Waits until the element is in the wanted hover state and every transition it started has
+     * finished, so the read that follows sees the end state - .pk-btn transitions both its
+     * background-color and its filter over 0.2s.
+     *
+     * <p>Equal consecutive reads are not proof of a settled paint: a transition that has not
+     * advanced between two samples - one whose hover style has not landed yet, or one starved of
+     * frames - satisfies that just as well as a finished one. The cue's own starting value is
+     * brightness(1), which renders as the untouched fill, so sampling there makes the hovered
+     * fill compare equal to the resting one.
      */
-    private void awaitSettledPaint(String selector) {
+    private void awaitSettledPaint(String selector, boolean hovered) {
         page.evalOnSelector(selector, """
-                async el => {
-                    const read = () => getComputedStyle(el).backgroundColor + ' ' + getComputedStyle(el).filter;
-                    let previous = read();
-                    for (let i = 0; i < 60; i++) {
+                async (el, hovered) => {
+                    const deadline = Date.now() + 5000;
+                    while (Date.now() < deadline) {
+                        if (el.matches(':hover') === hovered) {
+                            // finished rejects on a transition a later style change replaces, and
+                            // never resolves while the timeline is starved, so the deadline rather
+                            // than the promise bounds this wait.
+                            const done = Promise.all(el.getAnimations().map(a => a.finished.catch(() => {})));
+                            await Promise.race([done, new Promise(r => setTimeout(r, deadline - Date.now()))]);
+                            if (el.matches(':hover') === hovered && el.getAnimations().length === 0) return;
+                        }
                         await new Promise(resolve => setTimeout(resolve, 50));
-                        const current = read();
-                        if (current === previous) return;
-                        previous = current;
                     }
-                    throw new Error('paint never settled: ' + read());
+                    throw new Error('paint never settled: hover=' + el.matches(':hover')
+                            + ' filter=' + getComputedStyle(el).filter);
                 }
-                """);
+                """, hovered);
     }
 
     /**
@@ -234,15 +257,13 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
             for (String button : List.of("#btn-pressed", "#unmask-pressed")) {
-                page.mouse().move(0, 0); // make sure nothing is hovered
-                awaitSettledPaint(button);
+                awaitResting(button);
                 Map<String, Object> resting = renderedInkAndFill(button);
                 assertThat(((Number) resting.get("ratio")).doubleValue())
                         .as("%s resting ink/fill contrast (%s theme)", button, theme)
                         .isGreaterThanOrEqualTo(4.5);
 
-                page.hover(button);
-                awaitSettledPaint(button);
+                awaitHovered(button);
                 Map<String, Object> hovered = renderedInkAndFill(button);
                 assertThat(hovered.get("fill"))
                         .as("%s hover shifts the rendered fill (%s theme)", button, theme)
@@ -269,8 +290,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
-            page.mouse().move(0, 0); // make sure nothing is hovered
-            awaitSettledPaint("#unmask-pressed");
+            awaitResting("#unmask-pressed");
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("resting fill is --pk-danger (%s theme)", theme)
@@ -279,8 +299,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                     .as("resting ink/fill contrast (%s theme)", theme)
                     .isGreaterThanOrEqualTo(4.5);
 
-            page.hover("#unmask-pressed");
-            awaitSettledPaint("#unmask-pressed");
+            awaitHovered("#unmask-pressed");
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("hovered fill stays --pk-danger (%s theme)", theme)
