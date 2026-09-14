@@ -14,6 +14,7 @@ import org.peekaboot.backend.security.SecurityContextRequestAuthentication;
 import org.peekaboot.backend.security.SecurityPosture;
 import org.peekaboot.backend.security.SecurityPostureListener;
 import org.peekaboot.backend.storage.StorageDirectory;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -24,6 +25,7 @@ import org.springframework.boot.info.BuildProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.ResolvableType;
 import org.springframework.core.env.Environment;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
@@ -52,6 +54,9 @@ public class PeekabootSecurityAutoConfiguration {
     /** Spring Boot's own default for {@code spring.security.filter.order}. */
     private static final int DEFAULT_SECURITY_FILTER_ORDER = -100;
 
+    private static final ResolvableType GUARD_TYPE =
+            ResolvableType.forClassWithGenerics(FilterRegistrationBean.class, DashboardAuthenticationFilter.class);
+
     @Bean
     @ConditionalOnMissingBean
     public SecurityPostureListener securityPostureListener(SecurityPosture securityPosture) {
@@ -70,12 +75,11 @@ public class PeekabootSecurityAutoConfiguration {
     public SecurityPosture securityPosture(
             ObjectProvider<DashboardCredentials> credentials,
             ObjectProvider<CredentialsFile> credentialsFile,
-            ObjectProvider<FilterRegistrationBean<DashboardAuthenticationFilter>> guard,
+            ListableBeanFactory beanFactory,
             Environment environment) {
         DashboardCredentials resolvedCredentials = credentials.getIfAvailable();
         CredentialsFile resolvedCredentialsFile = credentialsFile.getIfAvailable();
-        FilterRegistrationBean<DashboardAuthenticationFilter> resolvedGuard = guard.getIfAvailable();
-        if (resolvedCredentials != null && resolvedCredentialsFile != null && resolvedGuard != null) {
+        if (resolvedCredentials != null && resolvedCredentialsFile != null && guardRegistered(beanFactory)) {
             return SecurityPosture.armed(
                     resolvedCredentials,
                     resolvedCredentialsFile.path().orElse(null),
@@ -180,6 +184,18 @@ public class PeekabootSecurityAutoConfiguration {
      */
     static boolean springSecurityPresent() {
         return ClassUtils.isPresent(SECURITY_CONTEXT_HOLDER, ClassUtils.getDefaultClassLoader());
+    }
+
+    /**
+     * Asked of the bean definitions rather than through an injected {@code ObjectProvider}: with
+     * no guard registered, injection retries the lookup ignoring generics, and every other
+     * {@code FilterRegistrationBean} in the application is a candidate on that pass - two of them
+     * fail the context, one of them would arm the posture behind a filter that guards nothing.
+     * This is the same match {@code @ConditionalOnMissingBean} makes on the guard itself, so an
+     * application that replaced the registration still counts as guarded.
+     */
+    private static boolean guardRegistered(ListableBeanFactory beanFactory) {
+        return beanFactory.getBeanNamesForType(GUARD_TYPE, true, false).length > 0;
     }
 
     /** Detected-only, so an explicit override of {@code peekaboot.security.enabled} does not hide what was detected. */

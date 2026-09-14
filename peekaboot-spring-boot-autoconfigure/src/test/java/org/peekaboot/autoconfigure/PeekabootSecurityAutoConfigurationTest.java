@@ -2,6 +2,7 @@ package org.peekaboot.autoconfigure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.servlet.Filter;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -18,6 +19,8 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 class PeekabootSecurityAutoConfigurationTest {
 
@@ -206,8 +209,75 @@ class PeekabootSecurityAutoConfigurationTest {
                         .isEmpty());
     }
 
+    /**
+     * With no guard of its own to find, Spring retries the lookup ignoring generics, and every
+     * other {@code FilterRegistrationBean} in the application is a candidate on that pass - two of
+     * them used to fail the context. Zalando's Logbook contributes exactly this pair.
+     */
+    @Test
+    void startsWithoutAGuardAlongsideForeignFilterRegistrations(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .withUserConfiguration(ForeignFilterRegistrations.class)
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    assertThat(context.getBean(SecurityPosture.class).report()).isEmpty();
+                });
+    }
+
+    /** A single foreign registration is what that same pass would arm the posture behind. */
+    @Test
+    void staysQuietWithoutAGuardAlongsideOneForeignFilterRegistration(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withPropertyValues("peekaboot.security.enabled=false")
+                .withUserConfiguration(OneForeignFilterRegistration.class)
+                .run(context -> assertThat(
+                                context.getBean(SecurityPosture.class).report())
+                        .isEmpty());
+    }
+
+    /** Foreign registrations must not back the guard off through {@code @ConditionalOnMissingBean} either. */
+    @Test
+    void stillRegistersTheGuardAlongsideForeignFilterRegistrations(@TempDir Path storageDir) {
+        runner(storageDir)
+                .withUserConfiguration(ForeignFilterRegistrations.class)
+                .run(context -> {
+                    assertThat(context).hasBean("dashboardAuthenticationFilter");
+                    assertThat(context.getBean(SecurityPosture.class).report()).isPresent();
+                });
+    }
+
     @SuppressWarnings("unchecked")
     private static FilterRegistrationBean<DashboardAuthenticationFilter> registration(ApplicationContext context) {
         return context.getBean("dashboardAuthenticationFilter", FilterRegistrationBean.class);
+    }
+
+    /** Declared as {@code FilterRegistrationBean<?>}, the way Logbook declares its two. */
+    @Configuration(proxyBeanMethods = false)
+    static class ForeignFilterRegistrations {
+
+        @Bean
+        FilterRegistrationBean<?> logbookFilter() {
+            return passThrough();
+        }
+
+        @Bean
+        FilterRegistrationBean<?> secureLogbookFilter() {
+            return passThrough();
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class OneForeignFilterRegistration {
+
+        @Bean
+        FilterRegistrationBean<?> logbookFilter() {
+            return passThrough();
+        }
+    }
+
+    private static FilterRegistrationBean<?> passThrough() {
+        Filter filter = (request, response, chain) -> chain.doFilter(request, response);
+        return new FilterRegistrationBean<>(filter);
     }
 }
