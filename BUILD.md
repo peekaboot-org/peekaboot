@@ -484,13 +484,14 @@ signs or publishes anything. A push to `main` whose message does not contain `[r
 4. Grouped release notes for the new tag, rendered by git-cliff into the release body;
    `CHANGELOG.md` regenerated whole and committed to `main` behind the `[release]` prefix;
    and the `unreleased` draft deleted. See [Release notes](#release-notes).
-5. A pull request `main` → `dev` with
-   auto-merge enabled (`gh pr create` + `gh pr merge --auto`), carrying the two `[release]`
-   version commits back. A PR and not a push because `dev`'s `green-default-branch` ruleset
-   requires the `build-on-push` check and only admins bypass it; a merge commit pushed by
-   `GITHUB_TOKEN` has none and is refused. The PR gets no such check either, because
-   `build-on-push` ignores `main` and `GITHUB_TOKEN` events trigger no workflows. So it
-   waits for a human merge; an open one is reused by the next release
+5. `main` merged back into `dev` and pushed, carrying the `[release]` version commits and
+   the changelog. This needs GitHub Actions on the `green-default-branch` ruleset's bypass
+   list: the ruleset requires the `build-on-push` check, and a commit pushed here by
+   `GITHUB_TOKEN` never carries one, because that token starts no workflows and
+   `build-on-push` ignores `main` in any case. Without the bypass the push is refused and
+   the step falls back to a pull request with auto-merge, which then waits for a human
+   because the PR's head SHA cannot get the check either. The fallback exists so that a
+   refused push leaves an already-published release recoverable instead of failing the job
 
 Nothing automates what follows a release; do it on `dev` once the merge-back has landed.
 The Gradle build needs no step, since it derives the version and the build instant from
