@@ -112,6 +112,27 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: render-site-release-data
+        run: |
+          .github/release-notes/render.sh --context \
+            | jq -f .github/release-notes/site.jq > releases.json
+
+      # The site runs GitHub's legacy Pages build: no workflow, no plugins, nothing
+      # fetched at build time, so the data has to be committed into that repo.
+      # The clone inherits the job's git identity from configure-git-user.
+      - name: push-site-release-data
+        run: |
+          git clone --depth 1 \
+            "https://x-access-token:${SITE_REPO_TOKEN}@github.com/peekaboot-org/peekaboot-org.github.io.git" \
+            site
+          cp releases.json site/_data/releases.json
+          git -C site add _data/releases.json
+          git -C site diff --cached --quiet || git -C site commit \
+            -m "[release] release data for ${{ steps.get-latest-tag.outputs.tag }}"
+          git -C site push origin HEAD:main
+        env:
+          SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+
       # A direct push would be refused: the ruleset on dev requires the build-on-push
       # status check, and a merge commit pushed here has none. A pull request with
       # auto-merge is the path that ruleset accepts. An open one from an earlier release
