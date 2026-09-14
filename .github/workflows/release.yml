@@ -1,29 +1,42 @@
-name: build-release-on-main-push
+name: release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      releaseVersion:
+        description: 'Override the version git-cliff derives (x.y.z). Empty uses git-cliff.'
+        required: false
+        type: string
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  build-release-on-main-push:
-    if: ${{ !contains(github.event.head_commit.message, '[release]') }} # prevent recursive releases
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     permissions:
       contents: write
-      pull-requests: write
 
     steps:
+      # workflow_dispatch carries no branch filter, so a run started from a feature branch
+      # would otherwise tag and release that branch. A failing step rather than a job-level
+      # `if`, which would report a mis-dispatch as a green skip.
+      - name: guard-release-ref
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/dev" ]; then
+            echo "::error::releases run on dev only; this run was dispatched from $GITHUB_REF"
+            exit 1
+          fi
+
+      # No `ref`: checkout leaves HEAD on a local `dev`, and maven-scm pushes to whatever
+      # branch it finds checked out, which is the whole mechanism targeting `dev`. Naming
+      # `ref: dev` would redirect a mis-dispatched run instead of letting the guard fail it.
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
           # full history: the spotless ratchet resolves a fixed base commit
           fetch-depth: 0
 
@@ -46,13 +59,23 @@ jobs:
         uses: ./.github/actions/install-git-cliff
 
       # git-cliff picks the version here and groups the same subjects into the notes below,
-      # so one tool's reading of the history settles both.
+      # so one tool's reading of the history settles both. The dispatch input overrides it for
+      # the case where it reads the bump wrong, and takes the same checks either way. Through
+      # `env`, never `${{ }}` inside the script: an input interpolated there is a shell
+      # injection for anyone with write access.
       - name: resolve-release-version
         id: resolve-release-version
+        env:
+          OVERRIDE: ${{ inputs.releaseVersion }}
         run: |
-          version="$(.github/release-notes/render.sh --bumped-version)"
+          version="$OVERRIDE"
+          source="the releaseVersion input"
+          if [ -z "$version" ]; then
+            version="$(.github/release-notes/render.sh --bumped-version)"
+            source="git-cliff"
+          fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::git-cliff returned '$version', not an x.y.z version"
+            echo "::error::$source returned '$version', not an x.y.z version"
             exit 1
           fi
           if git rev-parse --verify --quiet "refs/tags/$version" > /dev/null; then
@@ -102,6 +125,19 @@ jobs:
           MAVEN_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.OSSRH_TOKEN }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
+
+      # main originates nothing; it is a pointer that only ever fast-forwards onto the commit
+      # that was published. Pushing a bare commit SHA makes git refuse anything but a
+      # fast-forward, so this needs no --force and can never rewrite main. The tag is
+      # annotated, hence the dereference: pushing a tag object to a branch ref is rejected.
+      # First of the post-publish steps because it is the one that cannot fail on its own, so
+      # a later step failing cannot leave main stale.
+      - name: fast-forward-main
+        env:
+          VERSION: ${{ steps.resolve-release-version.outputs.version }}
+        run: |
+          tag_commit="$(git rev-parse "refs/tags/${VERSION}^{commit}")"
+          git push origin "${tag_commit}:refs/heads/main"
 
       - name: render-release-notes
         run: |
@@ -157,27 +193,3 @@ jobs:
           git -C site push origin HEAD:main
         env:
           SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
-
-      # With GitHub Actions on the dev ruleset's bypass list this pushes straight through.
-      # The pull request stays as the fallback for when it cannot - the ruleset requires a
-      # build-on-push check, and a commit pushed here by GITHUB_TOKEN never gets one because
-      # that token starts no workflows. Central has already been published by this point, so
-      # a refused push must leave the release recoverable rather than fail the job.
-      - name: merge-main-to-dev
-        run: |
-          git fetch origin dev:refs/remotes/origin/dev
-          git checkout -B release-merge origin/dev
-          git merge main -m "[release] merge released main back to dev"
-          if git push origin HEAD:dev; then
-            exit 0
-          fi
-          echo "::warning::direct push to dev refused, opening a pull request instead"
-          pr_url="$(gh pr list --base dev --head main --state open --json url --jq '.[0].url')"
-          if [ -z "$pr_url" ]; then
-            pr_url="$(gh pr create --base dev --head main \
-              --title "[release] merge released main back to dev" \
-              --body "Carries the version commits of release ${{ steps.resolve-release-version.outputs.version }} back to dev.")"
-          fi
-          gh pr merge --auto --merge "$pr_url"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

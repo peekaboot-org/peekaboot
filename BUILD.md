@@ -435,8 +435,8 @@ every branch including Dependabot's, whose token is read-only. It also stays cle
 `build-on-push` check context the `dev` ruleset requires.
 
 The release job deletes the draft once the real release exists. It does not reappear until
-the next real commit on `dev`: the merge-back PR merges with `GITHUB_TOKEN`, and pushes made
-with that token trigger no workflows.
+the next real commit on `dev`: the release job's own commits are pushed with `GITHUB_TOKEN`,
+and pushes made with that token trigger no workflows.
 
 ### `cross-browser.yml`
 
@@ -451,7 +451,7 @@ different version and feature set. It is not Safari, and a green leg says nothin
 Safari. This workflow is separate from `build-on-push`, which stays the check the `dev`
 ruleset requires.
 
-### `build-release-on-main-push.yml`
+### `release.yml`
 
 See [Releasing](#releasing).
 
@@ -467,16 +467,19 @@ arrives as one grouped PR: its version is declared twice on the Maven side, and 
 landing in one place only leaves the reactor building two Boot versions. Dependabot watches
 Maven and Gradle daily, GitHub Actions weekly.
 
-Branch model: `dev` is the default and integration branch; `main` is the release trunk,
-and pushing to it releases. The `green-default-branch` ruleset on `dev` requires the
-`build-on-push` check, but its bypass list holds the organisation admins and the repository
-admin role with `bypass_mode: always`, so a direct push by the owner never waits for it.
+Branch model: `dev` is the default and integration branch, and the only branch that
+originates commits. `main` is a pointer to the last released commit; the release job
+fast-forwards it and nothing else writes to it. The `green-default-branch` ruleset on `dev`
+requires the `build-on-push` check and linear history. Its bypass list holds the organisation
+admins, the repository admin role and GitHub Actions, all `bypass_mode: always`, so a direct
+push by the owner or by the release job never waits for the check.
 
 ## Releasing
 
 Everything release-specific sits in the `peekaboot-release` profile; a normal build never
-signs or publishes anything. A push to `main` whose message does not contain `[release]`
-(which is how recursion is prevented) runs:
+signs or publishes anything. Releases start by hand: run the `release` workflow from the
+Actions tab with `dev` selected, and it fails immediately if dispatched from anything else.
+Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
 
 1. `./mvnw --batch-mode verify`
 2. The release version resolved with `git-cliff --bumped-version`, and `CHANGELOG.md`
@@ -484,18 +487,18 @@ signs or publishes anything. A push to `main` whose message does not contain `[r
 3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
    picks the staged changelog up, so version bump, changelog and tag are one commit.
 4. `./mvnw -P peekaboot-release release:perform`
-5. Grouped release notes for the new tag rendered by git-cliff into the release body, and
+5. `main` fast-forwarded to the tagged commit, so it names exactly what was published.
+   Nothing merges back, because `main` originates no commits of its own.
+6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
    the `unreleased` draft deleted.
-6. `main` merged back into `dev` and pushed, carrying the `[release]` version commits and
-   the changelog. This needs GitHub Actions on the `green-default-branch` ruleset's bypass
-   list: the ruleset requires the `build-on-push` check, and a commit pushed here by
-   `GITHUB_TOKEN` never carries one, because that token starts no workflows and
-   `build-on-push` ignores `main` in any case. Without the bypass the push is refused and
-   the step falls back to a pull request with auto-merge, which then waits for a human
-   because the PR's head SHA cannot get the check either. The fallback exists so that a
-   refused push leaves an already-published release recoverable instead of failing the job
 
-Nothing automates what follows a release; do it on `dev` once the merge-back has landed.
+`release:prepare` pushes to `dev`, which the ruleset protects, so GitHub Actions has to sit on
+that ruleset's bypass list: a commit pushed by `GITHUB_TOKEN` never carries a `build-on-push`
+check, because that token starts no workflows. Without the bypass the push is refused before
+the tag is created and long before anything reaches Central, so a missing bypass costs a
+release rather than leaving half of one behind.
+
+Nothing automates what follows a release; do it on `dev`.
 The Gradle build needs no step, since it derives the version and the build instant from
 the poms:
 
@@ -612,6 +615,10 @@ breaking change takes the project to `1.0.0`. Check the answer before releasing:
 The workflow hands that answer to `release:prepare` as `-DreleaseVersion`, so the POM's
 `-SNAPSHOT` is a placeholder rather than an input; editing it steers nothing. The plugin
 derives the next development version from the released one by incrementing its patch.
+
+The `releaseVersion` dispatch input overrides that answer for a run where git-cliff reads the
+bump wrong. An overridden version takes the same `x.y.z` and tag-exists checks as a derived
+one.
 
 ### Signing and secrets
 
