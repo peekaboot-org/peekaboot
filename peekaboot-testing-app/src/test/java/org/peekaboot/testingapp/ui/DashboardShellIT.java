@@ -234,6 +234,10 @@ class DashboardShellIT extends PlaywrightTestBase {
                 new Page.RouteOptions().setTimes(1));
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
+        // The first document satisfies both waits below on its own - it renders the shell and
+        // fires load even though meters.js was lost - so waiting only on those races the
+        // reload. The second document is what this test is about.
+        page.waitForCondition(() -> documents.size() == 2);
         page.waitForSelector("#build-info > *");
         page.waitForLoadState();
 
