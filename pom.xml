@@ -130,7 +130,10 @@
                             <useReleaseProfile>false</useReleaseProfile>
                             <releaseProfiles>peekaboot-release</releaseProfiles>
                             <tagNameFormat>@{project.version}</tagNameFormat>
-                            <scmCommentPrefix>[release]</scmCommentPrefix>
+                            <!-- The trailing space is for the tag message, which is hardcoded as the
+                                 prefix followed by "copy for tag ". The commit comments keep a space of
+                                 their own because they substitute @{prefix} trimmed. -->
+                            <scmCommentPrefix xml:space="preserve">[release] </scmCommentPrefix>
                             <scmReleaseCommitComment>@{prefix} set version to @{releaseLabel}</scmReleaseCommitComment>
                             <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration</scmDevelopmentCommitComment>
                             <!-- The workflow stages the rendered CHANGELOG.md before this runs, so that
