@@ -112,10 +112,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The only block here that pipes, hence the only one setting pipefail: the default
+      # shell is `bash -e` without it, so a failed render would still exit 0 and leave jq
+      # writing a zero-byte file, which the next step publishes as an empty release list.
+      # The length check guards the same silent success the two render steps above grep for.
       - name: render-site-release-data
         run: |
+          set -o pipefail
           .github/release-notes/render.sh --context \
             | jq -f .github/release-notes/site.jq > releases.json
+          jq -e 'length > 0' releases.json > /dev/null
 
       # The site runs GitHub's legacy Pages build: no workflow, no plugins, nothing
       # fetched at build time, so the data has to be committed into that repo.
