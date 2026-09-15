@@ -471,7 +471,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * A copyable full-length span id on every span-tree row would crowd the tree, so the
      * id lives on the Logs tab's rows instead (see logsTableRendersCopyableSpanIds and
      * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT). A row keeps its span
-     * name, duration, badges and the logs/SQL toggles - just not a copy control.
+     * name, duration and the logs toggle - just not a copy control.
      */
     @Test
     void spanTreeRowsDoNotRenderACopyableSpanId() {
@@ -595,16 +595,17 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * Cross-link: a span the backend classified as a query (span.query present) carries a
-     * link to its entry in the Queries tab. The jump switches the overlay tab, moves
-     * keyboard focus onto the target entry and marks it with a temporary highlight class,
-     * so the eye lands where focus just went. Runs on the toolbar-open path - the jump is
-     * pure DOM state and identical on every open path.
+     * link to its entry in the Queries tab, in its details panel. The jump switches the
+     * overlay tab, moves keyboard focus onto the target entry and marks it with a temporary
+     * highlight class, so the eye lands where focus just went. Runs on the toolbar-open
+     * path - the jump is pure DOM state and identical on every open path.
      */
     @Test
     void spanQueryLinkJumpsToTheQueriesTabEntry() {
         openOverlayFromToolbar();
         overlay.waitFor(".pk-span-query-link");
         String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-query-link').dataset.spanId");
+        overlay.click(".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle");
 
         overlay.click(".pk-span-query-link");
 
@@ -905,22 +906,27 @@ class TraceOverlayIT extends PlaywrightTestBase {
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        overlay.awaitMeasurable(".pk-gantt-row[data-depth='1']");
+        overlay.awaitMeasurable(".pk-gantt-span[data-depth='1']");
 
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")
                 .containsEntry("content-security-policy", "style-src 'self'");
         assertThat(
                         overlay.evaluate(
-                                "root => getComputedStyle(root.querySelector('.pk-gantt-row[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
                 .as("a nested row keeps its indent")
                 .isEqualTo("20px");
         assertThat((Boolean) overlay.evaluate("root => {"
-                        + "const track = root.querySelector('.pk-gantt-row[data-depth=\"0\"] .pk-gantt-track');"
+                        + "const track = root.querySelector('.pk-gantt-span[data-depth=\"0\"] .pk-gantt-track');"
                         + "return track.querySelector('.pk-gantt-bar').getBoundingClientRect().width"
                         + "  > track.getBoundingClientRect().width * 0.9; }"))
                 .as("the root span's bar spans its track")
                 .isTrue();
+        assertThat(
+                        overlay.evaluate(
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-span-details')).marginLeft"))
+                .as("its details panel sits under its name")
+                .isEqualTo("44px");
         assertThat(cspViolations).isEmpty();
 
         // style-src-attr falls back to style-src, so a parsed style attribute is refused
@@ -1021,7 +1027,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 };
                 const rowCountOf = span => rendered(span).querySelector('.pk-span-row-count')?.textContent ?? null;
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
-                const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
+                const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
                 return [
                     rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: 'select * from orders'}),
                     rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
@@ -1050,7 +1056,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const container = document.createElement('div');
                 m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'SELECT person',
                     tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}});
-                return Array.from(container.querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
+                return Array.from(container.querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
             })()
             """);
 
@@ -1087,36 +1093,130 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     private int visibleGanttRows() {
-        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-row')]"
-                        + ".filter(row => row.style.display !== 'none').length"))
+        return ((Number) overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-span')]"
+                        + ".filter(entry => entry.style.display !== 'none').length"))
                 .intValue();
     }
 
     /**
-     * A query span's SQL sits collapsed under its row until the reader asks: the statement can
-     * be hundreds of characters and the tree is what the tab is for. The toggle's title is the
-     * only name it has, so it has to say which way it switches.
+     * An open details panel belongs to its span's entry, so it hides and returns with that
+     * span: collapsing an ancestor takes it away, expanding the ancestor brings it back still
+     * open, and a collapsed span in between keeps its own subtree hidden throughout.
      */
     @Test
-    void theSqlToggleRevealsTheStatementUnderItsSpan() {
+    void collapsingASpanTakesItsDescendantsOpenDetailsWithIt() {
+        Object states = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'root', name: 'root', children: [
+                    {spanId: 'mid', name: 'mid', children: [{spanId: 'leaf', name: 'leaf', tags: {'db.system.name': 'h2'}}]},
+                    {spanId: 'sibling', name: 'sibling'}]}});
+                const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
+                const toggle = id => entry(id).querySelector('.pk-gantt-toggle');
+                const state = id => entry(id).style.display === 'none' ? 'hidden'
+                    : entry(id).classList.contains('pk-gantt-span--open') ? 'open' : 'shown';
+                const snapshot = () => ['mid', 'leaf', 'sibling'].map(state).join(',');
+                entry('leaf').querySelector('.pk-gantt-name__toggle').click();
+                const opened = snapshot();
+                toggle('root').click();
+                const rootCollapsed = snapshot();
+                toggle('root').click();
+                const rootExpanded = snapshot();
+                toggle('mid').click();
+                toggle('root').click();
+                toggle('root').click();
+                const midStillCollapsed = snapshot();
+                return [opened, rootCollapsed, rootExpanded, midStillCollapsed];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<String> stateSnapshots = (List<String>) states;
+        assertThat(stateSnapshots)
+                .containsExactly("shown,open,shown", "hidden,hidden,hidden", "shown,open,shown", "shown,hidden,shown");
+    }
+
+    /**
+     * The track is the widest part of a row, so a pointer opens the details from there as
+     * well as from the name. An event marker on the track is a control of its own and does
+     * not, and a click on the bar counts as a click on the track.
+     */
+    @Test
+    void clickingASpansTrackTogglesItsDetails() {
+        Object states = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a',
+                    events: [{name: 'exception', timestamp: '1970-01-01T00:00:00.005Z'}]}});
+                const entry = container.querySelector('.pk-gantt-span');
+                const open = () => entry.classList.contains('pk-gantt-span--open')
+                    && entry.querySelector('.pk-gantt-name__toggle').getAttribute('aria-expanded') === 'true';
+                const states = [];
+                entry.querySelector('.pk-gantt-track').click();
+                states.push(open());
+                entry.querySelector('.pk-gantt-event-marker').click();
+                states.push(open());
+                entry.querySelector('.pk-gantt-bar').click();
+                states.push(open());
+                return states;
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> trackClickStates = (List<Object>) states;
+        assertThat(trackClickStates).containsExactly(true, true, false);
+    }
+
+    /**
+     * A span's row is one line; its statement and its tags wait in a details panel under the
+     * row until the reader opens it from the span's name. A statement runs to hundreds of
+     * characters and a query span carries a dozen tags, which drawn on every row buried the
+     * tree the tab is for.
+     */
+    @Test
+    void aSpanNameOpensTheDetailsPanelUnderItsRow() {
         openPersonsPage();
         awaitTrace(toolbar.traceId(), "trace => (trace.queries || []).length > 0");
         toolbar.openOverlay();
-        overlay.waitFor(".pk-span-query-toggle");
+        overlay.waitFor(".pk-span-query-link");
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-span-query-link').dataset.spanId");
+        String nameToggle = ".pk-gantt-row[data-span-id='" + spanId + "'] .pk-gantt-name__toggle";
 
-        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
-                        + ".classList.contains('pk-span-query-detail--expanded')"))
-                .isFalse();
+        assertThat(overlay.evaluate("(root, sel) => root.querySelector(sel).getAttribute('aria-expanded')", nameToggle))
+                .isEqualTo("false");
+        assertThat(detailsPanelShown(spanId)).as("closed until asked for").isFalse();
 
-        overlay.click(".pk-span-query-toggle");
+        overlay.click(nameToggle);
 
-        assertThat((Boolean) overlay.evaluate("root => root.querySelector('.pk-span-query-detail')"
-                        + ".classList.contains('pk-span-query-detail--expanded')"))
-                .isTrue();
-        assertThat(overlay.text(".pk-span-query-detail .pk-query-text").toLowerCase(Locale.ROOT))
+        assertThat(detailsPanelShown(spanId)).isTrue();
+        assertThat(overlay.evaluate("(root, sel) => root.querySelector(sel).getAttribute('aria-expanded')", nameToggle))
+                .isEqualTo("true");
+        String panelId = (String)
+                overlay.evaluate("(root, sel) => root.querySelector(sel).getAttribute('aria-controls')", nameToggle);
+        assertThat(overlay.evaluate(
+                        "(root, id) => root.getElementById(id).closest('.pk-gantt-span').querySelector('.pk-gantt-row').dataset.spanId",
+                        panelId))
+                .as("the name names the panel it opens")
+                .isEqualTo(spanId);
+        assertThat(overlay.text("#" + panelId + " .pk-code-block").toLowerCase(Locale.ROOT))
                 .contains("select");
-        assertThat(overlay.evaluate("root => root.querySelector('.pk-span-query-toggle').title"))
-                .isEqualTo("Hide SQL");
+        assertThat(((Number) overlay.evaluate(
+                                "(root, id) => root.getElementById(id).querySelectorAll('.pk-span-tags__key').length",
+                                panelId))
+                        .intValue())
+                .as("the query span's tags are in its panel")
+                .isPositive();
+
+        overlay.click(nameToggle);
+
+        assertThat(detailsPanelShown(spanId)).isFalse();
+    }
+
+    private boolean detailsPanelShown(String spanId) {
+        return (Boolean) overlay.evaluate(
+                "(root, id) => getComputedStyle(root.querySelector(`.pk-gantt-row[data-span-id='${id}']`)"
+                        + ".closest('.pk-gantt-span').querySelector('.pk-span-details')).display !== 'none'",
+                spanId);
     }
 
     /**

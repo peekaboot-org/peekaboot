@@ -229,20 +229,22 @@ class AccessibilityIT extends PlaywrightTestBase {
     }
 
     /**
-     * The overlay's glyph buttons - the expand/collapse triangle, the SQL and query
-     * cross-link toggles, the logs toggle and the log row's span link - were converted to
-     * real buttons but rendered at glyph size. Measured like the copy control above:
-     * the declared min-width/min-height is not what a reader clicks.
+     * The overlay's small controls - the expand/collapse toggle, the span name that opens a
+     * span's details, the query cross-link in those details, the logs toggle and the log
+     * row's span link - are real buttons that could render at glyph size. Measured like the
+     * copy control above: the declared min-width/min-height is not what a reader clicks.
      */
     @Test
     void overlayGlyphControlsKeepTheMinimumHitTarget() {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-link");
-        for (String control :
-                List.of(".pk-gantt-toggle", ".pk-span-query-toggle", ".pk-span-query-link", ".pk-span-logs-toggle")) {
+        for (String control : List.of(".pk-gantt-toggle", ".pk-gantt-name__toggle", ".pk-span-logs-toggle")) {
             assertMinimumHitTarget(control);
         }
+        overlay.evaluate("root => root.querySelector('.pk-span-query-link')"
+                + ".closest('.pk-gantt-span').querySelector('.pk-gantt-name__toggle').click()");
+        assertMinimumHitTarget(".pk-span-query-link");
 
         overlay.openLogsTab();
         overlay.waitFor(".pk-log__goto-span");

@@ -45,10 +45,10 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
-     * The trace-detail overlay renders pills of its own - the gantt kind pills and the
-     * span tag badges - and tabStrip() its count pill; all are badges in all but class
-     * name, so they owe the same 4.5:1 in both themes. The tag badge doubles as the guard
-     * for muted/accent ink on the --pk-bg-hover surface, the lightest fill any text sits on.
+     * The trace-detail overlay renders ink of its own - the gantt kind pills and the details
+     * panel's tag keys and values - and tabStrip() its count pill; each owes the same 4.5:1
+     * as a badge in both themes. The tag key doubles as the guard for muted ink on the
+     * panel's --pk-bg-alt ground.
      */
     @Test
     void traceDetailPillInkClearsAaContrastInBothThemes() {
@@ -56,8 +56,8 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
-            for (String pill :
-                    List.of("kind-server", "kind-client", "kind-producer", "tag-badge", "tag-badge-key", "tab-count")) {
+            for (String pill : List.of(
+                    "kind-server", "kind-client", "kind-producer", "span-tag-key", "span-tag-value", "tab-count")) {
                 assertThat(contrastRatio("#" + pill))
                         .as("%s ink/fill contrast (%s theme)", pill, theme)
                         .isGreaterThanOrEqualTo(4.5);
@@ -128,7 +128,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     /**
      * WCAG contrast ratio between an element's computed color and the effective fill
      * behind it: its own background-color, or - where that is fully transparent, like
-     * the tag badge's key span - the nearest ancestor's.
+     * a details panel's tag key - the nearest ancestor's.
      */
     private double contrastRatio(String selector) {
         return ((Number) page.evaluate("""

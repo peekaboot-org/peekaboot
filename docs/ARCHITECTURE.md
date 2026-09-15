@@ -932,10 +932,11 @@ the order and the reasons are here:
 3. `jdbc.query[N]` (datasource-proxy/Micrometer)
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
-The same masked text is put on the span itself as `SpanNode.query`, which is what the Spans
-tab's SQL toggle shows, and the three statement tags it was read from are dropped from
-`SpanNode.tags` rather than served a second time beside it. A datasource-proxy result-set
-span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount` (null when it does not
+The same masked text is put on the span itself as `SpanNode.query`, which is what a query
+span's details panel in the Spans tab shows, and the three statement tags it was read from
+are dropped from `SpanNode.tags` rather than served a second time beside it. A
+datasource-proxy result-set span's `jdbc.row-count` tag is served parsed as
+`SpanNode.rowCount` (null when it does not
 parse) - on the query span it belongs to, not on the result-set span that recorded it.
 `RowCounts` pairs the two by creation order, the result set recorded after a query and
 before the next one, and both `TraceTreeMapper` and `QueryExtractor` read that one pairing,

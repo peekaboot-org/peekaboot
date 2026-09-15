@@ -248,7 +248,7 @@ than landing on an empty panel.
 ### Cross-links in the trace overlay
 
 The overlay's tabs link into each other. A log row links to the span that wrote it, a query
-span's gantt row links to its entry in the Queries tab, and each Queries entry links back to
+span's details panel links to its entry in the Queries tab, and each Queries entry links back to
 its span row (`trace-detail.js`'s `goToSpan`/`goToQuery`). The Logs tab's span-name button
 is the older third link, filtering the log list to a span. A jump switches the overlay tab
 the way the strip would (`replaceState`, params reset), scrolls to the target, moves keyboard
@@ -467,10 +467,11 @@ With a green brand, an INFO pill filled with `--pk-primary` sits beside a green
 
   The trace-detail overlay's small controls are all `<button>`s with the browser's button
   chrome reset away (`.pk-unbutton`, plus `.pk-icon-btn` for the 24px glyph box), so each
-  is reachable by keyboard. That covers the gantt expand/collapse triangle, the SQL and
-  logs toggles, the gantt event markers, the "show logs for all spans" link, the log
-  span-filter cell and the span-filter clear. A new control that needs `cursor: pointer` is
-  the smell; make it a `<button>` first.
+  is reachable by keyboard. That covers the gantt expand/collapse toggle, the span name
+  that opens a span's details, the logs toggle, the gantt event markers, the "show logs for
+  all spans" link, the log span-filter cell and the span-filter clear. A new control that
+  needs `cursor: pointer` is the smell; make it a `<button>` first. The gantt track's
+  pointer cursor is the one exception: it is a pointer shortcut to the span name's button.
 
 - **A control whose only content is an icon needs an explicit `aria-label`, and the icon
   needs `aria-hidden="true"`.** `title` does *not* rescue it: text content outranks title

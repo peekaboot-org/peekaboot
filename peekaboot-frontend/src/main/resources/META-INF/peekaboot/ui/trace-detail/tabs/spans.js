@@ -1,18 +1,26 @@
 /**
- * Trace-detail overlay - Spans tab: the gantt chart and its expand/collapse behaviour.
- * A span's "N logs" toggle does not render anything of its own - it asks trace-detail.js
- * (via context.goToSpanLogs) to switch the overlay to the Logs tab pre-filtered to that
- * span, which is where a span's logs and its full id both live.
+ * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour and each
+ * span's details panel. A span's "N logs" toggle does not render anything of its own - it
+ * asks trace-detail.js (via context.goToSpanLogs) to switch the overlay to the Logs tab
+ * pre-filtered to that span, which is where a span's logs and its full id both live.
  *
- * Bar positions, marker offsets and row indents are set through the CSSOM, never as a
- * style attribute in markup: a host page whose CSP omits style-src 'unsafe-inline' drops
- * the attributes, which would flatten every row to depth 0 and every bar to the left edge.
+ * Each span renders as one entry: its one-line row, then its details panel, closed until
+ * the reader opens it. Entries are flat siblings carrying their depth, which is what the
+ * subtree toggle walks.
+ *
+ * Bar positions, marker offsets and indents are set through the CSSOM, never as a style
+ * attribute in markup: a host page whose CSP omits style-src 'unsafe-inline' drops the
+ * attributes, which would flatten every row to depth 0 and every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 
 const INDENT_PX = 20;
+/** The subtree toggle's column; a details panel starts past it, under the span's name. */
+const TOGGLE_PX = 24;
+
+const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
 export function render(container, trace, context = {}) {
     // the 1 keeps a zero-length trace from dividing by zero in every position below
@@ -22,17 +30,17 @@ export function render(container, trace, context = {}) {
     // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
     const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
 
-    const rowsContainer = el('div', {attrs: {id: 'pk-gantt-rows'}});
+    const entries = el('div', {attrs: {id: 'pk-gantt-rows'}});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
             el('div', {className: 'pk-gantt-header__spacer'})),
-        rowsContainer));
+        entries));
 
-    renderSpanRows(rowsContainer, trace.rootSpan, 0, traceStart, totalDuration);
+    renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration);
 
-    rowsContainer.addEventListener('click', (e) => {
+    entries.addEventListener('click', (e) => {
         // Logs toggle: hands off to the Logs tab.
         const logsToggle = e.target.closest('.pk-span-logs-toggle');
         if (logsToggle) {
@@ -47,23 +55,26 @@ export function render(container, trace, context = {}) {
             return;
         }
 
-        const sqlToggle = e.target.closest('.pk-span-query-toggle');
-        if (sqlToggle) {
-            toggleQueryDetail(rowsContainer, sqlToggle);
+        const toggle = e.target.closest('.pk-gantt-toggle');
+        if (toggle) {
+            toggleSubtree(toggle);
             return;
         }
 
-        const toggle = e.target.closest('.pk-gantt-toggle');
-        if (toggle) toggleSubtree(toggle);
+        // The name is the keyboard path to the details; the track is the same switch for a
+        // pointer, being the widest part of the row. An event marker keeps its own hover.
+        const detailsSwitch = e.target.closest('.pk-gantt-name__toggle')
+            || (!e.target.closest('.pk-gantt-event-marker') && e.target.closest('.pk-gantt-track'));
+        if (detailsSwitch) {
+            const entry = detailsSwitch.closest('.pk-gantt-span');
+            setDetailsOpen(entry, !entry.classList.contains('pk-gantt-span--open'));
+        }
     });
 }
 
-function toggleQueryDetail(rowsContainer, sqlToggle) {
-    const spanId = sqlToggle.dataset.spanId;
-    const queryDetail = rowsContainer.querySelector(`.pk-span-query-detail[data-span-id="${CSS.escape(spanId)}"]`);
-    if (!queryDetail) return;
-    const expanded = queryDetail.classList.toggle('pk-span-query-detail--expanded');
-    sqlToggle.title = expanded ? 'Hide SQL' : 'Show SQL';
+function setDetailsOpen(entry, open) {
+    entry.classList.toggle('pk-gantt-span--open', open);
+    entry.querySelector('.pk-gantt-name__toggle').setAttribute('aria-expanded', String(open));
 }
 
 function toggleSubtree(toggle) {
@@ -71,81 +82,75 @@ function toggleSubtree(toggle) {
     toggle.setAttribute('aria-expanded', String(expand));
     toggle.setAttribute('aria-label', expand ? 'Collapse child spans' : 'Expand child spans');
     toggle.textContent = expand ? '-' : '+';
-    setSubtreeVisible(toggle.closest('.pk-gantt-row'), expand);
+    setSubtreeVisible(toggle.closest('.pk-gantt-span'), expand);
 }
 
 /**
- * Shows or hides everything nested under `row` - every following row with a deeper
- * data-depth, query details and tag rows included. Expanding leaves a collapsed
- * descendant's own subtree hidden.
+ * Shows or hides every entry nested under `entry` - every following entry with a deeper
+ * data-depth. Expanding leaves a collapsed descendant's own subtree hidden.
  */
-function setSubtreeVisible(row, expand) {
-    const rowDepth = Number(row.dataset.depth);
-    let sibling = row.nextElementSibling;
-    while (sibling && Number(sibling.dataset.depth) > rowDepth) {
-        sibling.style.display = expand ? '' : 'none';
-        const collapsed = expand && sibling.querySelector('.pk-gantt-toggle[aria-expanded="false"]');
-        sibling = collapsed ? nextOutsideSubtree(sibling) : sibling.nextElementSibling;
+function setSubtreeVisible(entry, expand) {
+    const depth = Number(entry.dataset.depth);
+    let next = entry.nextElementSibling;
+    while (next && Number(next.dataset.depth) > depth) {
+        next.style.display = expand ? '' : 'none';
+        const collapsed = expand && next.querySelector('.pk-gantt-toggle[aria-expanded="false"]');
+        next = collapsed ? nextOutsideSubtree(next) : next.nextElementSibling;
     }
 }
 
-function nextOutsideSubtree(row) {
-    const depth = Number(row.dataset.depth);
-    let next = row.nextElementSibling;
+function nextOutsideSubtree(entry) {
+    const depth = Number(entry.dataset.depth);
+    let next = entry.nextElementSibling;
     while (next && Number(next.dataset.depth) > depth) next = next.nextElementSibling;
     return next;
 }
 
-function renderSpanRows(container, span, depth, traceStart, totalDuration) {
-    if (!span) return;
-    const indent = depth * INDENT_PX;
-
-    const row = document.createElement('div');
-    row.className = 'pk-gantt-row';
-    row.dataset.spanId = span.spanId;
-    row.dataset.depth = depth;
-    row.append(nameCell(span, indent), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
-    container.appendChild(row);
-
-    if (span.query) container.appendChild(queryDetailRow(span, indent, depth));
-    const badges = tagBadgesRow(span, indent, depth);
-    if (badges) container.appendChild(badges);
-
-    (span.children || []).forEach(child => renderSpanRows(container, child, depth + 1, traceStart, totalDuration));
+function spanKind(span) {
+    const kind = (span.kind || 'internal').toLowerCase();
+    return Object.hasOwn(KIND_LABELS, kind) ? kind : 'internal';
 }
 
-function nameCell(span, indent) {
+function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
+    if (!span) return;
+    const kind = spanKind(span);
+    const detailsId = `pk-span-details-${span.spanId}`;
+
+    const entry = el('div', {className: 'pk-gantt-span'});
+    entry.dataset.depth = depth;
+
+    const row = el('div', {className: 'pk-gantt-row'});
+    row.dataset.spanId = span.spanId;
+    row.append(nameCell(span, kind, depth, detailsId), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
+    entry.append(row, detailsPanel(span, kind, depth, detailsId));
+    container.appendChild(entry);
+
+    (span.children || []).forEach(child => renderSpanEntries(container, child, depth + 1, traceStart, totalDuration));
+}
+
+function nameCell(span, kind, depth, detailsId) {
     const hasChildren = span.children && span.children.length > 0;
-    const kind = (span.kind || 'internal').toLowerCase();
     const name = span.name || 'unknown';
     const spanId = span.spanId;
     const logCount = (span.logs || []).length;
 
     const cell = el('div', {className: 'pk-gantt-name'});
-    cell.style.paddingLeft = `${indent}px`;
+    cell.style.paddingLeft = `${depth * INDENT_PX}px`;
     cell.append(hasChildren
         ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
-    if (kind !== 'internal' && kind !== 'unknown') {
+    if (kind !== 'internal') {
         cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
     }
-    cell.append(el('span', {className: 'pk-gantt-name__text', text: name, title: name}));
+    cell.append(button({
+        className: 'pk-unbutton pk-gantt-name__toggle', title: name,
+        attrs: {'aria-expanded': 'false', 'aria-controls': detailsId}
+    }, el('span', {className: 'pk-gantt-name__text', text: name})));
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
     // as span.rowCount.
     if (span.rowCount != null) {
         cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row')}));
-    }
-    if (span.query) {
-        cell.append(
-            button({
-                className: 'pk-span-action pk-span-query-toggle', text: '\u{1F4C4}', title: 'Show SQL',
-                attrs: {'data-span-id': spanId, 'aria-label': 'Show SQL for this span'}
-            }),
-            button({
-                className: 'pk-span-action pk-span-query-link', text: '⤷', title: 'Show in Queries tab',
-                attrs: {'data-span-id': spanId, 'aria-label': 'Show this query in the Queries tab'}
-            }));
     }
     if (logCount > 0) {
         const logs = formatCount(logCount, 'log');
@@ -211,44 +216,38 @@ function durationCell(span, totalDuration) {
     return cell;
 }
 
-/** The masked statement, hidden until the row's SQL toggle reveals it. */
-function queryDetailRow(span, indent, depth) {
-    const detail = document.createElement('div');
-    detail.className = 'pk-span-query-detail';
-    detail.dataset.spanId = span.spanId;
-    // depth + 1: counts as collapsible content of this span's row, so the
-    // expand/collapse walker (which stops at depth <= row depth) passes it
-    detail.dataset.depth = depth + 1;
-    detail.style.marginLeft = `${indent + INDENT_PX}px`;
-    detail.append(
-        el('div', {className: 'pk-query-label pk-label', text: 'Query'}),
-        el('div', {className: 'pk-query-text', text: span.query}));
-    return detail;
-}
-
 /**
- * The span's tags as badges under its row, or null when there are none: the backend
- * already keeps the statement tags out (they show in the query detail), and events sit
- * on the track.
+ * Everything about a span that does not fit its one-line row, closed until the name or the
+ * track opens it. The backend already keeps the statement tags out (they arrive as
+ * span.query), and events sit on the track.
  */
-function tagBadgesRow(span, indent, depth) {
-    const entries = Object.entries(span.tags || {});
-    if (entries.length === 0) return null;
-
-    const row = document.createElement('div');
-    row.className = 'pk-gantt-badges';
-    row.dataset.depth = depth + 1;
-    row.style.paddingLeft = `${indent + INDENT_PX}px`;
-    // the backend's tag map carries no order of its own
-    row.append(...entries.sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => tagBadge(key, String(value))));
-    return row;
+function detailsPanel(span, kind, depth, detailsId) {
+    const panel = el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
+        el('div', {className: 'pk-span-details__head'},
+            el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`})),
+        querySection(span),
+        tagList(span.tags));
+    panel.style.marginLeft = `${depth * INDENT_PX + TOGGLE_PX}px`;
+    return panel;
 }
 
-/** The key in full: cut to its last segment, db.system.name and jdbc.datasource.name both read "name". */
-function tagBadge(key, value) {
-    const shortValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
-    return el('span', {className: 'pk-tag-badge', title: `${key}: ${value}`},
-        el('span', {className: 'pk-tag-badge__key', text: key}),
-        '=',
-        el('span', {className: 'pk-tag-badge__value', text: shortValue}));
+function querySection(span) {
+    if (!span.query) return null;
+    return el('div', {className: 'pk-span-details__query'},
+        el('pre', {className: 'pk-code-block', text: span.query}),
+        button({
+            className: 'pk-btn pk-btn--small pk-span-query-link', text: 'Show in Queries tab',
+            attrs: {'data-span-id': span.spanId}
+        }));
+}
+
+/** Full keys, since short ones collide (db.system.name, jdbc.datasource.name), in key order, since the backend's map has none. */
+function tagList(tags) {
+    const entries = Object.entries(tags || {}).sort(([a], [b]) => a.localeCompare(b));
+    if (entries.length === 0) return null;
+    return el('dl', {className: 'pk-span-tags'},
+        ...entries.flatMap(([key, value]) => [
+            el('dt', {className: 'pk-span-tags__key', text: key}),
+            el('dd', {className: 'pk-span-tags__value', text: String(value)})
+        ]));
 }

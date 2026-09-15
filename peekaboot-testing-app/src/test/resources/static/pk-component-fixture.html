@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/peekaboot/ui/assets/components.css">
     <!-- dashboard chrome, for the unmask toggle's pressed (danger) state below -->
     <link rel="stylesheet" href="/peekaboot/ui/dashboard/dashboard.css">
-    <!-- overlay chrome, for the gantt kind and tag pills in the contrast sweep below -->
+    <!-- overlay chrome, for the span tree's kind pills and details panel in the contrast sweep below -->
     <link rel="stylesheet" href="/peekaboot/ui/trace-detail/trace-detail.css">
 </head>
 <body>
@@ -23,7 +23,7 @@
     <span class="pk-gantt-kind pk-gantt-kind--server" id="kind-server">server</span>
     <span class="pk-gantt-kind pk-gantt-kind--client" id="kind-client">client</span>
     <span class="pk-gantt-kind pk-gantt-kind--producer" id="kind-producer">producer</span>
-    <span class="pk-tag-badge" id="tag-badge"><span class="pk-tag-badge__key" id="tag-badge-key">http.method</span>=<span class="pk-tag-badge__value">GET</span></span>
+    <div class="pk-gantt-span pk-gantt-span--open"><div class="pk-span-details"><dl class="pk-span-tags"><dt class="pk-span-tags__key" id="span-tag-key">http.method</dt><dd class="pk-span-tags__value" id="span-tag-value">GET</dd></dl></div></div>
     <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
 
     <div class="pk-group" id="group">
