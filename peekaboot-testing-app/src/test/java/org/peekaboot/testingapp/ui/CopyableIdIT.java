@@ -117,9 +117,8 @@ class CopyableIdIT extends PlaywrightTestBase {
     }
 
     /**
-     * A full span id on every span-tree row would crowd the tree, so the Logs tab is where
-     * it lives: every row carries its span's full id next to the name button that filters
-     * to it.
+     * Every Logs tab row carries its span's full id next to the name button that filters to
+     * it; the span tree keeps ids off its rows and in each span's details panel.
      */
     @Test
     void logsTableRendersCopyableSpanIds() {
@@ -147,6 +146,28 @@ class CopyableIdIT extends PlaywrightTestBase {
         assertThat(filterChip)
                 .as("copying an id is not a request to also filter by it - same capture-phase handler as the toolbar")
                 .isNull();
+    }
+
+    /**
+     * The span id in a span's details panel copies like every other id and leaves the panel
+     * open.
+     */
+    @Test
+    void clickingASpanIdInItsDetailsPanelCopiesItAndLeavesThePanelOpen() {
+        openPageWithToolbar();
+        toolbar.openOverlay();
+        overlay.waitFor("#pk-gantt-rows .pk-gantt-name__toggle");
+
+        overlay.click("#pk-gantt-rows .pk-gantt-name__toggle");
+        overlay.click("#pk-gantt-rows .pk-span-details .pk-copy");
+
+        overlay.waitUntil("root => root.querySelector('#pk-gantt-rows .pk-span-details .pk-copy')"
+                + ".classList.contains('pk-copy--copied')");
+        assertThat(
+                        (Boolean)
+                                overlay.evaluate(
+                                        "root => root.querySelector('#pk-gantt-rows .pk-gantt-span').classList.contains('pk-gantt-span--open')"))
+                .isTrue();
     }
 
     /**

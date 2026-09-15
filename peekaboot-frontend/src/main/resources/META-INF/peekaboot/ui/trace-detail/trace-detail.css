@@ -211,8 +211,8 @@
 .pk-log:hover { background: var(--pk-bg-alt); }
 .pk-log--hidden { display: none; }
 .pk-log__time { color: var(--pk-text-muted); white-space: nowrap; width: 90px; }
-/* Name button (filters to the span) stacked over its copyable full id - the span tree
-   shows no ids (too crowded with one on every row), so this is the id's only home. */
+/* Name button (filters to the span) stacked over its copyable full id; the span tree keeps
+   ids off its rows and in each span's details panel. */
 .pk-log__span-cell { width: 140px; flex: none; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
 /* A .pk-unbutton that reads as the link it acts like. */
 .pk-log__span { width: 100%; color: var(--pk-primary-text); font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; flex: none; }

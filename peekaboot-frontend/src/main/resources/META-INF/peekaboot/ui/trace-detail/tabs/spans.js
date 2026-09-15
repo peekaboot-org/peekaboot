@@ -2,11 +2,11 @@
  * Trace-detail overlay - Spans tab: the gantt chart, its expand/collapse behaviour and each
  * span's details panel. A span's "N logs" toggle does not render anything of its own - it
  * asks trace-detail.js (via context.goToSpanLogs) to switch the overlay to the Logs tab
- * pre-filtered to that span, which is where a span's logs and its full id both live.
+ * pre-filtered to that span, which is where a span's logs live.
  *
- * Each span renders as one entry: its one-line row, then its details panel, closed until
- * the reader opens it. Entries are flat siblings carrying their depth, which is what the
- * subtree toggle walks.
+ * Each span renders as one entry: its one-line row, then its details panel (kind, span id,
+ * error, SQL, tags), closed until the reader opens it. Entries are flat siblings carrying
+ * their depth, which is what the subtree toggle walks.
  *
  * Bar positions, marker offsets, indents and indent guides are set through the CSSOM,
  * never as a style attribute in markup: a host page whose CSP omits style-src
@@ -16,6 +16,7 @@
 import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
+import {copyableId} from '../../shared/copyable.js';
 
 const INDENT_PX = 16;
 /** The subtree toggle's column; a details panel starts past it, under the span's name. */
@@ -243,7 +244,8 @@ function durationCell(span, totalDuration) {
 function detailsPanel(span, kind, depth, detailsId) {
     const panel = el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
         el('div', {className: 'pk-span-details__head'},
-            el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`})),
+            el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`}),
+            copyableId(span.spanId, {label: 'spanId'})),
         errorSection(span),
         querySection(span),
         tagList(span.tags));

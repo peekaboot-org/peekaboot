@@ -464,19 +464,22 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * A copyable full-length span id on every span-tree row would crowd the tree, so the
-     * id lives on the Logs tab's rows instead (see logsTableRendersCopyableSpanIds and
-     * clickingTheLogSpanIdCopiesItWithoutFiltering in CopyableIdIT). A row keeps its span
-     * name, duration and the logs toggle - just not a copy control.
+     * A full-length span id on every row would crowd the tree, so a row carries none. The id
+     * sits in the span's details panel instead, for the reader who opened the panel for this
+     * span's particulars; CopyableIdIT covers the copy itself.
      */
     @Test
-    void spanTreeRowsDoNotRenderACopyableSpanId() {
+    void aSpanIdIsCopyableFromItsDetailsPanelNotItsRow() {
         openOverlayFromToolbar();
 
-        boolean anyRowHasACopyControl =
-                (boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-copy')");
-
-        assertThat(anyRowHasACopyControl).isFalse();
+        assertThat((Boolean) overlay.evaluate("root => !!root.querySelector('#pk-gantt-rows .pk-gantt-row .pk-copy')"))
+                .as("no row carries a copy control")
+                .isFalse();
+        assertThat(overlay.evaluate("root => [...root.querySelectorAll('#pk-gantt-rows .pk-gantt-span')]"
+                        + ".every(entry => entry.querySelector('.pk-span-details .pk-copy')?.dataset.pkCopy"
+                        + " === entry.querySelector('.pk-gantt-row').dataset.spanId)"))
+                .as("every details panel offers its own span's id")
+                .isEqualTo(true);
     }
 
     /**
