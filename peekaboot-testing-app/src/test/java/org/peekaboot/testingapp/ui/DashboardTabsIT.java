@@ -803,27 +803,28 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * on the very first, unfiltered load; the plain {@code bucketCounts} only ever reaches the
      * UI as the "/ total" denominator once the reader picks an explicit type or operation.
      * Nothing here selects the errors/type filter, so {@code userFiltered} is false and the
-     * "All" button's label comes from {@code filteredBucketCounts.all} alone - the real,
-     * unpatched {@code bucketCounts.all} never enters the text. Renders are settled by the
-     * time {@code openTracesTab()} returns: its ready selector is renderList's own output,
-     * written right after updateBucketCounts in the same synchronous response handler.
+     * "All" button's label comes from {@code filteredBucketCounts.all} alone.
+     *
+     * <p>Proven on the real listing response's own {@code all} count, grouped with
+     * 'ar-EG-u-nu-arab' - its Arabic-Indic digits differ from the browser's en-US ones
+     * however small the count is - checked live with Intl in the page rather than
+     * hard-coded, so this holds regardless of how many traces the shared store carries when
+     * the suite runs.
      */
     @Test
     void tracesTabBucketCountsAreGroupedInTheDashboardsLocale() {
-        page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
-        page.route("**/api/traces/insights**", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode result = (ObjectNode) readJson(response.text());
-            ((ObjectNode) result.get("filteredBucketCounts")).put("all", 12345);
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(result.toString()));
-        });
-
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'ar-EG-u-nu-arab')");
         openDashboard();
-        // No separate wait for the count itself: see this test's javadoc above.
-        dashboard.openTracesTab();
+
+        Response listing = page.waitForResponse(
+                response -> response.url().contains("/api/traces/insights"), dashboard::openTracesTab);
+        int all = readJson(listing.text())
+                .path("filteredBucketCounts")
+                .path("all")
+                .asInt();
 
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
-                .isEqualTo("All (12.345)");
+                .isEqualTo("All (" + localeFormatted(all, "ar-EG-u-nu-arab") + ")");
     }
 
     /**

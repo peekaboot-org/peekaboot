@@ -63,8 +63,10 @@ function logRow(log, spanNames, dateOptions, view, onFilterToSpan) {
  * tab with `{span}`) instead of needing a hand-off channel of its own.
  * `view.setFilters(next)` reports every change back so it round-trips into the hash. Both
  * are optional - the dev toolbar's open path (no urlState at all) leaves filtering purely
- * local. `view.locale`/`view.timeZone` are the dashboard's display settings for the
- * timestamps; absent (the toolbar), the browser's own apply.
+ * local. `view.locale`/`view.timeZone` are the display settings for the timestamps;
+ * `view.locale` is the reader's shared locale on the toolbar's path too (its own
+ * readLocaleSetting() read), but `view.timeZone` stays dashboard-only, and the browser's
+ * own applies where it is absent.
  */
 export function render(container, trace, view = {}) {
     const spanNames = buildSpanNames(trace.rootSpan);

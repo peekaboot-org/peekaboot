@@ -23,8 +23,9 @@ export function writeSetting(key, value) {
     }
 }
 
-// The key the dashboard's locale select writes, shared across surfaces via same-origin
-// storage the way theme.js's own key shares the theme.
+// The key the dashboard's locale select writes. Every surface reads it fresh at the point
+// it needs the locale (readLocaleSetting()) rather than watching it live the way
+// theme.js's own key is.
 export const LOCALE_STORAGE_KEY = 'peekaboot-locale';
 
 /**

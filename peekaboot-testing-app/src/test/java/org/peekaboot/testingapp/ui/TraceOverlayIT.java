@@ -985,29 +985,30 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * The tab strip's counts are counts like any other: grouped, and in the locale the dashboard
-     * is set to when the dashboard opened the overlay.
+     * is set to when the dashboard opened the overlay. Proven on a real trace's real counts,
+     * grouped with 'ar-EG-u-nu-arab' - its Arabic-Indic digits differ from the browser's en-US
+     * ones however small a count is - and checked live with Intl in the page rather than
+     * hard-coded, so this holds regardless of how many spans/queries/logs the request produces.
      */
     @Test
     void overlayTabCountsAreGroupedInTheDashboardsLocale() {
         openPersonsPage();
         String traceId = toolbar.traceId();
-        page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
-        page.route("**/api/traces/" + traceId + "/insights**", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode trace = (ObjectNode) readJson(response.text());
-            ObjectNode summary = (ObjectNode) trace.get("summary");
-            ((ObjectNode) summary.get("spans")).put("count", 12345);
-            ((ObjectNode) summary.get("queries")).put("count", 2345);
-            ((ObjectNode) summary.get("logs")).put("count", 1234);
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
-        });
+        JsonNode trace = awaitTrace(traceId, "trace => (trace.queries || []).length > 0");
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'ar-EG-u-nu-arab')");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
         overlay.waitFor(".pk-tab[data-tab=\"logs\"] .pk-tab__count");
 
-        assertThat(overlay.text(".pk-tab[data-tab=\"spans\"] .pk-tab__count")).isEqualTo("12.345");
-        assertThat(overlay.text(".pk-tab[data-tab=\"queries\"] .pk-tab__count")).isEqualTo("2.345");
-        assertThat(overlay.text(".pk-tab[data-tab=\"logs\"] .pk-tab__count")).isEqualTo("1.234");
+        assertThat(overlay.text(".pk-tab[data-tab=\"spans\"] .pk-tab__count"))
+                .isEqualTo(localeFormatted(
+                        trace.path("summary").path("spans").path("count").asInt(), "ar-EG-u-nu-arab"));
+        assertThat(overlay.text(".pk-tab[data-tab=\"queries\"] .pk-tab__count"))
+                .isEqualTo(localeFormatted(
+                        trace.path("summary").path("queries").path("count").asInt(), "ar-EG-u-nu-arab"));
+        assertThat(overlay.text(".pk-tab[data-tab=\"logs\"] .pk-tab__count"))
+                .isEqualTo(localeFormatted(
+                        trace.path("summary").path("logs").path("count").asInt(), "ar-EG-u-nu-arab"));
     }
 
     /**

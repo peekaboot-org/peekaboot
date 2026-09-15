@@ -17,8 +17,10 @@
  *
  * The bar never fetches /api/features: it colours durations by the shared defaults
  * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults. Its counts
- * do group in the dashboard's chosen locale, shared through storage.js the way the theme
- * is - readLocaleSetting() falls back to the browser's own when nothing is stored.
+ * do group in the dashboard's chosen locale, shared through the same storage.js key the
+ * theme uses - but read fresh with readLocaleSetting() each time the stat line renders or
+ * the overlay opens, not watched live the way the theme is. It falls back to the browser's
+ * own locale when nothing valid is stored.
  */
 import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
@@ -54,9 +56,6 @@ function initToolbar(host, data) {
     const client = createClient({basePath: data.basePath});
     bindTheme(host);
     registerBundledFonts(data.basePath);
-    // undefined (not null) when nothing valid is stored, so a caller's own `locale ??`/
-    // default-parameter fallback to the browser's locale still applies.
-    const locale = readLocaleSetting() || undefined;
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
     // looking, so the notice the server rendered for the opposite case has served its
@@ -116,7 +115,11 @@ function initToolbar(host, data) {
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
         const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale}));
+        // Read fresh rather than captured once at init, the same reason openOverlay() below
+        // reads it again: a reader can change the dashboard's locale select without
+        // reloading this page. undefined (not null): toLocaleString(locale) throws given an
+        // explicit null, but treats undefined as "use the browser's own".
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale: readLocaleSetting() || undefined}));
     }
 
     // Nothing ever arrived: replace "loading" with the placeholder row rather than
@@ -129,7 +132,7 @@ function initToolbar(host, data) {
 
     async function openOverlay() {
         const overlay = await import('../trace-detail/trace-detail.js');
-        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale});
+        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale: readLocaleSetting() || undefined});
     }
 
     if (!data.idle && data.traceId) {

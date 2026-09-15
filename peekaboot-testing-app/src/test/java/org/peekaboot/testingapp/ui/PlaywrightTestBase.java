@@ -478,6 +478,15 @@ abstract class PlaywrightTestBase {
     }
 
     /**
+     * {@code count.toLocaleString(locale)}, evaluated live in the page rather than hard-coded -
+     * the browser's own Intl decides the exact digits and grouping.
+     */
+    protected String localeFormatted(int count, String locale) {
+        return (String)
+                page.evaluate("([count, locale]) => count.toLocaleString(locale)", Arrays.asList(count, locale));
+    }
+
+    /**
      * The meter group headers under {@code scope} whose type badge does not fit its column: the
      * name clipped inside the badge, or the badge painted past its column onto the unit cell.
      */
