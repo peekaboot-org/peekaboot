@@ -670,7 +670,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * Cross-link in the other direction: each Queries-tab entry links back to its span in
      * the Spans tab's tree - the row is scrolled to, focused and temporarily highlighted,
-     * mirroring spanQueryLinkJumpsToTheQueriesTabEntry above.
+     * mirroring spanQueryLinkJumpsToTheQueriesTabEntry above. Also the one test that proves
+     * a real jump applies {@code pk-jump-flash} at all - jumpFlashOutranksAHoveredRow below
+     * adds the class by hand, so it never exercises jumpToElement itself.
      */
     @Test
     void queryEntrySpanLinkJumpsBackToItsSpanRow() {
@@ -695,41 +697,36 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * A jump target a reader's pointer happens to rest on must still show the flash tint:
      * .pk-jump-flash alone (0,1,0) loses to .pk-gantt-row:hover (0,2,0) by specificity, so an
      * unguarded flash would show the hover tint instead of the highlight the jump exists to
-     * draw the eye to.
+     * draw the eye to. Before trace-detail.css qualified the flash rule to match the hover
+     * rule's specificity, this would have read the plain hover background instead of
+     * --pk-primary-light, since the hover rule declared later would have won the tie.
+     *
+     * <p>The class is added by hand rather than through a real jump, so nothing here races
+     * JUMP_FLASH_MS's 2s removal timer - queryEntrySpanLinkJumpsBackToItsSpanRow above
+     * already covers that a real jump applies the class. Hovering and reading both the
+     * hover state and the resolved background happen in one evaluate call, so there is no
+     * round trip in which anything could change the row between the two reads.
      */
     @Test
     void jumpFlashOutranksAHoveredRow() {
         openOverlayFromToolbar();
-        overlay.openTab("queries");
-        overlay.waitFor(".pk-query-span-link");
-        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-query-span-link').dataset.spanId");
-        String rowSelector = ".pk-gantt-row[data-span-id='" + spanId + "']";
+        overlay.waitFor(".pk-gantt-row");
+        String rowSelector = ".pk-gantt-row";
 
-        overlay.click(".pk-query-span-link");
-        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
-        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
         page.hover(rowSelector);
-
-        Boolean stillFlashing = (Boolean) overlay.evaluate(
-                "(root, sel) => root.querySelector(sel)?.classList.contains('pk-jump-flash')", rowSelector);
-        assertThat(stillFlashing).as("hover must land inside the flash window").isTrue();
-        String rowBackground = (String) overlay.evaluate(
-                "(root, sel) => getComputedStyle(root.querySelector(sel)).backgroundColor", rowSelector);
-        assertThat(rowBackground).isEqualTo(resolvedPrimaryLight());
-    }
-
-    /** The theme's --pk-primary-light, resolved the way the flash's own background-color renders. */
-    private String resolvedPrimaryLight() {
-        return (String) overlay.evaluate("""
-                root => {
-                    const probe = document.createElement('div');
-                    probe.style.backgroundColor = 'var(--pk-primary-light)';
-                    root.appendChild(probe);
-                    const resolved = getComputedStyle(probe).backgroundColor;
-                    probe.remove();
-                    return resolved;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> state = (Map<String, Object>) overlay.evaluate("""
+                (root, sel) => {
+                    const row = root.querySelector(sel);
+                    row.classList.add('pk-jump-flash');
+                    return {hovered: row.matches(':hover'), background: getComputedStyle(row).backgroundColor};
                 }
-                """);
+                """, rowSelector);
+
+        assertThat((Boolean) state.get("hovered"))
+                .as("hover must have landed on the row")
+                .isTrue();
+        assertThat(state.get("background")).isEqualTo(resolvedVar(TraceOverlay.HOST, "--pk-primary-light"));
     }
 
     /**

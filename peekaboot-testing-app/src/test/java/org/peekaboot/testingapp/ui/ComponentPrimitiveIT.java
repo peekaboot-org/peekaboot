@@ -206,20 +206,6 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                 """, selector)).doubleValue();
     }
 
-    /** The theme's resolved value of a --pk-* custom property, in the rgb() form computed styles use. */
-    private String resolvedVar(String property) {
-        return (String) page.evaluate("""
-                (prop) => {
-                    const probe = document.createElement('div');
-                    probe.style.backgroundColor = `var(${prop})`;
-                    document.body.appendChild(probe);
-                    const resolved = getComputedStyle(probe).backgroundColor;
-                    probe.remove();
-                    return resolved;
-                }
-                """, property);
-    }
-
     private String backgroundColor(String selector) {
         return (String) page.evalOnSelector(selector, "el => getComputedStyle(el).backgroundColor");
     }
@@ -348,7 +334,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("resting fill is --pk-danger (%s theme)", theme)
-                    .isEqualTo(resolvedVar("--pk-danger"));
+                    .isEqualTo(resolvedVar(null, "--pk-danger"));
             assertThat(contrastRatio("#unmask-pressed"))
                     .as("resting ink/fill contrast (%s theme)", theme)
                     .isGreaterThanOrEqualTo(4.5);
@@ -357,7 +343,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("hovered fill stays --pk-danger (%s theme)", theme)
-                    .isEqualTo(resolvedVar("--pk-danger"));
+                    .isEqualTo(resolvedVar(null, "--pk-danger"));
             assertThat(contrastRatio("#unmask-pressed"))
                     .as("hovered ink/fill contrast (%s theme)", theme)
                     .isGreaterThanOrEqualTo(4.5);

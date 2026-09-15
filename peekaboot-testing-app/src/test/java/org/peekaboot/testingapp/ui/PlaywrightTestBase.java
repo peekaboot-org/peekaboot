@@ -458,6 +458,26 @@ abstract class PlaywrightTestBase {
     }
 
     /**
+     * The resolved value of custom property {@code property} against {@code root} - the
+     * document ({@code hostSelector} null) or a shadow host's shadow root ({@code hostSelector}
+     * the host's own selector on the page) - in the browser's computed rgb() form. Resolved on
+     * a throwaway probe rather than an existing element, so no element's own rules can shadow it.
+     */
+    protected String resolvedVar(String hostSelector, String property) {
+        return (String) page.evaluate("""
+                ([hostSelector, prop]) => {
+                    const root = hostSelector ? document.querySelector(hostSelector).shadowRoot : document;
+                    const probe = document.createElement('div');
+                    probe.style.backgroundColor = `var(${prop})`;
+                    (root.body || root).appendChild(probe);
+                    const resolved = getComputedStyle(probe).backgroundColor;
+                    probe.remove();
+                    return resolved;
+                }
+                """, Arrays.asList(hostSelector, property));
+    }
+
+    /**
      * The meter group headers under {@code scope} whose type badge does not fit its column: the
      * name clipped inside the badge, or the badge painted past its column onto the unit cell.
      */
