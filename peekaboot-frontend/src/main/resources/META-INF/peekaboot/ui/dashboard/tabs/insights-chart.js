@@ -96,12 +96,14 @@ function timeAxis(colors) {
         grid: {stroke: colors.grid, width: 1}, ticks: {stroke: colors.grid}};
 }
 
-function valueAxis(scale, unit, side, colors) {
+function valueAxis(scale, unit, side, colors, dateOptions) {
     return {
         scale, side, size: 60, stroke: colors.axis, font: colors.font,
         grid: {show: side === 3, stroke: colors.grid, width: 1},
         ticks: {stroke: colors.grid},
-        values: (plot, splits) => splits.map(value => formatMetricValue(value, unit))
+        // dateOptions is read live, like the marker layer's hover labels, so a locale
+        // switch reaches an already-built chart without a rebuild.
+        values: (plot, splits) => splits.map(value => formatMetricValue(value, unit, {locale: dateOptions().locale}))
     };
 }
 
@@ -188,8 +190,8 @@ export function createChart({
         });
     });
 
-    const axes = [timeAxis(colors), valueAxis('y', panel.unit, 3, colors)];
-    if (secondaryUnit) axes.push(valueAxis('2', secondaryUnit, 1, colors));
+    const axes = [timeAxis(colors), valueAxis('y', panel.unit, 3, colors, dateOptions)];
+    if (secondaryUnit) axes.push(valueAxis('2', secondaryUnit, 1, colors, dateOptions));
 
     const options = {
         width: chartWidth(mount),

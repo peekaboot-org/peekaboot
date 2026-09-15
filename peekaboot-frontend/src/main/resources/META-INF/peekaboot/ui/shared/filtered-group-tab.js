@@ -11,15 +11,16 @@
  *   filterGroup(group, query)   -> the group narrowed to the query, or null when nothing
  *                                  in it matches; called with '' when no filter is set
  *   key/header/items            -> groupList()'s callbacks; header also receives the
- *                                  query, items the query and the current context
- *   extraTop(data)              -> optional element rendered above the groups, or null
+ *                                  query and the current context, items the query and
+ *                                  the current context
+ *   extraTop(data, context)     -> optional element rendered above the groups, or null
  *   emptyMessage                -> shown when the payload has no groups at all
  *   noMatchMessage(query)       -> shown when the filter narrows everything away
  *   urlFilter                   -> optional {reconcile(input, container, context),
  *                                  write(input, container, context)} for a tab whose URL
  *                                  state is more than the single "q" the default handles
  *   decorate(listEl, filtered)  -> optional post-processing of the rendered groups
- *   afterRender(container, {groups, filtered, query})
+ *   afterRender(container, {groups, filtered, query, context})
  *                               -> optional hook run after every (re-)render, the empty
  *                                  states included - meters.js's match-count readout
  *   fetchData(context)          -> optional: the tab's data comes from its own endpoint
@@ -121,29 +122,29 @@ export function filteredGroupTab({
         const groups = select(currentData);
         if (!groups || groups.length === 0) {
             target.appendChild(emptyState(emptyMessage));
-            afterRender?.(container, {groups: [], filtered: [], query});
+            afterRender?.(container, {groups: [], filtered: [], query, context: currentContext});
             return;
         }
 
-        const top = extraTop?.(currentData);
+        const top = extraTop?.(currentData, currentContext);
         if (top) target.appendChild(top);
 
         const filtered = groups.map(group => filterGroup(group, query)).filter(Boolean);
         if (filtered.length === 0) {
             const message = query ? noMatchMessage(query) : emptyMessage;
             target.appendChild(emptyState(message));
-            afterRender?.(container, {groups, filtered, query});
+            afterRender?.(container, {groups, filtered, query, context: currentContext});
             return;
         }
 
         groupList(target, filtered, {
             key,
-            header: group => header(group, query),
+            header: group => header(group, query, currentContext),
             items: (group, list) => items(group, list, query, currentContext),
             expandedKeys: expanded
         });
         if (decorate) decorate(target, filtered);
-        afterRender?.(container, {groups, filtered, query});
+        afterRender?.(container, {groups, filtered, query, context: currentContext});
     }
 
     return {render, refresh};
@@ -166,9 +167,9 @@ export function propertyGroupTab({inputId, listId, unmaskSlotId, select, groupNa
             return properties.length > 0 ? {...group, properties} : null;
         },
         key: groupName,
-        header: (group, query) => ({
+        header: (group, query, context) => ({
             name: groupName(group),
-            count: formatCount(group.properties.length, 'property', 'properties'),
+            count: formatCount(group.properties.length, 'property', {plural: 'properties', locale: context.locale}),
             highlight: query
         }),
         items: (group, list, query) => group.properties.forEach(prop =>

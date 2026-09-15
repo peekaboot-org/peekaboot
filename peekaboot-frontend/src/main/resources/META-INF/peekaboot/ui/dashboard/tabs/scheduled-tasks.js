@@ -4,7 +4,7 @@
  * row above the groups and a link to the Traces tab for scheduler-triggered traces.
  */
 import {badge, iconLink} from '../../shared/components.js';
-import {formatCount, formatDateTime, formatInterval} from '../../shared/format.js';
+import {formatCount, formatDateTime, formatInterval, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {taskStatusVariant} from '../../shared/severity.js';
 import {buildAppHash} from '../../shared/url-state.js';
@@ -23,10 +23,13 @@ const tab = filteredGroupTab({
     select: data => groupsByType(data?.scheduledTasks?.tasks),
     filterGroup: group => group,
     key: group => group.type,
-    header: group => ({name: TYPE_LABELS[group.type], count: formatCount(group.tasks.length, 'task')}),
+    header: (group, query, context) => ({
+        name: TYPE_LABELS[group.type],
+        count: formatCount(group.tasks.length, 'task', {locale: context.locale})
+    }),
     items: (group, list, query, context) => group.tasks.forEach(task =>
         list.appendChild(renderTaskRow(task, group.type, context))),
-    extraTop: data => renderSummary(data.scheduledTasks),
+    extraTop: (data, context) => renderSummary(data.scheduledTasks, context.locale),
     emptyMessage: 'No scheduled tasks configured'
 });
 
@@ -45,13 +48,13 @@ function groupsByType(tasks) {
         .filter(group => group.tasks.length > 0);
 }
 
-function renderSummary(scheduledTasks) {
+function renderSummary(scheduledTasks, locale) {
     const summaryEl = document.createElement('div');
     summaryEl.className = 'pk-tasks-summary';
-    summaryEl.appendChild(badge(`Total: ${scheduledTasks.tasks.length}`, 'muted'));
-    summaryEl.appendChild(badge(`Cron: ${scheduledTasks.cronCount}`, 'muted'));
-    summaryEl.appendChild(badge(`Fixed Delay: ${scheduledTasks.fixedDelayCount}`, 'muted'));
-    summaryEl.appendChild(badge(`Fixed Rate: ${scheduledTasks.fixedRateCount}`, 'muted'));
+    summaryEl.appendChild(badge(`Total: ${formatNumber(scheduledTasks.tasks.length, {locale})}`, 'muted'));
+    summaryEl.appendChild(badge(`Cron: ${formatNumber(scheduledTasks.cronCount, {locale})}`, 'muted'));
+    summaryEl.appendChild(badge(`Fixed Delay: ${formatNumber(scheduledTasks.fixedDelayCount, {locale})}`, 'muted'));
+    summaryEl.appendChild(badge(`Fixed Rate: ${formatNumber(scheduledTasks.fixedRateCount, {locale})}`, 'muted'));
     return summaryEl;
 }
 

@@ -6,7 +6,7 @@
 import {kvRow, badge, meter, tabStrip, emptyState} from '../../shared/components.js';
 import {escapeHtml} from '../../shared/markup.js';
 import {healthSeverity} from '../../shared/severity.js';
-import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatPlainValue, formatTileValue} from '../../shared/format.js';
+import {formatBytes, formatDateTime, formatDateTimeWith, formatHosts, formatNumber, formatPlainValue, formatTileValue} from '../../shared/format.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
 export const id = 'overview';
@@ -21,11 +21,11 @@ export function render(container, data, context = {}) {
     renderSpringInfo(container, application);
     renderJavaInfo(container, application);
     renderOsInfo(container, runtime);
-    renderMachineInfo(container, runtime);
+    renderMachineInfo(container, runtime, locale);
     renderJvmDefaults(container, data.server, {locale, timeZone});
     renderDataSourcesInfo(container, dataSources);
     renderMemoryInfo(container, runtime);
-    renderHealthBanner(container, health);
+    renderHealthBanner(container, health, locale);
     renderHealthComponents(container, health?.components);
 }
 
@@ -179,7 +179,7 @@ function renderOsInfo(container, runtime) {
  * not the host's. Every other fact is best-effort: what the backend couldn't read
  * arrives null/empty and renders no row at all.
  */
-function renderMachineInfo(container, runtime) {
+function renderMachineInfo(container, runtime, locale) {
     const el = container.querySelector('#machine-info');
     const previousFamily = el.querySelector('#machine-net-tabs .pk-tab[aria-selected="true"]')?.dataset.tab;
     el.innerHTML = '';
@@ -190,7 +190,7 @@ function renderMachineInfo(container, runtime) {
         return;
     }
 
-    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', cpuCoresValue(machine)));
+    if (machine.cpuCount) el.appendChild(kvRow('CPU Cores', cpuCoresValue(machine, locale)));
     if (machine.cpuModel) el.appendChild(kvRow('CPU Model', machine.cpuModel));
     if (machine.totalMemory) el.appendChild(kvRow('Total Memory', formatBytes(machine.totalMemory)));
     if (machine.maxHeap) el.appendChild(kvRow('Max Heap', formatBytes(machine.maxHeap)));
@@ -265,12 +265,13 @@ function renderNetworkAddresses(el, addresses, previousFamily) {
  * backend one - "8 (4 cores × 2 threads)" with SMT/hyper-threading active. The plain
  * count means the topology is unknown (non-Linux, exotic kernels).
  */
-function cpuCoresValue(machine) {
+function cpuCoresValue(machine, locale) {
     const topology = machine.cpuTopology;
-    if (!topology) return machine.cpuCount;
+    const cpuCount = formatNumber(machine.cpuCount, {locale});
+    if (!topology) return cpuCount;
     return topology.threadsPerCore > 1
-        ? `${machine.cpuCount} (${topology.physicalCores} cores × ${topology.threadsPerCore} threads)`
-        : `${machine.cpuCount} (${topology.physicalCores} cores, SMT off)`;
+        ? `${cpuCount} (${formatNumber(topology.physicalCores, {locale})} cores × ${formatNumber(topology.threadsPerCore, {locale})} threads)`
+        : `${cpuCount} (${formatNumber(topology.physicalCores, {locale})} cores, SMT off)`;
 }
 
 function renderJvmDefaults(container, server, {locale, timeZone}) {
@@ -407,7 +408,7 @@ function healthModifier(severity) {
     return null;
 }
 
-function renderHealthBanner(container, health) {
+function renderHealthBanner(container, health, locale) {
     const banner = container.querySelector('#health-banner');
     const dot = container.querySelector('#health-dot');
     const statusContainer = container.querySelector('#health-status-container');
@@ -434,7 +435,7 @@ function renderHealthBanner(container, health) {
 
     const components = health?.components;
     summary.textContent = components && components.length > 0
-        ? `${components.filter(c => c.status === 'UP').length}/${components.length} healthy`
+        ? `${formatNumber(components.filter(c => c.status === 'UP').length, {locale})}/${formatNumber(components.length, {locale})} healthy`
         : '';
 
     banner.onclick = () => {

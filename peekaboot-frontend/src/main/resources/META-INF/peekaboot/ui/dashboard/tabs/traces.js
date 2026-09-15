@@ -10,7 +10,7 @@
  * older response never overwrites a newer one.
  */
 import {badge, emptyState, loadingBlock, iconLink} from '../../shared/components.js';
-import {formatDurationMs, formatDateTime} from '../../shared/format.js';
+import {formatDurationMs, formatDateTime, formatNumber} from '../../shared/format.js';
 import {ROOT_ACTION_TYPES, rootActionIcon, rootActionLabel} from '../../shared/root-actions.js';
 import {copyableId, bindCopyables} from '../../shared/copyable.js';
 import {traceStatParts, truncatedBadge} from '../../shared/trace-stats.js';
@@ -41,7 +41,7 @@ const tab = selfFetchingTab({
         container.querySelector('#no-traces').classList.add('hidden');
     },
     renderResult: (container, result, context) => {
-        updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts);
+        updateBucketCounts(container, result.bucketCounts, result.filteredBucketCounts, context.locale);
         renderList(container, result, context);
         container.querySelector('#traces-loading').classList.add('hidden');
     },
@@ -203,17 +203,19 @@ function resetFilter() {
  * "shown / total" pair appears only for a filter the user chose, with the store's full
  * count (hidden types included) as the total.
  */
-function updateBucketCounts(container, counts, filteredCounts) {
+function updateBucketCounts(container, counts, filteredCounts, locale) {
     if (!counts) return;
     const userFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         const bucket = btn.dataset.bucket;
         const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
         const count = counts[bucket];
+        const grouped = n => formatNumber(n, {locale});
         if (count == null) btn.textContent = bucketLabel;
-        else if (userFiltered && filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]} / ${count})`;
-        else if (filteredCounts) btn.textContent = `${bucketLabel} (${filteredCounts[bucket]})`;
-        else btn.textContent = `${bucketLabel} (${count})`;
+        else if (userFiltered && filteredCounts) {
+            btn.textContent = `${bucketLabel} (${grouped(filteredCounts[bucket])} / ${grouped(count)})`;
+        } else if (filteredCounts) btn.textContent = `${bucketLabel} (${grouped(filteredCounts[bucket])})`;
+        else btn.textContent = `${bucketLabel} (${grouped(count)})`;
     });
 }
 
@@ -372,7 +374,7 @@ function renderStats(trace, context) {
         : '-';
     stats.appendChild(timeEl);
 
-    traceStatParts(trace, context.features).forEach((part, index) => {
+    traceStatParts(trace, {features: context.features, locale: context.locale}).forEach((part, index) => {
         if (index > 0) {
             const separator = document.createElement('span');
             separator.className = 'pk-trace-item__stat-separator';

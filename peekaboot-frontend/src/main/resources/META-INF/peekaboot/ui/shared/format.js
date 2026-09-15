@@ -107,8 +107,10 @@ function toSignificant(value, digits) {
     return Number(value.toPrecision(digits)).toString();
 }
 
-function formatMetricCount(value) {
-    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+function formatMetricCount(value, locale) {
+    return Number.isInteger(value)
+        ? value.toLocaleString(locale)
+        : value.toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
 
 /** A property or detail value as one line of text: '-' for nothing, JSON for a structured value. */
@@ -118,13 +120,19 @@ export function formatPlainValue(value) {
     return String(value);
 }
 
+/** `Number(n).toLocaleString(locale)` - grouped in `locale`, or the reader's browser locale when it is undefined. */
+export function formatNumber(n, {locale} = {}) {
+    return Number(n).toLocaleString(locale);
+}
+
 /**
  * Formats "n noun(s)" - plural defaults to singular + 's', override it for irregular nouns
- * (e.g. 'query'/'queries'). The number is grouped in the reader's locale, which a row count
- * in the tens of thousands needs to be readable at all.
+ * (e.g. 'query'/'queries'). The number is grouped in `locale`, or the reader's browser
+ * locale when it is undefined, which a row count in the tens of thousands needs to be
+ * readable at all.
  */
-export function formatCount(n, singular, plural = singular + 's') {
-    return `${n.toLocaleString()} ${n === 1 ? singular : plural}`;
+export function formatCount(n, singular, {plural = singular + 's', locale} = {}) {
+    return `${formatNumber(n, {locale})} ${n === 1 ? singular : plural}`;
 }
 
 /** The units a series or panel can carry (the backend's Unit enum, by wire name), and the formats a tile can (TileFormat). */
@@ -135,9 +143,10 @@ export const TILE_FORMATS = Object.freeze(['duration', 'datetime', 'bytes', 'cou
  * Formats one insights series/measurement value per its configured unit (see
  * InsightsConfigResponse.Series/Panel.unit): bytes/millis reuse the existing
  * byte/duration formatters, percent is raw 0..1 and scaled for display, persec/
- * bytes-persec append a rate suffix, count falls back to formatMetricCount().
+ * bytes-persec append a rate suffix, count falls back to formatMetricCount(), grouped in
+ * `locale`.
  */
-export function formatMetricValue(value, unit) {
+export function formatMetricValue(value, unit, {locale} = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     switch (unit) {
@@ -147,7 +156,7 @@ export function formatMetricValue(value, unit) {
         case 'persec': return toSignificant(value, 2) + '/s';
         case 'bytes-persec': return formatBytes(value) + '/s';
         case 'count':
-        default: return formatMetricCount(value);
+        default: return formatMetricCount(value, locale);
     }
 }
 
@@ -161,8 +170,8 @@ export function formatTileValue(value, format, display = {}) {
     if (value === null || value === undefined || Number.isNaN(value)) return '-';
 
     switch (format) {
-        case 'duration': return formatMetricValue(value * 1000, 'millis');
+        case 'duration': return formatMetricValue(value * 1000, 'millis', display);
         case 'datetime': return formatDateTime(value * 1000, display);
-        default: return formatMetricValue(value, format);
+        default: return formatMetricValue(value, format, display);
     }
 }

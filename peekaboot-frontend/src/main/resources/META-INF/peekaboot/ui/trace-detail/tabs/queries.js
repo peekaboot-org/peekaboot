@@ -32,7 +32,10 @@ function queryItem(query, index, view) {
             text: formatDurationMs(duration) + (durationClass ? ' SLOW' : '')
         }));
     if (query.rowCount != null) {
-        meta.append(el('span', {className: 'pk-query-rows', text: formatCount(Number(query.rowCount), 'row')}));
+        meta.append(el('span', {
+            className: 'pk-query-rows',
+            text: formatCount(Number(query.rowCount), 'row', {locale: view.locale})
+        }));
     }
     if (spanId && view.goToSpan) {
         const link = button({

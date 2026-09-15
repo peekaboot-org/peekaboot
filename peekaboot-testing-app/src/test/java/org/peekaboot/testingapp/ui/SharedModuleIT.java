@@ -472,23 +472,45 @@ class SharedModuleIT extends PlaywrightTestBase {
      */
     @Test
     void formatCountPluralisesIrregularNouns() {
-        assertThat(evalModule("format.js", "m.formatCount(1, 'query', 'queries')"))
+        assertThat(evalModule("format.js", "m.formatCount(1, 'query', {plural: 'queries'})"))
                 .isEqualTo("1 query");
-        assertThat(evalModule("format.js", "m.formatCount(2, 'query', 'queries')"))
+        assertThat(evalModule("format.js", "m.formatCount(2, 'query', {plural: 'queries'})"))
                 .isEqualTo("2 queries");
         assertThat(evalModule("format.js", "m.formatCount(1, 'span')")).isEqualTo("1 span");
         assertThat(evalModule("format.js", "m.formatCount(0, 'span')")).isEqualTo("0 spans");
     }
 
     /**
-     * A five-digit row count is unreadable as a run of digits, so every count is grouped in
-     * the reader's own locale - the browser's, which is also what the dashboard's locale
-     * select starts on.
+     * A five-digit count is unreadable as a run of digits, so every count is grouped: in the
+     * locale a surface passes (the dashboard's setting), else in the browser's.
      */
     @Test
-    void formatCountGroupsThousands() {
+    void countsAreGroupedInTheGivenLocaleElseTheBrowsers() {
         assertThat(evalModule("format.js", "m.formatCount(1234567, 'row')")).isEqualTo("1,234,567 rows");
         assertThat(evalModule("format.js", "m.formatCount(999, 'row')")).isEqualTo("999 rows");
+        assertThat(evalModule("format.js", "m.formatCount(1234567, 'row', {locale: 'de-DE'})"))
+                .isEqualTo("1.234.567 rows");
+        assertThat(evalModule("format.js", "m.formatNumber(12345)")).isEqualTo("12,345");
+        assertThat(evalModule("format.js", "m.formatNumber(12345, {locale: 'de-DE'})"))
+                .isEqualTo("12.345");
+        assertThat(evalModule("format.js", "m.formatMetricValue(1234567, 'count', {locale: 'de-DE'})"))
+                .isEqualTo("1.234.567");
+        assertThat(evalModule("format.js", "m.formatMetricValue(1234.5, 'count', {locale: 'de-DE'})"))
+                .isEqualTo("1.234,50");
+        assertThat(evalModule("format.js", "m.formatTileValue(12345, 'count', {locale: 'de-DE'})"))
+                .isEqualTo("12.345");
+    }
+
+    /** The stat line groups its counts in the locale it is given, like every other count. */
+    @Test
+    void traceStatPartsGroupCountsInTheGivenLocale() {
+        Object text = evalModule("trace-stats.js", """
+                m.traceStatParts({summary: {queries: {count: 1234, totalDurationMs: 5},
+                    logs: {count: 0, errorCount: 2345, warnCount: 0}}}, {locale: 'de-DE'})
+                    .map(part => part.textContent).join(' | ')
+                """);
+
+        assertThat((String) text).contains("1.234 queries").contains("2.345 errors");
     }
 
     @Test

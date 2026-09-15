@@ -214,6 +214,8 @@ export function expandedKeys(container) {
  * button exists yet does this build one from `label`/`count`, and `panel` - the one
  * element every tab switches the content of - is what the built buttons point at: it
  * becomes the tabpanel, each button controls it, and its label follows the selection.
+ * `count` is already display text (grouped, in whatever locale the caller formatted
+ * it for) - this module renders it verbatim, never reformats it.
  *
  * `select(id)` (also returned to the caller) always updates the DOM; it invokes
  * `onSelect` too unless called with `{silent: true}` - the escape hatch a caller

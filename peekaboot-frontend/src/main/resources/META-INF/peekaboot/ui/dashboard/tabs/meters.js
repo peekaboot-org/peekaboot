@@ -6,7 +6,7 @@
  */
 import {badge} from '../../shared/components.js';
 import {highlightText} from '../../shared/markup.js';
-import {formatBytes, formatCount} from '../../shared/format.js';
+import {formatBytes, formatCount, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 
 export const id = 'meters';
@@ -24,9 +24,9 @@ const tab = filteredGroupTab({
     // a metric either matches as a whole or not at all - its measurements are never narrowed
     filterGroup: (metric, query) => (!query || matchesMetricFilter(metric, query) ? metric : null),
     key: metric => metric.name,
-    header: (metric, query) => ({
+    header: (metric, query, context) => ({
         name: metric.name,
-        count: formatCount(metric.measurements.length, 'measurement'),
+        count: formatCount(metric.measurements.length, 'measurement', {locale: context.locale}),
         highlight: query
     }),
     items: (metric, list, query, context) => {
@@ -54,15 +54,16 @@ export function render(container, data, context) {
 }
 
 /** The "N / M metrics" readout beside the filter input, updated on every render. */
-function updateCount(container, {groups, filtered, query}) {
+function updateCount(container, {groups, filtered, query, context}) {
     const countEl = container.querySelector('#meters-count');
     if (!countEl) return;
     if (groups.length === 0) {
         countEl.textContent = '';
     } else {
+        const locale = context.locale;
         countEl.textContent = query
-            ? `${filtered.length} / ${groups.length} metrics`
-            : `${groups.length} metrics`;
+            ? `${formatNumber(filtered.length, {locale})} / ${formatNumber(groups.length, {locale})} metrics`
+            : `${formatNumber(groups.length, {locale})} metrics`;
     }
 }
 

@@ -3,7 +3,7 @@
  * restrictable to loggers with an explicit configured level.
  */
 import {badge} from '../../shared/components.js';
-import {formatCount} from '../../shared/format.js';
+import {formatCount, formatNumber} from '../../shared/format.js';
 import {filteredGroupTab} from '../../shared/filtered-group-tab.js';
 import {highlightText} from '../../shared/markup.js';
 import {logLevelVariant} from '../../shared/severity.js';
@@ -20,14 +20,14 @@ const tab = filteredGroupTab({
         return loggers.length > 0 ? {packageName: group.packageName, loggers} : null;
     },
     key: group => group.packageName,
-    header: (group, query) => ({
+    header: (group, query, context) => ({
         name: group.packageName,
-        count: formatCount(group.loggers.length, 'logger'),
+        count: formatCount(group.loggers.length, 'logger', {locale: context.locale}),
         highlight: query
     }),
     items: (group, list, query) => group.loggers.forEach(logger =>
         list.appendChild(renderLoggerRow(logger, query))),
-    extraTop: data => renderSummary(data.loggers),
+    extraTop: (data, context) => renderSummary(data.loggers, context.locale),
     emptyMessage: 'No loggers available',
     noMatchMessage: () => 'No loggers matching criteria',
     urlFilter: {reconcile: reconcileWithUrl, write: writeUrlParams},
@@ -108,11 +108,11 @@ function matches(logger, query) {
     return !query || logger.name.toLowerCase().includes(query.toLowerCase());
 }
 
-function renderSummary(loggersInfo) {
+function renderSummary(loggersInfo, locale) {
     const summaryEl = document.createElement('div');
     summaryEl.className = 'pk-loggers-summary';
-    summaryEl.appendChild(badge(`Total: ${loggersInfo.totalCount}`, 'muted'));
-    summaryEl.appendChild(badge(`Configured: ${loggersInfo.configuredCount}`, 'muted'));
+    summaryEl.appendChild(badge(`Total: ${formatNumber(loggersInfo.totalCount, {locale})}`, 'muted'));
+    summaryEl.appendChild(badge(`Configured: ${formatNumber(loggersInfo.configuredCount, {locale})}`, 'muted'));
     return summaryEl;
 }
 

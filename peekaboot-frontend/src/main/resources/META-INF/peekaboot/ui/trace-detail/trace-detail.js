@@ -10,7 +10,7 @@
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
  */
 import {el, button} from '../shared/dom.js';
-import {formatDurationMs} from '../shared/format.js';
+import {formatDurationMs, formatNumber} from '../shared/format.js';
 import {severityClass} from '../shared/severity.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
@@ -340,7 +340,7 @@ function wireTabs(container, trace, urlState, display) {
     tabApi = tabStrip(container.querySelector('.pk-tabs'), TABS.map(tab => ({
         id: tab.id,
         label: tab.label,
-        count: tab.count ? tab.count(trace) : undefined
+        count: tab.count ? formatNumber(tab.count(trace), {locale: display.locale}) : undefined
     })), {
         onSelect: tabId => {
             if (tabId === activeTabId) return;

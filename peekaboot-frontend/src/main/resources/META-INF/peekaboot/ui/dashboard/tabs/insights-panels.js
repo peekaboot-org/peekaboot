@@ -151,7 +151,7 @@ export function createInsightsPanels({
         panels.forEach(panel => {
             const first = panel.definition.series[0];
             const unit = first.unit || panel.definition.unit;
-            updateText(panel.readout, formatMetricValue(currentValue(panel), unit));
+            updateText(panel.readout, formatMetricValue(currentValue(panel), unit, {locale: dateOptions().locale}));
         });
     }
 

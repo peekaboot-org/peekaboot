@@ -41,7 +41,7 @@ export function render(container, trace, context = {}) {
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
-    renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration);
+    renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration, context.locale);
 
     allDetailsToggle.addEventListener('click', () => {
         const open = !allDetailsOpen(entries);
@@ -147,7 +147,7 @@ function kindDot() {
     return el('span', {className: 'pk-gantt-kind-dot', attrs: {'aria-hidden': 'true'}});
 }
 
-function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
+function renderSpanEntries(container, span, depth, traceStart, totalDuration, locale) {
     if (!span) return;
     const kind = spanKind(span);
     const detailsId = `pk-span-details-${span.spanId}`;
@@ -163,16 +163,17 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
     row.append(
-        nameCell(span, kind, detailsId, hasError),
+        nameCell(span, kind, detailsId, hasError, locale),
         track(span, traceStart, totalDuration, hasError),
         durationCell(span, totalDuration));
     entry.append(row, detailsPanel(span, kind, detailsId));
     container.appendChild(entry);
 
-    (span.children || []).forEach(child => renderSpanEntries(container, child, depth + 1, traceStart, totalDuration));
+    (span.children || []).forEach(child =>
+        renderSpanEntries(container, child, depth + 1, traceStart, totalDuration, locale));
 }
 
-function nameCell(span, kind, detailsId, hasError) {
+function nameCell(span, kind, detailsId, hasError, locale) {
     const hasChildren = span.children && span.children.length > 0;
     const name = span.name || 'unknown';
     const spanId = span.spanId;
@@ -195,10 +196,10 @@ function nameCell(span, kind, detailsId, hasError) {
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
     // as span.rowCount.
     if (span.rowCount != null) {
-        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row')}));
+        cell.append(el('span', {className: 'pk-span-row-count', text: formatCount(span.rowCount, 'row', {locale})}));
     }
     if (logCount > 0) {
-        const logs = formatCount(logCount, 'log');
+        const logs = formatCount(logCount, 'log', {locale});
         cell.append(button({
             className: 'pk-span-action pk-span-logs-toggle', text: logs, title: 'View logs for this span',
             attrs: {'data-span-id': spanId, 'aria-label': `View ${logs} for this span in the Logs tab`}

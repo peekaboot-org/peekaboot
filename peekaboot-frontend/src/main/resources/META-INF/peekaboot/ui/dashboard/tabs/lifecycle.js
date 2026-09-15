@@ -16,7 +16,7 @@
  * surprised; the fetch's error path renders an honest "unavailable" line instead.
  */
 import {badge, cell, emptyState, table} from '../../shared/components.js';
-import {formatDateTime, formatLongDuration} from '../../shared/format.js';
+import {formatDateTime, formatLongDuration, formatNumber} from '../../shared/format.js';
 import {reconcileFilterWithUrl} from '../../shared/url-filter.js';
 import {selfFetchingTab} from '../../shared/self-fetching-tab.js';
 
@@ -109,7 +109,7 @@ function renderTable(container, context) {
     target.appendChild(table(COLUMNS, rows, {className: 'pk-table--card'}));
     // Rendered whenever there is at least one run, even for a single page, so the
     // control is discoverable and its presence is stable to test.
-    target.appendChild(renderPager(totalPages));
+    target.appendChild(renderPager(totalPages, locale));
 }
 
 function renderRow(run, dateOptions) {
@@ -192,7 +192,7 @@ function buildCell(run, dateOptions) {
     return td;
 }
 
-function renderPager(totalPages) {
+function renderPager(totalPages, locale) {
     const pager = document.createElement('div');
     pager.className = 'pk-lifecycle-pager';
 
@@ -214,7 +214,7 @@ function renderPager(totalPages) {
 
     const readout = document.createElement('span');
     readout.className = 'pk-lifecycle-pager__readout';
-    readout.textContent = `Page ${currentPage + 1} of ${totalPages}`;
+    readout.textContent = `Page ${formatNumber(currentPage + 1, {locale})} of ${formatNumber(totalPages, {locale})}`;
 
     pager.append(pagerButton('Previous', -1), readout, pagerButton('Next', 1));
     return pager;

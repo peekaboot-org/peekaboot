@@ -35,6 +35,7 @@ import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.ObjectNode;
 
 class DashboardTabsIT extends PlaywrightTestBase {
 
@@ -68,8 +69,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** The shared query stat on a listed trace row (trace-stats.js). */
     private static final Pattern QUERY_STAT = Pattern.compile("(\\d+) quer(?:y|ies)");
 
-    /** The meters tab's readout while a filter is active (meters.js's updateCount). */
-    private static final Pattern METERS_COUNT_READOUT = Pattern.compile("(\\d+) / (\\d+) metrics");
+    /** The meters tab's readout while a filter is active (meters.js's updateCount): each count is grouped. */
+    private static final Pattern METERS_COUNT_READOUT = Pattern.compile("([\\d,.]+) / ([\\d,.]+) metrics");
 
     /** A duration as format.js renders it: a number and its unit ("850ms", "1.23s", "1.50m"). */
     private static final Pattern RENDERED_DURATION = Pattern.compile("([0-9.]+)(ms|s|m)$");
@@ -593,10 +594,15 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(counts.matches())
                 .as("the count readout reads '<matched> / <all> metrics': %s", readout)
                 .isTrue();
-        assertThat(Integer.parseInt(counts.group(1)))
+        assertThat(parseGroupedInt(counts.group(1)))
                 .as("jvm.memory matches some meters but not all of them: %s", readout)
                 .isPositive()
-                .isLessThan(Integer.parseInt(counts.group(2)));
+                .isLessThan(parseGroupedInt(counts.group(2)));
+    }
+
+    /** A count as format.js groups it (e.g. "1,234"), stripped of its group separators before parsing. */
+    private static int parseGroupedInt(String grouped) {
+        return Integer.parseInt(grouped.replaceAll("[.,]", ""));
     }
 
     /** Every meter's type badge fits its column whole, clipped nowhere and clear of the unit beside it. */
@@ -769,6 +775,35 @@ class DashboardTabsIT extends PlaywrightTestBase {
         page.waitForFunction(
                 "(expected) => document.querySelectorAll('#traces-list .pk-trace-item').length === expected",
                 listedCount);
+    }
+
+    /**
+     * The bucket buttons' counts are counts like any other: grouped, and in the dashboard's
+     * locale. A request naming no type still gets the backend's default view (every type but
+     * Connection Pool, see TraceInsightsService.parseRootActionTypes), which counts as a
+     * filter of its own - so {@code filteredBucketCounts} is what a bucket button reads even
+     * on the very first, unfiltered load; the plain {@code bucketCounts} only ever reaches the
+     * UI as the "/ total" denominator once the reader picks an explicit type or operation.
+     */
+    @Test
+    void tracesTabBucketCountsAreGroupedInTheDashboardsLocale() {
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
+        page.route("**/api/traces/insights**", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode result = (ObjectNode) readJson(response.text());
+            ((ObjectNode) result.get("filteredBucketCounts")).put("all", 12345);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(result.toString()));
+        });
+
+        openDashboard();
+        // openTracesTab() already waits for the listing this route serves (its ready
+        // selector is renderList's own output, written right after updateBucketCounts in
+        // the same synchronous response handler), so the bucket text is settled by the
+        // time it returns - no separate wait needed for the count itself.
+        dashboard.openTracesTab();
+
+        assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
+                .contains("12.345");
     }
 
     /**

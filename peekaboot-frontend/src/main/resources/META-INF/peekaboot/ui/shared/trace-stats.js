@@ -9,19 +9,23 @@ import {badge} from './components.js';
 import {formatCount, formatDurationMs} from './format.js';
 import {durationSeverity, logLevelVariant, severityClass} from './severity.js';
 
-export function traceStatParts(trace, features) {
+export function traceStatParts(trace, {features, locale} = {}) {
     const summary = trace.summary || {};
     const queries = summary.queries || {};
     const logs = summary.logs || {};
     const parts = [];
     if (queries.count > 0) {
         parts.push(durationStat(
-                formatCount(queries.count, 'query', 'queries'),
+                formatCount(queries.count, 'query', {plural: 'queries', locale}),
                 queries.totalDurationMs,
                 durationSeverity(queries.totalDurationMs, features)));
     }
-    if (logs.errorCount > 0) parts.push(badge(formatCount(logs.errorCount, 'error'), logLevelVariant('ERROR')));
-    if (logs.warnCount > 0) parts.push(badge(formatCount(logs.warnCount, 'warning'), logLevelVariant('WARN')));
+    if (logs.errorCount > 0) {
+        parts.push(badge(formatCount(logs.errorCount, 'error', {locale}), logLevelVariant('ERROR')));
+    }
+    if (logs.warnCount > 0) {
+        parts.push(badge(formatCount(logs.warnCount, 'warning', {locale}), logLevelVariant('WARN')));
+    }
     return parts;
 }
 
