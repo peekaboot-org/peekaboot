@@ -711,7 +711,11 @@ class TraceOverlayIT extends PlaywrightTestBase {
     void jumpFlashOutranksAHoveredRow() {
         openOverlayFromToolbar();
         overlay.waitFor(".pk-gantt-row");
-        String rowSelector = ".pk-gantt-row";
+        // A specific row, by its own span id, so the row hover lands on and the row the
+        // class is added to are provably the same element rather than each independently
+        // resolving ".pk-gantt-row" to whichever row happens to be first.
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-gantt-row').dataset.spanId");
+        String rowSelector = ".pk-gantt-row[data-span-id='" + spanId + "']";
 
         page.hover(rowSelector);
         @SuppressWarnings("unchecked")
