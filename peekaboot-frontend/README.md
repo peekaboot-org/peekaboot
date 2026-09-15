@@ -401,7 +401,7 @@ Each of these has been broken at least once and caught only in review. Keep them
 | Role | Tokens | Drawn on |
 |---|---|---|
 | Fill | `--pk-primary`, `--pk-success`, `--pk-warning`, `--pk-info`, `--pk-danger`, `--pk-purple`, `--pk-danger-soft` | Backgrounds: badge fills, buttons, banners. Each carries its own `--pk-on-*` ink on top. |
-| Graphic fill | `--pk-pink` | Small-area fills only: the span tree's consumer-kind dot and bar (`trace-detail.css`). Never carries ink and is never drawn as text, so it has no `--pk-on-*` or `-text` variant. |
+| Graphic fill | `--pk-pink` | Small-area fills only: the span tree's consumer-kind fills - its legend dot, row dot, bar and details panel border (`trace-detail.css`). Never carries ink and is never drawn as text, so it has no `--pk-on-*` or `-text` variant. |
 | Text | `--pk-primary-text`, `--pk-success-text`, `--pk-warning-text`, `--pk-info-text` | The page background (`--pk-bg`, `--pk-bg-alt`, `--pk-bg-hover`): text, focus rings, borders, the selected-tab underline. |
 
 **Change a colour's whole trio together: the fill token, its `--pk-on-*` ink, and its

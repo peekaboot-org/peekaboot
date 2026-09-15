@@ -28,11 +28,13 @@
     <span class="pk-span-row-count" id="span-row-count">8 rows</span>
 
     <!-- the gantt legend, exactly as kindLegend() in tabs/spans.js builds it -->
-    <ul class="pk-gantt-legend">
-        <li class="pk-gantt-legend__item pk-gantt-kind--server"><span class="pk-gantt-kind-dot" id="kind-dot-server"></span>Server</li>
-        <li class="pk-gantt-legend__item pk-gantt-kind--producer"><span class="pk-gantt-kind-dot" id="kind-dot-producer"></span>Producer</li>
-        <li class="pk-gantt-legend__item pk-gantt-kind--consumer"><span class="pk-gantt-kind-dot" id="kind-dot-consumer"></span>Consumer</li>
+    <ul class="pk-gantt-legend" aria-label="Span kinds">
+        <li class="pk-gantt-legend__item pk-gantt-kind--server"><span class="pk-gantt-kind-dot" id="kind-dot-server" aria-hidden="true"></span>Server</li>
+        <li class="pk-gantt-legend__item pk-gantt-kind--producer"><span class="pk-gantt-kind-dot" id="kind-dot-producer" aria-hidden="true"></span>Producer</li>
+        <li class="pk-gantt-legend__item pk-gantt-kind--consumer"><span class="pk-gantt-kind-dot" id="kind-dot-consumer" aria-hidden="true"></span>Consumer</li>
     </ul>
+    <!-- a span row's bar, scoped by kind the way spans.js's track() draws it -->
+    <span class="pk-gantt-kind--server"><span class="pk-gantt-bar" id="kind-bar-server"></span></span>
     <span class="pk-query-rows" id="query-rows">3 rows</span>
     <button class="pk-tab" id="tab-with-count">Spans<span class="pk-tab__count" id="tab-count">12</span></button>
 

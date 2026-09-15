@@ -25,19 +25,20 @@ class ThemeTokenIT extends PlaywrightTestBase {
     }
 
     /**
-     * Serves a tokens.css with four declarations stripped - the shape a stale cached copy,
+     * Serves a tokens.css with five declarations stripped - the shape a stale cached copy,
      * predating those tokens, would take; a blocked or 404 load would lose the whole
-     * palette, not four tokens. Every var() reading one of the missing tokens still has the
+     * palette, not five tokens. Every var() reading one of the missing tokens still has the
      * light-theme literal as a fallback, so the loss costs the dark palette for that rule
      * and nothing more - a search highlight without ink, an error banner without its wash,
-     * or a hover wash without its ink, would be unreadable rather than merely un-themed.
+     * a hover wash without its ink, or a consumer-kind span without its colour, would be
+     * unreadable or invisible rather than merely un-themed.
      */
     @Test
     void aTokensFileMissingTheHighlightTintAndWashTokensStillPaintsTheirRules() {
         page.route("**/peekaboot/ui/assets/tokens.css", route -> {
             APIResponse response = route.fetch();
-            String withoutTokens =
-                    response.text().replaceAll("(?m)^\\s+--pk-(mark-bg|on-mark|danger-tint|on-primary-wash):.*$", "");
+            String withoutTokens = response.text()
+                    .replaceAll("(?m)^\\s+--pk-(mark-bg|on-mark|danger-tint|on-primary-wash|pink):.*$", "");
             route.fulfill(new Route.FulfillOptions().setContentType("text/css").setBody(withoutTokens));
         });
 
@@ -47,6 +48,9 @@ class ThemeTokenIT extends PlaywrightTestBase {
         page.evaluate("() => document.body.insertAdjacentHTML('beforeend',"
                 + " '<span id=\"pk-wash-probe\" class=\"pk-logs-filter-span-clear\">x</span>')");
         page.hover("#pk-wash-probe");
+        page.evaluate("() => document.body.insertAdjacentHTML('beforeend',"
+                + " '<span id=\"pk-pink-probe\" class=\"pk-gantt-kind--consumer\">"
+                + "<span class=\"pk-gantt-bar\"></span></span>')");
 
         assertThat(computedStyle("#pk-mark-probe", "backgroundColor"))
                 .as("the search highlight keeps its fill")
@@ -60,6 +64,9 @@ class ThemeTokenIT extends PlaywrightTestBase {
         assertThat(computedStyle("#pk-wash-probe", "backgroundColor"))
                 .as("the primary-fill hover wash keeps its ink")
                 .isEqualTo("rgba(13, 17, 23, 0.15)");
+        assertThat(computedStyle("#pk-pink-probe .pk-gantt-bar", "backgroundColor"))
+                .as("the consumer-kind bar keeps its fill")
+                .isEqualTo("rgb(219, 39, 119)");
     }
 
     private String computedStyle(String selector, String property) {

@@ -105,7 +105,7 @@
 .pk-gantt-kind--server { --pk-gantt-kind: var(--pk-primary); --pk-gantt-kind-dot: var(--pk-primary-text); }
 .pk-gantt-kind--client { --pk-gantt-kind: var(--pk-purple); }
 .pk-gantt-kind--producer { --pk-gantt-kind: var(--pk-info); }
-.pk-gantt-kind--consumer { --pk-gantt-kind: var(--pk-pink); }
+.pk-gantt-kind--consumer { --pk-gantt-kind: var(--pk-pink, #db2777); }
 .pk-gantt-kind--internal { --pk-gantt-kind: var(--pk-text-muted); }
 .pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind-dot, var(--pk-gantt-kind)); }
 

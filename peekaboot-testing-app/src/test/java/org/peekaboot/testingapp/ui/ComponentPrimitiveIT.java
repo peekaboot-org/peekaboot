@@ -92,7 +92,9 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
      * even though neither is the trace's primary server/client axis, so each reads its own
      * token. The server dot takes the higher-contrast --pk-primary-text rather than the
      * bar's plain --pk-primary: an 8px dot needs more contrast against the page than a wide
-     * bar does, and the legend and every row share the one dot rule (trace-detail.css).
+     * bar does, and the legend and every row share the one dot rule (trace-detail.css). Pins
+     * the server bar too, in both themes: reading only elements with their own fill (never a
+     * transitioning ancestor) keeps the sweep free of a transition race.
      */
     @Test
     void kindDotsUseDistinctFills() {
@@ -101,9 +103,16 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
         assertThat(backgroundColor("#kind-dot-producer"))
                 .as("producer and consumer dots differ")
                 .isNotEqualTo(backgroundColor("#kind-dot-consumer"));
-        assertThat(backgroundColor("#kind-dot-server"))
-                .as("server dot uses the text-tuned green, not the bar's plain fill")
-                .isEqualTo(resolvedVar("--pk-primary-text"));
+
+        for (String theme : List.of("light", "dark")) {
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
+            assertThat(backgroundColor("#kind-dot-server"))
+                    .as("server dot uses the text-tuned green, not the bar's plain fill (%s theme)", theme)
+                    .isEqualTo(resolvedVar(null, "--pk-primary-text"));
+            assertThat(backgroundColor("#kind-bar-server"))
+                    .as("server bar keeps the plain fill the dot deliberately does not use (%s theme)", theme)
+                    .isEqualTo(resolvedVar(null, "--pk-primary"));
+        }
     }
 
     /**
