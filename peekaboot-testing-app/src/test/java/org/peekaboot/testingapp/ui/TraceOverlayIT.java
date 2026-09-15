@@ -692,6 +692,47 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * A jump target a reader's pointer happens to rest on must still show the flash tint:
+     * .pk-jump-flash alone (0,1,0) loses to .pk-gantt-row:hover (0,2,0) by specificity, so an
+     * unguarded flash would show the hover tint instead of the highlight the jump exists to
+     * draw the eye to.
+     */
+    @Test
+    void jumpFlashOutranksAHoveredRow() {
+        openOverlayFromToolbar();
+        overlay.openTab("queries");
+        overlay.waitFor(".pk-query-span-link");
+        String spanId = (String) overlay.evaluate("root => root.querySelector('.pk-query-span-link').dataset.spanId");
+        String rowSelector = ".pk-gantt-row[data-span-id='" + spanId + "']";
+
+        overlay.click(".pk-query-span-link");
+        overlay.waitUntil("root => root.querySelector('.pk-tab[aria-selected=\"true\"]')?.dataset.tab === 'spans'");
+        overlay.waitFor(".pk-gantt-row.pk-jump-flash");
+        page.hover(rowSelector);
+
+        Boolean stillFlashing = (Boolean) overlay.evaluate(
+                "(root, sel) => root.querySelector(sel)?.classList.contains('pk-jump-flash')", rowSelector);
+        assertThat(stillFlashing).as("hover must land inside the flash window").isTrue();
+        String rowBackground = (String) overlay.evaluate(
+                "(root, sel) => getComputedStyle(root.querySelector(sel)).backgroundColor", rowSelector);
+        assertThat(rowBackground).isEqualTo(resolvedPrimaryLight());
+    }
+
+    /** The theme's --pk-primary-light, resolved the way the flash's own background-color renders. */
+    private String resolvedPrimaryLight() {
+        return (String) overlay.evaluate("""
+                root => {
+                    const probe = document.createElement('div');
+                    probe.style.backgroundColor = 'var(--pk-primary-light)';
+                    root.appendChild(probe);
+                    const resolved = getComputedStyle(probe).backgroundColor;
+                    probe.remove();
+                    return resolved;
+                }
+                """);
+    }
+
+    /**
      * Cross-link from the Logs tab: beside the existing filter-to-span button, each log
      * row links to its span in the Spans tab's tree the same way the Queries tab does.
      */

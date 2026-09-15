@@ -248,9 +248,13 @@
 
 /* Cross-link jump target (trace-detail.js's jumpToElement): briefly tinted and
    ring-marked - design tokens only, visible in both themes - so the eye lands where
-   focus just moved; the class is removed again after a moment. Declared last so it
-   wins over .pk-gantt-row:hover / .pk-query-item's own background. */
-.pk-jump-flash { background: var(--pk-primary-light); box-shadow: inset 0 0 0 2px var(--pk-primary-text); }
+   focus just moved; the class is removed again after a moment. .pk-jump-flash alone
+   is outranked by .pk-gantt-row:hover's specificity, so it is qualified to match it
+   and declared after it, which wins the tie even on a row the pointer rests on. */
+.pk-gantt-row.pk-jump-flash, .pk-query-item.pk-jump-flash {
+    background: var(--pk-primary-light);
+    box-shadow: inset 0 0 0 2px var(--pk-primary-text);
+}
 /* Focus lands on the row/entry itself (tabindex=-1, programmatic focus); while the flash
    ring above is up it is the visible indicator, so the UA's default outline is redundant.
    The flash is removed after a moment and focus stays, so :focus-visible - which a jump
