@@ -22,3 +22,23 @@ export function writeSetting(key, value) {
         /* preference simply will not persist */
     }
 }
+
+// The key the dashboard's locale select writes, shared across surfaces via same-origin
+// storage the way theme.js's own key shares the theme.
+export const LOCALE_STORAGE_KEY = 'peekaboot-locale';
+
+/**
+ * The stored locale tag, kept only if Intl actually accepts it - a stale non-BCP-47 value
+ * (e.g. an old build's 'en_US') would otherwise reach every toLocaleString call as a
+ * RangeError. Null for nothing stored, a blocked store, or an invalid tag, so every
+ * caller's own fallback (the browser's locale) applies the same way.
+ */
+export function readLocaleSetting() {
+    const value = readSetting(LOCALE_STORAGE_KEY);
+    if (!value) return null;
+    try {
+        return Intl.NumberFormat.supportedLocalesOf([value]).length > 0 ? value : null;
+    } catch {
+        return null;
+    }
+}

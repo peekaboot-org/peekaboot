@@ -10,7 +10,7 @@
 import {createClient} from '../shared/api.js';
 import {tabStrip} from '../shared/components.js';
 import {bindTheme, applyTheme, storeTheme} from '../shared/theme.js';
-import {readSetting, writeSetting} from '../shared/storage.js';
+import {readSetting, writeSetting, readLocaleSetting, LOCALE_STORAGE_KEY} from '../shared/storage.js';
 import {formatDateTimeWith} from '../shared/format.js';
 import {parseAppHash, pushAppHash, replaceAppHash} from '../shared/url-state.js';
 import {openTraceDetail, closeTraceDetail} from '../trace-detail/trace-detail.js';
@@ -32,26 +32,12 @@ const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
 
-/**
- * A stored locale tag, kept only if Intl actually accepts it - a stale non-BCP-47 value
- * (e.g. an old build's 'en_US') would otherwise reach every toLocaleString call on the
- * page as a RangeError, and renderData()'s tab loop stops rendering at the first one.
- */
-function validStoredLocale(value) {
-    if (!value) return null;
-    try {
-        return Intl.NumberFormat.supportedLocalesOf([value]).length > 0 ? value : null;
-    } catch {
-        return null;
-    }
-}
-
 let data = null;
 let features = {};
 let mainTabs = null;
 let refreshTimer = null;
 let isPaused = false;
-let locale = validStoredLocale(readSetting('peekaboot-locale')) || navigator.language || 'en-US';
+let locale = readLocaleSetting() || navigator.language || 'en-US';
 let useServerTimezone = readSetting('peekaboot-use-server-tz') === 'true';
 let serverTimezone = null;
 // Whether the next fetch should ask the API for real values instead of "******" -
@@ -371,7 +357,7 @@ function initLocaleSelector() {
     select.value = locale;
     select.addEventListener('change', () => {
         locale = select.value;
-        writeSetting('peekaboot-locale', locale);
+        writeSetting(LOCALE_STORAGE_KEY, locale);
         fetchData();
     });
 }

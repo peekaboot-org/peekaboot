@@ -16,7 +16,9 @@
  * Enter/Space while it has focus) lazy-imports the trace-detail overlay.
  *
  * The bar never fetches /api/features: it colours durations by the shared defaults
- * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults.
+ * (severity.js's DEFAULT_THRESHOLDS), which are the backend's own defaults. Its counts
+ * do group in the dashboard's chosen locale, shared through storage.js the way the theme
+ * is - readLocaleSetting() falls back to the browser's own when nothing is stored.
  */
 import {createClient} from '../shared/api.js';
 import {badge} from '../shared/components.js';
@@ -24,6 +26,7 @@ import {el} from '../shared/dom.js';
 import {durationSeverity} from '../shared/severity.js';
 import {statusVariant} from '../shared/http-status.js';
 import {bindTheme} from '../shared/theme.js';
+import {readLocaleSetting} from '../shared/storage.js';
 import {registerBundledFonts} from '../shared/fonts.js';
 import {copyableId, bindCopyables} from '../shared/copyable.js';
 import {traceStatParts, durationStat} from '../shared/trace-stats.js';
@@ -51,6 +54,9 @@ function initToolbar(host, data) {
     const client = createClient({basePath: data.basePath});
     bindTheme(host);
     registerBundledFonts(data.basePath);
+    // undefined (not null) when nothing valid is stored, so a caller's own `locale ??`/
+    // default-parameter fallback to the browser's locale still applies.
+    const locale = readLocaleSetting() || undefined;
 
     // Reaching this line is itself the proof that /peekaboot/** is readable by whoever is
     // looking, so the notice the server rendered for the opposite case has served its
@@ -110,7 +116,7 @@ function initToolbar(host, data) {
 
         const clock = el('span', {text: '⏱', attrs: {'aria-hidden': 'true'}});
         const duration = durationStat(clock, trace.durationMs, durationSeverity(trace.durationMs));
-        metricsEl.replaceChildren(duration, ...traceStatParts(trace));
+        metricsEl.replaceChildren(duration, ...traceStatParts(trace, {locale}));
     }
 
     // Nothing ever arrived: replace "loading" with the placeholder row rather than
@@ -123,7 +129,7 @@ function initToolbar(host, data) {
 
     async function openOverlay() {
         const overlay = await import('../trace-detail/trace-detail.js');
-        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath});
+        overlay.openTraceDetail(currentTraceId, {basePath: data.basePath, locale});
     }
 
     if (!data.idle && data.traceId) {

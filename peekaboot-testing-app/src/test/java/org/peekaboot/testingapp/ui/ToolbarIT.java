@@ -3,7 +3,9 @@ package org.peekaboot.testingapp.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.microsoft.playwright.APIResponse;
 import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Route;
 import com.microsoft.playwright.TimeoutError;
 import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
@@ -12,6 +14,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Exercises the real toolbar.js served by the running app in a real browser. Coverage comes
@@ -164,6 +167,66 @@ class ToolbarIT extends PlaywrightTestBase {
         toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('err')");
 
         assertThat(toolbar.text("#pk-metrics")).contains("1 err");
+    }
+
+    /**
+     * The dashboard's stored locale groups the bar's own counts and travels with it into
+     * the overlay it opens - storage.js's readLocaleSetting() is the one thing both
+     * surfaces read, the same way they already share the theme. The route patch mirrors
+     * TraceOverlayIT.overlayTabCountsAreGroupedInTheDashboardsLocale's pattern, applied to
+     * every one of the toolbar's fetch-ladder attempts rather than a single dashboard fetch.
+     */
+    @Test
+    void toolbarAndItsOverlayGroupCountsInTheDashboardsStoredLocale() {
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'de-DE')");
+        patchSpanCountTo(12345);
+
+        openPersonsPage();
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('span')");
+
+        assertThat(toolbar.text("#pk-metrics")).contains("12.345 spans");
+
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-tab[data-tab=\"spans\"] .pk-tab__count");
+        assertThat(overlay.text(".pk-tab[data-tab=\"spans\"] .pk-tab__count")).isEqualTo("12.345");
+    }
+
+    /**
+     * A stale, non-BCP-47 stored tag (an old build's underscore-separated 'en_US') must not
+     * blank the bar: storage.js's readLocaleSetting() rejects it before it ever reaches
+     * toLocaleString, so the browser's own locale (en-US, pinned by newContextOptions())
+     * applies instead - proven by the grouped count still rendering rather than the bar
+     * getting stuck on "loading" or throwing.
+     */
+    @Test
+    void toolbarFallsBackToTheBrowserLocaleWhenTheStoredTagIsInvalid() {
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'en_US')");
+        patchSpanCountTo(12345);
+
+        openPersonsPage();
+        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('span')");
+
+        assertThat(toolbar.text("#pk-metrics")).contains("12,345 spans");
+    }
+
+    /**
+     * Patches every insights response for the polled trace to carry {@code count} spans -
+     * registered before the trace exists, so the ladder's earlier attempts (a real 404
+     * until the trace is stored) must pass through untouched rather than fail parsing an
+     * error body. Mirrors TraceOverlayIT.overlayTabCountsAreGroupedInTheDashboardsLocale's
+     * route-patch pattern.
+     */
+    private void patchSpanCountTo(int count) {
+        page.route("**/api/traces/*/insights", route -> {
+            APIResponse response = route.fetch();
+            if (!response.ok()) {
+                route.fulfill(new Route.FulfillOptions().setResponse(response));
+                return;
+            }
+            ObjectNode trace = (ObjectNode) readJson(response.text());
+            ((ObjectNode) trace.get("summary").get("spans")).put("count", count);
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(trace.toString()));
+        });
     }
 
     /**
