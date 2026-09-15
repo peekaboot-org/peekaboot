@@ -90,6 +90,18 @@
 .pk-gantt-header__timeline { flex: 1; display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
 .pk-gantt-header__spacer { width: var(--pk-gantt-duration-width); }
 
+/* The legend of the trace's span kinds. */
+.pk-gantt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; margin-bottom: var(--pk-space-sm); }
+.pk-gantt-legend { display: flex; flex-wrap: wrap; gap: var(--pk-space-md); margin: 0; padding: 0; list-style: none; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-gantt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A span's colour scope: its legend dot, row dot, bar and details edge all read it. */
+.pk-gantt-kind--server { --pk-gantt-kind: var(--pk-primary); }
+.pk-gantt-kind--client { --pk-gantt-kind: var(--pk-purple); }
+.pk-gantt-kind--producer, .pk-gantt-kind--consumer { --pk-gantt-kind: var(--pk-info); }
+.pk-gantt-kind--internal { --pk-gantt-kind: var(--pk-text-muted); }
+.pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind); }
+
 .pk-gantt-row { display: flex; align-items: center; padding: var(--pk-space-xs) 0; border-radius: var(--pk-space-xs); }
 /* An open span's row keeps the hover tint, which ties the panel under it to its row. */
 .pk-gantt-row:hover, .pk-gantt-span--open > .pk-gantt-row { background: var(--pk-bg-alt); }
@@ -102,22 +114,14 @@
 .pk-gantt-toggle-spacer { flex: none; width: 24px; }
 
 .pk-gantt-name { width: var(--pk-gantt-name-width); display: flex; align-items: center; gap: var(--pk-space-xs); font-size: var(--pk-text-xs); overflow: hidden; }
-/* A .pk-unbutton: the span's name and the switch for its details panel. It takes the
-   cell's free width, which pushes the chips to the cell's right edge. */
+/* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
+   the cell's free width, which pushes the chips to the cell's right edge. */
 .pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); text-align: left; border-radius: var(--pk-space-xs); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pk-gantt-kind { font-size: var(--pk-text-xs); padding: 1px var(--pk-space-xs); border-radius: 3px; text-transform: uppercase; }
-.pk-gantt-kind--server { background: var(--pk-primary); color: var(--pk-on-primary); }
-.pk-gantt-kind--client { background: var(--pk-purple); color: var(--pk-on-purple); }
-.pk-gantt-kind--producer, .pk-gantt-kind--consumer { background: var(--pk-info); color: var(--pk-on-info); }
-
 /* Also the pointer's switch for the span's details (see spans.js). */
 .pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 var(--pk-space-sm); cursor: pointer; }
 .pk-gantt-row:hover .pk-gantt-track, .pk-gantt-span--open > .pk-gantt-row .pk-gantt-track { background: var(--pk-bg-hover); }
-.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-text-muted); }
-.pk-gantt-bar--server { background: var(--pk-primary); }
-.pk-gantt-bar--client { background: var(--pk-purple); }
-.pk-gantt-bar--producer, .pk-gantt-bar--consumer { background: var(--pk-info); }
+.pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-gantt-kind); }
 .pk-gantt-bar--error { background: var(--pk-danger); }
 
 .pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
@@ -144,7 +148,7 @@
 .pk-span-row-count, .pk-span-action { flex: none; white-space: nowrap; }
 
 /* Indented by spans.js to sit under its span's name. */
-.pk-span-details { display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-text-muted); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
+.pk-span-details { display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
 .pk-gantt-span--open > .pk-span-details { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }

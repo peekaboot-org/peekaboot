@@ -32,6 +32,7 @@ export function render(container, trace, context = {}) {
 
     const entries = el('div', {attrs: {id: 'pk-gantt-rows'}});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
+        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan)),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
@@ -111,12 +112,30 @@ function spanKind(span) {
     return Object.hasOwn(KIND_LABELS, kind) ? kind : 'internal';
 }
 
+/** The kinds this trace has, in KIND_LABELS order: the key to the row dots and bar colours. */
+function kindLegend(rootSpan) {
+    const present = new Set();
+    const collect = span => {
+        if (!span) return;
+        present.add(spanKind(span));
+        (span.children || []).forEach(collect);
+    };
+    collect(rootSpan);
+    return el('ul', {className: 'pk-gantt-legend', attrs: {'aria-label': 'Span kinds'}},
+        ...Object.keys(KIND_LABELS).filter(kind => present.has(kind)).map(kind =>
+            el('li', {className: `pk-gantt-legend__item pk-gantt-kind--${kind}`}, kindDot(), KIND_LABELS[kind])));
+}
+
+function kindDot() {
+    return el('span', {className: 'pk-gantt-kind-dot', attrs: {'aria-hidden': 'true'}});
+}
+
 function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
     if (!span) return;
     const kind = spanKind(span);
     const detailsId = `pk-span-details-${span.spanId}`;
 
-    const entry = el('div', {className: 'pk-gantt-span'});
+    const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}`});
     entry.dataset.depth = depth;
 
     const row = el('div', {className: 'pk-gantt-row'});
@@ -139,13 +158,10 @@ function nameCell(span, kind, depth, detailsId) {
     cell.append(hasChildren
         ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
-    if (kind !== 'internal') {
-        cell.append(el('span', {className: `pk-gantt-kind pk-gantt-kind--${kind}`, text: kind}));
-    }
     cell.append(button({
         className: 'pk-unbutton pk-gantt-name__toggle', title: name,
-        attrs: {'aria-expanded': 'false', 'aria-controls': detailsId}
-    }, el('span', {className: 'pk-gantt-name__text', text: name})));
+        attrs: {'aria-expanded': 'false', 'aria-controls': detailsId, 'aria-label': `${name}, ${kind} span`}
+    }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
     // as span.rowCount.
@@ -168,7 +184,6 @@ function track(span, traceStart, totalDuration) {
     const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
     const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
-    const kind = (span.kind || 'internal').toLowerCase();
     // the backend's verdict: ERROR whenever the span recorded an error message or class
     const hasError = span.status === 'ERROR';
 
@@ -176,7 +191,7 @@ function track(span, traceStart, totalDuration) {
     element.className = 'pk-gantt-track';
 
     const bar = document.createElement('div');
-    bar.className = `pk-gantt-bar pk-gantt-bar--${kind}${hasError ? ' pk-gantt-bar--error' : ''}`;
+    bar.className = `pk-gantt-bar${hasError ? ' pk-gantt-bar--error' : ''}`;
     bar.style.left = `${left}%`;
     bar.style.width = `${width}%`;
     element.appendChild(bar);

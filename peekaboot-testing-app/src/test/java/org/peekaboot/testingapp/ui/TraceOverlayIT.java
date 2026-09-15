@@ -159,8 +159,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Fills that reuse --pk-primary (this chip, the gantt "server" kind badge) or
-     * --pk-success (the query row-count badge) for their background take the
+     * Fills that reuse --pk-primary (this chip) or --pk-success (the query row-count
+     * badge) for their background take the
      * contrast-tuned --pk-on-primary/--pk-on-success foreground that components.css's
      * .pk-badge uses for the same fills - --pk-text-strong there would be near-white text
      * on light-blue/light-green at ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
@@ -171,13 +171,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * white on it measures 2.61:1, so not even the light theme can use plain white.
      *
      * Drives a real ERROR log entry (matching ToolbarIT's
-     * toolbarShowsErrorLogCountWhenRequestLogsAnError) rather than the gantt "server" kind
-     * badge: this test app's real request-capture path (RequestCaptureFilter /
-     * TracingHandlerInterceptor) never tags the root span with an OpenTelemetry SERVER
-     * kind - only OtelSpanExporter does that - so .pk-gantt-kind.server never actually
-     * renders here, and a query row-count badge needs a JDBC instrumentation detail
-     * this test has no reason to depend on. The logs-tab span-filter chip needs only one
-     * real log entry attached to the trace, which openPageThatLogsAnError() guarantees.
+     * toolbarShowsErrorLogCountWhenRequestLogsAnError): a query row-count badge needs a
+     * JDBC instrumentation detail this test has no reason to depend on, while the logs-tab
+     * span-filter chip needs only one real log entry attached to the trace, which
+     * openPageThatLogsAnError() guarantees.
      */
     @Test
     void logsFilterChipUsesTheContrastTunedForeground() {
@@ -1165,6 +1162,40 @@ class TraceOverlayIT extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<Object> trackClickStates = (List<Object>) states;
         assertThat(trackClickStates).containsExactly(true, true, false);
+    }
+
+    /**
+     * A span's kind is its dot's and its bar's colour, keyed by a legend of only the kinds the
+     * trace has. Colour never carries it alone: the name button's accessible name and the
+     * details panel say the kind in words. A kind the tab does not know reads as internal
+     * rather than as a colour with no legend entry.
+     */
+    @Test
+    void spanKindsAreColouredAndKeyedByTheLegend() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'http get /orders', kind: 'SERVER', children: [
+                    {spanId: 'b', name: 'SELECT person', kind: 'CLIENT'},
+                    {spanId: 'c', name: 'spring.handler', kind: null},
+                    {spanId: 'd', name: 'odd', kind: 'SOMETHING_NEW'}]}});
+                const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
+                return [
+                    Array.from(container.querySelectorAll('.pk-gantt-legend__item')).map(el => el.textContent).join(','),
+                    entry('b').classList.contains('pk-gantt-kind--client'),
+                    entry('b').querySelector('.pk-gantt-name__toggle').getAttribute('aria-label'),
+                    entry('b').querySelector('.pk-span-details__kind').textContent,
+                    entry('d').classList.contains('pk-gantt-kind--internal'),
+                    container.querySelectorAll('.pk-gantt-kind').length === 0
+                ];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> spanKindFacts = (List<Object>) facts;
+        assertThat(spanKindFacts)
+                .containsExactly(
+                        "Server,Client,Internal", true, "SELECT person, client span", "Client span", true, true);
     }
 
     /**
