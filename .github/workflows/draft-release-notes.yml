@@ -2,7 +2,6 @@ name: draft-release-notes
 
 # A separate workflow rather than steps in build-on-push: this needs `contents: write`,
 # and build-on-push runs on every branch including dependabot's, whose token is read-only.
-# It also stays clear of the `build-on-push` check context the ruleset on dev requires.
 on:
   push:
     branches:

@@ -7,6 +7,9 @@ on:
 jobs:
   dependabot-pr-auto-merge:
     runs-on: ubuntu-latest
+    # The merge step waits for the build, so this job outlives it. Bounded well above the
+    # build's own 30, and far below the six-hour default a watch would otherwise inherit.
+    timeout-minutes: 40
 
     permissions:
       contents: write
@@ -24,16 +27,24 @@ jobs:
       # constructs Boot's actuator endpoint objects directly (borrowing only the HealthEndpoint
       # bean) and depends on Boot's property-source ordering, so a Boot minor is a
       # compatibility event rather than a bump.
-      # One step for both commands: the condition reads this job's metadata step, which a
+      # One step for all three commands: the condition reads this job's metadata step, which a
       # job-level `if` cannot see.
-      - name: dependabot-pr-approve-and-auto-merge
+      - name: dependabot-pr-approve-and-merge
         if: steps.metadata.outputs.update-type != 'version-update:semver-major' && steps.metadata.outputs.package-ecosystem != 'gradle' && steps.metadata.outputs.dependency-group != 'spring-boot'
+        # Waits for the build rather than using `gh pr merge --auto`. Auto-merge only arms when
+        # something holds the pull request open, which was the dev ruleset's required check;
+        # that check is gone, because it also refused the release job's pushes and GitHub
+        # Actions cannot be granted a ruleset bypass. A red or cancelled build exits non-zero
+        # here and the pull request stays open for a human, which is the safe direction.
+        # No --required: with the check rule removed nothing is required any more, so filtering
+        # to required checks would watch an empty set and return immediately.
         # --rebase, not --merge: the dev ruleset requires linear history. Dependabot's single
         # commit already carries a conventional subject, which rebase keeps and squash would
         # replace with the pull request title.
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto --rebase "$PR_URL"
+          gh pr checks --watch --fail-fast "$PR_URL"
+          gh pr merge --rebase "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

@@ -431,8 +431,7 @@ Draft. It is visible only to accounts with write access, so a signed-out visitor
 sees nothing there.
 
 Separate from `build-on-push` because it needs `contents: write`, and that workflow runs on
-every branch including Dependabot's, whose token is read-only. It also stays clear of the
-`build-on-push` check context the `dev` ruleset requires.
+every branch including Dependabot's, whose token is read-only.
 
 The release job deletes the draft once the real release exists. It does not reappear until
 the next real commit on `dev`: the release job's own commits are pushed with `GITHUB_TOKEN`,
@@ -448,8 +447,8 @@ its ~60 system libraries. Firefox and WebKit hold back the `chromium-only` tests
 
 The webkit leg drives Playwright's own WebKit build: the engine Safari is built on, at a
 different version and feature set. It is not Safari, and a green leg says nothing about
-Safari. This workflow is separate from `build-on-push`, which stays the check the `dev`
-ruleset requires.
+Safari. It is separate from `build-on-push` so that a red engine here never fails a push
+build.
 
 ### `release.yml`
 
@@ -457,9 +456,13 @@ See [Releasing](#releasing).
 
 ### `dependabot-pr-auto-merge.yml`
 
-Auto-approves and auto-merges Dependabot PRs targeting `dev`. Three kinds wait for a
-human: semver-major updates, every `gradle`-ecosystem update (CI never builds Gradle, so a
-merged Gradle bump would be unverified), and the `spring-boot` dependency group. Boot is a
+Approves a Dependabot PR targeting `dev`, waits for its build with `gh pr checks --watch
+--fail-fast`, and rebase-merges it once green. It waits itself rather than using
+`gh pr merge --auto`, which only arms when a branch rule holds the pull request open; `dev`
+carries no such rule, for the reason under [Releasing](#releasing). A red or cancelled build
+leaves the pull request open for a human. Three kinds wait for a human anyway: semver-major
+updates, every `gradle`-ecosystem update (CI never builds Gradle, so a merged Gradle bump
+would be unverified), and the `spring-boot` dependency group. Boot is a
 compatibility event rather than a bump, because peekaboot implements
 `EndpointExposureOutcomeContributor`, constructs actuator endpoint objects directly and
 depends on Boot's property-source ordering. That whole line
@@ -470,9 +473,10 @@ Maven and Gradle daily, GitHub Actions weekly.
 Branch model: `dev` is the default and integration branch, and the only branch that
 originates commits. `main` is a pointer to the last released commit; the release job
 fast-forwards it and nothing else writes to it. The `green-default-branch` ruleset on `dev`
-requires the `build-on-push` check and linear history. Its bypass list holds the organisation
-admins, the repository admin role and GitHub Actions, all `bypass_mode: always`, so a direct
-push by the owner or by the release job never waits for the check.
+forbids deletion and requires linear history. Its bypass list holds the organisation admins
+and the repository admin role, both `bypass_mode: always`, so those two rules bind CI and the
+merge button rather than the owner. Nothing requires a status check on `dev`; see
+[Releasing](#releasing) for why one cannot coexist with an automated release.
 
 ## Releasing
 
@@ -496,11 +500,16 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
    committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
    bare version tagged there.
 
-`release:prepare` pushes to `dev`, which the ruleset protects, so GitHub Actions has to sit on
-that ruleset's bypass list: a commit pushed by `GITHUB_TOKEN` never carries a `build-on-push`
-check, because that token starts no workflows. Without the bypass the push is refused before
-the tag is created and long before anything reaches Central, so a missing bypass costs a
-release rather than leaving half of one behind.
+`release:prepare` pushes to `dev` with `GITHUB_TOKEN`, and that works only because the ruleset
+requires no status check. A required check refuses any push that does not carry one, and a
+`GITHUB_TOKEN` push never carries one, because that token starts no workflows. The usual
+escape is a ruleset bypass, but GitHub Actions is not an eligible bypass actor at all: the
+list admits repository admins, organisation and enterprise owners, the maintain or write role,
+teams, GitHub Apps and Dependabot. So a required check on `dev` and an automated release
+cannot coexist, short of running the release under a GitHub App or a personal token.
+
+That check used to exist to arm auto-merge on Dependabot pull requests, which is why
+[`dependabot-pr-auto-merge.yml`](#dependabot-pr-auto-mergeyml) now waits for the build itself.
 
 Nothing is left to do by hand afterwards. The Gradle build needs no step either, since it
 derives the version and the build instant from the poms.
