@@ -1017,8 +1017,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
     /**
      * A query span deep in the tree keeps its whole name beside its chips. The name column
-     * takes the widest row's indent, name and chips, up to 40% of the tab; a fixed width lost
-     * the name to the indent and the chips at depth.
+     * sizes to the widest row's own indent, name and chips, capped at 40% of the tab, so a
+     * name several levels down is not squeezed by the indent and chips it carries there.
      */
     @Test
     void aDeepQuerySpanKeepsItsWholeName() {
@@ -1032,6 +1032,39 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + ".filter(name => name.scrollWidth > name.clientWidth).map(name => name.textContent)"))
                 .as("span names cut short by an ellipsis")
                 .isEqualTo(List.of());
+    }
+
+    /**
+     * The 40% cap holds even against a single span whose name alone dwarfs it: the name
+     * column's {@code fit-content(40%)} still gives up no more than that share of the
+     * gantt's own width, leaving the rest of the name to the ellipsis - a column sized to
+     * {@code max-content} instead would grow past the cap to fit the whole name.
+     */
+    @Test
+    void theNameColumnNeverExceeds40PercentOfTheGanttsWidth() {
+        page.setViewportSize(1280, 800);
+        String traceId = "overlay-long-name-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("x".repeat(200))
+                .kind(Span.Kind.SERVER)
+                .at(0, 10)
+                .build());
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.awaitMeasurable(".pk-gantt-name__text");
+
+        BoundingBox nameCellBox =
+                page.locator(TraceOverlay.HOST + " .pk-gantt-name").first().boundingBox();
+        BoundingBox ganttBox = page.locator(TraceOverlay.HOST + " .pk-gantt").boundingBox();
+
+        assertThat(nameCellBox.width)
+                .as("name column width stays within 40% of the gantt's own content width")
+                .isLessThanOrEqualTo(ganttBox.width * 0.4 + 1);
+        assertThat((Boolean) overlay.evaluate("root => {"
+                        + "const name = root.querySelector('.pk-gantt-name__text');"
+                        + "return name.scrollWidth > name.clientWidth; }"))
+                .as("the 200-character name is the one that ellipses")
+                .isTrue();
     }
 
     /**

@@ -38,8 +38,7 @@ export function render(container, trace, context = {}) {
         el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
-            el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
-            el('div', {className: 'pk-gantt-header__spacer'})),
+            el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick})))),
         entries));
 
     renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration);
