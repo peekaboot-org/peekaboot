@@ -340,8 +340,12 @@
 /* The trace id is a .pk-copy control (components.css); it only needs a width bound here
    so a 32-character id cannot crowd the rest of the row. */
 .pk-trace-item__stats .pk-copy { max-width: 24ch; }
-.pk-trace-item__time { color: var(--pk-text-muted); font-size: var(--pk-text-sm); }
-.pk-trace-item__stats { display: flex; align-items: center; gap: var(--pk-space-md); margin-top: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-trace-item__time { color: var(--pk-text-muted); font-size: var(--pk-text-sm); white-space: nowrap; }
+/* flex-wrap so a narrow row wraps between parts (spans/queries/logs/badges), never inside
+   one; row-gap is tighter than the column gap since a wrapped line reads as a new row, not
+   a new column. */
+.pk-trace-item__stats { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-space-md); row-gap: var(--pk-space-xs); margin-top: var(--pk-space-xs); font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
+.pk-trace-item__stats .pk-stat { white-space: nowrap; }
 .pk-trace-item__stat-separator { color: var(--pk-text-muted); opacity: 0.6; }
 
 /* Scheduled task item */

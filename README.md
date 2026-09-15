@@ -30,8 +30,8 @@ how to override the detection are in
 
 ## What you get
 
-- A dev toolbar docked to every page, with request status, duration, query count and a
-  link to the full trace.
+- A dev toolbar docked to every page, with request status, duration, the span, query and
+  log counts with query time and error and warning counts, and a link to the full trace.
 - A dashboard for health, environment, config, Flyway, loggers, scheduled tasks and
   metrics, read in-process with nothing exposed under `/actuator/**`.
 - In-memory request tracing via Micrometer and OpenTelemetry, with no collector to run.

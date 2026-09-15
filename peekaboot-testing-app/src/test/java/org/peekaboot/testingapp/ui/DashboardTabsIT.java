@@ -827,6 +827,54 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
+     * With up to five stat parts (spans, queries with their time, logs, an error badge, a
+     * warning badge) plus the row's id and its timestamp, a phone-width row must wrap
+     * between parts rather than inside one - and {@code .pk-trace-item}'s own
+     * {@code overflow: hidden} must not clip a part off the row's right edge either way.
+     */
+    @Test
+    void tracesRowStatsFitAPhoneViewportWithoutWrappingOrClippingAPart() {
+        page.setViewportSize(375, 800);
+        String traceId = seedAnHttpTrace();
+        page.route("**/api/traces/insights**", route -> {
+            APIResponse response = route.fetch();
+            ObjectNode result = (ObjectNode) readJson(response.text());
+            for (JsonNode trace : result.path("traces")) {
+                if (!traceId.equals(trace.path("traceId").asString())) continue;
+                ObjectNode summary = (ObjectNode) trace.get("summary");
+                ((ObjectNode) summary.get("spans")).put("count", 84);
+                ((ObjectNode) summary.get("queries")).put("count", 26).put("totalDurationMs", 31);
+                ((ObjectNode) summary.get("logs"))
+                        .put("count", 27)
+                        .put("errorCount", 0)
+                        .put("warnCount", 2);
+            }
+            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(result.toString()));
+        });
+
+        openDashboard();
+        dashboard.openTracesTab();
+        dashboard.awaitListedTrace(traceId);
+
+        Object misfits = page.evaluate("""
+                selector => {
+                    const row = document.querySelector(selector);
+                    const rowRight = row.getBoundingClientRect().right;
+                    return [...row.children].flatMap(part => {
+                        const rect = part.getBoundingClientRect();
+                        const problems = [];
+                        if (rect.right > rowRight + 1) problems.push('past the row edge');
+                        if (part.getClientRects().length > 1) problems.push('wraps inside itself');
+                        return problems.length ? [part.textContent + ': ' + problems.join(', ')] : [];
+                    });
+                }
+                """, Dashboard.traceItem(traceId) + " .pk-trace-item__stats");
+        @SuppressWarnings("unchecked")
+        List<Object> misfitParts = (List<Object>) misfits;
+        assertThat(misfitParts).isEmpty();
+    }
+
+    /**
      * A deep link into the traces tab must restore the bucket and type filter controls
      * from the URL, not just land on the traces tab - a filtered traces URL is meant to
      * be shareable/bookmarkable.
