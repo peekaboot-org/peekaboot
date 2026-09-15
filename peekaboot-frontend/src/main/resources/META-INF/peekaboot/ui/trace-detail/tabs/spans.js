@@ -192,6 +192,10 @@ function nameCell(span, kind, detailsId, hasError, locale) {
             'aria-label': `${name}, ${kind} span${hasError ? ', error' : ''}`
         }
     }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
+    // aria-hidden: the name button's accessible name above already ends in ", error".
+    if (hasError) {
+        cell.append(el('span', {className: 'pk-span-error-chip', text: 'error', attrs: {'aria-hidden': 'true'}}));
+    }
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
     // as span.rowCount.

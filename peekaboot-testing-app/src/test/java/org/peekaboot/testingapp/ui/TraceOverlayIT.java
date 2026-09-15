@@ -1475,8 +1475,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * An error span says what went wrong where the reader is looking: its name takes the
      * danger colour on the row, following the backend's status verdict like the bar does,
-     * and its details panel leads with the exception class and message the backend recorded.
-     * A span that recorded neither renders no error section.
+     * its row carries a visible "error" chip, and its details panel leads with the exception
+     * class and message the backend recorded. A span that recorded neither renders no error
+     * section and no chip. The chip is aria-hidden: the name button's accessible name above
+     * already ends in ", error".
      */
     @Test
     void anErrorSpansDetailsShowTheExceptionItRecorded() {
@@ -1490,14 +1492,19 @@ class TraceOverlayIT extends PlaywrightTestBase {
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
                 const nameToggle = id => entry(id).querySelector('.pk-gantt-name__toggle');
                 const erroneous = id => nameToggle(id).classList.contains('pk-gantt-name__toggle--error');
+                const errorChips = id => entry(id).querySelectorAll('.pk-span-error-chip');
                 return [
                     erroneous('b'),
                     entry('b').querySelector('.pk-span-details__error-class')?.textContent ?? null,
                     entry('b').querySelector('.pk-span-details__error-message')?.textContent ?? null,
                     nameToggle('b').getAttribute('aria-label'),
+                    errorChips('b').length,
+                    errorChips('b')[0].textContent,
+                    errorChips('b')[0].getAttribute('aria-hidden'),
                     erroneous('c'),
                     entry('c').querySelector('.pk-span-details__error') === null,
-                    nameToggle('c').getAttribute('aria-label')
+                    nameToggle('c').getAttribute('aria-label'),
+                    errorChips('c').length
                 ];
             })()
             """);
@@ -1510,9 +1517,13 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         "org.springframework.web.client.ResourceAccessException",
                         "Connection refused",
                         "http get, internal span, error",
+                        1,
+                        "error",
+                        "true",
                         false,
                         true,
-                        "ok, internal span");
+                        "ok, internal span",
+                        0);
     }
 
     /**

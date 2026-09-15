@@ -160,10 +160,16 @@
 .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
 .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
 
+/* Shared box model for the tree's small text chips; each sets its own fill/ink below. */
+.pk-span-row-count, .pk-query-rows, .pk-span-error-chip { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
+
 /* A row count is a fact, not a verdict, so it takes a neutral fill in both the span tree
    and the Queries tab - one chip shared by .pk-span-row-count and .pk-query-rows, which
    stays the Queries tab's own class since queries.js and its tests hook on it. */
-.pk-span-row-count, .pk-query-rows { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; background: var(--pk-bg-hover); color: var(--pk-text); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
+.pk-span-row-count, .pk-query-rows { background: var(--pk-bg-hover); color: var(--pk-text); }
+/* Outlined, not filled: plain --pk-danger text/border already clears AA on the row's own
+   background (tokens.css), so there is no --pk-on-danger ink to recompute at chip scale. */
+.pk-span-error-chip { box-sizing: border-box; border: 1px solid var(--pk-danger); color: var(--pk-danger); }
 
 /* One small-button treatment for the row's logs toggle and queries.js's jump back to the
    span tree; each keeps its own class only as the JS hook. */
@@ -172,7 +178,7 @@
 .pk-span-action:active { background: var(--pk-bg-alt); }
 /* Neither gives when the name cell runs out of room: a shrunk badge wraps onto a second
    line and makes its row taller than every other one. The span name ellipses instead. */
-.pk-span-row-count, .pk-span-action { flex: none; white-space: nowrap; }
+.pk-span-row-count, .pk-span-action, .pk-span-error-chip { flex: none; white-space: nowrap; }
 
 /* Indented to sit under its span's name: past its ancestors' indent and its own toggle column. */
 .pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
