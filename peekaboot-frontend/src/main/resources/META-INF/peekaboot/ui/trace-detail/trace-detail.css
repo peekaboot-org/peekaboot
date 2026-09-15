@@ -124,13 +124,17 @@
 .pk-gantt-toggle::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
 .pk-gantt-toggle[aria-expanded="false"]::before { transform: translateX(-2px) rotate(-45deg); }
 .pk-gantt-toggle:hover { color: var(--pk-text); }
+/* .pk-gantt-name clips overflow for the ellipsis below, which crops a positive-offset ring
+   off a control flush against its edge; the inset offset keeps the whole ring inside instead. */
+.pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible { outline-offset: -2px; }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: 24px; }
 
 .pk-gantt-name { min-width: 0; display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; }
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
-   the cell's free width, which pushes the chips to the cell's right edge. */
-.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
+   the cell's free width, which pushes the chips to the cell's right edge. padding-left gives
+   the inset focus ring above room to clear the kind dot. */
+.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-left: var(--pk-space-xs); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
 .pk-gantt-name__toggle--error { color: var(--pk-danger); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Also the pointer's switch for the span's details (see spans.js). */
@@ -172,7 +176,7 @@
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
 .pk-span-details__query .pk-code-block { align-self: stretch; margin: 0; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }
-.pk-span-tags__key { color: var(--pk-text-muted); }
+.pk-span-tags__key { color: var(--pk-text-muted); overflow-wrap: anywhere; }
 .pk-span-tags__value { margin: 0; color: var(--pk-text); overflow-wrap: anywhere; }
 
 /* Request tab styles */

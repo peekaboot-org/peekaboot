@@ -933,23 +933,21 @@ the order and the reasons are here:
 4. only if nothing tagged the span, its own name, and only if that looks like SQL
 
 The same masked text is put on the span itself as `SpanNode.query`, which is what a query
-span's details panel in the Spans tab shows, and the three statement tags it was read from
-are dropped from `SpanNode.tags` rather than served a second time beside it. A
-datasource-proxy result-set span's `jdbc.row-count` tag is served parsed as
-`SpanNode.rowCount` (null when it does not
-parse) - on the query span it belongs to, not on the result-set span that recorded it.
-`RowCounts` pairs the two by creation order, the result set recorded after a query and
-before the next one, and both `TraceTreeMapper` and `QueryExtractor` read that one pairing,
-so a query reports the same count in the Spans tab and the Queries tab. The result-set span
-keeps its raw tag and nothing else. The Spans tab therefore reads facts the backend decided
-instead of re-deriving them from tag and span names. `DbSpans.system` mirrors this priority
-for `db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is
+span's details panel in the Spans tab shows, and the three statement tags it was read from are
+dropped from `SpanNode.tags` rather than served a second time beside it. A datasource-proxy
+result-set span's `jdbc.row-count` tag is served parsed as `SpanNode.rowCount` (null when it
+does not parse) - on the query span it belongs to, not on the result-set span that recorded it.
+`RowCounts` pairs the two by creation order, the result set recorded after a query and before
+the next one, and both `TraceTreeMapper` and `QueryExtractor` read that one pairing, so a query
+reports the same count in the Spans tab and the Queries tab. The result-set span keeps its raw
+tag and nothing else. The Spans tab therefore reads facts the backend decided instead of
+re-deriving them from tag and span names. `DbSpans.system` mirrors this priority for
+`db.system.name` / `db.system` / `jdbc.datasource.name` / `peer.service`. Masking is
 value-patterns only, not column-aware literal masking (`MaskingRules.VALUE_PATTERNS` carries
 the reasoning), so a credential with no provider-recognisable shape sitting in an ordinary
-column is not caught.
-The [security page](https://www.peekaboot.org/docs/security/#masking) states that as a caveat
-and tells readers to assume a captured trace carries plaintext SQL. It is a caveat, not a
-promise waiting to be strengthened.
+column is not caught. The [security page](https://www.peekaboot.org/docs/security/#masking)
+states that as a caveat and tells readers to assume a captured trace carries plaintext SQL. It
+is a caveat, not a promise waiting to be strengthened.
 
 Two pipelines render a query and only one depends on `QueryExtractor`. The Spans tab
 (`trace-detail/tabs/spans.js`) renders `span.name`, OpenTelemetry's own span-name summary, for

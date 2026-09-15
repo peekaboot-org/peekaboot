@@ -1388,8 +1388,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * A span's row is one line; its statement and its tags wait in a details panel under the
      * row until the reader opens it from the span's name. A statement runs to hundreds of
-     * characters and a query span carries a dozen tags, which drawn on every row buried the
-     * tree the tab is for.
+     * characters and a query span carries a dozen tags - more than a row can carry alongside
+     * every sibling row's own name and bar, so the tree stays the thing on screen by default.
      */
     @Test
     void aSpanNameOpensTheDetailsPanelUnderItsRow() {

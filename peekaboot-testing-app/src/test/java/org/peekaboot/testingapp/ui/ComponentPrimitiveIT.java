@@ -51,7 +51,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
      * on the panel's --pk-bg-alt ground.
      */
     @Test
-    void traceDetailPillInkClearsAaContrastInBothThemes() {
+    void traceDetailInkClearsAaContrastInBothThemes() {
         openFixture();
 
         for (String theme : List.of("light", "dark")) {

@@ -6,6 +6,7 @@ import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.BoundingBox;
 import com.microsoft.playwright.options.ReducedMotion;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -236,7 +237,7 @@ class AccessibilityIT extends PlaywrightTestBase {
      * not what a reader clicks.
      */
     @Test
-    void overlayGlyphControlsKeepTheMinimumHitTarget() {
+    void overlayControlsKeepTheMinimumHitTarget() {
         openPageThatLogsAnError();
         toolbar.openOverlay();
         overlay.waitFor(".pk-span-query-link");
@@ -257,5 +258,69 @@ class AccessibilityIT extends PlaywrightTestBase {
         BoundingBox box = page.locator(selector).first().boundingBox();
         assertThat(box.width).as("%s width", selector).isGreaterThanOrEqualTo(24.0);
         assertThat(box.height).as("%s height", selector).isGreaterThanOrEqualTo(24.0);
+    }
+
+    /**
+     * .pk-gantt-name clips overflow so a long span name ellipses instead of widening the row,
+     * and that same clip crops the base focus ring's positive offset off the chevron and the
+     * name button inside it, leaving only their two vertical edges visible when focused. Both
+     * take a negative outline-offset instead - the README's pattern for a control flush inside
+     * a clipping box - so the whole ring stays inside the cell that clips it.
+     */
+    @Test
+    void ganttChevronAndNameKeepTheirFocusRingInsideTheClippingCell() {
+        openPersonsPage();
+        toolbar.openOverlay();
+        overlay.waitFor(".pk-gantt-all-details");
+        overlay.evaluate("root => root.querySelector('.pk-gantt-all-details').focus()");
+
+        page.keyboard().press("Tab");
+        assertFocusRingInsideNameCell(".pk-gantt-toggle");
+
+        page.keyboard().press("Tab");
+        assertFocusRingInsideNameCell(".pk-gantt-name__toggle");
+    }
+
+    /**
+     * The active element must be a real {@code :focus-visible} match for {@code selector}, and
+     * its outline - the bounding rect grown by outline-width + outline-offset on every side,
+     * read from computed style rather than assumed - must stay inside the bounding rect of the
+     * {@code .pk-gantt-name} cell that clips it.
+     */
+    private void assertFocusRingInsideNameCell(String selector) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> result = (Map<String, Object>) overlay.evaluate("""
+                (root, sel) => {
+                    const el = root.activeElement;
+                    if (!el || !el.matches(sel)) return {matches: false};
+                    const cs = getComputedStyle(el);
+                    const grow = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
+                    const r = el.getBoundingClientRect();
+                    const cell = el.closest('.pk-gantt-name').getBoundingClientRect();
+                    return {
+                        matches: el.matches(':focus-visible'),
+                        insideLeft: (r.left - grow) >= cell.left - 0.5,
+                        insideRight: (r.right + grow) <= cell.right + 0.5,
+                        insideTop: (r.top - grow) >= cell.top - 0.5,
+                        insideBottom: (r.bottom + grow) <= cell.bottom + 0.5
+                    };
+                }
+                """, selector);
+
+        assertThat(result.get("matches"))
+                .as("%s is the focus-visible element", selector)
+                .isEqualTo(true);
+        assertThat(result.get("insideLeft"))
+                .as("%s ring's left edge inside its name cell", selector)
+                .isEqualTo(true);
+        assertThat(result.get("insideRight"))
+                .as("%s ring's right edge inside its name cell", selector)
+                .isEqualTo(true);
+        assertThat(result.get("insideTop"))
+                .as("%s ring's top edge inside its name cell", selector)
+                .isEqualTo(true);
+        assertThat(result.get("insideBottom"))
+                .as("%s ring's bottom edge inside its name cell", selector)
+                .isEqualTo(true);
     }
 }
