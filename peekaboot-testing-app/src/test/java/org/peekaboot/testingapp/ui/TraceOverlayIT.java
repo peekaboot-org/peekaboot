@@ -1396,13 +1396,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         errorClass: 'org.springframework.web.client.ResourceAccessException', errorMessage: 'Connection refused'},
                     {spanId: 'c', name: 'ok', status: 'OK'}]}});
                 const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
-                const erroneous = id => entry(id).querySelector('.pk-gantt-name__toggle').classList.contains('pk-gantt-name__toggle--error');
+                const nameToggle = id => entry(id).querySelector('.pk-gantt-name__toggle');
+                const erroneous = id => nameToggle(id).classList.contains('pk-gantt-name__toggle--error');
                 return [
                     erroneous('b'),
                     entry('b').querySelector('.pk-span-details__error-class')?.textContent ?? null,
                     entry('b').querySelector('.pk-span-details__error-message')?.textContent ?? null,
+                    nameToggle('b').getAttribute('aria-label'),
                     erroneous('c'),
-                    entry('c').querySelector('.pk-span-details__error') === null
+                    entry('c').querySelector('.pk-span-details__error') === null,
+                    nameToggle('c').getAttribute('aria-label')
                 ];
             })()
             """);
@@ -1414,8 +1417,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         true,
                         "org.springframework.web.client.ResourceAccessException",
                         "Connection refused",
+                        "http get, internal span, error",
                         false,
-                        true);
+                        true,
+                        "ok, internal span");
     }
 
     /**

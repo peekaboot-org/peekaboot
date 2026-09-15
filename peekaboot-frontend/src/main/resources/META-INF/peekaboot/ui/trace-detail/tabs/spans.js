@@ -151,6 +151,10 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
     if (!span) return;
     const kind = spanKind(span);
     const detailsId = `pk-span-details-${span.spanId}`;
+    // the backend's verdict, read once per span: ERROR whenever it recorded an error message
+    // or class, and everything that marks the span as erroneous - the name, the bar, its
+    // accessible name - reads this one flag rather than re-deriving it.
+    const hasError = span.status === 'ERROR';
 
     const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}`});
     entry.dataset.depth = depth;
@@ -158,14 +162,17 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
 
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
-    row.append(nameCell(span, kind, detailsId), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
+    row.append(
+        nameCell(span, kind, detailsId, hasError),
+        track(span, traceStart, totalDuration, hasError),
+        durationCell(span, totalDuration));
     entry.append(row, detailsPanel(span, kind, detailsId));
     container.appendChild(entry);
 
     (span.children || []).forEach(child => renderSpanEntries(container, child, depth + 1, traceStart, totalDuration));
 }
 
-function nameCell(span, kind, detailsId) {
+function nameCell(span, kind, detailsId, hasError) {
     const hasChildren = span.children && span.children.length > 0;
     const name = span.name || 'unknown';
     const spanId = span.spanId;
@@ -176,10 +183,13 @@ function nameCell(span, kind, detailsId) {
         ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
     cell.append(button({
-        // the backend's verdict, as for the bar: ERROR whenever the span recorded an error message or class
-        className: 'pk-unbutton pk-gantt-name__toggle' + (span.status === 'ERROR' ? ' pk-gantt-name__toggle--error' : ''),
+        className: 'pk-unbutton pk-gantt-name__toggle' + (hasError ? ' pk-gantt-name__toggle--error' : ''),
         title: name,
-        attrs: {'aria-expanded': 'false', 'aria-controls': detailsId, 'aria-label': `${name}, ${kind} span`}
+        attrs: {
+            'aria-expanded': 'false',
+            'aria-controls': detailsId,
+            'aria-label': `${name}, ${kind} span${hasError ? ', error' : ''}`
+        }
     }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
     // span.query, and the row count of the result-set span it paired to this one (RowCounts)
@@ -197,14 +207,12 @@ function nameCell(span, kind, detailsId) {
     return cell;
 }
 
-function track(span, traceStart, totalDuration) {
+function track(span, traceStart, totalDuration, hasError) {
     const spanStart = span.startTimeMs || traceStart;
     const spanDuration = span.durationMs || 0;
     const left = Math.max(0, ((spanStart - traceStart) / totalDuration) * 100);
     // the 0.5% floor only keeps the bar itself visible; the duration cell reports the raw share
     const width = Math.max((spanDuration / totalDuration) * 100, 0.5);
-    // the backend's verdict: ERROR whenever the span recorded an error message or class
-    const hasError = span.status === 'ERROR';
 
     const element = document.createElement('div');
     element.className = 'pk-gantt-track';
