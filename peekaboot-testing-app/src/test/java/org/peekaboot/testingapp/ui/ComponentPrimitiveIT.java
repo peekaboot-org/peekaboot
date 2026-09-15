@@ -61,9 +61,10 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
     /**
      * The trace-detail overlay renders ink of its own - the row-count chips, the error chip
-     * and the details panel's error, tag keys and values - and tabStrip() its count pill;
-     * each owes the same 4.5:1 as a badge in both themes. The tag key doubles as the guard
-     * for muted ink on the panel's --pk-bg-alt ground, which the error chip shares.
+     * (fixed to an open row's own ground, .pk-gantt-name, the way spans.js actually places
+     * it) and the details panel's error, tag keys and values - and tabStrip() its count
+     * pill; each owes the same 4.5:1 as a badge in both themes. The tag key doubles as the
+     * guard for muted ink on the panel's --pk-bg-alt ground.
      */
     @Test
     void traceDetailInkClearsAaContrastInBothThemes() {

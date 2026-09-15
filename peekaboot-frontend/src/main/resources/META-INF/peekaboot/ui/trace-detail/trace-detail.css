@@ -175,7 +175,7 @@
 .pk-span-row-count, .pk-query-rows { background: var(--pk-bg-hover); color: var(--pk-text); }
 /* Outlined, not filled: plain --pk-danger text/border already clears AA on the row's own
    background (tokens.css), so there is no --pk-on-danger ink to recompute at chip scale. */
-.pk-span-error-chip { box-sizing: border-box; border: 1px solid var(--pk-danger); color: var(--pk-danger); }
+.pk-span-error-chip { border: 1px solid var(--pk-danger); color: var(--pk-danger); }
 
 /* One small-button treatment for the row's logs toggle and queries.js's jump back to the
    span tree; each keeps its own class only as the JS hook. */

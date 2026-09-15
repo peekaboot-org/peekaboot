@@ -19,8 +19,12 @@
     <span class="pk-badge pk-badge--info" id="badge-info">Deployment</span>
     <span class="pk-badge pk-badge--muted" id="badge-muted">still counting</span>
 
-    <!-- the trace-detail overlay's own ink -->
-    <div class="pk-gantt-span pk-gantt-span--open"><div class="pk-span-details"><div class="pk-span-details__error" id="span-error">Connection refused</div><span class="pk-span-error-chip" id="span-error-chip" aria-hidden="true">error</span><dl class="pk-span-tags"><dt class="pk-span-tags__key" id="span-tag-key">http.method</dt><dd class="pk-span-tags__value" id="span-tag-value">GET</dd></dl></div></div>
+    <!-- the trace-detail overlay's own ink; the error chip sits on the row's own ground
+         (.pk-gantt-name), the way spans.js's nameCell() appends it -->
+    <div class="pk-gantt-span pk-gantt-span--open">
+        <div class="pk-gantt-row"><div class="pk-gantt-name"><span class="pk-span-error-chip" id="span-error-chip" aria-hidden="true">error</span></div></div>
+        <div class="pk-span-details"><div class="pk-span-details__error" id="span-error">Connection refused</div><dl class="pk-span-tags"><dt class="pk-span-tags__key" id="span-tag-key">http.method</dt><dd class="pk-span-tags__value" id="span-tag-value">GET</dd></dl></div>
+    </div>
     <span class="pk-span-row-count" id="span-row-count">8 rows</span>
 
     <!-- the gantt legend, exactly as kindLegend() in tabs/spans.js builds it -->
