@@ -209,4 +209,28 @@ class RequestTabIT extends PlaywrightTestBase {
         assertThat(page.locator("#pk-request-test-container .pk-badge").getAttribute("class"))
                 .doesNotContain("pk-badge--error-soft");
     }
+
+    /**
+     * Content-Type is a request header, and the Request Headers table lists it; a row of its own
+     * in the Request section only repeated it.
+     */
+    @Test
+    void theRequestSectionLeavesContentTypeToTheHeadersTable() {
+        renderWithTrace("""
+                {"durationMs": 12, "httpExchange": {
+                    "request": {"method": "POST", "path": "/api/users",
+                        "headers": {"content-type": "application/json"}},
+                    "response": {"status": 201, "headers": {}}
+                }}
+                """);
+
+        String requestSection = page.locator("#pk-request-test-container .pk-request-section")
+                .first()
+                .textContent();
+        assertThat(requestSection)
+                .contains("Method", "Path", "Status", "Duration")
+                .doesNotContain("Content-Type");
+        assertThat(page.locator("#pk-request-test-container").textContent())
+                .contains("Request Headers", "content-type", "application/json");
+    }
 }

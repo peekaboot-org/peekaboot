@@ -54,18 +54,12 @@ export function render(container, trace, view = {}) {
     ].filter(Boolean));
 }
 
-/** Header names are stored as the container spelled them, so the lookup ignores case. */
-function headerValue(headers, name) {
-    return Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name)?.[1];
-}
-
 function renderRequestDetails(req, res, trace) {
     const rows = [
         tableRow('Method', req?.method || '-'),
         tableRow('Path', req?.path || '-'),
         ...(req?.query ? [tableRow('Query String', req.query)] : []),
         tableRow('Status', badge(statusLabel(res?.status), statusVariant(res?.status))),
-        tableRow('Content-Type', headerValue(req?.headers, 'content-type') || '-'),
         tableRow('Duration', formatDurationMs(trace.durationMs))
     ];
     return section('Request', kvTable(rows));
