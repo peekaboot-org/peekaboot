@@ -198,6 +198,7 @@
     border-radius: var(--pk-radius);
     background: transparent;
     color: inherit;
+    font-family: inherit;
     font-size: var(--pk-text-sm);
     cursor: pointer;
     transition: background-color var(--pk-transition), filter var(--pk-transition);

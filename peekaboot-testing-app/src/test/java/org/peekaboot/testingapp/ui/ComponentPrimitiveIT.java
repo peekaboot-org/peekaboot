@@ -25,6 +25,21 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
+     * .pk-btn sets every other text property but not font-family, so without one a button
+     * renders in the UA's own button font instead of the page's.
+     */
+    @Test
+    void buttonsRenderInTheUiFont() {
+        openFixture();
+
+        String buttonFont = (String) page.evalOnSelector("#btn-pressed", "el => getComputedStyle(el).fontFamily");
+        String parentFont =
+                (String) page.evalOnSelector("#btn-pressed", "el => getComputedStyle(el.parentElement).fontFamily");
+
+        assertThat(buttonFont).isEqualTo(parentFont);
+    }
+
+    /**
      * Every badge variant's ink/fill pair must clear WCAG AA's 4.5:1 in BOTH themes,
      * measured from the resolved styles rather than pinned hexes so a future palette
      * tweak that regresses one variant fails here instead of in a screenshot.

@@ -841,6 +841,24 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * .pk-btn sets every other text property but not font-family, so without one the
+     * "Show all details" switch renders in the UA's button font instead of the UI's -
+     * mismatched against its own toolbar's legend right beside it.
+     */
+    @Test
+    void ganttToolbarButtonsShareTheLegendsFont() {
+        openOverlayFromToolbar();
+        overlay.waitFor(".pk-gantt-all-details");
+
+        String buttonFont = (String)
+                overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-gantt-all-details')).fontFamily");
+        String legendFont = (String)
+                overlay.evaluate("root => getComputedStyle(root.querySelector('.pk-gantt-legend')).fontFamily");
+
+        assertThat(buttonFont).isEqualTo(legendFont);
+    }
+
+    /**
      * The overlay keeps the features it is handed for its whole lifetime - every SLOW
      * colour in its header, Spans and Queries tabs comes from those thresholds - and
      * nothing re-opens it once /api/features answers. So a deep link straight to a trace
