@@ -160,8 +160,10 @@
 .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
 .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
 
-/* A row count is a fact about the query, so it takes a neutral fill and no verdict colour. */
-.pk-span-row-count { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; background: var(--pk-bg-hover); color: var(--pk-text); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
+/* A row count is a fact, not a verdict, so it takes a neutral fill in both the span tree
+   and the Queries tab - one chip shared by .pk-span-row-count and .pk-query-rows, which
+   stays the Queries tab's own class since queries.js and its tests hook on it. */
+.pk-span-row-count, .pk-query-rows { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; background: var(--pk-bg-hover); color: var(--pk-text); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
 
 /* One small-button treatment for the row's logs toggle and queries.js's jump back to the
    span tree; each keeps its own class only as the JS hook. */
@@ -195,7 +197,6 @@
 .pk-query-system { color: var(--pk-text-muted); }
 .pk-query-meta { display: flex; gap: var(--pk-space-md); align-items: center; }
 .pk-query__duration { font-family: var(--pk-font-mono); font-weight: 600; }
-.pk-query-rows { font-family: var(--pk-font-mono); color: var(--pk-success-text); font-size: var(--pk-text-xs); }
 /* A block of captured text kept verbatim - a query's SQL, a request body. */
 .pk-code-block { font-family: var(--pk-font-mono); font-size: var(--pk-text-xs); background: var(--pk-bg); padding: var(--pk-space-sm); border-radius: var(--pk-radius); white-space: pre-wrap; word-break: break-all; overflow-x: auto; color: var(--pk-text-strong); }
 
