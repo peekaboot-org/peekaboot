@@ -30,12 +30,12 @@ import org.peekaboot.testingapp.entity.CustomerOrder;
 import org.peekaboot.testingapp.entity.OrderLine;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
+import org.peekaboot.testingapp.order.OrderReconciler;
 import org.peekaboot.testingapp.repository.OrderLineRepository;
 import org.peekaboot.testingapp.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.node.ObjectNode;
 
 class DashboardTabsIT extends PlaywrightTestBase {
 
@@ -828,30 +828,22 @@ class DashboardTabsIT extends PlaywrightTestBase {
     }
 
     /**
-     * With up to five stat parts (spans, queries with their time, logs, an error badge, a
-     * warning badge) plus the row's id and its timestamp, a phone-width row must wrap
-     * between parts rather than inside one - and {@code .pk-trace-item}'s own
-     * {@code overflow: hidden} must not clip a part off the row's right edge either way.
+     * With up to four stat parts (spans, a query with its time, logs, a warning badge) plus
+     * the row's id and its timestamp, a phone-width row must wrap between parts rather than
+     * inside one - and {@code .pk-trace-item}'s own {@code overflow: hidden} must not clip a
+     * part off the row's right edge either way.
+     *
+     * <p>Driven by a real {@link OrderReconciler#reconcileOrders()} run rather than a
+     * rewritten listing response: against a PLACED order it seeds itself (the test profile
+     * disables Flyway, so V4__order-data.sql's fixture rows never load here), it issues one
+     * query (findAll()), logs an INFO summary and a WARN for that order, so its own trace
+     * carries every part this row can show except an error badge - reconcileOrders() logs
+     * no ERROR.
      */
     @Test
     void tracesRowStatsFitAPhoneViewportWithoutWrappingOrClippingAPart() {
         page.setViewportSize(375, 800);
-        String traceId = seedAnHttpTrace();
-        page.route("**/api/traces/insights**", route -> {
-            APIResponse response = route.fetch();
-            ObjectNode result = (ObjectNode) readJson(response.text());
-            for (JsonNode trace : result.path("traces")) {
-                if (!traceId.equals(trace.path("traceId").asString())) continue;
-                ObjectNode summary = (ObjectNode) trace.get("summary");
-                ((ObjectNode) summary.get("spans")).put("count", 84);
-                ((ObjectNode) summary.get("queries")).put("count", 26).put("totalDurationMs", 31);
-                ((ObjectNode) summary.get("logs"))
-                        .put("count", 27)
-                        .put("errorCount", 0)
-                        .put("warnCount", 2);
-            }
-            route.fulfill(new Route.FulfillOptions().setResponse(response).setBody(result.toString()));
-        });
+        String traceId = seedAWarningLoggingOrderReconcilerRun();
 
         openDashboard();
         dashboard.openTracesTab();
@@ -873,6 +865,30 @@ class DashboardTabsIT extends PlaywrightTestBase {
         @SuppressWarnings("unchecked")
         List<Object> misfitParts = (List<Object>) misfits;
         assertThat(misfitParts).isEmpty();
+    }
+
+    /**
+     * Fires {@code OrderReconciler.reconcileOrders()} against a PLACED order of its own
+     * (seedAnOrder()) until its own trace carries the WARN log that order produces - the
+     * same capture-appender-detached-by-a-context-boot race
+     * {@link PlaywrightTestBase#awaitErrorLoggingJobRun} guards against for an ERROR line,
+     * here for a WARN one instead.
+     */
+    private String seedAWarningLoggingOrderReconcilerRun() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            seedAnOrder();
+            String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
+            JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
+            boolean carriesAWarnLog = false;
+            for (JsonNode entry : trace.path("logs")) {
+                if ("WARN".equals(entry.path("level").asString(""))) {
+                    carriesAWarnLog = true;
+                    break;
+                }
+            }
+            if (carriesAWarnLog) return traceId;
+        }
+        throw new AssertionError("no run of reconcileOrders produced a trace carrying its own WARN log");
     }
 
     /**
