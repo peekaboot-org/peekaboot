@@ -239,15 +239,16 @@ function tagBadgesRow(span, indent, depth) {
     row.className = 'pk-gantt-badges';
     row.dataset.depth = depth + 1;
     row.style.paddingLeft = `${indent + INDENT_PX}px`;
-    row.append(...entries.map(([key, value]) => tagBadge(key, String(value))));
+    // the backend's tag map carries no order of its own
+    row.append(...entries.sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => tagBadge(key, String(value))));
     return row;
 }
 
+/** The key in full: cut to its last segment, db.system.name and jdbc.datasource.name both read "name". */
 function tagBadge(key, value) {
-    const shortKey = key.split('.').pop();
     const shortValue = value.length > 50 ? value.substring(0, 50) + '...' : value;
     return el('span', {className: 'pk-tag-badge', title: `${key}: ${value}`},
-        el('span', {className: 'pk-tag-badge__key', text: shortKey}),
+        el('span', {className: 'pk-tag-badge__key', text: key}),
         '=',
         el('span', {className: 'pk-tag-badge__value', text: shortValue}));
 }

@@ -1034,7 +1034,29 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
-        assertThat(spanFacts).containsExactly("1,234 rows", null, true, false, "system,statement");
+        assertThat(spanFacts).containsExactly("1,234 rows", null, true, false, "db.statement,db.system");
+    }
+
+    /**
+     * A span's tags show their full keys, in key order. A query span carries several keys
+     * that end in the same word (db.system.name, db.operation.name, jdbc.datasource.name),
+     * which a key shortened to its last segment renders as three indistinguishable "name"s,
+     * and the backend's tag map carries no order of its own.
+     */
+    @Test
+    void spanTagsShowTheirFullKeysInKeyOrder() {
+        Object keys = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'SELECT person',
+                    tags: {'jdbc.datasource.name': 'sample_app_db', 'db.system.name': 'postgresql', 'db.operation.name': 'SELECT'}}});
+                return Array.from(container.querySelectorAll('.pk-tag-badge__key')).map(el => el.textContent);
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<String> tagKeys = (List<String>) keys;
+        assertThat(tagKeys).containsExactly("db.operation.name", "db.system.name", "jdbc.datasource.name");
     }
 
     /**

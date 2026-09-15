@@ -127,7 +127,7 @@
 .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
 
 .pk-gantt-badges { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
-.pk-tag-badge { font-size: var(--pk-text-xs); padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pk-tag-badge { font-size: var(--pk-text-xs); padding: 1px 5px; background: var(--pk-bg-hover); color: var(--pk-text-muted); border-radius: 3px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pk-tag-badge__key { color: var(--pk-primary-text); }
 .pk-tag-badge__value { color: var(--pk-text); }
 
