@@ -86,7 +86,7 @@
    name column takes the widest row's indent, name and chips, up to 40%: a deep query span
    keeps its name, and a trace of short names leaves the timeline the room. A details panel
    spans the flexible timeline column, which keeps it out of that sizing. */
-.pk-gantt { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content; --pk-gantt-indent: 16px; }
+.pk-gantt { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content; --pk-gantt-indent: 16px; --pk-gantt-toggle: 24px; }
 .pk-gantt-header, .pk-gantt-rows, .pk-gantt-span, .pk-gantt-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
 .pk-gantt-header { border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-xs); }
 /* Same side margin as .pk-gantt-track below, so the ticks land right above the
@@ -105,13 +105,18 @@
 .pk-gantt-kind--internal { --pk-gantt-kind: var(--pk-text-muted); }
 .pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind); }
 
-/* One entry per span: its row and its details panel. The indent guides are a repeating
-   stripe, one per ancestor, confined to the indent by the background-size spans.js sets;
-   drawn on the entry so they run on through an open details panel. */
+/* One entry per span: its row and its details panel. spans.js sets only --pk-gantt-depth
+   per entry; the indent guides below - a repeating stripe, one per ancestor - and every
+   other depth-dependent offset in this sheet are calc()'d from it and --pk-gantt-indent /
+   --pk-gantt-toggle, which keeps their pixel values in this one place. Drawn on the entry,
+   not the row, so the guides run on through an open details panel. */
 .pk-gantt-span {
     background-image: repeating-linear-gradient(to right,
-        transparent 0 11px, var(--pk-border) 11px 12px, transparent 12px var(--pk-gantt-indent));
+        transparent 0 calc(var(--pk-gantt-toggle) / 2 - 1px),
+        var(--pk-border) calc(var(--pk-gantt-toggle) / 2 - 1px) calc(var(--pk-gantt-toggle) / 2),
+        transparent calc(var(--pk-gantt-toggle) / 2) var(--pk-gantt-indent));
     background-repeat: no-repeat;
+    background-size: calc(var(--pk-gantt-depth) * var(--pk-gantt-indent)) 100%;
 }
 
 .pk-gantt-row { align-items: center; min-height: 28px; border-radius: var(--pk-space-xs); }
@@ -128,9 +133,9 @@
    off a control flush against its edge; the inset offset keeps the whole ring inside instead. */
 .pk-gantt-toggle:focus-visible, .pk-gantt-name__toggle:focus-visible { outline-offset: -2px; }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
-.pk-gantt-toggle-spacer { flex: none; width: 24px; }
+.pk-gantt-toggle-spacer { flex: none; width: var(--pk-gantt-toggle); }
 
-.pk-gantt-name { min-width: 0; display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; }
+.pk-gantt-name { min-width: 0; display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; padding-left: calc(var(--pk-gantt-depth) * var(--pk-gantt-indent)); }
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
    the cell's free width, which pushes the chips to the cell's right edge. padding-left gives
    the inset focus ring above room to clear the kind dot. */
@@ -167,8 +172,8 @@
    line and makes its row taller than every other one. The span name ellipses instead. */
 .pk-span-row-count, .pk-span-action { flex: none; white-space: nowrap; }
 
-/* Indented by spans.js to sit under its span's name. */
-.pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
+/* Indented to sit under its span's name: past its ancestors' indent and its own toggle column. */
+.pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm) calc(var(--pk-gantt-depth) * var(--pk-gantt-indent) + var(--pk-gantt-toggle)); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
 .pk-gantt-span--open > .pk-span-details { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
 .pk-span-details__error { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }

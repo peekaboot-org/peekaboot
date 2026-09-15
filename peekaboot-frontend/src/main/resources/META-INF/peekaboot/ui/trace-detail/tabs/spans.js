@@ -8,19 +8,19 @@
  * error, SQL, tags), closed until the reader opens it. Entries are flat siblings carrying
  * their depth, which is what the subtree toggle walks.
  *
- * Bar positions, marker offsets, indents and indent guides are set through the CSSOM,
- * never as a style attribute in markup: a host page whose CSP omits style-src
- * 'unsafe-inline' drops the attributes, which would flatten every row to depth 0 and
- * every bar to the left edge.
+ * This module writes only one geometry value of its own: an entry's depth, as the CSS custom
+ * property --pk-gantt-depth. The name cell's indent, the details panel's margin and the
+ * indent guides' width are all calc()'d from it in trace-detail.css, so --pk-gantt-indent and
+ * --pk-gantt-toggle there stay the one place those pixel values live. Bar positions and
+ * marker offsets have no such shared formula and are written directly. Every one of these
+ * writes goes through the CSSOM, never a style attribute in markup: a host page whose CSP
+ * omits style-src 'unsafe-inline' drops the attribute form, which would flatten every row to
+ * depth 0 and every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 import {copyableId} from '../../shared/copyable.js';
-
-const INDENT_PX = 16;
-/** The subtree toggle's column; a details panel starts past it, under the span's name. */
-const TOGGLE_PX = 24;
 
 const KIND_LABELS = {server: 'Server', client: 'Client', producer: 'Producer', consumer: 'Consumer', internal: 'Internal'};
 
@@ -155,26 +155,24 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
 
     const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}`});
     entry.dataset.depth = depth;
-    // one guide per ancestor, confined to the indent (see .pk-gantt-span)
-    entry.style.backgroundSize = `${depth * INDENT_PX}px 100%`;
+    entry.style.setProperty('--pk-gantt-depth', depth);
 
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
-    row.append(nameCell(span, kind, depth, detailsId), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
-    entry.append(row, detailsPanel(span, kind, depth, detailsId));
+    row.append(nameCell(span, kind, detailsId), track(span, traceStart, totalDuration), durationCell(span, totalDuration));
+    entry.append(row, detailsPanel(span, kind, detailsId));
     container.appendChild(entry);
 
     (span.children || []).forEach(child => renderSpanEntries(container, child, depth + 1, traceStart, totalDuration));
 }
 
-function nameCell(span, kind, depth, detailsId) {
+function nameCell(span, kind, detailsId) {
     const hasChildren = span.children && span.children.length > 0;
     const name = span.name || 'unknown';
     const spanId = span.spanId;
     const logCount = (span.logs || []).length;
 
     const cell = el('div', {className: 'pk-gantt-name'});
-    cell.style.paddingLeft = `${depth * INDENT_PX}px`;
     cell.append(hasChildren
         ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
@@ -258,16 +256,14 @@ function durationCell(span, totalDuration) {
  * track opens it. The backend already keeps the statement tags out (they arrive as
  * span.query), and events sit on the track.
  */
-function detailsPanel(span, kind, depth, detailsId) {
-    const panel = el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
+function detailsPanel(span, kind, detailsId) {
+    return el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
         el('div', {className: 'pk-span-details__head'},
             el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`}),
             copyableId(span.spanId, {label: 'spanId'})),
         errorSection(span),
         querySection(span),
         tagList(span.tags));
-    panel.style.marginLeft = `${depth * INDENT_PX + TOGGLE_PX}px`;
-    return panel;
 }
 
 function errorSection(span) {
