@@ -468,7 +468,7 @@ class SharedModuleIT extends PlaywrightTestBase {
     /**
      * formatCount()'s plural defaults to singular + 's' (covers "span"/"spans", "log"/"logs")
      * but takes an explicit override for irregular nouns like "query"/"queries" - without it
-     * the overlay header meta line reads "1 queries".
+     * a trace's stat line reads "1 queries".
      */
     @Test
     void formatCountPluralisesIrregularNouns() {

@@ -10,7 +10,7 @@
  * rendering lives in its own module under tabs/ - adding a tab means adding one file.
  */
 import {el, button} from '../shared/dom.js';
-import {formatCount, formatDurationMs} from '../shared/format.js';
+import {formatDurationMs} from '../shared/format.js';
 import {severityClass} from '../shared/severity.js';
 import {statusLabel, statusVariant} from '../shared/http-status.js';
 import {rootActionIcon, rootActionLabel} from '../shared/root-actions.js';
@@ -234,7 +234,6 @@ function header(trace, display) {
     const method = req.method || summaryRequest.method || null;
     const path = req.path || summaryRequest.path || rootSpan.name || '-';
     const status = res.status || summaryRequest.statusCode;
-    const {spans: spanSummary, queries: querySummary, logs: logSummary} = trace.summary;
 
     const title = el('h2', {className: 'pk-overlay__title', attrs: {id: 'pk-overlay-title'}},
         el('span', {className: 'pk-overlay__title-icon', text: rootActionIcon(trace.rootActionType), attrs: {'aria-hidden': 'true'}}),
@@ -252,9 +251,6 @@ function header(trace, display) {
         }),
         badge(statusLabel(status), statusVariant(status)),
         trace.slow ? badge('SLOW', 'warn') : null,
-        el('span', {text: formatCount(spanSummary.count, 'span')}),
-        el('span', {text: formatCount(querySummary.count, 'query', 'queries')}),
-        el('span', {text: formatCount(logSummary.count, 'log')}),
         trace.truncated ? truncatedBadge() : null);
 
     return el('div', {className: 'pk-overlay__header'},

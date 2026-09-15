@@ -892,11 +892,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * the insights endpoint with a canned response - the fix is about what real
      * classification data the header renders, so a hand-built trace object would only
      * prove the header can read JSON, not that the classification it depends on ever
-     * happens. Also covers the "1 query" pluralisation on the same header
-     * (formatCount() in format.js): reconcileOrders() calls orderRepository.findAll()
-     * exactly once, and CustomerOrder is a flat entity with no lazy associations to
-     * trigger further queries, so the trace's query count is deterministically 1
-     * regardless of how many orders exist when the test runs.
+     * happens. Also covers that the header leaves the span/query/log counts to the tabs:
+     * reconcileOrders() calls orderRepository.findAll() exactly once, and CustomerOrder is
+     * a flat entity with no lazy associations to trigger further queries, so the trace's
+     * query count is deterministically 1 regardless of how many orders exist when the test
+     * runs - read from the Queries tab, whose "1 query" pluralisation is pinned by
+     * {@code SharedModuleIT.formatCountPluralisesIrregularNouns}.
      */
     @Test
     void overlayHeaderShowsTheRootActionLabelForNonHttpTraces() {
@@ -914,13 +915,16 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         + "the root-action label rather than a fake method")
                 .isEqualTo("Scheduled Job");
 
-        String metaText = overlay.text(".pk-overlay__meta");
+        String metaText = overlay.text(".pk-overlay__meta").toLowerCase(Locale.ROOT);
         assertThat(metaText)
+                .as("the tabs carry the span, query and log counts, so the header does not repeat them")
+                .doesNotContain("span")
+                .doesNotContain("quer")
+                .doesNotContain("log");
+        assertThat(overlay.text(".pk-tab[data-tab=\"queries\"] .pk-tab__count"))
                 .as("reconcileOrders() issues exactly one query (CustomerOrder is a flat entity, so "
-                        + "findAll() is a single SELECT regardless of row count) - the count is "
-                        + "deterministic, not just usually 1")
-                .contains("1 query")
-                .doesNotContain("1 queries");
+                        + "findAll() is a single SELECT regardless of row count)")
+                .isEqualTo("1");
     }
 
     /**
