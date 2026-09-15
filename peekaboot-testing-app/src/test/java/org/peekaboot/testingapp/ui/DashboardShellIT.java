@@ -10,6 +10,7 @@ import com.microsoft.playwright.options.WaitUntilState;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +29,23 @@ class DashboardShellIT extends PlaywrightTestBase {
             }
         });
         return documents;
+    }
+
+    /**
+     * Aborts the first request for {@code urlGlob} and lets every later one through, with the route
+     * installed for the whole test. A route spent through {@code RouteOptions.setTimes(1)} is
+     * removed, removing a page's last route switches request interception off, and a request the
+     * page starts at that moment can stall with its document never firing load.
+     */
+    private void loseTheFirstRequestFor(String urlGlob) {
+        AtomicBoolean lost = new AtomicBoolean();
+        page.route(urlGlob, route -> {
+            if (lost.compareAndSet(false, true)) {
+                route.abort();
+            } else {
+                route.resume();
+            }
+        });
     }
 
     /**
@@ -228,10 +246,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void theDashboardReloadsItselfWhenAScriptIsLostOnTheFirstTry() {
         List<String> documents = recordDocumentLoads();
-        page.route(
-                "**/peekaboot/ui/dashboard/tabs/meters.js",
-                route -> route.abort(),
-                new Page.RouteOptions().setTimes(1));
+        loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         // The first document satisfies both waits below on its own - it renders the shell and
@@ -296,10 +311,7 @@ class DashboardShellIT extends PlaywrightTestBase {
         setStoredTheme("light");
         // Left unanswered for the whole test, so no document here ever fires its load event.
         page.route("**/peekaboot/ui/assets/logo-mark.png", route -> {});
-        page.route(
-                "**/peekaboot/ui/dashboard/tabs/meters.js",
-                route -> route.abort(),
-                new Page.RouteOptions().setTimes(1));
+        loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
         page.navigate(
                 baseUrl + "/peekaboot/ui/dashboard/index.html",
@@ -318,10 +330,7 @@ class DashboardShellIT extends PlaywrightTestBase {
     @Test
     void aStaleRetryMarkerDoesNotSpendTheNextFailuresReload() {
         page.addInitScript("sessionStorage.setItem('peekaboot-dashboard-retried', String(Date.now() - 120000));");
-        page.route(
-                "**/peekaboot/ui/dashboard/tabs/meters.js",
-                route -> route.abort(),
-                new Page.RouteOptions().setTimes(1));
+        loseTheFirstRequestFor("**/peekaboot/ui/dashboard/tabs/meters.js");
 
         page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html");
         page.waitForSelector("#build-info > *");
