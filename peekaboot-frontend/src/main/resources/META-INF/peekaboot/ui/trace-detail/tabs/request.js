@@ -6,7 +6,7 @@
 import {MASK_LITERAL} from '../../shared/markup.js';
 import {badge, emptyState} from '../../shared/components.js';
 import {el} from '../../shared/dom.js';
-import {formatDurationMs} from '../../shared/format.js';
+import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {statusLabel, statusVariant} from '../../shared/http-status.js';
 
 // Code-point order, not localeCompare's: collation is the reader's browser setting, and
@@ -47,7 +47,7 @@ export function render(container, trace, view = {}) {
         renderController(req),
         renderParams('Query Parameters', req?.params?.query),
         renderParams('Form Parameters', req?.params?.form),
-        renderUploadedFiles(req?.params?.upload),
+        renderUploadedFiles(req?.params?.upload, view.locale),
         renderRequestBody(req?.body),
         renderHeaders('Request Headers', req?.headers, maskLiteral),
         renderHeaders('Response Headers', res?.headers, maskLiteral)
@@ -78,11 +78,11 @@ function renderParams(title, params) {
         tableRow(key, Array.isArray(value) ? value.join(', ') : String(value)))));
 }
 
-function renderUploadedFiles(files) {
+function renderUploadedFiles(files, locale) {
     if (!files?.length) return null;
     return section('Uploaded Files', kvTable(files.map(file =>
         tableRow(file.originalFilename || file.name || 'unknown',
-            `${file.contentType || '-'} (${String(file.size || 0)} bytes)`))));
+            `${file.contentType || '-'} (${formatCount(file.size || 0, 'byte', {locale})})`))));
 }
 
 function renderRequestBody(body) {

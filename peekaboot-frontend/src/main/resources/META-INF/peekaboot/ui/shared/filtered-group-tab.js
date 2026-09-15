@@ -10,9 +10,9 @@
  *   select(data)                -> the groups array, or nothing when the payload has none
  *   filterGroup(group, query)   -> the group narrowed to the query, or null when nothing
  *                                  in it matches; called with '' when no filter is set
- *   key/header/items            -> groupList()'s callbacks; header also receives the
- *                                  query and the current context, items the query and
- *                                  the current context
+ *   key/header/items            -> groupList()'s callbacks: header(group, query, context)
+ *                                  and items(group, list, query, context) each also take
+ *                                  the current query and context
  *   extraTop(data, context)     -> optional element rendered above the groups, or null
  *   emptyMessage                -> shown when the payload has no groups at all
  *   noMatchMessage(query)       -> shown when the filter narrows everything away

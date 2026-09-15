@@ -206,16 +206,23 @@ function resetFilter() {
 function updateBucketCounts(container, counts, filteredCounts, locale) {
     if (!counts) return;
     const userFiltered = selectedRootActionTypes.size > 0 || currentRootOperationFilter !== null;
+    const grouped = n => formatNumber(n, {locale});
     container.querySelectorAll('#traces-bucket .pk-btn').forEach(btn => {
         const bucket = btn.dataset.bucket;
         const bucketLabel = bucket.charAt(0).toUpperCase() + bucket.slice(1);
         const count = counts[bucket];
-        const grouped = n => formatNumber(n, {locale});
-        if (count == null) btn.textContent = bucketLabel;
-        else if (userFiltered && filteredCounts) {
-            btn.textContent = `${bucketLabel} (${grouped(filteredCounts[bucket])} / ${grouped(count)})`;
-        } else if (filteredCounts) btn.textContent = `${bucketLabel} (${grouped(filteredCounts[bucket])})`;
-        else btn.textContent = `${bucketLabel} (${grouped(count)})`;
+
+        let label;
+        if (count == null) {
+            label = bucketLabel;
+        } else if (userFiltered && filteredCounts) {
+            label = `${bucketLabel} (${grouped(filteredCounts[bucket])} / ${grouped(count)})`;
+        } else if (filteredCounts) {
+            label = `${bucketLabel} (${grouped(filteredCounts[bucket])})`;
+        } else {
+            label = `${bucketLabel} (${grouped(count)})`;
+        }
+        btn.textContent = label;
     });
 }
 

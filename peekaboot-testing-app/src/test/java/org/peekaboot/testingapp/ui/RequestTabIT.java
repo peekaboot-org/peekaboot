@@ -233,4 +233,46 @@ class RequestTabIT extends PlaywrightTestBase {
         assertThat(page.locator("#pk-request-test-container").textContent())
                 .contains("Request Headers", "content-type", "application/json");
     }
+
+    /**
+     * An upload's size is a count like any other: grouped, and singular at exactly one
+     * byte - unformatted, a two-file trace would read "12345678 bytes" and "1 bytes".
+     */
+    @Test
+    void uploadedFileSizesAreGrouped() {
+        renderWithTrace("""
+                {"durationMs": 12, "httpExchange": {
+                    "request": {"method": "POST", "path": "/api/upload", "params": {"upload": [
+                        {"originalFilename": "photo.png", "contentType": "image/png", "size": 12345678},
+                        {"originalFilename": "empty.bin", "contentType": "application/octet-stream", "size": 1}
+                    ]}},
+                    "response": {"status": 200, "headers": {}}
+                }}
+                """);
+
+        String text = page.locator("#pk-request-test-container").textContent();
+        assertThat(text).contains("12,345,678 bytes");
+        assertThat(text).contains("1 byte)").doesNotContain("1 bytes");
+    }
+
+    /**
+     * renderWithTrace's default view carries no dashboard locale, so the size falls back
+     * to the browser's own (Playwright's context is pinned to en-US - see
+     * PlaywrightTestBase.newContextOptions); an explicit view's locale must still win.
+     */
+    @Test
+    void uploadedFileSizesAreGroupedInTheDashboardsLocale() {
+        renderWithTrace("""
+                {"durationMs": 12, "httpExchange": {
+                    "request": {"method": "POST", "path": "/api/upload",
+                        "params": {"upload": [{"originalFilename": "photo.png", "contentType": "image/png",
+                            "size": 12345678}]}},
+                    "response": {"status": 200, "headers": {}}
+                }}
+                """, """
+                {"locale": "de-DE"}
+                """);
+
+        assertThat(page.locator("#pk-request-test-container").textContent()).contains("12.345.678 bytes");
+    }
 }

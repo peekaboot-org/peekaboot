@@ -32,12 +32,26 @@ const TAB_IDS = TABS.map(tab => tab.id);
 
 const client = createClient();
 
+/**
+ * A stored locale tag, kept only if Intl actually accepts it - a stale non-BCP-47 value
+ * (e.g. an old build's 'en_US') would otherwise reach every toLocaleString call on the
+ * page as a RangeError, and renderData()'s tab loop stops rendering at the first one.
+ */
+function validStoredLocale(value) {
+    if (!value) return null;
+    try {
+        return Intl.NumberFormat.supportedLocalesOf([value]).length > 0 ? value : null;
+    } catch {
+        return null;
+    }
+}
+
 let data = null;
 let features = {};
 let mainTabs = null;
 let refreshTimer = null;
 let isPaused = false;
-let locale = readSetting('peekaboot-locale') || navigator.language || 'en-US';
+let locale = validStoredLocale(readSetting('peekaboot-locale')) || navigator.language || 'en-US';
 let useServerTimezone = readSetting('peekaboot-use-server-tz') === 'true';
 let serverTimezone = null;
 // Whether the next fetch should ask the API for real values instead of "******" -

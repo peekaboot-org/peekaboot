@@ -66,8 +66,8 @@ class DashboardTabsIT extends PlaywrightTestBase {
     /** OrderService.listOrders' deliberate N+1: findByOrderId, countByOrderId, existsById. */
     private static final int QUERIES_PER_ORDER = 3;
 
-    /** The shared query stat on a listed trace row (trace-stats.js). */
-    private static final Pattern QUERY_STAT = Pattern.compile("(\\d+) quer(?:y|ies)");
+    /** The shared query stat on a listed trace row (trace-stats.js): grouped, like every other count. */
+    private static final Pattern QUERY_STAT = Pattern.compile("([\\d,.]+) quer(?:y|ies)");
 
     /** The meters tab's readout while a filter is active (meters.js's updateCount): each count is grouped. */
     private static final Pattern METERS_COUNT_READOUT = Pattern.compile("([\\d,.]+) / ([\\d,.]+) metrics");
@@ -228,6 +228,24 @@ class DashboardTabsIT extends PlaywrightTestBase {
                 .as("heap fill, rendered as %s", width)
                 .isGreaterThan(0)
                 .isLessThanOrEqualTo(100);
+    }
+
+    /**
+     * A stored locale from a stale build ('en_US', underscore-joined) is not a valid
+     * BCP-47 tag: toLocaleString throws RangeError on it, and renderData()'s tab loop
+     * (main.js) stops rendering at the first tab that throws - surfacing as the
+     * dashboard's own #error banner instead of a rendered Overview. The bootstrap
+     * validates the stored value once, up front, and falls back as if nothing were
+     * stored.
+     */
+    @Test
+    void aStoredLocaleThatIsNotAValidTagFallsBackInsteadOfBreakingTheDashboard() {
+        page.addInitScript("localStorage.setItem('peekaboot-locale', 'en_US')");
+
+        openDashboard();
+
+        assertThat(page.isVisible("#error")).isFalse();
+        assertThat(page.inputValue("#locale-select")).isEqualTo("en-US");
     }
 
     /**
@@ -784,6 +802,11 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * filter of its own - so {@code filteredBucketCounts} is what a bucket button reads even
      * on the very first, unfiltered load; the plain {@code bucketCounts} only ever reaches the
      * UI as the "/ total" denominator once the reader picks an explicit type or operation.
+     * Nothing here selects the errors/type filter, so {@code userFiltered} is false and the
+     * "All" button's label comes from {@code filteredBucketCounts.all} alone - the real,
+     * unpatched {@code bucketCounts.all} never enters the text. Renders are settled by the
+     * time {@code openTracesTab()} returns: its ready selector is renderList's own output,
+     * written right after updateBucketCounts in the same synchronous response handler.
      */
     @Test
     void tracesTabBucketCountsAreGroupedInTheDashboardsLocale() {
@@ -796,14 +819,11 @@ class DashboardTabsIT extends PlaywrightTestBase {
         });
 
         openDashboard();
-        // openTracesTab() already waits for the listing this route serves (its ready
-        // selector is renderList's own output, written right after updateBucketCounts in
-        // the same synchronous response handler), so the bucket text is settled by the
-        // time it returns - no separate wait needed for the count itself.
+        // No separate wait for the count itself: see this test's javadoc above.
         dashboard.openTracesTab();
 
         assertThat(page.textContent("#traces-bucket .pk-btn[data-bucket='all']"))
-                .contains("12.345");
+                .isEqualTo("All (12.345)");
     }
 
     /**
@@ -1144,7 +1164,7 @@ class DashboardTabsIT extends PlaywrightTestBase {
         assertThat(queries.find())
                 .as("the row's query stat reads '<n> queries': %s", queryStat)
                 .isTrue();
-        assertThat(Integer.parseInt(queries.group(1)))
+        assertThat(parseGroupedInt(queries.group(1)))
                 .as("the N+1 runs one query for the list plus %d per order, over %d orders", QUERIES_PER_ORDER, orders)
                 .isGreaterThanOrEqualTo((int) (orders * QUERIES_PER_ORDER + 1));
     }

@@ -357,6 +357,34 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo(true);
     }
 
+    /**
+     * propertyGroupTab's group header count is a count like any other: grouped in the
+     * context's locale. Driven straight off filteredGroupTab/propertyGroupTab rather than
+     * through a whole tab (config.js/environment.js) or a route-patched response - cheaper,
+     * and the header-building code is exactly the same either way.
+     */
+    @Test
+    void propertyGroupHeaderCountsAreGroupedInTheGivenLocale() {
+        Object count = evalModule("filtered-group-tab.js", """
+                (() => {
+                    const container = document.createElement('div');
+                    container.innerHTML = '<div id="pk-fgt-list"></div><div id="pk-fgt-unmask"></div>';
+                    document.body.appendChild(container);
+                    const tab = m.propertyGroupTab({
+                        listId: 'pk-fgt-list', unmaskSlotId: 'pk-fgt-unmask',
+                        select: data => data.groups,
+                        groupName: group => group.name,
+                        emptyMessage: 'none'
+                    });
+                    const properties = Array.from({length: 1234}, (_, i) => ({key: 'k' + i, value: i}));
+                    tab.render(container, {groups: [{name: 'g', properties}]}, {locale: 'de-DE', active: false});
+                    return container.querySelector('.pk-group__count').textContent;
+                })()
+                """);
+
+        assertThat(count).isEqualTo("1.234 properties");
+    }
+
     /** lifecycle.js's page param is 1-based in the URL; anything unparseable, fractional or below 1 is page one. */
     @Test
     void lifecyclePageFromUrlParsesOneBasedAndRejectsGarbage() {

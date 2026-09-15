@@ -1221,23 +1221,25 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * the query span itself (null for a count that did not parse, even where the result
      * set's own tag is right there), an error bar follows {@code span.status} alone, and
      * every tag on the span is shown - the backend already keeps the statement tags out,
-     * so the tab does not sniff for them.
+     * so the tab does not sniff for them. The row count chip is also where the locale
+     * passed to {@code m.render} must land: rendered in de-DE, 12345 rows reads "12.345".
      */
     @Test
     void spansTabTrustsTheBackendsSpanFacts() {
         Object facts = importModule("trace-detail/tabs/spans.js", """
             (() => {
-                const rendered = span => {
+                const rendered = (span, locale) => {
                     const container = document.createElement('div');
-                    m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span});
+                    m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: span}, {locale});
                     return container;
                 };
-                const rowCountOf = span => rendered(span).querySelector('.pk-span-row-count')?.textContent ?? null;
+                const rowCountOf = (span, locale) => rendered(span, locale).querySelector('.pk-span-row-count')?.textContent ?? null;
                 const errorBar = span => rendered(span).querySelector('.pk-gantt-bar').className.includes('--error');
                 const tagKeys = span => Array.from(rendered(span).querySelectorAll('.pk-span-tags__key')).map(el => el.textContent);
                 return [
                     rowCountOf({spanId: 'a', name: 'SELECT orders', rowCount: 1234, query: 'select * from orders'}),
                     rowCountOf({spanId: 'b', name: 'result-set', rowCount: null, tags: {'jdbc.row-count': '3'}}),
+                    rowCountOf({spanId: 'f', name: 'SELECT big', rowCount: 12345}, 'de-DE'),
                     errorBar({spanId: 'c', name: 'x', status: 'ERROR'}),
                     errorBar({spanId: 'd', name: 'x', status: 'OK', errorMessage: 'ignored'}),
                     tagKeys({spanId: 'e', name: 'x', tags: {'db.system': 'h2', 'db.statement': 'SELECT 1'}}).join(',')
@@ -1247,7 +1249,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
 
         @SuppressWarnings("unchecked")
         List<Object> spanFacts = (List<Object>) facts;
-        assertThat(spanFacts).containsExactly("1,234 rows", null, true, false, "db.statement,db.system");
+        assertThat(spanFacts).containsExactly("1,234 rows", null, "12.345 rows", true, false, "db.statement,db.system");
     }
 
     /**
