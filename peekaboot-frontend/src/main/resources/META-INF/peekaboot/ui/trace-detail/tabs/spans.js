@@ -8,15 +8,16 @@
  * the reader opens it. Entries are flat siblings carrying their depth, which is what the
  * subtree toggle walks.
  *
- * Bar positions, marker offsets and indents are set through the CSSOM, never as a style
- * attribute in markup: a host page whose CSP omits style-src 'unsafe-inline' drops the
- * attributes, which would flatten every row to depth 0 and every bar to the left edge.
+ * Bar positions, marker offsets, indents and indent guides are set through the CSSOM,
+ * never as a style attribute in markup: a host page whose CSP omits style-src
+ * 'unsafe-inline' drops the attributes, which would flatten every row to depth 0 and
+ * every bar to the left edge.
  */
 import {el, button} from '../../shared/dom.js';
 import {formatCount, formatDurationMs} from '../../shared/format.js';
 import {issueSeverity, severityClass} from '../../shared/severity.js';
 
-const INDENT_PX = 20;
+const INDENT_PX = 16;
 /** The subtree toggle's column; a details panel starts past it, under the span's name. */
 const TOGGLE_PX = 24;
 
@@ -82,7 +83,6 @@ function toggleSubtree(toggle) {
     const expand = toggle.getAttribute('aria-expanded') === 'false';
     toggle.setAttribute('aria-expanded', String(expand));
     toggle.setAttribute('aria-label', expand ? 'Collapse child spans' : 'Expand child spans');
-    toggle.textContent = expand ? '-' : '+';
     setSubtreeVisible(toggle.closest('.pk-gantt-span'), expand);
 }
 
@@ -137,6 +137,8 @@ function renderSpanEntries(container, span, depth, traceStart, totalDuration) {
 
     const entry = el('div', {className: `pk-gantt-span pk-gantt-kind--${kind}`});
     entry.dataset.depth = depth;
+    // one guide per ancestor, confined to the indent (see .pk-gantt-span)
+    entry.style.backgroundSize = `${depth * INDENT_PX}px 100%`;
 
     const row = el('div', {className: 'pk-gantt-row'});
     row.dataset.spanId = span.spanId;
@@ -156,7 +158,7 @@ function nameCell(span, kind, depth, detailsId) {
     const cell = el('div', {className: 'pk-gantt-name'});
     cell.style.paddingLeft = `${depth * INDENT_PX}px`;
     cell.append(hasChildren
-        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', text: '-', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
+        ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
     cell.append(button({
         className: 'pk-unbutton pk-gantt-name__toggle', title: name,

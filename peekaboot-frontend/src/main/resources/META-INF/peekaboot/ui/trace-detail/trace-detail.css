@@ -82,8 +82,8 @@
 .pk-overlay__error { color: var(--pk-danger); }
 
 /* Gantt view styles */
-.pk-gantt { display: flex; flex-direction: column; gap: 2px; --pk-gantt-name-width: 350px; --pk-gantt-duration-width: 90px; }
-.pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-sm); }
+.pk-gantt { display: flex; flex-direction: column; --pk-gantt-name-width: 350px; --pk-gantt-duration-width: 90px; --pk-gantt-indent: 16px; }
+.pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-xs); }
 .pk-gantt-header__name { width: var(--pk-gantt-name-width); }
 /* Same side margin as .pk-gantt-track below, so the ticks land right above the
    start/end of the bars they describe instead of further out. */
@@ -102,24 +102,37 @@
 .pk-gantt-kind--internal { --pk-gantt-kind: var(--pk-text-muted); }
 .pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind); }
 
-.pk-gantt-row { display: flex; align-items: center; padding: var(--pk-space-xs) 0; border-radius: var(--pk-space-xs); }
+/* One entry per span: its row and its details panel. The indent guides are a repeating
+   stripe, one per ancestor, confined to the indent by the background-size spans.js sets;
+   drawn on the entry so they run on through an open details panel. flow-root keeps the
+   panel's bottom margin inside the entry, under the guides. */
+.pk-gantt-span {
+    display: flow-root;
+    background-image: repeating-linear-gradient(to right,
+        transparent 0 11px, var(--pk-border) 11px 12px, transparent 12px var(--pk-gantt-indent));
+    background-repeat: no-repeat;
+}
+
+.pk-gantt-row { display: flex; align-items: center; min-height: 28px; border-radius: var(--pk-space-xs); }
 /* An open span's row keeps the hover tint, which ties the panel under it to its row. */
 .pk-gantt-row:hover, .pk-gantt-span--open > .pk-gantt-row { background: var(--pk-bg-alt); }
 
-/* A .pk-unbutton .pk-icon-btn: it looks like the plain glyph it is; the keyboard
-   reachability is the point. */
-.pk-gantt-toggle { user-select: none; color: var(--pk-text-muted); line-height: inherit; }
+/* A .pk-unbutton .pk-icon-btn drawing its chevron in CSS, so the button has no glyph text
+   to announce over its aria-label. */
+.pk-gantt-toggle { color: var(--pk-text-muted); }
+.pk-gantt-toggle::before { content: ''; width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); }
+.pk-gantt-toggle[aria-expanded="false"]::before { transform: translateX(-2px) rotate(-45deg); }
 .pk-gantt-toggle:hover { color: var(--pk-text); }
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: 24px; }
 
-.pk-gantt-name { width: var(--pk-gantt-name-width); display: flex; align-items: center; gap: var(--pk-space-xs); font-size: var(--pk-text-xs); overflow: hidden; }
+.pk-gantt-name { width: var(--pk-gantt-name-width); display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; }
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
    the cell's free width, which pushes the chips to the cell's right edge. */
-.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); text-align: left; border-radius: var(--pk-space-xs); }
+.pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Also the pointer's switch for the span's details (see spans.js). */
-.pk-gantt-track { flex: 1; height: 22px; position: relative; background: var(--pk-bg-alt); border-radius: 3px; margin: 0 var(--pk-space-sm); cursor: pointer; }
+.pk-gantt-track { flex: 1; align-self: stretch; margin: 3px var(--pk-space-sm); position: relative; background: var(--pk-bg-alt); border-radius: 3px; cursor: pointer; }
 .pk-gantt-row:hover .pk-gantt-track, .pk-gantt-span--open > .pk-gantt-row .pk-gantt-track { background: var(--pk-bg-hover); }
 .pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-gantt-kind); }
 .pk-gantt-bar--error { background: var(--pk-danger); }
@@ -136,11 +149,12 @@
 .pk-gantt-event-tooltip { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: var(--pk-bg-alt); border: 1px solid var(--pk-border); border-radius: 3px; padding: var(--pk-space-xs) var(--pk-space-sm); font-size: var(--pk-text-xs); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--pk-transition); z-index: 10; }
 .pk-gantt-event-marker:hover .pk-gantt-event-tooltip { opacity: 1; }
 
-.pk-span-row-count { font-size: var(--pk-text-xs); padding: 1px 5px; background: var(--pk-success); color: var(--pk-on-success); border-radius: 3px; margin-left: var(--pk-space-xs); }
+/* A row count is a fact about the query, so it takes a neutral fill and no verdict colour. */
+.pk-span-row-count { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; background: var(--pk-bg-hover); color: var(--pk-text); border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
 
 /* One small-button treatment for the row's logs toggle and queries.js's jump back to the
    span tree; each keeps its own class only as the JS hook. */
-.pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; margin-left: var(--pk-space-xs); user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
+.pk-span-action { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 2px 6px; background: transparent; border: 1px solid var(--pk-border); border-radius: var(--pk-radius); color: var(--pk-text-muted); font-size: var(--pk-text-xs); cursor: pointer; user-select: none; transition: background-color var(--pk-transition), color var(--pk-transition), border-color var(--pk-transition); }
 .pk-span-action:hover { background: var(--pk-bg-hover); color: var(--pk-text); border-color: var(--pk-text-muted); }
 .pk-span-action:active { background: var(--pk-bg-alt); }
 /* Neither gives when the name cell runs out of room: a shrunk badge wraps onto a second

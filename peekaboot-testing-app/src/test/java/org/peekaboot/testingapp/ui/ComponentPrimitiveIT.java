@@ -45,10 +45,10 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
-     * The trace-detail overlay renders ink of its own - the details panel's tag keys and
-     * values - and tabStrip() its count pill; each owes the same 4.5:1
-     * as a badge in both themes. The tag key doubles as the guard for muted ink on the
-     * panel's --pk-bg-alt ground.
+     * The trace-detail overlay renders ink of its own - the row-count chip and the
+     * details panel's tag keys and values - and tabStrip() its count pill; each owes the
+     * same 4.5:1 as a badge in both themes. The tag key doubles as the guard for muted ink
+     * on the panel's --pk-bg-alt ground.
      */
     @Test
     void traceDetailPillInkClearsAaContrastInBothThemes() {
@@ -56,7 +56,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
         for (String theme : List.of("light", "dark")) {
             page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme);
-            for (String pill : List.of("span-tag-key", "span-tag-value", "tab-count")) {
+            for (String pill : List.of("span-row-count", "span-tag-key", "span-tag-value", "tab-count")) {
                 assertThat(contrastRatio("#" + pill))
                         .as("%s ink/fill contrast (%s theme)", pill, theme)
                         .isGreaterThanOrEqualTo(4.5);

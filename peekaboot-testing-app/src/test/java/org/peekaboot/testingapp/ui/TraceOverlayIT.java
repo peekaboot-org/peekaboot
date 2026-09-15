@@ -159,11 +159,10 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * Fills that reuse --pk-primary (this chip) or --pk-success (the query row-count
-     * badge) for their background take the
-     * contrast-tuned --pk-on-primary/--pk-on-success foreground that components.css's
-     * .pk-badge uses for the same fills - --pk-text-strong there would be near-white text
-     * on light-blue/light-green at ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
+     * The Logs tab's span-filter chip reuses --pk-primary for its background, so it takes
+     * the contrast-tuned --pk-on-primary foreground that components.css's .pk-badge uses
+     * for the same fill - --pk-text-strong there would be near-white text on light green at
+     * ~2.3:1 in dark mode, against 8.2-8.3:1 for dark ink.
      * Pins the literal resolved colour rather than comparing against the --pk-on-primary
      * token itself, which would pass even if both sides regressed to the same wrong token.
      *
@@ -171,10 +170,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
      * white on it measures 2.61:1, so not even the light theme can use plain white.
      *
      * Drives a real ERROR log entry (matching ToolbarIT's
-     * toolbarShowsErrorLogCountWhenRequestLogsAnError): a query row-count badge needs a
-     * JDBC instrumentation detail this test has no reason to depend on, while the logs-tab
-     * span-filter chip needs only one real log entry attached to the trace, which
-     * openPageThatLogsAnError() guarantees.
+     * toolbarShowsErrorLogCountWhenRequestLogsAnError): the chip needs only one real log
+     * entry attached to the trace, which openPageThatLogsAnError() guarantees.
      */
     @Test
     void logsFilterChipUsesTheContrastTunedForeground() {
@@ -880,9 +877,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
     /**
      * A CSP that omits style-src 'unsafe-inline' drops every style attribute written
      * through innerHTML, but not CSSOM writes (element.style). The gantt has to survive
-     * that policy: its bar positions and row indents are the whole chart, and it sets
-     * them through the CSSOM for exactly this reason. The policy is applied by adding the
-     * header to the real dashboard response (its body is untouched), so the dashboard
+     * that policy: its bar positions, row indents and indent guides are the whole chart,
+     * and it sets them through the CSSOM for exactly this reason. The policy is applied
+     * by adding the header to the real dashboard response (its body is untouched), so the dashboard
      * document and the overlay it opens are what runs under it - the toolbar's own page
      * is served before the route is installed and is not covered here.
      *
@@ -903,7 +900,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
         serveWithCsp("**/peekaboot/ui/dashboard/index.html", "style-src 'self'");
 
         Response navigation = page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
-        overlay.awaitMeasurable(".pk-gantt-span[data-depth='1']");
+        overlay.awaitMeasurable(".pk-gantt-span[data-depth='2']");
 
         assertThat(navigation.headers())
                 .as("the policy reached the document under test")
@@ -912,7 +909,7 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         overlay.evaluate(
                                 "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-gantt-name')).paddingLeft"))
                 .as("a nested row keeps its indent")
-                .isEqualTo("20px");
+                .isEqualTo("16px");
         assertThat((Boolean) overlay.evaluate("root => {"
                         + "const track = root.querySelector('.pk-gantt-span[data-depth=\"0\"] .pk-gantt-track');"
                         + "return track.querySelector('.pk-gantt-bar').getBoundingClientRect().width"
@@ -923,7 +920,12 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         overlay.evaluate(
                                 "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"1\"] .pk-span-details')).marginLeft"))
                 .as("its details panel sits under its name")
-                .isEqualTo("44px");
+                .isEqualTo("40px");
+        assertThat(
+                        overlay.evaluate(
+                                "root => getComputedStyle(root.querySelector('.pk-gantt-span[data-depth=\"2\"]')).backgroundSize"))
+                .as("a span two levels down draws two indent guides")
+                .isEqualTo("32px 100%");
         assertThat(cspViolations).isEmpty();
 
         // style-src-attr falls back to style-src, so a parsed style attribute is refused
@@ -1083,6 +1085,9 @@ class TraceOverlayIT extends PlaywrightTestBase {
         assertThat(overlay.evaluate(
                         "root => root.querySelector('#pk-gantt-rows .pk-gantt-toggle').getAttribute('aria-expanded')"))
                 .isEqualTo("false");
+        assertThat(overlay.text("#pk-gantt-rows .pk-gantt-toggle"))
+                .as("the chevron is drawn in CSS, so there is no glyph to announce over the label")
+                .isEmpty();
 
         overlay.click("#pk-gantt-rows .pk-gantt-toggle");
 
