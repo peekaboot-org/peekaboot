@@ -838,57 +838,67 @@ class DashboardTabsIT extends PlaywrightTestBase {
      * disables Flyway, so V4__order-data.sql's fixture rows never load here), it issues one
      * query (findAll()), logs an INFO summary and a WARN for that order, so its own trace
      * carries every part this row can show except an error badge - reconcileOrders() logs
-     * no ERROR.
+     * no ERROR. The order is seeded once, outside the retry loop below, and removed in a
+     * {@code finally}: {@code reconcileOrders()} never moves an order out of PLACED, and the
+     * H2 database is shared by every IT the context cache reuses, so leaving it behind would
+     * permanently raise every later real run's warning count.
      */
     @Test
     void tracesRowStatsFitAPhoneViewportWithoutWrappingOrClippingAPart() {
         page.setViewportSize(375, 800);
-        String traceId = seedAWarningLoggingOrderReconcilerRun();
+        CustomerOrder order = seedAnOrder();
+        try {
+            String traceId = awaitReconcilerRunThatLogsAWarning();
 
-        openDashboard();
-        dashboard.openTracesTab();
-        dashboard.awaitListedTrace(traceId);
+            openDashboard();
+            dashboard.openTracesTab();
+            dashboard.awaitListedTrace(traceId);
 
-        Object misfits = page.evaluate("""
-                selector => {
-                    const row = document.querySelector(selector);
-                    const rowRight = row.getBoundingClientRect().right;
-                    return [...row.children].flatMap(part => {
-                        const rect = part.getBoundingClientRect();
-                        const problems = [];
-                        if (rect.right > rowRight + 1) problems.push('past the row edge');
-                        if (part.getClientRects().length > 1) problems.push('wraps inside itself');
-                        return problems.length ? [part.textContent + ': ' + problems.join(', ')] : [];
-                    });
-                }
-                """, Dashboard.traceItem(traceId) + " .pk-trace-item__stats");
-        @SuppressWarnings("unchecked")
-        List<Object> misfitParts = (List<Object>) misfits;
-        assertThat(misfitParts).isEmpty();
+            Object misfits = page.evaluate("""
+                    selector => {
+                        const row = document.querySelector(selector);
+                        const rowRight = row.getBoundingClientRect().right;
+                        return [...row.children].flatMap(part => {
+                            const rect = part.getBoundingClientRect();
+                            const problems = [];
+                            if (rect.right > rowRight + 1) problems.push('past the row edge');
+                            if (part.getClientRects().length > 1) problems.push('wraps inside itself');
+                            return problems.length ? [part.textContent + ': ' + problems.join(', ')] : [];
+                        });
+                    }
+                    """, Dashboard.traceItem(traceId) + " .pk-trace-item__stats");
+            @SuppressWarnings("unchecked")
+            List<Object> misfitParts = (List<Object>) misfits;
+            assertThat(misfitParts).isEmpty();
+        } finally {
+            deleteOrder(order);
+        }
     }
 
     /**
-     * Fires {@code OrderReconciler.reconcileOrders()} against a PLACED order of its own
-     * (seedAnOrder()) until its own trace carries the WARN log that order produces - the
-     * same capture-appender-detached-by-a-context-boot race
+     * Fires {@code OrderReconciler.reconcileOrders()} until its own trace carries a WARN log
+     * - the same capture-appender-detached-by-a-context-boot race
      * {@link PlaywrightTestBase#awaitErrorLoggingJobRun} guards against for an ERROR line,
-     * here for a WARN one instead.
+     * here for a WARN one instead. Retries the run, not the seed: the caller's PLACED order
+     * stays PLACED for every attempt, so only the log capture itself needs a second try.
      */
-    private String seedAWarningLoggingOrderReconcilerRun() {
+    private String awaitReconcilerRunThatLogsAWarning() {
         for (int attempt = 0; attempt < 5; attempt++) {
-            seedAnOrder();
             String traceId = ScheduledJobs.run(scheduledTaskHolder, OrderReconciler.class, "reconcileOrders");
             JsonNode trace = awaitTrace(traceId, "trace => trace.rootActionType === 'SCHEDULED_JOB'");
-            boolean carriesAWarnLog = false;
             for (JsonNode entry : trace.path("logs")) {
                 if ("WARN".equals(entry.path("level").asString(""))) {
-                    carriesAWarnLog = true;
-                    break;
+                    return traceId;
                 }
             }
-            if (carriesAWarnLog) return traceId;
         }
         throw new AssertionError("no run of reconcileOrders produced a trace carrying its own WARN log");
+    }
+
+    /** Undoes {@link #seedAnOrder()}, so a test that seeds its own order leaves the shared H2 database as it found it. */
+    private void deleteOrder(CustomerOrder order) {
+        orderLineRepository.deleteAll(orderLineRepository.findByOrderId(order.getId()));
+        orderRepository.delete(order);
     }
 
     /**
