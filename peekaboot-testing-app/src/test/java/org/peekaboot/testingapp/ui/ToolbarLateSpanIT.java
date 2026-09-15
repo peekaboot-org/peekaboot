@@ -25,11 +25,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 class ToolbarLateSpanIT extends PlaywrightTestBase {
 
     /**
-     * The bar exposes no span count, and adding one purely to make this observable would be
-     * production code written for a test. The rendered {@code ⏱} duration moves instead: the
-     * trace's duration spans its earliest start to its latest end, so a child ending 1.5s after
-     * the root stretches it from a handful of milliseconds to at least {@code LATE_WORK}. The
-     * query and log counters cannot serve - this request issues neither.
+     * The rendered {@code ⏱} duration is the signal, not the span count: the trace's duration
+     * spans its earliest start to its latest end, so a child ending 1.5s after the root
+     * stretches it from a handful of milliseconds to at least {@code LATE_WORK}, while the span
+     * count only steps by one and could land on either render depending on when the backend
+     * counts a still-running child. The query and log counters cannot serve at all - this
+     * request issues neither.
      */
     private static final String RENDERED_DURATION =
             "root => root.querySelector('#pk-metrics .pk-stat__duration')?.textContent ?? null";

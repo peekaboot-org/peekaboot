@@ -1,24 +1,33 @@
 /**
  * The stat line a trace shows wherever it is summarised - the Traces tab's list rows and
- * the dev toolbar's bar: the query count with the total query time, then the error and
- * warning log counts. One builder so the two surfaces cannot drift in wording,
- * pluralisation or the thresholds that colour the query time. Returns detached elements;
- * each surface decides how to separate them.
+ * the dev toolbar's bar: span count, query count with the total query time, log count,
+ * then the error and warning log-level badges - the overlay's own Request/Spans/Queries/Logs
+ * tab order. One builder so the two surfaces cannot drift in wording, pluralisation, order
+ * or the thresholds that colour the query time. Returns detached elements; each surface
+ * decides how to separate them.
  */
+import {el} from './dom.js';
 import {badge} from './components.js';
 import {formatCount, formatDurationMs} from './format.js';
 import {durationSeverity, logLevelVariant, severityClass} from './severity.js';
 
 export function traceStatParts(trace, {features, locale} = {}) {
     const summary = trace.summary || {};
+    const spans = summary.spans || {};
     const queries = summary.queries || {};
     const logs = summary.logs || {};
     const parts = [];
+    if (spans.count > 0) {
+        parts.push(el('span', {className: 'pk-stat', text: formatCount(spans.count, 'span', {locale})}));
+    }
     if (queries.count > 0) {
         parts.push(durationStat(
                 formatCount(queries.count, 'query', {plural: 'queries', locale}),
                 queries.totalDurationMs,
                 durationSeverity(queries.totalDurationMs, features)));
+    }
+    if (logs.count > 0) {
+        parts.push(el('span', {className: 'pk-stat', text: formatCount(logs.count, 'log', {locale})}));
     }
     if (logs.errorCount > 0) {
         parts.push(badge(formatCount(logs.errorCount, 'error', {locale}), logLevelVariant('ERROR')));

@@ -1134,8 +1134,12 @@ class DashboardTabsIT extends PlaywrightTestBase {
         dashboard.openTracesTab();
         dashboard.awaitListedTrace(traceId);
 
-        String queryStat =
-                page.locator(Dashboard.traceItem(traceId) + " .pk-stat").first().textContent();
+        List<String> stats =
+                page.locator(Dashboard.traceItem(traceId) + " .pk-stat").allTextContents();
+        String queryStat = stats.stream()
+                .filter(stat -> QUERY_STAT.matcher(stat).find())
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no stat reads '<n> queries': " + stats));
         Matcher queries = QUERY_STAT.matcher(queryStat);
         assertThat(queries.find())
                 .as("the row's query stat reads '<n> queries': %s", queryStat)

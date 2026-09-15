@@ -501,6 +501,32 @@ class SharedModuleIT extends PlaywrightTestBase {
                 .isEqualTo("12.345");
     }
 
+    /**
+     * The stat line reads in the overlay's tab order - spans, queries with their time, logs -
+     * then the error and warning badges. Each count shows only when there is something to count,
+     * which for spans is every real trace.
+     */
+    @Test
+    void traceStatPartsFollowTheOverlayTabOrder() {
+        Object full = evalModule("trace-stats.js", """
+                m.traceStatParts({summary: {spans: {count: 84}, queries: {count: 26, totalDurationMs: 31},
+                    logs: {count: 27, errorCount: 1, warnCount: 2}}})
+                    .map(part => part.textContent)
+                """);
+        Object quiet = evalModule("trace-stats.js", """
+                m.traceStatParts({summary: {spans: {count: 1}, queries: {count: 0, totalDurationMs: 0},
+                    logs: {count: 0, errorCount: 0, warnCount: 0}}})
+                    .map(part => part.textContent)
+                """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> fullParts = (List<Object>) full;
+        @SuppressWarnings("unchecked")
+        List<Object> quietParts = (List<Object>) quiet;
+        assertThat(fullParts).containsExactly("84 spans", "26 queries 31ms", "27 logs", "1 error", "2 warnings");
+        assertThat(quietParts).containsExactly("1 span");
+    }
+
     /** The stat line groups its counts in the locale it is given, like every other count. */
     @Test
     void traceStatPartsGroupCountsInTheGivenLocale() {

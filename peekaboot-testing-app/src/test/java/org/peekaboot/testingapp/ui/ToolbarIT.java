@@ -9,6 +9,8 @@ import com.microsoft.playwright.options.ColorScheme;
 import com.microsoft.playwright.options.WaitForSelectorState;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -128,15 +130,28 @@ class ToolbarIT extends PlaywrightTestBase {
      * insights (once the fetch ladder picks them up) carry a real query count and a real
      * controller name - no fetch stubbing needed. This also exercises the ladder's happy path
      * end to end: the query spans have not reached the store when the first attempt fires, so
-     * this wait only succeeds if the later attempts run and re-render with what they find.
+     * this wait only succeeds if the later attempts run and re-render with what they find. The
+     * persons lookup also logs its result inside its own span, so the same trace proves the bar
+     * reads spans, queries and logs in the overlay's tab order.
      */
     @Test
     void toolbarShowsQueryCountAndControllerNameAfterTraceCompletes() {
         openPersonsPage();
-        toolbar.waitUntil("root => root.querySelector('#pk-metrics').textContent.includes('quer')");
+        toolbar.waitUntil("root => { const text = root.querySelector('#pk-metrics').textContent;"
+                + " return text.includes('quer') && text.includes('log'); }");
 
-        assertThat(toolbar.text("#pk-metrics")).contains("1 query");
+        String metrics = toolbar.text("#pk-metrics");
+        assertThat(metrics).contains("1 query");
         assertThat(toolbar.text("#pk-controller")).contains("PersonController.persons");
+
+        Matcher spans = Pattern.compile("\\d[\\d,]* spans?").matcher(metrics);
+        Matcher queries = Pattern.compile("1 query").matcher(metrics);
+        Matcher logs = Pattern.compile("\\d[\\d,]* logs?").matcher(metrics);
+        assertThat(spans.find()).as("a span count: %s", metrics).isTrue();
+        assertThat(queries.find()).as("a query count: %s", metrics).isTrue();
+        assertThat(logs.find()).as("a log count: %s", metrics).isTrue();
+        assertThat(spans.start()).as("spans before queries: %s", metrics).isLessThan(queries.start());
+        assertThat(queries.start()).as("queries before logs: %s", metrics).isLessThan(logs.start());
     }
 
     /**
