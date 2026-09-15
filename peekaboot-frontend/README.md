@@ -401,6 +401,7 @@ Each of these has been broken at least once and caught only in review. Keep them
 | Role | Tokens | Drawn on |
 |---|---|---|
 | Fill | `--pk-primary`, `--pk-success`, `--pk-warning`, `--pk-info`, `--pk-danger`, `--pk-purple`, `--pk-danger-soft` | Backgrounds: badge fills, buttons, banners. Each carries its own `--pk-on-*` ink on top. |
+| Graphic fill | `--pk-pink` | Small-area fills only: the span tree's consumer-kind dot and bar (`trace-detail.css`). Never carries ink and is never drawn as text, so it has no `--pk-on-*` or `-text` variant. |
 | Text | `--pk-primary-text`, `--pk-success-text`, `--pk-warning-text`, `--pk-info-text` | The page background (`--pk-bg`, `--pk-bg-alt`, `--pk-bg-hover`): text, focus rings, borders, the selected-tab underline. |
 
 **Change a colour's whole trio together: the fill token, its `--pk-on-*` ink, and its
@@ -427,6 +428,11 @@ move again, so text still goes through the `-text` token.
 `--pk-danger` and `--pk-purple` are the two dark enough to serve both roles (5.31:1 and
 5.70:1, down to 4.73:1 for danger on `--pk-bg-hover`, still AA), which is why neither has a
 `-text` variant.
+
+`--pk-pink` has no `-text` variant for the opposite reason: it never carries text at all, so
+1.4.3's 4.5:1 does not apply, only 1.4.11's 3:1 for the small graphic it fills. It clears
+that with room in every theme and ground it is measured against (`tokens.css`), tightest at
+4.10:1 on light `--pk-bg-hover`.
 
 **Never put `--pk-text-strong` or a literal `white`/`#fff` on a saturated fill.** Each fill
 has an `--pk-on-*` counterpart that clears 4.5:1 in both themes by construction;

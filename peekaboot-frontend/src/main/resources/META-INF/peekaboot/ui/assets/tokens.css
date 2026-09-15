@@ -56,6 +56,7 @@
     --pk-warning: #b35900;      /* deep tier too: a burnt orange is the only amber-band hue that carries white ink */
     --pk-danger: #d21f1f;       /* dark enough to double as text: 4.73:1 on --pk-bg-hover */
     --pk-purple: #7c3aed;
+    --pk-pink: #db2777;         /* gantt consumer-kind dot/bar fill only - no ink drawn on it, so no --pk-on-pink or -text variant: 4.60:1 on --pk-bg, 4.32:1 on --pk-bg-alt, 4.10:1 on --pk-bg-hover */
     --pk-on-success: #ffffff;   /* 5.02:1 on --pk-success */
     --pk-on-warning: #ffffff;   /* 4.83:1 on --pk-warning */
     --pk-on-danger:  #ffffff;   /* 5.31:1 on --pk-danger */
@@ -124,6 +125,7 @@
     --pk-warning: #d29922;
     --pk-danger: #f85149;
     --pk-purple: #a371f7;
+    --pk-pink: #f472b6;         /* 7.15:1 on --pk-bg, 6.53:1 on --pk-bg-alt, 5.75:1 on --pk-bg-hover */
     --pk-on-success: #0d1117;   /* 7.45:1 */
     --pk-on-warning: #0d1117;   /* 7.50:1 */
     --pk-on-danger:  #0d1117;   /* 5.65:1 */

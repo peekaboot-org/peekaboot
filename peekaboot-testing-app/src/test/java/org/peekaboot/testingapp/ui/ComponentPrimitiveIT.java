@@ -87,6 +87,25 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
     }
 
     /**
+     * A span's kind sets its dot's fill. Producer and consumer are visually distinct kinds
+     * even though neither is the trace's primary server/client axis, so each reads its own
+     * token. The server dot takes the higher-contrast --pk-primary-text rather than the
+     * bar's plain --pk-primary: an 8px dot needs more contrast against the page than a wide
+     * bar does, and the legend and every row share the one dot rule (trace-detail.css).
+     */
+    @Test
+    void kindDotsUseDistinctFills() {
+        openFixture();
+
+        assertThat(backgroundColor("#kind-dot-producer"))
+                .as("producer and consumer dots differ")
+                .isNotEqualTo(backgroundColor("#kind-dot-consumer"));
+        assertThat(backgroundColor("#kind-dot-server"))
+                .as("server dot uses the text-tuned green, not the bar's plain fill")
+                .isEqualTo(resolvedVar("--pk-primary-text"));
+    }
+
+    /**
      * A row count is a fact about the query, not a verdict, so the Queries tab's count
      * takes the span tree's neutral chip instead of its own success-green text.
      */
@@ -187,18 +206,18 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
                 """, selector)).doubleValue();
     }
 
-    /** The theme's --pk-danger, resolved to the same rgb() form computed styles use. */
-    private String resolvedDangerFill() {
+    /** The theme's resolved value of a --pk-* custom property, in the rgb() form computed styles use. */
+    private String resolvedVar(String property) {
         return (String) page.evaluate("""
-                () => {
+                (prop) => {
                     const probe = document.createElement('div');
-                    probe.style.backgroundColor = 'var(--pk-danger)';
+                    probe.style.backgroundColor = `var(${prop})`;
                     document.body.appendChild(probe);
                     const resolved = getComputedStyle(probe).backgroundColor;
                     probe.remove();
                     return resolved;
                 }
-                """);
+                """, property);
     }
 
     private String backgroundColor(String selector) {
@@ -329,7 +348,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("resting fill is --pk-danger (%s theme)", theme)
-                    .isEqualTo(resolvedDangerFill());
+                    .isEqualTo(resolvedVar("--pk-danger"));
             assertThat(contrastRatio("#unmask-pressed"))
                     .as("resting ink/fill contrast (%s theme)", theme)
                     .isGreaterThanOrEqualTo(4.5);
@@ -338,7 +357,7 @@ class ComponentPrimitiveIT extends PlaywrightTestBase {
 
             assertThat(backgroundColor("#unmask-pressed"))
                     .as("hovered fill stays --pk-danger (%s theme)", theme)
-                    .isEqualTo(resolvedDangerFill());
+                    .isEqualTo(resolvedVar("--pk-danger"));
             assertThat(contrastRatio("#unmask-pressed"))
                     .as("hovered ink/fill contrast (%s theme)", theme)
                     .isGreaterThanOrEqualTo(4.5);

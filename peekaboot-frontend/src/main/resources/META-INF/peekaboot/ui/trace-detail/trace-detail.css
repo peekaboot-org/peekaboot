@@ -98,12 +98,16 @@
 .pk-gantt-legend { display: flex; flex-wrap: wrap; gap: var(--pk-space-md); margin: 0; padding: 0; list-style: none; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-gantt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 
-/* A span's colour scope: its legend dot, row dot, bar and details edge all read it. */
-.pk-gantt-kind--server { --pk-gantt-kind: var(--pk-primary); }
+/* A span's colour scope: its legend dot, row dot, bar and details edge all read it.
+   --pk-gantt-kind-dot overrides the dot alone, falling back to --pk-gantt-kind, so the
+   server's small dot can take the higher-contrast --pk-primary-text while its wide bar
+   keeps the plain --pk-primary - one dot rule below serves every kind either way. */
+.pk-gantt-kind--server { --pk-gantt-kind: var(--pk-primary); --pk-gantt-kind-dot: var(--pk-primary-text); }
 .pk-gantt-kind--client { --pk-gantt-kind: var(--pk-purple); }
-.pk-gantt-kind--producer, .pk-gantt-kind--consumer { --pk-gantt-kind: var(--pk-info); }
+.pk-gantt-kind--producer { --pk-gantt-kind: var(--pk-info); }
+.pk-gantt-kind--consumer { --pk-gantt-kind: var(--pk-pink); }
 .pk-gantt-kind--internal { --pk-gantt-kind: var(--pk-text-muted); }
-.pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind); }
+.pk-gantt-kind-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pk-gantt-kind-dot, var(--pk-gantt-kind)); }
 
 /* One entry per span: its row and its details panel. spans.js sets only --pk-gantt-depth
    per entry; the indent guides below - a repeating stripe, one per ancestor - and every
