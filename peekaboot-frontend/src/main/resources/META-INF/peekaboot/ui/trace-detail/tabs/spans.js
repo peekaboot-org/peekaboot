@@ -33,8 +33,9 @@ export function render(container, trace, context = {}) {
     const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
 
     const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
+    const allDetailsToggle = button({className: 'pk-btn pk-btn--small pk-gantt-all-details', text: 'Show all details'});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
-        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan)),
+        el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan), allDetailsToggle),
         el('div', {className: 'pk-gantt-header'},
             el('div', {className: 'pk-gantt-header__name pk-label', text: 'Span'}),
             el('div', {className: 'pk-gantt-header__timeline'}, ...ticks.map(tick => el('span', {text: tick}))),
@@ -42,6 +43,12 @@ export function render(container, trace, context = {}) {
         entries));
 
     renderSpanEntries(entries, trace.rootSpan, 0, traceStart, totalDuration);
+
+    allDetailsToggle.addEventListener('click', () => {
+        const open = !allDetailsOpen(entries);
+        entries.querySelectorAll('.pk-gantt-span').forEach(entry => setDetailsOpen(entry, open));
+        syncAllDetailsToggle(entries, allDetailsToggle);
+    });
 
     entries.addEventListener('click', (e) => {
         // Logs toggle: hands off to the Logs tab.
@@ -71,6 +78,7 @@ export function render(container, trace, context = {}) {
         if (detailsSwitch) {
             const entry = detailsSwitch.closest('.pk-gantt-span');
             setDetailsOpen(entry, !entry.classList.contains('pk-gantt-span--open'));
+            syncAllDetailsToggle(entries, allDetailsToggle);
         }
     });
 }
@@ -78,6 +86,15 @@ export function render(container, trace, context = {}) {
 function setDetailsOpen(entry, open) {
     entry.classList.toggle('pk-gantt-span--open', open);
     entry.querySelector('.pk-gantt-name__toggle').setAttribute('aria-expanded', String(open));
+}
+
+function allDetailsOpen(entries) {
+    return !entries.querySelector('.pk-gantt-span:not(.pk-gantt-span--open)');
+}
+
+/** The label names what the next click does, so it reads true after a panel is opened or closed by hand. */
+function syncAllDetailsToggle(entries, allDetailsToggle) {
+    allDetailsToggle.textContent = allDetailsOpen(entries) ? 'Hide all details' : 'Show all details';
 }
 
 function toggleSubtree(toggle) {

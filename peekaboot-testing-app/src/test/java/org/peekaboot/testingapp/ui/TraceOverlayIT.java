@@ -483,6 +483,50 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * One switch opens every span's details panel, and closes them all again. Its label names
+     * what the next click does, worked out from the panels themselves, so it stays true after
+     * the reader opens or closes panels by hand.
+     */
+    @Test
+    void theAllDetailsSwitchOpensAndClosesEveryPanel() {
+        Object states = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'a', children: [{spanId: 'b', name: 'b'}]}});
+                const all = container.querySelector('.pk-gantt-all-details');
+                const names = container.querySelectorAll('.pk-gantt-name__toggle');
+                const snapshot = () => [all.textContent,
+                    container.querySelectorAll('.pk-gantt-span--open').length,
+                    container.querySelectorAll('.pk-gantt-name__toggle[aria-expanded="true"]').length].join(':');
+                const states = [snapshot()];
+                all.click();
+                states.push(snapshot());
+                names[0].click();
+                states.push(snapshot());
+                all.click();
+                states.push(snapshot());
+                all.click();
+                states.push(snapshot());
+                names[0].click();
+                names[1].click();
+                states.push(snapshot());
+                return states;
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<String> allDetailsStates = (List<String>) states;
+        assertThat(allDetailsStates)
+                .containsExactly(
+                        "Show all details:0:0",
+                        "Hide all details:2:2",
+                        "Show all details:1:1",
+                        "Hide all details:2:2",
+                        "Show all details:0:0",
+                        "Hide all details:2:2");
+    }
+
+    /**
      * The Spans tab's per-span "N logs" toggle hands off to the Logs tab's own span filter
      * - switch the overlay to the Logs tab, seed its span filter, and rely on the filter
      * chip's own clear button for a reversible "back to all logs" - rather than opening a

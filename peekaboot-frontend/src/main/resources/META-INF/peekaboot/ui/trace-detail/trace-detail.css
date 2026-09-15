@@ -93,7 +93,7 @@
    start/end of the bars they describe instead of further out. */
 .pk-gantt-header__timeline { display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
 
-/* The legend of the trace's span kinds. */
+/* The legend of the trace's span kinds on the left, the all-details switch on the right. */
 .pk-gantt-toolbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; margin-bottom: var(--pk-space-sm); }
 .pk-gantt-legend { display: flex; flex-wrap: wrap; gap: var(--pk-space-md); margin: 0; padding: 0; list-style: none; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-gantt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
