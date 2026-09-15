@@ -161,7 +161,9 @@ function nameCell(span, kind, depth, detailsId) {
         ? button({className: 'pk-unbutton pk-icon-btn pk-gantt-toggle', attrs: {'aria-expanded': 'true', 'aria-label': 'Collapse child spans'}})
         : el('span', {className: 'pk-gantt-toggle-spacer'}));
     cell.append(button({
-        className: 'pk-unbutton pk-gantt-name__toggle', title: name,
+        // the backend's verdict, as for the bar: ERROR whenever the span recorded an error message or class
+        className: 'pk-unbutton pk-gantt-name__toggle' + (span.status === 'ERROR' ? ' pk-gantt-name__toggle--error' : ''),
+        title: name,
         attrs: {'aria-expanded': 'false', 'aria-controls': detailsId, 'aria-label': `${name}, ${kind} span`}
     }, kindDot(), el('span', {className: 'pk-gantt-name__text', text: name})));
     // The backend decides what a query span is (DbSpans) and ships its masked statement as
@@ -242,10 +244,18 @@ function detailsPanel(span, kind, depth, detailsId) {
     const panel = el('div', {className: 'pk-span-details', attrs: {id: detailsId}},
         el('div', {className: 'pk-span-details__head'},
             el('span', {className: 'pk-span-details__kind', text: `${KIND_LABELS[kind]} span`})),
+        errorSection(span),
         querySection(span),
         tagList(span.tags));
     panel.style.marginLeft = `${depth * INDENT_PX + TOGGLE_PX}px`;
     return panel;
+}
+
+function errorSection(span) {
+    if (!span.errorMessage && !span.errorClass) return null;
+    return el('div', {className: 'pk-span-details__error'},
+        span.errorClass ? el('div', {className: 'pk-span-details__error-class', text: span.errorClass}) : null,
+        span.errorMessage ? el('div', {className: 'pk-span-details__error-message', text: span.errorMessage}) : null);
 }
 
 function querySection(span) {

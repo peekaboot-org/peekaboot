@@ -131,6 +131,7 @@
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
    the cell's free width, which pushes the chips to the cell's right edge. */
 .pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
+.pk-gantt-name__toggle--error { color: var(--pk-danger); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Also the pointer's switch for the span's details (see spans.js). */
 .pk-gantt-track { align-self: stretch; margin: 3px var(--pk-space-sm); position: relative; background: var(--pk-bg-alt); border-radius: 3px; cursor: pointer; }
@@ -166,6 +167,8 @@
 .pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
 .pk-gantt-span--open > .pk-span-details { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
+.pk-span-details__error { color: var(--pk-danger); font-family: var(--pk-font-mono); overflow-wrap: anywhere; }
+.pk-span-details__error-class { font-weight: 600; }
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
 .pk-span-details__query .pk-code-block { align-self: stretch; margin: 0; }
 .pk-span-tags { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--pk-space-md); row-gap: 2px; margin: 0; font-family: var(--pk-font-mono); }

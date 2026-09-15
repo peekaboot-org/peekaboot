@@ -1301,6 +1301,44 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
+     * An error span says what went wrong where the reader is looking: its name takes the
+     * danger colour on the row, following the backend's status verdict like the bar does,
+     * and its details panel leads with the exception class and message the backend recorded.
+     * A span that recorded neither renders no error section.
+     */
+    @Test
+    void anErrorSpansDetailsShowTheExceptionItRecorded() {
+        Object facts = importModule("trace-detail/tabs/spans.js", """
+            (() => {
+                const container = document.createElement('div');
+                m.render(container, {durationMs: 10, startTimeMs: 0, rootSpan: {spanId: 'a', name: 'root', children: [
+                    {spanId: 'b', name: 'http get', status: 'ERROR',
+                        errorClass: 'org.springframework.web.client.ResourceAccessException', errorMessage: 'Connection refused'},
+                    {spanId: 'c', name: 'ok', status: 'OK'}]}});
+                const entry = id => container.querySelector(`.pk-gantt-row[data-span-id="${id}"]`).closest('.pk-gantt-span');
+                const erroneous = id => entry(id).querySelector('.pk-gantt-name__toggle').classList.contains('pk-gantt-name__toggle--error');
+                return [
+                    erroneous('b'),
+                    entry('b').querySelector('.pk-span-details__error-class')?.textContent ?? null,
+                    entry('b').querySelector('.pk-span-details__error-message')?.textContent ?? null,
+                    erroneous('c'),
+                    entry('c').querySelector('.pk-span-details__error') === null
+                ];
+            })()
+            """);
+
+        @SuppressWarnings("unchecked")
+        List<Object> errorFacts = (List<Object>) facts;
+        assertThat(errorFacts)
+                .containsExactly(
+                        true,
+                        "org.springframework.web.client.ResourceAccessException",
+                        "Connection refused",
+                        false,
+                        true);
+    }
+
+    /**
      * A span's row is one line; its statement and its tags wait in a details panel under the
      * row until the reader opens it from the span's name. A statement runs to hundreds of
      * characters and a query span carries a dozen tags, which drawn on every row buried the
