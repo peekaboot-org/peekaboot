@@ -136,10 +136,11 @@
                             <scmCommentPrefix xml:space="preserve">[release] </scmCommentPrefix>
                             <scmReleaseCommitComment>@{prefix} set version to @{releaseLabel}</scmReleaseCommitComment>
                             <scmDevelopmentCommitComment>@{prefix} prepare for next development iteration</scmDevelopmentCommitComment>
-                            <!-- The workflow stages the rendered CHANGELOG.md before this runs, so that
-                                 the release commit carries it. -->
+                            <!-- The workflow stages the rendered CHANGELOG.md and the rewritten
+                                 README.md before this runs, so that the release commit carries both. -->
                             <checkModificationExcludes>
                                 <checkModificationExclude>CHANGELOG.md</checkModificationExclude>
+                                <checkModificationExclude>README.md</checkModificationExclude>
                             </checkModificationExcludes>
                             <goals>deploy</goals>
                         </configuration>

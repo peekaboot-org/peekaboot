@@ -482,8 +482,9 @@ Actions tab with `dev` selected, and it fails immediately if dispatched from any
 Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does:
 
 1. `./mvnw --batch-mode verify`
-2. The release version resolved with `git-cliff --bumped-version`, and `CHANGELOG.md`
-   regenerated whole against it and staged. See [Release notes](#release-notes).
+2. The release version resolved with `git-cliff --bumped-version`. `CHANGELOG.md` regenerated
+   whole against it and staged, and `README.md`'s dependency snippet rewritten to it and
+   staged. See [Release notes](#release-notes).
 3. `./mvnw -P peekaboot-release release:prepare -DreleaseVersion=<x.y.z>`, whose own commit
    picks the staged changelog up, so version bump, changelog and tag are one commit.
 4. `./mvnw -P peekaboot-release release:perform`
@@ -491,6 +492,9 @@ Leave `releaseVersion` empty unless git-cliff reads the bump wrong. The run does
    Nothing merges back, because `main` originates no commits of its own.
 6. Grouped release notes for the new tag rendered by git-cliff into the release body, and
    the `unreleased` draft deleted.
+7. The docs site published: `_data/releases.json` and `_config.yml`'s `peekaboot_version`
+   committed to that repo's `dev`, its `main` fast-forwarded so Pages rebuilds, and the same
+   bare version tagged there.
 
 `release:prepare` pushes to `dev`, which the ruleset protects, so GitHub Actions has to sit on
 that ruleset's bypass list: a commit pushed by `GITHUB_TOKEN` never carries a `build-on-push`
@@ -498,15 +502,19 @@ check, because that token starts no workflows. Without the bypass the push is re
 the tag is created and long before anything reaches Central, so a missing bypass costs a
 release rather than leaving half of one behind.
 
-Nothing automates what follows a release; do it on `dev`.
-The Gradle build needs no step, since it derives the version and the build instant from
-the poms:
+Nothing is left to do by hand afterwards. The Gradle build needs no step either, since it
+derives the version and the build instant from the poms.
 
-1. In the docs site (`../peekaboot-org.github.io`), set `peekaboot_version` in
-   `_config.yml` to the released version; every dependency snippet on the site reads it.
-   The site publishes from its `main`, so merge `dev` into it and push.
-2. Put the released version into `README.md`'s dependency snippet, the one place the app
-   repo spells it out.
+Both places that spell a version out are rewritten by the job. `README.md`'s dependency
+snippet is staged before `release:prepare`, so it rides into the tagged commit beside the
+changelog. The docs site's `_config.yml` carries `peekaboot_version`, which every dependency
+snippet on the site reads, and it is committed to that repo's `dev` with the release data.
+Each rewrite is a `sed` followed by a `grep`, because a pattern that stops matching exits 0
+and would otherwise publish a stale version behind a green build.
+
+The site repo follows the same branch model as this one: `dev` is where commits land and
+`main` is fast-forwarded onto them, which is what triggers the Pages rebuild. Its tag is the
+same bare `x.y.z` as the app's, so a site commit can be traced to the release it shipped with.
 
 The profile adds `maven-release-plugin`, which the workflow drives with an explicit
 `-DreleaseVersion`; see [How the next version is chosen](#how-the-next-version-is-chosen).

@@ -95,6 +95,18 @@ jobs:
           grep -q "^## ${{ steps.resolve-release-version.outputs.version }} " CHANGELOG.md
           git add CHANGELOG.md
 
+      # Staged beside the changelog so release:prepare's own commit carries it, which puts the
+      # released version in the tagged tree rather than in a commit after it. README.md holds
+      # the only dependency snippet this repo spells a version out in. sed then grep: a pattern
+      # that stops matching still exits 0, and the stale version would publish unnoticed.
+      - name: stage-readme-version
+        env:
+          VERSION: ${{ steps.resolve-release-version.outputs.version }}
+        run: |
+          sed -i -E "s|^( *<version>)[0-9]+\.[0-9]+\.[0-9]+(</version>)$|\1${VERSION}\2|" README.md
+          grep -q "<version>${VERSION}</version>" README.md
+          git add README.md
+
       - name: configure-git-user
         uses: qoomon/actions--setup-git@8e6bd30ac05e17a81b61169daae62cb6b7e61294 # v1.1.1
         with:
@@ -109,13 +121,15 @@ jobs:
         env:
           MAVEN_GPG_PASSPHRASE: ${{ secrets.OSSRH_GPG_SECRET_KEY_PASSWORD }}
 
-      # The changelog rides into the release commit on maven-scm's `git commit` taking the
-      # whole index, which it documents nowhere. A regression has to surface here, where the
-      # damage is a tag, and not after Central holds the artifacts.
+      # The changelog and the README rewrite ride into the release commit on maven-scm's
+      # `git commit` taking the whole index, which it documents nowhere. A regression has to
+      # surface here, where the damage is a tag, and not after Central holds the artifacts.
       - name: verify-release-commit
         run: |
           git grep -q "^## ${{ steps.resolve-release-version.outputs.version }} " \
             "${{ steps.resolve-release-version.outputs.version }}" -- CHANGELOG.md
+          git grep -q "<version>${{ steps.resolve-release-version.outputs.version }}</version>" \
+            "${{ steps.resolve-release-version.outputs.version }}" -- README.md
 
       - name: perform-release-publish-on-maven-central
         # no third test run: release:prepare's preparationGoals verified the tag's tree, and this
@@ -178,18 +192,29 @@ jobs:
             | jq -f .github/release-notes/site.jq > releases.json
           jq -e 'length > 0' releases.json > /dev/null
 
-      # The site runs GitHub's legacy Pages build: no workflow, no plugins, nothing
-      # fetched at build time, so the data has to be committed into that repo.
-      # The clone inherits the job's git identity from configure-git-user.
-      - name: push-site-release-data
+      # The site runs GitHub's legacy Pages build: no workflow, no plugins, nothing fetched at
+      # build time, so both the release data and the version have to be committed into that
+      # repo. It follows this repo's model - commits land on `dev` and `main` is fast-forwarded
+      # onto them, and that second push is what makes Pages rebuild. A full clone rather than
+      # --depth 1, because a shallow clone cannot be relied on to push a branch it did not
+      # fetch. The clone inherits the job's git identity from configure-git-user.
+      - name: publish-site
+        env:
+          SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          VERSION: ${{ steps.resolve-release-version.outputs.version }}
         run: |
-          git clone --depth 1 \
+          git clone --branch dev \
             "https://x-access-token:${SITE_REPO_TOKEN}@github.com/peekaboot-org/peekaboot-org.github.io.git" \
             site
           cp releases.json site/_data/releases.json
-          git -C site add _data/releases.json
+          sed -i -E "s|^peekaboot_version: .*$|peekaboot_version: ${VERSION}|" site/_config.yml
+          grep -q "^peekaboot_version: ${VERSION}$" site/_config.yml
+          git -C site add _data/releases.json _config.yml
           git -C site diff --cached --quiet || git -C site commit \
-            -m "[release] release data for ${{ steps.resolve-release-version.outputs.version }}"
+            -m "[release] site for ${VERSION}"
+          # Annotated, matching the app repo's tags. An existing tag fails the step rather than
+          # silently retagging, the same way resolve-release-version refuses a taken version.
+          git -C site tag -a "${VERSION}" -m "[release] site for ${VERSION}"
+          git -C site push origin HEAD:dev
           git -C site push origin HEAD:main
-        env:
-          SITE_REPO_TOKEN: ${{ secrets.SITE_REPO_TOKEN }}
+          git -C site push origin "refs/tags/${VERSION}"
