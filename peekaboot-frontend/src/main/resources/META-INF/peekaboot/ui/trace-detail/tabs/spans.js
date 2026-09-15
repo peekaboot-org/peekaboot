@@ -31,7 +31,7 @@ export function render(container, trace, context = {}) {
     // spelled out rather than run through formatDurationMs - which calls 0 "<1ms"
     const ticks = ['0ms', ...[0.25, 0.5, 0.75, 1].map(p => formatDurationMs(totalDuration * p))];
 
-    const entries = el('div', {attrs: {id: 'pk-gantt-rows'}});
+    const entries = el('div', {className: 'pk-gantt-rows', attrs: {id: 'pk-gantt-rows'}});
     container.replaceChildren(el('div', {className: 'pk-gantt'},
         el('div', {className: 'pk-gantt-toolbar'}, kindLegend(trace.rootSpan)),
         el('div', {className: 'pk-gantt-header'},

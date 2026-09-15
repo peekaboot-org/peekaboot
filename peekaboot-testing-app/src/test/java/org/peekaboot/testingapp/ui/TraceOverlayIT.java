@@ -16,6 +16,7 @@ import io.micrometer.tracing.Span;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.tracing.event.LogCapturedEvent;
 import org.peekaboot.backend.tracing.store.TraceStore;
 import org.peekaboot.testingapp.integration.ScheduledJobs;
 import org.peekaboot.testingapp.integration.TestSpans;
@@ -945,9 +947,8 @@ class TraceOverlayIT extends PlaywrightTestBase {
     }
 
     /**
-     * On a phone-sized viewport the fixed 350px name column would leave the track no
-     * room at all and push every row past the right edge; the name shares the row
-     * proportionally instead.
+     * On a phone-sized viewport a row wraps rather than splitting one line three ways, so it
+     * stays inside the viewport and the track keeps a usable width.
      */
     @Test
     void ganttRowsFitANarrowViewport() {
@@ -965,6 +966,102 @@ class TraceOverlayIT extends PlaywrightTestBase {
                         .doubleValue())
                 .as("the track keeps a usable width")
                 .isGreaterThan(40.0);
+    }
+
+    /**
+     * A query span deep in the tree keeps its whole name beside its chips. The name column
+     * takes the widest row's indent, name and chips, up to 40% of the tab; a fixed width lost
+     * the name to the indent and the chips at depth.
+     */
+    @Test
+    void aDeepQuerySpanKeepsItsWholeName() {
+        page.setViewportSize(1280, 800);
+        String traceId = storeDeepQueryTrace();
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.awaitMeasurable(".pk-span-logs-toggle");
+
+        assertThat(overlay.evaluate("root => [...root.querySelectorAll('.pk-gantt-name__text')]"
+                        + ".filter(name => name.scrollWidth > name.clientWidth).map(name => name.textContent)"))
+                .as("span names cut short by an ellipsis")
+                .isEqualTo(List.of());
+    }
+
+    /**
+     * Below 768px a row gives its name and chips the whole width and puts the track and the
+     * duration on the line under them, so neither the name nor the track is squeezed out.
+     */
+    @Test
+    void aNarrowViewportGivesEachSpanNameALineOfItsOwn() {
+        page.setViewportSize(375, 667);
+        String traceId = storeDeepQueryTrace();
+
+        page.navigate(baseUrl + "/peekaboot/ui/dashboard/index.html#traces/" + traceId);
+        overlay.awaitMeasurable(".pk-span-logs-toggle");
+
+        assertThat(overlay.evaluate("""
+                root => [...root.querySelectorAll('.pk-gantt-row')].every(row => {
+                    const name = row.querySelector('.pk-gantt-name').getBoundingClientRect();
+                    const track = row.querySelector('.pk-gantt-track').getBoundingClientRect();
+                    return Math.abs(name.width - row.getBoundingClientRect().width) < 1 && track.top >= name.bottom;
+                })
+                """)).isEqualTo(true);
+    }
+
+    /**
+     * Stores the shape /orders produces - a query span five levels down, under a nested HTTP
+     * call - with the result-set span and the log that give its row both chips, and returns
+     * the trace id.
+     */
+    private String storeDeepQueryTrace() {
+        String traceId = "overlay-deep-query-" + System.nanoTime();
+        traceStore.addSpan(TestSpans.span(traceId, "root")
+                .named("http get /orders")
+                .kind(Span.Kind.SERVER)
+                .at(0, 40)
+                .tag("http.method", "GET")
+                .tag("url.path", "/orders")
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "handler")
+                .parent("root")
+                .named("spring.handler")
+                .at(1, 38)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "client")
+                .parent("handler")
+                .named("http get")
+                .kind(Span.Kind.CLIENT)
+                .at(2, 30)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "server")
+                .parent("client")
+                .named("http get /api/person/{id}")
+                .kind(Span.Kind.SERVER)
+                .at(3, 28)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "inner-handler")
+                .parent("server")
+                .named("spring.handler")
+                .at(4, 26)
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "query")
+                .parent("inner-handler")
+                .named("SELECT customer_order")
+                .kind(Span.Kind.CLIENT)
+                .at(5, 2)
+                .tag("db.system.name", "postgresql")
+                .tag("db.query.text", "select * from customer_order")
+                .build());
+        traceStore.addSpan(TestSpans.span(traceId, "result-set")
+                .parent("inner-handler")
+                .named("result-set")
+                .kind(Span.Kind.CLIENT)
+                .at(7, 1)
+                .tag("jdbc.row-count", "8")
+                .build());
+        traceStore.addLog(new LogCapturedEvent(
+                traceId, "query", Instant.EPOCH.plusMillis(6), "INFO", "fixture", "found 8 orders", "main"));
+        return traceId;
     }
 
     /**

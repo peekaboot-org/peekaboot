@@ -82,16 +82,19 @@
 .pk-overlay__error { color: var(--pk-danger); }
 
 /* Gantt view styles */
-.pk-gantt { display: flex; flex-direction: column; --pk-gantt-name-width: 350px; --pk-gantt-duration-width: 90px; --pk-gantt-indent: 16px; }
-.pk-gantt-header { display: flex; border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-xs); }
-.pk-gantt-header__name { width: var(--pk-gantt-name-width); }
+/* One grid for the header and every row, so the columns line up without fixed widths. The
+   name column takes the widest row's indent, name and chips, up to 40%: a deep query span
+   keeps its name, and a trace of short names leaves the timeline the room. A details panel
+   spans the flexible timeline column, which keeps it out of that sizing. */
+.pk-gantt { display: grid; grid-template-columns: fit-content(40%) minmax(0, 1fr) max-content; --pk-gantt-indent: 16px; }
+.pk-gantt-header, .pk-gantt-rows, .pk-gantt-span, .pk-gantt-row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; }
+.pk-gantt-header { border-bottom: 1px solid var(--pk-border); padding-bottom: var(--pk-space-sm); margin-bottom: var(--pk-space-xs); }
 /* Same side margin as .pk-gantt-track below, so the ticks land right above the
    start/end of the bars they describe instead of further out. */
-.pk-gantt-header__timeline { flex: 1; display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
-.pk-gantt-header__spacer { width: var(--pk-gantt-duration-width); }
+.pk-gantt-header__timeline { display: flex; justify-content: space-between; font-size: var(--pk-text-xs); color: var(--pk-text-muted); font-family: var(--pk-font-mono); margin: 0 var(--pk-space-sm); }
 
 /* The legend of the trace's span kinds. */
-.pk-gantt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; margin-bottom: var(--pk-space-sm); }
+.pk-gantt-toolbar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: var(--pk-space-md); flex-wrap: wrap; margin-bottom: var(--pk-space-sm); }
 .pk-gantt-legend { display: flex; flex-wrap: wrap; gap: var(--pk-space-md); margin: 0; padding: 0; list-style: none; font-size: var(--pk-text-xs); color: var(--pk-text-muted); }
 .pk-gantt-legend__item { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -104,16 +107,14 @@
 
 /* One entry per span: its row and its details panel. The indent guides are a repeating
    stripe, one per ancestor, confined to the indent by the background-size spans.js sets;
-   drawn on the entry so they run on through an open details panel. flow-root keeps the
-   panel's bottom margin inside the entry, under the guides. */
+   drawn on the entry so they run on through an open details panel. */
 .pk-gantt-span {
-    display: flow-root;
     background-image: repeating-linear-gradient(to right,
         transparent 0 11px, var(--pk-border) 11px 12px, transparent 12px var(--pk-gantt-indent));
     background-repeat: no-repeat;
 }
 
-.pk-gantt-row { display: flex; align-items: center; min-height: 28px; border-radius: var(--pk-space-xs); }
+.pk-gantt-row { align-items: center; min-height: 28px; border-radius: var(--pk-space-xs); }
 /* An open span's row keeps the hover tint, which ties the panel under it to its row. */
 .pk-gantt-row:hover, .pk-gantt-span--open > .pk-gantt-row { background: var(--pk-bg-alt); }
 
@@ -126,18 +127,18 @@
 /* Holds the toggle's column on a row with no children, so sibling names line up. */
 .pk-gantt-toggle-spacer { flex: none; width: 24px; }
 
-.pk-gantt-name { width: var(--pk-gantt-name-width); display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; }
+.pk-gantt-name { min-width: 0; display: flex; align-items: center; gap: var(--pk-space-xs); overflow: hidden; }
 /* A .pk-unbutton: the span's dot and name, and the switch for its details panel. It takes
    the cell's free width, which pushes the chips to the cell's right edge. */
 .pk-gantt-name__toggle { flex: 1; min-width: 0; min-height: 24px; display: flex; align-items: center; gap: var(--pk-space-sm); padding-right: var(--pk-space-xs); font-size: var(--pk-text-sm); color: var(--pk-text); text-align: left; border-radius: var(--pk-space-xs); }
 .pk-gantt-name__text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Also the pointer's switch for the span's details (see spans.js). */
-.pk-gantt-track { flex: 1; align-self: stretch; margin: 3px var(--pk-space-sm); position: relative; background: var(--pk-bg-alt); border-radius: 3px; cursor: pointer; }
+.pk-gantt-track { align-self: stretch; margin: 3px var(--pk-space-sm); position: relative; background: var(--pk-bg-alt); border-radius: 3px; cursor: pointer; }
 .pk-gantt-row:hover .pk-gantt-track, .pk-gantt-span--open > .pk-gantt-row .pk-gantt-track { background: var(--pk-bg-hover); }
 .pk-gantt-bar { position: absolute; height: 100%; border-radius: 3px; min-width: 3px; background: var(--pk-gantt-kind); }
 .pk-gantt-bar--error { background: var(--pk-danger); }
 
-.pk-gantt-duration { width: var(--pk-gantt-duration-width); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
+.pk-gantt-duration { white-space: nowrap; font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); color: var(--pk-text-muted); text-align: right; }
 
 /* A .pk-unbutton whose 2px line is the visible marker; the ::before box around it is the
    click target, sized to the same 24px floor as the other overlay controls. */
@@ -162,7 +163,7 @@
 .pk-span-row-count, .pk-span-action { flex: none; white-space: nowrap; }
 
 /* Indented by spans.js to sit under its span's name. */
-.pk-span-details { display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
+.pk-span-details { grid-column: 1 / -1; display: none; margin: 0 0 var(--pk-space-sm); padding: var(--pk-space-sm) var(--pk-space-md); border-left: 2px solid var(--pk-gantt-kind); border-radius: 0 0 var(--pk-space-xs) 0; background: var(--pk-bg-alt); font-size: var(--pk-text-xs); }
 .pk-gantt-span--open > .pk-span-details { display: flex; flex-direction: column; gap: var(--pk-space-sm); }
 .pk-span-details__head { display: flex; align-items: center; gap: var(--pk-space-md); flex-wrap: wrap; color: var(--pk-text-muted); }
 .pk-span-details__query { display: flex; flex-direction: column; align-items: flex-start; gap: var(--pk-space-xs); }
@@ -248,14 +249,20 @@
     outline-offset: -2px;
 }
 
-/* Narrow viewports: the fixed name column would otherwise leave the track no room and
-   push every row past the right edge. The name shares the row proportionally instead
-   and the header tightens; the log rows keep their columns and scroll if they must. */
+/* Narrow viewports: a span row wraps, its name and chips on one line and its track and
+   duration on the next, so neither is squeezed out; a details panel stacks each tag key
+   over its value, and the header tightens. The log rows keep their columns and scroll if
+   they must. */
 @media (max-width: 767px) {
     .pk-overlay__header, .pk-overlay__content { padding: var(--pk-space-sm) var(--pk-space-md); }
     .pk-overlay__container > .pk-tabs { padding: 0 var(--pk-space-md); }
     .pk-overlay__title { flex-wrap: wrap; gap: var(--pk-space-sm); }
     .pk-overlay__title-path { max-width: none; }
-    .pk-gantt { --pk-gantt-name-width: 40%; }
-    .pk-gantt-name, .pk-gantt-header__name { flex: none; min-width: 0; }
+    .pk-gantt { grid-template-columns: minmax(0, 1fr) max-content; }
+    .pk-gantt-name, .pk-gantt-header__name { grid-column: 1 / -1; }
+    .pk-gantt-header__name { margin-bottom: var(--pk-space-xs); }
+    .pk-gantt-track { min-height: 14px; }
+    .pk-gantt-row { padding-bottom: var(--pk-space-xs); }
+    .pk-span-tags { grid-template-columns: minmax(0, 1fr); }
+    .pk-span-tags__value + .pk-span-tags__key { margin-top: var(--pk-space-xs); }
 }
