@@ -169,9 +169,9 @@
 .pk-span-row-count, .pk-query-rows, .pk-span-error-chip { display: inline-flex; align-items: center; min-height: 20px; padding: 0 6px; border-radius: var(--pk-radius); font-size: var(--pk-text-xs); font-family: var(--pk-font-mono); }
 
 /* A row count is a fact, not a verdict, so it takes a neutral fill in both the span tree
-   and the Queries tab - one chip shared by .pk-span-row-count and .pk-query-rows, which
-   stays a class of its own only because queries.js's own render uses it as a hook, not
-   because any test selects it directly. */
+   and the Queries tab - one chip rule shared by .pk-span-row-count and .pk-query-rows,
+   the Queries tab's own class name for it. queries.js only assigns the class; nothing
+   selects it. */
 .pk-span-row-count, .pk-query-rows { background: var(--pk-bg-hover); color: var(--pk-text); }
 /* Outlined, not filled: plain --pk-danger text/border already clears AA on the row's own
    background (tokens.css), so there is no --pk-on-danger ink to recompute at chip scale. */
