@@ -14,6 +14,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      # `gh run list` and `gh run watch` read the Actions API. The Checks API is not involved.
+      actions: read
 
     if: github.actor == 'dependabot[bot]'
     steps:
@@ -36,15 +38,34 @@ jobs:
         # that check is gone, because it also refused the release job's pushes and GitHub
         # Actions cannot be granted a ruleset bypass. A red or cancelled build exits non-zero
         # here and the pull request stays open for a human, which is the safe direction.
-        # No --required: with the check rule removed nothing is required any more, so filtering
-        # to required checks would watch an empty set and return immediately.
+        # Waits on the push-triggered build-on-push run for this head commit, never on
+        # `gh pr checks --watch`: that watches every check on the pull request, this job is one
+        # of them, and gh's loop exits only once nothing is pending, with no exclusion for the
+        # run executing it. It would wait on itself until the job timeout.
+        # The run may not exist yet when the pull_request event fires, hence the poll.
         # --rebase, not --merge: the dev ruleset requires linear history. Dependabot's single
         # commit already carries a conventional subject, which rebase keeps and squash would
         # replace with the pull request title.
+        # --match-head-commit: a Dependabot rebase between the watch and the merge would
+        # otherwise merge a commit this build never covered.
         run: |
           gh pr review --approve "$PR_URL"
-          gh pr checks --watch --fail-fast "$PR_URL"
-          gh pr merge --rebase "$PR_URL"
+
+          for _ in $(seq 30); do
+            run_id=$(gh run list --workflow build-on-push.yml --commit "$HEAD_SHA" \
+              --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+            [ -n "$run_id" ] && break
+            sleep 10
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "no build-on-push run for $HEAD_SHA after five minutes" >&2
+            exit 1
+          fi
+
+          gh run watch "$run_id" --exit-status
+          gh pr merge --rebase --match-head-commit "$HEAD_SHA" "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
+          HEAD_SHA: ${{github.event.pull_request.head.sha}}
           GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
