@@ -240,7 +240,7 @@ org.peekaboot.backend/
 | Filter | Order | Registered when | Purpose |
 |--------|-------|-----------------|---------|
 | `RequestCaptureFilter` | `HIGHEST_PRECEDENCE + 100` | a `Tracer` **and** a `TraceStore` bean exist | Captures request/response metadata for traces, and sets the `Server-Timing` header |
-| `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it |
+| `DevToolbarFilter` | `LOWEST_PRECEDENCE` | a `Tracer` bean exists | Renders the toolbar (markup, inlined styles, data) into HTML responses via `ToolbarShell`, and loads the script that enhances it. Registered for `REQUEST` and `ERROR`: the `REQUEST` dispatch stashes the failing request's method, URI and trace id on a request attribute, and the `ERROR` dispatch reads it back so the error page's bar reports the request that failed, not the `/error` dispatch that renders it |
 | `DashboardAuthenticationFilter` | `spring.security.filter.order` + 100 | `peekaboot.enabled` **and** `peekaboot.security.enabled` | Challenges a `/peekaboot/**` request that reaches it unauthenticated, with Peekaboot's fallback credentials |
 
 Both `RequestCaptureFilter` and `DevToolbarFilter` map `/*`. `RequestCaptureFilter`'s order is
@@ -288,7 +288,10 @@ The site lists the prefixes themselves under
 [what gets captured](https://www.peekaboot.org/docs/traces/#what-gets-captured). Note what is
 not among them: Boot's other default static locations, `/public/`, `/resources/` and
 `/META-INF/resources/`. As MVC patterns each prefix gains a `**` suffix, and `/x/**` matches
-bare `/x`, so `/error` is excluded while `/errors` stays an application path.
+bare `/x`, so `/error` is excluded while `/errors` stays an application path. That exclusion is
+matched on the path, which only ever governs the first dispatch of a request; the `ERROR`
+dispatch a failure triggers afterwards is recognised by its `DispatcherType`, never by
+re-matching `/error`, so relocating `spring.web.error.path` needs no configuration here.
 
 Everything in `PeekabootPaths` is relative to the servlet context. The filters match on the
 container's mapped path (`getServletPath() + getPathInfo()`, decoded and normalised) rather
@@ -448,11 +451,42 @@ exposure contributors run. `access=none` still removes the bean.
 See [www.peekaboot.org/docs/security](https://www.peekaboot.org/docs/security/) for what this
 exposure model means in practice for securing a deployment.
 
+### Error Page
+
+`ErrorPageAutoConfiguration` registers a `View` bean named `error`, the one place Spring Boot
+leaves for a fallback page: Boot's own whitelabel view is `@ConditionalOnMissingBean(name =
+"error")`, so registering this bean first, `before ErrorMvcAutoConfiguration`, backs the
+whitelabel view off and leaves Boot's `BeanNameViewResolver` to resolve `error` to
+`PeekabootErrorView` instead. It carries every condition Boot puts on its own whitelabel page -
+`spring.web.error.whitelabel.enabled` and no `error` view template available - plus its own
+`@ConditionalOnMissingBean(name = "error")` and `@ConditionalOnClass({DispatcherServlet.class,
+ErrorAttributes.class})`. An application therefore keeps whatever error page it already has: an
+`error` view bean of its own, an `error` template, or a static `error/*.html`. The one case this
+can't cover is an application that excludes `ErrorMvcAutoConfiguration` outright, which leaves
+no `ErrorAttributes` bean for either page to render with - Boot's own whitelabel view cannot
+express that case either, since Peekaboot's configuration runs ahead of it.
+
+The page shows the status and its reason, the request line, the exception class and message,
+and the stack trace with the application's own frames marked (from
+`AutoConfigurationPackages`). `PeekabootErrorView` asks the application's own `ErrorAttributes`
+bean for these, with every `Include` switched on, so the application's own
+`spring.web.error.include-*` settings are neither read nor changed: they govern what the error
+*response* a client receives carries, and this is a page rendered for a developer looking at the
+browser.
+
+`peekaboot.error-page.enabled` gates the bean, defaulted from the same launch-context detection
+as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise, with an
+explicit setting winning either way (see *Conditional Loading*). It carries the dev toolbar the
+same way any other HTML response does, because `DevToolbarFilter` is registered for the `ERROR`
+dispatch as well as `REQUEST` (see *Servlet Filters*) - reporting the original request that
+failed, not the `/error` dispatch that renders the page.
+
 ## peekaboot-frontend
 
-Static resources served from `/peekaboot/ui/`, backing three UI surfaces that share one design
-system: the standalone dashboard, the dev toolbar injected into host-app pages, and the
-trace-detail overlay. This section covers only the headline decisions;
+Static resources served from `/peekaboot/ui/`, backing four UI surfaces that share one design
+system: the standalone dashboard, the dev toolbar injected into host-app pages, the
+trace-detail overlay, and the error page rendered in place of Boot's whitelabel page. This
+section covers only the headline decisions;
 `peekaboot-frontend/README.md` has the shared-layer split, the shadow-DOM delivery mechanism,
 theme resolution, accessibility invariants, the ids the test suite depends on, and the file
 inventory of every module under `META-INF/peekaboot/ui/`.
@@ -460,7 +494,7 @@ inventory of every module under `META-INF/peekaboot/ui/`.
 ### Design Principles
 
 - **No build step**: plain HTML/CSS/JS, ES modules
-- **Shared design system, three surfaces**: the dashboard document consumes
+- **Shared design system, four surfaces**: the dashboard and error page documents consume
   `assets/tokens.css`/`base.css`/`components.css` directly, the toolbar's and overlay's shadow
   roots via `attachSharedStyles()`. A doubled selector (`:root, :host { ... }`) lets the
   identical stylesheet apply in both contexts, so no surface carries its own palette,
@@ -494,6 +528,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` and `TomcatForwardResponseCustomizer` beans |
+| `ErrorPageAutoConfiguration` | `.imports` | The `error` view bean that replaces Boot's whitelabel page (see *Error Page*) |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
@@ -502,7 +537,7 @@ hooks that run before or outside the application context are registered in
 | `TracingInterceptorAutoConfiguration` | `.imports` | Tracing handler interceptor and its MVC registration (see *Handler and View Spans*) |
 | `PeekabootPathsAutoConfiguration` | `.imports` | The single `PeekabootPaths` bean (see *Servlet Filters*) |
 | `PeekabootSecurityAutoConfiguration` | `.imports` | The dashboard credentials, `DashboardAuthenticationFilter`'s registration and the startup posture report (see *Servlet Filters* and *Automatic Dashboard Security*) |
-| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled`, and the default property values |
+| `PeekabootDefaultsEnvironmentPostProcessor` | `spring.factories` (`EnvironmentPostProcessor`) | Local-dev detection for `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and `peekaboot.error-page.enabled`, and the default property values |
 | `PeekabootEndpointExposureOutcomeContributor` | `spring.factories` (`EndpointExposureOutcomeContributor`) | Reports `health` as web-exposed while Peekaboot is on, so Boot creates its bean without `management.endpoints.web.exposure.include` |
 | `LogbackCaptureReinstaller` | `spring.factories` (`ApplicationListener`) | Re-attaches the log-capture appender after Boot's `LoggingApplicationListener` re-initialises Logback |
 | `LogbackAppenderRegistrar` | (package-private bean type) | Attaches the log-capture appender per context and keeps the JVM-wide set the reinstaller re-attaches |
@@ -531,7 +566,7 @@ nobody overrode bought nothing but wiring.
 Most of the auto-configuration classes carry the same two class-level conditions, the
 servlet guard and the master switch: `PeekabootAutoConfiguration`,
 `PeekabootPathsAutoConfiguration`, `ActuatorSourcesAutoConfiguration`,
-`DevToolbarAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
+`DevToolbarAutoConfiguration`, `ErrorPageAutoConfiguration`, `TracingInterceptorAutoConfiguration`,
 `PeekabootTracingAutoConfiguration`, `OtelTracingAutoConfiguration`,
 `InsightsAutoConfiguration` and `PeekabootSecurityAutoConfiguration`.
 
@@ -586,6 +621,10 @@ source at lowest precedence, so any explicit application setting wins in either 
 toolbar keys on the same local-development detection as `peekaboot.enabled`, not on
 `peekaboot.enabled`'s resolved value, so turning Peekaboot on deliberately in a shared
 environment does not inject the toolbar into every page as a side effect.
+
+`peekaboot.error-page.enabled` is the fourth switch this detection derives, alongside
+`peekaboot.enabled`, `peekaboot.dev-toolbar` and `peekaboot.storage.enabled` (see *Persisted
+state*): on for a detected local run, off otherwise, with an explicit setting always winning.
 
 `LocalDevDetector` starts from the heuristics Spring Boot DevTools itself uses and adds two
 signals of its own, checked in order:
@@ -678,13 +717,16 @@ exists Peekaboot folds its entries into it, underneath the application's own, so
 `SpringApplicationBuilder.properties("peekaboot.enabled=false")` wins like any other setting.
 Where it does not, Peekaboot's four named sources are appended last, in this order:
 `peekabootDetection`, `peekabootNoPushDefaults`, `peekabootDefaults` and
-`peekabootDevToolbarDefaults`. `PeekabootDefaultsRegistrationTest` pins both halves.
+`peekabootDevToolbarDefaults`. `peekabootDetection` is where all four launch-context-detected
+switches land - `peekaboot.enabled`, `peekaboot.dev-toolbar`, `peekaboot.storage.enabled` and
+`peekaboot.error-page.enabled` - since none of them needs a yml resource of its own (see
+*Conditional Loading*). `PeekabootDefaultsRegistrationTest` pins both halves.
 
 ### Automatic Dashboard Security
 
-`peekaboot.security.enabled` follows the same idiom as the other three launch-context switches:
+`peekaboot.security.enabled` follows the same idiom as the other four launch-context switches:
 `PeekabootDefaultsEnvironmentPostProcessor` publishes a detected default at lowest precedence,
-and any explicit setting wins over it. Unlike the other three the default does not follow
+and any explicit setting wins over it. Unlike the other four the default does not follow
 `LOCAL_DEV`; it is `true` on a `DEPLOYMENT` launch and `false` on both `LOCAL_DEV` and `TEST`,
 the third value `LocalDevDetector.LaunchKind` grows for this. `TEST` is matched against
 `SKIPPED_STACK_ELEMENTS` before the local-dev checks run at all, not folded into them: several
@@ -1104,7 +1146,7 @@ webEnvironment = RANDOM_PORT)` on the `integration` profile, pulling in
 6. **Plain bounded maps for storage**: memory is bounded by the three bucket caps and the per-trace span and log caps, with no cache library
 7. **Shadow DOM**: the toolbar cannot interfere with the host application
 8. **Lowest-priority defaults**: applications can always override Peekaboot settings
-9. **One token sheet for three surfaces**: the dashboard, the toolbar and the trace overlay all load the same `tokens.css`, so every colour is defined once and no component hardcodes one. This keeps the CSS honest; it is not a supported theming API, and nothing outside the project is expected to replace the file. See [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md) for the fill/text pairing rule that constrains any change to it
+9. **One token sheet for four surfaces**: the dashboard, the toolbar, the trace overlay and the error page all load the same `tokens.css`, so every colour is defined once and no component hardcodes one. This keeps the CSS honest; it is not a supported theming API, and nothing outside the project is expected to replace the file. See [`peekaboot-frontend/README.md`](../peekaboot-frontend/README.md) for the fill/text pairing rule that constrains any change to it
 
 ## Auto-Configuration Ordering
 

@@ -39,6 +39,8 @@ how to override the detection are in
   instrumentation, so there is none to wire up yourself.
 - Charts that mark every application start and stop, with metric history surviving a
   restart.
+- An error page on a local run, in place of the whitelabel page, carrying the exception,
+  the stack trace and the toolbar.
 - Zero configuration, on for a local run and off everywhere else.
 
 ## Documentation
