@@ -1,17 +1,7 @@
 package org.peekaboot.backend.devtoolbar;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import org.peekaboot.backend.config.PeekabootPaths;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.peekaboot.backend.ui.InlinedStylesheets;
 
 /**
  * The dev toolbar's server-rendered shell: the bar's markup, in a declarative shadow root,
@@ -29,13 +19,6 @@ import org.slf4j.LoggerFactory;
  * a page served behind a {@code server.servlet.context-path} gets links that resolve.
  */
 public class ToolbarShell {
-
-    private static final Logger log = LoggerFactory.getLogger(ToolbarShell.class);
-
-    private static final String CLASSPATH_ROOT = PeekabootPaths.CLASSPATH_ROOT;
-
-    /** Stands in for the base path until {@link #render} knows it; also survives into the inlined CSS. */
-    private static final String BASE_TOKEN = "{{BASE}}";
 
     /**
      * Every sheet the bar loads, in cascade order, relative to the base path: the three shared
@@ -63,18 +46,7 @@ public class ToolbarShell {
             .filter(sheet -> !COMPONENTS_SHEET.equals(sheet))
             .toList();
 
-    /** A relative {@code url()} target; absolute and scheme-qualified ones are left alone. */
-    private static final Pattern CSS_URL = Pattern.compile("url\\(\\s*(['\"]?)([^'\")]+)\\1\\s*\\)");
-
-    /**
-     * A CSS comment block; the sheets carry their design rationale in them, which a host page
-     * need not download. Naive by design: it pairs comment delimiters wherever they appear,
-     * where a CSS parser ignores them inside a string or a {@code url()}. Every sheet in
-     * {@link #INLINED_SHEETS} must therefore keep both delimiters out of its string and
-     * {@code url()} tokens - a {@code content} value spelling an opener, or a data URI
-     * carrying a closer, has the stripper swallow the declarations in between.
-     */
-    private static final Pattern CSS_COMMENT = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    private static final InlinedStylesheets STYLESHEETS = InlinedStylesheets.of(LINKED_SHEETS, INLINED_SHEETS);
 
     /**
      * The bar's markup with placeholders for everything that varies: the inlined CSS and the
@@ -113,7 +85,7 @@ public class ToolbarShell {
     private final String shell;
 
     public ToolbarShell() {
-        this.shell = TEMPLATE.replace("{{CSS}}", loadInlinedCss()).replace("{{LINKS}}", stylesheetLinks());
+        this.shell = TEMPLATE.replace("{{CSS}}", STYLESHEETS.css()).replace("{{LINKS}}", STYLESHEETS.links());
     }
 
     /**
@@ -132,73 +104,6 @@ public class ToolbarShell {
      * @param dataJson the toolbar data blob, already script-safe (see ToolbarDataProvider)
      */
     public String render(String basePath, String dataJson) {
-        return shell.replace(BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
-    }
-
-    private static String stylesheetLinks() {
-        return LINKED_SHEETS.stream()
-                .map(href -> "        <link rel=\"stylesheet\" href=\"" + BASE_TOKEN + href + "\">")
-                .collect(Collectors.joining("\n"));
-    }
-
-    private static String loadInlinedCss() {
-        StringBuilder css = new StringBuilder();
-        for (String servedPath : INLINED_SHEETS) {
-            String sheet = readSheet(servedPath);
-            if (sheet != null) {
-                css.append(resolveRelativeUrls(stripComments(sheet), servedPath))
-                        .append('\n');
-            }
-        }
-        return css.toString();
-    }
-
-    private static String stripComments(String css) {
-        return CSS_COMMENT.matcher(css).replaceAll("");
-    }
-
-    private static String readSheet(String servedPath) {
-        try (InputStream in = ToolbarShell.class.getResourceAsStream(CLASSPATH_ROOT + servedPath)) {
-            if (in == null) {
-                // peekaboot-frontend is not on the classpath, which also means toolbar.js
-                // is not being served - the bar has bigger problems than its styling.
-                log.warn("Dev toolbar stylesheet {} not found on the classpath; the bar will be unstyled", servedPath);
-                return null;
-            }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.warn("Failed to read dev toolbar stylesheet {}: {}", servedPath, e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * A relative {@code url()} resolves against the stylesheet that contains it. Inlined into
-     * the page the same text would resolve against the page instead, so each one is rewritten
-     * to the path it had while the sheet was still being served from its own URL - behind the
-     * base-path token, which {@link #render} fills in per request.
-     */
-    private static String resolveRelativeUrls(String css, String servedPath) {
-        URI sheetUri = URI.create(servedPath);
-        Matcher matcher = CSS_URL.matcher(css);
-        StringBuilder resolved = new StringBuilder();
-        while (matcher.find()) {
-            matcher.appendReplacement(resolved, Matcher.quoteReplacement(rewriteUrl(sheetUri, matcher.group(2))));
-        }
-        matcher.appendTail(resolved);
-        return resolved.toString();
-    }
-
-    private static String rewriteUrl(URI sheetUri, String target) {
-        if (target.startsWith("/") || target.startsWith("#") || target.contains(":")) {
-            return "url('" + target + "')";
-        }
-        try {
-            return "url('" + BASE_TOKEN
-                    + sheetUri.resolve(new URI(null, null, target, null)).getPath() + "')";
-        } catch (URISyntaxException e) {
-            log.debug("Leaving unparseable stylesheet url({}) alone: {}", target, e.getMessage());
-            return "url('" + target + "')";
-        }
+        return shell.replace(InlinedStylesheets.BASE_TOKEN, basePath).replace("{{DATA}}", dataJson);
     }
 }
