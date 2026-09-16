@@ -91,8 +91,20 @@ public class RequestCaptureFilter implements Filter {
 
         long startTime = clock.getAsLong();
 
+        int statusOnFailure = 0;
         try {
             chain.doFilter(request, response);
+        } catch (IOException | ServletException | RuntimeException failure) {
+            // Nothing has set 500 yet: the container sets it outside every filter, and so
+            // does Spring's ServerHttpObservationFilter, one filter further out - unless the
+            // response is already committed, in which case that setStatus(500) is silently
+            // ignored and the client, and the server span, keep whatever status was already
+            // flushed. Reading it back here instead of assuming 500 keeps this exchange on
+            // the same number.
+            statusOnFailure = httpResponse.isCommitted()
+                    ? httpResponse.getStatus()
+                    : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
+            throw failure;
         } finally {
             // Resolved here, on the request thread, where the server span is current; an
             // async completion callback runs on a container thread that has no span.
@@ -106,7 +118,8 @@ public class RequestCaptureFilter implements Filter {
                         .getAsyncContext()
                         .addListener(new CaptureOnCompletion(httpRequest, httpResponse, traceId, startTime));
             } else {
-                capture(httpRequest, httpResponse, traceId, startTime);
+                int status = statusOnFailure != 0 ? statusOnFailure : httpResponse.getStatus();
+                capture(httpRequest, httpResponse, traceId, startTime, status);
             }
         }
     }
@@ -116,9 +129,10 @@ public class RequestCaptureFilter implements Filter {
         return currentSpan == null ? null : currentSpan.context().traceId();
     }
 
-    private void capture(HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
+    private void capture(
+            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime, int status) {
         try {
-            captureRequest(request, response, traceId, startTime);
+            captureRequest(request, response, traceId, startTime, status);
         } catch (Exception e) {
             log.warn("Failed to capture request details", e);
         }
@@ -142,7 +156,7 @@ public class RequestCaptureFilter implements Filter {
 
         @Override
         public void onComplete(AsyncEvent event) {
-            capture(request, response, traceId, startTime);
+            capture(request, response, traceId, startTime, response.getStatus());
         }
 
         @Override
@@ -178,7 +192,7 @@ public class RequestCaptureFilter implements Filter {
     }
 
     private void captureRequest(
-            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime) {
+            HttpServletRequest request, HttpServletResponse response, String traceId, long startTime, int status) {
         long durationMs = clock.getAsLong() - startTime;
 
         Map<String, String> requestHeaders = maskedRequestHeaders(request);
@@ -209,7 +223,7 @@ public class RequestCaptureFilter implements Filter {
                 queryParams,
                 formParams,
                 List.of(), // uploads are not captured
-                response.getStatus(),
+                status,
                 responseHeaders,
                 durationMs);
 

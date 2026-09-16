@@ -1,8 +1,10 @@
 package org.peekaboot.backend.filter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +17,7 @@ import io.micrometer.tracing.Tracer;
 import jakarta.servlet.AsyncEvent;
 import jakarta.servlet.AsyncListener;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.PrimitiveIterator;
@@ -105,6 +108,40 @@ class RequestCaptureFilterTest {
         assertThat(event.status()).isEqualTo(200);
     }
 
+    /**
+     * A handler that throws answers 500, but nothing has set that status yet when this
+     * filter's finally block runs: the container sets it in its own valve, outside every
+     * filter, and Spring's ServerHttpObservationFilter sets it one filter further out. So
+     * the exchange records the status the client sees, the same one the server span carries.
+     */
+    @Test
+    void aThrownExceptionIsCapturedAsAServerError() throws Exception {
+        setupTraceContext("trace1");
+        doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
+
+        assertThat(publishedEvent().status()).isEqualTo(500);
+    }
+
+    /**
+     * Once the response is committed, {@code ServerHttpObservationFilter}'s own
+     * {@code setStatus(500)} is silently ignored by the container - a committed response
+     * cannot change its status line. The exchange has to keep the status that was actually
+     * flushed, not the 500 nobody managed to send.
+     */
+    @Test
+    void aThrownExceptionAfterTheResponseIsCommittedKeepsTheFlushedStatus() throws Exception {
+        setupTraceContext("trace1");
+        response.setStatus(200);
+        response.flushBuffer();
+        doThrow(new ServletException("handler failed")).when(chain).doFilter(request, response);
+
+        assertThatThrownBy(() -> filter.doFilter(request, response, chain)).isInstanceOf(ServletException.class);
+
+        assertThat(publishedEvent().status()).isEqualTo(200);
+    }
+
     @Test
     void capturesRequestHeaders() throws Exception {
         setupTraceContext("trace1");
@@ -118,6 +155,7 @@ class RequestCaptureFilterTest {
         RequestCompletedEvent event = publishedEvent();
         assertThat(event.requestHeaders()).containsEntry("Content-Type", "application/json");
         assertThat(event.requestHeaders()).containsEntry("Accept", "application/json");
+        assertThat(event.status()).isEqualTo(201);
     }
 
     @Test
