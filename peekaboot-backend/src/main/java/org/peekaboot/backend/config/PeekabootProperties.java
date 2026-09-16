@@ -33,6 +33,8 @@ public class PeekabootProperties {
 
     private Security security = new Security();
 
+    private ErrorPage errorPage = new ErrorPage();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -79,6 +81,14 @@ public class PeekabootProperties {
 
     public void setSecurity(Security security) {
         this.security = security;
+    }
+
+    public ErrorPage getErrorPage() {
+        return errorPage;
+    }
+
+    public void setErrorPage(ErrorPage errorPage) {
+        this.errorPage = errorPage;
     }
 
     /**
@@ -188,6 +198,25 @@ public class PeekabootProperties {
 
         public void setCredentialsFile(String credentialsFile) {
             this.credentialsFile = credentialsFile;
+        }
+    }
+
+    /**
+     * Peekaboot's own error page, which replaces Spring Boot's whitelabel page while the
+     * application brings no error page of its own. Defaulted from the launch context like
+     * {@code peekaboot.enabled}, since the page shows the exception and its stack trace.
+     */
+    public static class ErrorPage {
+
+        /** Renders the failing request, the exception and its stack trace where Boot would render the whitelabel page. */
+        private boolean enabled = false;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }

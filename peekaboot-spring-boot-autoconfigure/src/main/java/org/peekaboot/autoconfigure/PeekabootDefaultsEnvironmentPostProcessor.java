@@ -23,14 +23,15 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
 /**
- * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar} and
- * {@code peekaboot.storage.enabled} from the launch context (on only when running locally
- * in an IDE or via spring-boot:run/bootRun), and for {@code peekaboot.security.enabled} from
- * the same detection reading {@link LocalDevDetector.LaunchKind#DEPLOYMENT} rather than local
- * development: a test launch is neither, so a consumer's own {@code @SpringBootTest} is not
- * made to start authenticating against a dashboard it never armed. Peekaboot's defaults apply
- * at the lowest precedence, so any application property wins - {@code SpringApplication.setDefaultProperties}
- * included. An explicit setting for any of the four always overrides the detection.
+ * Derives the defaults for {@code peekaboot.enabled}, {@code peekaboot.dev-toolbar},
+ * {@code peekaboot.storage.enabled} and {@code peekaboot.error-page.enabled} from the launch
+ * context (on only when running locally in an IDE or via spring-boot:run/bootRun), and for
+ * {@code peekaboot.security.enabled} from the same detection reading
+ * {@link LocalDevDetector.LaunchKind#DEPLOYMENT} rather than local development: a test launch
+ * is neither, so a consumer's own {@code @SpringBootTest} is not made to start authenticating
+ * against a dashboard it never armed. Peekaboot's defaults apply at the lowest precedence, so
+ * any application property wins - {@code SpringApplication.setDefaultProperties} included. An
+ * explicit setting for any of the five always overrides the detection.
  *
  * <p>All defaults live in yml resources. {@code peekaboot-no-push-defaults.yml} is applied
  * unconditionally, so the starter never pushes telemetry anywhere unless the application
@@ -68,25 +69,27 @@ public class PeekabootDefaultsEnvironmentPostProcessor implements EnvironmentPos
         boolean servlet = webApplicationType(environment, application) == WebApplicationType.SERVLET;
         boolean deploymentLaunch = launchKind == LocalDevDetector.LaunchKind.DEPLOYMENT;
 
-        // The toolbar and persistence follow the launch context rather than peekaboot.enabled,
-        // so switching Peekaboot on deliberately in a shared environment neither injects a
-        // toolbar into every page nor writes files into that host's home directory.
+        // The toolbar, persistence and error page follow the launch context rather than
+        // peekaboot.enabled, so switching Peekaboot on deliberately in a shared environment
+        // neither injects a toolbar into every page, nor writes files into that host's home
+        // directory, nor starts serving stack traces there.
         Map<String, Object> detected = new HashMap<>();
         detected.put(PeekabootPropertyKeys.ENABLED, localDevelopment);
         detected.put(PeekabootPropertyKeys.DEV_TOOLBAR, localDevelopment);
         detected.put(PeekabootPropertyKeys.STORAGE_ENABLED, localDevelopment);
+        detected.put(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, localDevelopment);
         // Security follows the deployment launch rather than localDevelopment: a test is
         // neither, and a consumer's @SpringBootTest must not start being challenged.
         detected.put(PeekabootPropertyKeys.SECURITY_ENABLED, deploymentLaunch);
-        // Not meant for an application to set, so unlike the switch above its resolved value
+        // Not meant for an application to set, so unlike the switches above its resolved value
         // is always what was detected - including once these entries are folded into
         // defaultProperties (see #contribute) and this method's own named property source
         // never appears at all.
         detected.put(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, deploymentLaunch);
         contribute(environment, new MapPropertySource(PeekabootPropertyKeys.DETECTION_PROPERTY_SOURCE_NAME, detected));
         log.debug("Local development " + (localDevelopment ? "detected" : "not detected") + " - peekaboot, the"
-                + " dev toolbar and storage " + (localDevelopment ? "enabled" : "disabled") + " by default, security "
-                + (deploymentLaunch ? "enabled" : "disabled") + " by default");
+                + " dev toolbar, storage and error page " + (localDevelopment ? "enabled" : "disabled")
+                + " by default, security " + (deploymentLaunch ? "enabled" : "disabled") + " by default");
 
         applyDefaults(environment, NO_PUSH_PROPERTY_SOURCE_NAME, NO_PUSH_DEFAULTS_RESOURCE);
 

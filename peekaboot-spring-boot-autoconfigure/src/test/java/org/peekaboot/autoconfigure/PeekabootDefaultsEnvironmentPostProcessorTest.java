@@ -54,37 +54,47 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
     }
 
     /**
-     * The three switches follow the launch detection unless set explicitly, and each on its
+     * The four switches follow the launch detection unless set explicitly, and each on its
      * own: switching Peekaboot on deliberately outside a local run neither injects the toolbar
-     * into every page nor writes files into that host's home directory, and switching it off
-     * locally leaves the other two where detection put them.
+     * into every page, nor writes files into that host's home directory, nor starts serving
+     * the error page there; switching it off locally leaves the other three where detection
+     * put them. Rows three and four carry that guarantee for the error page, whose failure mode
+     * is a shared deployment handing out stack traces: they force {@code peekaboot.enabled} in
+     * each direction and pin that the error page ignores it. The last two rows pin the
+     * error-page switch's own explicit override, in both directions.
      */
-    @ParameterizedTest(name = "local={0} enabled={1} dev-toolbar={2} storage={3}")
+    @ParameterizedTest(name = "local={0} enabled={1} dev-toolbar={2} storage={3} error-page={4}")
     @CsvSource(
             nullValues = "-",
             value = {
-                // local, explicit enabled, explicit dev-toolbar, explicit storage -> enabled, dev-toolbar, storage
-                "true,  -,     -,     -,     true,  true,  true",
-                "false, -,     -,     -,     false, false, false",
-                "false, true,  -,     -,     true,  false, false",
-                "true,  false, -,     -,     false, true,  true",
-                "true,  -,     false, -,     true,  false, true",
-                "false, -,     true,  -,     false, true,  false",
-                "true,  -,     -,     false, true,  true,  false",
-                "false, -,     -,     true,  false, false, true"
+                // local, explicit enabled, dev-toolbar, storage, error-page
+                //   -> enabled, dev-toolbar, storage, error-page
+                "true,  -,     -,     -,     -,     true,  true,  true,  true",
+                "false, -,     -,     -,     -,     false, false, false, false",
+                "false, true,  -,     -,     -,     true,  false, false, false",
+                "true,  false, -,     -,     -,     false, true,  true,  true",
+                "true,  -,     false, -,     -,     true,  false, true,  true",
+                "false, -,     true,  -,     -,     false, true,  false, false",
+                "true,  -,     -,     false, -,     true,  true,  false, true",
+                "false, -,     -,     true,  -,     false, false, true,  false",
+                "true,  -,     -,     -,     false, true,  true,  true,  false",
+                "false, -,     -,     -,     true,  false, false, false, true"
             })
     void theSwitchesFollowDetectionUnlessSetExplicitly(
             boolean localDevelopment,
             Boolean enabled,
             Boolean devToolbar,
             Boolean storage,
+            Boolean errorPage,
             boolean expectedEnabled,
             boolean expectedDevToolbar,
-            boolean expectedStorage) {
+            boolean expectedStorage,
+            boolean expectedErrorPage) {
         MockEnvironment environment = new MockEnvironment();
         setIfGiven(environment, "peekaboot.enabled", enabled);
         setIfGiven(environment, "peekaboot.dev-toolbar", devToolbar);
         setIfGiven(environment, "peekaboot.storage.enabled", storage);
+        setIfGiven(environment, "peekaboot.error-page.enabled", errorPage);
 
         postProcessor(localDevelopment).postProcessEnvironment(environment, servletApplication());
 
@@ -93,6 +103,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isEqualTo(expectedDevToolbar);
         assertThat(environment.getProperty("peekaboot.storage.enabled", Boolean.class))
                 .isEqualTo(expectedStorage);
+        assertThat(environment.getProperty("peekaboot.error-page.enabled", Boolean.class))
+                .isEqualTo(expectedErrorPage);
     }
 
     /** The observability defaults come and go with the resolved switch, not with the detection. */
@@ -260,7 +272,8 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                         PeekabootPropertyKeys.DEV_TOOLBAR,
                         PeekabootPropertyKeys.STORAGE_ENABLED,
                         PeekabootPropertyKeys.SECURITY_ENABLED,
-                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED);
+                        PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED,
+                        PeekabootPropertyKeys.ERROR_PAGE_ENABLED);
         assertThat(environment.getProperty("management.endpoint.env.show-values"))
                 .isNull();
         assertThat(environment.getProperty("management.endpoint.configprops.show-values"))
@@ -342,6 +355,48 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
         assertThat(environment.getProperty("peekaboot.security.enabled", Boolean.class))
                 .isFalse();
         assertThat(environment.getProperty(PeekabootPropertyKeys.SECURITY_DEPLOYMENT_DETECTED, Boolean.class))
+                .isTrue();
+    }
+
+    /**
+     * The page shows an application's internals, so it follows the local-run detection, not
+     * peekaboot.enabled.
+     */
+    @Test
+    void theErrorPageIsEnabledByDefaultOnALocalRun() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class))
+                .isTrue();
+    }
+
+    @Test
+    void theErrorPageIsDisabledByDefaultOnADeploymentLaunch() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class))
+                .isFalse();
+    }
+
+    /**
+     * Forcing Peekaboot on in a shared environment must not start serving stack traces
+     * there.
+     */
+    @Test
+    void anExplicitErrorPageSettingBeatsTheDetectedDefault() {
+        ConfigurableEnvironment environment = new MockEnvironment();
+        environment
+                .getPropertySources()
+                .addFirst(new MapPropertySource(
+                        "appProperties", Map.of(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, "true")));
+
+        postProcessor(LocalDevDetector.LaunchKind.DEPLOYMENT).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getProperty(PeekabootPropertyKeys.ERROR_PAGE_ENABLED, Boolean.class))
                 .isTrue();
     }
 

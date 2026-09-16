@@ -32,6 +32,9 @@ final class PeekabootPropertyKeys {
      */
     static final String SECURITY_DEPLOYMENT_DETECTED = "peekaboot.security.deployment-detected";
 
+    /** The error-page switch; defaulted from the launch context like {@link #ENABLED}. */
+    static final String ERROR_PAGE_ENABLED = "peekaboot.error-page.enabled";
+
     /**
      * The property source carrying the launch-context defaults - present under this name only
      * when the application has not already called {@code SpringApplication.setDefaultProperties}
