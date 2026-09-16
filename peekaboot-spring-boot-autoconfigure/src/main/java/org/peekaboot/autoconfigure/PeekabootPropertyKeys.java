@@ -35,6 +35,9 @@ final class PeekabootPropertyKeys {
     /** The error-page switch; defaulted from the launch context like {@link #ENABLED}. */
     static final String ERROR_PAGE_ENABLED = "peekaboot.error-page.enabled";
 
+    /** Makes the error page outrank the application's own, where the page is already enabled. */
+    static final String ERROR_PAGE_OVERRIDE = "peekaboot.error-page.override";
+
     /**
      * The property source carrying the launch-context defaults - present under this name only
      * when the application has not already called {@code SpringApplication.setDefaultProperties}

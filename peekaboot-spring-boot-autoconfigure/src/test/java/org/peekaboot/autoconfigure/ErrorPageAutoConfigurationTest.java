@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration;
 import org.springframework.boot.webmvc.autoconfigure.error.ErrorMvcAutoConfiguration;
+import org.springframework.boot.webmvc.autoconfigure.error.ErrorViewResolver;
 import org.springframework.boot.webmvc.error.ErrorAttributes;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,8 @@ import org.springframework.web.servlet.view.BeanNameViewResolver;
  * Peekaboot's page stands exactly where Boot's whitelabel page would: it takes the bean
  * name Boot's own view uses, under Boot's own conditions, so every error page an
  * application brings - a status template, an error template, its own view or controller -
- * wins without Peekaboot knowing about it.
+ * wins without Peekaboot knowing about it. {@code peekaboot.error-page.override} is the
+ * opt-out of that back-off: with it set, Peekaboot's page wins instead.
  */
 class ErrorPageAutoConfigurationTest {
 
@@ -41,6 +43,7 @@ class ErrorPageAutoConfigurationTest {
             assertThat(context.getBean("error")).isInstanceOf(PeekabootErrorView.class);
             // proves the page is actually reachable: BeanNameViewResolver is what resolves "error" to this bean
             assertThat(context).hasSingleBean(BeanNameViewResolver.class);
+            assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
         });
     }
 
@@ -121,6 +124,91 @@ class ErrorPageAutoConfigurationTest {
                 .withPropertyValues("peekaboot.error-page.enabled=true")
                 .withUserConfiguration(OwnErrorView.class)
                 .run(context -> assertThat(context.getBean("error")).isSameAs(OwnErrorView.VIEW));
+    }
+
+    /**
+     * With the override on, Peekaboot resolves the page itself instead of filling Boot's
+     * fallback slot, so none of the back-off conditions apply and no bean named {@code error}
+     * is registered - an application {@code error} bean would clash on the name.
+     */
+    @Test
+    void takesPrecedenceOverTheApplicationsOwnErrorViewWithTheOverrideOn() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .withUserConfiguration(OwnErrorView.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context.getBean("error")).isSameAs(OwnErrorView.VIEW);
+                });
+    }
+
+    /** The template condition gates the fallback path only; the override path registers regardless. */
+    @Test
+    void registersTheResolverWithAnErrorTemplatePresent() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.error-page.override=true",
+                        "test.error-template=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                });
+    }
+
+    /**
+     * The override path resolves the page itself and never asks BeanNameViewResolver for a bean
+     * named {@code error}, so the whitelabel switch that removes that resolver is irrelevant to it.
+     */
+    @Test
+    void registersTheResolverWithTheWhitelabelPageDisabled() {
+        contextRunner
+                .withPropertyValues(
+                        "peekaboot.error-page.enabled=true",
+                        "peekaboot.error-page.override=true",
+                        "spring.web.error.whitelabel.enabled=false")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ErrorViewResolver.class);
+                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                });
+    }
+
+    /** The override is an opt-in on top of the page, never a way to turn the page on. */
+    @Test
+    void registersNothingWhereTheOverrideIsOnButThePageIsOff() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=false", "peekaboot.error-page.override=true")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context.getBean("error")).isNotInstanceOf(PeekabootErrorView.class);
+                });
+    }
+
+    /**
+     * The two paths must be mutually exclusive; with nothing else suppressing the fallback
+     * condition, only the override condition itself can keep it from registering alongside the
+     * resolver.
+     */
+    @Test
+    void registersOnlyTheResolverWithTheOverrideOn() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                    assertThat(context.getBean("error")).isNotInstanceOf(PeekabootErrorView.class);
+                });
+    }
+
+    /** Pins that an explicit false behaves the same as leaving the override unset. */
+    @Test
+    void registersOnlyTheFallbackPathWithTheOverrideExplicitlyOff() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=false")
+                .run(context -> {
+                    assertThat(context.getBean("error")).isInstanceOf(PeekabootErrorView.class);
+                    assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
+                });
     }
 
     @Configuration(proxyBeanMethods = false)

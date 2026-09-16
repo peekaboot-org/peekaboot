@@ -16,8 +16,9 @@ import org.springframework.web.servlet.View;
 import org.springframework.web.util.HtmlUtils;
 
 /**
- * The page Peekaboot renders where Spring Boot would render its whitelabel page: the failing
- * request, the exception and its stack trace, with the application's own frames marked.
+ * The page Peekaboot renders where Spring Boot would render its whitelabel page, or where the
+ * application's own error page would render with {@code peekaboot.error-page.override} set: the
+ * failing request, the exception and its stack trace, with the application's own frames marked.
  *
  * <p>Every detail comes from the application's own {@link ErrorAttributes}, asked for with
  * every {@code Include} switched on. The application's {@code spring.web.error.include-*}

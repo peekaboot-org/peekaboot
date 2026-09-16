@@ -203,13 +203,17 @@ public class PeekabootProperties {
 
     /**
      * Peekaboot's own error page, which replaces Spring Boot's whitelabel page while the
-     * application brings no error page of its own. Defaulted from the launch context like
-     * {@code peekaboot.enabled}, since the page shows the exception and its stack trace.
+     * application brings no error page of its own, and the application's own page where
+     * {@code override} is set. Defaulted from the launch context like {@code peekaboot.enabled},
+     * since the page shows the exception and its stack trace.
      */
     public static class ErrorPage {
 
-        /** Renders the failing request, the exception and its stack trace where Boot would render the whitelabel page. */
+        /** Renders the failing request, the exception and its stack trace where Boot would render the whitelabel page, or the application's own page where {@code override} is set. */
         private boolean enabled = false;
+
+        /** Renders Peekaboot's page even where the application brings an error page of its own. */
+        private boolean override = false;
 
         public boolean isEnabled() {
             return enabled;
@@ -217,6 +221,14 @@ public class PeekabootProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+
+        public boolean isOverride() {
+            return override;
+        }
+
+        public void setOverride(boolean override) {
+            this.override = override;
         }
     }
 }

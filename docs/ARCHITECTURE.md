@@ -453,18 +453,34 @@ exposure model means in practice for securing a deployment.
 
 ### Error Page
 
-`ErrorPageAutoConfiguration` registers a `View` bean named `error`, the one place Spring Boot
-leaves for a fallback page: Boot's own whitelabel view is `@ConditionalOnMissingBean(name =
-"error")`, so registering this bean first, `before ErrorMvcAutoConfiguration`, backs the
-whitelabel view off and leaves Boot's `BeanNameViewResolver` to resolve `error` to
-`PeekabootErrorView` instead. It carries every condition Boot puts on its own whitelabel page -
-`spring.web.error.whitelabel.enabled` and no `error` view template available - plus its own
-`@ConditionalOnMissingBean(name = "error")` and `@ConditionalOnClass({DispatcherServlet.class,
-ErrorAttributes.class})`. An application therefore keeps whatever error page it already has: an
-`error` view bean of its own, an `error` template, or a static `error/*.html`. The one case this
-can't cover is an application that excludes `ErrorMvcAutoConfiguration` outright, which leaves
-no `ErrorAttributes` bean for either page to render with - Boot's own whitelabel view cannot
-express that case either, since Peekaboot's configuration runs ahead of it.
+`ErrorPageAutoConfiguration` registers Peekaboot's page in either of the two places Spring Boot
+leaves for one, chosen by `peekaboot.error-page.override`.
+
+Unset, it registers a `View` bean named `error`, the fallback slot. Boot's own whitelabel view
+is `@ConditionalOnMissingBean(name = "error")`, so registering this bean first, `before
+ErrorMvcAutoConfiguration`, backs the whitelabel view off and leaves Boot's
+`BeanNameViewResolver` to resolve `error` to `PeekabootErrorView` instead. It carries every
+condition Boot puts on its own whitelabel page - `spring.web.error.whitelabel.enabled` and no
+`error` view template available - plus its own `@ConditionalOnMissingBean(name = "error")`. An
+application therefore keeps whatever error page it already has: an `error` view bean of its
+own, an `error` template, or a static `error/*.html`.
+
+Set, it registers an `ErrorViewResolver` at `Ordered.HIGHEST_PRECEDENCE` instead, which
+`BasicErrorController` consults before it falls back to the view name `error` - so Peekaboot's
+page outranks a template, a static `error/*.html` and an application `error` bean, without
+clashing with any of them. None of the back-off conditions apply on that path, including the
+whitelabel one, since it does not depend on `BeanNameViewResolver`. The resolver answers every
+error. Registering any `ErrorViewResolver` removes Boot's own, so returning null would drop the
+`error/4xx.html` convention rather than fall through to it.
+
+Both paths sit behind `@ConditionalOnWebApplication(SERVLET)`,
+`@ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})`, `peekaboot.enabled` and
+`peekaboot.error-page.enabled`; the override cannot turn the page on by itself. Neither path
+covers an application that excludes `ErrorMvcAutoConfiguration` outright, which leaves no
+`ErrorAttributes` bean for either page to render with, or one whose own error page is an
+`ErrorController` on `/error`, which backs `BasicErrorController` off entirely and with it
+anything that would consult an `ErrorViewResolver`. Boot's own whitelabel view cannot express
+the first case either, since Peekaboot's configuration runs ahead of it.
 
 The page shows the status and its reason, the request line, the exception class and message,
 and the stack trace with the application's own frames marked (from
@@ -474,7 +490,7 @@ bean for these, with every `Include` switched on, so the application's own
 *response* a client receives carries, and this is a page rendered for a developer looking at the
 browser.
 
-`peekaboot.error-page.enabled` gates the bean, defaulted from the same launch-context detection
+`peekaboot.error-page.enabled` gates both paths, defaulted from the same launch-context detection
 as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise, with an
 explicit setting winning either way (see *Conditional Loading*). It carries the dev toolbar the
 same way any other HTML response does, because `DevToolbarFilter` is registered for the `ERROR`
@@ -528,7 +544,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` and `TomcatForwardResponseCustomizer` beans |
-| `ErrorPageAutoConfiguration` | `.imports` | The `error` view bean that replaces Boot's whitelabel page (see *Error Page*) |
+| `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in whichever of Boot's two slots `peekaboot.error-page.override` selects (see *Error Page*) |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |
