@@ -10,8 +10,8 @@ Playwright UI suite and the screenshot tool that feeds the website.
 cd peekaboot-testing-app && mvn spring-boot:run
 ```
 
-Starts on <http://localhost:8083> with the dashboard at
-<http://localhost:8083/peekaboot/> and the dev toolbar injected into every page. The
+Starts on <http://localhost:8093> with the dashboard at
+<http://localhost:8093/peekaboot/> and the dev toolbar injected into every page. The
 datasource is a PostgreSQL container started automatically by Spring Boot's Docker Compose
 support, so Docker needs to be running. Flyway migrations and a `@Scheduled` job give the
 Flyway and Scheduled Tasks tabs real data to show.

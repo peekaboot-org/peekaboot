@@ -36,7 +36,7 @@ mvn -pl <module> -am verify -Dit.test=<Class> \
     -Dfailsafe.failIfNoSpecifiedTests=false           # the same against uncommitted sibling-module
                                                   # changes: both skip flags, or failsafe fails the
                                                   # first upstream module with "No tests matching pattern"
-mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8083; needs Docker
+mvn -pl peekaboot-testing-app spring-boot:run     # sample app on :8093; needs Docker
                                                   # and an `mvn install` beforehand
 ```
 

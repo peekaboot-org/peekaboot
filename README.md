@@ -70,7 +70,7 @@ mvn clean verify    # the real build: every test and every gate
 mvn clean install   # the same, plus install into ~/.m2
 mvn test            # unit tests only; the *IT classes need `verify`
 
-cd peekaboot-testing-app && mvn spring-boot:run   # the sample app on :8083; needs
+cd peekaboot-testing-app && mvn spring-boot:run   # the sample app on :8093; needs
                                                   # Docker and a prior `mvn install`
 ```
 
