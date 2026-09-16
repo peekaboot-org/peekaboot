@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- ErrorDispatchIT's /throwing endpoint escapes as an unhandled exception, which embedded
+         Tomcat logs as a full stack trace. Spring Boot numbers each embedded Tomcat per JVM
+         (Tomcat, Tomcat-1, ...), so an instance-specific logger name only matches an isolated
+         run; Logback has no wildcard matching, and the numbered segment sits directly under
+         ContainerBase, so that ancestor is the narrowest static name that works across runs.
+         This silences ALL of ContainerBase's logging, not just per-request stack traces - also
+         cluster, realm, child and threaded start/stop failures, and background-process errors,
+         none of which any assertion here would catch. Accepted because this module configures
+         no clustering and no custom realm, so those paths never fire, and because Peekaboot's
+         own error-page rendering is unaffected - a real assertion failure still fails the test. -->
+    <logger name="org.apache.catalina.core.ContainerBase" level="OFF"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+</configuration>

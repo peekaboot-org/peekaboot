@@ -276,8 +276,8 @@ class DevToolbarAutoConfigurationTest {
     /**
      * Reproduces what Spring Boot's {@code LogbackLoggingSystem.stopAndReset} does - stopping
      * the logger context (which drops every listener, reset-resistant ones included) and then
-     * resetting it - restores Logback's default configuration through {@code autoConfig()}
-     * (this module has no logback-test.xml), and then fires the event that carries the repair.
+     * resetting it - restores Logback's configuration through {@code autoConfig()} (which picks
+     * up this module's {@code logback-test.xml}), and then fires the event that carries the repair.
      */
     private void reinitialiseLogback() throws Exception {
         LoggerContext loggerContext = (LoggerContext) LoggerFactory.getILoggerFactory();

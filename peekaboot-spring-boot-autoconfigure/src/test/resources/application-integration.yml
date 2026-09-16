@@ -12,3 +12,5 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
+  error-page:
+    enabled: true

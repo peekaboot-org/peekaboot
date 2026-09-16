@@ -149,7 +149,11 @@ Test output must be silent: no ERROR lines, no stack traces, no unexplained WARN
   every run. Accepted: the module configures no clustering and no custom realm, the only other
   things that logger silences, and the application's own error logging is unaffected. A real
   failure still prints and is still asserted.
-- The same file raises `org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver`
+- `peekaboot-spring-boot-autoconfigure`'s `logback-test.xml` silences the same logger for the same
+  reason, there for `ErrorDispatchIT`'s deliberately failing `/throwing` endpoint. That file
+  silences nothing else.
+- `peekaboot-testing-app`'s `logback-test.xml` raises
+  `org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolver`
   to `ERROR`. Playwright teardown aborts in-flight JSON responses, and the resolver WARNs
   `Ignoring exception ... Broken pipe` for each aborted write. That is Spring-side teardown
   noise. A failure the resolver really handles still reaches the client as a 4xx/5xx and fails
