@@ -17,6 +17,8 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-flyway")
     compileOnly("org.flywaydb:flyway-core")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
+    // ErrorMvcAutoConfiguration and ErrorAttributes for the error page
+    compileOnly("org.springframework.boot:spring-boot-webmvc")
     // the Tomcat context customizer that keeps forwards working, see TomcatForwardResponseCustomizer
     compileOnly("org.springframework.boot:spring-boot-tomcat")
     compileOnly("org.apache.tomcat.embed:tomcat-embed-core")

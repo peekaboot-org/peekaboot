@@ -54,6 +54,12 @@
             <artifactId>jakarta.servlet-api</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- compile-only: ErrorMvcAutoConfiguration and ErrorAttributes for the error page -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc</artifactId>
+            <optional>true</optional>
+        </dependency>
         <!-- compile-only: the Tomcat context customizer that keeps forwards working, see
              TomcatForwardResponseCustomizer -->
         <dependency>
