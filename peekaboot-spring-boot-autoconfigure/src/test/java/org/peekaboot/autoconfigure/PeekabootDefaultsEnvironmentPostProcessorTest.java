@@ -400,6 +400,32 @@ class PeekabootDefaultsEnvironmentPostProcessorTest {
                 .isTrue();
     }
 
+    /**
+     * spring.web.error.include-* feed DefaultErrorAttributes for every consumer - the
+     * application's own error page and the JSON body an API client receives. Peekaboot's page
+     * builds its own ErrorAttributeOptions per render instead, so setting one of these globally
+     * would change what the application renders and could put a stack trace in a production
+     * response. No Peekaboot property source may carry one, under any switch.
+     */
+    @Test
+    void contributesNoSpringWebErrorProperty() {
+        MockEnvironment environment = new MockEnvironment();
+        postProcessor(LocalDevDetector.LaunchKind.LOCAL_DEV).postProcessEnvironment(environment, servletApplication());
+
+        assertThat(environment.getPropertySources())
+                .filteredOn(source -> source.getName().startsWith("peekaboot"))
+                .extracting(PropertySource::getName)
+                .contains(
+                        "peekabootDetection",
+                        "peekabootNoPushDefaults",
+                        "peekabootDefaults",
+                        "peekabootDevToolbarDefaults");
+        assertThat(environment.getPropertySources())
+                .filteredOn(source -> source.getName().startsWith("peekaboot"))
+                .allSatisfy(source -> assertThat(((EnumerablePropertySource<?>) source).getPropertyNames())
+                        .noneMatch(name -> name.startsWith("spring.web.error")));
+    }
+
     @Test
     void appPropertiesOverrideDefaults() {
         ConfigurableEnvironment environment = new MockEnvironment();

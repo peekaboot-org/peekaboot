@@ -8,6 +8,12 @@ spring:
   docker:
     compose:
       enabled: false
+  web:
+    error:
+      # never is the Boot default; pinned here so ErrorDispatchIT proves the page shows the
+      # trace regardless of what the application's global setting says, without a properties
+      # override that would fork it off DevToolbarAutoConfigurationIT's cached context.
+      include-stacktrace: never
 
 peekaboot:
   enabled: true
