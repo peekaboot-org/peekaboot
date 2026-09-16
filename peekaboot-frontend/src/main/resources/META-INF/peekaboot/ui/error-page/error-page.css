@@ -1,0 +1,124 @@
+/* The page Peekaboot renders in place of Boot's whitelabel page. Tokens come from
+   ../assets/tokens.css, the reset, the focus ring and the logo mark from ../assets/base.css,
+   the status pill from ../assets/components.css (.pk-badge) - the four sheets
+   PeekabootErrorView inlines and links. Its own document, not a shadow root, so the rem
+   type scale on :root applies and the page follows a reader's root-size preference. */
+
+/* One column, read top to bottom: the status, then what failed, then the trace. Wide enough
+   for a typical frame line without wrapping, so the eye can scan the left edge of the
+   trace for the application's own packages. */
+.pk-error {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--pk-space-xl) var(--pk-space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-space-lg);
+}
+
+.pk-error__head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-space-sm);
+}
+
+/* The shared pill, only sized here: a status is the first thing read on this page, so it
+   carries the page's largest type rather than the badge's --pk-text-xs. align-self keeps
+   the inline-flex pill at its content width inside the column. */
+.pk-error__status {
+    align-self: flex-start;
+    margin: 0;
+    padding: var(--pk-space-xs) var(--pk-space-sm);
+    font-size: var(--pk-text-base);
+}
+
+.pk-error__reason {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    font-weight: 600;
+    color: var(--pk-text-strong);
+}
+
+/* A flex row rather than inline text: the method is left out entirely where the container
+   sets none, and a whitespace-only flex item is not rendered, so the line keeps no gap
+   where the method would have been. */
+.pk-error__request {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-space-sm);
+    margin: 0;
+    color: var(--pk-text-muted);
+}
+.pk-error__path {
+    font-family: var(--pk-font-mono);
+    color: var(--pk-text-strong);
+    word-break: break-all;
+}
+
+.pk-error__detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-space-sm);
+}
+/* The exception class and the message are wire text, not prose: mono so a package name
+   reads as one, and break-word because neither has a length the page can rely on. */
+.pk-error__exception {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-base);
+    font-weight: 600;
+    color: var(--pk-danger);
+    overflow-wrap: break-word;
+}
+.pk-error__message {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    color: var(--pk-text);
+    overflow-wrap: break-word;
+}
+
+/* The trace scrolls sideways instead of wrapping: a wrapped frame line loses the column
+   alignment that makes the application's own frames findable at a glance. */
+.pk-error__frames {
+    margin: 0;
+    padding: var(--pk-space-md);
+    background: var(--pk-bg-alt);
+    border: 1px solid var(--pk-border);
+    border-radius: var(--pk-radius);
+    overflow-x: auto;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    line-height: 1.6;
+}
+/* Every line is a span so the frames the application owns can stand out; the rest recedes
+   to muted rather than disappearing, since a framework frame is still part of the story. */
+.pk-error__frame {
+    display: block;
+    color: var(--pk-text-muted);
+}
+.pk-error__frame--app {
+    color: var(--pk-text-strong);
+    font-weight: 600;
+}
+
+.pk-error__footer {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-space-sm);
+    padding-top: var(--pk-space-md);
+    border-top: 1px solid var(--pk-border);
+    color: var(--pk-text-muted);
+    font-size: var(--pk-text-xs);
+}
+.pk-error__footer a { color: var(--pk-primary-text); }
+.pk-error__mark { width: 18px; height: 18px; }
+/* Forced-colors modes drop background images, and the mark is this link's only content,
+   which would leave an invisible 18px box where the dashboard link is. Same fallback as
+   the toolbar's dashboard link. */
+@media (forced-colors: active) {
+    .pk-error__mark { border: 1px solid currentColor; border-radius: var(--pk-radius); }
+}
+.pk-error__footer code {
+    font-family: var(--pk-font-mono);
+    color: var(--pk-text);
+}

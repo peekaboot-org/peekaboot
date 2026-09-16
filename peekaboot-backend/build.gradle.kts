@@ -16,6 +16,8 @@ dependencies {
     // auto-configuration conditions guard their use.
     compileOnly("org.springframework.boot:spring-boot-web-server")
     compileOnly("org.springframework:spring-webmvc")
+    // ErrorAttributes for the error page, see PeekabootErrorView
+    compileOnly("org.springframework.boot:spring-boot-webmvc")
     compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("org.springframework.security:spring-security-core")
     compileOnly("ch.qos.logback:logback-classic")

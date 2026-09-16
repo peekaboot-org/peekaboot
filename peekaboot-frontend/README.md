@@ -1,6 +1,6 @@
 # Peekaboot Frontend
 
-Static resources served from `/peekaboot/ui/`, backing three UI surfaces that share one
+Static resources served from `/peekaboot/ui/`, backing four UI surfaces that share one
 design system:
 
 - **Dashboard** (`dashboard/`). The standalone app-insights page.
@@ -9,6 +9,9 @@ design system:
   it and vice versa.
 - **Trace-detail overlay** (`trace-detail/`). A full-screen dialog, also shadow-rooted,
   opened from the dashboard or the toolbar.
+- **Error page** (`error-page/`). Rendered by `PeekabootErrorView` where Spring Boot would
+  render its whitelabel page: the failing request, the exception and its stack trace. No
+  script of its own.
 
 No build step. Plain ES modules and CSS, served as-is.
 
@@ -25,6 +28,8 @@ META-INF/peekaboot/ui/
 │                    boot-recovery.js: reloads once, then says so, when main.js never loads
 ├── trace-detail/    trace-detail.css, trace-detail.js, tabs/*.js   (4 tabs)
 ├── toolbar/         toolbar.css, toolbar.js
+├── error-page/      error-page.css: the page Peekaboot renders in place of Boot's
+│                    whitelabel page
 └── vendor/          uplot/: the chart library, loaded on demand (see below)
                      geist/: the bundled webfont, with both its licence files
 ```
@@ -53,7 +58,8 @@ surface:
    icon button, group, kv row, meter, button, copy control, table with its card and stripe
    modifiers, tab strip, icon link, placeholder note with its centred empty-state form,
    loading block and spinner) every surface's own CSS builds on. A surface stylesheet
-   (`dashboard.css`, `toolbar.css`, `trace-detail.css`) only adds surface-specific chrome,
+   (`dashboard.css`, `toolbar.css`, `trace-detail.css`, `error-page.css`) only adds
+   surface-specific chrome,
    never a second copy of a primitive. A variant one surface needs becomes a modifier here
    (`.pk-table--kv`, the overlay's key/value table); a surface element that only sizes or
    spaces a primitive carries its own class beside the primitive's (`.pk-note
@@ -62,22 +68,23 @@ surface:
 ### The doubled-selector mechanism
 
 `tokens.css` and `base.css` each declare their rules twice, which is what lets one file
-serve three DOM contexts:
+serve every DOM context a surface renders into:
 
 ```css
 :root, :host { --pk-bg: #ffffff; /* ... */ }
 [data-theme="dark"], :host([data-theme="dark"]) { --pk-bg: #0d1117; /* ... */ }
 ```
 
-`:root` matches the dashboard's own document. `:host` matches the shadow root of an element
-these same `<link>` tags are loaded into. The identical file works unmodified whether it is
-linked into `dashboard/index.html`'s `<head>` or into the toolbar's or overlay's shadow
-root. No surface-specific variant, no build step to generate one.
+`:root` matches Peekaboot's own documents, the dashboard and the error page. `:host` matches
+the shadow root of an element these same `<link>` tags are loaded into. The identical file
+works unmodified whether it is linked into `dashboard/index.html`'s `<head>` or into the
+toolbar's or overlay's shadow root. No surface-specific variant, no build step to generate
+one.
 
 The type scale is the one place the two deliberately differ. `:root` keeps it in `rem`, so
-the dashboard follows a reader's root-size preference; a `:host`-only block below pins the
-same sizes in `px`, because `rem` resolves against the *host document's* root font size and
-the toolbar and overlay live in pages Peekaboot does not own. A host with the common
+Peekaboot's own pages follow a reader's root-size preference; a `:host`-only block below
+pins the same sizes in `px`, because `rem` resolves against the *host document's* root font
+size and the toolbar and overlay live in pages Peekaboot does not own. A host with the common
 `html { font-size: 62.5% }` reset would render the bar at 7.5px. The two blocks move
 together: change `--pk-text-*` in one and change it in the other, or the embedded surfaces
 drift away from the dashboard.
@@ -305,6 +312,11 @@ all four. It has to be self-sufficient: a reader who has put Spring Security in 
 `/peekaboot/**` cannot load a linked sheet from there any more than they can load
 `toolbar.js`, and the bar still has to render and say so.
 
+The error page is self-sufficient for the same reason and inlines all four, `components.css`
+included (see `PeekabootErrorView`). The toolbar leaves that one linked because it styles
+controls `toolbar.js` has yet to inject; the error page's status pill is server-rendered
+markup that is already on the page.
+
 `attachSharedStyles` links `tokens.css`, `base.css`, `components.css`, and (if given) the
 surface's own sheet into the shadow root as `<link>` elements. Those load asynchronously, so
 it holds `hostElement.style.visibility = 'hidden'` until every sheet has settled (`load` or
@@ -521,6 +533,7 @@ breaks them silently. Grep `peekaboot-testing-app/src/test` before you do.
 | `#traces-bucket` and `data-bucket` | The All/Errors/Slow bucket filter buttons; tests select and click by `[data-bucket="..."]`. |
 | `#<tabId>-tab` panel convention | Each dashboard tab's content lives in a `<section id="<id>-tab">`; `main.js`'s `renderTab()` looks it up by this exact id, and tests wait on `#<tabId>-tab.active`. |
 | `data-tab` | The tab-strip button attribute (`.pk-tab[data-tab="<id>"]`) that `tabStrip()` and `main.js` both key off for selection state. |
+| `.pk-error`, `.pk-error__frame`, `.pk-error__frame--app` | The error page's root, its trace lines and the ones in the application's own packages. `PeekabootErrorView` writes them and the UI tests assert the page is Peekaboot's and that the marked frames are the application's. |
 
 ## The collapsed bar's trace fetch schedule
 
