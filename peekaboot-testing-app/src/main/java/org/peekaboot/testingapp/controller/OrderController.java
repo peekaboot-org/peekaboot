@@ -28,8 +28,8 @@ public class OrderController {
 
     /**
      * Always fails. Exists so the Errors bucket and the error badge have something real to
-     * render. Not the toolbar: the throw is served by the error dispatch, a path Peekaboot
-     * excludes, so that page carries no bar.
+     * render. The throw is served by the error dispatch, which renders Peekaboot's error
+     * page carrying the bar for this failed request.
      */
     @GetMapping("/boom")
     public String boom() {

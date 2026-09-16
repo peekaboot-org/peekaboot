@@ -9,7 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * axe-core over the three surfaces, at the WCAG levels the project holds itself to.
+ * axe-core over the four surfaces, at the WCAG levels the project holds itself to.
  * {@code AccessibilityIT} pins the regressions this project has actually had, one assertion
  * each; this is the other direction - a control that arrives unlabelled, a contrast pair
  * nobody measured, a landmark that stopped being one. Neither replaces the other: the sweep
@@ -82,6 +82,15 @@ class AccessibilitySweepIT extends PlaywrightTestBase {
                         .include("#peekaboot-toolbar-host")
                         .withTags(WCAG_AA)
                         .analyze());
+    }
+
+    /** Unscoped: the whole document is Peekaboot's own markup here, unlike the toolbar's host page. */
+    @Test
+    void theErrorPageHasNoAccessibilityViolations() {
+        page.navigate(baseUrl + "/boom");
+        page.waitForSelector(".pk-error");
+
+        assertNoViolations("the error page", sweep());
     }
 
     private AxeResults sweep() {

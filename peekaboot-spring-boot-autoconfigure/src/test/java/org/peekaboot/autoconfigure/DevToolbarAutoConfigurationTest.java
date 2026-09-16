@@ -9,7 +9,9 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.util.ContextInitializer;
 import ch.qos.logback.core.Appender;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.DispatcherType;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -116,6 +118,17 @@ class DevToolbarAutoConfigurationTest {
 
                     assertThat(response.getContentAsString()).contains("\"idle\":true");
                 });
+    }
+
+    /** The error page is rendered on the ERROR dispatch; a REQUEST-only registration never sees it. */
+    @Test
+    void theToolbarFilterIsRegisteredForTheErrorDispatchToo() {
+        contextRunner
+                .withPropertyValues("peekaboot.dev-toolbar=true")
+                .withUserConfiguration(MockTracingConfig.class)
+                .run(context -> assertThat(context.getBean("devToolbarFilter", FilterRegistrationBean.class))
+                        .extracting(FilterRegistrationBean::determineDispatcherTypes)
+                        .isEqualTo(EnumSet.of(DispatcherType.REQUEST, DispatcherType.ERROR)));
     }
 
     @Test

@@ -35,6 +35,10 @@ spring:
 peekaboot:
   enabled: true
   dev-toolbar: true
+  # The detected default is off outside a local run; a test launch is neither local nor a
+  # deployment, so ErrorPageIT needs it turned on explicitly.
+  error-page:
+    enabled: true
   insights:
     config-location: classpath:insights-test-panels.yml
     levels:

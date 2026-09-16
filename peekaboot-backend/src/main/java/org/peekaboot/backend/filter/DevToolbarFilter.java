@@ -2,6 +2,7 @@ package org.peekaboot.backend.filter;
 
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.Filter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -12,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.devtoolbar.ToolbarShell;
@@ -23,6 +25,10 @@ public class DevToolbarFilter implements Filter {
     private static final Logger log = LoggerFactory.getLogger(DevToolbarFilter.class);
 
     private static final String BODY_END_TAG = "</body>";
+
+    // The error page renders on the ERROR dispatch, which follows the REQUEST dispatch that
+    // actually failed; this is where that request's identity is stashed for the bar to find.
+    private static final String ORIGINAL_REQUEST_ATTRIBUTE = DevToolbarFilter.class.getName() + ".originalRequest";
 
     // Recognised by simple name: this module depends on no container, and shaded or
     // repackaged copies move the classes around.
@@ -82,13 +88,61 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
+        if (httpRequest.getDispatcherType() == DispatcherType.ERROR) {
+            // Absent for a request this filter's REQUEST-dispatch pass skipped (shouldSkip,
+            // an XHR) - or, the largest category, never reached at all: this filter sits at
+            // LOWEST_PRECEDENCE, so Spring Security's own filters, a 401/403 chief among
+            // them, can already have short-circuited the chain before that pass ever runs.
+            if (httpRequest.getAttribute(ORIGINAL_REQUEST_ATTRIBUTE) instanceof OriginalRequest original) {
+                inject(httpRequest, httpResponse, chain, original.method(), original.uri(), original::traceId);
+            } else {
+                chain.doFilter(request, response);
+            }
+            return;
+        }
+
         if (shouldSkip(httpRequest)) {
             chain.doFilter(request, response);
             return;
         }
 
+        // Read here, not after the chain: an exception never comes back through this filter,
+        // and the error dispatch that renders the page has no observation scope of its own.
+        httpRequest.setAttribute(
+                ORIGINAL_REQUEST_ATTRIBUTE,
+                new OriginalRequest(httpRequest.getMethod(), httpRequest.getRequestURI(), currentTraceId()));
+
         log.trace("DevToolbarFilter processing: {} {}", httpRequest.getMethod(), httpRequest.getRequestURI());
-        ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(httpResponse);
+        inject(
+                httpRequest,
+                httpResponse,
+                chain,
+                httpRequest.getMethod(),
+                httpRequest.getRequestURI(),
+                this::currentTraceId);
+    }
+
+    /**
+     * Buffers the response, runs the chain, and injects the bar - reporting the given method,
+     * URI and trace id rather than whatever the current dispatch's own request says, so the
+     * ERROR dispatch can report the REQUEST dispatch that actually failed.
+     *
+     * <p>{@code traceId} is resolved lazily, after the chain has run: the REQUEST dispatch
+     * still reads it fresh off the current span at that point, unchanged from before, while
+     * the ERROR dispatch supplies the trace id stashed earlier without touching the tracer -
+     * Spring opens no observation scope for that dispatch, so {@link Tracer#currentSpan()}
+     * would be null there.
+     */
+    private void inject(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain chain,
+            String method,
+            String uri,
+            Supplier<String> traceId)
+            throws IOException, ServletException {
+
+        ContentBufferingResponseWrapper wrappedResponse = new ContentBufferingResponseWrapper(response);
 
         // Deliberately not a finally: a handler that throws mid-render leaves a partial page
         // in the buffer, and committing it as a 200 would take the container's error page
@@ -96,27 +150,36 @@ public class DevToolbarFilter implements Filter {
         chain.doFilter(request, wrappedResponse);
 
         try {
-            if (httpRequest.isAsyncStarted()) {
+            if (request.isAsyncStarted()) {
                 // async handlers keep writing after this filter returns;
                 // hand the response over and skip injection
                 wrappedResponse.enablePassthrough();
             } else if (!wrappedResponse.isPassthrough()) {
-                processResponse(httpRequest, wrappedResponse);
+                processResponse(request, wrappedResponse, method, uri, traceId.get());
             }
         } catch (Exception e) {
             if (isClientAbort(e)) {
-                log.debug(
-                        "Client closed the connection before the toolbar could be written: {} {}",
-                        httpRequest.getMethod(),
-                        httpRequest.getRequestURI());
+                log.debug("Client closed the connection before the toolbar could be written: {} {}", method, uri);
             } else {
                 log.warn("Failed to inject dev toolbar, returning original response", e);
-                if (!httpResponse.isCommitted()) {
+                if (!response.isCommitted()) {
                     wrappedResponse.copyBodyToResponse();
                 }
             }
         }
     }
+
+    private String currentTraceId() {
+        Span currentSpan = tracer.currentSpan();
+        return currentSpan != null ? currentSpan.context().traceId() : null;
+    }
+
+    /**
+     * The request that reached the application, captured while the REQUEST dispatch runs so
+     * the ERROR dispatch that renders the error page can report it instead of the
+     * {@code /error} dispatch that follows.
+     */
+    record OriginalRequest(String method, String uri, String traceId) {}
 
     /**
      * Whether the write failed because the client hung up - a browser navigating away
@@ -165,12 +228,17 @@ public class DevToolbarFilter implements Filter {
         return "XMLHttpRequest".equalsIgnoreCase(xRequestedWith);
     }
 
-    private void processResponse(HttpServletRequest request, ContentBufferingResponseWrapper wrappedResponse)
+    private void processResponse(
+            HttpServletRequest request,
+            ContentBufferingResponseWrapper wrappedResponse,
+            String method,
+            String uri,
+            String traceId)
             throws IOException {
 
         wrappedResponse.flushBuffer();
 
-        log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), request.getRequestURI());
+        log.trace("Response content-type: {} for {}", wrappedResponse.getContentType(), uri);
 
         if (!wrappedResponse.isHtml()) {
             log.trace("Skipping toolbar injection - not HTML: {}", wrappedResponse.getContentType());
@@ -189,11 +257,6 @@ public class DevToolbarFilter implements Filter {
             return;
         }
 
-        String traceId = null;
-        Span currentSpan = tracer.currentSpan();
-        if (currentSpan != null) {
-            traceId = currentSpan.context().traceId();
-        }
         log.trace("Injecting toolbar at position {} with traceId: {}", bodyEndIndex, traceId);
 
         String toolbarHtml;
@@ -201,7 +264,7 @@ public class DevToolbarFilter implements Filter {
             if (isSwaggerUi(request)) {
                 toolbarHtml = generateSwaggerToolbarHtml(request);
             } else {
-                toolbarHtml = generateToolbarHtml(request, wrappedResponse, traceId);
+                toolbarHtml = generateToolbarHtml(request, wrappedResponse, method, uri, traceId);
             }
         } catch (Exception e) {
             log.warn("Failed to generate toolbar HTML", e);
@@ -215,7 +278,7 @@ public class DevToolbarFilter implements Filter {
         byte[] modifiedBytes = modifiedContent.getBytes(wrappedResponse.charset());
         wrappedResponse.copyBodyToResponse(modifiedBytes);
 
-        log.trace("Toolbar injected successfully for {}", request.getRequestURI());
+        log.trace("Toolbar injected successfully for {}", uri);
     }
 
     /**
@@ -232,10 +295,14 @@ public class DevToolbarFilter implements Filter {
     }
 
     private String generateToolbarHtml(
-            HttpServletRequest request, ContentBufferingResponseWrapper response, String traceId) {
+            HttpServletRequest request,
+            ContentBufferingResponseWrapper response,
+            String method,
+            String uri,
+            String traceId) {
         String basePath = PeekabootPaths.basePath(request);
-        String summaryJson = toolbarDataProvider.getToolbarSummaryJson(
-                basePath, request.getMethod(), request.getRequestURI(), response.getStatus(), traceId);
+        String summaryJson =
+                toolbarDataProvider.getToolbarSummaryJson(basePath, method, uri, response.getStatus(), traceId);
         return toolbarShell.render(basePath, summaryJson);
     }
 

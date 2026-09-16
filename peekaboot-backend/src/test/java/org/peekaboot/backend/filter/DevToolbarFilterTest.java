@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,9 +14,11 @@ import ch.qos.logback.classic.Level;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.TraceContext;
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
@@ -517,6 +520,66 @@ class DevToolbarFilterTest {
     }
 
     /**
+     * The error dispatch renders the page, so that is where the bar has to go in - reporting
+     * the request that failed, not the /error dispatch that followed it. Spring's observation
+     * filter opens no scope for this dispatch, so the trace id comes from the attribute the
+     * first dispatch left behind.
+     */
+    @Test
+    void theErrorDispatchGetsTheBarForTheRequestThatFailed() throws Exception {
+        request = new MockHttpServletRequest("POST", "/users/123");
+        request.setServletPath("/users/123");
+        Span span = mock(Span.class);
+        TraceContext traceContext = mock(TraceContext.class);
+        when(traceContext.traceId()).thenReturn("abc123");
+        when(span.context()).thenReturn(traceContext);
+        when(tracer.currentSpan()).thenReturn(span);
+
+        filter.doFilter(request, response, chain);
+
+        MockHttpServletResponse errorResponse = new MockHttpServletResponse();
+        errorResponse.setStatus(500);
+        request.setDispatcherType(DispatcherType.ERROR);
+        request.setRequestURI("/error");
+        request.setServletPath("/error");
+        // No scope is open on the real ERROR dispatch; a correct implementation never
+        // consults the tracer here, so this stubbing is deliberately left unconsumed.
+        lenient().when(tracer.currentSpan()).thenReturn(null);
+        chainWritesHtml("<html><body><h1>Whoops</h1></body></html>");
+
+        filter.doFilter(request, errorResponse, chain);
+
+        assertThat(errorResponse.getContentAsString())
+                .contains("<!-- Peekaboot Dev Toolbar -->")
+                .contains("\"path\":\"/users/123\"")
+                .contains("\"method\":\"POST\"")
+                .contains("\"status\":500")
+                .contains("\"traceId\":\"abc123\"");
+    }
+
+    /**
+     * No attribute means the first dispatch never wanted a bar - an asset, an XHR, Peekaboot's
+     * own path. The error dispatch's own URI is rewritten to {@code /error}, as a real
+     * container does; the request that was actually skipped stays {@code /peekaboot/api/traces}.
+     */
+    @Test
+    void anErrorDispatchForASkippedRequestGetsNoBar() throws Exception {
+        request = get("/peekaboot/api/traces");
+        filter.doFilter(request, response, chain);
+
+        MockHttpServletResponse errorResponse = new MockHttpServletResponse();
+        errorResponse.setStatus(404);
+        request.setDispatcherType(DispatcherType.ERROR);
+        request.setRequestURI("/error");
+        request.setServletPath("/error");
+        chainWritesHtml("<html><body>gone</body></html>");
+
+        filter.doFilter(request, errorResponse, chain);
+
+        assertThat(errorResponse.getContentAsString()).doesNotContain("Peekaboot Dev Toolbar");
+    }
+
+    /**
      * Stand-ins carrying the abort exceptions' simple names in a package no container
      * uses: only the simple name may matter to the recognition.
      */
@@ -537,14 +600,15 @@ class DevToolbarFilterTest {
     }
 
     /**
-     * Makes {@code chain.doFilter} write {@code content} with the given content type through
-     * the {@link ContentBufferingResponseWrapper} the filter passes down.
+     * Makes {@code chain.doFilter} write {@code content} with the given content type onto
+     * whatever response the filter passes down - wrapped for injection, or the raw response
+     * on a path the filter never wraps.
      */
     private void chainWrites(String contentType, String content) throws Exception {
         doAnswer(invocation -> {
-                    ContentBufferingResponseWrapper wrapper = invocation.getArgument(1);
-                    wrapper.setContentType(contentType);
-                    wrapper.getWriter().write(content);
+                    HttpServletResponse target = invocation.getArgument(1);
+                    target.setContentType(contentType);
+                    target.getWriter().write(content);
                     return null;
                 })
                 .when(chain)

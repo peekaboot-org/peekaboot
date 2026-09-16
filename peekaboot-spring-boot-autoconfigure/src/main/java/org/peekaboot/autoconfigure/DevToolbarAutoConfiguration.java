@@ -1,6 +1,7 @@
 package org.peekaboot.autoconfigure;
 
 import io.micrometer.tracing.Tracer;
+import jakarta.servlet.DispatcherType;
 import org.peekaboot.backend.config.PeekabootPaths;
 import org.peekaboot.backend.devtoolbar.ToolbarDataProvider;
 import org.peekaboot.backend.filter.DevToolbarFilter;
@@ -65,6 +66,9 @@ public class DevToolbarAutoConfiguration {
                 peekabootPaths,
                 environment.getProperty("springdoc.swagger-ui.path", PeekabootPaths.DEFAULT_SWAGGER_UI_PATH)));
         registration.addUrlPatterns("/*");
+        // ERROR as well as REQUEST: the error page is rendered on its own dispatch, and the
+        // bar belongs on it. What the bar reports there comes from the original request.
+        registration.setDispatcherTypes(DispatcherType.REQUEST, DispatcherType.ERROR);
         registration.setOrder(Ordered.LOWEST_PRECEDENCE);
         registration.setName("devToolbarFilter");
         log.debug("DevToolbarFilter registered for all URLs");

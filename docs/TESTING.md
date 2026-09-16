@@ -182,8 +182,8 @@ Peekaboot keeps none: a test that passes on a re-run is a defect to root-cause.
   moves an order out of `PLACED`, so the count grows with the orders a run places.
 - `ERROR ... o.p.t.controller.OrderController : order reconciliation gateway is unreachable`.
   From `OrderController`'s deliberately failing `/boom` endpoint, exercised to populate the
-  Errors bucket. Not the toolbar: the throw is handled by the error dispatch, whose path
-  `PeekabootPaths` excludes, so the whitelabel page carries no bar.
+  Errors bucket. The throw is handled by the error dispatch, which renders Peekaboot's error
+  page carrying the bar for the request that failed.
 - `ERROR ... o.p.t.controller.PersonController : An error occurred while trying to find all
   persons`. From `PersonController`'s deliberate error path (`/?error=true`), same purpose.
 - `WARN ... o.f.c.internal.database.base.Database : Using H2 <version> which is newer than the
