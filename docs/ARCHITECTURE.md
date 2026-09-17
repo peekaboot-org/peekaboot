@@ -453,8 +453,9 @@ exposure model means in practice for securing a deployment.
 
 ### Error Page
 
-`ErrorPageAutoConfiguration` registers Peekaboot's page in either of the two places Spring Boot
-leaves for one, chosen by `peekaboot.error-page.override`.
+`ErrorPageAutoConfiguration` registers Peekaboot's page in the fallback slot Spring Boot leaves
+for one, or - where `peekaboot.error-page.override` is set - in either of two places that
+outrank an application's own.
 
 Unset, it registers a `View` bean named `error`, the fallback slot. Boot's own whitelabel view
 is `@ConditionalOnMissingBean(name = "error")`, so registering this bean first, `before
@@ -465,19 +466,47 @@ condition Boot puts on its own whitelabel page - `spring.web.error.whitelabel.en
 application therefore keeps whatever error page it already has: an `error` view bean of its
 own, an `error` template, or a static `error/*.html`.
 
-Set, it registers an `ErrorViewResolver` at `Ordered.HIGHEST_PRECEDENCE` instead, which
-`BasicErrorController` consults before it falls back to the view name `error` - so Peekaboot's
-page outranks a template, a static `error/*.html` and an application `error` bean, without
-clashing with any of them. None of the back-off conditions apply on that path, including the
-whitelabel one, since it does not depend on `BeanNameViewResolver`. The resolver answers every
-error. Registering any `ErrorViewResolver` removes Boot's own, so returning null would drop the
-`error/4xx.html` convention rather than fall through to it.
+Set, it registers two beans instead. An `ErrorViewResolver` at `Ordered.HIGHEST_PRECEDENCE`,
+which `BasicErrorController` consults before it falls back to the view name `error` - so
+Peekaboot's page outranks a template, a static `error/*.html` and an application `error` bean,
+without clashing with any of them. None of the back-off conditions apply on that path, including
+the whitelabel one, since it does not depend on `BeanNameViewResolver`. The resolver answers
+every error. Registering any `ErrorViewResolver` removes Boot's own, so returning null would
+drop the `error/4xx.html` convention rather than fall through to it.
 
-Both paths sit behind `@ConditionalOnWebApplication(SERVLET)`,
+Alongside it, a `PeekabootErrorExceptionResolver`, a `HandlerExceptionResolver` at
+`Ordered.HIGHEST_PRECEDENCE + 1` - one slot after Boot's `DefaultErrorAttributes`, which is
+itself a resolver at that exact value. A tie there would be broken by bean registration order,
+which nothing here controls, so the next slot is the deterministic choice; it is not, as the
+value might suggest, about giving `DefaultErrorAttributes` a chance to record the exception
+first - `DispatcherServlet.processHandlerException` calls `WebUtils.exposeErrorRequestAttributes`
+once a resolver has answered, which sets `jakarta.servlet.error.exception` if nothing already
+has, and `DefaultErrorAttributes.getError` falls back to exactly that. This is what lets
+Peekaboot's page win where an application renders its own from a `@ControllerAdvice`: that
+advice resolves inside the REQUEST dispatch, so no ERROR dispatch ever follows it,
+`BasicErrorController` never runs and no `ErrorViewResolver` is ever consulted. It outranks the
+`HandlerExceptionResolverComposite` that holds `ExceptionHandlerExceptionResolver` among Boot's
+own resolvers, so it intercepts the exception first. It returns
+null for an `AsyncRequestNotUsableException` before anything else - `DefaultHandlerExceptionResolver`
+answers that one with an empty `ModelAndView` on purpose, so nothing is written to a connection
+the client already dropped, and rendering here would call `getWriter()` on that same dead
+connection and raise the exception again. It also returns null - falling through to the
+application's own handling - unless the request accepts HTML, the same boundary
+`BasicErrorController` draws between `errorHtml` and its JSON method, using Boot's own test from
+`WelcomePageHandlerMapping.isHtmlTextAccepted`. It derives a status from the exception (an
+`ErrorResponse`'s own status, a merged `@ResponseStatus` on its class, or the same on a cause,
+walked iteratively with a small depth cap so a cyclic cause chain cannot overflow the stack;
+500 otherwise), sets `RequestDispatcher.ERROR_STATUS_CODE`, `ERROR_REQUEST_URI` and
+`ERROR_METHOD` on the request - nothing else sets that last one on a REQUEST dispatch - so
+`PeekabootErrorView` renders the same request line, status and reason it would off a real ERROR
+dispatch, and returns a `ModelAndView` carrying that status and a `PeekabootErrorView` built the
+same way the `ErrorViewResolver`'s is, from a separate call to the same `errorView(...)` helper.
+
+All three paths sit behind `@ConditionalOnWebApplication(SERVLET)`,
 `@ConditionalOnClass({DispatcherServlet.class, ErrorAttributes.class})`, `peekaboot.enabled` and
-`peekaboot.error-page.enabled`; the override cannot turn the page on by itself. Neither path
-covers an application that excludes `ErrorMvcAutoConfiguration` outright, which leaves no
-`ErrorAttributes` bean for either page to render with, or one whose own error page is an
+`peekaboot.error-page.enabled`; the override cannot turn the page on by itself. None of them
+cover an application that excludes `ErrorMvcAutoConfiguration` outright, which leaves no
+`ErrorAttributes` bean for any page to render with, or one whose own error page is an
 `ErrorController` on `/error`, which backs `BasicErrorController` off entirely and with it
 anything that would consult an `ErrorViewResolver`. Boot's own whitelabel view cannot express
 the first case either, since Peekaboot's configuration runs ahead of it.
@@ -490,12 +519,12 @@ bean for these, with every `Include` switched on, so the application's own
 *response* a client receives carries, and this is a page rendered for a developer looking at the
 browser.
 
-`peekaboot.error-page.enabled` gates both paths, defaulted from the same launch-context detection
-as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise, with an
-explicit setting winning either way (see *Conditional Loading*). It carries the dev toolbar the
-same way any other HTML response does, because `DevToolbarFilter` is registered for the `ERROR`
-dispatch as well as `REQUEST` (see *Servlet Filters*) - reporting the original request that
-failed, not the `/error` dispatch that renders the page.
+`peekaboot.error-page.enabled` gates all three paths, defaulted from the same launch-context
+detection as `peekaboot.enabled` and the dev toolbar: on for a detected local run, off otherwise,
+with an explicit setting winning either way (see *Conditional Loading*). It carries the dev
+toolbar the same way any other HTML response does, because `DevToolbarFilter` is registered for
+the `ERROR` dispatch as well as `REQUEST` (see *Servlet Filters*). The bar reports the request
+that failed, never the dispatch that rendered the page.
 
 ## peekaboot-frontend
 
@@ -544,7 +573,7 @@ hooks that run before or outside the application context are registered in
 | `PeekabootAutoConfiguration` | `.imports` | Core beans: controller, services, trace mappers, web config |
 | `ActuatorSourcesAutoConfiguration` | `.imports` | One `InsightsSource` bean per actuator endpoint id (see *In-Process Actuator Invocation*) |
 | `DevToolbarAutoConfiguration` | `.imports` | Toolbar and capture filter registrations, the `LogbackAppenderRegistrar` and `TomcatForwardResponseCustomizer` beans |
-| `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in whichever of Boot's two slots `peekaboot.error-page.override` selects (see *Error Page*) |
+| `ErrorPageAutoConfiguration` | `.imports` | Peekaboot's error page, registered in the fallback slot or, where `peekaboot.error-page.override` is set, in the two places that outrank an application's own (see *Error Page*) |
 | `PeekabootLifecycleAutoConfiguration` | `.imports` | Ready/stopped listeners, lifecycle event log and its API |
 | `PeekabootStorageAutoConfiguration` | `.imports` | `StorageDirectory`; no web/actuator conditions |
 | `InsightsAutoConfiguration` | `.imports` | Metrics collector/service, SSE fan-out, insights controller; needs a `MeterRegistry` |

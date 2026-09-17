@@ -3,6 +3,7 @@ package org.peekaboot.autoconfigure;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
+import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -30,14 +31,18 @@ import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 
 /**
- * Peekaboot's error page, in either of the two places Spring Boot leaves for one. By default it
- * fills the fallback slot - the view named {@code error}, which Boot's whitelabel view claims
- * with {@code @ConditionalOnMissingBean(name = "error")} - under every condition Boot puts on
- * that view, so an application that brings any error page of its own keeps it. Where
- * {@code peekaboot.error-page.override} is set, it registers a high-precedence
- * {@link ErrorViewResolver} instead, which {@code BasicErrorController} consults before it
- * reaches a template, a static {@code error/*.html} or the view name {@code error} at all.
- * Neither path can turn the page on by itself; both sit behind
+ * Peekaboot's error page, in the fallback slot Spring Boot leaves for one, or - where
+ * {@code peekaboot.error-page.override} is set - in either of two places that outrank an
+ * application's own. By default it fills the fallback slot - the view named {@code error}, which
+ * Boot's whitelabel view claims with {@code @ConditionalOnMissingBean(name = "error")} - under
+ * every condition Boot puts on that view, so an application that brings any error page of its own
+ * keeps it. With the override set, it registers a high-precedence {@link ErrorViewResolver},
+ * which {@code BasicErrorController} consults before it reaches a template, a static
+ * {@code error/*.html} or the view name {@code error} at all, and a high-precedence
+ * {@code HandlerExceptionResolver}, which outranks {@code ExceptionHandlerExceptionResolver} and
+ * so beats an application's own {@code @ControllerAdvice} - the one case the view resolver alone
+ * cannot reach, because that advice resolves inside the REQUEST dispatch and no ERROR dispatch
+ * ever follows it. Neither override path can turn the page on by itself; both sit behind
  * {@code peekaboot.error-page.enabled}. Neither covers an application that excludes
  * {@code ErrorMvcAutoConfiguration} outright, which leaves no {@code ErrorAttributes} bean for
  * any page to render with, or one whose own error page is an {@code ErrorController} on
@@ -77,6 +82,13 @@ public class ErrorPageAutoConfiguration {
     public PeekabootErrorViewResolver peekabootErrorViewResolver(
             ErrorAttributes errorAttributes, BeanFactory beanFactory) {
         return new PeekabootErrorViewResolver(errorView(errorAttributes, beanFactory));
+    }
+
+    @Bean
+    @ConditionalOnBooleanProperty(PeekabootPropertyKeys.ERROR_PAGE_OVERRIDE)
+    public PeekabootErrorExceptionResolver peekabootErrorExceptionResolver(
+            ErrorAttributes errorAttributes, BeanFactory beanFactory) {
+        return new PeekabootErrorExceptionResolver(errorView(errorAttributes, beanFactory));
     }
 
     /**

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 import org.junit.jupiter.api.Test;
+import org.peekaboot.backend.errorpage.PeekabootErrorExceptionResolver;
 import org.peekaboot.backend.errorpage.PeekabootErrorView;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.FilteredClassLoader;
@@ -209,6 +210,31 @@ class ErrorPageAutoConfigurationTest {
                     assertThat(context.getBean("error")).isInstanceOf(PeekabootErrorView.class);
                     assertThat(context).doesNotHaveBean(ErrorPageAutoConfiguration.PeekabootErrorViewResolver.class);
                 });
+    }
+
+    /**
+     * The MVC path registers alongside the ErrorViewResolver path, under the same condition:
+     * it is what lets Peekaboot's page beat an application's own {@code @ControllerAdvice}.
+     */
+    @Test
+    void registersTheExceptionResolverWithTheOverrideOn() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=true")
+                .run(context -> assertThat(context).hasSingleBean(PeekabootErrorExceptionResolver.class));
+    }
+
+    @Test
+    void registersNoExceptionResolverWithTheOverrideOff() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true", "peekaboot.error-page.override=false")
+                .run(context -> assertThat(context).doesNotHaveBean(PeekabootErrorExceptionResolver.class));
+    }
+
+    @Test
+    void registersNoExceptionResolverWithTheOverrideUnset() {
+        contextRunner
+                .withPropertyValues("peekaboot.error-page.enabled=true")
+                .run(context -> assertThat(context).doesNotHaveBean(PeekabootErrorExceptionResolver.class));
     }
 
     @Configuration(proxyBeanMethods = false)
